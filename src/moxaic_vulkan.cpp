@@ -10,14 +10,20 @@
 #define VK_ALLOCATOR nullptr
 
 #define VK_CHECK(command) \
-({ \
+({                        \
+    g_VulkanDebugLine = __LINE__; \
+    g_VulkanDebugFile = MXC_FILE_NO_PATH; \
+    g_VulkanDebugCommand = #command; \
     VkResult result = command; \
     if (result != VK_SUCCESS) { \
-        printf("(%s:%d) VKCheck Fail! - %s - %d\n", __FUNCTION__, __LINE__, #command, result); \
+        printf("(%s:%d) VKCheck fail on command: %s - %d\n", g_VulkanDebugFile, g_VulkanDebugLine, g_VulkanDebugCommand, result); \
         return false; \
     } \
 })
 
+static int g_VulkanDebugLine;
+static const char* g_VulkanDebugCommand;
+static const char* g_VulkanDebugFile;
 static bool g_EnableValidationLayers;
 static VkInstance g_Instance;
 static VkSurfaceKHR g_Surface;
@@ -28,13 +34,13 @@ static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severit
 {
     switch (severity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            return "(Vulkan) ";
+            return "";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-            return "(Vulkan Info) ";
+            return "";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            return "! (Vulkan Warning) ";
+            return "! ";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            return "!!! (Vulkan Error) ";
+            return "!!! ";
     }
 }
 
@@ -43,7 +49,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
                                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                                                     void *pUserData)
 {
-    std::cout << SeverityToName(messageSeverity) << pCallbackData->pMessage << '\n';
+    printf("%s(%s:%d) %s\n%s", SeverityToName(messageSeverity), g_VulkanDebugFile, g_VulkanDebugLine, g_VulkanDebugCommand, pCallbackData->pMessage);
     return VK_FALSE;
 }
 
@@ -325,13 +331,13 @@ bool Moxaic::VulkanDevice::CreateDevice()
 {
     MXC_LOG("Vulkan Create Device");
     const float queuePriority = Moxaic::IsCompositor() ?
-                                0.0f :
-                                1.0f;
+                                1.0f :
+                                0.0f;
     const VkDeviceQueueGlobalPriorityCreateInfoEXT queueGlobalPriorityCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
             .globalPriority = Moxaic::IsCompositor()
-                              ? VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT
-                              : VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT
+                              ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT
+                              : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT
     };
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
     queueCreateInfos.push_back(
