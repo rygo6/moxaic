@@ -1,6 +1,5 @@
 #include "main.hpp"
 
-#include <iostream>
 #include <SDL2/SDL.h>
 
 #include "moxaic_window.hpp"

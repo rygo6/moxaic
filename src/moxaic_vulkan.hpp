@@ -46,17 +46,20 @@ namespace Moxaic
 
         bool PickPhysicalDevice();
         bool FindQueues();
-
         bool CreateDevice();
+        bool CreateRenderPass();
+        bool CreateCommandBuffers();
+        bool CreatePools();
+        bool CreateSamplers();
     };
 
     bool VulkanInit(SDL_Window* pWindow, bool enableValidationLayers);
 
     VulkanDevice GetVulkanDevice();
 
-//    extern bool g_EnableValidationLayers;
-//    extern VkInstance g_Instance;
-//    extern VkSurfaceKHR g_Surface;
+//    extern bool g_VulkanValidationLayers;
+//    extern VkInstance g_VulkanInstance;
+//    extern VkSurfaceKHR g_VulkanSurface;
 //    extern VkPhysicalDevice g_PhysicalDevice;
 //    extern VkPhysicalDeviceMeshShaderPropertiesEXT  g_PhysicalDeviceMeshShaderProperties;
 //    extern VkPhysicalDeviceProperties2  g_PhysicalDeviceProperties;
