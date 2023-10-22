@@ -10,15 +10,22 @@
 namespace Moxaic
 {
     bool g_ApplicationRunning = true;
+    Role g_Role = Compositor;
 }
 
 int main(int argc, char *argv[])
 {
     MXC_LOG("Starting Moxaic!");
 
-    Moxaic::WindowInit();
+    if (!Moxaic::WindowInit()) {
+        MXC_LOG_ERROR("Window Init Fail!");
+        return 1;
+    }
 
-    Moxaic::VulkanInit(Moxaic::g_pSDLWindow, true);
+    if (!Moxaic::VulkanInit(Moxaic::g_pSDLWindow, true)) {
+        MXC_LOG_ERROR("Vulkan Init Fail!");
+        return 1;
+    }
 
     while (Moxaic::g_ApplicationRunning) {
         Moxaic::WindowPoll();

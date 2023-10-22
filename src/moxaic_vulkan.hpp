@@ -10,12 +10,16 @@ namespace Moxaic
     class VulkanDevice
     {
     public:
-        VulkanDevice();
+        VulkanDevice(VkInstance instance, VkSurfaceKHR surface);
         virtual ~VulkanDevice();
         bool Init();
 
     private:
+        VkInstance m_Instance;
+        VkSurfaceKHR m_Surface;
         VkDevice m_Device;
+
+        VkPhysicalDevice m_PhysicalDevice;
 
         VkQueue m_GraphicsQueue;
         uint32_t m_GraphicsQueueFamilyIndex;
@@ -35,9 +39,18 @@ namespace Moxaic
 
         VkSampler m_LinearSampler;
         VkSampler m_NearestSampler;
+
+        VkPhysicalDeviceMeshShaderPropertiesEXT  m_PhysicalDeviceMeshShaderProperties;
+        VkPhysicalDeviceProperties2  m_PhysicalDeviceProperties;
+        VkPhysicalDeviceMemoryProperties m_PhysicalDeviceMemoryProperties;
+
+        bool PickPhysicalDevice();
+        bool FindQueues();
+
+        bool CreateDevice();
     };
 
-    bool VulkanInit(SDL_Window *pWindow, bool enableValidationLayers);
+    bool VulkanInit(SDL_Window* pWindow, bool enableValidationLayers);
 
     VulkanDevice GetVulkanDevice();
 

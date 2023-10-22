@@ -4,7 +4,7 @@
 
 namespace Moxaic {
 
-    void WindowInit();
+    bool WindowInit();
     void WindowPoll();
     void WindowShutdown();
 
