@@ -3,6 +3,10 @@
 #include <vulkan/vulkan.h>
 #include "moxaic_vulkan.hpp"
 
+#if WIN32
+#include <vulkan/vulkan_win32.h>
+#endif
+
 namespace Moxaic
 {
     class VulkanDevice
@@ -19,14 +23,6 @@ namespace Moxaic
         bool AllocateMemory(const VkMemoryPropertyFlags &properties,
                             const VkImage &image,
                             VkDeviceMemory &outDeviceMemory) const;
-
-        bool BindImageMemory(const VkImage &image,
-                             const VkDeviceMemory &DeviceMemory) const
-        { return vkBindImageMemory(m_Device, image, DeviceMemory, 0) == VK_SUCCESS; }
-
-        bool CreateImageView(const VkImageViewCreateInfo &createInfo,
-                             VkImageView &outImageView) const
-        { return vkCreateImageView(m_Device, &createInfo, VK_ALLOC, &outImageView) == VK_SUCCESS; }
 
     private:
         const VkInstance &m_Instance;
@@ -66,5 +62,29 @@ namespace Moxaic
         bool CreateCommandBuffers();
         bool CreatePools();
         bool CreateSamplers();
+
+    public: // inline
+        bool BindImageMemory(const VkImage &image,
+                             const VkDeviceMemory &DeviceMemory) const
+        {
+            VK_CHK(vkBindImageMemory(m_Device, image, DeviceMemory, 0));
+            return true;
+        }
+
+        bool CreateImageView(const VkImageViewCreateInfo &createInfo,
+                             VkImageView &outImageView) const
+        {
+            VK_CHK(vkCreateImageView(m_Device, &createInfo, VK_ALLOC, &outImageView));
+            return true;
+        }
+
+#if WIN32
+        bool GetMemoryHandle(const VkMemoryGetWin32HandleInfoKHR &getWin32HandleInfo,
+                             HANDLE &outHandle) const
+        {
+            VK_CHK(VkFunc.GetMemoryWin32HandleKHR(m_Device, &getWin32HandleInfo, &outHandle));
+            return true;
+        }
+#endif
     };
 }

@@ -7,6 +7,7 @@
 
 #ifdef WIN32
 #include <windows.h>
+#include <vulkan/vulkan_win32.h>
 #endif
 
 #define MXC_COLOR_BUFFER_USAGE (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
@@ -22,7 +23,7 @@
 #define VK_ALLOC nullptr
 
 #define VK_CHK(command) \
-({                        \
+({ \
     Moxaic::VkDebug.VulkanDebugLine = __LINE__; \
     Moxaic::VkDebug.VulkanDebugFile = MXC_FILE_NO_PATH; \
     Moxaic::VkDebug.VulkanDebugCommand = #command; \
@@ -39,6 +40,17 @@ namespace Moxaic
 
     VkInstance VulkanInstance();
     VkSurfaceKHR VulkanSurface();
+
+    struct VulkanFunc
+    {
+#ifdef WIN32
+        PFN_vkGetMemoryWin32HandleKHR GetMemoryWin32HandleKHR;
+#endif
+        PFN_vkCmdDrawMeshTasksEXT CmdDrawMeshTasksEXT;
+        PFN_vkCreateDebugUtilsMessengerEXT CreateDebugUtilsMessengerEXT;
+    };
+
+    extern struct VulkanFunc VkFunc;
 
     struct VulkanDebug
     {

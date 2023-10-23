@@ -16,27 +16,19 @@
 
 #define MXC_LOAD_VULKAN_FUNCTION(function) \
     MXC_LOG_NAMED(#function); \
-    VkFunc.function = (PFN_vk##function) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#function); \
-    if (VkFunc.function == nullptr) { \
+    Moxaic::VkFunc.function = (PFN_vk##function) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#function); \
+    if (Moxaic::VkFunc.function == nullptr) { \
         MXC_LOG_ERROR("Load Fail: ", #function); \
         return false; \
     }
 
+struct Moxaic::VulkanFunc Moxaic::VkFunc;
 struct Moxaic::VulkanDebug Moxaic::VkDebug;
 
 static VkInstance g_VulkanInstance;
 static VkSurfaceKHR g_VulkanSurface;
 static bool g_VulkanValidationLayers;
 static VkDebugUtilsMessengerEXT g_VulkanDebugMessenger;
-
-static struct
-{
-#ifdef WIN32
-    PFN_vkGetMemoryWin32HandleKHR GetMemoryWin32HandleKHR;
-#endif
-    PFN_vkCmdDrawMeshTasksEXT CmdDrawMeshTasksEXT;
-    PFN_vkCreateDebugUtilsMessengerEXT CreateDebugUtilsMessengerEXT;
-} VkFunc;
 
 static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severity)
 {
@@ -197,10 +189,10 @@ static bool CreateVulkanDebugOutput()
                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
             .pfnUserCallback = DebugCallback,
     };
-    VK_CHK(VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
-                                               &debugUtilsMessengerCreateInfo,
-                                               VK_ALLOC,
-                                               &g_VulkanDebugMessenger));
+    VK_CHK(Moxaic::VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
+                                                       &debugUtilsMessengerCreateInfo,
+                                                       VK_ALLOC,
+                                                       &g_VulkanDebugMessenger));
 
     return true;
 }

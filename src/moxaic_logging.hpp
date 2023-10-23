@@ -40,7 +40,7 @@ namespace Moxaic
 #define MXC_CHK(command) \
 ({ \
     if (!command) { \
-        printf("(%s:%d) Fail on command: %s\n", MXC_FILE_NO_PATH, __LINE__, #command); \
+        printf("(%s:%d) Fail: %s\n", MXC_FILE_NO_PATH, __LINE__, #command); \
         return false; \
     } \
 })

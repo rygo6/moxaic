@@ -30,11 +30,10 @@ namespace Moxaic
         vulkanDevice->Init();
 
         auto vulkanTexture = VulkanTexture(*vulkanDevice);
-        vulkanTexture.Create(VK_FORMAT_R8G8B8A8_UNORM,
-                             {10,10, 1},
-                             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-                             VK_IMAGE_ASPECT_COLOR_BIT,
-                             false);
+        vulkanTexture.Init(VK_FORMAT_R8G8B8A8_UNORM,
+                           {10, 10, 1},
+                           VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                           VK_IMAGE_ASPECT_COLOR_BIT);
 
         while (g_ApplicationRunning) {
             WindowPoll();

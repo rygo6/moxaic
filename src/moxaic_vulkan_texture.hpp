@@ -17,35 +17,41 @@ namespace Moxaic
 
         virtual ~VulkanTexture();
 
-        bool CreateFromImage(VkFormat format,
-                             VkExtent2D extent,
-                             VkImage image);
+        bool InitFromImage(VkFormat format,
+                           VkExtent2D extent,
+                           VkImage image);
 
-        bool CreateFromFile(bool external,
-                            char const *filename);
+        bool InitFromFile(bool external,
+                          char const *filename);
 
-        bool Import(VkFormat format,
-                    VkExtent2D extent,
-                    VkImageUsageFlags usage,
-                    VkImageAspectFlags aspectMask,
-                    HANDLE externalMemory);
+        bool InitFromImport(VkFormat format,
+                            VkExtent2D extent,
+                            VkImageUsageFlags usage,
+                            VkImageAspectFlags aspectMask,
+                            HANDLE externalMemory);
 
-        bool Create(VkFormat format,
-                    VkExtent3D extent,
-                    VkImageUsageFlags usage,
-                    VkImageAspectFlags aspectMask,
-                    bool external);
+        bool Init(VkFormat format,
+                  VkExtent3D extent,
+                  VkImageUsageFlags usage,
+                  VkImageAspectFlags aspectMask);
 
-        void Destroy();
+        bool InitExternal(VkFormat format,
+                          VkExtent3D extent,
+                          VkImageUsageFlags usage,
+                          VkImageAspectFlags aspectMask);
+
+        void Cleanup();
 
     private:
         const VulkanDevice &m_Device;
         VkImage m_Image;
         VkImageView m_ImageView;
         VkDeviceMemory m_DeviceMemory;
-        VkExtent2D m_Extent;
+        VkExtent3D m_Extent;
 #ifdef WIN32
         HANDLE m_ExternalMemory;
 #endif
+
+
     };
 }
