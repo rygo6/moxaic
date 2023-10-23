@@ -14,19 +14,19 @@ namespace Moxaic
         bool Init();
 
         bool CreateImage(const VkImageCreateInfo &imageCreateInfo,
-                         VkImage &m_Image) const;
+                         VkImage &outImage) const;
 
         bool AllocateMemory(const VkMemoryPropertyFlags &properties,
                             const VkImage &image,
-                            VkDeviceMemory &deviceMemory) const;
+                            VkDeviceMemory &outDeviceMemory) const;
 
         bool BindImageMemory(const VkImage &image,
                              const VkDeviceMemory &DeviceMemory) const
         { return vkBindImageMemory(m_Device, image, DeviceMemory, 0) == VK_SUCCESS; }
 
         bool CreateImageView(const VkImageViewCreateInfo &createInfo,
-                             VkImageView &imageView) const
-        { return vkCreateImageView(m_Device, &createInfo, VK_ALLOC, &imageView) == VK_SUCCESS; }
+                             VkImageView &outImageView) const
+        { return vkCreateImageView(m_Device, &createInfo, VK_ALLOC, &outImageView) == VK_SUCCESS; }
 
     private:
         const VkInstance &m_Instance;

@@ -16,13 +16,13 @@
 static bool MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
                                      const VkMemoryPropertyFlags &requiredMemoryProperties,
                                      uint32_t requiredMemoryTypeBits,
-                                     uint32_t &memoryTypeBits)
+                                     uint32_t &outMemoryTypeBits)
 {
     for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++) {
         if ((requiredMemoryTypeBits & 1) == 1) {
             if ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & requiredMemoryProperties) ==
                 requiredMemoryProperties) {
-                memoryTypeBits = i;
+                outMemoryTypeBits = i;
                 return true;
             }
         }
@@ -36,28 +36,28 @@ static bool ImageMemoryTypeFromProperties(const VkDevice &device,
                                           const VkImage &image,
                                           const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
                                           const VkMemoryPropertyFlags properties,
-                                          VkMemoryRequirements &memoryRequirements,
-                                          uint32_t &memoryTypeBits)
+                                          VkMemoryRequirements &outMemoryRequirements,
+                                          uint32_t &outMemoryTypeBits)
 {
-    vkGetImageMemoryRequirements(device, image, &memoryRequirements);
+    vkGetImageMemoryRequirements(device, image, &outMemoryRequirements);
     return MemoryTypeFromProperties(physicalDeviceMemoryProperties,
                                     properties,
-                                    memoryRequirements.memoryTypeBits,
-                                    memoryTypeBits);
+                                    outMemoryRequirements.memoryTypeBits,
+                                    outMemoryTypeBits);
 }
 
 static bool BufferMemoryTypeFromProperties(const VkDevice &device,
                                            const VkBuffer &buffer,
                                            const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
                                            const VkMemoryPropertyFlags properties,
-                                           VkMemoryRequirements *memoryRequirements,
-                                           uint32_t &memoryTypeBits)
+                                           VkMemoryRequirements *outMemoryRequirements,
+                                           uint32_t &outMemoryTypeBits)
 {
-    vkGetBufferMemoryRequirements(device, buffer, memoryRequirements);
+    vkGetBufferMemoryRequirements(device, buffer, outMemoryRequirements);
     return MemoryTypeFromProperties(physicalDeviceMemoryProperties,
                                     properties,
-                                    memoryRequirements->memoryTypeBits,
-                                    memoryTypeBits);
+                                    outMemoryRequirements->memoryTypeBits,
+                                    outMemoryTypeBits);
 }
 
 Moxaic::VulkanDevice::VulkanDevice(const VkInstance &instance,
@@ -649,7 +649,7 @@ bool Moxaic::VulkanDevice::Init()
 
 bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
                                           const VkImage &image,
-                                          VkDeviceMemory &deviceMemory) const
+                                          VkDeviceMemory &outDeviceMemory) const
 {
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
@@ -668,17 +668,17 @@ bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &propertie
     VK_CHK(vkAllocateMemory(m_Device,
                             &allocateInfo,
                             VK_ALLOC,
-                            &deviceMemory));
+                            &outDeviceMemory));
 
     return true;
 }
 
 bool Moxaic::VulkanDevice::CreateImage(const VkImageCreateInfo &imageCreateInfo,
-                                       VkImage &m_Image) const
+                                       VkImage &outImage) const
 {
     VK_CHK(vkCreateImage(m_Device,
                          &imageCreateInfo,
                          VK_ALLOC,
-                         &m_Image));
+                         &outImage));
     return true;
 }
