@@ -1,5 +1,7 @@
 #pragma once
 
+#include "moxaic_vulkan_texture.hpp"
+
 #include <vulkan/vulkan.hpp>
 
 namespace Moxaic
@@ -11,15 +13,18 @@ namespace Moxaic
         virtual ~VulkanDevice();
         bool Init();
 
+        uint32_t m_GraphicsQueueFamilyIndex;
+
     private:
-        VkInstance m_Instance;
-        VkSurfaceKHR m_Surface;
+        const VkInstance m_Instance;
+        const VkSurfaceKHR m_Surface;
+
         VkDevice m_Device;
 
         VkPhysicalDevice m_PhysicalDevice;
 
         VkQueue m_GraphicsQueue;
-        uint32_t m_GraphicsQueueFamilyIndex;
+//        uint32_t m_GraphicsQueueFamilyIndex;
 
         VkQueue m_ComputeQueue;
         uint32_t m_ComputeQueueFamilyIndex;

@@ -4,6 +4,7 @@
 
 #include "moxaic_window.hpp"
 #include "moxaic_vulkan.hpp"
+#include "moxaic_vulkan_device.hpp"
 #include "moxaic_logging.hpp"
 
 namespace Moxaic
@@ -25,6 +26,9 @@ int main(int argc, char *argv[])
         MXC_LOG_ERROR("Vulkan Init Fail!");
         return 1;
     }
+
+    auto vulkanDevice = Moxaic::VulkanDevice(Moxaic::VulkanInstance(), Moxaic::VulkanSurface());
+    vulkanDevice.Init();
 
     while (Moxaic::g_ApplicationRunning) {
         Moxaic::WindowPoll();

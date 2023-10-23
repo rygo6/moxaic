@@ -8,34 +8,34 @@
 #include <SDL2/SDL_Vulkan.h>
 
 #ifdef WIN32
+
 #include <vulkan/vulkan_win32.h>
+
 #endif
 
 #define MXC_LOAD_VULKAN_FUNCTION(function) \
     MXC_LOG_NAMED(#function); \
-    g_VulkanFunctions.function = (PFN_vk##function) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#function); \
-    if (g_VulkanFunctions.function == nullptr) { \
+    VkFunc.function = (PFN_vk##function) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#function); \
+    if (VkFunc.function == nullptr) { \
         MXC_LOG_ERROR("Load Fail: ", #function); \
         return false; \
     }
 
-int Moxaic::g_VulkanDebugLine;
-const char* Moxaic::g_VulkanDebugCommand;
-const char* Moxaic::g_VulkanDebugFile;
+struct Moxaic::VulkanDebug Moxaic::VkDebug;
 
-static bool g_VulkanValidationLayers;
 static VkInstance g_VulkanInstance;
 static VkSurfaceKHR g_VulkanSurface;
+static bool g_VulkanValidationLayers;
 static VkDebugUtilsMessengerEXT g_VulkanDebugMessenger;
-static std::vector<Moxaic::VulkanDevice> g_VulkanDevices;
 
-static struct {
+static struct
+{
 #ifdef WIN32
     PFN_vkGetMemoryWin32HandleKHR GetMemoryWin32HandleKHR;
 #endif
     PFN_vkCmdDrawMeshTasksEXT CmdDrawMeshTasksEXT;
     PFN_vkCreateDebugUtilsMessengerEXT CreateDebugUtilsMessengerEXT;
-} g_VulkanFunctions;
+} VkFunc;
 
 static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severity)
 {
@@ -56,11 +56,12 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
                                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                                                     void *pUserData)
 {
+
     printf("%s(%s:%d) %s\n%s",
            SeverityToName(messageSeverity),
-           Moxaic::g_VulkanDebugFile,
-           Moxaic::g_VulkanDebugLine,
-           Moxaic::g_VulkanDebugCommand,
+           Moxaic::VkDebug.VulkanDebugFile,
+           Moxaic::VkDebug.VulkanDebugLine,
+           Moxaic::VkDebug.VulkanDebugCommand,
            pCallbackData->pMessage);
     return VK_FALSE;
 }
@@ -194,7 +195,10 @@ static bool CreateVulkanDebugOutput()
                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
             .pfnUserCallback = DebugCallback,
     };
-    MXC_VK_CHECK(g_VulkanFunctions.CreateDebugUtilsMessengerEXT(g_VulkanInstance, &debugUtilsMessengerCreateInfo, MXC_VK_ALLOCATOR, &g_VulkanDebugMessenger));
+    MXC_VK_CHECK(VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
+                                                     &debugUtilsMessengerCreateInfo,
+                                                     MXC_VK_ALLOCATOR,
+                                                     &g_VulkanDebugMessenger));
 
     return true;
 }
@@ -217,11 +221,21 @@ bool Moxaic::VulkanInit(SDL_Window *const pWindow, const bool enableValidationLa
     if (!SDL_Vulkan_CreateSurface(pWindow, g_VulkanInstance, &g_VulkanSurface))
         return false;
 
-    auto device = new VulkanDevice(g_VulkanInstance, g_VulkanSurface);
-    if (!device->Init())
-        return false;
-
-    g_VulkanDevices.push_back(*device);
+//    auto device = new VulkanDevice(g_VulkanInstance, g_VulkanSurface);
+//    if (!device->Init())
+//        return false;
+//
+//    g_pVulkanDevices.push_back(device);
 
     return true;
+}
+
+VkInstance Moxaic::VulkanInstance() {
+    assert((g_VulkanInstance != nullptr) && "Vulkan not initialized!");
+    return g_VulkanInstance;
+}
+
+VkSurfaceKHR Moxaic::VulkanSurface() {
+    assert((g_VulkanSurface != nullptr) && "Vulkan not initialized!");
+    return g_VulkanSurface;
 }

@@ -23,12 +23,12 @@
 
 #define MXC_VK_CHECK(command) \
 ({                        \
-    Moxaic::g_VulkanDebugLine = __LINE__; \
-    Moxaic::g_VulkanDebugFile = MXC_FILE_NO_PATH; \
-    Moxaic::g_VulkanDebugCommand = #command; \
+    Moxaic::VkDebug.VulkanDebugLine = __LINE__; \
+    Moxaic::VkDebug.VulkanDebugFile = MXC_FILE_NO_PATH; \
+    Moxaic::VkDebug.VulkanDebugCommand = #command; \
     VkResult result = command; \
     if (result != VK_SUCCESS) { \
-        printf("(%s:%d) VKCheck fail on command: %s - %d\n", Moxaic::g_VulkanDebugFile, Moxaic::g_VulkanDebugLine, Moxaic::g_VulkanDebugCommand, result); \
+        printf("(%s:%d) VKCheck fail on command: %s - %d\n", Moxaic::VkDebug.VulkanDebugFile, Moxaic::VkDebug.VulkanDebugLine, Moxaic::VkDebug.VulkanDebugCommand, result); \
         return false; \
     } \
 })
@@ -37,7 +37,15 @@ namespace Moxaic
 {
     bool VulkanInit(SDL_Window* pWindow, bool enableValidationLayers);
 
-    extern int g_VulkanDebugLine;
-    extern const char* g_VulkanDebugCommand;
-    extern const char* g_VulkanDebugFile;
+    VkInstance VulkanInstance();
+    VkSurfaceKHR VulkanSurface();
+
+    struct VulkanDebug
+    {
+        int VulkanDebugLine;
+        const char *VulkanDebugCommand;
+        const char *VulkanDebugFile;
+    };
+
+    extern struct VulkanDebug VkDebug;
 }
