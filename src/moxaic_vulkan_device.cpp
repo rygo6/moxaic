@@ -3,11 +3,65 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_logging.hpp"
 
+#include "main.hpp"
+
 #ifdef WIN32
 #include <vulkan/vulkan_win32.h>
 #endif
 
-Moxaic::VulkanDevice::VulkanDevice(VkInstance instance, VkSurfaceKHR surface)
+#include <vector>
+#include <array>
+
+// From OVR Vulkan example. Is this better/same as vulkan tutorial!?
+static bool MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
+                                     const VkMemoryPropertyFlags &requiredMemoryProperties,
+                                     uint32_t requiredMemoryTypeBits,
+                                     uint32_t &memoryTypeBits)
+{
+    for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++) {
+        if ((requiredMemoryTypeBits & 1) == 1) {
+            if ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & requiredMemoryProperties) ==
+                requiredMemoryProperties) {
+                memoryTypeBits = i;
+                return true;
+            }
+        }
+        requiredMemoryTypeBits >>= 1;
+    }
+    MXC_LOG_ERROR("Can't find memory type.", requiredMemoryProperties, requiredMemoryTypeBits);
+    return false;
+}
+
+static bool ImageMemoryTypeFromProperties(const VkDevice &device,
+                                          const VkImage &image,
+                                          const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
+                                          const VkMemoryPropertyFlags properties,
+                                          VkMemoryRequirements &memoryRequirements,
+                                          uint32_t &memoryTypeBits)
+{
+    vkGetImageMemoryRequirements(device, image, &memoryRequirements);
+    return MemoryTypeFromProperties(physicalDeviceMemoryProperties,
+                                    properties,
+                                    memoryRequirements.memoryTypeBits,
+                                    memoryTypeBits);
+}
+
+static bool BufferMemoryTypeFromProperties(const VkDevice &device,
+                                           const VkBuffer &buffer,
+                                           const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
+                                           const VkMemoryPropertyFlags properties,
+                                           VkMemoryRequirements *memoryRequirements,
+                                           uint32_t &memoryTypeBits)
+{
+    vkGetBufferMemoryRequirements(device, buffer, memoryRequirements);
+    return MemoryTypeFromProperties(physicalDeviceMemoryProperties,
+                                    properties,
+                                    memoryRequirements->memoryTypeBits,
+                                    memoryTypeBits);
+}
+
+Moxaic::VulkanDevice::VulkanDevice(const VkInstance &instance,
+                                   const VkSurfaceKHR &surface)
         : m_Instance(instance)
         , m_Surface(surface)
         , m_Device(VK_NULL_HANDLE)
@@ -37,23 +91,22 @@ bool Moxaic::VulkanDevice::PickPhysicalDevice()
     MXC_LOG_FUNCTION();
 
     uint32_t deviceCount = 0;
-    MXC_VK_CHECK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr));
+    VK_CHK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, nullptr));
     if (deviceCount == 0) {
         MXC_LOG_ERROR("Failed to find GPUs with Vulkan support!");
         return false;
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    MXC_VK_CHECK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data()));
+    VK_CHK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data()));
 
     // Todo Implement Query OpenVR for the physical device to use
     m_PhysicalDevice = devices.front();
 
-    // Gather Physical VulkanDevice Properties
-    vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &m_PhysicalDeviceMemoryProperties);
     m_PhysicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
     m_PhysicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     m_PhysicalDeviceProperties.pNext = &m_PhysicalDeviceMeshShaderProperties;
     vkGetPhysicalDeviceProperties2(m_PhysicalDevice, &m_PhysicalDeviceProperties);
+    vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &m_PhysicalDeviceMemoryProperties);
 
     MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.timestampPeriod);
     MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[0]);
@@ -303,7 +356,7 @@ bool Moxaic::VulkanDevice::CreateDevice()
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.enabledExtensionCount = requiredDeviceExtensions.size();
     createInfo.ppEnabledExtensionNames = requiredDeviceExtensions.data();
-    MXC_VK_CHECK(vkCreateDevice(m_PhysicalDevice, &createInfo, MXC_VK_ALLOCATOR, &m_Device));
+    VK_CHK(vkCreateDevice(m_PhysicalDevice, &createInfo, VK_ALLOC, &m_Device));
 
     return true;
 }
@@ -314,7 +367,7 @@ bool Moxaic::VulkanDevice::CreateRenderPass()
     MXC_LOG_FUNCTION();
 
     // supposedly most correct https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#swapchain-image-acquire-and-present
-    const std::array colorAttachments {
+    const std::array colorAttachments{
             (VkAttachmentReference) {
                     .attachment = 0,
                     .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -340,7 +393,7 @@ bool Moxaic::VulkanDevice::CreateRenderPass()
                     .pDepthStencilAttachment = &depthAttachmentReference,
             }
     };
-    const std::array dependencies {
+    const std::array dependencies{
             (VkSubpassDependency) {
                     .srcSubpass = VK_SUBPASS_EXTERNAL,
                     .dstSubpass = 0,
@@ -360,7 +413,7 @@ bool Moxaic::VulkanDevice::CreateRenderPass()
                     .dependencyFlags = 0,
             },
     };
-    const std::array attachments {
+    const std::array attachments{
             (VkAttachmentDescription) {
                     .flags = 0,
                     .format = MXC_COLOR_BUFFER_FORMAT,
@@ -418,7 +471,7 @@ bool Moxaic::VulkanDevice::CreateRenderPass()
             .pDependencies = dependencies.data(),
     };
 
-    MXC_VK_CHECK(vkCreateRenderPass(m_Device, &renderPassInfo, MXC_VK_ALLOCATOR, &m_RenderPass));
+    VK_CHK(vkCreateRenderPass(m_Device, &renderPassInfo, VK_ALLOC, &m_RenderPass));
 
     return true;
 }
@@ -433,19 +486,19 @@ bool Moxaic::VulkanDevice::CreateCommandBuffers()
             .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
             .queueFamilyIndex = m_GraphicsQueueFamilyIndex,
     };
-    MXC_VK_CHECK(vkCreateCommandPool(m_Device,
-                                     &graphicsPoolInfo,
-                                     MXC_VK_ALLOCATOR,
-                                     &m_GraphicsCommandPool));
+    VK_CHK(vkCreateCommandPool(m_Device,
+                               &graphicsPoolInfo,
+                               VK_ALLOC,
+                               &m_GraphicsCommandPool));
     const VkCommandBufferAllocateInfo graphicsAllocateInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .commandPool = m_GraphicsCommandPool,
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount = 1,
     };
-    MXC_VK_CHECK(vkAllocateCommandBuffers(m_Device,
-                                          &graphicsAllocateInfo,
-                                          &m_GraphicsCommandBuffer));
+    VK_CHK(vkAllocateCommandBuffers(m_Device,
+                                    &graphicsAllocateInfo,
+                                    &m_GraphicsCommandBuffer));
 
     // Compute
     const VkCommandPoolCreateInfo computePoolInfo = {
@@ -453,19 +506,19 @@ bool Moxaic::VulkanDevice::CreateCommandBuffers()
             .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
             .queueFamilyIndex = m_ComputeQueueFamilyIndex,
     };
-    MXC_VK_CHECK(vkCreateCommandPool(m_Device,
-                                     &computePoolInfo,
-                                     MXC_VK_ALLOCATOR,
-                                     &m_ComputeCommandPool));
+    VK_CHK(vkCreateCommandPool(m_Device,
+                               &computePoolInfo,
+                               VK_ALLOC,
+                               &m_ComputeCommandPool));
     const VkCommandBufferAllocateInfo computeAllocInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .commandPool = m_ComputeCommandPool,
             .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
             .commandBufferCount = 1,
     };
-    MXC_VK_CHECK(vkAllocateCommandBuffers(m_Device,
-                                          &computeAllocInfo,
-                                          &m_ComputeCommandBuffer));
+    VK_CHK(vkAllocateCommandBuffers(m_Device,
+                                    &computeAllocInfo,
+                                    &m_ComputeCommandBuffer));
 
     return true;
 }
@@ -482,9 +535,9 @@ bool Moxaic::VulkanDevice::CreatePools()
             .queryCount = 2,
             .pipelineStatistics = 0,
     };
-    vkCreateQueryPool(m_Device, &queryPoolCreateInfo, MXC_VK_ALLOCATOR, &m_QueryPool);
+    vkCreateQueryPool(m_Device, &queryPoolCreateInfo, VK_ALLOC, &m_QueryPool);
 
-    const std::array poolSizes {
+    const std::array poolSizes{
             (VkDescriptorPoolSize) {
                     .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .descriptorCount = 4,
@@ -506,10 +559,10 @@ bool Moxaic::VulkanDevice::CreatePools()
             .poolSizeCount = poolSizes.size(),
             .pPoolSizes = poolSizes.data(),
     };
-    MXC_VK_CHECK(vkCreateDescriptorPool(m_Device,
-                                        &poolInfo,
-                                        MXC_VK_ALLOCATOR,
-                                        &m_DescriptorPool));
+    VK_CHK(vkCreateDescriptorPool(m_Device,
+                                  &poolInfo,
+                                  VK_ALLOC,
+                                  &m_DescriptorPool));
 
     return true;
 }
@@ -536,7 +589,7 @@ bool Moxaic::VulkanDevice::CreateSamplers()
             .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
             .unnormalizedCoordinates = VK_FALSE,
     };
-    MXC_VK_CHECK(vkCreateSampler(m_Device, &linearSamplerInfo, MXC_VK_ALLOCATOR, &m_LinearSampler));
+    VK_CHK(vkCreateSampler(m_Device, &linearSamplerInfo, VK_ALLOC, &m_LinearSampler));
 
     const VkSamplerCreateInfo nearestSamplerInfo = {
             .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -556,13 +609,15 @@ bool Moxaic::VulkanDevice::CreateSamplers()
             .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
             .unnormalizedCoordinates = VK_FALSE,
     };
-    MXC_VK_CHECK(vkCreateSampler(m_Device, &nearestSamplerInfo, MXC_VK_ALLOCATOR, &m_NearestSampler));
+    VK_CHK(vkCreateSampler(m_Device, &nearestSamplerInfo, VK_ALLOC, &m_NearestSampler));
 
     return true;
 }
 
 bool Moxaic::VulkanDevice::Init()
 {
+    MXC_LOG_FUNCTION();
+
     if (!PickPhysicalDevice())
         return false;
 
@@ -589,5 +644,41 @@ bool Moxaic::VulkanDevice::Init()
 
 //    SDL_Vulkan_GetDrawableSize(window, &width, &height);
 
+    return true;
+}
+
+bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
+                                          const VkImage &image,
+                                          VkDeviceMemory &deviceMemory) const
+{
+    VkMemoryRequirements memRequirements = {};
+    uint32_t memTypeIndex;
+    MXC_CHK(ImageMemoryTypeFromProperties(m_Device,
+                                          image,
+                                          m_PhysicalDeviceMemoryProperties,
+                                          properties,
+                                          memRequirements,
+                                          memTypeIndex));
+
+    const VkMemoryAllocateInfo allocateInfo = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .allocationSize = memRequirements.size,
+            .memoryTypeIndex = memTypeIndex,
+    };
+    VK_CHK(vkAllocateMemory(m_Device,
+                            &allocateInfo,
+                            VK_ALLOC,
+                            &deviceMemory));
+
+    return true;
+}
+
+bool Moxaic::VulkanDevice::CreateImage(const VkImageCreateInfo &imageCreateInfo,
+                                       VkImage &m_Image) const
+{
+    VK_CHK(vkCreateImage(m_Device,
+                         &imageCreateInfo,
+                         VK_ALLOC,
+                         &m_Image));
     return true;
 }

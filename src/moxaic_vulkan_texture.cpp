@@ -1,50 +1,9 @@
 #include "moxaic_vulkan_texture.hpp"
 #include "moxaic_vulkan_device.hpp"
+#include "moxaic_vulkan.hpp"
+#include "moxaic_logging.hpp"
 
-//static void createTexture(const FbrVulkan *pVulkan,
-//                          VkExtent2D extent,
-//                          VkFormat format,
-//                          VkImageTiling tiling,
-//                          VkImageUsageFlags usage,
-//                          VkMemoryPropertyFlags properties,
-//                          FbrTexture *pTexture) {
-//
-//    const VkImageCreateInfo imageCreateInfo = {
-//            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-//            .imageType = VK_IMAGE_TYPE_2D,
-//            .extent.width = extent.width,
-//            .extent.height = extent.height,
-//            .extent.depth = 1,
-//            .mipLevels = 1,
-//            .arrayLayers = 1,
-//            .format = format,
-//            .tiling = tiling,
-//            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-//            .usage = usage,
-//            .samples = VK_SAMPLE_COUNT_1_BIT,
-//            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-//    };
-//    FBR_VK_CHECK(vkCreateImage(pVulkan->device, &imageCreateInfo, FBR_ALLOCATOR, &pTexture->image));
-//
-//    VkMemoryRequirements memRequirements = {};
-//    uint32_t memTypeIndex;
-//    FBR_VK_CHECK(fbrImageMemoryTypeFromProperties(pVulkan,
-//                                                  pTexture->image,
-//                                                  properties,
-//                                                  &memRequirements,
-//                                                  &memTypeIndex));
-//
-//    VkMemoryAllocateInfo allocInfo = {
-//            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-//            .allocationSize = memRequirements.size,
-//            .memoryTypeIndex = memTypeIndex,
-//    };
-//    FBR_VK_CHECK(vkAllocateMemory(pVulkan->device, &allocInfo, NULL, &pTexture->deviceMemory));
-//
-//    vkBindImageMemory(pVulkan->device, pTexture->image, pTexture->deviceMemory, 0);
-//
-//    pTexture->extent = extent;
-//}
+#include <vulkan/vulkan.h>
 
 Moxaic::VulkanTexture::VulkanTexture(const VulkanDevice &device)
         : m_Device(device)
@@ -78,29 +37,51 @@ bool Moxaic::VulkanTexture::Import(VkFormat format,
 }
 
 bool Moxaic::VulkanTexture::Create(VkFormat format,
-                                   VkExtent2D extent,
+                                   VkExtent3D extent,
                                    VkImageUsageFlags usage,
                                    VkImageAspectFlags aspectMask,
                                    bool external)
 {
-//    if (external) {
-//        createExternalTexture(pVulkan,
-//                              extent,
-//                              format,
-//                              VK_IMAGE_TILING_OPTIMAL,
-//                              usage,
-//                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-//                              pTexture);
-//    } else {
-//        createTexture(pVulkan,
-//                      extent,
-//                      format,
-//                      VK_IMAGE_TILING_OPTIMAL,
-//                      usage,
-//                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-//                      pTexture);
-//    }
-//    createTextureView(pVulkan, format, aspectMask, pTexture);
+    MXC_LOG("CreateTexture: ", format, usage, aspectMask);
+
+    const VkImageCreateInfo imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = format,
+            .extent = extent,
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    MXC_CHK(m_Device.CreateImage(imageCreateInfo, m_Image));
+    MXC_CHK(m_Device.AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_Image, m_DeviceMemory));
+    MXC_CHK(m_Device.BindImageMemory(m_Image, m_DeviceMemory));
+
+    const VkImageViewCreateInfo imageViewCreateInfo {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = m_Image,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = format,
+            .components {
+                    .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                    .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                    .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                    .a = VK_COMPONENT_SWIZZLE_IDENTITY
+            },
+            .subresourceRange {
+                    .aspectMask = aspectMask,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+            }
+    };
+    MXC_CHK(m_Device.CreateImageView(imageViewCreateInfo, m_ImageView));
+
     return true;
 }
 

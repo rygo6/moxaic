@@ -1,30 +1,43 @@
 #pragma once
 
-#include "moxaic_vulkan_texture.hpp"
-
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
+#include "moxaic_vulkan.hpp"
 
 namespace Moxaic
 {
     class VulkanDevice
     {
     public:
-        VulkanDevice(VkInstance instance, VkSurfaceKHR surface);
+        VulkanDevice(const VkInstance &instance,
+                     const VkSurfaceKHR &surface);
         virtual ~VulkanDevice();
         bool Init();
 
-        uint32_t m_GraphicsQueueFamilyIndex;
+        bool CreateImage(const VkImageCreateInfo &imageCreateInfo,
+                         VkImage &m_Image) const;
+
+        bool AllocateMemory(const VkMemoryPropertyFlags &properties,
+                            const VkImage &image,
+                            VkDeviceMemory &deviceMemory) const;
+
+        bool BindImageMemory(const VkImage &image,
+                             const VkDeviceMemory &DeviceMemory) const
+        { return vkBindImageMemory(m_Device, image, DeviceMemory, 0) == VK_SUCCESS; }
+
+        bool CreateImageView(const VkImageViewCreateInfo &createInfo,
+                             VkImageView &imageView) const
+        { return vkCreateImageView(m_Device, &createInfo, VK_ALLOC, &imageView) == VK_SUCCESS; }
 
     private:
-        const VkInstance m_Instance;
-        const VkSurfaceKHR m_Surface;
+        const VkInstance &m_Instance;
+        const VkSurfaceKHR &m_Surface;
 
         VkDevice m_Device;
 
         VkPhysicalDevice m_PhysicalDevice;
 
         VkQueue m_GraphicsQueue;
-//        uint32_t m_GraphicsQueueFamilyIndex;
+        uint32_t m_GraphicsQueueFamilyIndex;
 
         VkQueue m_ComputeQueue;
         uint32_t m_ComputeQueueFamilyIndex;

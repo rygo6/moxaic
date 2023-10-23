@@ -36,3 +36,11 @@ namespace Moxaic
 #define MXC_LOG_FUNCTION() Moxaic::LogParams(MXC_FILE_NO_PATH, __LINE__, __FUNCTION__)
 #define MXC_LOG_ERROR(...) Moxaic::LogError(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
 #define MXC_LOG_NAMED(var) std::cout << '(' << MXC_FILE_NO_PATH << ':' << __LINE__ << ") " << #var << " = " << var << '\n';
+
+#define MXC_CHK(command) \
+({ \
+    if (!command) { \
+        printf("(%s:%d) Fail on command: %s\n", MXC_FILE_NO_PATH, __LINE__, #command); \
+        return false; \
+    } \
+})

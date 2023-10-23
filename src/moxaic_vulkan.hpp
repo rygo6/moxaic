@@ -1,8 +1,8 @@
 #pragma once
 
-#include "main.hpp"
+#include "moxaic_logging.hpp"
 
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 #include <SDL2/SDL.h>
 
 #ifdef WIN32
@@ -19,9 +19,9 @@
 #define MXC_G_BUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define MXC_DEPTH_BUFFER_FORMAT VK_FORMAT_D32_SFLOAT
 
-#define MXC_VK_ALLOCATOR nullptr
+#define VK_ALLOC nullptr
 
-#define MXC_VK_CHECK(command) \
+#define VK_CHK(command) \
 ({                        \
     Moxaic::VkDebug.VulkanDebugLine = __LINE__; \
     Moxaic::VkDebug.VulkanDebugFile = MXC_FILE_NO_PATH; \

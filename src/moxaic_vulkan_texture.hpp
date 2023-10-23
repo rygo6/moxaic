@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 #ifdef WIN32
 #include <windows.h>
@@ -31,7 +31,7 @@ namespace Moxaic
                     HANDLE externalMemory);
 
         bool Create(VkFormat format,
-                    VkExtent2D extent,
+                    VkExtent3D extent,
                     VkImageUsageFlags usage,
                     VkImageAspectFlags aspectMask,
                     bool external);
@@ -42,7 +42,7 @@ namespace Moxaic
         const VulkanDevice &m_Device;
         VkImage m_Image;
         VkImageView m_ImageView;
-        VkDeviceMemory n_DeviceMemory;
+        VkDeviceMemory m_DeviceMemory;
         VkExtent2D m_Extent;
 #ifdef WIN32
         HANDLE m_ExternalMemory;

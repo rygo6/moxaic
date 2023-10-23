@@ -3,14 +3,15 @@
 
 #include "moxaic_logging.hpp"
 
+#include "main.hpp"
+
+#include <vector>
 #include <iostream>
-#include <SDL2/SDL.h>
+#include <cassert>
 #include <SDL2/SDL_Vulkan.h>
 
 #ifdef WIN32
-
 #include <vulkan/vulkan_win32.h>
-
 #endif
 
 #define MXC_LOAD_VULKAN_FUNCTION(function) \
@@ -49,6 +50,7 @@ static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severit
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
             return "!!! ";
     }
+    return "";
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -71,9 +73,9 @@ static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *> &
     MXC_LOG_FUNCTION();
 
     unsigned int count = 0;
-    MXC_VK_CHECK(vkEnumerateInstanceLayerProperties(&count, nullptr));
+    VK_CHK(vkEnumerateInstanceLayerProperties(&count, nullptr));
     std::vector<VkLayerProperties> properties(count);
-    MXC_VK_CHECK(vkEnumerateInstanceLayerProperties(&count, properties.data()));
+    VK_CHK(vkEnumerateInstanceLayerProperties(&count, properties.data()));
 
     for (auto requiredName: requiredInstanceLayerNames) {
         MXC_LOG("Loading InstanceLayer: ", requiredName);
@@ -98,9 +100,9 @@ static bool CheckVulkanInstanceExtensions(const std::vector<const char *> &requi
     MXC_LOG_FUNCTION();
 
     unsigned int count = 0;
-    MXC_VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr));
+    VK_CHK(vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr));
     std::vector<VkExtensionProperties> properties(count);
-    MXC_VK_CHECK(vkEnumerateInstanceExtensionProperties(nullptr, &count, properties.data()));
+    VK_CHK(vkEnumerateInstanceExtensionProperties(nullptr, &count, properties.data()));
 
     for (auto requiredName: requiredInstanceExtensionsNames) {
         MXC_LOG("Loading InstanceExtension:", requiredName);
@@ -163,7 +165,7 @@ static bool CreateVulkanInstance(SDL_Window *const pWindow)
     createInfo.enabledExtensionCount = requiredInstanceExtensionsNames.size();
     createInfo.ppEnabledExtensionNames = requiredInstanceExtensionsNames.data();
 
-    MXC_VK_CHECK(vkCreateInstance(&createInfo, MXC_VK_ALLOCATOR, &g_VulkanInstance));
+    VK_CHK(vkCreateInstance(&createInfo, VK_ALLOC, &g_VulkanInstance));
 
     return true;
 }
@@ -195,10 +197,10 @@ static bool CreateVulkanDebugOutput()
                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
             .pfnUserCallback = DebugCallback,
     };
-    MXC_VK_CHECK(VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
-                                                     &debugUtilsMessengerCreateInfo,
-                                                     MXC_VK_ALLOCATOR,
-                                                     &g_VulkanDebugMessenger));
+    VK_CHK(VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
+                                               &debugUtilsMessengerCreateInfo,
+                                               VK_ALLOC,
+                                               &g_VulkanDebugMessenger));
 
     return true;
 }
