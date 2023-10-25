@@ -1,16 +1,17 @@
 #include "moxaic_vulkan_texture.hpp"
 #include "moxaic_vulkan_device.hpp"
+#include "moxaic_vulkan.hpp"
 #include "moxaic_logging.hpp"
 
 #include <vulkan/vulkan.h>
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vk_enum_string_helper.h>
 
 #if WIN32
 #include <vulkan/vulkan_win32.h>
 #endif
 
 Moxaic::VulkanTexture::VulkanTexture(const VulkanDevice &device)
-        : m_Device(device)
+        : k_Device(device)
 {}
 
 Moxaic::VulkanTexture::~VulkanTexture() = default;
@@ -43,64 +44,14 @@ bool Moxaic::VulkanTexture::InitFromImport(VkFormat format,
 bool Moxaic::VulkanTexture::Init(VkFormat format,
                                  VkExtent3D extent,
                                  VkImageUsageFlags usage,
-                                 VkImageAspectFlags aspectMask)
+                                 VkImageAspectFlags aspectMask,
+                                 TextureLocality locality)
 {
-    MXC_LOG("CreateTexture: ", format, usage, aspectMask);
-
-    const VkImageCreateInfo imageCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = nullptr,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .format = format,
-            .extent = extent,
-            .mipLevels = 1,
-            .arrayLayers = 1,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .tiling = VK_IMAGE_TILING_OPTIMAL,
-            .usage = usage,
-            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-            .queueFamilyIndexCount = 0,
-            .pQueueFamilyIndices = nullptr,
-            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    };
-    MXC_CHK(m_Device.CreateImage(imageCreateInfo, m_Image));
-    MXC_CHK(m_Device.AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_Image, m_DeviceMemory));
-    MXC_CHK(m_Device.BindImageMemory(m_Image, m_DeviceMemory));
-
-    const VkImageViewCreateInfo imageViewCreateInfo {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-            .image = m_Image,
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = format,
-            .components {
-                    .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                    .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                    .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                    .a = VK_COMPONENT_SWIZZLE_IDENTITY
-            },
-            .subresourceRange {
-                    .aspectMask = aspectMask,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1,
-            }
-    };
-    MXC_CHK(m_Device.CreateImageView(imageViewCreateInfo, m_ImageView));
-
-    m_Extent = extent;
-
-    return true;
-}
-
-bool Moxaic::VulkanTexture::InitExternal(VkFormat format,
-                                         VkExtent3D extent,
-                                         VkImageUsageFlags usage,
-                                         VkImageAspectFlags aspectMask)
-{
-    MXC_LOG("CreateExternalTexture: ", format, usage, aspectMask);
+    MXC_LOG("CreateTexture: ",
+            string_VkFormat(format),
+            string_VkImageUsageFlags(usage),
+            string_VkImageAspectFlags(aspectMask),
+            string_TextureLocality(locality));
 
     const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
     const VkExternalMemoryImageCreateInfo externalImageInfo = {
@@ -110,7 +61,7 @@ bool Moxaic::VulkanTexture::InitExternal(VkFormat format,
     };
     const VkImageCreateInfo imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = &externalImageInfo,
+            .pNext = locality == ExternalTexture ? &externalImageInfo : nullptr,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = format,
             .extent = extent,
@@ -124,17 +75,18 @@ bool Moxaic::VulkanTexture::InitExternal(VkFormat format,
             .pQueueFamilyIndices = nullptr,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    MXC_CHK(m_Device.CreateImage(imageCreateInfo, m_Image));
-    // todo your supposed check if it wants dedicated memory
-//    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
-//            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
-//            .image = pTestTexture->image,
-//            .buffer = VK_NULL_HANDLE,
-//    };
-    MXC_CHK(m_Device.AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_Image, m_DeviceMemory));
-    MXC_CHK(m_Device.BindImageMemory(m_Image, m_DeviceMemory));
+    VK_CHK(k_Device.VkCreateImage(imageCreateInfo,
+                                  m_Image));
+    MXC_CHK(k_Device.AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                    m_Image,
+                                    m_DeviceMemory));
+    VK_CHK(k_Device.VkBindImageMemory(m_Image,
+                                      m_DeviceMemory));
 
-    const VkImageViewCreateInfo imageViewCreateInfo {
+    if (m_Image == nullptr)
+        printf("TRUE");
+
+    const VkImageViewCreateInfo imageViewCreateInfo{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
@@ -155,17 +107,21 @@ bool Moxaic::VulkanTexture::InitExternal(VkFormat format,
                     .layerCount = 1,
             }
     };
-    MXC_CHK(m_Device.CreateImageView(imageViewCreateInfo, m_ImageView));
+    VK_CHK(k_Device.VkCreateImageView(imageViewCreateInfo,
+                                      m_ImageView));
 
+    if (locality == ExternalTexture) {
 #if WIN32
-    const VkMemoryGetWin32HandleInfoKHR memoryInfo = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
-            .pNext = nullptr,
-            .memory = m_DeviceMemory,
-            .handleType = externalHandleType
-    };
-    m_Device.GetMemoryHandle(memoryInfo, m_ExternalMemory);
+        const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+                .pNext = nullptr,
+                .memory = m_DeviceMemory,
+                .handleType = externalHandleType
+        };
+        VK_CHK(k_Device.VkGetMemoryHandle(getWin32HandleInfo,
+                                          m_ExternalMemory));
 #endif
+    }
 
     m_Extent = extent;
 

@@ -215,12 +215,6 @@ bool Moxaic::VulkanInit(SDL_Window *const pWindow, const bool enableValidationLa
     if (!SDL_Vulkan_CreateSurface(pWindow, g_VulkanInstance, &g_VulkanSurface))
         return false;
 
-//    auto device = new VulkanDevice(g_VulkanInstance, g_VulkanSurface);
-//    if (!device->Init())
-//        return false;
-//
-//    g_pVulkanDevices.push_back(device);
-
     return true;
 }
 

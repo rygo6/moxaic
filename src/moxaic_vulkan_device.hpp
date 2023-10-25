@@ -1,59 +1,60 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
 #include "moxaic_vulkan.hpp"
 
+#include <vulkan/vulkan.h>
+
 #if WIN32
+#include <windows.h>
 #include <vulkan/vulkan_win32.h>
 #endif
 
 namespace Moxaic
 {
+
     class VulkanDevice
     {
     public:
-        VulkanDevice(const VkInstance &instance,
-                     const VkSurfaceKHR &surface);
+        explicit VulkanDevice(VkInstance instance, VkSurfaceKHR surface);
+
         virtual ~VulkanDevice();
+
         bool Init();
 
-        bool CreateImage(const VkImageCreateInfo &imageCreateInfo,
-                         VkImage &outImage) const;
-
         bool AllocateMemory(const VkMemoryPropertyFlags &properties,
-                            const VkImage &image,
+                            VkImage image,
                             VkDeviceMemory &outDeviceMemory) const;
 
     private:
-        const VkInstance &m_Instance;
-        const VkSurfaceKHR &m_Surface;
+        VkInstance m_Instance;
+        VkSurfaceKHR m_Surface;
 
-        VkDevice m_Device;
+        VkDevice m_Device{VK_NULL_HANDLE};
 
-        VkPhysicalDevice m_PhysicalDevice;
+        VkPhysicalDevice m_PhysicalDevice{VK_NULL_HANDLE};
 
-        VkQueue m_GraphicsQueue;
-        uint32_t m_GraphicsQueueFamilyIndex;
+        VkQueue m_GraphicsQueue{VK_NULL_HANDLE};
+        uint32_t m_GraphicsQueueFamilyIndex{};
 
-        VkQueue m_ComputeQueue;
-        uint32_t m_ComputeQueueFamilyIndex;
+        VkQueue m_ComputeQueue{VK_NULL_HANDLE};
+        uint32_t m_ComputeQueueFamilyIndex{};
 
-        VkRenderPass m_RenderPass;
+        VkRenderPass m_RenderPass{VK_NULL_HANDLE};
 
-        VkDescriptorPool m_DescriptorPool;
-        VkQueryPool m_QueryPool;
-        VkCommandPool m_GraphicsCommandPool;
-        VkCommandPool m_ComputeCommandPool;
+        VkDescriptorPool m_DescriptorPool{VK_NULL_HANDLE};
+        VkQueryPool m_QueryPool{VK_NULL_HANDLE};
+        VkCommandPool m_GraphicsCommandPool{VK_NULL_HANDLE};
+        VkCommandPool m_ComputeCommandPool{VK_NULL_HANDLE};
 
-        VkCommandBuffer m_GraphicsCommandBuffer;
-        VkCommandBuffer m_ComputeCommandBuffer;
+        VkCommandBuffer m_GraphicsCommandBuffer{VK_NULL_HANDLE};
+        VkCommandBuffer m_ComputeCommandBuffer{VK_NULL_HANDLE};
 
-        VkSampler m_LinearSampler;
-        VkSampler m_NearestSampler;
+        VkSampler m_LinearSampler{VK_NULL_HANDLE};
+        VkSampler m_NearestSampler{VK_NULL_HANDLE};
 
-        VkPhysicalDeviceMeshShaderPropertiesEXT  m_PhysicalDeviceMeshShaderProperties;
-        VkPhysicalDeviceProperties2  m_PhysicalDeviceProperties;
-        VkPhysicalDeviceMemoryProperties m_PhysicalDeviceMemoryProperties;
+        VkPhysicalDeviceMeshShaderPropertiesEXT m_PhysicalDeviceMeshShaderProperties{};
+        VkPhysicalDeviceProperties2 m_PhysicalDeviceProperties{};
+        VkPhysicalDeviceMemoryProperties m_PhysicalDeviceMemoryProperties{};
 
         bool PickPhysicalDevice();
         bool FindQueues();
@@ -63,28 +64,30 @@ namespace Moxaic
         bool CreatePools();
         bool CreateSamplers();
 
-    public: // inline
-        bool BindImageMemory(const VkImage &image,
-                             const VkDeviceMemory &DeviceMemory) const
+    public: // vk inline
+        VkResult VkCreateImage(const VkImageCreateInfo &imageCreateInfo, VkImage &outImage) const
         {
-            VK_CHK(vkBindImageMemory(m_Device, image, DeviceMemory, 0));
-            return true;
+            return vkCreateImage(m_Device, &imageCreateInfo, VK_ALLOC, &outImage);
         }
 
-        bool CreateImageView(const VkImageViewCreateInfo &createInfo,
-                             VkImageView &outImageView) const
+        VkResult VkBindImageMemory(VkImage image, VkDeviceMemory DeviceMemory) const
         {
-            VK_CHK(vkCreateImageView(m_Device, &createInfo, VK_ALLOC, &outImageView));
-            return true;
+            return vkBindImageMemory(m_Device, image, DeviceMemory, 0);
+        }
+
+        VkResult VkCreateImageView(const VkImageViewCreateInfo &imageViewCreateInfo, VkImageView &outImageView) const
+        {
+            return vkCreateImageView(m_Device, &imageViewCreateInfo, VK_ALLOC, &outImageView);
         }
 
 #if WIN32
-        bool GetMemoryHandle(const VkMemoryGetWin32HandleInfoKHR &getWin32HandleInfo,
-                             HANDLE &outHandle) const
+
+        VkResult VkGetMemoryHandle(VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo, HANDLE &outHandle) const
         {
-            VK_CHK(VkFunc.GetMemoryWin32HandleKHR(m_Device, &getWin32HandleInfo, &outHandle));
-            return true;
+            return VkFunc.GetMemoryWin32HandleKHR(m_Device, &getWin32HandleInfo, &outHandle);
         }
+
 #endif
     };
+
 }

@@ -3,6 +3,7 @@
 #include "moxaic_logging.hpp"
 
 #include <vulkan/vulkan.h>
+#include <vulkan/vk_enum_string_helper.h>
 #include <SDL2/SDL.h>
 
 #ifdef WIN32
@@ -29,7 +30,11 @@
     Moxaic::VkDebug.VulkanDebugCommand = #command; \
     VkResult result = command; \
     if (result != VK_SUCCESS) { \
-        printf("(%s:%d) VKCheck fail on command: %s - %d\n", Moxaic::VkDebug.VulkanDebugFile, Moxaic::VkDebug.VulkanDebugLine, Moxaic::VkDebug.VulkanDebugCommand, result); \
+        printf("(%s:%d) VKCheck fail on command: %s - %s\n", \
+                Moxaic::VkDebug.VulkanDebugFile, \
+                Moxaic::VkDebug.VulkanDebugLine, \
+                Moxaic::VkDebug.VulkanDebugCommand, \
+                string_VkResult(result)); \
         return false; \
     } \
 })

@@ -60,28 +60,10 @@ static bool BufferMemoryTypeFromProperties(const VkDevice &device,
                                     outMemoryTypeBits);
 }
 
-Moxaic::VulkanDevice::VulkanDevice(const VkInstance &instance,
-                                   const VkSurfaceKHR &surface)
+Moxaic::VulkanDevice::VulkanDevice(VkInstance instance,
+                                   VkSurfaceKHR surface)
         : m_Instance(instance)
         , m_Surface(surface)
-        , m_Device(VK_NULL_HANDLE)
-        , m_PhysicalDevice(VK_NULL_HANDLE)
-        , m_GraphicsQueue(VK_NULL_HANDLE)
-        , m_GraphicsQueueFamilyIndex(-1)
-        , m_ComputeQueue(VK_NULL_HANDLE)
-        , m_ComputeQueueFamilyIndex(-1)
-        , m_RenderPass(VK_NULL_HANDLE)
-        , m_DescriptorPool(VK_NULL_HANDLE)
-        , m_QueryPool(VK_NULL_HANDLE)
-        , m_GraphicsCommandPool(VK_NULL_HANDLE)
-        , m_ComputeCommandPool(VK_NULL_HANDLE)
-        , m_GraphicsCommandBuffer(VK_NULL_HANDLE)
-        , m_ComputeCommandBuffer(VK_NULL_HANDLE)
-        , m_LinearSampler(VK_NULL_HANDLE)
-        , m_NearestSampler(VK_NULL_HANDLE)
-        , m_PhysicalDeviceMeshShaderProperties()
-        , m_PhysicalDeviceProperties()
-        , m_PhysicalDeviceMemoryProperties()
 {}
 
 Moxaic::VulkanDevice::~VulkanDevice() = default;
@@ -99,7 +81,7 @@ bool Moxaic::VulkanDevice::PickPhysicalDevice()
     std::vector<VkPhysicalDevice> devices(deviceCount);
     VK_CHK(vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data()));
 
-    // Todo Implement Query OpenVR for the physical device to use
+    // Todo Implement Query OpenVR for the physical vkDevice to use
     m_PhysicalDevice = devices.front();
 
     m_PhysicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
@@ -642,13 +624,11 @@ bool Moxaic::VulkanDevice::Init()
     if (!CreateSamplers())
         return false;
 
-//    SDL_Vulkan_GetDrawableSize(window, &width, &height);
-
     return true;
 }
 
 bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
-                                          const VkImage &image,
+                                          VkImage image,
                                           VkDeviceMemory &outDeviceMemory) const
 {
     VkMemoryRequirements memRequirements = {};
@@ -670,15 +650,5 @@ bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &propertie
                             VK_ALLOC,
                             &outDeviceMemory));
 
-    return true;
-}
-
-bool Moxaic::VulkanDevice::CreateImage(const VkImageCreateInfo &imageCreateInfo,
-                                       VkImage &outImage) const
-{
-    VK_CHK(vkCreateImage(m_Device,
-                         &imageCreateInfo,
-                         VK_ALLOC,
-                         &outImage));
     return true;
 }

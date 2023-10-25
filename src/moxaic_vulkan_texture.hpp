@@ -10,10 +10,15 @@ namespace Moxaic
 {
     class VulkanDevice;
 
+    enum TextureLocality : char {
+        LocalTexture,
+        ExternalTexture,
+    };
+
     class VulkanTexture
     {
     public:
-        VulkanTexture(const VulkanDevice &Device);
+        explicit VulkanTexture(const VulkanDevice &device);
 
         virtual ~VulkanTexture();
 
@@ -33,25 +38,30 @@ namespace Moxaic
         bool Init(VkFormat format,
                   VkExtent3D extent,
                   VkImageUsageFlags usage,
-                  VkImageAspectFlags aspectMask);
-
-        bool InitExternal(VkFormat format,
-                          VkExtent3D extent,
-                          VkImageUsageFlags usage,
-                          VkImageAspectFlags aspectMask);
+                  VkImageAspectFlags aspectMask,
+                  TextureLocality locality);
 
         void Cleanup();
 
     private:
-        const VulkanDevice &m_Device;
-        VkImage m_Image;
-        VkImageView m_ImageView;
-        VkDeviceMemory m_DeviceMemory;
-        VkExtent3D m_Extent;
+        const VulkanDevice &k_Device;
+        VkImage m_Image{VK_NULL_HANDLE};
+        VkImageView m_ImageView{VK_NULL_HANDLE};
+        VkDeviceMemory m_DeviceMemory{VK_NULL_HANDLE};
+        VkExtent3D m_Extent{};
 #ifdef WIN32
-        HANDLE m_ExternalMemory;
+        HANDLE m_ExternalMemory{};
 #endif
-
-
     };
+
+    static inline const char* string_TextureLocality(TextureLocality input_value) {
+        switch (input_value) {
+            case LocalTexture:
+                return "LocalTexture";
+            case ExternalTexture:
+                return "ExternalTexture";
+            default:
+                return "Unhandled TextureLocality";
+        }
+    }
 }
