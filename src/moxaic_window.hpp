@@ -2,8 +2,8 @@
 
 #include <SDL2/SDL.h>
 
-namespace Moxaic {
-
+namespace Moxaic
+{
     bool WindowInit();
     void WindowPoll();
     void WindowShutdown();

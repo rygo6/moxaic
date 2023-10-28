@@ -1,5 +1,7 @@
 #pragma once
 
+#include "moxaic_vulkan.hpp"
+
 #include <vulkan/vulkan.h>
 
 #ifdef WIN32
@@ -9,11 +11,6 @@
 namespace Moxaic
 {
     class VulkanDevice;
-
-    enum TextureLocality : char {
-        LocalTexture,
-        ExternalTexture,
-    };
 
     class VulkanTexture
     {
@@ -35,33 +32,33 @@ namespace Moxaic
                             VkImageAspectFlags aspectMask,
                             HANDLE externalMemory);
 
-        bool Init(VkFormat format,
-                  VkExtent3D extent,
-                  VkImageUsageFlags usage,
-                  VkImageAspectFlags aspectMask,
-                  TextureLocality locality);
+        bool Init(const VkFormat &format,
+                  const VkExtent3D &extent,
+                  const VkImageUsageFlags &usage,
+                  const VkImageAspectFlags &aspectMask,
+                  const BufferLocality &locality);
 
         void Cleanup();
 
+        bool TransitionImageLayoutImmediate(VkImageLayout oldLayout,
+                                            VkImageLayout newLayout,
+                                            VkAccessFlags srcAccessMask,
+                                            VkAccessFlags dstAccessMask,
+                                            VkPipelineStageFlags srcStageMask,
+                                            VkPipelineStageFlags dstStageMask,
+                                            VkImageAspectFlags aspectMask) const;
+
+        inline VkImageView vkImageView() const { return m_VkImageView; }
+
     private:
         const VulkanDevice &k_Device;
-        VkImage m_Image{VK_NULL_HANDLE};
-        VkImageView m_ImageView{VK_NULL_HANDLE};
-        VkDeviceMemory m_DeviceMemory{VK_NULL_HANDLE};
+        VkImage m_VkImage{VK_NULL_HANDLE};
+        VkImageView m_VkImageView{VK_NULL_HANDLE};
+        VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
         VkExtent3D m_Extent{};
 #ifdef WIN32
         HANDLE m_ExternalMemory{};
 #endif
-    };
 
-    static inline const char* string_TextureLocality(TextureLocality input_value) {
-        switch (input_value) {
-            case LocalTexture:
-                return "LocalTexture";
-            case ExternalTexture:
-                return "ExternalTexture";
-            default:
-                return "Unhandled TextureLocality";
-        }
-    }
+    };
 }

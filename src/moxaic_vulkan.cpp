@@ -34,7 +34,6 @@ static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severit
 {
     switch (severity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-            return "";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
             return "";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
@@ -203,27 +202,22 @@ bool Moxaic::VulkanInit(SDL_Window *const pWindow, const bool enableValidationLa
 
     g_VulkanValidationLayers = enableValidationLayers;
 
-    if (!CreateVulkanInstance(pWindow))
-        return false;
-
-    if (!LoadVulkanFunctionPointers())
-        return false;
-
-    if (!CreateVulkanDebugOutput())
-        return false;
-
-    if (!SDL_Vulkan_CreateSurface(pWindow, g_VulkanInstance, &g_VulkanSurface))
-        return false;
+    MXC_CHK(CreateVulkanInstance(pWindow));
+    MXC_CHK(LoadVulkanFunctionPointers());
+    MXC_CHK(CreateVulkanDebugOutput());
+    MXC_CHK(SDL_Vulkan_CreateSurface(pWindow, g_VulkanInstance, &g_VulkanSurface));
 
     return true;
 }
 
-VkInstance Moxaic::VulkanInstance() {
+VkInstance Moxaic::vkInstance()
+{
     assert((g_VulkanInstance != nullptr) && "Vulkan not initialized!");
     return g_VulkanInstance;
 }
 
-VkSurfaceKHR Moxaic::VulkanSurface() {
+VkSurfaceKHR Moxaic::vkSurface()
+{
     assert((g_VulkanSurface != nullptr) && "Vulkan not initialized!");
     return g_VulkanSurface;
 }

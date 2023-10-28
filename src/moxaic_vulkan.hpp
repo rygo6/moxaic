@@ -11,15 +11,10 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-#define MXC_COLOR_BUFFER_USAGE (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT)
-#define MXC_NORMAL_BUFFER_USAGE (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)
-#define MXC_G_BUFFER_USAGE (VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)
-#define MXC_DEPTH_BUFFER_USAGE (VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT)
-
-#define MXC_COLOR_BUFFER_FORMAT VK_FORMAT_R8G8B8A8_UNORM
-#define MXC_NORMAL_BUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
-#define MXC_G_BUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
-#define MXC_DEPTH_BUFFER_FORMAT VK_FORMAT_D32_SFLOAT
+inline constinit VkFormat k_ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
+inline constinit VkFormat k_NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+inline constinit VkFormat k_GBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 
 #define VK_ALLOC nullptr
 
@@ -41,10 +36,27 @@
 
 namespace Moxaic
 {
-    bool VulkanInit(SDL_Window* pWindow, bool enableValidationLayers);
+    bool VulkanInit(SDL_Window *pWindow, bool enableValidationLayers);
 
-    VkInstance VulkanInstance();
-    VkSurfaceKHR VulkanSurface();
+    VkInstance vkInstance();
+    VkSurfaceKHR vkSurface();
+
+    enum BufferLocality : char {
+        Local,
+        External,
+    };
+
+    inline const char *string_BufferLocality(BufferLocality input_value)
+    {
+        switch (input_value) {
+            case Local:
+                return "Local";
+            case External:
+                return "External";
+            default:
+                return "Unknown Locality";
+        }
+    }
 
     struct VulkanFunc
     {
