@@ -25,14 +25,14 @@ namespace Moxaic
         bool Init(const VkExtent2D &extent,
                   const BufferLocality &locality);
 
-        inline auto vkFramebuffer() const { return m_Framebuffer; }
-        inline auto vkRenderCompleteSemaphore() const { return m_RenderCompleteSemaphore; }
+        inline auto vkFramebuffer() const { return m_VkFramebuffer; }
+        inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
 
     private:
         const VulkanDevice &k_Device;
 
-        VkFramebuffer m_Framebuffer{VK_NULL_HANDLE};
-        VkSemaphore m_RenderCompleteSemaphore{VK_NULL_HANDLE};
+        VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
+        VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
         std::unique_ptr<VulkanTexture> m_ColorTexture{};
         std::unique_ptr<VulkanTexture> m_NormalTexture{};

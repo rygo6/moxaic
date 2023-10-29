@@ -55,14 +55,14 @@ namespace Moxaic
     private:
         const VulkanDevice &k_Device;
 
-        VkImage m_VkImage;
-        VkImageView m_VkImageView;
-        VkDeviceMemory m_VkDeviceMemory;
+        VkImage m_VkImage{VK_NULL_HANDLE};
+        VkImageView m_VkImageView{VK_NULL_HANDLE};
+        VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
 
         VkExtent3D m_Extent{};
 
 #ifdef WIN32
         HANDLE m_ExternalMemory{};
 #endif
-    }
+    };
 }
