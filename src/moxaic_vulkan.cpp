@@ -41,7 +41,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
                                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                                                     void *pUserData)
 {
-
     printf("%s(%s:%d) %s\n%s",
            SeverityToName(messageSeverity),
            Moxaic::VkDebug.VulkanDebugFile,

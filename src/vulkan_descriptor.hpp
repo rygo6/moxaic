@@ -3,51 +3,66 @@
 #include "moxaic_vulkan.hpp"
 
 #include "vulkan/vulkan.h"
+#include <vector>
 
 namespace Moxaic
 {
+    class VulkanDevice;
 
+    class VulkanTexture;
 
-    class VulkanDescriptor
+    class VulkanFramebuffer;
+
+    class VulkanDescriptorBase
     {
     public:
-        VulkanDescriptor();
-        virtual ~VulkanDescriptor();
+        explicit VulkanDescriptorBase(const VulkanDevice &device);
+        virtual ~VulkanDescriptorBase();
 
+        [[nodiscard]] static auto vkLayout();
+        [[nodiscard]] inline auto vkSet() const { return m_VkDescriptorSet; }
+    protected:
+        const VulkanDevice &k_Device;
+        VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
+
+        bool CreateDescriptorSetLayout(const std::vector<VkDescriptorSetLayoutBinding> &bindings,
+                                       VkDescriptorSetLayout &outSetLayout);
+
+        bool AllocateDescriptorSet(VkDescriptorSetLayout const &descriptorSetLayout,
+                                   VkDescriptorSet &outDescriptorSet);
+
+        void PushBinding(VkDescriptorSetLayoutBinding binding,
+                         std::vector<VkDescriptorSetLayoutBinding> &bindings);
+
+        void PushWrite(VkDescriptorImageInfo imageInfo,
+                       std::vector<VkWriteDescriptorSet> &outWrites);
+
+        void WritePushedDescriptors(const std::vector<VkWriteDescriptorSet> &writes);
+    };
+
+    class GlobalDescriptor : VulkanDescriptorBase
+    {
+    public:
+//        bool Init(Camera);
         bool Init();
-
     private:
-        VkDescriptorSetLayout m_VkDescriptorSetLayout;
-        VkDescriptorSet m_VkDescriptorSet;
+        inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
     };
 
-    class GlobalDescriptor : VulkanDescriptor
+    class MaterialDescriptor : VulkanDescriptorBase
     {
     public:
-//        FBR_RESULT fbrCreateSetGlobal(const FbrVulkan *pVulkan,
-//                                      const FbrDescriptors *pDescriptors,
-//                                      const FbrCamera *pCamera,
-//                                      FbrSetPass *pSet);
-    public:
+        bool Init(VulkanTexture texture);
+    private:
+        inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
     };
 
-    class MaterialDescriptor : VulkanDescriptor
+    class MeshNodeDescriptor : VulkanDescriptorBase
     {
     public:
-//        FBR_RESULT fbrCreateSetMaterial(const FbrVulkan *pVulkan,
-//                                        const FbrDescriptors *pDescriptors,
-//                                        const FbrTexture *pTexture,
-//                                        FbrSetMaterial *pSet);
-    public:
+        bool Init(VulkanFramebuffer framebuffer);
+    private:
+        inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
     };
 
-    class ObjectDescriptor : VulkanDescriptor
-    {
-    public:
-//        FBR_RESULT fbrCreateSetObject(const FbrVulkan *pVulkan,
-//                                      const FbrDescriptors *pDescriptors,
-//                                      const FbrTransform *pTransform,
-//                                      FbrSetObject *pSet);
-    public:
-    };
 }

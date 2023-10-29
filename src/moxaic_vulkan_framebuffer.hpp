@@ -14,10 +14,6 @@ namespace Moxaic
     class VulkanFramebuffer
     {
     public:
-#define VK_HANDLES \
-        VK_HANDLE(,Framebuffer) \
-        VK_HANDLE(RenderComplete,Semaphore)
-
         explicit VulkanFramebuffer(const VulkanDevice &device);
         VulkanFramebuffer(const VulkanDevice &&) = delete;  // prevents rvalue binding?
         virtual ~VulkanFramebuffer();
@@ -27,6 +23,11 @@ namespace Moxaic
 
         inline auto vkFramebuffer() const { return m_VkFramebuffer; }
         inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
+
+        inline const auto& ColorTexture() const { return *m_ColorTexture; }
+        inline const auto& NormalTexture() const { return *m_NormalTexture; }
+        inline const auto& GBufferTexture() const { return *m_GBufferTexture; }
+        inline const auto& DepthTexture() const { return *m_DepthTexture; }
 
     private:
         const VulkanDevice &k_Device;
@@ -38,6 +39,7 @@ namespace Moxaic
         std::unique_ptr<VulkanTexture> m_NormalTexture{};
         std::unique_ptr<VulkanTexture> m_GBufferTexture{};
         std::unique_ptr<VulkanTexture> m_DepthTexture{};
+
         VkSampleCountFlagBits m_Samples{VK_SAMPLE_COUNT_1_BIT};
 
     };

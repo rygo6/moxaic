@@ -16,7 +16,6 @@ namespace Moxaic
     {
     public:
         explicit VulkanTexture(const VulkanDevice &device);
-
         virtual ~VulkanTexture();
 
         bool InitFromImage(VkFormat format,
