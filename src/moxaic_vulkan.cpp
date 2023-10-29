@@ -158,7 +158,7 @@ static bool LoadVulkanFunctionPointers()
     MXC_LOG_FUNCTION();
 
 #define VK_FUNC(func) \
-    MXC_LOG_NAMED(#func); \
+    MXC_LOG(#func); \
     Moxaic::VkFunc.func = (PFN_vk##func) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#func); \
     if (Moxaic::VkFunc.func == nullptr) { \
         MXC_LOG_ERROR("Load Fail: ", #func); \

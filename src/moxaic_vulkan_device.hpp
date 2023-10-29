@@ -18,7 +18,6 @@ namespace Moxaic
     {
     public:
         VulkanDevice();
-
         virtual ~VulkanDevice();
 
         bool Init();
@@ -31,7 +30,41 @@ namespace Moxaic
 
         bool EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const;
 
+        inline auto vkDevice() const { return m_VkDevice; }
+        inline auto vkPhysicalDevice() const { return m_VkPhysicalDevice; }
+        inline auto vkGraphicsQueue() const { return m_VkGraphicsQueue; }
+        inline auto vkComputeQueue() const { return m_VkComputeQueue; }
+        inline auto vkRenderPass() const { return m_VkRenderPass; }
+        inline auto vkDescriptorPool() const { return m_VkDescriptorPool; }
+        inline auto vkQueryPool() const { return m_VkQueryPool; }
+        inline auto vkGraphicsCommandPool() const { return m_VkGraphicsCommandPool; }
+        inline auto vkComputeCommandPool() const { return m_VkComputeCommandPool; }
+        inline auto vkGraphicsCommandBuffer() const { return m_VkGraphicsCommandBuffer; }
+        inline auto vkComputeCommandBuffer() const { return m_VkComputeCommandBuffer; }
+        inline auto vkLinearSampler() const { return m_VkLinearSampler; }
+        inline auto vkNearestSampler() const { return m_VkNearestSampler; }
+
     private:
+        VkDevice m_VkDevice{VK_NULL_HANDLE};
+
+        VkPhysicalDevice m_VkPhysicalDevice{VK_NULL_HANDLE};
+
+        VkQueue m_VkGraphicsQueue{VK_NULL_HANDLE};
+        VkQueue m_VkComputeQueue{VK_NULL_HANDLE};
+
+        VkRenderPass m_VkRenderPass{VK_NULL_HANDLE};
+
+        VkDescriptorPool m_VkDescriptorPool{VK_NULL_HANDLE};
+        VkQueryPool m_VkQueryPool{VK_NULL_HANDLE};
+        VkCommandPool m_VkGraphicsCommandPool{VK_NULL_HANDLE};
+        VkCommandPool m_VkComputeCommandPool{VK_NULL_HANDLE};
+
+        VkCommandBuffer m_VkGraphicsCommandBuffer{VK_NULL_HANDLE};
+        VkCommandBuffer m_VkComputeCommandBuffer{VK_NULL_HANDLE};
+
+        VkSampler m_VkLinearSampler{VK_NULL_HANDLE};
+        VkSampler m_VkNearestSampler{VK_NULL_HANDLE};
+
         uint32_t m_GraphicsQueueFamilyIndex{};
         uint32_t m_ComputeQueueFamilyIndex{};
 
@@ -47,30 +80,5 @@ namespace Moxaic
         bool CreatePools();
         bool CreateSamplers();
 
-
-    public:
-#define VK_HANDLES \
-        VK_HANDLE(,Device) \
-        VK_HANDLE(,PhysicalDevice) \
-        VK_HANDLE(Graphics,Queue) \
-        VK_HANDLE(Compute,Queue) \
-        VK_HANDLE(,RenderPass) \
-        VK_HANDLE(,DescriptorPool) \
-        VK_HANDLE(,QueryPool) \
-        VK_HANDLE(Graphics,CommandPool) \
-        VK_HANDLE(Compute,CommandPool) \
-        VK_HANDLE(Graphics,CommandBuffer) \
-        VK_HANDLE(Compute,CommandBuffer) \
-        VK_HANDLE(Linear,Sampler) \
-        VK_HANDLE(Nearest,Sampler)
-
-#define VK_HANDLE(p, h) VK_GETTERS(p, h)
-        VK_HANDLES
-#undef VK_HANDLE
-    private:
-#define VK_HANDLE(p, h) VK_MEMBERS(p, h)
-        VK_HANDLES
-#undef VK_HANDLE
-#undef VK_HANDLES
     };
 }

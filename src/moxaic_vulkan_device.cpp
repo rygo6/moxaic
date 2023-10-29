@@ -598,29 +598,17 @@ bool Moxaic::VulkanDevice::Init()
     SDL_assert_always(vkInstance() != VK_NULL_HANDLE);
     SDL_assert_always(vkSurface() != VK_NULL_HANDLE);
 
-    if (!PickPhysicalDevice())
-        return false;
-
-    if (!FindQueues())
-        return false;
-
-    if (!CreateDevice())
-        return false;
+    MXC_CHK(PickPhysicalDevice());
+    MXC_CHK(FindQueues());
+    MXC_CHK(CreateDevice());
 
     vkGetDeviceQueue(m_VkDevice, m_GraphicsQueueFamilyIndex, 0, &m_VkGraphicsQueue);
     vkGetDeviceQueue(m_VkDevice, m_ComputeQueueFamilyIndex, 0, &m_VkComputeQueue);
 
-    if (!CreateRenderPass())
-        return false;
-
-    if (!CreateCommandBuffers())
-        return false;
-
-    if (!CreatePools())
-        return false;
-
-    if (!CreateSamplers())
-        return false;
+    MXC_CHK(CreateRenderPass());
+    MXC_CHK(CreateCommandBuffers());
+    MXC_CHK(CreatePools());
+    MXC_CHK(CreateSamplers());
 
     return true;
 }

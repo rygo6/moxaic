@@ -16,14 +16,6 @@ inline constinit VkFormat k_NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constinit VkFormat k_GBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 
-// Automate laying out vulkan handles and public getters. VkHandles themselves do not obey
-// object encapsulation because it gets too contrived the larger the application gets and
-// vulkan isn't safe anyway, so why pretend. Plus writing out inline wrapper functions for
-// all vulkan calls is a lot of mess for not really getting much more safety. Objects make
-// direct vulkan calls with the actual vkHandles retrieved through the getters.
-#define VK_GETTERS(prefix, handle) [[nodiscard]] inline auto vk##prefix##handle() const { return m_Vk##prefix##handle; }
-#define VK_MEMBERS(prefix, handle) Vk##handle m_Vk##prefix##handle{VK_NULL_HANDLE};
-
 #define VK_ALLOC nullptr
 
 #define VK_CHK(command) \
