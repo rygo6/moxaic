@@ -60,12 +60,7 @@ static bool BufferMemoryTypeFromProperties(const VkDevice &device,
                                     outMemoryTypeBits);
 }
 
-Moxaic::VulkanDevice::VulkanDevice(VkInstance instance,
-                                   VkSurfaceKHR surface)
-        : m_VkInstance(instance)
-        , m_VkSurface(surface)
-{}
-
+Moxaic::VulkanDevice::VulkanDevice() = default;
 Moxaic::VulkanDevice::~VulkanDevice() = default;
 
 bool Moxaic::VulkanDevice::PickPhysicalDevice()
@@ -73,13 +68,13 @@ bool Moxaic::VulkanDevice::PickPhysicalDevice()
     MXC_LOG_FUNCTION();
 
     uint32_t deviceCount = 0;
-    VK_CHK(vkEnumeratePhysicalDevices(m_VkInstance, &deviceCount, nullptr));
+    VK_CHK(vkEnumeratePhysicalDevices(vkInstance(), &deviceCount, nullptr));
     if (deviceCount == 0) {
         MXC_LOG_ERROR("Failed to find GPUs with Vulkan support!");
         return false;
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    VK_CHK(vkEnumeratePhysicalDevices(m_VkInstance, &deviceCount, devices.data()));
+    VK_CHK(vkEnumeratePhysicalDevices(vkInstance(), &deviceCount, devices.data()));
 
     // Todo Implement Query OpenVR for the physical vkDevice to use
     m_VkPhysicalDevice = devices.front();
@@ -144,7 +139,7 @@ bool Moxaic::VulkanDevice::FindQueues()
         bool computeSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
 
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice, i, m_VkSurface, &presentSupport);
+        vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice, i, vkSurface(), &presentSupport);
 
         if (!foundGraphics && graphicsSupport && presentSupport) {
             if (!globalQueueSupport) {
@@ -599,6 +594,9 @@ bool Moxaic::VulkanDevice::CreateSamplers()
 bool Moxaic::VulkanDevice::Init()
 {
     MXC_LOG_FUNCTION();
+
+    SDL_assert_always(vkInstance() != VK_NULL_HANDLE);
+    SDL_assert_always(vkSurface() != VK_NULL_HANDLE);
 
     if (!PickPhysicalDevice())
         return false;

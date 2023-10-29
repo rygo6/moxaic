@@ -76,14 +76,14 @@ bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &extent,
             .height = extent.height,
             .layers = 1,
     };
-    VK_CHK(k_Device.VkCreateFramebuffer(framebufferCreateInfo, m_Framebuffer));
+    VK_CHK(vkCreateFramebuffer(k_Device.vkDevice(), &framebufferCreateInfo, VK_ALLOC, &m_VkFramebuffer));
 
     const VkSemaphoreCreateInfo renderCompleteCreateInfo{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
     };
-    VK_CHK(k_Device.VkCreateSemaphore(renderCompleteCreateInfo, m_RenderCompleteSemaphore));
+    VK_CHK(vkCreateSemaphore(k_Device.vkDevice(), &renderCompleteCreateInfo, VK_ALLOC, &m_VkRenderCompleteSemaphore));
 
     return true;
 }

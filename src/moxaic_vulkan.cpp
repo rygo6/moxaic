@@ -14,14 +14,6 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-#define MXC_LOAD_VULKAN_FUNCTION(function) \
-    MXC_LOG_NAMED(#function); \
-    Moxaic::VkFunc.function = (PFN_vk##function) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#function); \
-    if (Moxaic::VkFunc.function == nullptr) { \
-        MXC_LOG_ERROR("Load Fail: ", #function); \
-        return false; \
-    }
-
 struct Moxaic::VulkanFunc Moxaic::VkFunc;
 struct Moxaic::VulkanDebug Moxaic::VkDebug;
 
@@ -165,11 +157,15 @@ static bool LoadVulkanFunctionPointers()
 {
     MXC_LOG_FUNCTION();
 
-#ifdef WIN32
-    MXC_LOAD_VULKAN_FUNCTION(GetMemoryWin32HandleKHR);
-#endif
-    MXC_LOAD_VULKAN_FUNCTION(CmdDrawMeshTasksEXT);
-    MXC_LOAD_VULKAN_FUNCTION(CreateDebugUtilsMessengerEXT);
+#define VK_FUNC(func) \
+    MXC_LOG_NAMED(#func); \
+    Moxaic::VkFunc.func = (PFN_vk##func) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#func); \
+    if (Moxaic::VkFunc.func == nullptr) { \
+        MXC_LOG_ERROR("Load Fail: ", #func); \
+        return false; \
+    }
+    VK_FUNCS
+#undef VK_FUNC
 
     return true;
 }

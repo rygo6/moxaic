@@ -48,17 +48,28 @@ namespace Moxaic
                                             VkPipelineStageFlags dstStageMask,
                                             VkImageAspectFlags aspectMask) const;
 
-        inline VkImageView vkImageView() const { return m_VkImageView; }
-
     private:
         const VulkanDevice &k_Device;
-        VkImage m_VkImage{VK_NULL_HANDLE};
-        VkImageView m_VkImageView{VK_NULL_HANDLE};
-        VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
         VkExtent3D m_Extent{};
+
 #ifdef WIN32
         HANDLE m_ExternalMemory{};
 #endif
 
+
+    public:
+#define VK_HANDLES \
+        VK_HANDLE(,Image) \
+        VK_HANDLE(,ImageView) \
+        VK_HANDLE(,DeviceMemory)
+
+#define VK_HANDLE(p, h) VK_GETTERS(p, h)
+        VK_HANDLES
+#undef VK_HANDLE
+    private:
+#define VK_HANDLE(p, h) VK_MEMBERS(p, h)
+        VK_HANDLES
+#undef VK_HANDLE
+#undef VK_HANDLES
     };
 }
