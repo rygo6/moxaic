@@ -53,7 +53,6 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
             string_VkImageUsageFlags(usage),
             string_VkImageAspectFlags(aspectMask),
             string_BufferLocality(locality));
-
     const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
     const VkExternalMemoryImageCreateInfo externalImageInfo = {
             .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -82,9 +81,12 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
                          &m_VkImage));
     MXC_CHK(k_Device.AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                     m_VkImage,
+                                    locality == External ? externalHandleType : 0,
                                     m_VkDeviceMemory));
-    VK_CHK(vkBindImageMemory(k_Device.vkDevice(), m_VkImage, m_VkDeviceMemory, 0));
-
+    VK_CHK(vkBindImageMemory(k_Device.vkDevice(),
+                             m_VkImage,
+                             m_VkDeviceMemory,
+                             0));
     const VkImageViewCreateInfo imageViewCreateInfo{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .pNext = nullptr,
@@ -106,8 +108,10 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
                     .layerCount = 1,
             }
     };
-    VK_CHK(vkCreateImageView(k_Device.vkDevice(), &imageViewCreateInfo, VK_ALLOC, &m_VkImageView));
-
+    VK_CHK(vkCreateImageView(k_Device.vkDevice(),
+                             &imageViewCreateInfo,
+                             VK_ALLOC,
+                             &m_VkImageView));
     if (locality == External) {
 #if WIN32
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
@@ -116,18 +120,13 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
                 .memory = m_VkDeviceMemory,
                 .handleType = externalHandleType
         };
-        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(), &getWin32HandleInfo, &m_ExternalMemory));
+        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
+                                              &getWin32HandleInfo,
+                                              &m_ExternalMemory));
 #endif
     }
-
     m_Extent = extent;
-
     return true;
-}
-
-void Moxaic::VulkanTexture::Cleanup()
-{
-
 }
 
 // TODO implemented for unified graphics + transfer only right now
@@ -143,7 +142,6 @@ bool Moxaic::VulkanTexture::TransitionImageLayoutImmediate(VkImageLayout oldLayo
 
     VkCommandBuffer commandBuffer;
     MXC_CHK(k_Device.BeginImmediateCommandBuffer(commandBuffer));
-
     const VkImageMemoryBarrier imageMemoryBarrier = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
             .srcAccessMask = srcAccessMask,
@@ -169,9 +167,5 @@ bool Moxaic::VulkanTexture::TransitionImageLayoutImmediate(VkImageLayout oldLayo
                          1, &imageMemoryBarrier);
 
     MXC_CHK(k_Device.EndImmediateCommandBuffer(commandBuffer));
-
     return true;
 }
-
-
-

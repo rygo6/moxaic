@@ -16,13 +16,13 @@
 static bool MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
                                      const VkMemoryPropertyFlags &requiredMemoryProperties,
                                      uint32_t requiredMemoryTypeBits,
-                                     uint32_t &outMemoryTypeBits)
+                                     uint32_t &outMemTypeIndex)
 {
     for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++) {
         if ((requiredMemoryTypeBits & 1) == 1) {
             if ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & requiredMemoryProperties) ==
                 requiredMemoryProperties) {
-                outMemoryTypeBits = i;
+                outMemTypeIndex = i;
                 return true;
             }
         }
@@ -30,34 +30,6 @@ static bool MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties &phy
     }
     MXC_LOG_ERROR("Can't find memory type.", requiredMemoryProperties, requiredMemoryTypeBits);
     return false;
-}
-
-static bool ImageMemoryTypeFromProperties(const VkDevice &device,
-                                          const VkImage &image,
-                                          const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
-                                          const VkMemoryPropertyFlags properties,
-                                          VkMemoryRequirements &outMemoryRequirements,
-                                          uint32_t &outMemoryTypeBits)
-{
-    vkGetImageMemoryRequirements(device, image, &outMemoryRequirements);
-    return MemoryTypeFromProperties(physicalDeviceMemoryProperties,
-                                    properties,
-                                    outMemoryRequirements.memoryTypeBits,
-                                    outMemoryTypeBits);
-}
-
-static bool BufferMemoryTypeFromProperties(const VkDevice &device,
-                                           const VkBuffer &buffer,
-                                           const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
-                                           const VkMemoryPropertyFlags properties,
-                                           VkMemoryRequirements *outMemoryRequirements,
-                                           uint32_t &outMemoryTypeBits)
-{
-    vkGetBufferMemoryRequirements(device, buffer, outMemoryRequirements);
-    return MemoryTypeFromProperties(physicalDeviceMemoryProperties,
-                                    properties,
-                                    outMemoryRequirements->memoryTypeBits,
-                                    outMemoryTypeBits);
 }
 
 Moxaic::VulkanDevice::VulkanDevice() = default;
@@ -614,20 +586,33 @@ bool Moxaic::VulkanDevice::Init()
 }
 
 bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
-                                          VkImage image,
+                                          const VkImage &image,
+                                          const VkExternalMemoryHandleTypeFlags &externalHandleType,
                                           VkDeviceMemory &outDeviceMemory) const
 {
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
-    MXC_CHK(ImageMemoryTypeFromProperties(m_VkDevice,
-                                          image,
-                                          m_PhysicalDeviceMemoryProperties,
-                                          properties,
-                                          memRequirements,
-                                          memTypeIndex));
-
+    vkGetImageMemoryRequirements(m_VkDevice,
+                                 image,
+                                 &memRequirements);
+    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+                                     properties,
+                                     memRequirements.memoryTypeBits,
+                                     memTypeIndex));
+    // todo your supposed check if it wants dedicated memory
+//    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
+//            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
+//            .image = pTestTexture->image,
+//            .buffer = VK_NULL_HANDLE,
+//    };
+    const VkExportMemoryAllocateInfo exportAllocInfo = {
+            .sType =VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+//            .pNext =&dedicatedAllocInfo,
+            .handleTypes = externalHandleType
+    };
     const VkMemoryAllocateInfo allocateInfo = {
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = externalHandleType == 0 ? nullptr : &exportAllocInfo,
             .allocationSize = memRequirements.size,
             .memoryTypeIndex = memTypeIndex,
     };
@@ -635,8 +620,53 @@ bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &propertie
                             &allocateInfo,
                             VK_ALLOC,
                             &outDeviceMemory));
-
     return true;
+}
+
+bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
+                                          const VkBuffer &buffer,
+                                          const VkExternalMemoryHandleTypeFlags &externalHandleType,
+                                          VkDeviceMemory &outDeviceMemory) const
+{
+    VkMemoryRequirements memRequirements = {};
+    uint32_t memTypeIndex;
+    vkGetBufferMemoryRequirements(m_VkDevice,
+                                  buffer,
+                                  &memRequirements);
+    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+                                     properties,
+                                     memRequirements.memoryTypeBits,
+                                     memTypeIndex));
+    // dedicated needed??
+//    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
+//            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
+//            .image = VK_NULL_HANDLE,
+//            .buffer = *pRingBuffer,
+//    };
+    const VkExportMemoryWin32HandleInfoKHR exportMemoryWin32HandleInfo = {
+            .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+            .pNext = nullptr,
+            .pAttributes = nullptr,
+            // This seems to not make the actual UBO read only, only the NT handle I presume
+            .dwAccess = GENERIC_READ,
+            .name = nullptr,
+    };
+    const VkExportMemoryAllocateInfo exportAllocInfo = {
+            .sType =VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+            .pNext = &exportMemoryWin32HandleInfo,
+            .handleTypes = externalHandleType
+    };
+    const VkMemoryAllocateInfo allocInfo = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = externalHandleType == 0 ? nullptr : &exportAllocInfo,
+            .allocationSize = memRequirements.size,
+            .memoryTypeIndex = memTypeIndex
+    };
+    VK_CHK(vkAllocateMemory(m_VkDevice,
+                            &allocInfo,
+                            VK_ALLOC,
+                            &outDeviceMemory));
+    return false;
 }
 
 // TODO make use transfer queue
@@ -660,7 +690,6 @@ bool Moxaic::VulkanDevice::BeginImmediateCommandBuffer(VkCommandBuffer &outComma
     };
     VK_CHK(vkBeginCommandBuffer(outCommandBuffer,
                                 &beginInfo));
-
     return true;
 }
 

@@ -35,6 +35,7 @@ namespace Moxaic
         VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
+        // theoretically these could be a tex array and probably better...
         std::unique_ptr<VulkanTexture> m_ColorTexture{};
         std::unique_ptr<VulkanTexture> m_NormalTexture{};
         std::unique_ptr<VulkanTexture> m_GBufferTexture{};

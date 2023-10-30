@@ -37,8 +37,6 @@ namespace Moxaic
                   const VkImageAspectFlags &aspectMask,
                   const BufferLocality &locality);
 
-        void Cleanup();
-
         bool TransitionImageLayoutImmediate(VkImageLayout oldLayout,
                                             VkImageLayout newLayout,
                                             VkAccessFlags srcAccessMask,

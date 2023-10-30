@@ -23,7 +23,13 @@ namespace Moxaic
         bool Init();
 
         bool AllocateMemory(const VkMemoryPropertyFlags &properties,
-                            VkImage image,
+                            const VkImage &image,
+                            const VkExternalMemoryHandleTypeFlags &externalHandleType,
+                            VkDeviceMemory &outDeviceMemory) const;
+
+        bool AllocateMemory(const VkMemoryPropertyFlags &properties,
+                            const VkBuffer &buffer,
+                            const VkExternalMemoryHandleTypeFlags &externalHandleType,
                             VkDeviceMemory &outDeviceMemory) const;
 
         bool BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const;
@@ -43,6 +49,10 @@ namespace Moxaic
         inline auto vkComputeCommandBuffer() const { return m_VkComputeCommandBuffer; }
         inline auto vkLinearSampler() const { return m_VkLinearSampler; }
         inline auto vkNearestSampler() const { return m_VkNearestSampler; }
+
+        inline const auto &physicalDeviceMeshShaderProperties() const { return m_PhysicalDeviceMeshShaderProperties; }
+        inline const auto &physicalDeviceProperties() const { return m_PhysicalDeviceProperties; }
+        inline const auto &physicalDeviceMemoryProperties() const { return m_PhysicalDeviceMemoryProperties; }
 
     private:
         VkDevice m_VkDevice{VK_NULL_HANDLE};
