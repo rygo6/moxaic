@@ -1,9 +1,12 @@
-#include "vulkan_descriptor.hpp"
+#include "moxaic_vulkan_descriptor.hpp"
 
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_texture.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
+#include "moxaic_vulkan_uniform.hpp"
+
+#include "moxaic_camera.hpp"
 
 #include <vector>
 
@@ -17,7 +20,7 @@ void Moxaic::VulkanDescriptorBase::PushBinding(VkDescriptorSetLayoutBinding bind
                                                std::vector<VkDescriptorSetLayoutBinding> &bindings)
 {
     binding.binding = bindings.size();
-    binding.descriptorCount == 0 ? 1 : binding.descriptorCount;
+    binding.descriptorCount = 1;
     bindings.push_back(binding);
 }
 
@@ -34,7 +37,7 @@ bool Moxaic::VulkanDescriptorBase::CreateDescriptorSetLayout(const std::vector<V
                                        &layoutInfo,
                                        VK_ALLOC,
                                        &outSetLayout));
-    return false;
+    return true;
 }
 
 bool Moxaic::VulkanDescriptorBase::AllocateDescriptorSet(const VkDescriptorSetLayout &descriptorSetLayout,
@@ -53,6 +56,24 @@ bool Moxaic::VulkanDescriptorBase::AllocateDescriptorSet(const VkDescriptorSetLa
     return true;
 }
 
+void Moxaic::VulkanDescriptorBase::PushWrite(VkDescriptorBufferInfo bufferInfo,
+                                             std::vector<VkWriteDescriptorSet> &outWrites)
+{
+    SDL_assert_always(m_VkDescriptorSet != nullptr);
+    VkWriteDescriptorSet write = {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .pNext = nullptr,
+            .dstSet = m_VkDescriptorSet,
+            .dstArrayElement = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &bufferInfo
+    };
+    write.dstBinding = outWrites.size();
+    write.descriptorCount = write.descriptorCount == 0 ? 1 : write.descriptorCount;
+    outWrites.push_back(write);
+}
+
 void Moxaic::VulkanDescriptorBase::PushWrite(VkDescriptorImageInfo imageInfo,
                                              std::vector<VkWriteDescriptorSet> &outWrites)
 {
@@ -67,6 +88,7 @@ void Moxaic::VulkanDescriptorBase::PushWrite(VkDescriptorImageInfo imageInfo,
             .pImageInfo = &imageInfo
     };
     write.dstBinding = outWrites.size();
+    write.descriptorCount = write.descriptorCount == 0 ? 1 : write.descriptorCount;
     outWrites.push_back(write);
 }
 
@@ -79,9 +101,48 @@ void Moxaic::VulkanDescriptorBase::WritePushedDescriptors(const std::vector<VkWr
                            nullptr);
 }
 
+Moxaic::GlobalDescriptor::GlobalDescriptor(const VulkanDevice &device)
+        : VulkanDescriptorBase(device) {}
+
 bool Moxaic::GlobalDescriptor::Init()
 {
-    return false;
+    MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                           BufferLocality::Local));
+
+    if (s_VkDescriptorSetLayout == VK_NULL_HANDLE) {
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        PushBinding((VkDescriptorSetLayoutBinding) {
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                              VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                              VK_SHADER_STAGE_COMPUTE_BIT |
+                              VK_SHADER_STAGE_FRAGMENT_BIT |
+                              VK_SHADER_STAGE_MESH_BIT_EXT |
+                              VK_SHADER_STAGE_TASK_BIT_EXT,
+        }, bindings);
+        MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
+    };
+
+    MXC_CHK(AllocateDescriptorSet(s_VkDescriptorSetLayout, m_VkDescriptorSet));
+    std::vector<VkWriteDescriptorSet> writes;
+    PushWrite((VkDescriptorBufferInfo) {
+            .buffer = m_Uniform.vkBuffer(),
+            .range = sizeof(Buffer),
+    }, writes);
+    WritePushedDescriptors(writes);
+
+    return true;
+}
+
+void Moxaic::GlobalDescriptor::Update(Camera &camera, VkExtent2D dimensions)
+{
+    m_Uniform.Mapped().width = dimensions.width;
+    m_Uniform.Mapped().height = dimensions.height;
+    m_Uniform.Mapped().proj = camera.projection();
+    m_Uniform.Mapped().invProj = camera.inverseProjection();
+    m_Uniform.Mapped().view = camera.view();
+    m_Uniform.Mapped().invView = camera.inverseView();
 }
 
 bool Moxaic::MaterialDescriptor::Init(VulkanTexture texture)
@@ -99,6 +160,7 @@ bool Moxaic::MaterialDescriptor::Init(VulkanTexture texture)
 
     return false;
 }
+
 
 bool Moxaic::MeshNodeDescriptor::Init(VulkanFramebuffer framebuffer)
 {

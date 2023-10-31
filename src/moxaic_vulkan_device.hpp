@@ -36,6 +36,8 @@ namespace Moxaic
 
         bool EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const;
 
+        bool BeginGraphicsCommandBuffer() const;
+
         inline auto vkDevice() const { return m_VkDevice; }
         inline auto vkPhysicalDevice() const { return m_VkPhysicalDevice; }
         inline auto vkGraphicsQueue() const { return m_VkGraphicsQueue; }

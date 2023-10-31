@@ -2,6 +2,7 @@
 
 #include "moxaic_vulkan.hpp"
 #include "moxaic_logging.hpp"
+#include "moxaic_window.hpp"
 
 #include "main.hpp"
 
@@ -666,7 +667,7 @@ bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &propertie
                             &allocInfo,
                             VK_ALLOC,
                             &outDeviceMemory));
-    return false;
+    return true;
 }
 
 // TODO make use transfer queue
@@ -720,5 +721,39 @@ bool Moxaic::VulkanDevice::EndImmediateCommandBuffer(const VkCommandBuffer &comm
                          1,
                          &commandBuffer);
 
+    return true;
+}
+bool Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
+{
+    VK_CHK(vkResetCommandBuffer(m_VkGraphicsCommandBuffer,
+                                VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
+    const VkCommandBufferBeginInfo beginInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .pInheritanceInfo = nullptr,
+    };
+    VK_CHK(vkBeginCommandBuffer(m_VkGraphicsCommandBuffer,
+                                &beginInfo));
+    const VkViewport viewport = {
+            .x = 0.0f,
+            .y = 0.0f,
+            .width = (float) g_WindowDimensions.width,
+            .height = (float) g_WindowDimensions.height,
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(m_VkGraphicsCommandBuffer,
+                     0,
+                     1,
+                     &viewport);
+    const VkRect2D scissor = {
+            .offset = {0, 0},
+            .extent = g_WindowDimensions,
+    };
+    vkCmdSetScissor(m_VkGraphicsCommandBuffer,
+                    0,
+                    1,
+                    &scissor);
     return true;
 }

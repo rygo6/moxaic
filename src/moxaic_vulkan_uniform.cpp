@@ -1,11 +1,10 @@
 #include "moxaic_vulkan_uniform.hpp"
 #include "moxaic_vulkan_device.hpp"
+#include "moxaic_vulkan_descriptor.hpp"
 
 template<typename T>
 Moxaic::VulkanUniform<T>::VulkanUniform(const VulkanDevice &device)
-{
-
-}
+        : k_Device(device) {}
 
 template<typename T>
 Moxaic::VulkanUniform<T>::~VulkanUniform()
@@ -13,9 +12,9 @@ Moxaic::VulkanUniform<T>::~VulkanUniform()
     vkDestroyBuffer(k_Device.vkDevice(), m_VkBuffer, VK_ALLOC);
 
     if (m_pMappedBuffer != nullptr)
-        vkUnmapMemory(k_Device.vkDevice(), m_pMappedBuffer);
+        vkUnmapMemory(k_Device.vkDevice(), m_VkDeviceMemory);
 
-    vkFreeMemory(k_Device.vkDevice(), m_pMappedBuffer, VK_ALLOC);
+    vkFreeMemory(k_Device.vkDevice(), m_VkDeviceMemory, VK_ALLOC);
 
     if (m_ExternalMemory != nullptr)
         CloseHandle(m_ExternalMemory);
@@ -57,7 +56,7 @@ bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags &properties,
                           &bufferCreateInfo,
                           nullptr,
                           &m_VkBuffer));
-    MXC_CHK(k_Device.AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    MXC_CHK(k_Device.AllocateMemory(properties,
                                     m_VkBuffer,
                                     locality == External ? externalHandleType : 0,
                                     m_VkDeviceMemory));
@@ -70,7 +69,7 @@ bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags &properties,
                        0,
                        BufferSize(),
                        0,
-                       &m_pMappedBuffer));
+                       (void **) &m_pMappedBuffer));
     if (locality == BufferLocality::External) {
 #if WIN32
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
@@ -86,3 +85,6 @@ bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags &properties,
     }
     return true;
 }
+
+template
+class Moxaic::VulkanUniform<Moxaic::GlobalDescriptor::Buffer>;

@@ -2,9 +2,11 @@
 #include "moxaic_core.hpp"
 #include "moxaic_logging.hpp"
 #include "moxaic_window.hpp"
+#include "moxaic_camera.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
+#include "moxaic_vulkan_descriptor.hpp"
 
 using namespace Moxaic;
 
@@ -23,6 +25,13 @@ bool Moxiac::CoreInit()
                             k_DefaultHeight},
                            Moxaic::BufferLocality::Local));
 
+    Camera camera = Camera();
+    camera.transform().position() = {0, 0, -2};
+
+    GlobalDescriptor globalDescriptor = GlobalDescriptor(*g_pDevice);
+    MXC_CHK(globalDescriptor.Init());
+    globalDescriptor.Update(camera, g_WindowDimensions);
+
     return true;
 }
 
@@ -30,7 +39,14 @@ bool Moxiac::CoreLoop()
 {
     while (g_ApplicationRunning) {
         WindowPoll();
+
+        g_pDevice->BeginGraphicsCommandBuffer();
+
+
+        VK_CHK(vkEndCommandBuffer(g_pDevice->vkGraphicsCommandBuffer()));
     }
 
     WindowShutdown();
+
+    return true;
 }

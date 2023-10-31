@@ -125,7 +125,7 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
                                               &m_ExternalMemory));
 #endif
     }
-    m_Extent = extent;
+    m_Dimensions = extent;
     return true;
 }
 

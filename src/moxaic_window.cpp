@@ -2,6 +2,7 @@
 #include "moxaic_window.hpp"
 
 SDL_Window *Moxaic::g_pSDLWindow;
+VkExtent2D Moxaic::g_WindowDimensions;
 
 bool Moxaic::WindowInit()
 {
@@ -9,8 +10,9 @@ bool Moxaic::WindowInit()
     g_pSDLWindow = SDL_CreateWindow(k_ApplicationName,
                                     SDL_WINDOWPOS_CENTERED,
                                     SDL_WINDOWPOS_CENTERED,
-                                    800, 600,
+                                    k_DefaultWidth, k_DefaultHeight,
                                    SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
+    g_WindowDimensions = VkExtent2D{k_DefaultWidth, k_DefaultHeight};
     return g_pSDLWindow != nullptr;
 }
 

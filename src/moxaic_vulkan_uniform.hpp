@@ -13,7 +13,7 @@ namespace Moxaic
     class VulkanUniform
     {
     public:
-        explicit VulkanUniform(const VulkanDevice &device);
+        VulkanUniform(const VulkanDevice &device);
         virtual ~VulkanUniform();
 
         bool InitFromImport();
@@ -22,8 +22,10 @@ namespace Moxaic
                   const VkBufferUsageFlags &usage,
                   const BufferLocality &external);
 
-        inline T Mapped() const { return m_pMappedBuffer; }
+        inline T& Mapped() { return *m_pMappedBuffer; }
         inline VkDeviceSize BufferSize() const { return sizeof(T); }
+
+        inline auto vkBuffer() const { return m_VkBuffer; }
 
     private:
         const VulkanDevice &k_Device;

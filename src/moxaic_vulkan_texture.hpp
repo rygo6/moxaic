@@ -56,7 +56,7 @@ namespace Moxaic
         VkImageView m_VkImageView{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
 
-        VkExtent3D m_Extent{};
+        VkExtent3D m_Dimensions{};
 
 #ifdef WIN32
         HANDLE m_ExternalMemory{};
