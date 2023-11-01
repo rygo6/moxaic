@@ -13,6 +13,9 @@
 
 namespace Moxaic
 {
+    class VulkanFramebuffer;
+    class VulkanSwap;
+    class VulkanTimelineSemaphore;
 
     class VulkanDevice
     {
@@ -20,24 +23,36 @@ namespace Moxaic
         VulkanDevice();
         virtual ~VulkanDevice();
 
-        bool Init();
+        MXC_RESULT Init();
+        MXC_RESULT AllocateMemory(const VkMemoryPropertyFlags &properties,
+                                  const VkImage &image,
+                                  const VkExternalMemoryHandleTypeFlags &externalHandleType,
+                                  VkDeviceMemory &outDeviceMemory) const;
+        MXC_RESULT AllocateMemory(const VkMemoryPropertyFlags &properties,
+                                  const VkBuffer &buffer,
+                                  const VkExternalMemoryHandleTypeFlags &externalHandleType,
+                                  VkDeviceMemory &outDeviceMemory) const;
+        MXC_RESULT TransitionImageLayoutImmediate(VkImage image,
+                                                  VkImageLayout oldLayout,
+                                                  VkImageLayout newLayout,
+                                                  VkAccessFlags srcAccessMask,
+                                                  VkAccessFlags dstAccessMask,
+                                                  VkPipelineStageFlags srcStageMask,
+                                                  VkPipelineStageFlags dstStageMask,
+                                                  VkImageAspectFlags aspectMask) const;
+        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const;
+        MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const;
+        MXC_RESULT BeginGraphicsCommandBuffer() const;
+        MXC_RESULT EndGraphicsCommandBuffer() const;
+        MXC_RESULT BeginRenderPass(const VulkanFramebuffer &framebuffer) const;
+        MXC_RESULT EndRenderPass() const;
+        MXC_RESULT SubmitGraphicsQueueAndPresent(VulkanTimelineSemaphore &timelineSemaphore, const VulkanSwap &swap) const;
 
-        bool AllocateMemory(const VkMemoryPropertyFlags &properties,
-                            const VkImage &image,
-                            const VkExternalMemoryHandleTypeFlags &externalHandleType,
-                            VkDeviceMemory &outDeviceMemory) const;
-
-        bool AllocateMemory(const VkMemoryPropertyFlags &properties,
-                            const VkBuffer &buffer,
-                            const VkExternalMemoryHandleTypeFlags &externalHandleType,
-                            VkDeviceMemory &outDeviceMemory) const;
-
-        bool BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const;
-
-        bool EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const;
-
-        bool BeginGraphicsCommandBuffer() const;
-
+        // VulkanHandles are not encapsulated. Deal with vk vars and methods with care.
+        // Reason? Vulkan safety is better enforced by validation layers, not C++, and
+        // the attempt to encapsulate these to more so rely on C++ type safety ends up
+        // with something more complex and convoluted that doesn't add much over Vulkan
+        // Validation layers. Classes are more to organize relationship of VulkanHandles.
         inline auto vkDevice() const { return m_VkDevice; }
         inline auto vkPhysicalDevice() const { return m_VkPhysicalDevice; }
         inline auto vkGraphicsQueue() const { return m_VkGraphicsQueue; }
@@ -51,6 +66,9 @@ namespace Moxaic
         inline auto vkComputeCommandBuffer() const { return m_VkComputeCommandBuffer; }
         inline auto vkLinearSampler() const { return m_VkLinearSampler; }
         inline auto vkNearestSampler() const { return m_VkNearestSampler; }
+
+        inline auto graphicsQueueFamilyIndex() const { return m_GraphicsQueueFamilyIndex; }
+        inline auto computeQueueFamilyIndex() const { return m_ComputeQueueFamilyIndex; }
 
         inline const auto &physicalDeviceMeshShaderProperties() const { return m_PhysicalDeviceMeshShaderProperties; }
         inline const auto &physicalDeviceProperties() const { return m_PhysicalDeviceProperties; }
@@ -91,6 +109,5 @@ namespace Moxaic
         bool CreateCommandBuffers();
         bool CreatePools();
         bool CreateSamplers();
-
     };
 }

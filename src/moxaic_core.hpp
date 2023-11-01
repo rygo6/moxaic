@@ -1,7 +1,13 @@
 #pragma once
 
-namespace Moxiac
+#include "moxaic_logging.hpp"
+
+namespace Moxaic
 {
-    bool CoreInit();
-    bool CoreLoop();
+    class VulkanDevice;
+    class VulkanFramebuffer;
+    class Camera;
+
+    MXC_RESULT CoreInit();
+    MXC_RESULT CoreLoop();
 }

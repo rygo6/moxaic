@@ -9,7 +9,6 @@
 namespace Moxaic
 {
     class VulkanTexture;
-
     class VulkanDevice;
 
     class VulkanFramebuffer
@@ -19,21 +18,18 @@ namespace Moxaic
         VulkanFramebuffer(const VulkanDevice &&) = delete;  // prevents rvalue binding?
         virtual ~VulkanFramebuffer();
 
-        bool Init(const VkExtent2D &extent,
-                  const BufferLocality &locality);
+        bool Init(const VkExtent2D &dimensions,
+                  const Locality &locality);
 
         inline auto vkFramebuffer() const { return m_VkFramebuffer; }
         inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
 
-//        inline const auto& ColorTexture() const { return *m_ColorTexture; }
-//        inline const auto& NormalTexture() const { return *m_NormalTexture; }
-//        inline const auto& GBufferTexture() const { return *m_GBufferTexture; }
-//        inline const auto& DepthTexture() const { return *m_DepthTexture; }
+        inline const auto& colorTexture() const { return m_ColorTexture; }
+        inline const auto& normalTexture() const { return m_NormalTexture; }
+        inline const auto& gBufferTexture() const { return m_GBufferTexture; }
+        inline const auto& depthTexture() const { return m_DepthTexture; }
 
-        inline const auto& ColorTexture() const { return m_ColorTexture; }
-        inline const auto& NormalTexture() const { return m_NormalTexture; }
-        inline const auto& GBufferTexture() const { return m_GBufferTexture; }
-        inline const auto& DepthTexture() const { return m_DepthTexture; }
+        inline const auto& dimensions() const { return m_Dimensions; }
 
     private:
         const VulkanDevice &k_Device;
@@ -41,18 +37,14 @@ namespace Moxaic
         VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        // theoretically these could be a tex array and probably better...
-//        std::unique_ptr<VulkanTexture> m_ColorTexture{};
-//        std::unique_ptr<VulkanTexture> m_NormalTexture{};
-//        std::unique_ptr<VulkanTexture> m_GBufferTexture{};
-//        std::unique_ptr<VulkanTexture> m_DepthTexture{};
-
         VulkanTexture m_ColorTexture{k_Device};
         VulkanTexture m_NormalTexture{k_Device};
         VulkanTexture m_GBufferTexture{k_Device};
         VulkanTexture m_DepthTexture{k_Device};
 
-        VkSampleCountFlagBits m_Samples{VK_SAMPLE_COUNT_1_BIT};
+        VkExtent2D m_Dimensions;
 
+        bool InitialLayoutTransition(const VulkanTexture &texture,
+                                     VkImageAspectFlags aspectMask);
     };
 }

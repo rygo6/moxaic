@@ -7,46 +7,74 @@
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_descriptor.hpp"
+#include "moxaic_vulkan_swap.hpp"
+#include "moxaic_vulkan_timeline_semaphore.hpp"
 
 using namespace Moxaic;
 
-VulkanDevice* g_pDevice;
+struct
+{
+    VulkanDevice *pDevice;
+    VulkanFramebuffer *pFramebuffer;
+    Camera *pCamera;
+    GlobalDescriptor *pGlobalDescriptor;
+    VulkanSwap *pSwap;
+    VulkanTimelineSemaphore *pTimelineSemaphore;
+} Core;
 
-bool Moxiac::CoreInit()
+MXC_RESULT Moxaic::CoreInit()
 {
     MXC_CHK(WindowInit());
-    MXC_CHK(VulkanInit(g_pSDLWindow, true));
+    MXC_CHK(VulkanInit(g_pSDLWindow,
+                       true));
 
-    g_pDevice = new VulkanDevice();
-    MXC_CHK(g_pDevice->Init());
+    Core.pDevice = new VulkanDevice();
+    MXC_CHK(Core.pDevice->Init());
 
-    VulkanFramebuffer vulkanFramebuffer = VulkanFramebuffer(*g_pDevice);
-    MXC_CHK(vulkanFramebuffer.Init({k_DefaultWidth,
-                            k_DefaultHeight},
-                           Moxaic::BufferLocality::Local));
+    Core.pFramebuffer = new VulkanFramebuffer(*Core.pDevice);
+    MXC_CHK(Core.pFramebuffer->Init(g_WindowDimensions,
+                                    Locality::Local));
 
-    Camera camera = Camera();
-    camera.transform().position() = {0, 0, -2};
+    Core.pCamera = new Camera();
+    Core.pCamera->transform().position() = {0, 0, -2};
 
-    GlobalDescriptor globalDescriptor = GlobalDescriptor(*g_pDevice);
-    MXC_CHK(globalDescriptor.Init());
-    globalDescriptor.Update(camera, g_WindowDimensions);
+    Core.pGlobalDescriptor = new GlobalDescriptor(*Core.pDevice);
+    MXC_CHK(Core.pGlobalDescriptor->Init());
+    Core.pGlobalDescriptor->Update(*Core.pCamera,
+                                   g_WindowDimensions);
 
-    return true;
+    Core.pSwap = new VulkanSwap(*Core.pDevice);
+    MXC_CHK(Core.pSwap->Init(g_WindowDimensions,
+                             false));
+
+    Core.pTimelineSemaphore = new VulkanTimelineSemaphore(*Core.pDevice);
+    MXC_CHK(Core.pTimelineSemaphore->Init(false,
+                                          Locality::Local));
+
+    return MXC_SUCCESS;
 }
 
-bool Moxiac::CoreLoop()
+MXC_RESULT Moxaic::CoreLoop()
 {
     while (g_ApplicationRunning) {
         WindowPoll();
 
-        g_pDevice->BeginGraphicsCommandBuffer();
+        Core.pDevice->BeginGraphicsCommandBuffer();
+        Core.pDevice->BeginRenderPass(*Core.pFramebuffer);
 
 
-        VK_CHK(vkEndCommandBuffer(g_pDevice->vkGraphicsCommandBuffer()));
+        Core.pDevice->EndRenderPass();
+
+        Core.pSwap->BlitToSwap(Core.pFramebuffer->colorTexture().vkImage());
+
+        Core.pDevice->EndGraphicsCommandBuffer();
+
+        Core.pDevice->SubmitGraphicsQueueAndPresent(*Core.pTimelineSemaphore, *Core.pSwap);
+
+        Core.pTimelineSemaphore->Wait();
     }
 
     WindowShutdown();
 
-    return true;
+    return MXC_SUCCESS;
 }

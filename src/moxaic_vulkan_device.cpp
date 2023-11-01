@@ -1,11 +1,15 @@
-#include "moxaic_vulkan_device.hpp"
-
 #include "moxaic_vulkan.hpp"
+#include "moxaic_vulkan_device.hpp"
+#include "moxaic_vulkan_framebuffer.hpp"
+#include "moxaic_vulkan_swap.hpp"
+
 #include "moxaic_logging.hpp"
 #include "moxaic_window.hpp"
 
 #include "main.hpp"
+#include "moxaic_vulkan_timeline_semaphore.hpp"
 
+#include <vulkan/vulkan.h>
 #ifdef WIN32
 #include <vulkan/vulkan_win32.h>
 #endif
@@ -14,29 +18,29 @@
 #include <array>
 
 // From OVR Vulkan example. Is this better/same as vulkan tutorial!?
-static bool MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
-                                     const VkMemoryPropertyFlags &requiredMemoryProperties,
-                                     uint32_t requiredMemoryTypeBits,
-                                     uint32_t &outMemTypeIndex)
+static MXC_RESULT MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
+                                           const VkMemoryPropertyFlags &requiredMemoryProperties,
+                                           uint32_t requiredMemoryTypeBits,
+                                           uint32_t &outMemTypeIndex)
 {
     for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++) {
         if ((requiredMemoryTypeBits & 1) == 1) {
             if ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & requiredMemoryProperties) ==
                 requiredMemoryProperties) {
                 outMemTypeIndex = i;
-                return true;
+                return MXC_SUCCESS;
             }
         }
         requiredMemoryTypeBits >>= 1;
     }
     MXC_LOG_ERROR("Can't find memory type.", requiredMemoryProperties, requiredMemoryTypeBits);
-    return false;
+    return MXC_FAIL;
 }
 
 Moxaic::VulkanDevice::VulkanDevice() = default;
 Moxaic::VulkanDevice::~VulkanDevice() = default;
 
-bool Moxaic::VulkanDevice::PickPhysicalDevice()
+MXC_RESULT Moxaic::VulkanDevice::PickPhysicalDevice()
 {
     MXC_LOG_FUNCTION();
 
@@ -44,7 +48,7 @@ bool Moxaic::VulkanDevice::PickPhysicalDevice()
     VK_CHK(vkEnumeratePhysicalDevices(vkInstance(), &deviceCount, nullptr));
     if (deviceCount == 0) {
         MXC_LOG_ERROR("Failed to find GPUs with Vulkan support!");
-        return false;
+        return MXC_FAIL;
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
     VK_CHK(vkEnumeratePhysicalDevices(vkInstance(), &deviceCount, devices.data()));
@@ -77,10 +81,10 @@ bool Moxaic::VulkanDevice::PickPhysicalDevice()
     MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.prefersCompactPrimitiveOutput);
     MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.prefersCompactVertexOutput);
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::FindQueues()
+MXC_RESULT Moxaic::VulkanDevice::FindQueues()
 {
     MXC_LOG_FUNCTION();
 
@@ -88,7 +92,7 @@ bool Moxaic::VulkanDevice::FindQueues()
     vkGetPhysicalDeviceQueueFamilyProperties2(m_VkPhysicalDevice, &queueFamilyCount, nullptr);
     if (queueFamilyCount == 0) {
         MXC_LOG_ERROR("Failed to get graphicsQueue properties.");
-        return false;
+        return MXC_FAIL;
     }
     std::vector<VkQueueFamilyGlobalPriorityPropertiesEXT> queueFamilyGlobalPriorityProperties(queueFamilyCount);
     std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
@@ -112,7 +116,10 @@ bool Moxaic::VulkanDevice::FindQueues()
         bool computeSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
 
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice, i, vkSurface(), &presentSupport);
+        vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice,
+                                             i,
+                                             vkSurface(),
+                                             &presentSupport);
 
         if (!foundGraphics && graphicsSupport && presentSupport) {
             if (!globalQueueSupport) {
@@ -135,18 +142,18 @@ bool Moxaic::VulkanDevice::FindQueues()
 
     if (!foundGraphics) {
         MXC_LOG_ERROR("Failed to find a graphicsQueue that supports both graphics and present!");
-        return false;
+        return MXC_FAIL;
     }
 
     if (!foundCompute) {
         MXC_LOG_ERROR("Failed to find a computeQueue!");
-        return false;
+        return MXC_FAIL;
     }
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::CreateDevice()
+MXC_RESULT Moxaic::VulkanDevice::CreateDevice()
 {
     MXC_LOG_FUNCTION();
 
@@ -308,11 +315,11 @@ bool Moxaic::VulkanDevice::CreateDevice()
     createInfo.ppEnabledExtensionNames = requiredDeviceExtensions.data();
     VK_CHK(vkCreateDevice(m_VkPhysicalDevice, &createInfo, VK_ALLOC, &m_VkDevice));
 
-    return true;
+    return MXC_SUCCESS;
 }
 
 
-bool Moxaic::VulkanDevice::CreateRenderPass()
+MXC_RESULT Moxaic::VulkanDevice::CreateRenderPass()
 {
     MXC_LOG_FUNCTION();
 
@@ -423,10 +430,10 @@ bool Moxaic::VulkanDevice::CreateRenderPass()
 
     VK_CHK(vkCreateRenderPass(m_VkDevice, &renderPassInfo, VK_ALLOC, &m_VkRenderPass));
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::CreateCommandBuffers()
+MXC_RESULT Moxaic::VulkanDevice::CreateCommandBuffers()
 {
     MXC_LOG_FUNCTION();
 
@@ -470,10 +477,10 @@ bool Moxaic::VulkanDevice::CreateCommandBuffers()
                                     &computeAllocInfo,
                                     &m_VkComputeCommandBuffer));
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::CreatePools()
+MXC_RESULT Moxaic::VulkanDevice::CreatePools()
 {
     MXC_LOG_FUNCTION();
 
@@ -514,10 +521,10 @@ bool Moxaic::VulkanDevice::CreatePools()
                                   VK_ALLOC,
                                   &m_VkDescriptorPool));
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::CreateSamplers()
+MXC_RESULT Moxaic::VulkanDevice::CreateSamplers()
 {
     MXC_LOG_FUNCTION();
 
@@ -561,10 +568,10 @@ bool Moxaic::VulkanDevice::CreateSamplers()
     };
     VK_CHK(vkCreateSampler(m_VkDevice, &nearestSamplerInfo, VK_ALLOC, &m_VkNearestSampler));
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::Init()
+MXC_RESULT Moxaic::VulkanDevice::Init()
 {
     MXC_LOG_FUNCTION();
 
@@ -583,13 +590,13 @@ bool Moxaic::VulkanDevice::Init()
     MXC_CHK(CreatePools());
     MXC_CHK(CreateSamplers());
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
-                                          const VkImage &image,
-                                          const VkExternalMemoryHandleTypeFlags &externalHandleType,
-                                          VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
+                                                const VkImage &image,
+                                                const VkExternalMemoryHandleTypeFlags &externalHandleType,
+                                                VkDeviceMemory &outDeviceMemory) const
 {
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
@@ -621,13 +628,13 @@ bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &propertie
                             &allocateInfo,
                             VK_ALLOC,
                             &outDeviceMemory));
-    return true;
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
-                                          const VkBuffer &buffer,
-                                          const VkExternalMemoryHandleTypeFlags &externalHandleType,
-                                          VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
+                                                const VkBuffer &buffer,
+                                                const VkExternalMemoryHandleTypeFlags &externalHandleType,
+                                                VkDeviceMemory &outDeviceMemory) const
 {
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
@@ -667,11 +674,53 @@ bool Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &propertie
                             &allocInfo,
                             VK_ALLOC,
                             &outDeviceMemory));
-    return true;
+    return MXC_SUCCESS;
+}
+
+// TODO implemented for unified graphics + transfer only right now
+//  https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies
+MXC_RESULT Moxaic::VulkanDevice::TransitionImageLayoutImmediate(VkImage image,
+                                                                VkImageLayout oldLayout,
+                                                                VkImageLayout newLayout,
+                                                                VkAccessFlags srcAccessMask,
+                                                                VkAccessFlags dstAccessMask,
+                                                                VkPipelineStageFlags srcStageMask,
+                                                                VkPipelineStageFlags dstStageMask,
+                                                                VkImageAspectFlags aspectMask) const
+{
+
+    VkCommandBuffer commandBuffer;
+    MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
+    const VkImageMemoryBarrier imageMemoryBarrier = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = srcAccessMask,
+            .dstAccessMask = dstAccessMask,
+            .oldLayout = oldLayout,
+            .newLayout = newLayout,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = image,
+            .subresourceRange = {
+                    .aspectMask = aspectMask,
+                    .baseMipLevel = 0,
+                    .levelCount = 1,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1
+            }
+    };
+    vkCmdPipelineBarrier(commandBuffer,
+                         srcStageMask,
+                         dstStageMask,
+                         0,
+                         0, nullptr,
+                         0, nullptr,
+                         1, &imageMemoryBarrier);
+    MXC_CHK(EndImmediateCommandBuffer(commandBuffer));
+    return MXC_SUCCESS;
 }
 
 // TODO make use transfer queue
-bool Moxaic::VulkanDevice::BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const
+MXC_RESULT Moxaic::VulkanDevice::BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const
 {
     const VkCommandBufferAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -691,14 +740,13 @@ bool Moxaic::VulkanDevice::BeginImmediateCommandBuffer(VkCommandBuffer &outComma
     };
     VK_CHK(vkBeginCommandBuffer(outCommandBuffer,
                                 &beginInfo));
-    return true;
+    return MXC_SUCCESS;
 }
 
 // TODO make use transfer queue
-bool Moxaic::VulkanDevice::EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const
+MXC_RESULT Moxaic::VulkanDevice::EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const
 {
     VK_CHK(vkEndCommandBuffer(commandBuffer));
-
     const VkSubmitInfo submitInfo = {
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
             .pNext = nullptr,
@@ -715,15 +763,13 @@ bool Moxaic::VulkanDevice::EndImmediateCommandBuffer(const VkCommandBuffer &comm
                          &submitInfo,
                          VK_NULL_HANDLE));
     VK_CHK(vkQueueWaitIdle(m_VkGraphicsQueue));
-
     vkFreeCommandBuffers(m_VkDevice,
                          m_VkGraphicsCommandPool,
                          1,
                          &commandBuffer);
-
-    return true;
+    return MXC_SUCCESS;
 }
-bool Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
+MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
 {
     VK_CHK(vkResetCommandBuffer(m_VkGraphicsCommandBuffer,
                                 VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
@@ -755,5 +801,109 @@ bool Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
                     0,
                     1,
                     &scissor);
-    return true;
+    return MXC_SUCCESS;
 }
+
+MXC_RESULT Moxaic::VulkanDevice::EndGraphicsCommandBuffer() const
+{
+    VK_CHK(vkEndCommandBuffer(m_VkGraphicsCommandBuffer));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Moxaic::VulkanDevice::BeginRenderPass(const VulkanFramebuffer &framebuffer) const
+{
+    std::array<VkClearValue, 4> clearValues;
+    clearValues[0].color = (VkClearColorValue) {{0.1f, 0.2f, 0.3f, 0.0f}};
+    clearValues[1].color = (VkClearColorValue) {{0.0f, 0.0f, 0.0f, 0.0f}};
+    clearValues[2].color = (VkClearColorValue) {{0.0f, 0.0f, 0.0f, 0.0f}};
+    clearValues[3].depthStencil = (VkClearDepthStencilValue) {1.0f, 0};
+    const VkRenderPassBeginInfo vkRenderPassBeginInfo = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .pNext = nullptr,
+            .renderPass = m_VkRenderPass,
+            .framebuffer = framebuffer.vkFramebuffer(),
+            .renderArea = {
+                    .offset = {0, 0},
+                    .extent = framebuffer.dimensions(),
+            },
+            .clearValueCount = clearValues.size(),
+            .pClearValues = clearValues.data(),
+    };
+    vkCmdBeginRenderPass(m_VkGraphicsCommandBuffer,
+                         &vkRenderPassBeginInfo,
+                         VK_SUBPASS_CONTENTS_INLINE);
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Moxaic::VulkanDevice::EndRenderPass() const
+{
+    vkCmdEndRenderPass(m_VkGraphicsCommandBuffer);
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Moxaic::VulkanDevice::SubmitGraphicsQueueAndPresent(VulkanTimelineSemaphore &timelineSemaphore, const VulkanSwap &swap) const
+{
+    // https://www.khronos.org/blog/vulkan-timeline-semaphores
+    const uint64_t waitValue = timelineSemaphore.waitValue();
+    timelineSemaphore.IncrementWaitValue();
+    const uint64_t signalValue = timelineSemaphore.waitValue();
+    const uint64_t pWaitSemaphoreValues[] = {
+            waitValue,
+            0
+    };
+    const uint64_t pSignalSemaphoreValues[] = {
+            signalValue,
+            0
+    };
+    const VkTimelineSemaphoreSubmitInfo timelineSemaphoreSubmitInfo = {
+            .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+            .pNext = NULL,
+            .waitSemaphoreValueCount = 2,
+            .pWaitSemaphoreValues =  pWaitSemaphoreValues,
+            .signalSemaphoreValueCount = 2,
+            .pSignalSemaphoreValues = pSignalSemaphoreValues,
+    };
+    const VkSemaphore pWaitSemaphores[] = {
+            timelineSemaphore.vkSemaphore(),
+            swap.acquireCompleteSemaphore(),
+    };
+    const VkPipelineStageFlags pWaitDstStageMask[] = {
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    };
+    const VkSemaphore pSignalSemaphores[] = {
+            timelineSemaphore.vkSemaphore(),
+            swap.renderCompleteSemaphore(),
+    };
+    const VkSubmitInfo submitInfo = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext = &timelineSemaphoreSubmitInfo,
+            .waitSemaphoreCount = 2,
+            .pWaitSemaphores = pWaitSemaphores,
+            .pWaitDstStageMask = pWaitDstStageMask,
+            .commandBufferCount = 1,
+            .pCommandBuffers = &m_VkGraphicsCommandBuffer,
+            .signalSemaphoreCount = 2,
+            .pSignalSemaphores = pSignalSemaphores
+    };
+    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
+                         1,
+                         &submitInfo,
+                         VK_NULL_HANDLE));
+    // TODO want to use this?? https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_present_id.html
+    auto renderCompleteSemaphore = swap.renderCompleteSemaphore();
+    auto vkSwapchain = swap.vkSwapchain();
+    auto blitIndex = swap.blitIndex();
+    const VkPresentInfoKHR presentInfo = {
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &renderCompleteSemaphore,
+            .swapchainCount = 1,
+            .pSwapchains = &vkSwapchain,
+            .pImageIndices = &blitIndex,
+    };
+    VK_CHK(vkQueuePresentKHR(m_VkGraphicsQueue,
+                             &presentInfo));
+    return MXC_SUCCESS;
+}
+

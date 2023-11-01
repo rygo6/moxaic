@@ -108,7 +108,7 @@ bool Moxaic::GlobalDescriptor::Init()
 {
     MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                           BufferLocality::Local));
+                           Locality::Local));
 
     if (s_VkDescriptorSetLayout == VK_NULL_HANDLE) {
         std::vector<VkDescriptorSetLayoutBinding> bindings;
@@ -197,22 +197,22 @@ bool Moxaic::MeshNodeDescriptor::Init(VulkanFramebuffer framebuffer)
     std::vector<VkWriteDescriptorSet> writes;
     PushWrite((VkDescriptorImageInfo) {
             .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.ColorTexture().vkImageView(),
+            .imageView = framebuffer.colorTexture().vkImageView(),
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     }, writes);
     PushWrite((VkDescriptorImageInfo) {
             .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.NormalTexture().vkImageView(),
+            .imageView = framebuffer.normalTexture().vkImageView(),
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     }, writes);
     PushWrite((VkDescriptorImageInfo) {
             .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.GBufferTexture().vkImageView(),
+            .imageView = framebuffer.gBufferTexture().vkImageView(),
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     }, writes);
     PushWrite((VkDescriptorImageInfo) {
             .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.ColorTexture().vkImageView(),
+            .imageView = framebuffer.colorTexture().vkImageView(),
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     }, writes);
     WritePushedDescriptors(writes);

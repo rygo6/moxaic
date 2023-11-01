@@ -14,8 +14,8 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-struct Moxaic::VulkanFunc Moxaic::VkFunc;
-struct Moxaic::VulkanDebug Moxaic::VkDebug;
+Moxaic::VulkanFunc Moxaic::VkFunc;
+Moxaic::VulkanDebug Moxaic::VkDebug;
 
 static VkInstance g_VulkanInstance;
 static VkSurfaceKHR g_VulkanSurface;
@@ -200,7 +200,11 @@ bool Moxaic::VulkanInit(SDL_Window *const pWindow, const bool enableValidationLa
     MXC_CHK(CreateVulkanInstance(pWindow));
     MXC_CHK(LoadVulkanFunctionPointers());
     MXC_CHK(CreateVulkanDebugOutput());
-    MXC_CHK(SDL_Vulkan_CreateSurface(pWindow, g_VulkanInstance, &g_VulkanSurface));
+
+    // should surface move into swap class?! or device class?
+    MXC_CHK(SDL_Vulkan_CreateSurface(pWindow,
+                                     g_VulkanInstance,
+                                     &g_VulkanSurface));
 
     return true;
 }

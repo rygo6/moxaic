@@ -24,7 +24,7 @@ inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
     Moxaic::VkDebug.VulkanDebugFile = MXC_FILE_NO_PATH; \
     Moxaic::VkDebug.VulkanDebugCommand = #command; \
     VkResult result = command; \
-    if (result != VK_SUCCESS) { \
+    if (result != VK_SUCCESS) [[unlikely]] { \
         printf("(%s:%d) VKCheck fail on command: %s - %s\n", \
                 Moxaic::VkDebug.VulkanDebugFile, \
                 Moxaic::VkDebug.VulkanDebugLine, \
@@ -39,14 +39,25 @@ namespace Moxaic
     bool VulkanInit(SDL_Window *pWindow, bool enableValidationLayers);
 
     VkInstance vkInstance();
+
+    // should surface move into swap class?! or device class?
     VkSurfaceKHR vkSurface();
 
-    enum BufferLocality : char {
+    inline constinit VkImageSubresourceRange k_DefaultColorSubresourceRange {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+    };
+
+    enum Locality : char
+    {
         Local,
         External,
     };
 
-    inline const char *string_BufferLocality(BufferLocality input_value)
+    inline const char *string_BufferLocality(Locality input_value)
     {
         switch (input_value) {
             case Local:

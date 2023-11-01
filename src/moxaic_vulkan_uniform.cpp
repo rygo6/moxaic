@@ -29,7 +29,7 @@ bool Moxaic::VulkanUniform<T>::InitFromImport()
 template<typename T>
 bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags &properties,
                                     const VkBufferUsageFlags &usage,
-                                    const BufferLocality &locality)
+                                    const Locality &locality)
 {
     MXC_LOG("Init Uniform:",
             string_VkMemoryPropertyFlags(properties),
@@ -70,7 +70,7 @@ bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags &properties,
                        BufferSize(),
                        0,
                        (void **) &m_pMappedBuffer));
-    if (locality == BufferLocality::External) {
+    if (locality == Locality::External) {
 #if WIN32
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
                 .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,

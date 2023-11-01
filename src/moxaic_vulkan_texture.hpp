@@ -35,15 +35,7 @@ namespace Moxaic
                   const VkExtent3D &extent,
                   const VkImageUsageFlags &usage,
                   const VkImageAspectFlags &aspectMask,
-                  const BufferLocality &locality);
-
-        bool TransitionImageLayoutImmediate(VkImageLayout oldLayout,
-                                            VkImageLayout newLayout,
-                                            VkAccessFlags srcAccessMask,
-                                            VkAccessFlags dstAccessMask,
-                                            VkPipelineStageFlags srcStageMask,
-                                            VkPipelineStageFlags dstStageMask,
-                                            VkImageAspectFlags aspectMask) const;
+                  const Locality &locality);
 
         inline auto vkImage() const { return m_VkImage; }
         inline auto vkImageView() const { return m_VkImageView; }

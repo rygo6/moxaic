@@ -7,16 +7,6 @@ constinit VkImageUsageFlags k_NormalBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMEN
 constinit VkImageUsageFlags k_GBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 constinit VkImageUsageFlags k_DepthBufferUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-static bool initialLayoutTransition(const Moxaic::VulkanTexture &vulkanTexture, VkImageAspectFlags aspectMask)
-{
-    return vulkanTexture.TransitionImageLayoutImmediate(VK_IMAGE_LAYOUT_UNDEFINED,
-                                                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                        0, 0,
-                                                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                                        aspectMask);
-}
-
 Moxaic::VulkanFramebuffer::VulkanFramebuffer(const Moxaic::VulkanDevice &device)
         : k_Device(device)
 //        , m_ColorTexture(std::make_unique<VulkanTexture>(device))
@@ -27,38 +17,38 @@ Moxaic::VulkanFramebuffer::VulkanFramebuffer(const Moxaic::VulkanDevice &device)
 
 Moxaic::VulkanFramebuffer::~VulkanFramebuffer() = default;
 
-bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &extent,
-                                     const BufferLocality &locality)
+bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &dimensions,
+                                     const Locality &locality)
 {
-    VkExtent3D extent3D = {extent.width, extent.height, 1};
+    VkExtent3D extent3D = {dimensions.width, dimensions.height, 1};
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
+                                extent3D,
+                                k_ColorBufferUsage,
+                                VK_IMAGE_ASPECT_COLOR_BIT,
+                                locality));
+    MXC_CHK(InitialLayoutTransition(m_ColorTexture,
+                                    VK_IMAGE_ASPECT_COLOR_BIT));
+    MXC_CHK(m_NormalTexture.Init(k_NormalBufferFormat,
                                  extent3D,
-                                 k_ColorBufferUsage,
+                                 k_NormalBufferUsage,
                                  VK_IMAGE_ASPECT_COLOR_BIT,
                                  locality));
-    MXC_CHK(initialLayoutTransition(m_ColorTexture, VK_IMAGE_ASPECT_COLOR_BIT));
-
-    MXC_CHK(m_NormalTexture.Init(k_NormalBufferFormat,
+    MXC_CHK(InitialLayoutTransition(m_NormalTexture,
+                                    VK_IMAGE_ASPECT_COLOR_BIT));
+    MXC_CHK(m_GBufferTexture.Init(k_GBufferFormat,
                                   extent3D,
-                                  k_NormalBufferUsage,
+                                  k_GBufferUsage,
                                   VK_IMAGE_ASPECT_COLOR_BIT,
                                   locality));
-    MXC_CHK(initialLayoutTransition(m_NormalTexture, VK_IMAGE_ASPECT_COLOR_BIT));
-
-    MXC_CHK(m_GBufferTexture.Init(k_GBufferFormat,
-                                   extent3D,
-                                   k_GBufferUsage,
-                                   VK_IMAGE_ASPECT_COLOR_BIT,
-                                   locality));
-    MXC_CHK(initialLayoutTransition(m_GBufferTexture, VK_IMAGE_ASPECT_COLOR_BIT));
-
+    MXC_CHK(InitialLayoutTransition(m_GBufferTexture,
+                                    VK_IMAGE_ASPECT_COLOR_BIT));
     MXC_CHK(m_DepthTexture.Init(k_DepthBufferFormat,
-                                 extent3D,
-                                 k_DepthBufferUsage,
-                                 VK_IMAGE_ASPECT_DEPTH_BIT,
-                                 locality));
-    MXC_CHK(initialLayoutTransition(m_DepthTexture, VK_IMAGE_ASPECT_DEPTH_BIT));
-
+                                extent3D,
+                                k_DepthBufferUsage,
+                                VK_IMAGE_ASPECT_DEPTH_BIT,
+                                locality));
+    MXC_CHK(InitialLayoutTransition(m_DepthTexture,
+                                    VK_IMAGE_ASPECT_DEPTH_BIT));
     const std::array attachments{
             m_ColorTexture.vkImageView(),
             m_NormalTexture.vkImageView(),
@@ -72,20 +62,29 @@ bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &extent,
             .renderPass = k_Device.vkRenderPass(),
             .attachmentCount = attachments.size(),
             .pAttachments = attachments.data(),
-            .width = extent.width,
-            .height = extent.height,
+            .width = dimensions.width,
+            .height = dimensions.height,
             .layers = 1,
     };
     VK_CHK(vkCreateFramebuffer(k_Device.vkDevice(), &framebufferCreateInfo, VK_ALLOC, &m_VkFramebuffer));
-
     const VkSemaphoreCreateInfo renderCompleteCreateInfo{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
             .pNext = nullptr,
             .flags = 0,
     };
     VK_CHK(vkCreateSemaphore(k_Device.vkDevice(), &renderCompleteCreateInfo, VK_ALLOC, &m_VkRenderCompleteSemaphore));
-
+    m_Dimensions = dimensions;
     return true;
 }
 
-
+MXC_RESULT Moxaic::VulkanFramebuffer::InitialLayoutTransition(const Moxaic::VulkanTexture &texture,
+                                                              VkImageAspectFlags aspectMask)
+{
+    return k_Device.TransitionImageLayoutImmediate(texture.vkImage(),
+                                                   VK_IMAGE_LAYOUT_UNDEFINED,
+                                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                                   0, 0,
+                                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                                   aspectMask);
+}

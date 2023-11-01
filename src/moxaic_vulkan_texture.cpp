@@ -46,7 +46,7 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
                                  const VkExtent3D &extent,
                                  const VkImageUsageFlags &usage,
                                  const VkImageAspectFlags &aspectMask,
-                                 const BufferLocality &locality)
+                                 const Locality &locality)
 {
     MXC_LOG("CreateTexture:",
             string_VkFormat(format),
@@ -126,46 +126,5 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
 #endif
     }
     m_Dimensions = extent;
-    return true;
-}
-
-// TODO implemented for unified graphics + transfer only right now
-//  https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies
-bool Moxaic::VulkanTexture::TransitionImageLayoutImmediate(VkImageLayout oldLayout,
-                                                           VkImageLayout newLayout,
-                                                           VkAccessFlags srcAccessMask,
-                                                           VkAccessFlags dstAccessMask,
-                                                           VkPipelineStageFlags srcStageMask,
-                                                           VkPipelineStageFlags dstStageMask,
-                                                           VkImageAspectFlags aspectMask) const
-{
-
-    VkCommandBuffer commandBuffer;
-    MXC_CHK(k_Device.BeginImmediateCommandBuffer(commandBuffer));
-    const VkImageMemoryBarrier imageMemoryBarrier = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-            .srcAccessMask = srcAccessMask,
-            .dstAccessMask = dstAccessMask,
-            .oldLayout = oldLayout,
-            .newLayout = newLayout,
-            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = m_VkImage,
-            .subresourceRange = {.aspectMask = aspectMask,
-                    .baseMipLevel = 0,
-                    .levelCount = 1,
-                    .baseArrayLayer = 0,
-                    .layerCount = 1
-            }
-    };
-    vkCmdPipelineBarrier(commandBuffer,
-                         srcStageMask,
-                         dstStageMask,
-                         0,
-                         0, nullptr,
-                         0, nullptr,
-                         1, &imageMemoryBarrier);
-
-    MXC_CHK(k_Device.EndImmediateCommandBuffer(commandBuffer));
     return true;
 }

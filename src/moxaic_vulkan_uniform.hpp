@@ -20,7 +20,7 @@ namespace Moxaic
 
         bool Init(const VkMemoryPropertyFlags &properties,
                   const VkBufferUsageFlags &usage,
-                  const BufferLocality &external);
+                  const Locality &external);
 
         inline T& Mapped() { return *m_pMappedBuffer; }
         inline VkDeviceSize BufferSize() const { return sizeof(T); }
