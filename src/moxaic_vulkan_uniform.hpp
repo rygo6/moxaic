@@ -18,9 +18,9 @@ namespace Moxaic
 
         bool InitFromImport();
 
-        bool Init(const VkMemoryPropertyFlags &properties,
-                  const VkBufferUsageFlags &usage,
-                  const Locality &external);
+        bool Init(const VkMemoryPropertyFlags properties,
+                  const VkBufferUsageFlags usage,
+                  const Locality external);
 
         inline T& Mapped() { return *m_pMappedBuffer; }
         inline VkDeviceSize BufferSize() const { return sizeof(T); }

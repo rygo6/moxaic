@@ -593,10 +593,10 @@ MXC_RESULT Moxaic::VulkanDevice::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
-                                                const VkImage &image,
-                                                const VkExternalMemoryHandleTypeFlags &externalHandleType,
-                                                VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Moxaic::VulkanDevice::AllocateBindImage(const VkMemoryPropertyFlags properties,
+                                                   const VkImage image,
+                                                   const VkExternalMemoryHandleTypeFlags externalHandleType,
+                                                   VkDeviceMemory &outDeviceMemory) const
 {
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
@@ -628,23 +628,62 @@ MXC_RESULT Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &pro
                             &allocateInfo,
                             VK_ALLOC,
                             &outDeviceMemory));
+    VK_CHK(vkBindImageMemory(m_VkDevice,
+                             image,
+                             outDeviceMemory,
+                             0));
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &properties,
-                                                const VkBuffer &buffer,
-                                                const VkExternalMemoryHandleTypeFlags &externalHandleType,
-                                                VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Moxaic::VulkanDevice::AllocateBindBuffer(const VkBufferUsageFlags usage,
+                                                    const VkMemoryPropertyFlags properties,
+                                                    const VkDeviceSize bufferSize,
+                                                    VkBuffer &outBuffer,
+                                                    VkDeviceMemory &outDeviceMemory) const
 {
+    HANDLE tempHandle;
+    return AllocateBindBuffer(usage, properties, bufferSize, Local, outBuffer, outDeviceMemory, tempHandle);
+}
+
+MXC_RESULT Moxaic::VulkanDevice::AllocateBindBuffer(const VkBufferUsageFlags usage,
+                                                    const VkMemoryPropertyFlags properties,
+                                                    const VkDeviceSize bufferSize,
+                                                    const Locality locality,
+                                                    VkBuffer &outBuffer,
+                                                    VkDeviceMemory &outDeviceMemory,
+                                                    HANDLE &outExternalMemory) const
+{
+    const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
+    const VkExternalMemoryBufferCreateInfoKHR externalBufferInfo = {
+            .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO_KHR,
+            .pNext = nullptr,
+            .handleTypes = externalHandleType
+    };
+    const VkBufferCreateInfo bufferCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+            .pNext = locality == Local ? nullptr : &externalBufferInfo,
+            .flags = 0,
+            .size = bufferSize,
+            .usage = usage,
+            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 0,
+            .pQueueFamilyIndices = nullptr,
+    };
+    VK_CHK(vkCreateBuffer(m_VkDevice,
+                          &bufferCreateInfo,
+                          nullptr,
+                          &outBuffer));
+
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
     vkGetBufferMemoryRequirements(m_VkDevice,
-                                  buffer,
+                                  outBuffer,
                                   &memRequirements);
     MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
                                      properties,
                                      memRequirements.memoryTypeBits,
                                      memTypeIndex));
+
     // dedicated needed??
 //    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
 //            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
@@ -666,7 +705,7 @@ MXC_RESULT Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &pro
     };
     const VkMemoryAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = externalHandleType == 0 ? nullptr : &exportAllocInfo,
+            .pNext = locality == Local ? nullptr : &exportAllocInfo,
             .allocationSize = memRequirements.size,
             .memoryTypeIndex = memTypeIndex
     };
@@ -674,6 +713,119 @@ MXC_RESULT Moxaic::VulkanDevice::AllocateMemory(const VkMemoryPropertyFlags &pro
                             &allocInfo,
                             VK_ALLOC,
                             &outDeviceMemory));
+    VK_CHK(vkBindBufferMemory(m_VkDevice,
+                              outBuffer,
+                              outDeviceMemory,
+                              0));
+
+    if (locality == Locality::External) {
+#if WIN32
+        const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+                .pNext = nullptr,
+                .memory = outDeviceMemory,
+                .handleType = externalHandleType
+        };
+        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(m_VkDevice,
+                                              &getWin32HandleInfo,
+                                              &outExternalMemory));
+#endif
+    }
+
+    return MXC_SUCCESS;
+}
+
+//MXC_RESULT Moxaic::VulkanDevice::CreateBuffer(const VkBufferUsageFlags usage,
+//                                              const Locality locality,
+//                                              const VkDeviceSize bufferSize,
+//                                              VkBuffer &outBuffer) const
+//{
+//    MXC_LOG_FUNCTION();
+//    const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
+//    const VkExternalMemoryBufferCreateInfoKHR externalBufferInfo = {
+//            .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO_KHR,
+//            .pNext = nullptr,
+//            .handleTypes = externalHandleType
+//    };
+//    const VkBufferCreateInfo bufferCreateInfo = {
+//            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+//            .pNext = locality ? &externalBufferInfo : nullptr,
+//            .flags = 0,
+//            .size = bufferSize,
+//            .usage = usage,
+//            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+//            .queueFamilyIndexCount = 0,
+//            .pQueueFamilyIndices = nullptr,
+//    };
+//    VK_CHK(vkCreateBuffer(m_VkDevice,
+//                          &bufferCreateInfo,
+//                          nullptr,
+//                          &outBuffer));
+//    return MXC_SUCCESS;
+//}
+
+MXC_RESULT Moxaic::VulkanDevice::CreateStagingBuffer(const void *srcData,
+                                                     const VkDeviceSize bufferSize,
+                                                     VkBuffer &outStagingBuffer,
+                                                     VkDeviceMemory &outStagingBufferMemory) const
+{
+    MXC_CHK(AllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                               bufferSize,
+                               outStagingBuffer,
+                               outStagingBufferMemory));
+    void *dstData;
+    vkMapMemory(m_VkDevice, outStagingBufferMemory, 0, bufferSize, 0, &dstData);
+    memcpy(dstData, srcData, bufferSize);
+    vkUnmapMemory(m_VkDevice, outStagingBufferMemory);\
+    return MXC_SUCCESS;
+}
+
+void Moxaic::VulkanDevice::CopyBuffer(const VkDeviceSize bufferSize,
+                                      VkBuffer srcBuffer,
+                                      VkBuffer dstBuffer) const
+{
+    VkCommandBuffer commandBuffer;
+    BeginImmediateCommandBuffer(commandBuffer);
+    const VkBufferCopy copyRegion = {
+            .srcOffset = 0,
+            .dstOffset = 0,
+            .size = bufferSize,
+    };
+    vkCmdCopyBuffer(commandBuffer,
+                    srcBuffer,
+                    dstBuffer,
+                    1,
+                    &copyRegion);
+    EndImmediateCommandBuffer(commandBuffer);
+}
+
+MXC_RESULT Moxaic::VulkanDevice::CreatePopulateBufferViaStaging(const void *srcData,
+                                                                const VkBufferUsageFlagBits usage,
+                                                                const VkDeviceSize bufferSize,
+                                                                VkBuffer &outBuffer,
+                                                                VkDeviceMemory &outBufferMemory) const
+{
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    MXC_CHK(CreateStagingBuffer(srcData,
+                                bufferSize,
+                                stagingBuffer,
+                                stagingBufferMemory));
+    MXC_CHK(AllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
+                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                               bufferSize,
+                               outBuffer,
+                               outBufferMemory));
+    CopyBuffer(bufferSize,
+               stagingBuffer,
+               outBuffer);
+    vkDestroyBuffer(m_VkDevice,
+                    stagingBuffer,
+                    VK_ALLOC);
+    vkFreeMemory(m_VkDevice,
+                 stagingBufferMemory,
+                 VK_ALLOC);
     return MXC_SUCCESS;
 }
 
@@ -688,7 +840,6 @@ MXC_RESULT Moxaic::VulkanDevice::TransitionImageLayoutImmediate(VkImage image,
                                                                 VkPipelineStageFlags dstStageMask,
                                                                 VkImageAspectFlags aspectMask) const
 {
-
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
     const VkImageMemoryBarrier imageMemoryBarrier = {
@@ -769,6 +920,7 @@ MXC_RESULT Moxaic::VulkanDevice::EndImmediateCommandBuffer(const VkCommandBuffer
                          &commandBuffer);
     return MXC_SUCCESS;
 }
+
 MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
 {
     VK_CHK(vkResetCommandBuffer(m_VkGraphicsCommandBuffer,

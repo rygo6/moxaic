@@ -9,18 +9,17 @@
 #include "moxaic_vulkan_descriptor.hpp"
 #include "moxaic_vulkan_swap.hpp"
 #include "moxaic_vulkan_timeline_semaphore.hpp"
+#include "moxaic_vulkan_mesh.hpp"
 
 using namespace Moxaic;
 
-struct
-{
-    VulkanDevice *pDevice;
-    VulkanFramebuffer *pFramebuffer;
-    Camera *pCamera;
-    GlobalDescriptor *pGlobalDescriptor;
-    VulkanSwap *pSwap;
-    VulkanTimelineSemaphore *pTimelineSemaphore;
-} Core;
+VulkanDevice *g_pDevice;
+VulkanFramebuffer *g_pFramebuffer;
+Camera *g_pCamera;
+GlobalDescriptor *g_pGlobalDescriptor;
+VulkanSwap *g_pSwap;
+VulkanTimelineSemaphore *g_pTimelineSemaphore;
+VulkanMesh *g_pMesh;
 
 MXC_RESULT Moxaic::CoreInit()
 {
@@ -28,28 +27,31 @@ MXC_RESULT Moxaic::CoreInit()
     MXC_CHK(VulkanInit(g_pSDLWindow,
                        true));
 
-    Core.pDevice = new VulkanDevice();
-    MXC_CHK(Core.pDevice->Init());
+    g_pDevice = new VulkanDevice();
+    MXC_CHK(g_pDevice->Init());
 
-    Core.pFramebuffer = new VulkanFramebuffer(*Core.pDevice);
-    MXC_CHK(Core.pFramebuffer->Init(g_WindowDimensions,
-                                    Locality::Local));
+    g_pFramebuffer = new VulkanFramebuffer(*g_pDevice);
+    MXC_CHK(g_pFramebuffer->Init(g_WindowDimensions,
+                                 Locality::Local));
 
-    Core.pCamera = new Camera();
-    Core.pCamera->transform().position() = {0, 0, -2};
+    g_pCamera = new Camera();
+    g_pCamera->transform().position() = {0, 0, -2};
 
-    Core.pGlobalDescriptor = new GlobalDescriptor(*Core.pDevice);
-    MXC_CHK(Core.pGlobalDescriptor->Init());
-    Core.pGlobalDescriptor->Update(*Core.pCamera,
-                                   g_WindowDimensions);
+    g_pGlobalDescriptor = new GlobalDescriptor(*g_pDevice);
+    MXC_CHK(g_pGlobalDescriptor->Init());
+    g_pGlobalDescriptor->Update(*g_pCamera,
+                                g_WindowDimensions);
 
-    Core.pSwap = new VulkanSwap(*Core.pDevice);
-    MXC_CHK(Core.pSwap->Init(g_WindowDimensions,
-                             false));
+    g_pSwap = new VulkanSwap(*g_pDevice);
+    MXC_CHK(g_pSwap->Init(g_WindowDimensions,
+                          false));
 
-    Core.pTimelineSemaphore = new VulkanTimelineSemaphore(*Core.pDevice);
-    MXC_CHK(Core.pTimelineSemaphore->Init(false,
-                                          Locality::Local));
+    g_pTimelineSemaphore = new VulkanTimelineSemaphore(*g_pDevice);
+    MXC_CHK(g_pTimelineSemaphore->Init(false,
+                                       Locality::Local));
+
+    g_pMesh = new VulkanMesh(*g_pDevice);
+    MXC_CHK(g_pMesh->Init());
 
     return MXC_SUCCESS;
 }
@@ -59,19 +61,19 @@ MXC_RESULT Moxaic::CoreLoop()
     while (g_ApplicationRunning) {
         WindowPoll();
 
-        Core.pDevice->BeginGraphicsCommandBuffer();
-        Core.pDevice->BeginRenderPass(*Core.pFramebuffer);
+        g_pDevice->BeginGraphicsCommandBuffer();
+        g_pDevice->BeginRenderPass(*g_pFramebuffer);
 
 
-        Core.pDevice->EndRenderPass();
+        g_pDevice->EndRenderPass();
 
-        Core.pSwap->BlitToSwap(Core.pFramebuffer->colorTexture().vkImage());
+        g_pSwap->BlitToSwap(g_pFramebuffer->colorTexture().vkImage());
 
-        Core.pDevice->EndGraphicsCommandBuffer();
+        g_pDevice->EndGraphicsCommandBuffer();
 
-        Core.pDevice->SubmitGraphicsQueueAndPresent(*Core.pTimelineSemaphore, *Core.pSwap);
+        g_pDevice->SubmitGraphicsQueueAndPresent(*g_pTimelineSemaphore, *g_pSwap);
 
-        Core.pTimelineSemaphore->Wait();
+        g_pTimelineSemaphore->Wait();
     }
 
     WindowShutdown();

@@ -11,8 +11,7 @@
 #endif
 
 Moxaic::VulkanTexture::VulkanTexture(const VulkanDevice &device)
-        : k_Device(device)
-{}
+        : k_Device(device) {}
 
 Moxaic::VulkanTexture::~VulkanTexture() = default;
 
@@ -79,14 +78,10 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
                          &imageCreateInfo,
                          VK_ALLOC,
                          &m_VkImage));
-    MXC_CHK(k_Device.AllocateMemory(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                    m_VkImage,
-                                    locality == External ? externalHandleType : 0,
-                                    m_VkDeviceMemory));
-    VK_CHK(vkBindImageMemory(k_Device.vkDevice(),
-                             m_VkImage,
-                             m_VkDeviceMemory,
-                             0));
+    MXC_CHK(k_Device.AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                       m_VkImage,
+                                       locality == External ? externalHandleType : 0,
+                                       m_VkDeviceMemory));
     const VkImageViewCreateInfo imageViewCreateInfo{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .pNext = nullptr,
