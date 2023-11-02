@@ -101,11 +101,11 @@ MXC_RESULT Moxaic::VulkanMesh::CreateVertexBuffer(const Vertex *pVertices,
 {
     m_VertexCount = vertexCount;
     const VkDeviceSize bufferSize = (sizeof(Vertex) * vertexCount);
-    MXC_CHK(k_Device.CreatePopulateBufferViaStaging(pVertices,
-                                                    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                    bufferSize,
-                                                    m_VkVertexBuffer,
-                                                    m_VkVertexBufferMemory));
+    MXC_CHK(k_Device.CreateAllocateBindPopulateBufferViaStaging(pVertices,
+                                                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                                                bufferSize,
+                                                                m_VkVertexBuffer,
+                                                                m_VkVertexBufferMemory));
     return MXC_SUCCESS;
 }
 
@@ -114,10 +114,10 @@ MXC_RESULT Moxaic::VulkanMesh::CreateIndexBuffer(const uint16_t *pIndices,
 {
     m_IndexCount = indexCount;
     const VkDeviceSize bufferSize = (sizeof(uint16_t) * indexCount);
-    MXC_CHK(k_Device.CreatePopulateBufferViaStaging(pIndices,
-                                                    VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                                                    bufferSize,
-                                                    m_VkIndexBuffer,
-                                                    m_VkIndexBufferMemory));
+    MXC_CHK(k_Device.CreateAllocateBindPopulateBufferViaStaging(pIndices,
+                                                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                                                                bufferSize,
+                                                                m_VkIndexBuffer,
+                                                                m_VkIndexBufferMemory));
     return MXC_SUCCESS;
 }

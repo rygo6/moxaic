@@ -5,6 +5,7 @@
 
 #include <vulkan/vulkan.h>
 #include <vector>
+#include <memory>
 
 #include <glm/glm.hpp>
 
@@ -14,18 +15,23 @@ namespace Moxaic
     class VulkanTexture;
     class VulkanFramebuffer;
     class Camera;
+    class Transform;
 
     class VulkanDescriptorBase
     {
     public:
         VulkanDescriptorBase(const VulkanDevice &device);
         virtual ~VulkanDescriptorBase();
+        MXC_RESULT Init();
 
         inline virtual VkDescriptorSetLayout vkLayout() const = 0;
         inline auto vkSet() const { return m_VkDescriptorSet; }
     protected:
         const VulkanDevice &k_Device;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
+
+        virtual MXC_RESULT SetupDescriptorSetLayout() = 0;
+        virtual MXC_RESULT SetupDescriptorSet() = 0;
 
         bool CreateDescriptorSetLayout(const std::vector<VkDescriptorSetLayoutBinding> &bindings,
                                        VkDescriptorSetLayout &outSetLayout);
@@ -46,14 +52,11 @@ namespace Moxaic
     };
 
 
-    class GlobalDescriptor : VulkanDescriptorBase
+    class GlobalDescriptor : public VulkanDescriptorBase
     {
     public:
-        GlobalDescriptor(const VulkanDevice &device);
-        bool Init();
+        using VulkanDescriptorBase::VulkanDescriptorBase;
         void Update(Camera &camera, VkExtent2D dimensions);
-
-        inline VkDescriptorSetLayout vkLayout() const override { return s_VkDescriptorSetLayout; }
 
         struct Buffer
         {
@@ -65,29 +68,67 @@ namespace Moxaic
             uint32_t height;
         };
 
+        inline VkDescriptorSetLayout vkLayout() const override { return s_VkDescriptorSetLayout; }
+
     private:
-        inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VulkanUniform<Buffer> m_Uniform{k_Device};
+
+        inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
+        MXC_RESULT SetupDescriptorSetLayout() override;
+        MXC_RESULT SetupDescriptorSet() override;
     };
 
 
-    class MaterialDescriptor : VulkanDescriptorBase
+    class MaterialDescriptor : public VulkanDescriptorBase
     {
     public:
-        bool Init(VulkanTexture texture);
+        using VulkanDescriptorBase::VulkanDescriptorBase;
+//        void Update(VulkanTexture texture);
+
         inline VkDescriptorSetLayout vkLayout() const override { return s_VkDescriptorSetLayout; }
+
     private:
+
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
+        MXC_RESULT SetupDescriptorSetLayout() override;
+        MXC_RESULT SetupDescriptorSet() override;
+    };
+
+    class ObjectDescriptor : public VulkanDescriptorBase
+    {
+    public:
+        using VulkanDescriptorBase::VulkanDescriptorBase;
+//        void Update(Transform transform);
+
+        struct Buffer
+        {
+            glm::mat4 model;
+        };
+
+        inline VkDescriptorSetLayout vkLayout() const override { return s_VkDescriptorSetLayout; }
+
+    private:
+        VulkanUniform<Buffer> m_Uniform{k_Device};
+
+        inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
+        MXC_RESULT SetupDescriptorSetLayout() override;
+        MXC_RESULT SetupDescriptorSet() override;
     };
 
 
-    class MeshNodeDescriptor : VulkanDescriptorBase
+    class MeshNodeDescriptor : public VulkanDescriptorBase
     {
     public:
-        bool Init(VulkanFramebuffer framebuffer);
+        using VulkanDescriptorBase::VulkanDescriptorBase;
+//        bool Init(VulkanFramebuffer framebuffer);
+
         inline VkDescriptorSetLayout vkLayout() const override { return s_VkDescriptorSetLayout; }
+
     private:
+
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
+        MXC_RESULT SetupDescriptorSetLayout() override;
+        MXC_RESULT SetupDescriptorSet() override;
     };
 
 }

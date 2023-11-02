@@ -28,23 +28,23 @@ namespace Moxaic
                                      const VkImage image,
                                      const VkExternalMemoryHandleTypeFlags externalHandleType,
                                      VkDeviceMemory &outDeviceMemory) const;
-        MXC_RESULT AllocateBindBuffer(const VkBufferUsageFlags usage,
-                                const VkMemoryPropertyFlags properties,
-                                const VkDeviceSize bufferSize,
-                                VkBuffer &outBuffer,
-                                VkDeviceMemory &outDeviceMemory) const;
-        MXC_RESULT AllocateBindBuffer(const VkBufferUsageFlags usage,
-                                      const VkMemoryPropertyFlags properties,
-                                      const VkDeviceSize bufferSize,
-                                      const Locality locality,
-                                      VkBuffer &outBuffer,
-                                      VkDeviceMemory &outDeviceMemory,
-                                      HANDLE &outExternalMemory) const;
-        MXC_RESULT CreatePopulateBufferViaStaging(const void *srcData,
-                                                  const VkBufferUsageFlagBits usage,
-                                                  const VkDeviceSize bufferSize,
-                                                  VkBuffer &outBuffer,
-                                                  VkDeviceMemory &outBufferMemory) const;
+        MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
+                                            const VkMemoryPropertyFlags properties,
+                                            const VkDeviceSize bufferSize,
+                                            VkBuffer &outBuffer,
+                                            VkDeviceMemory &outDeviceMemory) const;
+        MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
+                                            const VkMemoryPropertyFlags properties,
+                                            const VkDeviceSize bufferSize,
+                                            const Locality locality,
+                                            VkBuffer &outBuffer,
+                                            VkDeviceMemory &outDeviceMemory,
+                                            HANDLE &outExternalMemory) const;
+        MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(const void *srcData,
+                                                              const VkBufferUsageFlagBits usage,
+                                                              const VkDeviceSize bufferSize,
+                                                              VkBuffer &outBuffer,
+                                                              VkDeviceMemory &outBufferMemory) const;
         MXC_RESULT TransitionImageLayoutImmediate(VkImage image,
                                                   VkImageLayout oldLayout,
                                                   VkImageLayout newLayout,

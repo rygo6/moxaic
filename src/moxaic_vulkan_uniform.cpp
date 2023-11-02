@@ -40,13 +40,13 @@ bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags properties,
             string_BufferLocality(locality));
     VkMemoryPropertyFlags supportedProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     assert(((supportedProperties & properties) == supportedProperties) && "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
-    MXC_CHK(k_Device.AllocateBindBuffer(usage,
-                                        properties,
-                                        BufferSize(),
-                                        locality,
-                                        m_VkBuffer,
-                                        m_VkDeviceMemory,
-                                        m_ExternalMemory));
+    MXC_CHK(k_Device.CreateAllocateBindBuffer(usage,
+                                              properties,
+                                              BufferSize(),
+                                              locality,
+                                              m_VkBuffer,
+                                              m_VkDeviceMemory,
+                                              m_ExternalMemory));
     VK_CHK(vkMapMemory(k_Device.vkDevice(),
                        m_VkDeviceMemory,
                        0,

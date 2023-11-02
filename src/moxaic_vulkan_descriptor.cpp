@@ -14,7 +14,22 @@ Moxaic::VulkanDescriptorBase::VulkanDescriptorBase(const VulkanDevice &device)
         : k_Device(device) {}
 
 
-Moxaic::VulkanDescriptorBase::~VulkanDescriptorBase() = default;
+Moxaic::VulkanDescriptorBase::~VulkanDescriptorBase()
+{
+    vkFreeDescriptorSets(k_Device.vkDevice(),
+                         k_Device.vkDescriptorPool(),
+                         1,
+                         &m_VkDescriptorSet);
+}
+
+MXC_RESULT Moxaic::VulkanDescriptorBase::Init()
+{
+    if (vkLayout() == VK_NULL_HANDLE) {
+        MXC_CHK(SetupDescriptorSetLayout());
+    };
+    MXC_CHK(SetupDescriptorSet());
+    return MXC_SUCCESS;
+}
 
 void Moxaic::VulkanDescriptorBase::PushBinding(VkDescriptorSetLayoutBinding binding,
                                                std::vector<VkDescriptorSetLayoutBinding> &bindings)
@@ -101,29 +116,27 @@ void Moxaic::VulkanDescriptorBase::WritePushedDescriptors(const std::vector<VkWr
                            nullptr);
 }
 
-Moxaic::GlobalDescriptor::GlobalDescriptor(const VulkanDevice &device)
-        : VulkanDescriptorBase(device) {}
-
-bool Moxaic::GlobalDescriptor::Init()
+/// GlobalDescriptor
+MXC_RESULT Moxaic::GlobalDescriptor::SetupDescriptorSetLayout()
+{
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    PushBinding((VkDescriptorSetLayoutBinding) {
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                          VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                          VK_SHADER_STAGE_COMPUTE_BIT |
+                          VK_SHADER_STAGE_FRAGMENT_BIT |
+                          VK_SHADER_STAGE_MESH_BIT_EXT |
+                          VK_SHADER_STAGE_TASK_BIT_EXT,
+    }, bindings);
+    MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
+    return MXC_SUCCESS;
+}
+MXC_RESULT Moxaic::GlobalDescriptor::SetupDescriptorSet()
 {
     MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                            Locality::Local));
-
-    if (s_VkDescriptorSetLayout == VK_NULL_HANDLE) {
-        std::vector<VkDescriptorSetLayoutBinding> bindings;
-        PushBinding((VkDescriptorSetLayoutBinding) {
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                              VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
-                              VK_SHADER_STAGE_COMPUTE_BIT |
-                              VK_SHADER_STAGE_FRAGMENT_BIT |
-                              VK_SHADER_STAGE_MESH_BIT_EXT |
-                              VK_SHADER_STAGE_TASK_BIT_EXT,
-        }, bindings);
-        MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
-    };
-
     MXC_CHK(AllocateDescriptorSet(s_VkDescriptorSetLayout, m_VkDescriptorSet));
     std::vector<VkWriteDescriptorSet> writes;
     PushWrite((VkDescriptorBufferInfo) {
@@ -131,10 +144,8 @@ bool Moxaic::GlobalDescriptor::Init()
             .range = sizeof(Buffer),
     }, writes);
     WritePushedDescriptors(writes);
-
-    return true;
+    return MXC_SUCCESS;
 }
-
 void Moxaic::GlobalDescriptor::Update(Camera &camera, VkExtent2D dimensions)
 {
     m_Uniform.Mapped().width = dimensions.width;
@@ -145,77 +156,79 @@ void Moxaic::GlobalDescriptor::Update(Camera &camera, VkExtent2D dimensions)
     m_Uniform.Mapped().invView = camera.inverseView();
 }
 
-bool Moxaic::MaterialDescriptor::Init(VulkanTexture texture)
+/// MaterialDescriptor
+MXC_RESULT Moxaic::MaterialDescriptor::SetupDescriptorSetLayout()
 {
-    if (s_VkDescriptorSetLayout == nullptr) {
-        MXC_CHK(CreateDescriptorSetLayout(
-                {
-                        (VkDescriptorSetLayoutBinding) {
-                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                        }
-                },
-                s_VkDescriptorSetLayout));
-    }
+    std::vector<VkDescriptorSetLayoutBinding> bindings;
 
-    return false;
+    PushBinding((VkDescriptorSetLayoutBinding) {
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    }, bindings);
+
+    MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
+    return MXC_SUCCESS;
+}
+MXC_RESULT Moxaic::MaterialDescriptor::SetupDescriptorSet()
+{
+    return MXC_SUCCESS;
 }
 
 
-bool Moxaic::MeshNodeDescriptor::Init(VulkanFramebuffer framebuffer)
-{
-    if (s_VkDescriptorSetLayout == VK_NULL_HANDLE) {
-        std::vector<VkDescriptorSetLayoutBinding> bindings;
-        PushBinding((VkDescriptorSetLayoutBinding) {
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
-                              VK_SHADER_STAGE_TASK_BIT_EXT |
-                              VK_SHADER_STAGE_MESH_BIT_EXT
-        }, bindings);
-        PushBinding((VkDescriptorSetLayoutBinding) {
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
-                              VK_SHADER_STAGE_TASK_BIT_EXT |
-                              VK_SHADER_STAGE_MESH_BIT_EXT
-        }, bindings);
-        PushBinding((VkDescriptorSetLayoutBinding) {
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
-                              VK_SHADER_STAGE_TASK_BIT_EXT |
-                              VK_SHADER_STAGE_MESH_BIT_EXT
-        }, bindings);
-        PushBinding((VkDescriptorSetLayoutBinding) {
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
-                              VK_SHADER_STAGE_TASK_BIT_EXT |
-                              VK_SHADER_STAGE_MESH_BIT_EXT
-        }, bindings);
-        MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
-    };
-
-    MXC_CHK(AllocateDescriptorSet(s_VkDescriptorSetLayout, m_VkDescriptorSet));
-    std::vector<VkWriteDescriptorSet> writes;
-    PushWrite((VkDescriptorImageInfo) {
-            .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.colorTexture().vkImageView(),
-            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    }, writes);
-    PushWrite((VkDescriptorImageInfo) {
-            .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.normalTexture().vkImageView(),
-            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    }, writes);
-    PushWrite((VkDescriptorImageInfo) {
-            .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.gBufferTexture().vkImageView(),
-            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    }, writes);
-    PushWrite((VkDescriptorImageInfo) {
-            .sampler = k_Device.vkLinearSampler(),
-            .imageView = framebuffer.colorTexture().vkImageView(),
-            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    }, writes);
-    WritePushedDescriptors(writes);
-
-    return true;
-}
+//bool Moxaic::MeshNodeDescriptor::Init(VulkanFramebuffer framebuffer)
+//{
+//    if (s_VkDescriptorSetLayout == VK_NULL_HANDLE) {
+//        std::vector<VkDescriptorSetLayoutBinding> bindings;
+//        PushBinding((VkDescriptorSetLayoutBinding) {
+//                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+//                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
+//                              VK_SHADER_STAGE_TASK_BIT_EXT |
+//                              VK_SHADER_STAGE_MESH_BIT_EXT
+//        }, bindings);
+//        PushBinding((VkDescriptorSetLayoutBinding) {
+//                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+//                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
+//                              VK_SHADER_STAGE_TASK_BIT_EXT |
+//                              VK_SHADER_STAGE_MESH_BIT_EXT
+//        }, bindings);
+//        PushBinding((VkDescriptorSetLayoutBinding) {
+//                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+//                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
+//                              VK_SHADER_STAGE_TASK_BIT_EXT |
+//                              VK_SHADER_STAGE_MESH_BIT_EXT
+//        }, bindings);
+//        PushBinding((VkDescriptorSetLayoutBinding) {
+//                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+//                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT |
+//                              VK_SHADER_STAGE_TASK_BIT_EXT |
+//                              VK_SHADER_STAGE_MESH_BIT_EXT
+//        }, bindings);
+//        MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
+//    };
+//
+//    MXC_CHK(AllocateDescriptorSet(s_VkDescriptorSetLayout, m_VkDescriptorSet));
+//    std::vector<VkWriteDescriptorSet> writes;
+//    PushWrite((VkDescriptorImageInfo) {
+//            .sampler = k_Device.vkLinearSampler(),
+//            .imageView = framebuffer.colorTexture().vkImageView(),
+//            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//    }, writes);
+//    PushWrite((VkDescriptorImageInfo) {
+//            .sampler = k_Device.vkLinearSampler(),
+//            .imageView = framebuffer.normalTexture().vkImageView(),
+//            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//    }, writes);
+//    PushWrite((VkDescriptorImageInfo) {
+//            .sampler = k_Device.vkLinearSampler(),
+//            .imageView = framebuffer.gBufferTexture().vkImageView(),
+//            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//    }, writes);
+//    PushWrite((VkDescriptorImageInfo) {
+//            .sampler = k_Device.vkLinearSampler(),
+//            .imageView = framebuffer.colorTexture().vkImageView(),
+//            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//    }, writes);
+//    WritePushedDescriptors(writes);
+//
+//    return true;
+//}

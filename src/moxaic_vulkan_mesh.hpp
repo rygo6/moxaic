@@ -19,6 +19,7 @@ namespace Moxaic
     class VulkanMesh
     {
     public:
+        /// Really just a test sphere mesh right now.
         VulkanMesh(const VulkanDevice &device);
         virtual ~VulkanMesh();
 

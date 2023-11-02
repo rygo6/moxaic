@@ -635,23 +635,23 @@ MXC_RESULT Moxaic::VulkanDevice::AllocateBindImage(const VkMemoryPropertyFlags p
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::AllocateBindBuffer(const VkBufferUsageFlags usage,
-                                                    const VkMemoryPropertyFlags properties,
-                                                    const VkDeviceSize bufferSize,
-                                                    VkBuffer &outBuffer,
-                                                    VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
+                                                          const VkMemoryPropertyFlags properties,
+                                                          const VkDeviceSize bufferSize,
+                                                          VkBuffer &outBuffer,
+                                                          VkDeviceMemory &outDeviceMemory) const
 {
     HANDLE tempHandle;
-    return AllocateBindBuffer(usage, properties, bufferSize, Local, outBuffer, outDeviceMemory, tempHandle);
+    return CreateAllocateBindBuffer(usage, properties, bufferSize, Local, outBuffer, outDeviceMemory, tempHandle);
 }
 
-MXC_RESULT Moxaic::VulkanDevice::AllocateBindBuffer(const VkBufferUsageFlags usage,
-                                                    const VkMemoryPropertyFlags properties,
-                                                    const VkDeviceSize bufferSize,
-                                                    const Locality locality,
-                                                    VkBuffer &outBuffer,
-                                                    VkDeviceMemory &outDeviceMemory,
-                                                    HANDLE &outExternalMemory) const
+MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
+                                                          const VkMemoryPropertyFlags properties,
+                                                          const VkDeviceSize bufferSize,
+                                                          const Locality locality,
+                                                          VkBuffer &outBuffer,
+                                                          VkDeviceMemory &outDeviceMemory,
+                                                          HANDLE &outExternalMemory) const
 {
     const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
     const VkExternalMemoryBufferCreateInfoKHR externalBufferInfo = {
@@ -735,45 +735,16 @@ MXC_RESULT Moxaic::VulkanDevice::AllocateBindBuffer(const VkBufferUsageFlags usa
     return MXC_SUCCESS;
 }
 
-//MXC_RESULT Moxaic::VulkanDevice::CreateBuffer(const VkBufferUsageFlags usage,
-//                                              const Locality locality,
-//                                              const VkDeviceSize bufferSize,
-//                                              VkBuffer &outBuffer) const
-//{
-//    MXC_LOG_FUNCTION();
-//    const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
-//    const VkExternalMemoryBufferCreateInfoKHR externalBufferInfo = {
-//            .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO_KHR,
-//            .pNext = nullptr,
-//            .handleTypes = externalHandleType
-//    };
-//    const VkBufferCreateInfo bufferCreateInfo = {
-//            .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-//            .pNext = locality ? &externalBufferInfo : nullptr,
-//            .flags = 0,
-//            .size = bufferSize,
-//            .usage = usage,
-//            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-//            .queueFamilyIndexCount = 0,
-//            .pQueueFamilyIndices = nullptr,
-//    };
-//    VK_CHK(vkCreateBuffer(m_VkDevice,
-//                          &bufferCreateInfo,
-//                          nullptr,
-//                          &outBuffer));
-//    return MXC_SUCCESS;
-//}
-
 MXC_RESULT Moxaic::VulkanDevice::CreateStagingBuffer(const void *srcData,
                                                      const VkDeviceSize bufferSize,
                                                      VkBuffer &outStagingBuffer,
                                                      VkDeviceMemory &outStagingBufferMemory) const
 {
-    MXC_CHK(AllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                               bufferSize,
-                               outStagingBuffer,
-                               outStagingBufferMemory));
+    MXC_CHK(CreateAllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                                     bufferSize,
+                                     outStagingBuffer,
+                                     outStagingBufferMemory));
     void *dstData;
     vkMapMemory(m_VkDevice, outStagingBufferMemory, 0, bufferSize, 0, &dstData);
     memcpy(dstData, srcData, bufferSize);
@@ -800,11 +771,11 @@ void Moxaic::VulkanDevice::CopyBuffer(const VkDeviceSize bufferSize,
     EndImmediateCommandBuffer(commandBuffer);
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreatePopulateBufferViaStaging(const void *srcData,
-                                                                const VkBufferUsageFlagBits usage,
-                                                                const VkDeviceSize bufferSize,
-                                                                VkBuffer &outBuffer,
-                                                                VkDeviceMemory &outBufferMemory) const
+MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindPopulateBufferViaStaging(const void *srcData,
+                                                                            const VkBufferUsageFlagBits usage,
+                                                                            const VkDeviceSize bufferSize,
+                                                                            VkBuffer &outBuffer,
+                                                                            VkDeviceMemory &outBufferMemory) const
 {
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
@@ -812,11 +783,11 @@ MXC_RESULT Moxaic::VulkanDevice::CreatePopulateBufferViaStaging(const void *srcD
                                 bufferSize,
                                 stagingBuffer,
                                 stagingBufferMemory));
-    MXC_CHK(AllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
-                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                               bufferSize,
-                               outBuffer,
-                               outBufferMemory));
+    MXC_CHK(CreateAllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
+                                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                     bufferSize,
+                                     outBuffer,
+                                     outBufferMemory));
     CopyBuffer(bufferSize,
                stagingBuffer,
                outBuffer);
@@ -1042,6 +1013,7 @@ MXC_RESULT Moxaic::VulkanDevice::SubmitGraphicsQueueAndPresent(VulkanTimelineSem
                          1,
                          &submitInfo,
                          VK_NULL_HANDLE));
+
     // TODO want to use this?? https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_present_id.html
     auto renderCompleteSemaphore = swap.renderCompleteSemaphore();
     auto vkSwapchain = swap.vkSwapchain();
@@ -1056,6 +1028,7 @@ MXC_RESULT Moxaic::VulkanDevice::SubmitGraphicsQueueAndPresent(VulkanTimelineSem
     };
     VK_CHK(vkQueuePresentKHR(m_VkGraphicsQueue,
                              &presentInfo));
+
     return MXC_SUCCESS;
 }
 
