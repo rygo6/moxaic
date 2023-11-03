@@ -2,6 +2,8 @@
 
 #include "moxaic_vulkan_descriptor.hpp"
 
+#include "../moxaic_vulkan_texture.hpp"
+
 namespace Moxaic
 {
     class MaterialDescriptor : public VulkanDescriptorBase<MaterialDescriptor>

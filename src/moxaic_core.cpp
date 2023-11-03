@@ -11,6 +11,7 @@
 #include "moxaic_vulkan_mesh.hpp"
 
 #include "descriptors/moxaic_global_descriptor.hpp"
+#include "descriptors/moxaic_material_descriptor.hpp"
 
 using namespace Moxaic;
 
@@ -18,6 +19,7 @@ VulkanDevice *g_pDevice;
 VulkanFramebuffer *g_pFramebuffer;
 Camera *g_pCamera;
 GlobalDescriptor *g_pGlobalDescriptor;
+MaterialDescriptor *g_pMaterialDescriptor;
 VulkanSwap *g_pSwap;
 VulkanTimelineSemaphore *g_pTimelineSemaphore;
 VulkanMesh *g_pMesh;
@@ -42,6 +44,9 @@ MXC_RESULT Moxaic::CoreInit()
     MXC_CHK(g_pGlobalDescriptor->Init());
     g_pGlobalDescriptor->Update(*g_pCamera,
                                 g_WindowDimensions);
+
+    g_pMaterialDescriptor = new MaterialDescriptor(*g_pDevice);
+    MXC_CHK(g_pMaterialDescriptor->Init());
 
     g_pSwap = new VulkanSwap(*g_pDevice);
     MXC_CHK(g_pSwap->Init(g_WindowDimensions,
