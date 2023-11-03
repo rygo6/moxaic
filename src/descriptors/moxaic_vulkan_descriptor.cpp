@@ -1,20 +1,23 @@
 #include "moxaic_vulkan_descriptor.hpp"
+#include "moxaic_global_descriptor.hpp"
+#include "moxaic_material_descriptor.hpp"
+#include "moxaic_object_descriptor.hpp"
+#include "moxaic_mesh_node_descriptor.hpp"
 
-#include "moxaic_vulkan.hpp"
-#include "moxaic_vulkan_texture.hpp"
-#include "moxaic_vulkan_device.hpp"
-#include "moxaic_vulkan_framebuffer.hpp"
-#include "moxaic_vulkan_uniform.hpp"
-
-#include "moxaic_camera.hpp"
+#include "../moxaic_vulkan.hpp"
+#include "../moxaic_vulkan_device.hpp"
 
 #include <vector>
 
-Moxaic::VulkanDescriptorBase::VulkanDescriptorBase(const VulkanDevice &device)
+thread_local std::vector<VkDescriptorSetLayoutBinding> g_Bindings;
+thread_local std::vector<VkWriteDescriptorSet> g_Writes;
+
+template<typename T>
+Moxaic::VulkanDescriptorBase<T>::VulkanDescriptorBase(const VulkanDevice &device)
         : k_Device(device) {}
 
-
-Moxaic::VulkanDescriptorBase::~VulkanDescriptorBase()
+template<typename T>
+Moxaic::VulkanDescriptorBase<T>::~VulkanDescriptorBase()
 {
     vkFreeDescriptorSets(k_Device.vkDevice(),
                          k_Device.vkDescriptorPool(),
@@ -22,57 +25,60 @@ Moxaic::VulkanDescriptorBase::~VulkanDescriptorBase()
                          &m_VkDescriptorSet);
 }
 
-MXC_RESULT Moxaic::VulkanDescriptorBase::Init()
+template<typename T>
+MXC_RESULT Moxaic::VulkanDescriptorBase<T>::Init()
 {
     if (vkLayout() == VK_NULL_HANDLE) {
         MXC_CHK(SetupDescriptorSetLayout());
     };
+    MXC_CHK(AllocateDescriptorSet());
     MXC_CHK(SetupDescriptorSet());
     return MXC_SUCCESS;
 }
 
-void Moxaic::VulkanDescriptorBase::PushBinding(VkDescriptorSetLayoutBinding binding,
-                                               std::vector<VkDescriptorSetLayoutBinding> &bindings)
+template<typename T>
+void Moxaic::VulkanDescriptorBase<T>::PushBinding(VkDescriptorSetLayoutBinding binding)
 {
-    binding.binding = bindings.size();
+    binding.binding = g_Bindings.size();
     binding.descriptorCount = 1;
-    bindings.push_back(binding);
+    g_Bindings.push_back(binding);
 }
 
-bool Moxaic::VulkanDescriptorBase::CreateDescriptorSetLayout(const std::vector<VkDescriptorSetLayoutBinding> &bindings,
-                                                             VkDescriptorSetLayout &outSetLayout)
+template<typename T>
+MXC_RESULT Moxaic::VulkanDescriptorBase<T>::CreateDescriptorSetLayout()
 {
     VkDescriptorSetLayoutCreateInfo layoutInfo = {};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.pNext = nullptr;
     layoutInfo.flags = 0;
-    layoutInfo.bindingCount = bindings.size();
-    layoutInfo.pBindings = bindings.data();
+    layoutInfo.bindingCount = g_Bindings.size();
+    layoutInfo.pBindings = g_Bindings.data();
     VK_CHK(vkCreateDescriptorSetLayout(k_Device.vkDevice(),
                                        &layoutInfo,
                                        VK_ALLOC,
-                                       &outSetLayout));
-    return true;
+                                       &s_VkDescriptorSetLayout));
+    g_Bindings.clear();
+    return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanDescriptorBase::AllocateDescriptorSet(const VkDescriptorSetLayout &descriptorSetLayout,
-                                                         VkDescriptorSet &outDescriptorSet)
+template<typename T>
+bool Moxaic::VulkanDescriptorBase<T>::AllocateDescriptorSet()
 {
     const VkDescriptorSetAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
             .pNext = nullptr,
             .descriptorPool = k_Device.vkDescriptorPool(),
             .descriptorSetCount = 1,
-            .pSetLayouts = &descriptorSetLayout,
+            .pSetLayouts = &s_VkDescriptorSetLayout,
     };
     VK_CHK(vkAllocateDescriptorSets(k_Device.vkDevice(),
                                     &allocInfo,
-                                    &outDescriptorSet));
+                                    &m_VkDescriptorSet));
     return true;
 }
 
-void Moxaic::VulkanDescriptorBase::PushWrite(VkDescriptorBufferInfo bufferInfo,
-                                             std::vector<VkWriteDescriptorSet> &outWrites)
+template<typename T>
+void Moxaic::VulkanDescriptorBase<T>::PushWrite(VkDescriptorBufferInfo bufferInfo)
 {
     SDL_assert_always(m_VkDescriptorSet != nullptr);
     VkWriteDescriptorSet write = {
@@ -84,13 +90,13 @@ void Moxaic::VulkanDescriptorBase::PushWrite(VkDescriptorBufferInfo bufferInfo,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &bufferInfo
     };
-    write.dstBinding = outWrites.size();
+    write.dstBinding = g_Writes.size();
     write.descriptorCount = write.descriptorCount == 0 ? 1 : write.descriptorCount;
-    outWrites.push_back(write);
+    g_Writes.push_back(write);
 }
 
-void Moxaic::VulkanDescriptorBase::PushWrite(VkDescriptorImageInfo imageInfo,
-                                             std::vector<VkWriteDescriptorSet> &outWrites)
+template<typename T>
+void Moxaic::VulkanDescriptorBase<T>::PushWrite(VkDescriptorImageInfo imageInfo)
 {
     SDL_assert_always(m_VkDescriptorSet != nullptr);
     VkWriteDescriptorSet write = {
@@ -102,77 +108,27 @@ void Moxaic::VulkanDescriptorBase::PushWrite(VkDescriptorImageInfo imageInfo,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &imageInfo
     };
-    write.dstBinding = outWrites.size();
+    write.dstBinding = g_Writes.size();
     write.descriptorCount = write.descriptorCount == 0 ? 1 : write.descriptorCount;
-    outWrites.push_back(write);
+    g_Writes.push_back(write);
 }
 
-void Moxaic::VulkanDescriptorBase::WritePushedDescriptors(const std::vector<VkWriteDescriptorSet> &writes)
+template<typename T>
+void Moxaic::VulkanDescriptorBase<T>::WritePushedDescriptors()
 {
-    vkUpdateDescriptorSets(k_Device.vkDevice(),
-                           writes.size(),
-                           writes.data(),
-                           0,
-                           nullptr);
+    VK_CHK_VOID(vkUpdateDescriptorSets(k_Device.vkDevice(),
+                                       g_Writes.size(),
+                                       g_Writes.data(),
+                                       0,
+                                       nullptr));
+    g_Writes.clear();
 }
 
-/// GlobalDescriptor
-MXC_RESULT Moxaic::GlobalDescriptor::SetupDescriptorSetLayout()
-{
-    std::vector<VkDescriptorSetLayoutBinding> bindings;
-    PushBinding((VkDescriptorSetLayoutBinding) {
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                          VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
-                          VK_SHADER_STAGE_COMPUTE_BIT |
-                          VK_SHADER_STAGE_FRAGMENT_BIT |
-                          VK_SHADER_STAGE_MESH_BIT_EXT |
-                          VK_SHADER_STAGE_TASK_BIT_EXT,
-    }, bindings);
-    MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
-    return MXC_SUCCESS;
-}
-MXC_RESULT Moxaic::GlobalDescriptor::SetupDescriptorSet()
-{
-    MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                           Locality::Local));
-    MXC_CHK(AllocateDescriptorSet(s_VkDescriptorSetLayout, m_VkDescriptorSet));
-    std::vector<VkWriteDescriptorSet> writes;
-    PushWrite((VkDescriptorBufferInfo) {
-            .buffer = m_Uniform.vkBuffer(),
-            .range = sizeof(Buffer),
-    }, writes);
-    WritePushedDescriptors(writes);
-    return MXC_SUCCESS;
-}
-void Moxaic::GlobalDescriptor::Update(Camera &camera, VkExtent2D dimensions)
-{
-    m_Uniform.Mapped().width = dimensions.width;
-    m_Uniform.Mapped().height = dimensions.height;
-    m_Uniform.Mapped().proj = camera.projection();
-    m_Uniform.Mapped().invProj = camera.inverseProjection();
-    m_Uniform.Mapped().view = camera.view();
-    m_Uniform.Mapped().invView = camera.inverseView();
-}
+template
+class Moxaic::VulkanDescriptorBase<Moxaic::GlobalDescriptor>;
 
-/// MaterialDescriptor
-MXC_RESULT Moxaic::MaterialDescriptor::SetupDescriptorSetLayout()
-{
-    std::vector<VkDescriptorSetLayoutBinding> bindings;
-
-    PushBinding((VkDescriptorSetLayoutBinding) {
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-    }, bindings);
-
-    MXC_CHK(CreateDescriptorSetLayout(bindings, s_VkDescriptorSetLayout));
-    return MXC_SUCCESS;
-}
-MXC_RESULT Moxaic::MaterialDescriptor::SetupDescriptorSet()
-{
-    return MXC_SUCCESS;
-}
+template
+class Moxaic::VulkanDescriptorBase<Moxaic::MaterialDescriptor>;
 
 
 //bool Moxaic::MeshNodeDescriptor::Init(VulkanFramebuffer framebuffer)

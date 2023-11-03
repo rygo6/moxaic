@@ -10,6 +10,10 @@ file(GLOB SRC_FILES
         src/*.hpp
         src/*.c
         src/*.h
+        src/descriptors/*.cpp
+        src/descriptors/*.hpp
+        src/descriptors/*.c
+        src/descriptors/*.h
 )
 
 add_executable(${TARGET_NAME}

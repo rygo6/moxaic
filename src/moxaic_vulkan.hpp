@@ -34,6 +34,14 @@ inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
     } \
 })
 
+#define VK_CHK_VOID(command) \
+({ \
+    Moxaic::VkDebug.VulkanDebugLine = __LINE__; \
+    Moxaic::VkDebug.VulkanDebugFile = MXC_FILE_NO_PATH; \
+    Moxaic::VkDebug.VulkanDebugCommand = #command; \
+    command; \
+})
+
 namespace Moxaic
 {
     bool VulkanInit(SDL_Window *pWindow, bool enableValidationLayers);

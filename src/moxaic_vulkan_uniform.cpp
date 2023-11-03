@@ -1,8 +1,7 @@
 #include "moxaic_vulkan_uniform.hpp"
 #include "moxaic_vulkan_device.hpp"
-#include "moxaic_vulkan_descriptor.hpp"
 
-#include "SDL2/SDL.h"
+#include "Descriptors/moxaic_global_descriptor.hpp"
 
 template<typename T>
 Moxaic::VulkanUniform<T>::VulkanUniform(const VulkanDevice &device)
@@ -23,13 +22,13 @@ Moxaic::VulkanUniform<T>::~VulkanUniform()
 }
 
 template<typename T>
-bool Moxaic::VulkanUniform<T>::InitFromImport()
+MXC_RESULT Moxaic::VulkanUniform<T>::InitFromImport()
 {
-    return true;
+    return MXC_SUCCESS;
 }
 
 template<typename T>
-bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags properties,
+MXC_RESULT Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags properties,
                                     const VkBufferUsageFlags usage,
                                     const Locality locality)
 {
@@ -53,7 +52,7 @@ bool Moxaic::VulkanUniform<T>::Init(const VkMemoryPropertyFlags properties,
                        BufferSize(),
                        0,
                        (void **) &m_pMappedBuffer));
-    return true;
+    return MXC_SUCCESS;
 }
 
 template

@@ -6,10 +6,11 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
-#include "moxaic_vulkan_descriptor.hpp"
 #include "moxaic_vulkan_swap.hpp"
 #include "moxaic_vulkan_timeline_semaphore.hpp"
 #include "moxaic_vulkan_mesh.hpp"
+
+#include "descriptors/moxaic_global_descriptor.hpp"
 
 using namespace Moxaic;
 
