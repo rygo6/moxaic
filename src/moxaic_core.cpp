@@ -41,12 +41,10 @@ MXC_RESULT Moxaic::CoreInit()
     g_pCamera->transform().position() = {0, 0, -2};
 
     g_pGlobalDescriptor = new GlobalDescriptor(*g_pDevice);
-    MXC_CHK(g_pGlobalDescriptor->Init());
-    g_pGlobalDescriptor->Update(*g_pCamera,
-                                g_WindowDimensions);
+    MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, g_WindowDimensions));
 
-    g_pMaterialDescriptor = new MaterialDescriptor(*g_pDevice);
-    MXC_CHK(g_pMaterialDescriptor->Init());
+//    g_pMaterialDescriptor = new MaterialDescriptor(*g_pDevice);
+//    MXC_CHK(g_pMaterialDescriptor->Init());
 
     g_pSwap = new VulkanSwap(*g_pDevice);
     MXC_CHK(g_pSwap->Init(g_WindowDimensions,

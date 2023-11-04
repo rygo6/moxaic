@@ -8,12 +8,9 @@ namespace Moxaic
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
-//        bool Init(VulkanFramebuffer framebuffer);
+        MXC_RESULT Init();
 
     private:
 
-        MXC_RESULT SetupDescriptorSetLayout() override;
-        MXC_RESULT SetupDescriptorSet() override;
     };
-
 }

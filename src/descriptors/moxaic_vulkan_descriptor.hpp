@@ -12,14 +12,15 @@ namespace Moxaic
 {
     class VulkanDevice;
 
-    namespace
+    class VulkanDescriptorShared
     {
-        thread_local inline std::vector<VkDescriptorSetLayoutBinding> g_Bindings;
-        thread_local inline std::vector<VkWriteDescriptorSet> g_Writes;
-    }
+    protected:
+        inline static std::vector<VkDescriptorSetLayoutBinding> s_Bindings{};
+        inline static std::vector<VkWriteDescriptorSet> s_Writes{};
+    };
 
     template<typename T>
-    class VulkanDescriptorBase
+    class VulkanDescriptorBase : public VulkanDescriptorShared
     {
     public:
         VulkanDescriptorBase(const VulkanDevice &device)
@@ -33,16 +34,6 @@ namespace Moxaic
                                  &m_VkDescriptorSet);
         }
 
-        MXC_RESULT Init()
-        {
-            if (vkLayout() == VK_NULL_HANDLE) {
-                MXC_CHK(SetupDescriptorSetLayout());
-            };
-            MXC_CHK(AllocateDescriptorSet());
-            MXC_CHK(SetupDescriptorSet());
-            return MXC_SUCCESS;
-        }
-
         inline VkDescriptorSetLayout vkLayout() const { return s_VkDescriptorSetLayout; }
         inline auto vkSet() const { return m_VkDescriptorSet; }
     protected:
@@ -50,8 +41,7 @@ namespace Moxaic
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 
-        virtual MXC_RESULT SetupDescriptorSetLayout() = 0;
-        virtual MXC_RESULT SetupDescriptorSet() = 0;
+        static bool initializeLayout() { return s_VkDescriptorSetLayout == VK_NULL_HANDLE; }
 
         MXC_RESULT CreateDescriptorSetLayout()
         {
@@ -59,13 +49,13 @@ namespace Moxaic
             layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
             layoutInfo.pNext = nullptr;
             layoutInfo.flags = 0;
-            layoutInfo.bindingCount = g_Bindings.size();
-            layoutInfo.pBindings = g_Bindings.data();
+            layoutInfo.bindingCount = s_Bindings.size();
+            layoutInfo.pBindings = s_Bindings.data();
             VK_CHK(vkCreateDescriptorSetLayout(k_Device.vkDevice(),
                                                &layoutInfo,
                                                VK_ALLOC,
                                                &s_VkDescriptorSetLayout));
-            g_Bindings.clear();
+            s_Bindings.clear();
             return MXC_SUCCESS;
         }
 
@@ -86,9 +76,9 @@ namespace Moxaic
 
         void PushBinding(VkDescriptorSetLayoutBinding binding)
         {
-            binding.binding = g_Bindings.size();
+            binding.binding = s_Bindings.size();
             binding.descriptorCount = 1;
-            g_Bindings.push_back(binding);
+            s_Bindings.push_back(binding);
         }
 
         void PushWrite(VkDescriptorImageInfo imageInfo)
@@ -103,9 +93,9 @@ namespace Moxaic
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     .pImageInfo = &imageInfo
             };
-            write.dstBinding = g_Writes.size();
+            write.dstBinding = s_Writes.size();
             write.descriptorCount = write.descriptorCount == 0 ? 1 : write.descriptorCount;
-            g_Writes.push_back(write);
+            s_Writes.push_back(write);
         }
 
         void PushWrite(VkDescriptorBufferInfo bufferInfo)
@@ -120,19 +110,19 @@ namespace Moxaic
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                     .pBufferInfo = &bufferInfo
             };
-            write.dstBinding = g_Writes.size();
+            write.dstBinding = s_Writes.size();
             write.descriptorCount = write.descriptorCount == 0 ? 1 : write.descriptorCount;
-            g_Writes.push_back(write);
+            s_Writes.push_back(write);
         }
 
         void WritePushedDescriptors()
         {
             VK_CHK_VOID(vkUpdateDescriptorSets(k_Device.vkDevice(),
-                                               g_Writes.size(),
-                                               g_Writes.data(),
+                                               s_Writes.size(),
+                                               s_Writes.data(),
                                                0,
                                                nullptr));
-            g_Writes.clear();
+            s_Writes.clear();
         }
     };
 }

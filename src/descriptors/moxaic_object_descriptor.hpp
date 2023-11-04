@@ -2,13 +2,17 @@
 
 #include "moxaic_vulkan_descriptor.hpp"
 
+#include "../moxaic_vulkan_uniform.hpp"
+
+#include "glm/glm.hpp"
+
 namespace Moxaic
 {
     class ObjectDescriptor : public VulkanDescriptorBase<ObjectDescriptor>
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
-//        void Update(Transform transform);
+        MXC_RESULT Init();
 
         struct Buffer
         {
@@ -17,8 +21,5 @@ namespace Moxaic
 
     private:
         VulkanUniform<Buffer> m_Uniform{k_Device};
-
-        MXC_RESULT SetupDescriptorSetLayout() override;
-        MXC_RESULT SetupDescriptorSet() override;
     };
 }

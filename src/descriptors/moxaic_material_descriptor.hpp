@@ -10,22 +10,16 @@ namespace Moxaic
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
-        void Update(VulkanTexture texture);
 
-    private:
-
-        inline MXC_RESULT SetupDescriptorSetLayout() override
+        MXC_RESULT Init(VulkanTexture texture)
         {
-            PushBinding((VkDescriptorSetLayoutBinding) {
-                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            });
-            MXC_CHK(CreateDescriptorSetLayout());
-            return MXC_SUCCESS;
-
-        }
-        inline MXC_RESULT SetupDescriptorSet() override
-        {
+            if (initializeLayout()) {
+                PushBinding((VkDescriptorSetLayoutBinding) {
+                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                });
+                MXC_CHK(CreateDescriptorSetLayout());
+            }
             return MXC_SUCCESS;
         }
     };
