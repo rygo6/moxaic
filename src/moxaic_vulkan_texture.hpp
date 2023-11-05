@@ -32,7 +32,7 @@ namespace Moxaic
                             HANDLE externalMemory);
 
         bool Init(const VkFormat &format,
-                  const VkExtent3D &extent,
+                  const VkExtent3D &dimensions,
                   const VkImageUsageFlags &usage,
                   const VkImageAspectFlags &aspectMask,
                   const Locality &locality);

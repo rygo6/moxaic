@@ -11,7 +11,7 @@ namespace Moxaic
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
-        MXC_RESULT Init(VulkanTexture texture)
+        MXC_RESULT Init(const VulkanTexture& texture)
         {
             if (initializeLayout()) {
                 PushBinding((VkDescriptorSetLayoutBinding) {
@@ -20,6 +20,13 @@ namespace Moxaic
                 });
                 MXC_CHK(CreateDescriptorSetLayout());
             }
+            MXC_CHK(AllocateDescriptorSet());
+//            PushWrite((VkDescriptorBufferInfo) {
+//                    .buffer = m_Uniform.vkBuffer(),
+//                    .range = m_Uniform.BufferSize()
+//            });
+            WritePushedDescriptors();
+
             return MXC_SUCCESS;
         }
     };

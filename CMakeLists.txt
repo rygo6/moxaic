@@ -37,3 +37,5 @@ target_link_libraries(${TARGET_NAME}
         SDL2
         vulkan-1
 )
+
+#target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)

@@ -3,6 +3,8 @@
 #include <iostream>
 #include <cstring>
 
+#include <SDL2/SDL.h>
+
 namespace Moxaic
 {
     static void LogParams()
@@ -31,6 +33,8 @@ namespace Moxaic
         LogParams(params...);
     }
 }
+
+
 
 #define MXC_FILE_NO_PATH (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define MXC_LOG(...) Moxaic::LogParams(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)

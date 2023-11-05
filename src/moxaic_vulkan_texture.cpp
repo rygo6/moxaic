@@ -42,7 +42,7 @@ bool Moxaic::VulkanTexture::InitFromImport(VkFormat format,
 }
 
 bool Moxaic::VulkanTexture::Init(const VkFormat &format,
-                                 const VkExtent3D &extent,
+                                 const VkExtent3D &dimensions,
                                  const VkImageUsageFlags &usage,
                                  const VkImageAspectFlags &aspectMask,
                                  const Locality &locality)
@@ -52,6 +52,9 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
             string_VkImageUsageFlags(usage),
             string_VkImageAspectFlags(aspectMask),
             string_BufferLocality(locality));
+    const auto checkedDimensions = dimensions.depth == 0 ?
+                                   (VkExtent3D) {dimensions.width, dimensions.height, 1} :
+                                   dimensions;
     const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
     const VkExternalMemoryImageCreateInfo externalImageInfo = {
             .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -63,7 +66,7 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
             .pNext = locality == External ? &externalImageInfo : nullptr,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = format,
-            .extent = extent,
+            .extent = checkedDimensions,
             .mipLevels = 1,
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -120,6 +123,6 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
                                               &m_ExternalMemory));
 #endif
     }
-    m_Dimensions = extent;
+    m_Dimensions = checkedDimensions;
     return true;
 }

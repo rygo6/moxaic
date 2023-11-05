@@ -34,8 +34,8 @@ namespace Moxaic
                                  &m_VkDescriptorSet);
         }
 
-        inline VkDescriptorSetLayout vkLayout() const { return s_VkDescriptorSetLayout; }
-        inline auto vkSet() const { return m_VkDescriptorSet; }
+        inline VkDescriptorSetLayout vkDescriptorSetLayout() const { return s_VkDescriptorSetLayout; }
+        inline auto vkDescriptorSet() const { return m_VkDescriptorSet; }
     protected:
         const VulkanDevice &k_Device;
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;

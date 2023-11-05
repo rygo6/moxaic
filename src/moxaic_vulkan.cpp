@@ -73,7 +73,6 @@ static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *> &
             return false;
         }
     }
-
     return true;
 }
 

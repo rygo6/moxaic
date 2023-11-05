@@ -13,6 +13,8 @@
 #include "descriptors/moxaic_global_descriptor.hpp"
 #include "descriptors/moxaic_material_descriptor.hpp"
 
+#include "pipelines/moxaic_standard_pipeline.hpp"
+
 using namespace Moxaic;
 
 VulkanDevice *g_pDevice;
@@ -20,9 +22,13 @@ VulkanFramebuffer *g_pFramebuffer;
 Camera *g_pCamera;
 GlobalDescriptor *g_pGlobalDescriptor;
 MaterialDescriptor *g_pMaterialDescriptor;
+ObjectDescriptor *g_pObjectDescriptor;
 VulkanSwap *g_pSwap;
 VulkanTimelineSemaphore *g_pTimelineSemaphore;
 VulkanMesh *g_pMesh;
+VulkanTexture *g_pTexture;
+StandardPipeline *g_pStandardPipeline;
+Transform *g_pTransform;
 
 MXC_RESULT Moxaic::CoreInit()
 {
@@ -43,8 +49,23 @@ MXC_RESULT Moxaic::CoreInit()
     g_pGlobalDescriptor = new GlobalDescriptor(*g_pDevice);
     MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, g_WindowDimensions));
 
-//    g_pMaterialDescriptor = new MaterialDescriptor(*g_pDevice);
-//    MXC_CHK(g_pMaterialDescriptor->Init());
+    g_pTexture = new VulkanTexture(*g_pDevice);
+    g_pTexture->Init(VK_FORMAT_R8G8B8A8_SRGB,
+                     {128, 128},
+                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                     VK_IMAGE_ASPECT_COLOR_BIT,
+                     Locality::Local);
+
+    g_pMaterialDescriptor = new MaterialDescriptor(*g_pDevice);
+    MXC_CHK(g_pMaterialDescriptor->Init(*g_pTexture));
+
+    g_pTransform = new Transform();
+
+    g_pObjectDescriptor = new ObjectDescriptor(*g_pDevice);
+    MXC_CHK(g_pObjectDescriptor->Init(*g_pTransform));
+
+    g_pStandardPipeline = new StandardPipeline(*g_pDevice);
+    MXC_CHK(g_pStandardPipeline->Init(*g_pGlobalDescriptor, *g_pMaterialDescriptor, *g_pObjectDescriptor));
 
     g_pSwap = new VulkanSwap(*g_pDevice);
     MXC_CHK(g_pSwap->Init(g_WindowDimensions,
