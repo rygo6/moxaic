@@ -39,3 +39,22 @@ target_link_libraries(${TARGET_NAME}
 )
 
 #target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)
+
+set(SHADER_COMPILER "${VULKAN_SDK_PATH}/Bin/glslc.exe")
+file(GLOB SHADER_SOURCE_FILES
+        shaders/*.vert
+        shaders/*.frag
+)
+foreach(SHADER IN LISTS SHADER_SOURCE_FILES)
+    get_filename_component(SHADER_NAME ${SHADER} NAME)
+    set(SHADER_OUTPUT "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv")
+    add_custom_command(
+            OUTPUT ${SHADER_OUTPUT}
+            COMMAND ${SHADER_COMPILER} ${SHADER} -o ${SHADER_OUTPUT}
+            DEPENDS ${SHADER}
+            COMMENT "Compiling ${SHADER_NAME}"
+    )
+    list(APPEND SHADER_OUTPUT_FILES ${SHADER_OUTPUT})
+endforeach()
+add_custom_target(CompileShaders ALL DEPENDS ${SHADER_OUTPUT_FILES})
+add_dependencies(${TARGET_NAME} CompileShaders)

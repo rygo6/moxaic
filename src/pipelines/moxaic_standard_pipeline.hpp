@@ -19,7 +19,7 @@
 
 namespace Moxaic
 {
-    class StandardPipeline : VulkanPipeline
+    class StandardPipeline : VulkanPipeline<StandardPipeline>
     {
     public:
         using VulkanPipeline::VulkanPipeline;
@@ -50,10 +50,10 @@ namespace Moxaic
             }
 
             VkShaderModule vertShaderModule;
-            MXC_CHK(CreateShaderModule("./shaders/vert.spv",
+            MXC_CHK(CreateShaderModule("./shaders/shader_base.vert.spv",
                                        vertShaderModule));
             VkShaderModule fragShaderModule;
-            MXC_CHK(CreateShaderModule("./shaders/frag.spv",
+            MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv",
                                        fragShaderModule));
             const std::array stages{
                     (VkPipelineShaderStageCreateInfo) {
@@ -75,6 +75,7 @@ namespace Moxaic
                                                 nullptr));
             vkDestroyShaderModule(k_Device.vkDevice(), vertShaderModule, VK_ALLOC);
             vkDestroyShaderModule(k_Device.vkDevice(), fragShaderModule, VK_ALLOC);
+            return MXC_SUCCESS;
         }
     };
 }

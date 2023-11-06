@@ -35,6 +35,7 @@ namespace Moxaic
         return MXC_SUCCESS;
     }
 
+    template<typename T>
     class VulkanPipeline
     {
     public:
@@ -85,28 +86,29 @@ namespace Moxaic
                                                const VkPipelineShaderStageCreateInfo *pStages,
                                                const VkPipelineTessellationStateCreateInfo *pTessellationState)
         {
+            MXC_LOG_FUNCTION();
             // Vertex Input
-            const VkVertexInputBindingDescription pVertexBindingDescriptions[]{
-                    {
+            std::array vertexBindingDescriptions{
+                    (VkVertexInputBindingDescription) {
                             .binding = 0,
                             .stride = sizeof(Vertex),
                             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
                     },
             };
-            const VkVertexInputAttributeDescription pVertexAttributeDescriptions[]{
-                    {
+            std::array vertexAttributeDescriptions{
+                    (VkVertexInputAttributeDescription) {
                             .location = 0,
                             .binding = 0,
                             .format = VK_FORMAT_R32G32B32_SFLOAT,
                             .offset = offsetof(Vertex, pos),
                     },
-                    {
+                    (VkVertexInputAttributeDescription) {
                             .location = 1,
                             .binding = 0,
                             .format = VK_FORMAT_R32G32B32_SFLOAT,
                             .offset = offsetof(Vertex, normal),
                     },
-                    {
+                    (VkVertexInputAttributeDescription) {
                             .location = 2,
                             .binding = 0,
                             .format = VK_FORMAT_R32G32_SFLOAT,
@@ -115,10 +117,10 @@ namespace Moxaic
             };
             const VkPipelineVertexInputStateCreateInfo vertexInputState{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                    .vertexBindingDescriptionCount = 1,
-                    .pVertexBindingDescriptions = pVertexBindingDescriptions,
-                    .vertexAttributeDescriptionCount = 3,
-                    .pVertexAttributeDescriptions = pVertexAttributeDescriptions
+                    .vertexBindingDescriptionCount = vertexBindingDescriptions.size(),
+                    .pVertexBindingDescriptions = vertexBindingDescriptions.data(),
+                    .vertexAttributeDescriptionCount = vertexAttributeDescriptions.size(),
+                    .pVertexAttributeDescriptions = vertexAttributeDescriptions.data()
             };
             const VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -141,6 +143,7 @@ namespace Moxaic
                                     const VkPipelineInputAssemblyStateCreateInfo *pInputAssemblyState,
                                     const VkPipelineTessellationStateCreateInfo *pTessellationState)
         {
+            MXC_LOG_FUNCTION();
             SDL_assert(s_VkPipelineLayout != nullptr);
             // Fragment
             const std::array pipelineColorBlendAttachmentStates{
@@ -169,7 +172,7 @@ namespace Moxaic
 
                     }
             };
-            const VkPipelineColorBlendStateCreateInfo colorBlendState = {
+            const VkPipelineColorBlendStateCreateInfo colorBlendState{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                     .pNext = NULL,
                     .logicOpEnable = VK_FALSE,
@@ -178,7 +181,7 @@ namespace Moxaic
                     .pAttachments = pipelineColorBlendAttachmentStates.data(),
                     .blendConstants {0.0f, 0.0f, 0.0f, 0.0f}
             };
-            const VkPipelineDepthStencilStateCreateInfo depthStencilState = {
+            const VkPipelineDepthStencilStateCreateInfo depthStencilState{
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
                     .depthTestEnable = VK_TRUE,
                     .depthWriteEnable =  VK_TRUE,
