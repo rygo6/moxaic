@@ -24,12 +24,12 @@ namespace Moxaic
         inline auto vkFramebuffer() const { return m_VkFramebuffer; }
         inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
 
-        inline const auto& colorTexture() const { return m_ColorTexture; }
-        inline const auto& normalTexture() const { return m_NormalTexture; }
-        inline const auto& gBufferTexture() const { return m_GBufferTexture; }
-        inline const auto& depthTexture() const { return m_DepthTexture; }
+        inline const auto &colorTexture() const { return m_ColorTexture; }
+        inline const auto &normalTexture() const { return m_NormalTexture; }
+        inline const auto &gBufferTexture() const { return m_GBufferTexture; }
+        inline const auto &depthTexture() const { return m_DepthTexture; }
 
-        inline const auto& dimensions() const { return m_Dimensions; }
+        inline const auto &dimensions() const { return m_Dimensions; }
 
     private:
         const VulkanDevice &k_Device;
@@ -43,8 +43,5 @@ namespace Moxaic
         VulkanTexture m_DepthTexture{k_Device};
 
         VkExtent2D m_Dimensions;
-
-        bool InitialLayoutTransition(const VulkanTexture &texture,
-                                     VkImageAspectFlags aspectMask);
     };
 }

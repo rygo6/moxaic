@@ -8,6 +8,7 @@
 namespace Moxaic
 {
     class VulkanDevice;
+    class VulkanTexture;
 
     const uint32_t k_SwapCount = 2;
 
@@ -19,9 +20,7 @@ namespace Moxaic
 
         MXC_RESULT Init(VkExtent2D dimensions, bool computeStorage);
 
-//        MXC_RESULT AcquireSwap(uint32_t& outSwapIndex);
-
-        MXC_RESULT BlitToSwap(VkImage srcImage);
+        MXC_RESULT BlitToSwap(const VulkanTexture &srcTexture);
 
         inline auto vkSwapchain() const { return m_Swapchain; }
         inline auto acquireCompleteSemaphore() const { return m_AcquireCompleteSemaphore; }

@@ -41,11 +41,11 @@ bool Moxaic::VulkanTexture::InitFromImport(VkFormat format,
     return true;
 }
 
-bool Moxaic::VulkanTexture::Init(const VkFormat &format,
-                                 const VkExtent3D &dimensions,
-                                 const VkImageUsageFlags &usage,
-                                 const VkImageAspectFlags &aspectMask,
-                                 const Locality &locality)
+bool Moxaic::VulkanTexture::Init(const VkFormat format,
+                                 const VkExtent3D dimensions,
+                                 const VkImageUsageFlags usage,
+                                 const VkImageAspectFlags aspectMask,
+                                 const Locality locality)
 {
     MXC_LOG("CreateTexture:",
             string_VkFormat(format),
@@ -124,5 +124,14 @@ bool Moxaic::VulkanTexture::Init(const VkFormat &format,
 #endif
     }
     m_Dimensions = checkedDimensions;
+    m_AspectMask = aspectMask;
     return true;
+}
+bool Moxaic::VulkanTexture::InitialReadTransition()
+{
+    return k_Device.TransitionImageLayoutImmediate(m_VkImage,
+                                                   VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                                   0, 0,
+                                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                                   m_AspectMask);
 }

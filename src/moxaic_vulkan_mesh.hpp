@@ -25,6 +25,8 @@ namespace Moxaic
 
         MXC_RESULT Init();
 
+        void RecordRender();
+
     private:
         const VulkanDevice &k_Device;
 

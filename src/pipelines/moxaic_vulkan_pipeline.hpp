@@ -49,8 +49,15 @@ namespace Moxaic
                               VK_ALLOC);
         }
 
-        inline VkPipelineLayout vkPipelineLayout() const { return s_VkPipelineLayout; }
-        inline auto vkPipeline() const { return m_VkPipeline; }
+        void BindPipeline()
+        {
+            vkCmdBindPipeline(k_Device.vkGraphicsCommandBuffer(),
+                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              m_VkPipeline);
+        }
+
+//        inline VkPipelineLayout vkPipelineLayout() const { return s_VkPipelineLayout; }
+//        inline auto vkPipeline() const { return m_VkPipeline; }
     protected:
         const VulkanDevice &k_Device;
         inline static VkPipelineLayout s_VkPipelineLayout = VK_NULL_HANDLE;

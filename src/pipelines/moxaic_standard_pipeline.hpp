@@ -19,7 +19,7 @@
 
 namespace Moxaic
 {
-    class StandardPipeline : VulkanPipeline<StandardPipeline>
+    class StandardPipeline : public VulkanPipeline<StandardPipeline>
     {
     public:
         using VulkanPipeline::VulkanPipeline;
@@ -76,6 +76,45 @@ namespace Moxaic
             vkDestroyShaderModule(k_Device.vkDevice(), vertShaderModule, VK_ALLOC);
             vkDestroyShaderModule(k_Device.vkDevice(), fragShaderModule, VK_ALLOC);
             return MXC_SUCCESS;
+        }
+
+        void BindDescriptor(const GlobalDescriptor &descriptor)
+        {
+            auto descriptorSet = descriptor.vkDescriptorSet();
+            vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    s_VkPipelineLayout,
+                                    0,
+                                    1,
+                                    &descriptorSet,
+                                    0,
+                                    nullptr);
+        }
+
+        void BindDescriptor(const MaterialDescriptor &descriptor)
+        {
+            auto descriptorSet = descriptor.vkDescriptorSet();
+            vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    s_VkPipelineLayout,
+                                    1,
+                                    1,
+                                    &descriptorSet,
+                                    0,
+                                    nullptr);
+        }
+
+        void BindDescriptor(const ObjectDescriptor &descriptor)
+        {
+            auto descriptorSet = descriptor.vkDescriptorSet();
+            vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    s_VkPipelineLayout,
+                                    2,
+                                    1,
+                                    &descriptorSet,
+                                    0,
+                                    nullptr);
         }
     };
 }

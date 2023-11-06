@@ -31,11 +31,13 @@ namespace Moxaic
                             VkImageAspectFlags aspectMask,
                             HANDLE externalMemory);
 
-        bool Init(const VkFormat &format,
-                  const VkExtent3D &dimensions,
-                  const VkImageUsageFlags &usage,
-                  const VkImageAspectFlags &aspectMask,
-                  const Locality &locality);
+        bool Init(const VkFormat format,
+                  const VkExtent3D dimensions,
+                  const VkImageUsageFlags usage,
+                  const VkImageAspectFlags aspectMask,
+                  const Locality locality);
+
+        bool InitialReadTransition();
 
         inline auto vkImage() const { return m_VkImage; }
         inline auto vkImageView() const { return m_VkImageView; }
@@ -49,6 +51,7 @@ namespace Moxaic
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
 
         VkExtent3D m_Dimensions{};
+        VkImageAspectFlags m_AspectMask{};
 
 #ifdef WIN32
         HANDLE m_ExternalMemory{};

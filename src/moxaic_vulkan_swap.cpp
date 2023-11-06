@@ -2,6 +2,7 @@
 
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
+#include "moxaic_vulkan_texture.hpp"
 
 #include <vulkan/vk_enum_string_helper.h>
 
@@ -249,7 +250,7 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
 //    return MXC_SUCCESS;
 //}
 
-MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(VkImage srcImage)
+MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
 {
     VK_CHK(vkAcquireNextImageKHR(k_Device.vkDevice(),
                                  m_Swapchain,
@@ -257,6 +258,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(VkImage srcImage)
                                  m_AcquireCompleteSemaphore,
                                  VK_NULL_HANDLE,
                                  &m_BlitIndex));
+    auto srcImage = srcTexture.vkImage();
     uint32_t graphicsQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex();
     const std::array transitionBlitBarrier{
             (VkImageMemoryBarrier) {

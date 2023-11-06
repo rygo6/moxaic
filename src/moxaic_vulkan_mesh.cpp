@@ -121,3 +121,23 @@ MXC_RESULT Moxaic::VulkanMesh::CreateIndexBuffer(const uint16_t *pIndices,
                                                                 m_VkIndexBufferMemory));
     return MXC_SUCCESS;
 }
+void Moxaic::VulkanMesh::RecordRender()
+{
+    VkBuffer vertexBuffers[] = {m_VkVertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(k_Device.vkGraphicsCommandBuffer(),
+                           0,
+                           1,
+                           vertexBuffers,
+                           offsets);
+    vkCmdBindIndexBuffer(k_Device.vkGraphicsCommandBuffer(),
+                         m_VkIndexBuffer,
+                         0,
+                         VK_INDEX_TYPE_UINT16);
+    vkCmdDrawIndexed(k_Device.vkGraphicsCommandBuffer(),
+                     m_IndexCount,
+                     1,
+                     0,
+                     0,
+                     0);
+}

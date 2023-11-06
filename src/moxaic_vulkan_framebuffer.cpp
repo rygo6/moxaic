@@ -26,29 +26,25 @@ bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &dimensions,
                                 k_ColorBufferUsage,
                                 VK_IMAGE_ASPECT_COLOR_BIT,
                                 locality));
-    MXC_CHK(InitialLayoutTransition(m_ColorTexture,
-                                    VK_IMAGE_ASPECT_COLOR_BIT));
+    MXC_CHK(m_ColorTexture.InitialReadTransition());
     MXC_CHK(m_NormalTexture.Init(k_NormalBufferFormat,
                                  extent3D,
                                  k_NormalBufferUsage,
                                  VK_IMAGE_ASPECT_COLOR_BIT,
                                  locality));
-    MXC_CHK(InitialLayoutTransition(m_NormalTexture,
-                                    VK_IMAGE_ASPECT_COLOR_BIT));
+    MXC_CHK(m_NormalTexture.InitialReadTransition());
     MXC_CHK(m_GBufferTexture.Init(k_GBufferFormat,
                                   extent3D,
                                   k_GBufferUsage,
                                   VK_IMAGE_ASPECT_COLOR_BIT,
                                   locality));
-    MXC_CHK(InitialLayoutTransition(m_GBufferTexture,
-                                    VK_IMAGE_ASPECT_COLOR_BIT));
+    MXC_CHK(m_GBufferTexture.InitialReadTransition());
     MXC_CHK(m_DepthTexture.Init(k_DepthBufferFormat,
                                 extent3D,
                                 k_DepthBufferUsage,
                                 VK_IMAGE_ASPECT_DEPTH_BIT,
                                 locality));
-    MXC_CHK(InitialLayoutTransition(m_DepthTexture,
-                                    VK_IMAGE_ASPECT_DEPTH_BIT));
+    MXC_CHK(m_DepthTexture.InitialReadTransition());
     const std::array attachments{
             m_ColorTexture.vkImageView(),
             m_NormalTexture.vkImageView(),
@@ -75,16 +71,4 @@ bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &dimensions,
     VK_CHK(vkCreateSemaphore(k_Device.vkDevice(), &renderCompleteCreateInfo, VK_ALLOC, &m_VkRenderCompleteSemaphore));
     m_Dimensions = dimensions;
     return true;
-}
-
-MXC_RESULT Moxaic::VulkanFramebuffer::InitialLayoutTransition(const Moxaic::VulkanTexture &texture,
-                                                              VkImageAspectFlags aspectMask)
-{
-    return k_Device.TransitionImageLayoutImmediate(texture.vkImage(),
-                                                   VK_IMAGE_LAYOUT_UNDEFINED,
-                                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                   0, 0,
-                                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                   VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                                   aspectMask);
 }

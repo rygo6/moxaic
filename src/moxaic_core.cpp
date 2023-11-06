@@ -15,6 +15,8 @@
 
 #include "pipelines/moxaic_standard_pipeline.hpp"
 
+#include "vulkan/vulkan.h"
+
 using namespace Moxaic;
 
 VulkanDevice *g_pDevice;
@@ -45,6 +47,7 @@ MXC_RESULT Moxaic::CoreInit()
 
     g_pCamera = new Camera();
     g_pCamera->transform().position() = {0, 0, -2};
+    g_pCamera->transform().rotation() = glm::quat(glm::vec3(0, glm::radians(180.0), 0));
 
     g_pGlobalDescriptor = new GlobalDescriptor(*g_pDevice);
     MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, g_WindowDimensions));
@@ -55,6 +58,7 @@ MXC_RESULT Moxaic::CoreInit()
                      VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                      VK_IMAGE_ASPECT_COLOR_BIT,
                      Locality::Local);
+    g_pTexture->InitialReadTransition();
 
     g_pMaterialDescriptor = new MaterialDescriptor(*g_pDevice);
     MXC_CHK(g_pMaterialDescriptor->Init(*g_pTexture));
@@ -83,22 +87,35 @@ MXC_RESULT Moxaic::CoreInit()
 
 MXC_RESULT Moxaic::CoreLoop()
 {
+    auto& device = *g_pDevice;
+    auto& swap = *g_pSwap;
+    auto& timelineSemaphore = *g_pTimelineSemaphore;
+    auto& framebuffer = *g_pFramebuffer;
+    auto& standardPipeline = *g_pStandardPipeline;
+    auto& mesh = *g_pMesh;
+
     while (g_ApplicationRunning) {
         WindowPoll();
 
-        g_pDevice->BeginGraphicsCommandBuffer();
-        g_pDevice->BeginRenderPass(*g_pFramebuffer);
+        device.BeginGraphicsCommandBuffer();
+        device.BeginRenderPass(*g_pFramebuffer);
 
+        standardPipeline.BindPipeline();
+        standardPipeline.BindDescriptor(*g_pGlobalDescriptor);
+        standardPipeline.BindDescriptor(*g_pMaterialDescriptor);
+        standardPipeline.BindDescriptor(*g_pObjectDescriptor);
 
-        g_pDevice->EndRenderPass();
+        mesh.RecordRender();
 
-        g_pSwap->BlitToSwap(g_pFramebuffer->colorTexture().vkImage());
+        device.EndRenderPass();
 
-        g_pDevice->EndGraphicsCommandBuffer();
+        swap.BlitToSwap(framebuffer.colorTexture());
 
-        g_pDevice->SubmitGraphicsQueueAndPresent(*g_pTimelineSemaphore, *g_pSwap);
+        device.EndGraphicsCommandBuffer();
 
-        g_pTimelineSemaphore->Wait();
+        device.SubmitGraphicsQueueAndPresent(timelineSemaphore, swap);
+
+        timelineSemaphore.Wait();
     }
 
     WindowShutdown();
