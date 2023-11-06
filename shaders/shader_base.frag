@@ -19,13 +19,14 @@ void main()
 {
     float depth = gl_FragCoord.z;
     vec2 normalizedFragCoord = vec2(gl_FragCoord.x / globalUBO.width, gl_FragCoord.y / globalUBO.height);
-    vec4 clipPos = vec4(normalizedFragCoord * 2.0 - 1.0,  depth, 1.0);
+    vec4 clipPos = vec4(normalizedFragCoord * 2.0 - 1.0, depth, 1.0);
     vec4 eyePos = globalUBO.invProj * clipPos;
     vec3 ndcPos = eyePos.xyz / eyePos.w;
     vec4 worldPos = globalUBO.invView * vec4(ndcPos, 1.0);
 
-    outColor = texture(texSampler, inUV);
-//    outColor = worldPos;
+    // outColor = texture(texSampler, inUV);
+    // outColor = worldPos;
+    outColor = vec4(0, 1, 0, 1);
 
     // Is this right?! https://github.com/SaschaWillems/Vulkan/blob/master/data/shaders/glsl/subpasses/gbuffer.frag
     vec3 N = normalize(inNormal);

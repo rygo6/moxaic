@@ -18,9 +18,10 @@ namespace Moxaic
         explicit Camera();
         virtual ~Camera();
 
-        void UpdateMatrices();
+        void UpdateView();
+        void UpdateProjection();
 
-        inline auto transform() const { return m_Transform; }
+        inline auto& transform() { return m_Transform; }
 
         inline auto view() const { return m_View; }
         inline auto projection() const { return m_Projection; }

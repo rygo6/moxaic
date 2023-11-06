@@ -26,7 +26,7 @@ namespace Moxaic
 
         inline Buffer &uniform() { return m_Uniform.Mapped(); }
 
-        MXC_RESULT Init(Camera &camera, VkExtent2D dimensions)
+        inline MXC_RESULT Init(Camera &camera, VkExtent2D dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
 
@@ -71,6 +71,12 @@ namespace Moxaic
                              writes.data());
 
             return MXC_SUCCESS;
+        }
+
+        inline void UpdateView(Camera &camera)
+        {
+            uniform().view = camera.view();
+            uniform().invView = camera.inverseView();
         }
 
     private:

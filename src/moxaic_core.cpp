@@ -15,7 +15,8 @@
 
 #include "pipelines/moxaic_standard_pipeline.hpp"
 
-#include "vulkan/vulkan.h"
+#include <vulkan/vulkan.h>
+#include <glm/glm.hpp>
 
 using namespace Moxaic;
 
@@ -46,8 +47,8 @@ MXC_RESULT Moxaic::CoreInit()
                                  Locality::Local));
 
     g_pCamera = new Camera();
-    g_pCamera->transform().position() = {0, 0, -2};
-    g_pCamera->transform().rotation() = glm::quat(glm::vec3(0, glm::radians(180.0), 0));
+    g_pCamera->transform().setPosition({0, 0, -2});
+    g_pCamera->transform().Rotate(0, 180, 0);
 
     g_pGlobalDescriptor = new GlobalDescriptor(*g_pDevice);
     MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, g_WindowDimensions));
@@ -64,6 +65,7 @@ MXC_RESULT Moxaic::CoreInit()
     MXC_CHK(g_pMaterialDescriptor->Init(*g_pTexture));
 
     g_pTransform = new Transform();
+    g_pTransform->setPosition({0, 0, 4});
 
     g_pObjectDescriptor = new ObjectDescriptor(*g_pDevice);
     MXC_CHK(g_pObjectDescriptor->Init(*g_pTransform));
@@ -87,15 +89,30 @@ MXC_RESULT Moxaic::CoreInit()
 
 MXC_RESULT Moxaic::CoreLoop()
 {
-    auto& device = *g_pDevice;
-    auto& swap = *g_pSwap;
-    auto& timelineSemaphore = *g_pTimelineSemaphore;
-    auto& framebuffer = *g_pFramebuffer;
-    auto& standardPipeline = *g_pStandardPipeline;
-    auto& mesh = *g_pMesh;
+    auto &device = *g_pDevice;
+    auto &swap = *g_pSwap;
+    auto &timelineSemaphore = *g_pTimelineSemaphore;
+    auto &framebuffer = *g_pFramebuffer;
+    auto &globalDescriptor = *g_pGlobalDescriptor;
+    auto &standardPipeline = *g_pStandardPipeline;
+    auto &mesh = *g_pMesh;
+    auto &camera = *g_pCamera;
 
     while (g_ApplicationRunning) {
         WindowPoll();
+
+        if (g_DeltaMouseX != 0) {
+            camera.transform().Rotate(0, g_DeltaMouseX, 0);
+            camera.UpdateView();
+            globalDescriptor.UpdateView(camera);
+
+            auto euler = glm::eulerAngles(camera.transform().orientation());
+            printf("%.2f %.2f %.2f %.2f\n",
+                   g_DeltaMouseX,
+                   glm::degrees(euler.x),
+                   glm::degrees(euler.y),
+                   glm::degrees(euler.z));
+        }
 
         device.BeginGraphicsCommandBuffer();
         device.BeginRenderPass(*g_pFramebuffer);

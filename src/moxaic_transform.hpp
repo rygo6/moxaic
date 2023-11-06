@@ -12,10 +12,21 @@ namespace Moxaic
         Transform();
         virtual ~Transform();
 
-        inline auto position() const { return m_Position; }
-        inline auto rotation() const { return m_Orientation; }
+        inline void Rotate(float x, float y, float z)
+        {
+            auto rotation = glm::quat(glm::vec3(
+                    glm::radians(x),
+                    glm::radians(y),
+                    glm::radians(z)));
+            m_Orientation = rotation * m_Orientation;
+        }
 
-        inline auto modelMatrix() const
+        inline const auto &position() const { return m_Position; }
+        inline void setPosition(glm::vec3 position) { m_Position = position; }
+        inline const auto &orientation() const { return m_Orientation; }
+        inline void setOrientation(glm::quat orientation) { m_Orientation = orientation; }
+
+        inline const auto modelMatrix() const
         {
             glm::mat4 rot = glm::toMat4(m_Orientation);
             glm::mat4 pos = glm::translate(glm::identity<glm::mat4>(), m_Position);
