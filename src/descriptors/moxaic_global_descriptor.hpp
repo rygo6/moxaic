@@ -24,21 +24,26 @@ namespace Moxaic
             uint32_t height;
         };
 
-        inline Buffer& uniform() { return m_Uniform.Mapped(); }
+        inline Buffer &uniform() { return m_Uniform.Mapped(); }
 
         MXC_RESULT Init(Camera &camera, VkExtent2D dimensions)
         {
+            MXC_LOG("Init GlobalDescriptor");
+
             if (initializeLayout()) {
-                PushBinding((VkDescriptorSetLayoutBinding) {
-                        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                                      VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
-                                      VK_SHADER_STAGE_COMPUTE_BIT |
-                                      VK_SHADER_STAGE_FRAGMENT_BIT |
-                                      VK_SHADER_STAGE_MESH_BIT_EXT |
-                                      VK_SHADER_STAGE_TASK_BIT_EXT,
-                });
-                MXC_CHK(CreateDescriptorSetLayout());
+                std::array bindings{
+                        (VkDescriptorSetLayoutBinding) {
+                                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                              VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                                              VK_SHADER_STAGE_COMPUTE_BIT |
+                                              VK_SHADER_STAGE_FRAGMENT_BIT |
+                                              VK_SHADER_STAGE_MESH_BIT_EXT |
+                                              VK_SHADER_STAGE_TASK_BIT_EXT,
+                        }
+                };
+                MXC_CHK(CreateDescriptorSetLayout(bindings.size(),
+                                                  bindings.data()));
             };
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -52,11 +57,18 @@ namespace Moxaic
             uniform().invView = camera.inverseView();
 
             MXC_CHK(AllocateDescriptorSet());
-            PushWrite((VkDescriptorBufferInfo) {
+            const VkDescriptorBufferInfo globalUBOInfo{
                     .buffer = m_Uniform.vkBuffer(),
                     .range = m_Uniform.BufferSize()
-            });
-            WritePushedDescriptors();
+            };
+            std::array writes{
+                    (VkWriteDescriptorSet) {
+                            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                            .pBufferInfo = &globalUBOInfo
+                    },
+            };
+            WriteDescriptors(writes.size(),
+                             writes.data());
 
             return MXC_SUCCESS;
         }

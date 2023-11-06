@@ -11,21 +11,35 @@ namespace Moxaic
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
-        MXC_RESULT Init(const VulkanTexture& texture)
+        MXC_RESULT Init(const VulkanTexture &texture)
         {
+            MXC_LOG("Init MaterialDescriptor");
+
             if (initializeLayout()) {
-                PushBinding((VkDescriptorSetLayoutBinding) {
-                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                });
-                MXC_CHK(CreateDescriptorSetLayout());
+                std::array bindings{
+                        (VkDescriptorSetLayoutBinding) {
+                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                        }
+                };
+                MXC_CHK(CreateDescriptorSetLayout(bindings.size(),
+                                                  bindings.data()));
             }
+
             MXC_CHK(AllocateDescriptorSet());
-//            PushWrite((VkDescriptorBufferInfo) {
-//                    .buffer = m_Uniform.vkBuffer(),
-//                    .range = m_Uniform.BufferSize()
-//            });
-            WritePushedDescriptors();
+            const VkDescriptorImageInfo imageInfo{
+                    .sampler = k_Device.vkLinearSampler(),
+                    .imageView = texture.vkImageView(),
+                    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            };
+            std::array writes{
+                    (VkWriteDescriptorSet) {
+                            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                            .pImageInfo = &imageInfo
+                    },
+            };
+            WriteDescriptors(writes.size(),
+                             writes.data());
 
             return MXC_SUCCESS;
         }
