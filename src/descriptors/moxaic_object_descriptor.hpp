@@ -19,8 +19,6 @@ namespace Moxaic
             glm::mat4 model;
         };
 
-        inline Buffer &uniform() { return m_Uniform.Mapped(); }
-
         MXC_RESULT Init(const Transform &transform)
         {
             MXC_LOG("Init ObjectDescriptor");
@@ -40,7 +38,7 @@ namespace Moxaic
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Locality::Local));
-            uniform().model = transform.modelMatrix();
+            m_Uniform.Mapped().model = transform.modelMatrix();
 
             MXC_CHK(AllocateDescriptorSet());
             const VkDescriptorBufferInfo objectUBOInfo{

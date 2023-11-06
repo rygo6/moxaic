@@ -31,7 +31,9 @@ bool Moxaic::WindowInit()
 void Moxaic::WindowPoll()
 {
     g_DeltaRawMouseX = 0;
-    g_DeltaRawMouseX = 0;
+    g_DeltaRawMouseY = 0;
+    g_DeltaMouseX = 0;
+    g_DeltaMouseY = 0;
 
     static SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -54,14 +56,13 @@ void Moxaic::WindowPoll()
             case SDL_MOUSEMOTION:
                 // accumulate in case there are multiples
                 if (g_RelativeMouseMode) {
-                    g_DeltaRawMouseX += event.motion.x;
-                    g_DeltaRawMouseX += event.motion.y;
+                    g_DeltaRawMouseX += event.motion.xrel;
+                    g_DeltaRawMouseY += event.motion.yrel;
                 }
                 break;
         }
     }
 
-//    SDL_GetMouseState(&g_RawMouseX, &g_RawMouseY);
     if (g_RelativeMouseMode) {
         g_DeltaMouseX = (float)g_DeltaRawMouseX * k_MouseSensitivity;
         g_DeltaMouseY = (float)g_DeltaRawMouseY * k_MouseSensitivity;

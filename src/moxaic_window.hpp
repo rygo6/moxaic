@@ -9,7 +9,7 @@ namespace Moxaic
     void WindowPoll();
     void WindowShutdown();
 
-    inline constinit float k_MouseSensitivity = 0.001f;
+    inline constinit float k_MouseSensitivity = 0.01f;
 
     extern float g_DeltaMouseX;
     extern float g_DeltaMouseY;

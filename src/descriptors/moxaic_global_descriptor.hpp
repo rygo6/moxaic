@@ -24,8 +24,6 @@ namespace Moxaic
             uint32_t height;
         };
 
-        inline Buffer &uniform() { return m_Uniform.Mapped(); }
-
         inline MXC_RESULT Init(Camera &camera, VkExtent2D dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
@@ -49,12 +47,12 @@ namespace Moxaic
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Locality::Local));
-            uniform().width = dimensions.width;
-            uniform().height = dimensions.height;
-            uniform().proj = camera.projection();
-            uniform().invProj = camera.inverseProjection();
-            uniform().view = camera.view();
-            uniform().invView = camera.inverseView();
+            m_Uniform.Mapped().width = dimensions.width;
+            m_Uniform.Mapped().height = dimensions.height;
+            m_Uniform.Mapped().proj = camera.projection();
+            m_Uniform.Mapped().invProj = camera.inverseProjection();
+            m_Uniform.Mapped().view = camera.view();
+            m_Uniform.Mapped().invView = camera.inverseView();
 
             MXC_CHK(AllocateDescriptorSet());
             const VkDescriptorBufferInfo globalUBOInfo{
@@ -75,8 +73,8 @@ namespace Moxaic
 
         inline void UpdateView(Camera &camera)
         {
-            uniform().view = camera.view();
-            uniform().invView = camera.inverseView();
+            m_Uniform.Mapped().view = camera.view();
+            m_Uniform.Mapped().invView = camera.inverseView();
         }
 
     private:

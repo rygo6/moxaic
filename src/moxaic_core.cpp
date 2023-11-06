@@ -105,13 +105,6 @@ MXC_RESULT Moxaic::CoreLoop()
             camera.transform().Rotate(0, g_DeltaMouseX, 0);
             camera.UpdateView();
             globalDescriptor.UpdateView(camera);
-
-            auto euler = glm::eulerAngles(camera.transform().orientation());
-            printf("%.2f %.2f %.2f %.2f\n",
-                   g_DeltaMouseX,
-                   glm::degrees(euler.x),
-                   glm::degrees(euler.y),
-                   glm::degrees(euler.z));
         }
 
         device.BeginGraphicsCommandBuffer();
