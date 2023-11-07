@@ -33,11 +33,26 @@ VulkanTexture *g_pTexture;
 StandardPipeline *g_pStandardPipeline;
 Transform *g_pTransform;
 
-static void UpdateCamera(MouseMotionEvent& event)
+bool g_CameraLocked = false;
+
+static void UpdateCamera(const MouseMotionEvent &event)
 {
-    g_pCamera->transform().Rotate(0, event.delta.x, 0);
-    g_pCamera->UpdateView();
-    g_pGlobalDescriptor->UpdateView(*g_pCamera);
+    if (g_CameraLocked) {
+        g_pCamera->transform().Rotate(0, event.delta.x, 0);
+        g_pCamera->UpdateView();
+        g_pGlobalDescriptor->UpdateView(*g_pCamera);
+    }
+}
+
+static void LockMouse(const MouseClickEvent &event)
+{
+    if (event.button == Button::Left && event.phase == Phase::Pressed) {
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        g_CameraLocked = true;
+    } else if (event.button == Button::Left && event.phase == Phase::Released) {
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+        g_CameraLocked = false;
+    }
 }
 
 MXC_RESULT Moxaic::CoreInit()
@@ -92,6 +107,7 @@ MXC_RESULT Moxaic::CoreInit()
     MXC_CHK(g_pMesh->Init());
 
     g_MouseMotionSubscribers.push_back(UpdateCamera);
+    g_MouseClickSubscribers.push_back(LockMouse);
 
     return MXC_SUCCESS;
 }

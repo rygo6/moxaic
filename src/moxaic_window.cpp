@@ -8,11 +8,10 @@
 SDL_Window *Moxaic::g_pSDLWindow;
 VkExtent2D Moxaic::g_WindowDimensions;
 
-int g_DeltaRawMouseX;
-int g_DeltaRawMouseY;
-bool g_RelativeMouseMode;
+std::vector<void (*)(const Moxaic::MouseMotionEvent &)> Moxaic::g_MouseMotionSubscribers;
+std::vector<void (*)(const Moxaic::MouseClickEvent &)> Moxaic::g_MouseClickSubscribers;
 
-std::vector<void (*)(Moxaic::MouseMotionEvent&)> Moxaic::g_MouseMotionSubscribers;
+bool g_RelativeMouseMode;
 
 bool Moxaic::WindowInit()
 {
@@ -28,43 +27,44 @@ bool Moxaic::WindowInit()
 
 void Moxaic::WindowPoll()
 {
-    g_DeltaRawMouseX = 0;
-    g_DeltaRawMouseY = 0;
-
-    static SDL_Event event;
-    while (SDL_PollEvent(&event)) {
-        switch (event.type) {
-            case SDL_QUIT:
+    static SDL_Event pollEvent;
+    while (SDL_PollEvent(&pollEvent)) {
+        switch (pollEvent.type) {
+            case SDL_QUIT: {
                 g_ApplicationRunning = false;
                 break;
-            case SDL_MOUSEBUTTONDOWN:
-                if (event.button.button == SDL_BUTTON_LEFT) {
-                    SDL_SetRelativeMouseMode(SDL_TRUE);
-                    g_RelativeMouseMode = true;
+            }
+            case SDL_MOUSEBUTTONDOWN: {
+                MouseClickEvent event{
+                        .phase = Phase::Pressed,
+                        .button = static_cast<Button>(pollEvent.button.button)
+                };
+                for (int i = 0; i < g_MouseClickSubscribers.size(); ++i) {
+                    g_MouseClickSubscribers[i](event);
                 }
                 break;
-            case SDL_MOUSEBUTTONUP:
-                if (event.button.button == SDL_BUTTON_LEFT) {
-                    SDL_SetRelativeMouseMode(SDL_FALSE);
-                    g_RelativeMouseMode = false;
+            }
+            case SDL_MOUSEBUTTONUP: {
+                MouseClickEvent event{
+                        .phase = Phase::Released,
+                        .button = static_cast<Button>(pollEvent.button.button)
+                };
+                for (int i = 0; i < g_MouseClickSubscribers.size(); ++i) {
+                    g_MouseClickSubscribers[i](event);
                 }
                 break;
-            case SDL_MOUSEMOTION:
-                // accumulate in case there are multiples
-                if (g_RelativeMouseMode) {
-                    g_DeltaRawMouseX += event.motion.xrel;
-                    g_DeltaRawMouseY += event.motion.yrel;
+            }
+            case SDL_MOUSEMOTION: {
+                // not accumulating and eventing at the end might produce more correct behaviour
+                MouseMotionEvent event{
+                        .delta = glm::vec2((float) pollEvent.motion.xrel * k_MouseSensitivity,
+                                           (float) pollEvent.motion.yrel * k_MouseSensitivity)
+                };
+                for (int i = 0; i < g_MouseMotionSubscribers.size(); ++i) {
+                    g_MouseMotionSubscribers[i](event);
                 }
                 break;
-        }
-    }
-
-    if (g_RelativeMouseMode) {
-        auto mouseMotionEvent = (MouseMotionEvent) {
-                .delta = glm::vec2((float)g_DeltaRawMouseX * k_MouseSensitivity, (float)g_DeltaRawMouseY * k_MouseSensitivity)
-        };
-        for (int i = 0; i < g_MouseMotionSubscribers.size(); ++i){
-            g_MouseMotionSubscribers[i](mouseMotionEvent);
+            }
         }
     }
 }
