@@ -3,18 +3,16 @@
 
 #include "moxaic_logging.hpp"
 
+#include <vector>
+
 SDL_Window *Moxaic::g_pSDLWindow;
 VkExtent2D Moxaic::g_WindowDimensions;
 
-float Moxaic::g_DeltaMouseX;
-float Moxaic::g_DeltaMouseY;
 int g_DeltaRawMouseX;
 int g_DeltaRawMouseY;
-int g_RawMouseX;
-int g_RawMouseY;
-int g_PriorRawMouseX;
-int g_PriorRawMouseY;
 bool g_RelativeMouseMode;
+
+std::vector<void (*)(Moxaic::MouseMotionEvent&)> Moxaic::g_MouseMotionSubscribers;
 
 bool Moxaic::WindowInit()
 {
@@ -32,8 +30,6 @@ void Moxaic::WindowPoll()
 {
     g_DeltaRawMouseX = 0;
     g_DeltaRawMouseY = 0;
-    g_DeltaMouseX = 0;
-    g_DeltaMouseY = 0;
 
     static SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -64,8 +60,12 @@ void Moxaic::WindowPoll()
     }
 
     if (g_RelativeMouseMode) {
-        g_DeltaMouseX = (float)g_DeltaRawMouseX * k_MouseSensitivity;
-        g_DeltaMouseY = (float)g_DeltaRawMouseY * k_MouseSensitivity;
+        auto mouseMotionEvent = (MouseMotionEvent) {
+                .delta = glm::vec2((float)g_DeltaRawMouseX * k_MouseSensitivity, (float)g_DeltaRawMouseY * k_MouseSensitivity)
+        };
+        for (int i = 0; i < g_MouseMotionSubscribers.size(); ++i){
+            g_MouseMotionSubscribers[i](mouseMotionEvent);
+        }
     }
 }
 

@@ -33,6 +33,13 @@ VulkanTexture *g_pTexture;
 StandardPipeline *g_pStandardPipeline;
 Transform *g_pTransform;
 
+static void UpdateCamera(MouseMotionEvent& event)
+{
+    g_pCamera->transform().Rotate(0, event.delta.x, 0);
+    g_pCamera->UpdateView();
+    g_pGlobalDescriptor->UpdateView(*g_pCamera);
+}
+
 MXC_RESULT Moxaic::CoreInit()
 {
     MXC_CHK(WindowInit());
@@ -84,6 +91,8 @@ MXC_RESULT Moxaic::CoreInit()
     g_pMesh = new VulkanMesh(*g_pDevice);
     MXC_CHK(g_pMesh->Init());
 
+    g_MouseMotionSubscribers.push_back(UpdateCamera);
+
     return MXC_SUCCESS;
 }
 
@@ -101,11 +110,11 @@ MXC_RESULT Moxaic::CoreLoop()
     while (g_ApplicationRunning) {
         WindowPoll();
 
-        if (g_DeltaMouseX != 0) {
-            camera.transform().Rotate(0, g_DeltaMouseX, 0);
-            camera.UpdateView();
-            globalDescriptor.UpdateView(camera);
-        }
+//        if (g_DeltaMouseX != 0) {
+//            camera.transform().Rotate(0, g_DeltaMouseX, 0);
+//            camera.UpdateView();
+//            globalDescriptor.UpdateView(camera);
+//        }
 
         device.BeginGraphicsCommandBuffer();
         device.BeginRenderPass(*g_pFramebuffer);
