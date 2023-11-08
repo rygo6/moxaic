@@ -9,7 +9,8 @@ SDL_Window *Moxaic::g_pSDLWindow;
 VkExtent2D Moxaic::g_WindowDimensions;
 
 std::vector<void (*)(const Moxaic::MouseMotionEvent &)> Moxaic::g_MouseMotionSubscribers;
-std::vector<void (*)(const Moxaic::MouseClickEvent &)> Moxaic::g_MouseClickSubscribers;
+std::vector<void (*)(const Moxaic::MouseEvent &)> Moxaic::g_MouseSubscribers;
+std::vector<void (*)(const Moxaic::KeyEvent &)> Moxaic::g_KeySubscribers;
 
 bool g_RelativeMouseMode;
 
@@ -34,23 +35,43 @@ void Moxaic::WindowPoll()
                 g_ApplicationRunning = false;
                 break;
             }
+            case SDL_KEYDOWN: {
+                KeyEvent event{
+                        .phase = Phase::Pressed,
+                        .key = pollEvent.key.keysym.sym,
+                };
+                for (int i = 0; i < g_KeySubscribers.size(); ++i) {
+                    g_KeySubscribers[i](event);
+                }
+                break;
+            }
+            case SDL_KEYUP: {
+                KeyEvent event{
+                        .phase = Phase::Released,
+                        .key = pollEvent.key.keysym.sym,
+                };
+                for (int i = 0; i < g_KeySubscribers.size(); ++i) {
+                    g_KeySubscribers[i](event);
+                }
+                break;
+            }
             case SDL_MOUSEBUTTONDOWN: {
-                MouseClickEvent event{
+                MouseEvent event{
                         .phase = Phase::Pressed,
                         .button = static_cast<Button>(pollEvent.button.button)
                 };
-                for (int i = 0; i < g_MouseClickSubscribers.size(); ++i) {
-                    g_MouseClickSubscribers[i](event);
+                for (int i = 0; i < g_MouseSubscribers.size(); ++i) {
+                    g_MouseSubscribers[i](event);
                 }
                 break;
             }
             case SDL_MOUSEBUTTONUP: {
-                MouseClickEvent event{
+                MouseEvent event{
                         .phase = Phase::Released,
                         .button = static_cast<Button>(pollEvent.button.button)
                 };
-                for (int i = 0; i < g_MouseClickSubscribers.size(); ++i) {
-                    g_MouseClickSubscribers[i](event);
+                for (int i = 0; i < g_MouseSubscribers.size(); ++i) {
+                    g_MouseSubscribers[i](event);
                 }
                 break;
             }

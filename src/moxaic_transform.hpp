@@ -12,6 +12,19 @@ namespace Moxaic
         Transform();
         virtual ~Transform();
 
+        inline void LocalTranslate(glm::vec3 delta)
+        {
+            delta = glm::rotate(m_Orientation, delta);
+            m_Position += delta;
+        }
+
+        inline void LocalTranslate(float x, float y, float z)
+        {
+            auto delta = glm::vec3(x, y, z);
+            delta = glm::rotate(m_Orientation, delta);
+            m_Position += delta;
+        }
+
         inline void Rotate(float x, float y, float z)
         {
             auto rotation = glm::quat(glm::vec3(
@@ -22,9 +35,15 @@ namespace Moxaic
         }
 
         inline const auto &position() const { return m_Position; }
-        inline void setPosition(glm::vec3 position) { m_Position = position; }
+        inline void setPosition(glm::vec3 position)
+        {
+            m_Position = position;
+        }
         inline const auto &orientation() const { return m_Orientation; }
-        inline void setOrientation(glm::quat orientation) { m_Orientation = orientation; }
+        inline void setOrientation(glm::quat orientation)
+        {
+            m_Orientation = orientation;
+        }
 
         inline const auto modelMatrix() const
         {
