@@ -3,6 +3,7 @@
 #include "moxaic_vulkan.hpp"
 
 #include <vulkan/vulkan.h>
+#include <string>
 
 #ifdef WIN32
 #include <windows.h>
@@ -18,26 +19,26 @@ namespace Moxaic
         explicit VulkanTexture(const VulkanDevice &device);
         virtual ~VulkanTexture();
 
-        bool InitFromImage(VkFormat format,
-                           VkExtent2D extent,
-                           VkImage image);
+        MXC_RESULT InitFromImage(VkFormat format,
+                                 VkExtent2D extent,
+                                 VkImage image);
 
-        bool InitFromFile(bool external,
-                          char const *filename);
+        MXC_RESULT InitFromFile(const std::string file,
+                                const Locality locality);
 
-        bool InitFromImport(VkFormat format,
-                            VkExtent2D extent,
-                            VkImageUsageFlags usage,
-                            VkImageAspectFlags aspectMask,
-                            HANDLE externalMemory);
+        MXC_RESULT InitFromImport(VkFormat format,
+                                  VkExtent2D extent,
+                                  VkImageUsageFlags usage,
+                                  VkImageAspectFlags aspectMask,
+                                  HANDLE externalMemory);
 
-        bool Init(const VkFormat format,
-                  const VkExtent3D dimensions,
-                  const VkImageUsageFlags usage,
-                  const VkImageAspectFlags aspectMask,
-                  const Locality locality);
+        MXC_RESULT Init(const VkFormat format,
+                        const VkExtent2D extents,
+                        const VkImageUsageFlags usage,
+                        const VkImageAspectFlags aspectMask,
+                        const Locality locality);
 
-        bool InitialReadTransition();
+        MXC_RESULT TransitionImmediateInitialToGraphicsRead();
 
         inline auto vkImage() const { return m_VkImage; }
         inline auto vkImageView() const { return m_VkImageView; }
@@ -50,11 +51,13 @@ namespace Moxaic
         VkImageView m_VkImageView{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
 
-        VkExtent3D m_Dimensions{};
+        VkExtent2D m_Dimensions{};
         VkImageAspectFlags m_AspectMask{};
 
 #ifdef WIN32
         HANDLE m_ExternalMemory{};
 #endif
+        bool TransitionImediateInitialToTransferDst();
+        bool TransitionImmediateTransferDstToGraphicsRead();
     };
 }

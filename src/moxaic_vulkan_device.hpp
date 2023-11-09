@@ -28,6 +28,10 @@ namespace Moxaic
                                      const VkImage image,
                                      const VkExternalMemoryHandleTypeFlags externalHandleType,
                                      VkDeviceMemory &outDeviceMemory) const;
+        MXC_RESULT CreateStagingBuffer(const void *srcData,
+                                       const VkDeviceSize bufferSize,
+                                       VkBuffer &outStagingBuffer,
+                                       VkDeviceMemory &outStagingBufferMemory) const;
         MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
                                             const VkMemoryPropertyFlags properties,
                                             const VkDeviceSize bufferSize,
@@ -45,6 +49,12 @@ namespace Moxaic
                                                               const VkDeviceSize bufferSize,
                                                               VkBuffer &outBuffer,
                                                               VkDeviceMemory &outBufferMemory) const;
+        MXC_RESULT CopyBufferToBuffer(const VkDeviceSize bufferSize,
+                                      const VkBuffer srcBuffer,
+                                      VkBuffer dstBuffer) const;
+        MXC_RESULT CopyBufferToImage(const VkExtent2D imageExtent,
+                                     const VkBuffer srcBuffer,
+                                     VkImage dstImage) const;
         MXC_RESULT TransitionImageLayoutImmediate(VkImage image,
                                                   VkImageLayout oldLayout,
                                                   VkImageLayout newLayout,
@@ -122,14 +132,5 @@ namespace Moxaic
         bool CreateCommandBuffers();
         bool CreatePools();
         bool CreateSamplers();
-
-        MXC_RESULT CreateStagingBuffer(const void *srcData,
-                                       const VkDeviceSize bufferSize,
-                                       VkBuffer &outStagingBuffer,
-                                       VkDeviceMemory &outStagingBufferMemory) const;
-
-        void CopyBuffer(const VkDeviceSize bufferSize,
-                        VkBuffer srcBuffer,
-                        VkBuffer dstBuffer) const;
     };
 }

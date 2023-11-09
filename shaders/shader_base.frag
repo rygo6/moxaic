@@ -24,9 +24,9 @@ void main()
     vec3 ndcPos = eyePos.xyz / eyePos.w;
     vec4 worldPos = globalUBO.invView * vec4(ndcPos, 1.0);
 
-    // outColor = texture(texSampler, inUV);
+     outColor = texture(texSampler, inUV);
     // outColor = worldPos;
-    outColor = vec4(0, 1, 0, 1);
+//    outColor = vec4(0, 1, 0, 1);
 
     // Is this right?! https://github.com/SaschaWillems/Vulkan/blob/master/data/shaders/glsl/subpasses/gbuffer.frag
     vec3 N = normalize(inNormal);

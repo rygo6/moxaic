@@ -17,34 +17,33 @@ Moxaic::VulkanFramebuffer::VulkanFramebuffer(const Moxaic::VulkanDevice &device)
 
 Moxaic::VulkanFramebuffer::~VulkanFramebuffer() = default;
 
-bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &dimensions,
-                                     const Locality &locality)
+bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D extents,
+                                     const Locality locality)
 {
-    VkExtent3D extent3D = {dimensions.width, dimensions.height, 1};
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
-                                extent3D,
+                                extents,
                                 k_ColorBufferUsage,
                                 VK_IMAGE_ASPECT_COLOR_BIT,
                                 locality));
-    MXC_CHK(m_ColorTexture.InitialReadTransition());
+    MXC_CHK(m_ColorTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_NormalTexture.Init(k_NormalBufferFormat,
-                                 extent3D,
+                                 extents,
                                  k_NormalBufferUsage,
                                  VK_IMAGE_ASPECT_COLOR_BIT,
                                  locality));
-    MXC_CHK(m_NormalTexture.InitialReadTransition());
+    MXC_CHK(m_NormalTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_GBufferTexture.Init(k_GBufferFormat,
-                                  extent3D,
+                                  extents,
                                   k_GBufferUsage,
                                   VK_IMAGE_ASPECT_COLOR_BIT,
                                   locality));
-    MXC_CHK(m_GBufferTexture.InitialReadTransition());
+    MXC_CHK(m_GBufferTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_DepthTexture.Init(k_DepthBufferFormat,
-                                extent3D,
+                                extents,
                                 k_DepthBufferUsage,
                                 VK_IMAGE_ASPECT_DEPTH_BIT,
                                 locality));
-    MXC_CHK(m_DepthTexture.InitialReadTransition());
+    MXC_CHK(m_DepthTexture.TransitionImmediateInitialToGraphicsRead());
     const std::array attachments{
             m_ColorTexture.vkImageView(),
             m_NormalTexture.vkImageView(),
@@ -58,8 +57,8 @@ bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &dimensions,
             .renderPass = k_Device.vkRenderPass(),
             .attachmentCount = attachments.size(),
             .pAttachments = attachments.data(),
-            .width = dimensions.width,
-            .height = dimensions.height,
+            .width = extents.width,
+            .height = extents.height,
             .layers = 1,
     };
     VK_CHK(vkCreateFramebuffer(k_Device.vkDevice(), &framebufferCreateInfo, VK_ALLOC, &m_VkFramebuffer));
@@ -69,6 +68,6 @@ bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D &dimensions,
             .flags = 0,
     };
     VK_CHK(vkCreateSemaphore(k_Device.vkDevice(), &renderCompleteCreateInfo, VK_ALLOC, &m_VkRenderCompleteSemaphore));
-    m_Dimensions = dimensions;
+    m_Dimensions = extents;
     return true;
 }

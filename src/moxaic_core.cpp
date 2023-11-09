@@ -10,10 +10,10 @@
 #include "moxaic_vulkan_timeline_semaphore.hpp"
 #include "moxaic_vulkan_mesh.hpp"
 
-#include "descriptors/moxaic_global_descriptor.hpp"
-#include "descriptors/moxaic_material_descriptor.hpp"
+#include "moxaic_global_descriptor.hpp"
+#include "moxaic_material_descriptor.hpp"
 
-#include "pipelines/moxaic_standard_pipeline.hpp"
+#include "moxaic_standard_pipeline.hpp"
 
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
@@ -113,12 +113,9 @@ MXC_RESULT Moxaic::CoreInit()
     MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, g_WindowDimensions));
 
     g_pTexture = new VulkanTexture(*g_pDevice);
-    g_pTexture->Init(VK_FORMAT_R8G8B8A8_SRGB,
-                     {128, 128},
-                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                     VK_IMAGE_ASPECT_COLOR_BIT,
-                     Locality::Local);
-    g_pTexture->InitialReadTransition();
+    g_pTexture->InitFromFile("textures/test.jpg",
+                             Locality::Local);
+    g_pTexture->TransitionImmediateInitialToGraphicsRead();
 
     g_pMaterialDescriptor = new MaterialDescriptor(*g_pDevice);
     MXC_CHK(g_pMaterialDescriptor->Init(*g_pTexture));

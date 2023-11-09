@@ -752,12 +752,12 @@ MXC_RESULT Moxaic::VulkanDevice::CreateStagingBuffer(const void *srcData,
     return MXC_SUCCESS;
 }
 
-void Moxaic::VulkanDevice::CopyBuffer(const VkDeviceSize bufferSize,
-                                      VkBuffer srcBuffer,
-                                      VkBuffer dstBuffer) const
+MXC_RESULT Moxaic::VulkanDevice::CopyBufferToBuffer(const VkDeviceSize bufferSize,
+                                                    const VkBuffer srcBuffer,
+                                                    VkBuffer dstBuffer) const
 {
     VkCommandBuffer commandBuffer;
-    BeginImmediateCommandBuffer(commandBuffer);
+    MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
     const VkBufferCopy copyRegion = {
             .srcOffset = 0,
             .dstOffset = 0,
@@ -768,7 +768,40 @@ void Moxaic::VulkanDevice::CopyBuffer(const VkDeviceSize bufferSize,
                     dstBuffer,
                     1,
                     &copyRegion);
-    EndImmediateCommandBuffer(commandBuffer);
+    MXC_CHK(EndImmediateCommandBuffer(commandBuffer));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Moxaic::VulkanDevice::CopyBufferToImage(const VkExtent2D imageExtent,
+                                                   const VkBuffer srcBuffer,
+                                                   VkImage dstImage) const
+{
+    VkCommandBuffer commandBuffer;
+    MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
+    const VkBufferImageCopy region{
+            .bufferOffset = 0,
+            .bufferRowLength = 0,
+            .bufferImageHeight = 0,
+            .imageSubresource {
+                    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                    .mipLevel = 0,
+                    .baseArrayLayer = 0,
+                    .layerCount = 1,
+            },
+            .imageOffset = {0, 0, 0},
+            .imageExtent = {imageExtent.width,
+                            imageExtent.height,
+                            1},
+    };
+    vkCmdCopyBufferToImage(
+            commandBuffer,
+            srcBuffer,
+            dstImage,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &region);
+    MXC_CHK(EndImmediateCommandBuffer(commandBuffer));
+    return MXC_SUCCESS;
 }
 
 MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindPopulateBufferViaStaging(const void *srcData,
@@ -788,9 +821,9 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindPopulateBufferViaStaging(cons
                                      bufferSize,
                                      outBuffer,
                                      outBufferMemory));
-    CopyBuffer(bufferSize,
-               stagingBuffer,
-               outBuffer);
+    CopyBufferToBuffer(bufferSize,
+                       stagingBuffer,
+                       outBuffer);
     vkDestroyBuffer(m_VkDevice,
                     stagingBuffer,
                     VK_ALLOC);
