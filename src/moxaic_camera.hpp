@@ -2,6 +2,7 @@
 
 #include "moxaic_vulkan.hpp"
 #include "moxaic_transform.hpp"
+#include "moxaic_window.hpp"
 
 #include <vulkan/vulkan.h>
 #include <windows.h>
@@ -17,6 +18,8 @@ namespace Moxaic
     public:
         explicit Camera();
         virtual ~Camera();
+
+        bool Update(uint32_t deltaTime);
 
         void UpdateView();
         void UpdateProjection();
@@ -39,5 +42,9 @@ namespace Moxaic
         glm::mat4x4 m_Projection{glm::identity<glm::mat4x4>()};
         glm::mat4x4 m_InverseView{glm::identity<glm::mat4x4>()};
         glm::mat4x4 m_InverseProjection{glm::identity<glm::mat4x4>()};
+
+        void OnMouseMove(const MouseMotionEvent &event);
+        void OnKey(const KeyEvent &event);
+        void OnMouse(const MouseEvent &event);
     };
 }

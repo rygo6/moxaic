@@ -70,7 +70,7 @@ MXC_RESULT Moxaic::VulkanTexture::InitFromFile(const std::string file,
          VK_IMAGE_ASPECT_COLOR_BIT,
          locality);
 
-    TransitionImediateInitialToTransferDst();
+    TransitionImmediateInitialToTransferDst();
     k_Device.CopyBufferToImage(extents,
                                stagingBuffer,
                                m_VkImage);
@@ -84,7 +84,7 @@ MXC_RESULT Moxaic::VulkanTexture::InitFromFile(const std::string file,
     return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanTexture::InitFromImport(VkFormat format,
+MXC_RESULT Moxaic::VulkanTexture::InitFromImport(VkFormat format,
                                            VkExtent2D extent,
                                            VkImageUsageFlags usage,
                                            VkImageAspectFlags aspectMask,
@@ -93,7 +93,7 @@ bool Moxaic::VulkanTexture::InitFromImport(VkFormat format,
     return MXC_SUCCESS;
 }
 
-bool Moxaic::VulkanTexture::Init(const VkFormat format,
+MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
                                  const VkExtent2D extents,
                                  const VkImageUsageFlags usage,
                                  const VkImageAspectFlags aspectMask,
@@ -186,7 +186,7 @@ MXC_RESULT Moxaic::VulkanTexture::TransitionImmediateInitialToGraphicsRead()
                                                    m_AspectMask);
 }
 
-MXC_RESULT Moxaic::VulkanTexture::TransitionImediateInitialToTransferDst()
+MXC_RESULT Moxaic::VulkanTexture::TransitionImmediateInitialToTransferDst()
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,

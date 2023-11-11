@@ -4,13 +4,14 @@
 #include "moxaic_logging.hpp"
 
 #include <vector>
+#include <functional>
 
 SDL_Window *Moxaic::g_pSDLWindow;
 VkExtent2D Moxaic::g_WindowDimensions;
 
-std::vector<void (*)(const Moxaic::MouseMotionEvent &)> Moxaic::g_MouseMotionSubscribers;
-std::vector<void (*)(const Moxaic::MouseEvent &)> Moxaic::g_MouseSubscribers;
-std::vector<void (*)(const Moxaic::KeyEvent &)> Moxaic::g_KeySubscribers;
+std::vector<std::function<Moxaic::MouseMotionCallback>> Moxaic::g_MouseMotionSubscribers;
+std::vector<std::function<Moxaic::MouseCallback>> Moxaic::g_MouseSubscribers;
+std::vector<std::function<Moxaic::KeyCallback>> Moxaic::g_KeySubscribers;
 
 bool g_RelativeMouseMode;
 
@@ -78,8 +79,8 @@ void Moxaic::WindowPoll()
             case SDL_MOUSEMOTION: {
                 // not accumulating and eventing at the end might produce more correct behaviour
                 MouseMotionEvent event{
-                        .delta = glm::vec2((float) pollEvent.motion.xrel * k_MouseSensitivity,
-                                           (float) pollEvent.motion.yrel * k_MouseSensitivity)
+                        .delta = glm::vec2((float) pollEvent.motion.xrel,
+                                           (float) pollEvent.motion.yrel)
                 };
                 for (int i = 0; i < g_MouseMotionSubscribers.size(); ++i) {
                     g_MouseMotionSubscribers[i](event);

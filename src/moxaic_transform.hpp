@@ -34,6 +34,12 @@ namespace Moxaic
             m_Orientation = rotation * m_Orientation;
         }
 
+        inline void Rotate(glm::vec3 euler)
+        {
+            auto rotation = glm::quat(euler);
+            m_Orientation = rotation * m_Orientation;
+        }
+
         inline const auto &position() const { return m_Position; }
         inline void setPosition(glm::vec3 position)
         {

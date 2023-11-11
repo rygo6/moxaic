@@ -57,7 +57,7 @@ namespace Moxaic
 #ifdef WIN32
         HANDLE m_ExternalMemory{};
 #endif
-        bool TransitionImediateInitialToTransferDst();
+        bool TransitionImmediateInitialToTransferDst();
         bool TransitionImmediateTransferDstToGraphicsRead();
     };
 }
