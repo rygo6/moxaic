@@ -10,12 +10,22 @@ file(GLOB SRC_FILES
         src/*.hpp
         src/*.c
         src/*.h
+        third_party/*.cpp
+        third_party/*.hpp
         third_party/*.c
         third_party/*.h
         src/descriptors/*.cpp
         src/descriptors/*.hpp
         src/descriptors/*.c
         src/descriptors/*.h
+        src/pipelines/*.cpp
+        src/pipelines/*.hpp
+        src/pipelines/*.c
+        src/pipelines/*.h
+        src/utilities/*.cpp
+        src/utilities/*.hpp
+        src/utilities/*.c
+        src/utilities/*.h
 )
 
 add_executable(${TARGET_NAME}
@@ -33,6 +43,7 @@ target_include_directories(${TARGET_NAME} PUBLIC
         src
         src/descriptors
         src/pipelines
+        src/utilities
         third_party
         "${VULKAN_SDK_PATH}/Include"
 )

@@ -15,9 +15,6 @@
 
 #include "moxaic_standard_pipeline.hpp"
 
-#include <vulkan/vulkan.h>
-#include <glm/glm.hpp>
-
 using namespace Moxaic;
 
 VulkanDevice *g_pDevice;

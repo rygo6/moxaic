@@ -13,9 +13,7 @@ namespace Moxaic
 {
     class VulkanDevice;
 
-    class Camera : public MouseMotionReceiver<Camera>,
-                   public MouseReceiver<Camera>,
-                   public KeyReceiver<Camera>
+    class Camera
     {
     public:
         Camera();
@@ -33,10 +31,6 @@ namespace Moxaic
         inline auto inverseView() const { return m_InverseView; }
         inline auto inverseProjection() const { return m_InverseProjection; }
 
-        void OnMouseMove(const MouseMotionEvent &event);
-        void OnKey(const KeyEvent &event);
-        void OnMouse(const MouseEvent &event);
-
     private:
         float m_FOV{45.0f};
         float m_Near{0.0001f};
@@ -49,18 +43,6 @@ namespace Moxaic
         glm::mat4x4 m_InverseView{glm::identity<glm::mat4x4>()};
         glm::mat4x4 m_InverseProjection{glm::identity<glm::mat4x4>()};
 
-        enum CameraMove
-        {
-            Forward = 1 << 0,
-            Back = 1 << 1,
-            Left = 1 << 2,
-            Right = 1 << 3,
-            Rotation = 1 << 4,
-        };
-
         bool m_CameraLocked{};
-        CameraMove m_ActiveMovement{};
-        glm::vec3 m_CameraPositionDelta{};
-        glm::vec3 m_CameraRotationDelta{};
     };
 }

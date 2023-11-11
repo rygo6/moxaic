@@ -3,14 +3,42 @@
 
 #include "moxaic_logging.hpp"
 
-#include <vector>
+#include <glm/gtc/constants.hpp>
 
 SDL_Window *Moxaic::g_pSDLWindow;
 VkExtent2D Moxaic::g_WindowDimensions;
+Moxaic::UserCommand g_UserCommand;
 
-std::vector<const Moxaic::MouseMotionCallback *> Moxaic::g_MouseMotionSubscribers;
-std::vector<const Moxaic::MouseCallback *> Moxaic::g_MouseSubscribers;
-std::vector<const Moxaic::KeyCallback *> Moxaic::g_KeySubscribers;
+inline static void SetMouseButton(const int index, const bool pressed)
+{
+    switch (index) {
+        case SDL_BUTTON_LEFT:
+            g_UserCommand.leftMouseButtonPressed = pressed;
+    }
+}
+
+inline static void SetKey(const SDL_Keycode keycode, const bool pressed)
+{
+    switch (keycode) {
+        case SDLK_w:
+            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Forward, pressed);
+            break;
+        case SDLK_s:
+            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Back, pressed);
+            break;
+        case SDLK_a:
+            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Left, pressed);
+            break;
+        case SDLK_d:
+            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Right, pressed);
+            break;
+    }
+}
+
+const Moxaic::UserCommand &Moxaic::getUserCommand()
+{
+    return g_UserCommand;
+}
 
 bool Moxaic::WindowInit()
 {
@@ -26,6 +54,11 @@ bool Moxaic::WindowInit()
 
 void Moxaic::WindowPoll()
 {
+    if (g_UserCommand.mouseMoved) {
+        g_UserCommand.mouseDelta = glm::zero<glm::vec2>();
+        g_UserCommand.mouseMoved = false;
+    }
+
     static SDL_Event pollEvent;
     while (SDL_PollEvent(&pollEvent)) {
         switch (pollEvent.type) {
@@ -34,54 +67,25 @@ void Moxaic::WindowPoll()
                 break;
             }
             case SDL_KEYDOWN: {
-                KeyEvent event{
-                        .phase = Phase::Pressed,
-                        .key = pollEvent.key.keysym.sym,
-                };
-                for (int i = 0; i < g_KeySubscribers.size(); ++i) {
-                    (*g_KeySubscribers[i])(event);
-                }
+                SetKey(pollEvent.key.keysym.sym, true);
                 break;
             }
             case SDL_KEYUP: {
-                KeyEvent event{
-                        .phase = Phase::Released,
-                        .key = pollEvent.key.keysym.sym,
-                };
-                for (int i = 0; i < g_KeySubscribers.size(); ++i) {
-                    (*g_KeySubscribers[i])(event);
-                }
+                SetKey(pollEvent.key.keysym.sym, false);
                 break;
             }
             case SDL_MOUSEBUTTONDOWN: {
-                MouseEvent event{
-                        .phase = Phase::Pressed,
-                        .button = static_cast<Button>(pollEvent.button.button)
-                };
-                for (int i = 0; i < g_MouseSubscribers.size(); ++i) {
-                    (*g_MouseSubscribers[i])(event);
-                }
+                SetMouseButton(pollEvent.button.button, true);
                 break;
             }
             case SDL_MOUSEBUTTONUP: {
-                MouseEvent event{
-                        .phase = Phase::Released,
-                        .button = static_cast<Button>(pollEvent.button.button)
-                };
-                for (int i = 0; i < g_MouseSubscribers.size(); ++i) {
-                    (*g_MouseSubscribers[i])(event);
-                }
+                SetMouseButton(pollEvent.button.button, false);
                 break;
             }
             case SDL_MOUSEMOTION: {
-                // not accumulating and eventing at the end might produce more correct behaviour
-                MouseMotionEvent event{
-                        .delta = glm::vec2((float) pollEvent.motion.xrel,
-                                           (float) pollEvent.motion.yrel)
-                };
-                for (int i = 0; i < g_MouseMotionSubscribers.size(); ++i) {
-                    (*g_MouseMotionSubscribers[i])(event);
-                }
+                // accumulate, multiples may come
+                g_UserCommand.mouseDelta += glm::vec2((float) pollEvent.motion.xrel, (float) pollEvent.motion.yrel);
+                g_UserCommand.mouseMoved = true;
                 break;
             }
         }

@@ -9,34 +9,49 @@ Moxaic::Camera::Camera()
     UpdateProjection();
 }
 
-Moxaic::Camera::~Camera()
-{
-
-}
+Moxaic::Camera::~Camera() {}
 
 bool Moxaic::Camera::Update(uint32_t deltaTime)
 {
-    if (m_ActiveMovement != 0) {
+    bool updated = false;
+
+    const auto &userCommand = getUserCommand();
+    if (!m_CameraLocked && userCommand.leftMouseButtonPressed) {
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        m_CameraLocked = true;
+    } else if (m_CameraLocked && !userCommand.leftMouseButtonPressed) {
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+        m_CameraLocked = false;
+    }
+
+    if (m_CameraLocked && userCommand.mouseMoved) {
+        auto rotation = glm::radians(-userCommand.mouseDelta.x) * 1.0f;
+        m_Transform.Rotate(0, rotation, 0);
+        updated = true;
+    }
+
+    const auto &userMove = getUserCommand().userMove;
+    if (!userMove.None()) {
         auto delta = glm::zero<glm::vec3>();
-        if ((m_ActiveMovement & CameraMove::Forward) == CameraMove::Forward) {
+        if (userMove.ContainsFlag(UserMove::Forward)) {
             delta.z -= 1;
         }
-        if ((m_ActiveMovement & CameraMove::Back) == CameraMove::Back) {
+        if (userMove.ContainsFlag(UserMove::Back)) {
             delta.z += 1;
         }
-        if ((m_ActiveMovement & CameraMove::Left) == CameraMove::Left) {
+        if (userMove.ContainsFlag(UserMove::Left)) {
             delta.x -= 1;
         }
-        if ((m_ActiveMovement & CameraMove::Right) == CameraMove::Right) {
+        if (userMove.ContainsFlag(UserMove::Right)) {
             delta.x += 1;
         }
-        m_Transform.LocalTranslate(delta * (float) deltaTime * 0.005f);
-
-        if ((m_ActiveMovement & CameraMove::Rotation) == CameraMove::Rotation) {
-            m_ActiveMovement = (CameraMove) (m_ActiveMovement & ~CameraMove::Rotation);
-            m_Transform.Rotate(m_CameraRotationDelta);
+        if (glm::length(delta) > 0.0f) {
+            m_Transform.LocalTranslate(glm::normalize(delta) * (float) deltaTime * 0.005f);
+            updated = true;
         }
+    }
 
+    if (updated) {
         UpdateView();
         return true;
     }
@@ -54,49 +69,4 @@ void Moxaic::Camera::UpdateProjection()
 {
     m_Projection = glm::perspective(m_FOV, m_Aspect, m_Near, m_Far);
     m_InverseProjection = glm::inverse(m_Projection);
-}
-
-void Moxaic::Camera::OnMouseMove(const MouseMotionEvent &event)
-{
-    if (m_CameraLocked) {
-        m_ActiveMovement = (CameraMove) (m_ActiveMovement | CameraMove::Rotation);
-        m_CameraRotationDelta.y = glm::radians(-event.delta.x) * 0.5f;
-    }
-}
-
-void Moxaic::Camera::OnMouse(const MouseEvent &event)
-{
-    if (event.button == Button::Left && event.phase == Phase::Pressed) {
-        SDL_SetRelativeMouseMode(SDL_TRUE);
-        m_CameraLocked = true;
-    } else if (event.button == Button::Left && event.phase == Phase::Released) {
-        SDL_SetRelativeMouseMode(SDL_FALSE);
-        m_CameraLocked = false;
-    }
-}
-
-void Moxaic::Camera::OnKey(const KeyEvent &event)
-{
-    switch (event.key) {
-        case SDLK_w:
-            m_ActiveMovement = (CameraMove) (event.phase == Phase::Pressed ?
-                                             m_ActiveMovement | CameraMove::Forward :
-                                             m_ActiveMovement & ~CameraMove::Forward);
-            break;
-        case SDLK_s:
-            m_ActiveMovement = (CameraMove) (event.phase == Phase::Pressed ?
-                                             m_ActiveMovement | CameraMove::Back :
-                                             m_ActiveMovement & ~CameraMove::Back);
-            break;
-        case SDLK_a:
-            m_ActiveMovement = (CameraMove) (event.phase == Phase::Pressed ?
-                                             m_ActiveMovement | CameraMove::Left :
-                                             m_ActiveMovement & ~CameraMove::Left);
-            break;
-        case SDLK_d:
-            m_ActiveMovement = (CameraMove) (event.phase == Phase::Pressed ?
-                                             m_ActiveMovement | CameraMove::Right :
-                                             m_ActiveMovement & ~CameraMove::Right);
-            break;
-    }
 }
