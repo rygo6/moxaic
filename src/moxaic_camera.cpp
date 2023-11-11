@@ -30,7 +30,7 @@ bool Moxaic::Camera::Update(uint32_t deltaTime)
         if ((m_ActiveMovement & CameraMove::Right) == CameraMove::Right) {
             delta.x += 1;
         }
-        m_Transform.LocalTranslate(delta * (float) deltaTime * 0.01f);
+        m_Transform.LocalTranslate(delta * (float) deltaTime * 0.005f);
 
         if ((m_ActiveMovement & CameraMove::Rotation) == CameraMove::Rotation) {
             m_ActiveMovement = (CameraMove) (m_ActiveMovement & ~CameraMove::Rotation);
@@ -60,7 +60,7 @@ void Moxaic::Camera::OnMouseMove(const MouseMotionEvent &event)
 {
     if (m_CameraLocked) {
         m_ActiveMovement = (CameraMove) (m_ActiveMovement | CameraMove::Rotation);
-        m_CameraRotationDelta.y = glm::radians(-event.delta.x);
+        m_CameraRotationDelta.y = glm::radians(-event.delta.x) * 0.5f;
     }
 }
 

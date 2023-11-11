@@ -8,9 +8,9 @@
 SDL_Window *Moxaic::g_pSDLWindow;
 VkExtent2D Moxaic::g_WindowDimensions;
 
-std::vector<Moxaic::MouseMotionCallback *> Moxaic::g_MouseMotionSubscribers;
-std::vector<Moxaic::MouseCallback *> Moxaic::g_MouseSubscribers;
-std::vector<Moxaic::KeyCallback *> Moxaic::g_KeySubscribers;
+std::vector<const Moxaic::MouseMotionCallback *> Moxaic::g_MouseMotionSubscribers;
+std::vector<const Moxaic::MouseCallback *> Moxaic::g_MouseSubscribers;
+std::vector<const Moxaic::KeyCallback *> Moxaic::g_KeySubscribers;
 
 bool Moxaic::WindowInit()
 {

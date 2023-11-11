@@ -13,16 +13,11 @@ namespace Moxaic
 {
     class VulkanDevice;
 
-    class Camera
-            : public MouseMotionReceiver<Camera>,
-              public MouseReceiver<Camera>,
-              public KeyReceiver<Camera>
+    class Camera : public MouseMotionReceiver<Camera>,
+                   public MouseReceiver<Camera>,
+                   public KeyReceiver<Camera>
     {
     public:
-        void OnMouseMove(const MouseMotionEvent &event);
-        void OnKey(const KeyEvent &event);
-        void OnMouse(const MouseEvent &event);
-
         Camera();
         virtual ~Camera();
 
@@ -31,14 +26,16 @@ namespace Moxaic
         void UpdateView();
         void UpdateProjection();
 
-        inline auto& transform() { return m_Transform; }
+        inline auto &transform() { return m_Transform; }
 
         inline auto view() const { return m_View; }
         inline auto projection() const { return m_Projection; }
         inline auto inverseView() const { return m_InverseView; }
         inline auto inverseProjection() const { return m_InverseProjection; }
 
-
+        void OnMouseMove(const MouseMotionEvent &event);
+        void OnKey(const KeyEvent &event);
+        void OnMouse(const MouseEvent &event);
 
     private:
         float m_FOV{45.0f};
