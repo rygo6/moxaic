@@ -52,17 +52,14 @@ namespace Moxaic
     using MouseCallback = std::function<void(const MouseEvent &)>;
     using KeyCallback = std::function<void(const KeyEvent &)>;
 
-    extern std::vector<MouseMotionCallback *> g_MouseMotionSubscribers;
-    extern std::vector<MouseCallback *> g_MouseSubscribers;
-    extern std::vector<KeyCallback *> g_KeySubscribers;
+    extern std::vector<const MouseMotionCallback *> g_MouseMotionSubscribers;
+    extern std::vector<const MouseCallback *> g_MouseSubscribers;
+    extern std::vector<const KeyCallback *> g_KeySubscribers;
 
     template<typename T>
-    void Unsubscribe(std::vector<T *> &vector, const T &item)
+    void Unsubscribe(std::vector<const T *> &vector, const T &item)
     {
-        vector.erase(std::remove(vector.begin(),
-                                 vector.end(),
-                                 &item),
-                     vector.end());
+        vector.erase(std::remove(vector.begin(), vector.end(), &item), vector.end());
     }
 
 // I might hate this... why did they give us templates
@@ -72,7 +69,7 @@ namespace Moxaic
     protected:
         MouseMotionReceiver() { g_MouseMotionSubscribers.push_back(&m_MouseMotionBinding); }
         ~MouseMotionReceiver() { Unsubscribe(g_MouseMotionSubscribers, m_MouseMotionBinding); }
-        MouseMotionCallback m_MouseMotionBinding{[this](const MouseMotionEvent &event) {
+        const MouseMotionCallback m_MouseMotionBinding{[this](const MouseMotionEvent &event) {
             static_cast<T *>(this)->OnMouseMove(event);
         }};
     };
@@ -83,7 +80,7 @@ namespace Moxaic
     protected:
         MouseReceiver() { g_MouseSubscribers.push_back(&m_MouseBinding); }
         ~MouseReceiver() { Unsubscribe(g_MouseSubscribers, m_MouseBinding); }
-        MouseCallback m_MouseBinding{[this](const MouseEvent &event) {
+        const MouseCallback m_MouseBinding{[this](const MouseEvent &event) {
             static_cast<T *>(this)->OnMouse(event);
         }};
     };
@@ -94,7 +91,7 @@ namespace Moxaic
     protected:
         KeyReceiver() { g_KeySubscribers.push_back(&m_KeyBinding); }
         ~KeyReceiver() { Unsubscribe(g_KeySubscribers, m_KeyBinding); }
-        KeyCallback m_KeyBinding{[this](const KeyEvent &event) {
+        const KeyCallback m_KeyBinding{[this](const KeyEvent &event) {
             static_cast<T *>(this)->OnKey(event);
         }};
     };
