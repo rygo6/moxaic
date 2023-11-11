@@ -4,16 +4,13 @@
 #include "moxaic_logging.hpp"
 
 #include <vector>
-#include <functional>
 
 SDL_Window *Moxaic::g_pSDLWindow;
 VkExtent2D Moxaic::g_WindowDimensions;
 
-std::vector<std::function<Moxaic::MouseMotionCallback>> Moxaic::g_MouseMotionSubscribers;
-std::vector<std::function<Moxaic::MouseCallback>> Moxaic::g_MouseSubscribers;
-std::vector<std::function<Moxaic::KeyCallback>> Moxaic::g_KeySubscribers;
-
-bool g_RelativeMouseMode;
+std::vector<Moxaic::MouseMotionCallback *> Moxaic::g_MouseMotionSubscribers;
+std::vector<Moxaic::MouseCallback *> Moxaic::g_MouseSubscribers;
+std::vector<Moxaic::KeyCallback *> Moxaic::g_KeySubscribers;
 
 bool Moxaic::WindowInit()
 {
@@ -42,7 +39,7 @@ void Moxaic::WindowPoll()
                         .key = pollEvent.key.keysym.sym,
                 };
                 for (int i = 0; i < g_KeySubscribers.size(); ++i) {
-                    g_KeySubscribers[i](event);
+                    (*g_KeySubscribers[i])(event);
                 }
                 break;
             }
@@ -52,7 +49,7 @@ void Moxaic::WindowPoll()
                         .key = pollEvent.key.keysym.sym,
                 };
                 for (int i = 0; i < g_KeySubscribers.size(); ++i) {
-                    g_KeySubscribers[i](event);
+                    (*g_KeySubscribers[i])(event);
                 }
                 break;
             }
@@ -62,7 +59,7 @@ void Moxaic::WindowPoll()
                         .button = static_cast<Button>(pollEvent.button.button)
                 };
                 for (int i = 0; i < g_MouseSubscribers.size(); ++i) {
-                    g_MouseSubscribers[i](event);
+                    (*g_MouseSubscribers[i])(event);
                 }
                 break;
             }
@@ -72,7 +69,7 @@ void Moxaic::WindowPoll()
                         .button = static_cast<Button>(pollEvent.button.button)
                 };
                 for (int i = 0; i < g_MouseSubscribers.size(); ++i) {
-                    g_MouseSubscribers[i](event);
+                    (*g_MouseSubscribers[i])(event);
                 }
                 break;
             }
@@ -83,7 +80,7 @@ void Moxaic::WindowPoll()
                                            (float) pollEvent.motion.yrel)
                 };
                 for (int i = 0; i < g_MouseMotionSubscribers.size(); ++i) {
-                    g_MouseMotionSubscribers[i](event);
+                    (*g_MouseMotionSubscribers[i])(event);
                 }
                 break;
             }
