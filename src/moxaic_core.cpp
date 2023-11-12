@@ -33,14 +33,14 @@ Transform *g_pTransform;
 MXC_RESULT Moxaic::CoreInit()
 {
     MXC_CHK(WindowInit());
-    MXC_CHK(VulkanInit(g_pSDLWindow,
+    MXC_CHK(VulkanInit(Moxaic::window(),
                        true));
 
     g_pDevice = new VulkanDevice();
     MXC_CHK(g_pDevice->Init());
 
     g_pFramebuffer = new VulkanFramebuffer(*g_pDevice);
-    MXC_CHK(g_pFramebuffer->Init(g_WindowDimensions,
+    MXC_CHK(g_pFramebuffer->Init(windowExtents(),
                                  Locality::Local));
 
     g_pCamera = new Camera();
@@ -49,7 +49,7 @@ MXC_RESULT Moxaic::CoreInit()
     g_pCamera->UpdateView();
 
     g_pGlobalDescriptor = new GlobalDescriptor(*g_pDevice);
-    MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, g_WindowDimensions));
+    MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, windowExtents()));
 
     g_pTexture = new VulkanTexture(*g_pDevice);
     g_pTexture->InitFromFile("textures/test.jpg",
@@ -69,7 +69,7 @@ MXC_RESULT Moxaic::CoreInit()
     MXC_CHK(g_pStandardPipeline->Init(*g_pGlobalDescriptor, *g_pMaterialDescriptor, *g_pObjectDescriptor));
 
     g_pSwap = new VulkanSwap(*g_pDevice);
-    MXC_CHK(g_pSwap->Init(g_WindowDimensions,
+    MXC_CHK(g_pSwap->Init(windowExtents(),
                           false));
 
     g_pTimelineSemaphore = new VulkanTimelineSemaphore(*g_pDevice);

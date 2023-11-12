@@ -14,7 +14,6 @@ namespace Moxaic
         Back = 1 << 1,
         Left = 1 << 2,
         Right = 1 << 3,
-        Rotation = 1 << 4,
     };
 
     struct UserCommand
@@ -29,8 +28,7 @@ namespace Moxaic
     void WindowPoll();
     void WindowShutdown();
 
-    const UserCommand& getUserCommand();
-
-    extern VkExtent2D g_WindowDimensions;
-    extern SDL_Window *g_pSDLWindow;
+    const UserCommand &userCommand();
+    const VkExtent2D windowExtents();
+    SDL_Window *window();
 }

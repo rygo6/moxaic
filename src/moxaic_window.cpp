@@ -5,8 +5,8 @@
 
 #include <glm/gtc/constants.hpp>
 
-SDL_Window *Moxaic::g_pSDLWindow;
-VkExtent2D Moxaic::g_WindowDimensions;
+SDL_Window *g_pSDLWindow;
+VkExtent2D g_WindowDimensions;
 Moxaic::UserCommand g_UserCommand;
 
 inline static void SetMouseButton(const int index, const bool pressed)
@@ -35,9 +35,19 @@ inline static void SetKey(const SDL_Keycode keycode, const bool pressed)
     }
 }
 
-const Moxaic::UserCommand &Moxaic::getUserCommand()
+const Moxaic::UserCommand &Moxaic::userCommand()
 {
     return g_UserCommand;
+}
+
+const VkExtent2D Moxaic::windowExtents()
+{
+    return g_WindowDimensions;
+}
+
+SDL_Window *Moxaic::window()
+{
+    return g_pSDLWindow;
 }
 
 bool Moxaic::WindowInit()

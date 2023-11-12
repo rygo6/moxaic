@@ -940,8 +940,8 @@ MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
     const VkViewport viewport = {
             .x = 0.0f,
             .y = 0.0f,
-            .width = (float) g_WindowDimensions.width,
-            .height = (float) g_WindowDimensions.height,
+            .width = (float) windowExtents().width,
+            .height = (float) windowExtents().height,
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
     };
@@ -951,7 +951,7 @@ MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
                      &viewport);
     const VkRect2D scissor = {
             .offset = {0, 0},
-            .extent = g_WindowDimensions,
+            .extent = windowExtents(),
     };
     vkCmdSetScissor(m_VkGraphicsCommandBuffer,
                     0,

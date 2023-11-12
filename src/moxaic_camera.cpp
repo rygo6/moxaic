@@ -15,7 +15,7 @@ bool Moxaic::Camera::Update(uint32_t deltaTime)
 {
     bool updated = false;
 
-    const auto &userCommand = getUserCommand();
+    const auto &userCommand = Moxaic::userCommand();
     if (!m_CameraLocked && userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
         m_CameraLocked = true;
@@ -30,7 +30,7 @@ bool Moxaic::Camera::Update(uint32_t deltaTime)
         updated = true;
     }
 
-    const auto &userMove = getUserCommand().userMove;
+    const auto &userMove = userCommand.userMove;
     if (!userMove.None()) {
         auto delta = glm::zero<glm::vec3>();
         if (userMove.ContainsFlag(UserMove::Forward)) {
