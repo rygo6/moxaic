@@ -6,7 +6,7 @@
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 
-namespace Moxaic
+namespace Moxaic::Window
 {
     enum UserMove
     {
@@ -24,11 +24,11 @@ namespace Moxaic
         BitFlags<UserMove> userMove;
     };
 
-    bool WindowInit();
-    void WindowPoll();
-    void WindowShutdown();
+    bool Init();
+    void Poll();
+    void Shutdown();
 
     const UserCommand &userCommand();
-    const VkExtent2D windowExtents();
+    const VkExtent2D extents();
     SDL_Window *window();
 }

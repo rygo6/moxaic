@@ -17,6 +17,8 @@
 #include <vector>
 #include <array>
 
+using namespace Moxaic;
+
 // From OVR Vulkan example. Is this better/same as vulkan tutorial!?
 static MXC_RESULT MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties &physicalDeviceMemoryProperties,
                                            const VkMemoryPropertyFlags &requiredMemoryProperties,
@@ -940,8 +942,8 @@ MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
     const VkViewport viewport = {
             .x = 0.0f,
             .y = 0.0f,
-            .width = (float) windowExtents().width,
-            .height = (float) windowExtents().height,
+            .width = (float) Window::extents().width,
+            .height = (float) Window::extents().height,
             .minDepth = 0.0f,
             .maxDepth = 1.0f,
     };
@@ -951,7 +953,7 @@ MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
                      &viewport);
     const VkRect2D scissor = {
             .offset = {0, 0},
-            .extent = windowExtents(),
+            .extent = Window::extents(),
     };
     vkCmdSetScissor(m_VkGraphicsCommandBuffer,
                     0,

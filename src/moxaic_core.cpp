@@ -32,15 +32,15 @@ Transform *g_pTransform;
 
 MXC_RESULT Moxaic::CoreInit()
 {
-    MXC_CHK(WindowInit());
-    MXC_CHK(VulkanInit(Moxaic::window(),
+    MXC_CHK(Window::Init());
+    MXC_CHK(VulkanInit(Moxaic::Window::window(),
                        true));
 
     g_pDevice = new VulkanDevice();
     MXC_CHK(g_pDevice->Init());
 
     g_pFramebuffer = new VulkanFramebuffer(*g_pDevice);
-    MXC_CHK(g_pFramebuffer->Init(windowExtents(),
+    MXC_CHK(g_pFramebuffer->Init(Window::extents(),
                                  Locality::Local));
 
     g_pCamera = new Camera();
@@ -49,7 +49,7 @@ MXC_RESULT Moxaic::CoreInit()
     g_pCamera->UpdateView();
 
     g_pGlobalDescriptor = new GlobalDescriptor(*g_pDevice);
-    MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, windowExtents()));
+    MXC_CHK(g_pGlobalDescriptor->Init(*g_pCamera, Window::extents()));
 
     g_pTexture = new VulkanTexture(*g_pDevice);
     g_pTexture->InitFromFile("textures/test.jpg",
@@ -69,7 +69,7 @@ MXC_RESULT Moxaic::CoreInit()
     MXC_CHK(g_pStandardPipeline->Init(*g_pGlobalDescriptor, *g_pMaterialDescriptor, *g_pObjectDescriptor));
 
     g_pSwap = new VulkanSwap(*g_pDevice);
-    MXC_CHK(g_pSwap->Init(windowExtents(),
+    MXC_CHK(g_pSwap->Init(Window::extents(),
                           false));
 
     g_pTimelineSemaphore = new VulkanTimelineSemaphore(*g_pDevice);
@@ -102,7 +102,7 @@ MXC_RESULT Moxaic::CoreLoop()
         Uint32 deltaTime = time - priorTime;
         priorTime = time;
 
-        WindowPoll();
+        Window::Poll();
 
         if (camera.Update(deltaTime)) {
             // should camera auto update descriptor somehow?
@@ -130,7 +130,7 @@ MXC_RESULT Moxaic::CoreLoop()
         timelineSemaphore.Wait();
     }
 
-    WindowShutdown();
+    Window::Shutdown();
 
     return MXC_SUCCESS;
 }

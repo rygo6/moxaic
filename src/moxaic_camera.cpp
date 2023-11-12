@@ -3,6 +3,8 @@
 
 #include <glm/glm.hpp>
 
+using namespace Moxaic;
+
 Moxaic::Camera::Camera()
 {
     UpdateView();
@@ -15,7 +17,7 @@ bool Moxaic::Camera::Update(uint32_t deltaTime)
 {
     bool updated = false;
 
-    const auto &userCommand = Moxaic::userCommand();
+    const auto &userCommand = Window::userCommand();
     if (!m_CameraLocked && userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
         m_CameraLocked = true;
@@ -33,16 +35,16 @@ bool Moxaic::Camera::Update(uint32_t deltaTime)
     const auto &userMove = userCommand.userMove;
     if (!userMove.None()) {
         auto delta = glm::zero<glm::vec3>();
-        if (userMove.ContainsFlag(UserMove::Forward)) {
+        if (userMove.ContainsFlag(Window::UserMove::Forward)) {
             delta.z -= 1;
         }
-        if (userMove.ContainsFlag(UserMove::Back)) {
+        if (userMove.ContainsFlag(Window::UserMove::Back)) {
             delta.z += 1;
         }
-        if (userMove.ContainsFlag(UserMove::Left)) {
+        if (userMove.ContainsFlag(Window::UserMove::Left)) {
             delta.x -= 1;
         }
-        if (userMove.ContainsFlag(UserMove::Right)) {
+        if (userMove.ContainsFlag(Window::UserMove::Right)) {
             delta.x += 1;
         }
         if (glm::length(delta) > 0.0f) {

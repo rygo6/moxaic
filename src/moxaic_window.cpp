@@ -5,9 +5,12 @@
 
 #include <glm/gtc/constants.hpp>
 
+using namespace Moxaic;
+using namespace Moxaic::Window;
+
 SDL_Window *g_pSDLWindow;
 VkExtent2D g_WindowDimensions;
-Moxaic::UserCommand g_UserCommand;
+UserCommand g_UserCommand;
 
 inline static void SetMouseButton(const int index, const bool pressed)
 {
@@ -21,36 +24,36 @@ inline static void SetKey(const SDL_Keycode keycode, const bool pressed)
 {
     switch (keycode) {
         case SDLK_w:
-            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Forward, pressed);
+            g_UserCommand.userMove.ToggleFlag(UserMove::Forward, pressed);
             break;
         case SDLK_s:
-            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Back, pressed);
+            g_UserCommand.userMove.ToggleFlag(UserMove::Back, pressed);
             break;
         case SDLK_a:
-            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Left, pressed);
+            g_UserCommand.userMove.ToggleFlag(UserMove::Left, pressed);
             break;
         case SDLK_d:
-            g_UserCommand.userMove.ToggleFlag(Moxaic::UserMove::Right, pressed);
+            g_UserCommand.userMove.ToggleFlag(UserMove::Right, pressed);
             break;
     }
 }
 
-const Moxaic::UserCommand &Moxaic::userCommand()
+const UserCommand &Window::userCommand()
 {
     return g_UserCommand;
 }
 
-const VkExtent2D Moxaic::windowExtents()
+const VkExtent2D Window::extents()
 {
     return g_WindowDimensions;
 }
 
-SDL_Window *Moxaic::window()
+SDL_Window *Window::window()
 {
     return g_pSDLWindow;
 }
 
-bool Moxaic::WindowInit()
+bool Window::Init()
 {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
     g_pSDLWindow = SDL_CreateWindow(k_ApplicationName,
@@ -62,7 +65,7 @@ bool Moxaic::WindowInit()
     return g_pSDLWindow != nullptr;
 }
 
-void Moxaic::WindowPoll()
+void Window::Poll()
 {
     if (g_UserCommand.mouseMoved) {
         g_UserCommand.mouseDelta = glm::zero<glm::vec2>();
@@ -102,7 +105,7 @@ void Moxaic::WindowPoll()
     }
 }
 
-void Moxaic::WindowShutdown()
+void Window::Shutdown()
 {
     SDL_DestroyWindow(g_pSDLWindow);
     SDL_Quit();
