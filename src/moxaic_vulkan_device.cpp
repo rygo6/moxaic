@@ -1023,7 +1023,7 @@ MXC_RESULT Moxaic::VulkanDevice::SubmitGraphicsQueueAndPresent(VulkanTimelineSem
     };
     const VkSemaphore pWaitSemaphores[] = {
             timelineSemaphore.vkSemaphore(),
-            swap.acquireCompleteSemaphore(),
+            swap.vkAcquireCompleteSemaphore(),
     };
     const VkPipelineStageFlags pWaitDstStageMask[] = {
             VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1031,7 +1031,7 @@ MXC_RESULT Moxaic::VulkanDevice::SubmitGraphicsQueueAndPresent(VulkanTimelineSem
     };
     const VkSemaphore pSignalSemaphores[] = {
             timelineSemaphore.vkSemaphore(),
-            swap.renderCompleteSemaphore(),
+            swap.vkRenderCompleteSemaphore(),
     };
     const VkSubmitInfo submitInfo = {
             .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1050,7 +1050,7 @@ MXC_RESULT Moxaic::VulkanDevice::SubmitGraphicsQueueAndPresent(VulkanTimelineSem
                          VK_NULL_HANDLE));
 
     // TODO want to use this?? https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_present_id.html
-    auto renderCompleteSemaphore = swap.renderCompleteSemaphore();
+    auto renderCompleteSemaphore = swap.vkRenderCompleteSemaphore();
     auto vkSwapchain = swap.vkSwapchain();
     auto blitIndex = swap.blitIndex();
     const VkPresentInfoKHR presentInfo = {

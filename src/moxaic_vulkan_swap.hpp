@@ -22,22 +22,23 @@ namespace Moxaic
 
         MXC_RESULT BlitToSwap(const VulkanTexture &srcTexture);
 
-        inline auto vkSwapchain() const { return m_Swapchain; }
-        inline auto acquireCompleteSemaphore() const { return m_AcquireCompleteSemaphore; }
-        inline auto renderCompleteSemaphore() const { return m_RenderCompleteSemaphore; }
-        inline auto swapImages(int i) const { return m_SwapImages[i]; }
-        inline auto swapImageViews(int i) const { return m_SwapImageViews[i]; }
+        inline auto vkSwapchain() const { return m_VkSwapchain; }
+        inline auto vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
+        inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
+        inline auto vkSwapImages(int i) const { return m_VkSwapImages[i]; }
+        inline auto vkSwapImageViews(int i) const { return m_VkSwapImageViews[i]; }
         inline auto blitIndex() const { return m_BlitIndex; }
+        inline auto format() const { return m_Format; }
 
     private:
         const VulkanDevice &k_Device;
 
-        VkSwapchainKHR m_Swapchain{VK_NULL_HANDLE};
-        VkSemaphore m_AcquireCompleteSemaphore{VK_NULL_HANDLE};
-        VkSemaphore m_RenderCompleteSemaphore{VK_NULL_HANDLE};
+        VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
+        VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};
+        VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        std::array<VkImage, k_SwapCount> m_SwapImages{VK_NULL_HANDLE};
-        std::array<VkImageView, k_SwapCount> m_SwapImageViews{VK_NULL_HANDLE};
+        std::array<VkImage, k_SwapCount> m_VkSwapImages{VK_NULL_HANDLE};
+        std::array<VkImageView, k_SwapCount> m_VkSwapImageViews{VK_NULL_HANDLE};
 
         VkFormat m_Format;
         VkExtent2D m_Dimensions;

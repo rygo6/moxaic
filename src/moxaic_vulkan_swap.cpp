@@ -91,7 +91,15 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
 Moxaic::VulkanSwap::VulkanSwap(const Moxaic::VulkanDevice &device)
         : k_Device(device) {}
 
-Moxaic::VulkanSwap::~VulkanSwap() = default;
+Moxaic::VulkanSwap::~VulkanSwap()
+{
+    vkDestroySemaphore(k_Device.vkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_Device.vkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
+    for (int i = 0; i < k_SwapCount; ++i) {
+        vkDestroyImageView(k_Device.vkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
+        vkDestroyImage(k_Device.vkDevice(), m_VkSwapImages[i], VK_ALLOC);
+    }
+}
 
 MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
 {
@@ -168,29 +176,29 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
     VK_CHK(vkCreateSwapchainKHR(k_Device.vkDevice(),
                                 &createInfo,
                                 VK_ALLOC,
-                                &m_Swapchain));
+                                &m_VkSwapchain));
 
     uint32_t swapCount;
     VK_CHK(vkGetSwapchainImagesKHR(k_Device.vkDevice(),
-                                   m_Swapchain,
+                                   m_VkSwapchain,
                                    &swapCount,
                                    nullptr));
-    if (swapCount != m_SwapImages.size()) {
-        MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_SwapImages.size());
+    if (swapCount != m_VkSwapImages.size()) {
+        MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_VkSwapImages.size());
         return MXC_FAIL;
     }
     VK_CHK(vkGetSwapchainImagesKHR(k_Device.vkDevice(),
-                                   m_Swapchain,
+                                   m_VkSwapchain,
                                    &swapCount,
-                                   m_SwapImages.data()));
+                                   m_VkSwapImages.data()));
 
-    for (int i = 0; i < m_SwapImages.size(); ++i) {
-        k_Device.TransitionImageLayoutImmediate(m_SwapImages[i],
+    for (int i = 0; i < m_VkSwapImages.size(); ++i) {
+        k_Device.TransitionImageLayoutImmediate(m_VkSwapImages[i],
                                                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                                 VK_ACCESS_NONE, VK_ACCESS_NONE,
                                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                 VK_IMAGE_ASPECT_COLOR_BIT);
-        auto swapImage = m_SwapImages[i];
+        auto swapImage = m_VkSwapImages[i];
         const VkImageViewCreateInfo viewInfo{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                 .image = swapImage,
@@ -210,7 +218,7 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
                         .layerCount = 1,
                 }
         };
-        auto swapImageView = m_SwapImageViews[i];
+        auto swapImageView = m_VkSwapImageViews[i];
         VK_CHK(vkCreateImageView(k_Device.vkDevice(),
                                  &viewInfo,
                                  VK_ALLOC,
@@ -225,16 +233,21 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
     VK_CHK(vkCreateSemaphore(k_Device.vkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
-                             &m_AcquireCompleteSemaphore));
+                             &m_VkAcquireCompleteSemaphore));
     VK_CHK(vkCreateSemaphore(k_Device.vkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
-                             &m_RenderCompleteSemaphore));
+                             &m_VkRenderCompleteSemaphore));
 
     MXC_LOG_NAMED(string_VkImageUsageFlags(createInfo.imageUsage));
     MXC_LOG_NAMED(string_VkFormat(createInfo.imageFormat));
+
     m_Dimensions = dimensions;
     m_Format = surfaceFormat.format;
+
+    if (m_Format != VK_FORMAT_B8G8R8A8_SRGB){
+        MXC_LOG_ERROR("Format is not VK_FORMAT_B8G8R8A8_SRGB! Was expecting VK_FORMAT_B8G8R8A8_SRGB!");
+    }
 
     return MXC_SUCCESS;
 }
@@ -253,9 +266,9 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
 MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
 {
     VK_CHK(vkAcquireNextImageKHR(k_Device.vkDevice(),
-                                 m_Swapchain,
+                                 m_VkSwapchain,
                                  UINT64_MAX,
-                                 m_AcquireCompleteSemaphore,
+                                 m_VkAcquireCompleteSemaphore,
                                  VK_NULL_HANDLE,
                                  &m_BlitIndex));
     auto srcImage = srcTexture.vkImage();
@@ -280,7 +293,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
                     .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = m_SwapImages[m_BlitIndex],
+                    .image = m_VkSwapImages[m_BlitIndex],
                     .subresourceRange = k_DefaultColorSubresourceRange,
             },
     };
@@ -319,7 +332,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
     vkCmdBlitImage(k_Device.vkGraphicsCommandBuffer(),
                    srcImage,
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   m_SwapImages[m_BlitIndex],
+                   m_VkSwapImages[m_BlitIndex],
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    1,
                    &imageBlit,
@@ -344,7 +357,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
                     .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = m_SwapImages[m_BlitIndex],
+                    .image = m_VkSwapImages[m_BlitIndex],
                     .subresourceRange = k_DefaultColorSubresourceRange,
             },
     };

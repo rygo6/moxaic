@@ -14,11 +14,18 @@ namespace Moxaic
     class InterProcessBuffer
     {
     public:
-        InterProcessBuffer();
-        virtual ~InterProcessBuffer();
+        InterProcessBuffer() = default;
+        virtual ~InterProcessBuffer() = default;
 
-        MXC_RESULT Init();
-        MXC_RESULT InitFromImport();
+        MXC_RESULT Init()
+        {
+            return MXC_SUCCESS;
+        }
+
+        MXC_RESULT InitFromImport()
+        {
+            return MXC_SUCCESS;
+        }
 
         inline T &Buffer() { return *(T *) (m_pBuffer); }
         inline int BufferSize() const { return sizeof(T); }
@@ -55,6 +62,8 @@ namespace Moxaic
     public:
         InterProcessRingBuffer();
         virtual ~InterProcessRingBuffer();
+
+        MXC_RESULT Init();
 
     private:
         InterProcessBuffer<RingBuffer> m_RingBuffer{};

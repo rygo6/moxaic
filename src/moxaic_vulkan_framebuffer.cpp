@@ -9,10 +9,6 @@ constinit VkImageUsageFlags k_DepthBufferUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_AT
 
 Moxaic::VulkanFramebuffer::VulkanFramebuffer(const Moxaic::VulkanDevice &device)
         : k_Device(device)
-//        , m_ColorTexture(std::make_unique<VulkanTexture>(device))
-//        , m_NormalTexture(std::make_unique<VulkanTexture>(device))
-//        , m_GBufferTexture(std::make_unique<VulkanTexture>(device))
-//        , m_DepthTexture(std::make_unique<VulkanTexture>(device))
 {}
 
 Moxaic::VulkanFramebuffer::~VulkanFramebuffer() = default;

@@ -3,7 +3,6 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 
-
 #include <vulkan/vulkan.h>
 #include <windows.h>
 

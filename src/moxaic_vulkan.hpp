@@ -11,7 +11,7 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-inline constinit VkFormat k_ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
+inline constinit VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;
 inline constinit VkFormat k_NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constinit VkFormat k_GBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;

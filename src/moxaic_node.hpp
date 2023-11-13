@@ -16,6 +16,38 @@
 
 namespace Moxaic
 {
+    class CompositorNode
+    {
+    public:
+
+        CompositorNode(const VulkanDevice &device);
+        virtual ~CompositorNode();
+
+        MXC_RESULT Init();
+
+    private:
+        const VulkanDevice &k_Device;
+
+        Transform m_Transform{};
+
+        std::string m_Name{"default"};
+        float m_DrawRadius{1.0f};
+
+        Camera m_CompositingCamera{}; // Camera which compositor is using to reproject.
+
+        InterProcessBuffer<GlobalDescriptor::Buffer> m_ExportedGlobalDescriptor{}; // Buffer which the node is currently using to render
+
+        InterProcessRingBuffer m_IPCToNode{};
+        InterProcessRingBuffer m_IPCFromNode{};
+
+        VulkanTimelineSemaphore m_ExportedNodeSemaphore{k_Device};
+
+        std::array<VulkanFramebuffer, k_FramebufferCount> m_ExportedFramebuffers{k_Device, k_Device};
+
+        STARTUPINFO m_Startupinfo{};
+        PROCESS_INFORMATION m_ProcessInformation{};
+    };
+
     class Node
     {
     public:
@@ -31,39 +63,31 @@ namespace Moxaic
             HANDLE gBufferFramebuffer1ExternalHandle;
             HANDLE depthFramebuffer0ExternalHandle;
             HANDLE depthFramebuffer1ExternalHandle;
-            HANDLE parentSemaphoreExternalHandle;
-            HANDLE childSemaphoreExternalHandle;
+            HANDLE compositorSemaphoreExternalHandle;
+            HANDLE nodeSemaphoreExternalHandle;
         };
 
         Node(const VulkanDevice &device);
         virtual ~Node();
 
         MXC_RESULT Init();
-        MXC_RESULT InitFromImport(const ImportParam &param);
 
     private:
         const VulkanDevice &k_Device;
 
-        Transform m_Transform;
+        Transform m_Transform{};
 
-        std::string m_Name;
-        float m_DrawRadius;
+        std::string m_Name{"default"};
+        float m_DrawRadius{1.0f};
 
-        InterProcessRingBuffer m_ProducerRingBuffer;
-//        InterProcessRingBuffer m_ReceiverRingBuffer;
+        InterProcessBuffer<GlobalDescriptor::Buffer> m_ImportedGlobalDescriptor{};
 
-        VulkanTimelineSemaphore m_CompositorSemaphore{k_Device};
-        VulkanTimelineSemaphore m_NodeSemaphore{k_Device};
+        InterProcessRingBuffer m_IPCFromCompositor{};
+        InterProcessRingBuffer m_IPCToCompositor{};
 
-        VulkanFramebuffer m_Framebuffers[k_FramebufferCount]{k_Device,
-                                                             k_Device};
+        VulkanTimelineSemaphore m_ImportedCompositorSemaphore{k_Device};
+        VulkanTimelineSemaphore m_ImportedNodeSemaphore{k_Device};
 
-        // Camera which compositor is using to reproject.
-        Camera m_CompositingCamera;
-        // Buffer which the node is currently using to render
-        InterProcessBuffer<GlobalDescriptor::Buffer> m_GlobalDescriptorBuffer;
-
-        STARTUPINFO m_Startupinfo;
-        PROCESS_INFORMATION m_ProcessInformation;
+        std::array<VulkanFramebuffer, k_FramebufferCount> m_ImportedFramebuffers{k_Device, k_Device};
     };
 }
