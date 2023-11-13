@@ -73,8 +73,8 @@ MXC_RESULT Moxaic::CoreInit()
                           false));
 
     g_pTimelineSemaphore = new VulkanTimelineSemaphore(*g_pDevice);
-    MXC_CHK(g_pTimelineSemaphore->Init(false,
-                                       Locality::Local));
+    MXC_CHK(g_pTimelineSemaphore->Init(true,
+                                       Locality::External));
 
     g_pMesh = new VulkanMesh(*g_pDevice);
     MXC_CHK(g_pMesh->Init());
@@ -104,7 +104,7 @@ MXC_RESULT Moxaic::CoreLoop()
 
         Window::Poll();
 
-        if (camera.Update(deltaTime)) {
+        if (camera.UserCommandUpdate(deltaTime)) {
             // should camera auto update descriptor somehow?
             globalDescriptor.UpdateView(*g_pCamera);
         }

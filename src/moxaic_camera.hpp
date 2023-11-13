@@ -19,7 +19,7 @@ namespace Moxaic
         Camera();
         virtual ~Camera();
 
-        bool Update(uint32_t deltaTime);
+        bool UserCommandUpdate(uint32_t deltaTime);
 
         void UpdateView();
         void UpdateProjection();

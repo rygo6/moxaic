@@ -14,7 +14,7 @@ namespace Moxaic
     class VulkanFramebuffer
     {
     public:
-        explicit VulkanFramebuffer(const VulkanDevice &device);
+        VulkanFramebuffer(const VulkanDevice &device);
         VulkanFramebuffer(const VulkanDevice &&) = delete;  // prevents rvalue binding?
         virtual ~VulkanFramebuffer();
 

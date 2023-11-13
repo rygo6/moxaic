@@ -46,7 +46,8 @@ namespace Moxaic
                     BufferSize(),
                     string_BufferLocality(locality));
             VkMemoryPropertyFlags supportedProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-            SDL_assert(((supportedProperties & properties) == supportedProperties) && "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
+            SDL_assert(((supportedProperties & properties) == supportedProperties) &&
+                       "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
             MXC_CHK(k_Device.CreateAllocateBindBuffer(usage,
                                                       properties,
                                                       BufferSize(),
@@ -59,11 +60,11 @@ namespace Moxaic
                                0,
                                BufferSize(),
                                0,
-                               (void **) &m_pMappedBuffer));
+                               &m_pMappedBuffer));
             return MXC_SUCCESS;
         }
 
-        inline T& Mapped() { return *m_pMappedBuffer; }
+        inline T &Mapped() { return *(T*)(m_pMappedBuffer); }
         inline VkDeviceSize BufferSize() const { return sizeof(T); }
 
         inline auto vkBuffer() const { return m_VkBuffer; }
@@ -72,7 +73,7 @@ namespace Moxaic
         const VulkanDevice &k_Device;
         VkBuffer m_VkBuffer{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
-        T *m_pMappedBuffer{nullptr};
+        void *m_pMappedBuffer{nullptr};
 #ifdef WIN32
         HANDLE m_ExternalMemory{nullptr};
 #endif

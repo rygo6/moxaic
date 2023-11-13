@@ -13,7 +13,7 @@ Moxaic::Camera::Camera()
 
 Moxaic::Camera::~Camera() {}
 
-bool Moxaic::Camera::Update(uint32_t deltaTime)
+bool Moxaic::Camera::UserCommandUpdate(uint32_t deltaTime)
 {
     bool updated = false;
 

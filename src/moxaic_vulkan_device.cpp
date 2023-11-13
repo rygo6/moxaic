@@ -575,7 +575,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateSamplers()
 
 MXC_RESULT Moxaic::VulkanDevice::Init()
 {
-    MXC_LOG_FUNCTION();
+    MXC_LOG("Init Vulkan Device.");
 
     SDL_assert_always(vkInstance() != VK_NULL_HANDLE);
     SDL_assert_always(vkSurface() != VK_NULL_HANDLE);
