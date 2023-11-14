@@ -5,8 +5,13 @@
 
 using namespace Moxaic;
 
-const char g_TempSharedMemoryName[] = "FbrIPCRingBuffer";
-const char g_TempSharedCamMemoryName[] = "FbrIPCCamera";
+const char k_TempSharedProducerName[] = "IPCProducer";
+const char k_TempSharedCamMemoryName[] = "IPCCamera";
+
+static void TargetFuncImportCompositor(void *params)
+{
+
+}
 
 static MXC_RESULT StartProcess(STARTUPINFO &si, PROCESS_INFORMATION &pi)
 {
@@ -51,8 +56,8 @@ MXC_RESULT CompositorNode::Init()
     MXC_CHK(m_ExportedNodeSemaphore.Init(false,
                                          Locality::External));
 
-    m_IPCToNode.Init();
-    m_ExportedGlobalDescriptor.Init();
+    m_IPCToNode.Init(k_TempSharedProducerName);
+    m_ExportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
 
     for (int i = 0; i < m_ExportedFramebuffers.size(); ++i) {
         m_ExportedFramebuffers[i].Init(Window::extents(),
@@ -71,7 +76,22 @@ Node::~Node() = default;
 
 MXC_RESULT Node::Init()
 {
+//    auto lambda = [this](void* pParameters) {
+//        auto pImportParameters = (ImportParam*)pParameters;
+//        this->InitImport(*pImportParameters);
+//    };
+//    const std::array test{
+//        lambda
+//    };
+    const std::array<InterProcessFunc, 1> targetFuncs {
+            TargetFuncImportCompositor
+    };
+    m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
+    m_ImportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
+    return MXC_SUCCESS;
+}
 
-
+MXC_RESULT Node::InitImport(ImportParam& parameters)
+{
     return MXC_SUCCESS;
 }

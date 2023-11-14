@@ -37,8 +37,8 @@ namespace Moxaic
 
         InterProcessBuffer<GlobalDescriptor::Buffer> m_ExportedGlobalDescriptor{}; // Buffer which the node is currently using to render
 
-        InterProcessRingBuffer m_IPCToNode{};
-        InterProcessRingBuffer m_IPCFromNode{};
+        InterProcessProducer m_IPCToNode{};
+        InterProcessReceiver m_IPCFromNode{};
 
         VulkanTimelineSemaphore m_ExportedNodeSemaphore{k_Device};
 
@@ -71,6 +71,7 @@ namespace Moxaic
         virtual ~Node();
 
         MXC_RESULT Init();
+        MXC_RESULT InitImport(ImportParam& parameters);
 
     private:
         const VulkanDevice &k_Device;
@@ -82,8 +83,8 @@ namespace Moxaic
 
         InterProcessBuffer<GlobalDescriptor::Buffer> m_ImportedGlobalDescriptor{};
 
-        InterProcessRingBuffer m_IPCFromCompositor{};
-        InterProcessRingBuffer m_IPCToCompositor{};
+        InterProcessReceiver m_IPCFromCompositor{};
+        InterProcessProducer m_IPCToCompositor{};
 
         VulkanTimelineSemaphore m_ImportedCompositorSemaphore{k_Device};
         VulkanTimelineSemaphore m_ImportedNodeSemaphore{k_Device};

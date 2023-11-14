@@ -9,6 +9,7 @@
 #include "moxaic_vulkan_swap.hpp"
 #include "moxaic_vulkan_timeline_semaphore.hpp"
 #include "moxaic_vulkan_mesh.hpp"
+#include "moxaic_node.hpp"
 
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_material_descriptor.hpp"
@@ -29,6 +30,7 @@ VulkanMesh *g_pMesh;
 VulkanTexture *g_pTexture;
 StandardPipeline *g_pStandardPipeline;
 Transform *g_pTransform;
+
 
 MXC_RESULT Moxaic::CoreInit()
 {

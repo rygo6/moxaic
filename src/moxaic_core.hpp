@@ -4,10 +4,6 @@
 
 namespace Moxaic
 {
-    class VulkanDevice;
-    class VulkanFramebuffer;
-    class Camera;
-
     MXC_RESULT CoreInit();
     MXC_RESULT CoreLoop();
 }
