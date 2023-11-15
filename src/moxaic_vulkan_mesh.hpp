@@ -5,9 +5,9 @@
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanDevice;
+    class Device;
 
     struct Vertex
     {
@@ -16,19 +16,19 @@ namespace Moxaic
         glm::vec2 uv;
     };
 
-    class VulkanMesh
+    class Mesh
     {
     public:
         /// Really just a test sphere mesh right now.
-        VulkanMesh(const VulkanDevice &device);
-        virtual ~VulkanMesh();
+        Mesh(const Device &device);
+        virtual ~Mesh();
 
         MXC_RESULT Init();
 
         void RecordRender();
 
     private:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
 
         uint32_t m_IndexCount;
         uint32_t m_VertexCount;

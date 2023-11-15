@@ -9,15 +9,15 @@
 #include <windows.h>
 #endif
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanDevice;
+    class Device;
 
-    class VulkanTexture
+    class Texture
     {
     public:
-        explicit VulkanTexture(const VulkanDevice &device);
-        virtual ~VulkanTexture();
+        explicit Texture(const Device &device);
+        virtual ~Texture();
 
         MXC_RESULT InitFromImage(VkFormat format,
                                  VkExtent2D extent,
@@ -45,7 +45,7 @@ namespace Moxaic
         inline auto vkDeviceMemory() const { return m_VkDeviceMemory; }
 
     private:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
 
         VkImage m_VkImage{VK_NULL_HANDLE};
         VkImageView m_VkImageView{VK_NULL_HANDLE};

@@ -11,17 +11,17 @@
 #include <vector>
 #endif
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanFramebuffer;
-    class VulkanSwap;
-    class VulkanTimelineSemaphore;
+    class Framebuffer;
+    class Swap;
+    class Semaphore;
 
-    class VulkanDevice
+    class Device
     {
     public:
-        VulkanDevice();
-        virtual ~VulkanDevice();
+        Device();
+        virtual ~Device();
 
         MXC_RESULT Init();
         MXC_RESULT AllocateBindImage(const VkMemoryPropertyFlags properties,
@@ -67,9 +67,9 @@ namespace Moxaic
         MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const;
         MXC_RESULT BeginGraphicsCommandBuffer() const;
         MXC_RESULT EndGraphicsCommandBuffer() const;
-        MXC_RESULT BeginRenderPass(const VulkanFramebuffer &framebuffer) const;
+        MXC_RESULT BeginRenderPass(const Framebuffer &framebuffer) const;
         MXC_RESULT EndRenderPass() const;
-        MXC_RESULT SubmitGraphicsQueueAndPresent(VulkanTimelineSemaphore &timelineSemaphore, const VulkanSwap &swap) const;
+        MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore &timelineSemaphore, const Swap &swap) const;
 
         // VulkanHandles are not encapsulated. Deal with vk vars and methods with care.
         // Reason? Vulkan safety is better enforced by validation layers, not C++, and

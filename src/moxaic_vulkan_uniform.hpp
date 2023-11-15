@@ -6,18 +6,18 @@
 #include <vulkan/vulkan.h>
 #include <windows.h>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanDevice;
+    class Device;
 
     template<typename T>
-    class VulkanUniform
+    class Uniform
     {
     public:
-        VulkanUniform(const VulkanDevice &device)
+        Uniform(const Device &device)
                 : k_Device(device) {}
 
-        virtual ~VulkanUniform()
+        virtual ~Uniform()
         {
             vkDestroyBuffer(k_Device.vkDevice(), m_VkBuffer, VK_ALLOC);
 
@@ -69,7 +69,7 @@ namespace Moxaic
         inline auto vkBuffer() const { return m_VkBuffer; }
 
     private:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
         VkBuffer m_VkBuffer{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
         void *m_pMappedBuffer{nullptr};

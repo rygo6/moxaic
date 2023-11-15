@@ -17,7 +17,7 @@
 #include <array>
 #include <string>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
     class StandardPipeline : public VulkanPipeline<StandardPipeline>
     {

@@ -7,7 +7,7 @@
 
 #include <glm/glm.hpp>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
     class GlobalDescriptor : public VulkanDescriptorBase<GlobalDescriptor>
     {
@@ -78,6 +78,6 @@ namespace Moxaic
         }
 
     private:
-        VulkanUniform<Buffer> m_Uniform{k_Device};
+        Uniform<Buffer> m_Uniform{k_Device};
     };
 }

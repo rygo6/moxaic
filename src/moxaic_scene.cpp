@@ -2,7 +2,7 @@
 
 using namespace Moxaic;
 
-Scene::Scene(const VulkanDevice &device)
+Scene::Scene(const Vulkan::Device &device)
         : device(device) {}
 
 MXC_RESULT Scene::Init()

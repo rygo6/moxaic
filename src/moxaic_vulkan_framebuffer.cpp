@@ -2,19 +2,21 @@
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_texture.hpp"
 
+using namespace Moxaic;
+
 constinit VkImageUsageFlags k_ColorBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 constinit VkImageUsageFlags k_NormalBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 constinit VkImageUsageFlags k_GBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 constinit VkImageUsageFlags k_DepthBufferUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-Moxaic::VulkanFramebuffer::VulkanFramebuffer(const Moxaic::VulkanDevice &device)
+Vulkan::Framebuffer::Framebuffer(const Vulkan::Device &device)
         : k_Device(device)
 {}
 
-Moxaic::VulkanFramebuffer::~VulkanFramebuffer() = default;
+Vulkan::Framebuffer::~Framebuffer() = default;
 
-bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D extents,
-                                     const Vulkan::Locality locality)
+bool Vulkan::Framebuffer::Init(const VkExtent2D extents,
+                               const Vulkan::Locality locality)
 {
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
                                 extents,

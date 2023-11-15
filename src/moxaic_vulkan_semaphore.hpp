@@ -10,15 +10,15 @@
 #include <windows.h>
 #endif
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanDevice;
+    class Device;
 
-    class VulkanTimelineSemaphore
+    class Semaphore
     {
     public:
-        VulkanTimelineSemaphore(const VulkanDevice &device);
-        virtual ~VulkanTimelineSemaphore();
+        Semaphore(const Device &device);
+        virtual ~Semaphore();
 
         MXC_RESULT Init(bool readOnly, Vulkan::Locality locality);
 
@@ -30,7 +30,7 @@ namespace Moxaic
         inline auto waitValue() const { return m_WaitValue; }
 
     private:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
 
         uint64_t m_WaitValue{0};
         VkSemaphore m_vkSemaphore{VK_NULL_HANDLE};

@@ -8,15 +8,15 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanDevice;
+    class Device;
 
     template<typename T>
     class VulkanDescriptorBase
     {
     public:
-        VulkanDescriptorBase(const VulkanDevice &device)
+        VulkanDescriptorBase(const Device &device)
                 : k_Device(device) {}
 
         virtual ~VulkanDescriptorBase()
@@ -30,7 +30,7 @@ namespace Moxaic
         inline VkDescriptorSetLayout vkDescriptorSetLayout() const { return s_VkDescriptorSetLayout; }
         inline auto vkDescriptorSet() const { return m_VkDescriptorSet; }
     protected:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 

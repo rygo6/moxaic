@@ -15,10 +15,10 @@
 
 using namespace Moxaic;
 
-Moxaic::VulkanTexture::VulkanTexture(const VulkanDevice &device)
+Vulkan::Texture::Texture(const Device &device)
         : k_Device(device) {}
 
-Moxaic::VulkanTexture::~VulkanTexture()
+Vulkan::Texture::~Texture()
 {
     vkDestroyImageView(k_Device.vkDevice(), m_VkImageView, VK_ALLOC);
     vkFreeMemory(k_Device.vkDevice(), m_VkDeviceMemory, VK_ALLOC);
@@ -27,15 +27,15 @@ Moxaic::VulkanTexture::~VulkanTexture()
         CloseHandle(m_ExternalMemory);
 }
 
-MXC_RESULT Moxaic::VulkanTexture::InitFromImage(VkFormat format,
+MXC_RESULT Vulkan::Texture::InitFromImage(VkFormat format,
                                           VkExtent2D extent,
                                           VkImage image)
 {
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanTexture::InitFromFile(const std::string file,
-                                               const Vulkan::Locality locality)
+MXC_RESULT Vulkan::Texture::InitFromFile(const std::string file,
+                                         const Vulkan::Locality locality)
 {
     int texChannels;
     int width;
@@ -86,7 +86,7 @@ MXC_RESULT Moxaic::VulkanTexture::InitFromFile(const std::string file,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanTexture::InitFromImport(VkFormat format,
+MXC_RESULT Vulkan::Texture::InitFromImport(VkFormat format,
                                            VkExtent2D extent,
                                            VkImageUsageFlags usage,
                                            VkImageAspectFlags aspectMask,
@@ -95,7 +95,7 @@ MXC_RESULT Moxaic::VulkanTexture::InitFromImport(VkFormat format,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
+MXC_RESULT Vulkan::Texture::Init(const VkFormat format,
                                  const VkExtent2D extents,
                                  const VkImageUsageFlags usage,
                                  const VkImageAspectFlags aspectMask,
@@ -179,7 +179,7 @@ MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanTexture::TransitionImmediateInitialToGraphicsRead()
+MXC_RESULT Vulkan::Texture::TransitionImmediateInitialToGraphicsRead()
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -188,7 +188,7 @@ MXC_RESULT Moxaic::VulkanTexture::TransitionImmediateInitialToGraphicsRead()
                                                    m_AspectMask);
 }
 
-MXC_RESULT Moxaic::VulkanTexture::TransitionImmediateInitialToTransferDst()
+MXC_RESULT Vulkan::Texture::TransitionImmediateInitialToTransferDst()
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -197,7 +197,7 @@ MXC_RESULT Moxaic::VulkanTexture::TransitionImmediateInitialToTransferDst()
                                                    m_AspectMask);
 }
 
-MXC_RESULT Moxaic::VulkanTexture::TransitionImmediateTransferDstToGraphicsRead()
+MXC_RESULT Vulkan::Texture::TransitionImmediateTransferDstToGraphicsRead()
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,

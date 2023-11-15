@@ -11,8 +11,6 @@
 
 namespace Moxaic
 {
-    class VulkanDevice;
-
     class Camera
     {
     public:

@@ -41,7 +41,7 @@ static MXC_RESULT StartProcess(STARTUPINFO &si, PROCESS_INFORMATION &pi)
     return MXC_SUCCESS;
 }
 
-CompositorNode::CompositorNode(const VulkanDevice &device)
+CompositorNode::CompositorNode(const Vulkan::Device &device)
         : k_Device(device) {}
 
 CompositorNode::~CompositorNode()
@@ -69,7 +69,7 @@ MXC_RESULT CompositorNode::Init()
     return MXC_SUCCESS;
 }
 
-Node::Node(const VulkanDevice &device)
+Node::Node(const Vulkan::Device &device)
         : k_Device(device) {}
 
 Node::~Node() = default;
@@ -83,7 +83,7 @@ MXC_RESULT Node::Init()
 //    const std::array test{
 //        lambda
 //    };
-    const std::array<InterProcessFunc, 1> targetFuncs {
+    const std::array<InterProcessFunc, 1> targetFuncs{
             TargetFuncImportCompositor
     };
     m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
@@ -91,7 +91,7 @@ MXC_RESULT Node::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Node::InitImport(ImportParam& parameters)
+MXC_RESULT Node::InitImport(ImportParam &parameters)
 {
     return MXC_SUCCESS;
 }

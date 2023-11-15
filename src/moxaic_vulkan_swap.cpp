@@ -90,10 +90,10 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
     return MXC_SUCCESS;
 }
 
-Moxaic::VulkanSwap::VulkanSwap(const Moxaic::VulkanDevice &device)
+Vulkan::Swap::Swap(const Vulkan::Device &device)
         : k_Device(device) {}
 
-Moxaic::VulkanSwap::~VulkanSwap()
+Vulkan::Swap::~Swap()
 {
     vkDestroySemaphore(k_Device.vkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
     vkDestroySemaphore(k_Device.vkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
@@ -103,7 +103,7 @@ Moxaic::VulkanSwap::~VulkanSwap()
     }
 }
 
-MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
+MXC_RESULT Vulkan::Swap::Init(VkExtent2D dimensions, bool computeStorage)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
@@ -254,7 +254,7 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
     return MXC_SUCCESS;
 }
 
-//MXC_RESULT Moxaic::VulkanSwap::AcquireSwap(uint32_t &outSwapIndex)
+//MXC_RESULT Vulkan::VulkanSwap::AcquireSwap(uint32_t &outSwapIndex)
 //{
 //    VK_CHK(vkAcquireNextImageKHR(k_Device.vkDevice(),
 //                                 m_Swapchain,
@@ -265,7 +265,7 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
 //    return MXC_SUCCESS;
 //}
 
-MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
+MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
 {
     VK_CHK(vkAcquireNextImageKHR(k_Device.vkDevice(),
                                  m_VkSwapchain,

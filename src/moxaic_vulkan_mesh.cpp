@@ -3,6 +3,8 @@
 
 #include <glm/glm.hpp>
 
+using namespace Moxaic;
+
 #define PI 3.14159265358979323846f
 
 static int GenerateSphereVertexCount(int nslices, int nstacks)
@@ -15,7 +17,7 @@ static int GenerateSphereIndexCount(int nslices, int nstacks)
     return nslices * nstacks * 2 * 3;
 }
 
-static void GenerateSphere(int nslices, int nstacks, float radius, Moxaic::Vertex *pVertex)
+static void GenerateSphere(int nslices, int nstacks, float radius, Vulkan::Vertex *pVertex)
 {
     float fnslices = (float) nslices;
     float fnstacks = (float) nstacks;
@@ -39,7 +41,7 @@ static void GenerateSphere(int nslices, int nstacks, float radius, Moxaic::Verte
             glm::vec3 normal = {x, y, z};
             glm::vec2 uv = {ji / fnslices, fi / fnstacks};
 
-            Moxaic::Vertex vertexData = {};
+            Vulkan::Vertex vertexData = {};
             vertexData.pos = pos;
             vertexData.normal = normal;
             vertexData.uv = uv;
@@ -70,10 +72,10 @@ static void GenerateSphereIndices(int nslices, int nstacks, uint16_t *pIndices)
     }
 }
 
-Moxaic::VulkanMesh::VulkanMesh(const VulkanDevice &device)
+Vulkan::Mesh::Mesh(const Device &device)
         : k_Device(device) {}
 
-Moxaic::VulkanMesh::~VulkanMesh()
+Vulkan::Mesh::~Mesh()
 {
     vkDestroyBuffer(k_Device.vkDevice(), m_VkIndexBuffer, VK_ALLOC);
     vkFreeMemory(k_Device.vkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
@@ -81,7 +83,7 @@ Moxaic::VulkanMesh::~VulkanMesh()
     vkFreeMemory(k_Device.vkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
 }
 
-MXC_RESULT Moxaic::VulkanMesh::Init()
+MXC_RESULT Vulkan::Mesh::Init()
 {
     const int nSlices = 32;
     const int nStack = 32;
@@ -96,8 +98,8 @@ MXC_RESULT Moxaic::VulkanMesh::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanMesh::CreateVertexBuffer(const Vertex *pVertices,
-                                                  const int vertexCount)
+MXC_RESULT Vulkan::Mesh::CreateVertexBuffer(const Vertex *pVertices,
+                                            const int vertexCount)
 {
     m_VertexCount = vertexCount;
     const VkDeviceSize bufferSize = (sizeof(Vertex) * vertexCount);
@@ -109,8 +111,8 @@ MXC_RESULT Moxaic::VulkanMesh::CreateVertexBuffer(const Vertex *pVertices,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanMesh::CreateIndexBuffer(const uint16_t *pIndices,
-                                                 const int indexCount)
+MXC_RESULT Vulkan::Mesh::CreateIndexBuffer(const uint16_t *pIndices,
+                                           const int indexCount)
 {
     m_IndexCount = indexCount;
     const VkDeviceSize bufferSize = (sizeof(uint16_t) * indexCount);
@@ -121,7 +123,7 @@ MXC_RESULT Moxaic::VulkanMesh::CreateIndexBuffer(const uint16_t *pIndices,
                                                                 m_VkIndexBufferMemory));
     return MXC_SUCCESS;
 }
-void Moxaic::VulkanMesh::RecordRender()
+void Vulkan::Mesh::RecordRender()
 {
     VkBuffer vertexBuffers[] = {m_VkVertexBuffer};
     VkDeviceSize offsets[] = {0};

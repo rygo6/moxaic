@@ -1,6 +1,8 @@
 #include "moxaic_interprocess.hpp"
 #include "moxaic_node.hpp"
 
+using namespace Moxaic;
+
 constexpr std::array k_InterProcessTargetParamSize{
         sizeof(Moxaic::Node::ImportParam),
 };

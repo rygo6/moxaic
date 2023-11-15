@@ -6,16 +6,16 @@
 #include <vulkan/vulkan.h>
 #include <memory>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanTexture;
-    class VulkanDevice;
+    class Texture;
+    class Device;
 
-    class VulkanFramebuffer
+    class Framebuffer
     {
     public:
-        VulkanFramebuffer(const VulkanDevice &device);
-        virtual ~VulkanFramebuffer();
+        Framebuffer(const Device &device);
+        virtual ~Framebuffer();
 
         bool Init(const VkExtent2D extents,
                   const Vulkan::Locality locality);
@@ -31,15 +31,15 @@ namespace Moxaic
         inline const auto &dimensions() const { return m_Dimensions; }
 
     private:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
 
         VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        VulkanTexture m_ColorTexture{k_Device};
-        VulkanTexture m_NormalTexture{k_Device};
-        VulkanTexture m_GBufferTexture{k_Device};
-        VulkanTexture m_DepthTexture{k_Device};
+        Texture m_ColorTexture{k_Device};
+        Texture m_NormalTexture{k_Device};
+        Texture m_GBufferTexture{k_Device};
+        Texture m_DepthTexture{k_Device};
 
         VkExtent2D m_Dimensions;
     };

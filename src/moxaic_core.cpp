@@ -14,7 +14,7 @@ MXC_RESULT Core::Run()
     MXC_CHK(Window::Init());
     MXC_CHK(Vulkan::Init(Window::window(), true));
 
-    auto device = std::make_unique<VulkanDevice>();
+    auto device = std::make_unique<Vulkan::Device>();
     MXC_CHK(device->Init());
 
     auto scene = std::make_unique<Scene>(*device);

@@ -1,4 +1,4 @@
-#include "moxaic_vulkan_timeline_semaphore.hpp"
+#include "moxaic_vulkan_semaphore.hpp"
 #include "moxaic_vulkan_device.hpp"
 
 #include <vulkan/vulkan.h>
@@ -9,10 +9,10 @@
 
 using namespace Moxaic;
 
-Moxaic::VulkanTimelineSemaphore::VulkanTimelineSemaphore(const VulkanDevice &device)
+Vulkan::Semaphore::Semaphore(const Device &device)
         : k_Device(device) {}
 
-Moxaic::VulkanTimelineSemaphore::~VulkanTimelineSemaphore()
+Vulkan::Semaphore::~Semaphore()
 {
     if (m_ExternalHandle != nullptr)
         CloseHandle(m_ExternalHandle);
@@ -20,7 +20,7 @@ Moxaic::VulkanTimelineSemaphore::~VulkanTimelineSemaphore()
     vkDestroySemaphore(k_Device.vkDevice(), m_vkSemaphore, VK_ALLOC);
 }
 
-MXC_RESULT Moxaic::VulkanTimelineSemaphore::Init(bool readOnly, Vulkan::Locality locality)
+MXC_RESULT Vulkan::Semaphore::Init(bool readOnly, Vulkan::Locality locality)
 {
     MXC_LOG("Init VulkanTimelineSemaphore");
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
@@ -66,7 +66,7 @@ MXC_RESULT Moxaic::VulkanTimelineSemaphore::Init(bool readOnly, Vulkan::Locality
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanTimelineSemaphore::Wait()
+MXC_RESULT Vulkan::Semaphore::Wait()
 {
     const VkSemaphoreWaitInfo waitInfo{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,

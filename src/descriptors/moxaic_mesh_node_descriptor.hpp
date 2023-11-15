@@ -2,7 +2,7 @@
 
 #include "moxaic_vulkan_descriptor.hpp"
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
     class MeshNodeDescriptor : public VulkanDescriptorBase<MeshNodeDescriptor>
     {

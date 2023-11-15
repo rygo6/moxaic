@@ -7,7 +7,7 @@
 #include "moxaic_window.hpp"
 
 #include "main.hpp"
-#include "moxaic_vulkan_timeline_semaphore.hpp"
+#include "moxaic_vulkan_semaphore.hpp"
 
 #include <vulkan/vulkan.h>
 #ifdef WIN32
@@ -39,10 +39,10 @@ static MXC_RESULT MemoryTypeFromProperties(const VkPhysicalDeviceMemoryPropertie
     return MXC_FAIL;
 }
 
-Moxaic::VulkanDevice::VulkanDevice() = default;
-Moxaic::VulkanDevice::~VulkanDevice() = default;
+Vulkan::Device::Device() = default;
+Vulkan::Device::~Device() = default;
 
-MXC_RESULT Moxaic::VulkanDevice::PickPhysicalDevice()
+MXC_RESULT Vulkan::Device::PickPhysicalDevice()
 {
     MXC_LOG_FUNCTION();
 
@@ -86,7 +86,7 @@ MXC_RESULT Moxaic::VulkanDevice::PickPhysicalDevice()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::FindQueues()
+MXC_RESULT Vulkan::Device::FindQueues()
 {
     MXC_LOG_FUNCTION();
 
@@ -155,7 +155,7 @@ MXC_RESULT Moxaic::VulkanDevice::FindQueues()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreateDevice()
+MXC_RESULT Vulkan::Device::CreateDevice()
 {
     MXC_LOG_FUNCTION();
 
@@ -321,7 +321,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateDevice()
 }
 
 
-MXC_RESULT Moxaic::VulkanDevice::CreateRenderPass()
+MXC_RESULT Vulkan::Device::CreateRenderPass()
 {
     MXC_LOG_FUNCTION();
 
@@ -435,7 +435,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateRenderPass()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreateCommandBuffers()
+MXC_RESULT Vulkan::Device::CreateCommandBuffers()
 {
     MXC_LOG_FUNCTION();
 
@@ -482,7 +482,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateCommandBuffers()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreatePools()
+MXC_RESULT Vulkan::Device::CreatePools()
 {
     MXC_LOG_FUNCTION();
 
@@ -526,7 +526,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreatePools()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreateSamplers()
+MXC_RESULT Vulkan::Device::CreateSamplers()
 {
     MXC_LOG_FUNCTION();
 
@@ -573,7 +573,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateSamplers()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::Init()
+MXC_RESULT Vulkan::Device::Init()
 {
     MXC_LOG("Init Vulkan Device.");
 
@@ -595,10 +595,10 @@ MXC_RESULT Moxaic::VulkanDevice::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::AllocateBindImage(const VkMemoryPropertyFlags properties,
-                                                   const VkImage image,
-                                                   const VkExternalMemoryHandleTypeFlags externalHandleType,
-                                                   VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Vulkan::Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
+                                             const VkImage image,
+                                             const VkExternalMemoryHandleTypeFlags externalHandleType,
+                                             VkDeviceMemory &outDeviceMemory) const
 {
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
@@ -637,11 +637,11 @@ MXC_RESULT Moxaic::VulkanDevice::AllocateBindImage(const VkMemoryPropertyFlags p
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
-                                                          const VkMemoryPropertyFlags properties,
-                                                          const VkDeviceSize bufferSize,
-                                                          VkBuffer &outBuffer,
-                                                          VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Vulkan::Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
+                                                    const VkMemoryPropertyFlags properties,
+                                                    const VkDeviceSize bufferSize,
+                                                    VkBuffer &outBuffer,
+                                                    VkDeviceMemory &outDeviceMemory) const
 {
     HANDLE tempHandle;
     return CreateAllocateBindBuffer(usage,
@@ -653,13 +653,13 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFla
                                     tempHandle);
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
-                                                          const VkMemoryPropertyFlags properties,
-                                                          const VkDeviceSize bufferSize,
-                                                          const Vulkan::Locality locality,
-                                                          VkBuffer &outBuffer,
-                                                          VkDeviceMemory &outDeviceMemory,
-                                                          HANDLE &outExternalMemory) const
+MXC_RESULT Vulkan::Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
+                                                    const VkMemoryPropertyFlags properties,
+                                                    const VkDeviceSize bufferSize,
+                                                    const Vulkan::Locality locality,
+                                                    VkBuffer &outBuffer,
+                                                    VkDeviceMemory &outDeviceMemory,
+                                                    HANDLE &outExternalMemory) const
 {
     const VkExternalMemoryHandleTypeFlagBits externalHandleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR;
     const VkExternalMemoryBufferCreateInfoKHR externalBufferInfo = {
@@ -743,10 +743,10 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFla
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreateStagingBuffer(const void *srcData,
-                                                     const VkDeviceSize bufferSize,
-                                                     VkBuffer &outStagingBuffer,
-                                                     VkDeviceMemory &outStagingBufferMemory) const
+MXC_RESULT Vulkan::Device::CreateStagingBuffer(const void *srcData,
+                                               const VkDeviceSize bufferSize,
+                                               VkBuffer &outStagingBuffer,
+                                               VkDeviceMemory &outStagingBufferMemory) const
 {
     MXC_CHK(CreateAllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -760,9 +760,9 @@ MXC_RESULT Moxaic::VulkanDevice::CreateStagingBuffer(const void *srcData,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CopyBufferToBuffer(const VkDeviceSize bufferSize,
-                                                    const VkBuffer srcBuffer,
-                                                    VkBuffer dstBuffer) const
+MXC_RESULT Vulkan::Device::CopyBufferToBuffer(const VkDeviceSize bufferSize,
+                                              const VkBuffer srcBuffer,
+                                              VkBuffer dstBuffer) const
 {
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
@@ -780,9 +780,9 @@ MXC_RESULT Moxaic::VulkanDevice::CopyBufferToBuffer(const VkDeviceSize bufferSiz
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CopyBufferToImage(const VkExtent2D imageExtent,
-                                                   const VkBuffer srcBuffer,
-                                                   VkImage dstImage) const
+MXC_RESULT Vulkan::Device::CopyBufferToImage(const VkExtent2D imageExtent,
+                                             const VkBuffer srcBuffer,
+                                             VkImage dstImage) const
 {
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
@@ -812,11 +812,11 @@ MXC_RESULT Moxaic::VulkanDevice::CopyBufferToImage(const VkExtent2D imageExtent,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindPopulateBufferViaStaging(const void *srcData,
-                                                                            const VkBufferUsageFlagBits usage,
-                                                                            const VkDeviceSize bufferSize,
-                                                                            VkBuffer &outBuffer,
-                                                                            VkDeviceMemory &outBufferMemory) const
+MXC_RESULT Vulkan::Device::CreateAllocateBindPopulateBufferViaStaging(const void *srcData,
+                                                                      const VkBufferUsageFlagBits usage,
+                                                                      const VkDeviceSize bufferSize,
+                                                                      VkBuffer &outBuffer,
+                                                                      VkDeviceMemory &outBufferMemory) const
 {
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
@@ -843,14 +843,14 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindPopulateBufferViaStaging(cons
 
 // TODO implemented for unified graphics + transfer only right now
 //  https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies
-MXC_RESULT Moxaic::VulkanDevice::TransitionImageLayoutImmediate(VkImage image,
-                                                                VkImageLayout oldLayout,
-                                                                VkImageLayout newLayout,
-                                                                VkAccessFlags srcAccessMask,
-                                                                VkAccessFlags dstAccessMask,
-                                                                VkPipelineStageFlags srcStageMask,
-                                                                VkPipelineStageFlags dstStageMask,
-                                                                VkImageAspectFlags aspectMask) const
+MXC_RESULT Vulkan::Device::TransitionImageLayoutImmediate(VkImage image,
+                                                          VkImageLayout oldLayout,
+                                                          VkImageLayout newLayout,
+                                                          VkAccessFlags srcAccessMask,
+                                                          VkAccessFlags dstAccessMask,
+                                                          VkPipelineStageFlags srcStageMask,
+                                                          VkPipelineStageFlags dstStageMask,
+                                                          VkImageAspectFlags aspectMask) const
 {
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
@@ -883,7 +883,7 @@ MXC_RESULT Moxaic::VulkanDevice::TransitionImageLayoutImmediate(VkImage image,
 }
 
 // TODO make use transfer queue
-MXC_RESULT Moxaic::VulkanDevice::BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const
+MXC_RESULT Vulkan::Device::BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const
 {
     const VkCommandBufferAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -907,7 +907,7 @@ MXC_RESULT Moxaic::VulkanDevice::BeginImmediateCommandBuffer(VkCommandBuffer &ou
 }
 
 // TODO make use transfer queue
-MXC_RESULT Moxaic::VulkanDevice::EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const
+MXC_RESULT Vulkan::Device::EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const
 {
     VK_CHK(vkEndCommandBuffer(commandBuffer));
     const VkSubmitInfo submitInfo = {
@@ -933,7 +933,7 @@ MXC_RESULT Moxaic::VulkanDevice::EndImmediateCommandBuffer(const VkCommandBuffer
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
+MXC_RESULT Vulkan::Device::BeginGraphicsCommandBuffer() const
 {
     VK_CHK(vkResetCommandBuffer(m_VkGraphicsCommandBuffer,
                                 VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
@@ -968,13 +968,13 @@ MXC_RESULT Moxaic::VulkanDevice::BeginGraphicsCommandBuffer() const
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::EndGraphicsCommandBuffer() const
+MXC_RESULT Vulkan::Device::EndGraphicsCommandBuffer() const
 {
     VK_CHK(vkEndCommandBuffer(m_VkGraphicsCommandBuffer));
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::BeginRenderPass(const VulkanFramebuffer &framebuffer) const
+MXC_RESULT Vulkan::Device::BeginRenderPass(const Framebuffer &framebuffer) const
 {
     std::array<VkClearValue, 4> clearValues;
     clearValues[0].color = (VkClearColorValue) {{0.1f, 0.2f, 0.3f, 0.0f}};
@@ -999,13 +999,13 @@ MXC_RESULT Moxaic::VulkanDevice::BeginRenderPass(const VulkanFramebuffer &frameb
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::EndRenderPass() const
+MXC_RESULT Vulkan::Device::EndRenderPass() const
 {
     vkCmdEndRenderPass(m_VkGraphicsCommandBuffer);
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Moxaic::VulkanDevice::SubmitGraphicsQueueAndPresent(VulkanTimelineSemaphore &timelineSemaphore, const VulkanSwap &swap) const
+MXC_RESULT Vulkan::Device::SubmitGraphicsQueueAndPresent(Semaphore &timelineSemaphore, const Swap &swap) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
     const uint64_t waitValue = timelineSemaphore.waitValue();

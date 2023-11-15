@@ -4,14 +4,14 @@
 
 #include "../moxaic_vulkan_texture.hpp"
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
     class MaterialDescriptor : public VulkanDescriptorBase<MaterialDescriptor>
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
-        MXC_RESULT Init(const VulkanTexture &texture)
+        MXC_RESULT Init(const Texture &texture)
         {
             MXC_LOG("Init MaterialDescriptor");
 

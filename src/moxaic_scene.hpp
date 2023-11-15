@@ -7,7 +7,7 @@
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_swap.hpp"
-#include "moxaic_vulkan_timeline_semaphore.hpp"
+#include "moxaic_vulkan_semaphore.hpp"
 #include "moxaic_vulkan_mesh.hpp"
 #include "moxaic_node.hpp"
 
@@ -19,32 +19,30 @@
 
 namespace Moxaic
 {
-    class VulkanDevice;
-
     class Scene
     {
     public:
-        Scene(const VulkanDevice &device);
+        Scene(const Vulkan::Device &device);
         virtual ~Scene() = default;
 
         MXC_RESULT Init();
         MXC_RESULT Loop(const uint32_t deltaTime);
 
     private:
-        const VulkanDevice &device;
+        const Vulkan::Device &device;
 
-        VulkanFramebuffer framebuffer{device};
-        VulkanSwap swap{device};
-        VulkanTimelineSemaphore timelineSemaphore{device};
-        VulkanMesh mesh{device};
-        VulkanTexture texture{device};
+        Vulkan::Framebuffer framebuffer{device};
+        Vulkan::Swap swap{device};
+        Vulkan::Semaphore timelineSemaphore{device};
+        Vulkan::Mesh mesh{device};
+        Vulkan::Texture texture{device};
 
         CompositorNode compositorNode{device};
 
-        StandardPipeline standardPipeline{device};
-        GlobalDescriptor globalDescriptor{device};
-        MaterialDescriptor materialDescriptor{device};
-        ObjectDescriptor objectDescriptor{device};
+        Vulkan::StandardPipeline standardPipeline{device};
+        Vulkan::GlobalDescriptor globalDescriptor{device};
+        Vulkan::MaterialDescriptor materialDescriptor{device};
+        Vulkan::ObjectDescriptor objectDescriptor{device};
 
         Camera camera{};
 

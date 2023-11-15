@@ -5,22 +5,22 @@
 #include <vulkan/vulkan.h>
 #include <array>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    class VulkanDevice;
-    class VulkanTexture;
+    class Device;
+    class Texture;
 
     const uint32_t k_SwapCount = 2;
 
-    class VulkanSwap
+    class Swap
     {
     public:
-        VulkanSwap(const VulkanDevice &device);
-        virtual ~VulkanSwap();
+        Swap(const Device &device);
+        virtual ~Swap();
 
         MXC_RESULT Init(VkExtent2D dimensions, bool computeStorage);
 
-        MXC_RESULT BlitToSwap(const VulkanTexture &srcTexture);
+        MXC_RESULT BlitToSwap(const Texture &srcTexture);
 
         inline auto vkSwapchain() const { return m_VkSwapchain; }
         inline auto vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
@@ -31,7 +31,7 @@ namespace Moxaic
         inline auto format() const { return m_Format; }
 
     private:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
 
         VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};

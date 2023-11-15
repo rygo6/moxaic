@@ -11,7 +11,7 @@
 #include <array>
 #include <string>
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
     static MXC_RESULT AllocReadFile(const char *filename,
                                     uint32_t *length,
@@ -39,7 +39,7 @@ namespace Moxaic
     class VulkanPipeline
     {
     public:
-        VulkanPipeline(const VulkanDevice &device)
+        VulkanPipeline(const Device &device)
                 : k_Device(device) {}
 
         virtual ~VulkanPipeline()
@@ -59,7 +59,7 @@ namespace Moxaic
 //        inline VkPipelineLayout vkPipelineLayout() const { return s_VkPipelineLayout; }
 //        inline auto vkPipeline() const { return m_VkPipeline; }
     protected:
-        const VulkanDevice &k_Device;
+        const Device &k_Device;
         inline static VkPipelineLayout s_VkPipelineLayout = VK_NULL_HANDLE;
         VkPipeline m_VkPipeline{VK_NULL_HANDLE};
 
