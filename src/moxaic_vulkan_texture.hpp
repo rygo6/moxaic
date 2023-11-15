@@ -24,7 +24,7 @@ namespace Moxaic
                                  VkImage image);
 
         MXC_RESULT InitFromFile(const std::string file,
-                                const Locality locality);
+                                const Vulkan::Locality locality);
 
         MXC_RESULT InitFromImport(VkFormat format,
                                   VkExtent2D extent,
@@ -36,7 +36,7 @@ namespace Moxaic
                         const VkExtent2D extents,
                         const VkImageUsageFlags usage,
                         const VkImageAspectFlags aspectMask,
-                        const Locality locality);
+                        const Vulkan::Locality locality);
 
         MXC_RESULT TransitionImmediateInitialToGraphicsRead();
 

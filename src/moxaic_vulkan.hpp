@@ -20,15 +20,15 @@ inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 
 #define VK_CHK(command) \
 ({ \
-    Moxaic::VkDebug.VulkanDebugLine = __LINE__; \
-    Moxaic::VkDebug.VulkanDebugFile = MXC_FILE_NO_PATH; \
-    Moxaic::VkDebug.VulkanDebugCommand = #command; \
+    Moxaic::Vulkan::VkDebug.DebugLine = __LINE__; \
+    Moxaic::Vulkan::VkDebug.DebugFile = MXC_FILE_NO_PATH; \
+    Moxaic::Vulkan::VkDebug.DebugCommand = #command; \
     VkResult result = command; \
     if (result != VK_SUCCESS) [[unlikely]] { \
         printf("(%s:%d) VKCheck fail on command: %s - %s\n", \
-                Moxaic::VkDebug.VulkanDebugFile, \
-                Moxaic::VkDebug.VulkanDebugLine, \
-                Moxaic::VkDebug.VulkanDebugCommand, \
+                Moxaic::Vulkan::VkDebug.DebugFile, \
+                Moxaic::Vulkan::VkDebug.DebugLine, \
+                Moxaic::Vulkan::VkDebug.DebugCommand, \
                 string_VkResult(result)); \
         return false; \
     } \
@@ -36,22 +36,22 @@ inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 
 #define VK_CHK_VOID(command) \
 ({ \
-    Moxaic::VkDebug.VulkanDebugLine = __LINE__; \
-    Moxaic::VkDebug.VulkanDebugFile = MXC_FILE_NO_PATH; \
-    Moxaic::VkDebug.VulkanDebugCommand = #command; \
+    Moxaic::Vulkan::VkDebug.DebugLine = __LINE__; \
+    Moxaic::Vulkan::VkDebug.DebugFile = MXC_FILE_NO_PATH; \
+    Moxaic::Vulkan::VkDebug.DebugCommand = #command; \
     command; \
 })
 
-namespace Moxaic
+namespace Moxaic::Vulkan
 {
-    bool VulkanInit(SDL_Window *pWindow, bool enableValidationLayers);
+    bool Init(SDL_Window *pWindow, bool enableValidationLayers);
 
     VkInstance vkInstance();
 
     // should surface move into swap class?! or device class?
     VkSurfaceKHR vkSurface();
 
-    inline constinit VkImageSubresourceRange k_DefaultColorSubresourceRange {
+    inline constinit VkImageSubresourceRange defaultColorSubresourceRange {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = 0,
             .levelCount = 1,
@@ -59,7 +59,7 @@ namespace Moxaic
             .layerCount = 1,
     };
 
-    enum Locality : char
+    enum class Locality : char
     {
         Local,
         External,
@@ -68,25 +68,26 @@ namespace Moxaic
     inline const char *string_BufferLocality(Locality input_value)
     {
         switch (input_value) {
-            case Local:
+            case Locality::Local:
                 return "Local";
-            case External:
+            case Locality::External:
                 return "External";
             default:
                 return "Unknown Locality";
         }
     }
 
-    struct VulkanDebug
+    struct Debug
     {
-        int VulkanDebugLine;
-        const char *VulkanDebugCommand;
-        const char *VulkanDebugFile;
+        int DebugLine;
+        const char *DebugCommand;
+        const char *DebugFile;
     };
 
-    extern struct VulkanDebug VkDebug;
+    extern struct Debug VkDebug;
 
-    struct VulkanFunc
+    //inline?
+    struct Func
     {
 #define VK_FUNCS \
         VK_FUNC(GetMemoryWin32HandleKHR) \
@@ -98,5 +99,5 @@ namespace Moxaic
 #undef VK_FUNC
     };
 
-    extern struct VulkanFunc VkFunc;
+    extern struct Func VkFunc;
 }

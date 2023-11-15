@@ -14,7 +14,7 @@ Moxaic::VulkanFramebuffer::VulkanFramebuffer(const Moxaic::VulkanDevice &device)
 Moxaic::VulkanFramebuffer::~VulkanFramebuffer() = default;
 
 bool Moxaic::VulkanFramebuffer::Init(const VkExtent2D extents,
-                                     const Locality locality)
+                                     const Vulkan::Locality locality)
 {
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
                                 extents,

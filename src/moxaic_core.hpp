@@ -2,8 +2,7 @@
 
 #include "moxaic_logging.hpp"
 
-namespace Moxaic
+namespace Moxaic::Core
 {
-    MXC_RESULT CoreInit();
-    MXC_RESULT CoreLoop();
+    MXC_RESULT Run();
 }

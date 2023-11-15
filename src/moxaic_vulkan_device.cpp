@@ -47,13 +47,13 @@ MXC_RESULT Moxaic::VulkanDevice::PickPhysicalDevice()
     MXC_LOG_FUNCTION();
 
     uint32_t deviceCount = 0;
-    VK_CHK(vkEnumeratePhysicalDevices(vkInstance(), &deviceCount, nullptr));
+    VK_CHK(vkEnumeratePhysicalDevices(Vulkan::vkInstance(), &deviceCount, nullptr));
     if (deviceCount == 0) {
         MXC_LOG_ERROR("Failed to find GPUs with Vulkan support!");
         return MXC_FAIL;
     }
     std::vector<VkPhysicalDevice> devices(deviceCount);
-    VK_CHK(vkEnumeratePhysicalDevices(vkInstance(), &deviceCount, devices.data()));
+    VK_CHK(vkEnumeratePhysicalDevices(Vulkan::vkInstance(), &deviceCount, devices.data()));
 
     // Todo Implement Query OpenVR for the physical vkDevice to use
     m_VkPhysicalDevice = devices.front();
@@ -120,7 +120,7 @@ MXC_RESULT Moxaic::VulkanDevice::FindQueues()
         VkBool32 presentSupport = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice,
                                              i,
-                                             vkSurface(),
+                                             Vulkan::vkSurface(),
                                              &presentSupport);
 
         if (!foundGraphics && graphicsSupport && presentSupport) {
@@ -577,8 +577,8 @@ MXC_RESULT Moxaic::VulkanDevice::Init()
 {
     MXC_LOG("Init Vulkan Device.");
 
-    SDL_assert_always(vkInstance() != VK_NULL_HANDLE);
-    SDL_assert_always(vkSurface() != VK_NULL_HANDLE);
+    SDL_assert_always(Vulkan::vkInstance() != VK_NULL_HANDLE);
+    SDL_assert_always(Vulkan::vkSurface() != VK_NULL_HANDLE);
 
     MXC_CHK(PickPhysicalDevice());
     MXC_CHK(FindQueues());
@@ -644,13 +644,19 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFla
                                                           VkDeviceMemory &outDeviceMemory) const
 {
     HANDLE tempHandle;
-    return CreateAllocateBindBuffer(usage, properties, bufferSize, Local, outBuffer, outDeviceMemory, tempHandle);
+    return CreateAllocateBindBuffer(usage,
+                                    properties,
+                                    bufferSize,
+                                    Vulkan::Locality::Local,
+                                    outBuffer,
+                                    outDeviceMemory,
+                                    tempHandle);
 }
 
 MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
                                                           const VkMemoryPropertyFlags properties,
                                                           const VkDeviceSize bufferSize,
-                                                          const Locality locality,
+                                                          const Vulkan::Locality locality,
                                                           VkBuffer &outBuffer,
                                                           VkDeviceMemory &outDeviceMemory,
                                                           HANDLE &outExternalMemory) const
@@ -663,7 +669,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFla
     };
     const VkBufferCreateInfo bufferCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .pNext = locality == Local ? nullptr : &externalBufferInfo,
+            .pNext = locality == Vulkan::Locality::Local ? nullptr : &externalBufferInfo,
             .flags = 0,
             .size = bufferSize,
             .usage = usage,
@@ -707,7 +713,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFla
     };
     const VkMemoryAllocateInfo allocInfo = {
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = locality == Local ? nullptr : &exportAllocInfo,
+            .pNext = locality == Vulkan::Locality::Local ? nullptr : &exportAllocInfo,
             .allocationSize = memRequirements.size,
             .memoryTypeIndex = memTypeIndex
     };
@@ -720,7 +726,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFla
                               outDeviceMemory,
                               0));
 
-    if (locality == Locality::External) {
+    if (locality == Vulkan::Locality::External) {
 #if WIN32
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
                 .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
@@ -728,7 +734,7 @@ MXC_RESULT Moxaic::VulkanDevice::CreateAllocateBindBuffer(const VkBufferUsageFla
                 .memory = outDeviceMemory,
                 .handleType = externalHandleType
         };
-        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(m_VkDevice,
+        VK_CHK(Vulkan::VkFunc.GetMemoryWin32HandleKHR(m_VkDevice,
                                               &getWin32HandleInfo,
                                               &outExternalMemory));
 #endif

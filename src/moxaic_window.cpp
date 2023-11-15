@@ -61,6 +61,9 @@ bool Window::Init()
                                     SDL_WINDOWPOS_CENTERED,
                                     k_DefaultWidth, k_DefaultHeight,
                                     SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
+    int x, y;
+    SDL_GetWindowPosition(g_pSDLWindow, &x, &y);
+    SDL_SetWindowPosition(g_pSDLWindow, x + (g_Role == Role::Compositor ? -(int)(k_DefaultWidth / 2) : (int)(k_DefaultWidth / 2)), y);
     g_WindowDimensions = VkExtent2D{k_DefaultWidth, k_DefaultHeight};
     return g_pSDLWindow != nullptr;
 }

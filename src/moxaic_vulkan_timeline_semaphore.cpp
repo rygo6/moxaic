@@ -7,6 +7,8 @@
 #define MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #endif
 
+using namespace Moxaic;
+
 Moxaic::VulkanTimelineSemaphore::VulkanTimelineSemaphore(const VulkanDevice &device)
         : k_Device(device) {}
 
@@ -18,7 +20,7 @@ Moxaic::VulkanTimelineSemaphore::~VulkanTimelineSemaphore()
     vkDestroySemaphore(k_Device.vkDevice(), m_vkSemaphore, VK_ALLOC);
 }
 
-MXC_RESULT Moxaic::VulkanTimelineSemaphore::Init(bool readOnly, Locality locality)
+MXC_RESULT Moxaic::VulkanTimelineSemaphore::Init(bool readOnly, Vulkan::Locality locality)
 {
     MXC_LOG("Init VulkanTimelineSemaphore");
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
@@ -32,7 +34,7 @@ MXC_RESULT Moxaic::VulkanTimelineSemaphore::Init(bool readOnly, Locality localit
     };
     const VkExportSemaphoreCreateInfo exportSemaphoreCreateInfo{
             .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
-            .pNext = locality == Locality::External ? &exportSemaphoreWin32HandleInfo : nullptr,
+            .pNext = locality == Vulkan::Locality::External ? &exportSemaphoreWin32HandleInfo : nullptr,
             .handleTypes = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
     };
     const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo{
@@ -50,14 +52,14 @@ MXC_RESULT Moxaic::VulkanTimelineSemaphore::Init(bool readOnly, Locality localit
                              &timelineSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_vkSemaphore));
-    if (locality == Locality::External) {
+    if (locality == Vulkan::Locality::External) {
         const VkSemaphoreGetWin32HandleInfoKHR semaphoreGetWin32HandleInfo{
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
                 .pNext = nullptr,
                 .semaphore = m_vkSemaphore,
                 .handleType = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
         };
-        VK_CHK(VkFunc.GetSemaphoreWin32HandleKHR(k_Device.vkDevice(),
+        VK_CHK(Vulkan::VkFunc.GetSemaphoreWin32HandleKHR(k_Device.vkDevice(),
                                                  &semaphoreGetWin32HandleInfo,
                                                  &m_ExternalHandle));
     }

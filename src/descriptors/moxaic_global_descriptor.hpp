@@ -46,7 +46,7 @@ namespace Moxaic
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                   Locality::Local));
+                                   Vulkan::Locality::Local));
             m_Uniform.Mapped().width = dimensions.width;
             m_Uniform.Mapped().height = dimensions.height;
             m_Uniform.Mapped().proj = camera.projection();

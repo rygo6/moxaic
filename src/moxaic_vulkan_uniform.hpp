@@ -37,7 +37,7 @@ namespace Moxaic
 
         bool Init(const VkMemoryPropertyFlags properties,
                   const VkBufferUsageFlags usage,
-                  const Locality locality)
+                  const Vulkan::Locality locality)
         {
             MXC_LOG("Init Uniform:",
                     string_VkMemoryPropertyFlags(properties),

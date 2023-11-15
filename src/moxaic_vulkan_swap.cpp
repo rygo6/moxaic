@@ -6,16 +6,18 @@
 
 #include <vulkan/vk_enum_string_helper.h>
 
+using namespace Moxaic;
+
 static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice, VkPresentModeKHR &outPresentMode)
 {
     uint32_t presentModeCount;
     VK_CHK(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice,
-                                                     Moxaic::vkSurface(),
+                                                     Vulkan::vkSurface(),
                                                      &presentModeCount,
                                                      nullptr));
     VkPresentModeKHR presentModes[presentModeCount];
     VK_CHK(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice,
-                                                     Moxaic::vkSurface(),
+                                                     Vulkan::vkSurface(),
                                                      &presentModeCount,
                                                      (VkPresentModeKHR *) &presentModes));
 
@@ -60,12 +62,12 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
 {
     uint32_t formatCount;
     VK_CHK(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice,
-                                                Moxaic::vkSurface(),
+                                                Vulkan::vkSurface(),
                                                 &formatCount,
                                                 nullptr));
     VkSurfaceFormatKHR formats[formatCount];
     VK_CHK(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice,
-                                                Moxaic::vkSurface(),
+                                                Vulkan::vkSurface(),
                                                 &formatCount,
                                                 (VkSurfaceFormatKHR *) &formats));
 
@@ -106,7 +108,7 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
     VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(k_Device.vkPhysicalDevice(),
-                                                     Moxaic::vkSurface(),
+                                                     Vulkan::vkSurface(),
                                                      &capabilities));
 
     // I am setting this to 2 on the premise you get the least latency in VR.
@@ -126,7 +128,7 @@ MXC_RESULT Moxaic::VulkanSwap::Init(VkExtent2D dimensions, bool computeStorage)
     VkSwapchainCreateInfoKHR createInfo = {
             .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .pNext = VK_NULL_HANDLE,
-            .surface = Moxaic::vkSurface(),
+            .surface = Vulkan::vkSurface(),
             .minImageCount = k_SwapCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
@@ -283,7 +285,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .image = srcImage,
-                    .subresourceRange = k_DefaultColorSubresourceRange,
+                    .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
             (VkImageMemoryBarrier) {
                     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -294,7 +296,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .image = m_VkSwapImages[m_BlitIndex],
-                    .subresourceRange = k_DefaultColorSubresourceRange,
+                    .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
     };
     vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
@@ -347,7 +349,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .image = srcImage,
-                    .subresourceRange = k_DefaultColorSubresourceRange,
+                    .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
             (VkImageMemoryBarrier) {
                     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -358,7 +360,7 @@ MXC_RESULT Moxaic::VulkanSwap::BlitToSwap(const VulkanTexture &srcTexture)
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .image = m_VkSwapImages[m_BlitIndex],
-                    .subresourceRange = k_DefaultColorSubresourceRange,
+                    .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
     };
     vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),

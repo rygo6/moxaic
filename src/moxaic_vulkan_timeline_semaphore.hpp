@@ -20,7 +20,7 @@ namespace Moxaic
         VulkanTimelineSemaphore(const VulkanDevice &device);
         virtual ~VulkanTimelineSemaphore();
 
-        MXC_RESULT Init(bool readOnly, Locality locality);
+        MXC_RESULT Init(bool readOnly, Vulkan::Locality locality);
 
         MXC_RESULT Wait();
 

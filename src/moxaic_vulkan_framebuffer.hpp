@@ -15,11 +15,10 @@ namespace Moxaic
     {
     public:
         VulkanFramebuffer(const VulkanDevice &device);
-        VulkanFramebuffer(const VulkanDevice &&) = delete;  // prevents rvalue binding?
         virtual ~VulkanFramebuffer();
 
         bool Init(const VkExtent2D extents,
-                  const Locality locality);
+                  const Vulkan::Locality locality);
 
         inline auto vkFramebuffer() const { return m_VkFramebuffer; }
         inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }

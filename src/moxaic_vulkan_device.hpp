@@ -40,7 +40,7 @@ namespace Moxaic
         MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
                                             const VkMemoryPropertyFlags properties,
                                             const VkDeviceSize bufferSize,
-                                            const Locality locality,
+                                            const Vulkan::Locality locality,
                                             VkBuffer &outBuffer,
                                             VkDeviceMemory &outDeviceMemory,
                                             HANDLE &outExternalMemory) const;

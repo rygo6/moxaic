@@ -54,14 +54,14 @@ CompositorNode::~CompositorNode()
 MXC_RESULT CompositorNode::Init()
 {
     MXC_CHK(m_ExportedNodeSemaphore.Init(false,
-                                         Locality::External));
+                                         Vulkan::Locality::External));
 
     m_IPCToNode.Init(k_TempSharedProducerName);
     m_ExportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
 
     for (int i = 0; i < m_ExportedFramebuffers.size(); ++i) {
         m_ExportedFramebuffers[i].Init(Window::extents(),
-                                       Locality::External);
+                                       Vulkan::Locality::External);
     }
 
     StartProcess(m_Startupinfo, m_ProcessInformation);

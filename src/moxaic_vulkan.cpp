@@ -14,8 +14,10 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-Moxaic::VulkanFunc Moxaic::VkFunc;
-Moxaic::VulkanDebug Moxaic::VkDebug;
+using namespace Moxaic;
+
+Vulkan::Func Vulkan::VkFunc;
+Vulkan::Debug Vulkan::VkDebug;
 
 static VkInstance g_VulkanInstance;
 static VkSurfaceKHR g_VulkanSurface;
@@ -43,9 +45,9 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
 {
     printf("%s(%s:%d) %s\n%s\n",
            SeverityToName(messageSeverity),
-           Moxaic::VkDebug.VulkanDebugFile,
-           Moxaic::VkDebug.VulkanDebugLine,
-           Moxaic::VkDebug.VulkanDebugCommand,
+           Vulkan::VkDebug.DebugFile,
+           Vulkan::VkDebug.DebugLine,
+           Vulkan::VkDebug.DebugCommand,
            pCallbackData->pMessage);
     return VK_FALSE;
 }
@@ -157,8 +159,8 @@ static bool LoadVulkanFunctionPointers()
 
 #define VK_FUNC(func) \
     MXC_LOG(#func); \
-    Moxaic::VkFunc.func = (PFN_vk##func) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#func); \
-    if (Moxaic::VkFunc.func == nullptr) { \
+    Moxaic::Vulkan::VkFunc.func = (PFN_vk##func) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#func); \
+    if (Moxaic::Vulkan::VkFunc.func == nullptr) { \
         MXC_LOG_ERROR("Load Fail: ", #func); \
         return false; \
     }
@@ -182,7 +184,7 @@ static bool CreateVulkanDebugOutput()
                            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
             .pfnUserCallback = DebugCallback,
     };
-    VK_CHK(Moxaic::VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
+    VK_CHK(Vulkan::VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
                                                        &debugUtilsMessengerCreateInfo,
                                                        VK_ALLOC,
                                                        &g_VulkanDebugMessenger));
@@ -190,7 +192,7 @@ static bool CreateVulkanDebugOutput()
     return true;
 }
 
-bool Moxaic::VulkanInit(SDL_Window *const pWindow, const bool enableValidationLayers)
+bool Vulkan::Init(SDL_Window *const pWindow, const bool enableValidationLayers)
 {
     MXC_LOG_FUNCTION();
 
@@ -208,13 +210,13 @@ bool Moxaic::VulkanInit(SDL_Window *const pWindow, const bool enableValidationLa
     return true;
 }
 
-VkInstance Moxaic::vkInstance()
+VkInstance Vulkan::vkInstance()
 {
     assert((g_VulkanInstance != nullptr) && "Vulkan not initialized!");
     return g_VulkanInstance;
 }
 
-VkSurfaceKHR Moxaic::vkSurface()
+VkSurfaceKHR Vulkan::vkSurface()
 {
     assert((g_VulkanSurface != nullptr) && "Vulkan not initialized!");
     return g_VulkanSurface;

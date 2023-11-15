@@ -13,6 +13,8 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
+using namespace Moxaic;
+
 Moxaic::VulkanTexture::VulkanTexture(const VulkanDevice &device)
         : k_Device(device) {}
 
@@ -33,7 +35,7 @@ MXC_RESULT Moxaic::VulkanTexture::InitFromImage(VkFormat format,
 }
 
 MXC_RESULT Moxaic::VulkanTexture::InitFromFile(const std::string file,
-                                               const Moxaic::Locality locality)
+                                               const Vulkan::Locality locality)
 {
     int texChannels;
     int width;
@@ -97,7 +99,7 @@ MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
                                  const VkExtent2D extents,
                                  const VkImageUsageFlags usage,
                                  const VkImageAspectFlags aspectMask,
-                                 const Locality locality)
+                                 const Vulkan::Locality locality)
 {
     MXC_LOG("CreateTexture:",
             string_VkFormat(format),
@@ -112,7 +114,7 @@ MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
     };
     const VkImageCreateInfo imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == External ? &externalImageInfo : nullptr,
+            .pNext = locality == Vulkan::Locality::External ? &externalImageInfo : nullptr,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = format,
             .extent = {extents.width, extents.height, 1},
@@ -132,7 +134,7 @@ MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
                          &m_VkImage));
     MXC_CHK(k_Device.AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                        m_VkImage,
-                                       locality == External ? externalHandleType : 0,
+                                       locality == Vulkan::Locality::External ? externalHandleType : 0,
                                        m_VkDeviceMemory));
     const VkImageViewCreateInfo imageViewCreateInfo{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -159,7 +161,7 @@ MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
                              &imageViewCreateInfo,
                              VK_ALLOC,
                              &m_VkImageView));
-    if (locality == External) {
+    if (locality == Vulkan::Locality::External) {
 #if WIN32
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
                 .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
@@ -167,7 +169,7 @@ MXC_RESULT Moxaic::VulkanTexture::Init(const VkFormat format,
                 .memory = m_VkDeviceMemory,
                 .handleType = externalHandleType
         };
-        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
+        VK_CHK(Vulkan::VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
                                               &getWin32HandleInfo,
                                               &m_ExternalMemory));
 #endif
