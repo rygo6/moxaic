@@ -988,7 +988,7 @@ MXC_RESULT Vulkan::Device::BeginRenderPass(const Framebuffer &framebuffer) const
             .framebuffer = framebuffer.vkFramebuffer(),
             .renderArea = {
                     .offset = {0, 0},
-                    .extent = framebuffer.dimensions(),
+                    .extent = framebuffer.extents(),
             },
             .clearValueCount = clearValues.size(),
             .pClearValues = clearValues.data(),

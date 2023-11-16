@@ -66,6 +66,6 @@ bool Vulkan::Framebuffer::Init(const VkExtent2D extents,
             .flags = 0,
     };
     VK_CHK(vkCreateSemaphore(k_Device.vkDevice(), &renderCompleteCreateInfo, VK_ALLOC, &m_VkRenderCompleteSemaphore));
-    m_Dimensions = extents;
+    m_Extents = extents;
     return true;
 }

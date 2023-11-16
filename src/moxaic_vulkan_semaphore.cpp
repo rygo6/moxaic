@@ -8,11 +8,12 @@
 #endif
 
 using namespace Moxaic;
+using namespace Moxaic::Vulkan;
 
-Vulkan::Semaphore::Semaphore(const Device &device)
+Semaphore::Semaphore(const Device &device)
         : k_Device(device) {}
 
-Vulkan::Semaphore::~Semaphore()
+Semaphore::~Semaphore()
 {
     if (m_ExternalHandle != nullptr)
         CloseHandle(m_ExternalHandle);
@@ -20,7 +21,7 @@ Vulkan::Semaphore::~Semaphore()
     vkDestroySemaphore(k_Device.vkDevice(), m_vkSemaphore, VK_ALLOC);
 }
 
-MXC_RESULT Vulkan::Semaphore::Init(bool readOnly, Vulkan::Locality locality)
+MXC_RESULT Semaphore::Init(bool readOnly, Locality locality)
 {
     MXC_LOG("Init VulkanTimelineSemaphore");
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
@@ -34,7 +35,7 @@ MXC_RESULT Vulkan::Semaphore::Init(bool readOnly, Vulkan::Locality locality)
     };
     const VkExportSemaphoreCreateInfo exportSemaphoreCreateInfo{
             .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
-            .pNext = locality == Vulkan::Locality::External ? &exportSemaphoreWin32HandleInfo : nullptr,
+            .pNext = locality == Locality::External ? &exportSemaphoreWin32HandleInfo : nullptr,
             .handleTypes = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
     };
     const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo{
@@ -52,7 +53,7 @@ MXC_RESULT Vulkan::Semaphore::Init(bool readOnly, Vulkan::Locality locality)
                              &timelineSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_vkSemaphore));
-    if (locality == Vulkan::Locality::External) {
+    if (locality == Locality::External) {
         const VkSemaphoreGetWin32HandleInfoKHR semaphoreGetWin32HandleInfo{
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
                 .pNext = nullptr,
@@ -66,7 +67,7 @@ MXC_RESULT Vulkan::Semaphore::Init(bool readOnly, Vulkan::Locality locality)
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Semaphore::Wait()
+MXC_RESULT Semaphore::Wait()
 {
     const VkSemaphoreWaitInfo waitInfo{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -80,4 +81,17 @@ MXC_RESULT Vulkan::Semaphore::Wait()
                             &waitInfo,
                             UINT64_MAX));
     return MXC_SUCCESS;
+}
+
+const HANDLE Semaphore::ClonedExternalHandle(HANDLE hTargetProcessHandle) const
+{
+    HANDLE duplicateHandle;
+    DuplicateHandle(GetCurrentProcess(),
+                    m_ExternalHandle,
+                    hTargetProcessHandle,
+                    &duplicateHandle,
+                    0,
+                    false,
+                    DUPLICATE_SAME_ACCESS);
+    return duplicateHandle;
 }

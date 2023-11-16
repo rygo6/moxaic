@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <array>
+#include <functional>
 
 #ifdef WIN32
 #include <windows.h>
@@ -76,7 +77,7 @@ namespace Moxaic
         uint8_t pRingBuffer[RingBufferSize];
     };
 
-    using InterProcessFunc = void (*)(void *);
+    using InterProcessFunc = std::function<void(void *)>;
 
     enum InterProcessTargetFunc
     {

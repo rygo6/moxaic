@@ -40,6 +40,8 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT TransitionImmediateInitialToGraphicsRead();
 
+        const HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
+
         inline auto vkImage() const { return m_VkImage; }
         inline auto vkImageView() const { return m_VkImageView; }
         inline auto vkDeviceMemory() const { return m_VkDeviceMemory; }
@@ -55,7 +57,7 @@ namespace Moxaic::Vulkan
         VkImageAspectFlags m_AspectMask{};
 
 #ifdef WIN32
-        HANDLE m_ExternalMemory{};
+        HANDLE m_ExternalHandle{};
 #endif
         bool TransitionImmediateInitialToTransferDst();
         bool TransitionImmediateTransferDstToGraphicsRead();

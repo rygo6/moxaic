@@ -14,28 +14,29 @@
 #endif
 
 using namespace Moxaic;
+using namespace Moxaic::Vulkan;
 
-Vulkan::Texture::Texture(const Device &device)
+Texture::Texture(const Device &device)
         : k_Device(device) {}
 
-Vulkan::Texture::~Texture()
+Texture::~Texture()
 {
     vkDestroyImageView(k_Device.vkDevice(), m_VkImageView, VK_ALLOC);
     vkFreeMemory(k_Device.vkDevice(), m_VkDeviceMemory, VK_ALLOC);
     vkDestroyImage(k_Device.vkDevice(), m_VkImage, VK_ALLOC);
-    if (m_ExternalMemory != nullptr)
-        CloseHandle(m_ExternalMemory);
+    if (m_ExternalHandle != nullptr)
+        CloseHandle(m_ExternalHandle);
 }
 
-MXC_RESULT Vulkan::Texture::InitFromImage(VkFormat format,
-                                          VkExtent2D extent,
-                                          VkImage image)
+MXC_RESULT Texture::InitFromImage(VkFormat format,
+                                  VkExtent2D extent,
+                                  VkImage image)
 {
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Texture::InitFromFile(const std::string file,
-                                         const Vulkan::Locality locality)
+MXC_RESULT Texture::InitFromFile(const std::string file,
+                                 const Locality locality)
 {
     int texChannels;
     int width;
@@ -86,20 +87,20 @@ MXC_RESULT Vulkan::Texture::InitFromFile(const std::string file,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Texture::InitFromImport(VkFormat format,
-                                           VkExtent2D extent,
-                                           VkImageUsageFlags usage,
-                                           VkImageAspectFlags aspectMask,
-                                           HANDLE externalMemory)
+MXC_RESULT Texture::InitFromImport(VkFormat format,
+                                   VkExtent2D extent,
+                                   VkImageUsageFlags usage,
+                                   VkImageAspectFlags aspectMask,
+                                   HANDLE externalMemory)
 {
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Texture::Init(const VkFormat format,
-                                 const VkExtent2D extents,
-                                 const VkImageUsageFlags usage,
-                                 const VkImageAspectFlags aspectMask,
-                                 const Vulkan::Locality locality)
+MXC_RESULT Texture::Init(const VkFormat format,
+                         const VkExtent2D extents,
+                         const VkImageUsageFlags usage,
+                         const VkImageAspectFlags aspectMask,
+                         const Locality locality)
 {
     MXC_LOG("CreateTexture:",
             string_VkFormat(format),
@@ -114,7 +115,7 @@ MXC_RESULT Vulkan::Texture::Init(const VkFormat format,
     };
     const VkImageCreateInfo imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == Vulkan::Locality::External ? &externalImageInfo : nullptr,
+            .pNext = locality == Locality::External ? &externalImageInfo : nullptr,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = format,
             .extent = {extents.width, extents.height, 1},
@@ -134,7 +135,7 @@ MXC_RESULT Vulkan::Texture::Init(const VkFormat format,
                          &m_VkImage));
     MXC_CHK(k_Device.AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                        m_VkImage,
-                                       locality == Vulkan::Locality::External ? externalHandleType : 0,
+                                       locality == Locality::External ? externalHandleType : 0,
                                        m_VkDeviceMemory));
     const VkImageViewCreateInfo imageViewCreateInfo{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -170,8 +171,8 @@ MXC_RESULT Vulkan::Texture::Init(const VkFormat format,
                 .handleType = externalHandleType
         };
         VK_CHK(Vulkan::VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
-                                              &getWin32HandleInfo,
-                                              &m_ExternalMemory));
+                                                      &getWin32HandleInfo,
+                                                      &m_ExternalHandle));
 #endif
     }
     m_Dimensions = extents;
@@ -179,7 +180,7 @@ MXC_RESULT Vulkan::Texture::Init(const VkFormat format,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Texture::TransitionImmediateInitialToGraphicsRead()
+MXC_RESULT Texture::TransitionImmediateInitialToGraphicsRead()
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -188,7 +189,7 @@ MXC_RESULT Vulkan::Texture::TransitionImmediateInitialToGraphicsRead()
                                                    m_AspectMask);
 }
 
-MXC_RESULT Vulkan::Texture::TransitionImmediateInitialToTransferDst()
+MXC_RESULT Texture::TransitionImmediateInitialToTransferDst()
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -197,11 +198,24 @@ MXC_RESULT Vulkan::Texture::TransitionImmediateInitialToTransferDst()
                                                    m_AspectMask);
 }
 
-MXC_RESULT Vulkan::Texture::TransitionImmediateTransferDstToGraphicsRead()
+MXC_RESULT Texture::TransitionImmediateTransferDstToGraphicsRead()
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                    VK_ACCESS_MEMORY_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                                                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                                                    m_AspectMask);
+}
+
+const HANDLE Texture::ClonedExternalHandle(HANDLE hTargetProcessHandle) const
+{
+    HANDLE duplicateHandle;
+    DuplicateHandle(GetCurrentProcess(),
+                    m_ExternalHandle,
+                    hTargetProcessHandle,
+                    &duplicateHandle,
+                    0,
+                    false,
+                    DUPLICATE_SAME_ACCESS);
+    return duplicateHandle;
 }

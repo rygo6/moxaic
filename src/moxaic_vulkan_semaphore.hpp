@@ -26,6 +26,8 @@ namespace Moxaic::Vulkan
 
         inline void IncrementWaitValue() { m_WaitValue++; }
 
+        const HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
+
         inline auto vkSemaphore() const { return m_vkSemaphore; }
         inline auto waitValue() const { return m_WaitValue; }
 

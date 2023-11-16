@@ -25,6 +25,18 @@ namespace Moxaic
 
         MXC_RESULT Init();
 
+        MXC_RESULT ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore);
+
+        inline auto &ipcToNode()
+        {
+            return m_IPCToNode;
+        }
+
+        inline auto &ipcFromNode()
+        {
+            return m_IPCFromNode;
+        }
+
     private:
         const Vulkan::Device &k_Device;
 
@@ -53,8 +65,8 @@ namespace Moxaic
     public:
         struct ImportParam
         {
-            uint16_t framebufferWidth;
-            uint16_t framebufferHeight;
+            uint32_t framebufferWidth;
+            uint32_t framebufferHeight;
             HANDLE colorFramebuffer0ExternalHandle;
             HANDLE colorFramebuffer1ExternalHandle;
             HANDLE normalFramebuffer0ExternalHandle;
@@ -71,10 +83,30 @@ namespace Moxaic
         virtual ~Node();
 
         MXC_RESULT Init();
-        MXC_RESULT InitImport(ImportParam& parameters);
+        MXC_RESULT InitImport(ImportParam &parameters);
+
+        inline auto &ipcFromCompositor()
+        {
+            return m_IPCFromCompositor;
+        }
+
+        inline auto &ipcToCompositor()
+        {
+            return m_IPCFromCompositor;
+        }
 
     private:
         const Vulkan::Device &k_Device;
+
+        inline std::array<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
+        {
+            return {
+                    [this](void *pParameters) {
+                        auto pImportParameters = (ImportParam *) pParameters;
+                        this->InitImport(*pImportParameters);
+                    }
+            };
+        }
 
         Transform m_Transform{};
 

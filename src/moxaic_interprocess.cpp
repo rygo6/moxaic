@@ -7,7 +7,7 @@ constexpr std::array k_InterProcessTargetParamSize{
         sizeof(Moxaic::Node::ImportParam),
 };
 
-MXC_RESULT Moxaic::InterProcessProducer::Init(const std::string& sharedMemoryName)
+MXC_RESULT Moxaic::InterProcessProducer::Init(const std::string &sharedMemoryName)
 {
     m_RingBuffer.Init(sharedMemoryName);
     return MXC_SUCCESS;
@@ -21,8 +21,8 @@ void Moxaic::InterProcessProducer::Enque(InterProcessTargetFunc target, void *pa
     buffer.head = buffer.head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
 }
 
-MXC_RESULT Moxaic::InterProcessReceiver::Init(const std::string& sharedMemoryName,
-                                              const std::array<InterProcessFunc, InterProcessTargetFunc::Count>&& targetFuncs)
+MXC_RESULT Moxaic::InterProcessReceiver::Init(const std::string &sharedMemoryName,
+                                              const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs)
 {
     m_RingBuffer.Init(sharedMemoryName);
     m_TargetFuncs = targetFuncs;
@@ -35,6 +35,7 @@ int Moxaic::InterProcessReceiver::Deque()
 
     auto &buffer = m_RingBuffer.buffer();
 
+//    printf("%s %d %d", "IPC", buffer.head, buffer.tail);
     if (buffer.head == buffer.tail)
         return 0;
 

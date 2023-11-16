@@ -28,7 +28,7 @@ namespace Moxaic::Vulkan
         inline const auto &gBufferTexture() const { return m_GBufferTexture; }
         inline const auto &depthTexture() const { return m_DepthTexture; }
 
-        inline const auto &dimensions() const { return m_Dimensions; }
+        inline const auto &extents() const { return m_Extents; }
 
     private:
         const Device &k_Device;
@@ -41,6 +41,6 @@ namespace Moxaic::Vulkan
         Texture m_GBufferTexture{k_Device};
         Texture m_DepthTexture{k_Device};
 
-        VkExtent2D m_Dimensions;
+        VkExtent2D m_Extents;
     };
 }

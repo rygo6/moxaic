@@ -19,11 +19,11 @@
 
 namespace Moxaic
 {
-    class Scene
+    class CompositorScene
     {
     public:
-        Scene(const Vulkan::Device &device);
-        virtual ~Scene() = default;
+        CompositorScene(const Vulkan::Device &device);
+        virtual ~CompositorScene() = default;
 
         MXC_RESULT Init();
         MXC_RESULT Loop(const uint32_t deltaTime);
@@ -33,11 +33,40 @@ namespace Moxaic
 
         Vulkan::Framebuffer framebuffer{device};
         Vulkan::Swap swap{device};
-        Vulkan::Semaphore timelineSemaphore{device};
+        Vulkan::Semaphore semaphore{device};
         Vulkan::Mesh mesh{device};
         Vulkan::Texture texture{device};
 
+        Vulkan::StandardPipeline standardPipeline{device};
+        Vulkan::GlobalDescriptor globalDescriptor{device};
+        Vulkan::MaterialDescriptor materialDescriptor{device};
+        Vulkan::ObjectDescriptor objectDescriptor{device};
+
+        Camera camera{};
+
+        Transform transform{};
+
+        // should node be here? maybe outside scene?
         CompositorNode compositorNode{device};
+    };
+
+    class NodeScene
+    {
+    public:
+        NodeScene(const Vulkan::Device &device);
+        virtual ~NodeScene() = default;
+
+        MXC_RESULT Init();
+        MXC_RESULT Loop(const uint32_t deltaTime);
+
+    private:
+        const Vulkan::Device &device;
+
+        // should node be here? maybe outside scene?
+        Node node{device};
+
+        Vulkan::Mesh mesh{device};
+        Vulkan::Texture texture{device};
 
         Vulkan::StandardPipeline standardPipeline{device};
         Vulkan::GlobalDescriptor globalDescriptor{device};
