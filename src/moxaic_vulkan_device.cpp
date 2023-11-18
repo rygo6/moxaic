@@ -595,12 +595,12 @@ MXC_RESULT Vulkan::Device::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
-                                             const VkImage image,
-                                             const VkExternalMemoryHandleTypeFlags externalHandleType,
-                                             VkDeviceMemory &outDeviceMemory) const
+MXC_RESULT Vulkan::Device::AllocateBindImageExport(const VkMemoryPropertyFlags properties,
+                                                   const VkImage image,
+                                                   const VkExternalMemoryHandleTypeFlags externalHandleType,
+                                                   VkDeviceMemory &outDeviceMemory) const
 {
-    VkMemoryRequirements memRequirements = {};
+    VkMemoryRequirements memRequirements{};
     uint32_t memTypeIndex;
     vkGetImageMemoryRequirements(m_VkDevice,
                                  image,
@@ -615,14 +615,88 @@ MXC_RESULT Vulkan::Device::AllocateBindImage(const VkMemoryPropertyFlags propert
 //            .image = pTestTexture->image,
 //            .buffer = VK_NULL_HANDLE,
 //    };
-    const VkExportMemoryAllocateInfo exportAllocInfo = {
+    const VkExportMemoryAllocateInfo exportAllocInfo{
             .sType =VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
 //            .pNext =&dedicatedAllocInfo,
             .handleTypes = externalHandleType
     };
-    const VkMemoryAllocateInfo allocateInfo = {
+    const VkMemoryAllocateInfo allocateInfo{
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-            .pNext = externalHandleType == 0 ? nullptr : &exportAllocInfo,
+            .pNext = &exportAllocInfo,
+            .allocationSize = memRequirements.size,
+            .memoryTypeIndex = memTypeIndex,
+    };
+    VK_CHK(vkAllocateMemory(m_VkDevice,
+                            &allocateInfo,
+                            VK_ALLOC,
+                            &outDeviceMemory));
+    VK_CHK(vkBindImageMemory(m_VkDevice,
+                             image,
+                             outDeviceMemory,
+                             0));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Vulkan::Device::AllocateBindImageImport(const VkMemoryPropertyFlags properties,
+                                                   const VkImage image,
+                                                   const VkExternalMemoryHandleTypeFlagBits externalHandleType,
+                                                   const HANDLE externalHandle,
+                                                   VkDeviceMemory &outDeviceMemory) const
+{
+    VkMemoryRequirements memRequirements{};
+    uint32_t memTypeIndex;
+    vkGetImageMemoryRequirements(m_VkDevice,
+                                 image,
+                                 &memRequirements);
+    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+                                     properties,
+                                     memRequirements.memoryTypeBits,
+                                     memTypeIndex));
+    // todo your supposed check if it wants dedicated memory
+//    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
+//            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
+//            .image = pTestTexture->image,
+//            .buffer = VK_NULL_HANDLE,
+//    };
+    const VkImportMemoryWin32HandleInfoKHR importMemoryInfo{
+            .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+//            .pNext = &dedicatedAllocInfo,
+            .handleType = externalHandleType,
+            .handle = externalHandle,
+    };
+    const VkMemoryAllocateInfo allocateInfo{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = &importMemoryInfo,
+            .allocationSize = memRequirements.size,
+            .memoryTypeIndex = memTypeIndex,
+    };
+    VK_CHK(vkAllocateMemory(m_VkDevice,
+                            &allocateInfo,
+                            VK_ALLOC,
+                            &outDeviceMemory));
+    VK_CHK(vkBindImageMemory(m_VkDevice,
+                             image,
+                             outDeviceMemory,
+                             0));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Vulkan::Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
+                                             const VkImage image,
+                                             VkDeviceMemory &outDeviceMemory) const
+{
+    VkMemoryRequirements memRequirements{};
+    uint32_t memTypeIndex;
+    vkGetImageMemoryRequirements(m_VkDevice,
+                                 image,
+                                 &memRequirements);
+    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+                                     properties,
+                                     memRequirements.memoryTypeBits,
+                                     memTypeIndex));
+    const VkMemoryAllocateInfo allocateInfo{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+            .pNext = nullptr,
             .allocationSize = memRequirements.size,
             .memoryTypeIndex = memTypeIndex,
     };
@@ -735,8 +809,8 @@ MXC_RESULT Vulkan::Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usa
                 .handleType = externalHandleType
         };
         VK_CHK(Vulkan::VkFunc.GetMemoryWin32HandleKHR(m_VkDevice,
-                                              &getWin32HandleInfo,
-                                              &outExternalMemory));
+                                                      &getWin32HandleInfo,
+                                                      &outExternalMemory));
 #endif
     }
 
@@ -1072,4 +1146,3 @@ MXC_RESULT Vulkan::Device::SubmitGraphicsQueueAndPresent(Semaphore &timelineSema
 
     return MXC_SUCCESS;
 }
-

@@ -20,7 +20,11 @@ namespace Moxaic::Vulkan
         Semaphore(const Device &device);
         virtual ~Semaphore();
 
-        MXC_RESULT Init(bool readOnly, Vulkan::Locality locality);
+        MXC_RESULT Init(const bool readOnly,
+                        const Vulkan::Locality locality);
+
+        MXC_RESULT InitFromImport(const bool readOnly,
+                                  const HANDLE externalHandle);
 
         MXC_RESULT Wait();
 

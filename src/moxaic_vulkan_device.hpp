@@ -24,9 +24,17 @@ namespace Moxaic::Vulkan
         virtual ~Device();
 
         MXC_RESULT Init();
+        MXC_RESULT AllocateBindImageImport(const VkMemoryPropertyFlags properties,
+                                           const VkImage image,
+                                           const VkExternalMemoryHandleTypeFlagBits externalHandleType,
+                                           const HANDLE externalHandle,
+                                           VkDeviceMemory &outDeviceMemory) const;
+        MXC_RESULT AllocateBindImageExport(const VkMemoryPropertyFlags properties,
+                                           const VkImage image,
+                                           const VkExternalMemoryHandleTypeFlags externalHandleType,
+                                           VkDeviceMemory &outDeviceMemory) const;
         MXC_RESULT AllocateBindImage(const VkMemoryPropertyFlags properties,
                                      const VkImage image,
-                                     const VkExternalMemoryHandleTypeFlags externalHandleType,
                                      VkDeviceMemory &outDeviceMemory) const;
         MXC_RESULT CreateStagingBuffer(const void *srcData,
                                        const VkDeviceSize bufferSize,

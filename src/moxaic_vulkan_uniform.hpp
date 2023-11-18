@@ -43,7 +43,7 @@ namespace Moxaic::Vulkan
                     string_VkMemoryPropertyFlags(properties),
                     string_VkBufferUsageFlags(usage),
                     BufferSize(),
-                    string_BufferLocality(locality));
+                    string_Locality(locality));
             VkMemoryPropertyFlags supportedProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
             SDL_assert(((supportedProperties & properties) == supportedProperties) &&
                        "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");

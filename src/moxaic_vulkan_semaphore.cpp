@@ -2,6 +2,7 @@
 #include "moxaic_vulkan_device.hpp"
 
 #include <vulkan/vulkan.h>
+
 #ifdef WIN32
 #include <vulkan/vulkan_win32.h>
 #define MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
@@ -21,7 +22,7 @@ Semaphore::~Semaphore()
     vkDestroySemaphore(k_Device.vkDevice(), m_vkSemaphore, VK_ALLOC);
 }
 
-MXC_RESULT Semaphore::Init(bool readOnly, Locality locality)
+MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
 {
     MXC_LOG("Init VulkanTimelineSemaphore");
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
@@ -54,6 +55,7 @@ MXC_RESULT Semaphore::Init(bool readOnly, Locality locality)
                              VK_ALLOC,
                              &m_vkSemaphore));
     if (locality == Locality::External) {
+#ifdef WIN32
         const VkSemaphoreGetWin32HandleInfoKHR semaphoreGetWin32HandleInfo{
                 .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
                 .pNext = nullptr,
@@ -61,8 +63,9 @@ MXC_RESULT Semaphore::Init(bool readOnly, Locality locality)
                 .handleType = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
         };
         VK_CHK(Vulkan::VkFunc.GetSemaphoreWin32HandleKHR(k_Device.vkDevice(),
-                                                 &semaphoreGetWin32HandleInfo,
-                                                 &m_ExternalHandle));
+                                                         &semaphoreGetWin32HandleInfo,
+                                                         &m_ExternalHandle));
+#endif
     }
     return MXC_SUCCESS;
 }
@@ -94,4 +97,23 @@ const HANDLE Semaphore::ClonedExternalHandle(HANDLE hTargetProcessHandle) const
                     false,
                     DUPLICATE_SAME_ACCESS);
     return duplicateHandle;
+}
+
+MXC_RESULT Semaphore::InitFromImport(const bool readOnly, const HANDLE externalHandle)
+{
+    MXC_LOG("Importing Semaphore", externalHandle);
+    MXC_CHK(Init(readOnly, Locality::External));
+#ifdef WIN32
+    const VkImportSemaphoreWin32HandleInfoKHR importSemaphoreWin32HandleInfo{
+            .sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
+            .pNext = nullptr,
+            .semaphore = m_vkSemaphore,
+            .handleType = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
+            .handle = externalHandle,
+            .name = nullptr,
+    };
+    VK_CHK(VkFunc.ImportSemaphoreWin32HandleKHR(k_Device.vkDevice(),
+                                                &importSemaphoreWin32HandleInfo));
+#endif
+    return MXC_SUCCESS;
 }

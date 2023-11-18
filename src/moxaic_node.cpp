@@ -102,12 +102,27 @@ MXC_RESULT Node::Init()
             }
     };
     m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
-    m_ImportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
     return MXC_SUCCESS;
 }
 
 MXC_RESULT Node::InitImport(ImportParam &parameters)
 {
     MXC_LOG("Node Init Import");
+    m_ImportedFramebuffers[0].InitFromImport({parameters.framebufferWidth, parameters.framebufferHeight},
+                                             parameters.colorFramebuffer0ExternalHandle,
+                                             parameters.normalFramebuffer0ExternalHandle,
+                                             parameters.gBufferFramebuffer0ExternalHandle,
+                                             parameters.depthFramebuffer0ExternalHandle);
+    m_ImportedFramebuffers[1].InitFromImport({parameters.framebufferWidth, parameters.framebufferHeight},
+                                             parameters.colorFramebuffer1ExternalHandle,
+                                             parameters.normalFramebuffer1ExternalHandle,
+                                             parameters.gBufferFramebuffer1ExternalHandle,
+                                             parameters.depthFramebuffer1ExternalHandle);
+
+    m_ImportedCompositorSemaphore.InitFromImport(true, parameters.compositorSemaphoreExternalHandle);
+    m_ImportedNodeSemaphore.InitFromImport(false, parameters.nodeSemaphoreExternalHandle);
+
+    m_ImportedGlobalDescriptor.InitFromImport(k_TempSharedCamMemoryName);
+
     return MXC_SUCCESS;
 }

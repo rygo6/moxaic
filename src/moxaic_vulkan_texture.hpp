@@ -19,18 +19,14 @@ namespace Moxaic::Vulkan
         explicit Texture(const Device &device);
         virtual ~Texture();
 
-        MXC_RESULT InitFromImage(VkFormat format,
-                                 VkExtent2D extent,
-                                 VkImage image);
-
         MXC_RESULT InitFromFile(const std::string file,
                                 const Vulkan::Locality locality);
 
-        MXC_RESULT InitFromImport(VkFormat format,
-                                  VkExtent2D extent,
-                                  VkImageUsageFlags usage,
-                                  VkImageAspectFlags aspectMask,
-                                  HANDLE externalMemory);
+        MXC_RESULT InitFromImport(const VkFormat format,
+                                  const VkExtent2D extent,
+                                  const VkImageUsageFlags usage,
+                                  const VkImageAspectFlags aspectMask,
+                                  const HANDLE externalMemory);
 
         MXC_RESULT Init(const VkFormat format,
                         const VkExtent2D extents,
@@ -53,7 +49,7 @@ namespace Moxaic::Vulkan
         VkImageView m_VkImageView{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
 
-        VkExtent2D m_Dimensions{};
+        VkExtent2D m_Extents{};
         VkImageAspectFlags m_AspectMask{};
 
 #ifdef WIN32
@@ -61,5 +57,13 @@ namespace Moxaic::Vulkan
 #endif
         bool TransitionImmediateInitialToTransferDst();
         bool TransitionImmediateTransferDstToGraphicsRead();
+
+        MXC_RESULT InitImage(const VkFormat format,
+                             const VkExtent2D extents,
+                             const VkImageUsageFlags usage,
+                             const Locality locality);
+
+        MXC_RESULT InitImageView(const VkFormat format,
+                                 const VkImageAspectFlags aspectMask);
     };
 }

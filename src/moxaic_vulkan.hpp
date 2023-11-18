@@ -65,7 +65,7 @@ namespace Moxaic::Vulkan
         External,
     };
 
-    inline const char *string_BufferLocality(Locality input_value)
+    inline const char *string_Locality(Locality input_value)
     {
         switch (input_value) {
             case Locality::Local:
@@ -93,7 +93,8 @@ namespace Moxaic::Vulkan
         VK_FUNC(GetMemoryWin32HandleKHR) \
         VK_FUNC(CmdDrawMeshTasksEXT) \
         VK_FUNC(CreateDebugUtilsMessengerEXT) \
-        VK_FUNC(GetSemaphoreWin32HandleKHR)
+        VK_FUNC(GetSemaphoreWin32HandleKHR) \
+        VK_FUNC(ImportSemaphoreWin32HandleKHR)
 #define VK_FUNC(func) PFN_vk##func func;
         VK_FUNCS
 #undef VK_FUNC

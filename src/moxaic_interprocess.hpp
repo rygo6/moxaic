@@ -51,9 +51,10 @@ namespace Moxaic
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT InitFromImport()
+        MXC_RESULT InitFromImport(std::string sharedMemoryName)
         {
-            return MXC_SUCCESS;
+            // todo properly receive handle
+            return Init(sharedMemoryName);
         }
 
         inline T &buffer() { return *(T *) (m_pBuffer); }
