@@ -40,23 +40,25 @@ namespace Moxaic
         MXC_RESULT Loop(const uint32_t deltaTime) override;
 
     private:
-        Vulkan::Framebuffer framebuffer{k_Device};
-        Vulkan::Swap swap{k_Device};
-        Vulkan::Semaphore semaphore{k_Device};
-        Vulkan::Mesh mesh{k_Device};
-        Vulkan::Texture texture{k_Device};
+        std::array<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{k_Device, k_Device};
+        int m_FramebufferIndex{0};
+        
+        Vulkan::Swap m_Swap{k_Device};
+        Vulkan::Semaphore m_Semaphore{k_Device};
 
-        Vulkan::StandardPipeline standardPipeline{k_Device};
-        Vulkan::GlobalDescriptor globalDescriptor{k_Device};
-        Vulkan::MaterialDescriptor materialDescriptor{k_Device};
-        Vulkan::ObjectDescriptor objectDescriptor{k_Device};
+        Vulkan::StandardPipeline m_StandardPipeline{k_Device};
+        Vulkan::GlobalDescriptor m_GlobalDescriptor{k_Device};
+        Vulkan::MaterialDescriptor m_MaterialDescriptor{k_Device};
+        Vulkan::ObjectDescriptor m_ObjectDescriptor{k_Device};
 
-        Camera camera{};
+        Camera m_MainCamera{};
 
-        Transform transform{};
+        Vulkan::Mesh m_SphereTestMesh{k_Device};
+        Vulkan::Texture m_SphereTestTexture{k_Device};
+        Transform m_SphereTestTransform{};
 
         // should node be here? maybe outside scene?
-        CompositorNode compositorNode{k_Device};
+        CompositorNode m_CompositorNode{k_Device};
     };
 
     class NodeScene : public SceneBase
