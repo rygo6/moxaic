@@ -3,12 +3,9 @@
 #include "moxaic_vulkan.hpp"
 
 #include <vulkan/vulkan.h>
-#include <array>
 
 #if WIN32
 #include <windows.h>
-#include <vulkan/vulkan_win32.h>
-#include <vector>
 #endif
 
 namespace Moxaic::Vulkan
@@ -20,49 +17,50 @@ namespace Moxaic::Vulkan
     class Device
     {
         MXC_NO_VALUE_PASS(Device);
+
     public:
         Device();
         virtual ~Device();
 
         MXC_RESULT Init();
-        MXC_RESULT AllocateBindImageImport(const VkMemoryPropertyFlags properties,
-                                           const VkImage image,
-                                           const VkExternalMemoryHandleTypeFlagBits externalHandleType,
-                                           const HANDLE externalHandle,
-                                           VkDeviceMemory &outDeviceMemory) const;
-        MXC_RESULT AllocateBindImageExport(const VkMemoryPropertyFlags properties,
-                                           const VkImage image,
-                                           const VkExternalMemoryHandleTypeFlags externalHandleType,
-                                           VkDeviceMemory &outDeviceMemory) const;
-        MXC_RESULT AllocateBindImage(const VkMemoryPropertyFlags properties,
-                                     const VkImage image,
-                                     VkDeviceMemory &outDeviceMemory) const;
-        MXC_RESULT CreateStagingBuffer(const void *srcData,
-                                       const VkDeviceSize bufferSize,
-                                       VkBuffer &outStagingBuffer,
-                                       VkDeviceMemory &outStagingBufferMemory) const;
-        MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
-                                            const VkMemoryPropertyFlags properties,
-                                            const VkDeviceSize bufferSize,
-                                            VkBuffer &outBuffer,
-                                            VkDeviceMemory &outDeviceMemory) const;
-        MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
-                                            const VkMemoryPropertyFlags properties,
-                                            const VkDeviceSize bufferSize,
-                                            const Vulkan::Locality locality,
-                                            VkBuffer &outBuffer,
-                                            VkDeviceMemory &outDeviceMemory,
-                                            HANDLE &outExternalMemory) const;
-        MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(const void *srcData,
-                                                              const VkBufferUsageFlagBits usage,
-                                                              const VkDeviceSize bufferSize,
-                                                              VkBuffer &outBuffer,
-                                                              VkDeviceMemory &outBufferMemory) const;
-        MXC_RESULT CopyBufferToBuffer(const VkDeviceSize bufferSize,
-                                      const VkBuffer srcBuffer,
+        MXC_RESULT AllocateBindImageImport(VkMemoryPropertyFlags properties,
+                                           VkImage image,
+                                           VkExternalMemoryHandleTypeFlagBits externalHandleType,
+                                           HANDLE externalHandle,
+                                           VkDeviceMemory&outDeviceMemory) const;
+        MXC_RESULT AllocateBindImageExport(VkMemoryPropertyFlags properties,
+                                           VkImage image,
+                                           VkExternalMemoryHandleTypeFlags externalHandleType,
+                                           VkDeviceMemory&outDeviceMemory) const;
+        MXC_RESULT AllocateBindImage(VkMemoryPropertyFlags properties,
+                                     VkImage image,
+                                     VkDeviceMemory&outDeviceMemory) const;
+        MXC_RESULT CreateStagingBuffer(const void* srcData,
+                                       VkDeviceSize bufferSize,
+                                       VkBuffer&outStagingBuffer,
+                                       VkDeviceMemory&outStagingBufferMemory) const;
+        MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
+                                            VkMemoryPropertyFlags properties,
+                                            VkDeviceSize bufferSize,
+                                            VkBuffer&outBuffer,
+                                            VkDeviceMemory&outDeviceMemory) const;
+        MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
+                                            VkMemoryPropertyFlags properties,
+                                            VkDeviceSize bufferSize,
+                                            Vulkan::Locality locality,
+                                            VkBuffer&outBuffer,
+                                            VkDeviceMemory&outDeviceMemory,
+                                            HANDLE&outExternalMemory) const;
+        MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(const void* srcData,
+                                                              VkBufferUsageFlagBits usage,
+                                                              VkDeviceSize bufferSize,
+                                                              VkBuffer&outBuffer,
+                                                              VkDeviceMemory&outBufferMemory) const;
+        MXC_RESULT CopyBufferToBuffer(VkDeviceSize bufferSize,
+                                      VkBuffer srcBuffer,
                                       VkBuffer dstBuffer) const;
-        MXC_RESULT CopyBufferToImage(const VkExtent2D imageExtent,
-                                     const VkBuffer srcBuffer,
+        MXC_RESULT CopyBufferToImage(VkExtent2D imageExtent,
+                                     VkBuffer srcBuffer,
                                      VkImage dstImage) const;
         MXC_RESULT TransitionImageLayoutImmediate(VkImage image,
                                                   VkImageLayout oldLayout,
@@ -72,41 +70,41 @@ namespace Moxaic::Vulkan
                                                   VkPipelineStageFlags srcStageMask,
                                                   VkPipelineStageFlags dstStageMask,
                                                   VkImageAspectFlags aspectMask) const;
-        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const;
-        MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const;
+        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer&outCommandBuffer) const;
+        MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer&commandBuffer) const;
         MXC_RESULT BeginGraphicsCommandBuffer() const;
         MXC_RESULT EndGraphicsCommandBuffer() const;
-        MXC_RESULT BeginRenderPass(const Framebuffer &framebuffer) const;
-        MXC_RESULT EndRenderPass() const;
-        MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore &timelineSemaphore,
-                                                 const Swap &swap) const;
-        MXC_RESULT SubmitGraphicsQueue(Semaphore &timelineSemaphore) const;
+        void BeginRenderPass(const Framebuffer&framebuffer) const;
+        void EndRenderPass() const;
+        MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore&timelineSemaphore,
+                                                 const Swap&swap) const;
+        MXC_RESULT SubmitGraphicsQueue(Semaphore&timelineSemaphore) const;
 
         // VulkanHandles are not encapsulated. Deal with vk vars and methods with care.
         // Reason? Vulkan safety is better enforced by validation layers, not C++, and
         // the attempt to encapsulate these to more so rely on C++ type safety ends up
         // with something more complex and convoluted that doesn't add much over Vulkan
         // Validation layers. Classes are more to organize relationship of VulkanHandles.
-        inline auto vkDevice() const { return m_VkDevice; }
-        inline auto vkPhysicalDevice() const { return m_VkPhysicalDevice; }
-        inline auto vkGraphicsQueue() const { return m_VkGraphicsQueue; }
-        inline auto vkComputeQueue() const { return m_VkComputeQueue; }
-        inline auto vkRenderPass() const { return m_VkRenderPass; }
-        inline auto vkDescriptorPool() const { return m_VkDescriptorPool; }
-        inline auto vkQueryPool() const { return m_VkQueryPool; }
-        inline auto vkGraphicsCommandPool() const { return m_VkGraphicsCommandPool; }
-        inline auto vkComputeCommandPool() const { return m_VkComputeCommandPool; }
-        inline auto vkGraphicsCommandBuffer() const { return m_VkGraphicsCommandBuffer; }
-        inline auto vkComputeCommandBuffer() const { return m_VkComputeCommandBuffer; }
-        inline auto vkLinearSampler() const { return m_VkLinearSampler; }
-        inline auto vkNearestSampler() const { return m_VkNearestSampler; }
+        // Return vkHandles via const ref even though they are single pointers so that
+        // the pointer can be taken to them in designated initializers without having to first
+        // make a stack copy
+        const auto& vkDevice() const { return m_VkDevice; }
+        const auto& vkPhysicalDevice() const { return m_VkPhysicalDevice; }
+        const auto& vkGraphicsQueue() const { return m_VkGraphicsQueue; }
+        const auto& vkComputeQueue() const { return m_VkComputeQueue; }
+        const auto& vkRenderPass() const { return m_VkRenderPass; }
+        const auto& vkDescriptorPool() const { return m_VkDescriptorPool; }
+        const auto& vkGraphicsCommandBuffer() const { return m_VkGraphicsCommandBuffer; }
+        const auto& vkComputeCommandBuffer() const { return m_VkComputeCommandBuffer; }
+        const auto& vkLinearSampler() const { return m_VkLinearSampler; }
+        const auto& vkNearestSampler() const { return m_VkNearestSampler; }
 
-        inline auto graphicsQueueFamilyIndex() const { return m_GraphicsQueueFamilyIndex; }
-        inline auto computeQueueFamilyIndex() const { return m_ComputeQueueFamilyIndex; }
+        const auto& graphicsQueueFamilyIndex() const { return m_GraphicsQueueFamilyIndex; }
+        const auto& computeQueueFamilyIndex() const { return m_ComputeQueueFamilyIndex; }
 
-        inline const auto &physicalDeviceMeshShaderProperties() const { return m_PhysicalDeviceMeshShaderProperties; }
-        inline const auto &physicalDeviceProperties() const { return m_PhysicalDeviceProperties; }
-        inline const auto &physicalDeviceMemoryProperties() const { return m_PhysicalDeviceMemoryProperties; }
+        const auto& physicalDeviceMeshShaderProperties() const { return m_PhysicalDeviceMeshShaderProperties; }
+        const auto& physicalDeviceProperties() const { return m_PhysicalDeviceProperties; }
+        const auto& physicalDeviceMemoryProperties() const { return m_PhysicalDeviceMemoryProperties; }
 
     private:
         VkDevice m_VkDevice{VK_NULL_HANDLE};

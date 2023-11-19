@@ -25,11 +25,11 @@ namespace Moxaic
             CloseHandle(m_hMapFile);
         };
 
-        MXC_RESULT Init(std::string sharedMemoryName)
+        MXC_RESULT Init(const std::string& sharedMemoryName)
         {
             m_hMapFile = CreateFileMapping(
                     INVALID_HANDLE_VALUE, // use paging file
-                    NULL, // default security
+                    nullptr, // default security
                     PAGE_READWRITE, // read/write access
                     0, // maximum object size (high-order DWORD)
                     Size(), // maximum object size (low-order DWORD)
@@ -54,7 +54,7 @@ namespace Moxaic
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT InitFromImport(std::string sharedMemoryName)
+        MXC_RESULT InitFromImport(const std::string& sharedMemoryName)
         {
             // todo properly receive handle
             return Init(sharedMemoryName);
@@ -65,9 +65,9 @@ namespace Moxaic
             memcpy(m_pBuffer, &srcBuffer, Size());
         }
 
-        inline constexpr int Size() const { return sizeof(T); }
+        static constexpr int Size() { return sizeof(T); }
 
-        inline const T &buffer() const { return *(T *) (m_pBuffer); }
+        const T &buffer() const { return *static_cast<T *>(m_pBuffer); }
 
     protected:
 #ifdef WIN32
@@ -97,23 +97,21 @@ namespace Moxaic
         Count,
     };
 
-    class InterProcessProducer : InterProcessBuffer<RingBuffer>
+    class InterProcessProducer : public InterProcessBuffer<RingBuffer>
     {
     public:
-        MXC_RESULT Init(const std::string &sharedMemoryName);
-        void Enque(InterProcessTargetFunc, void *param);
+        void Enque(InterProcessTargetFunc, const void *param) const;
     };
 
-    class InterProcessReceiver : InterProcessBuffer<RingBuffer>
+    class InterProcessReceiver : public InterProcessBuffer<RingBuffer>
     {
         MXC_NO_VALUE_PASS(InterProcessReceiver);
     public:
         InterProcessReceiver() = default;
         MXC_RESULT Init(const std::string &sharedMemoryName,
                         const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs);
-        int Deque();
+        int Deque() const;
     private:
         std::array<InterProcessFunc, InterProcessTargetFunc::Count> m_TargetFuncs{};
-        InterProcessBuffer<RingBuffer> m_RingBuffer{};
     };
 }

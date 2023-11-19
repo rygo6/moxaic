@@ -12,15 +12,16 @@ SDL_Window *g_pSDLWindow;
 VkExtent2D g_WindowDimensions;
 UserCommand g_UserCommand;
 
-inline static void SetMouseButton(const int index, const bool pressed)
+static void SetMouseButton(const int index, const bool pressed)
 {
     switch (index) {
         case SDL_BUTTON_LEFT:
             g_UserCommand.leftMouseButtonPressed = pressed;
+        default: ;
     }
 }
 
-inline static void SetKey(const SDL_Keycode keycode, const bool pressed)
+static void SetKey(const SDL_Keycode keycode, const bool pressed)
 {
     switch (keycode) {
         case SDLK_w:
@@ -35,6 +36,7 @@ inline static void SetKey(const SDL_Keycode keycode, const bool pressed)
         case SDLK_d:
             g_UserCommand.userMove.ToggleFlag(UserMove::Right, pressed);
             break;
+        default: ;
     }
 }
 

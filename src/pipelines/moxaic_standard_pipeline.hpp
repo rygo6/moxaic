@@ -10,10 +10,8 @@
 
 #include "../moxaic_vulkan.hpp"
 #include "../moxaic_vulkan_device.hpp"
-#include "../moxaic_vulkan_mesh.hpp"
 
 #include <vulkan/vulkan.h>
-#include <vector>
 #include <array>
 #include <string>
 
@@ -28,6 +26,7 @@ namespace Moxaic::Vulkan
                         const StandardMaterialDescriptor &materialDescriptor,
                         const ObjectDescriptor &objectDescriptor)
         {
+            // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 const std::array setLayouts{
                         globalDescriptor.vkDescriptorSetLayout(),
@@ -78,41 +77,38 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void BindDescriptor(const GlobalDescriptor &descriptor)
+        void BindDescriptor(const GlobalDescriptor &descriptor) const
         {
-            auto descriptorSet = descriptor.vkDescriptorSet();
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_VkPipelineLayout,
                                     0,
                                     1,
-                                    &descriptorSet,
+                                    &descriptor.vkDescriptorSet(),
                                     0,
                                     nullptr);
         }
 
-        void BindDescriptor(const StandardMaterialDescriptor &descriptor)
+        void BindDescriptor(const StandardMaterialDescriptor &descriptor) const
         {
-            auto descriptorSet = descriptor.vkDescriptorSet();
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_VkPipelineLayout,
                                     1,
                                     1,
-                                    &descriptorSet,
+                                    &descriptor.vkDescriptorSet(),
                                     0,
                                     nullptr);
         }
 
-        void BindDescriptor(const ObjectDescriptor &descriptor)
+        void BindDescriptor(const ObjectDescriptor &descriptor) const
         {
-            auto descriptorSet = descriptor.vkDescriptorSet();
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_VkPipelineLayout,
                                     2,
                                     1,
-                                    &descriptorSet,
+                                    &descriptor.vkDescriptorSet(),
                                     0,
                                     nullptr);
         }

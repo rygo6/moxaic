@@ -4,7 +4,6 @@
 #include "moxaic_logging.hpp"
 
 #include <vulkan/vulkan.h>
-#include <array>
 
 #ifdef WIN32
 #include <windows.h>
@@ -17,27 +16,28 @@ namespace Moxaic::Vulkan
     class Semaphore
     {
         MXC_NO_VALUE_PASS(Semaphore);
+
     public:
-        Semaphore(const Device &device);
+        explicit Semaphore(const Device& device);
         virtual ~Semaphore();
 
-        MXC_RESULT Init(const bool readOnly,
-                        const Vulkan::Locality locality);
+        MXC_RESULT Init(bool readOnly,
+                        Locality locality);
 
-        MXC_RESULT InitFromImport(const bool readOnly,
-                                  const HANDLE externalHandle);
+        MXC_RESULT InitFromImport(bool readOnly,
+                                  HANDLE externalHandle);
 
         MXC_RESULT Wait();
 
-        inline void IncrementWaitValue() { m_WaitValue++; }
+        void IncrementWaitValue() { m_WaitValue++; }
 
-        const HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
+        HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
 
-        inline auto vkSemaphore() const { return m_vkSemaphore; }
-        inline auto waitValue() const { return m_WaitValue; }
+        const auto& vkSemaphore() const { return m_vkSemaphore; }
+        const auto& waitValue() const { return m_WaitValue; }
 
     private:
-        const Device &k_Device;
+        const Device& k_Device;
 
         uint64_t m_WaitValue{0};
         VkSemaphore m_vkSemaphore{VK_NULL_HANDLE};

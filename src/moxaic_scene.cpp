@@ -1,4 +1,5 @@
 #include "moxaic_scene.hpp"
+#include "moxaic_window.hpp"
 
 #include <thread>
 

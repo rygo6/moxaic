@@ -15,7 +15,7 @@ namespace Moxaic::Vulkan
     {
         MXC_NO_VALUE_PASS(Uniform);
     public:
-        Uniform(const Device &device)
+        explicit Uniform(const Device &device)
                 : k_Device(device) {}
 
         virtual ~Uniform()
@@ -31,21 +31,16 @@ namespace Moxaic::Vulkan
                 CloseHandle(m_ExternalMemory);
         }
 
-        bool InitFromImport()
-        {
-            return MXC_SUCCESS;
-        }
-
         bool Init(const VkMemoryPropertyFlags properties,
                   const VkBufferUsageFlags usage,
-                  const Vulkan::Locality locality)
+                  const Locality locality)
         {
             MXC_LOG("Init Uniform:",
                     string_VkMemoryPropertyFlags(properties),
                     string_VkBufferUsageFlags(usage),
                     Size(),
                     string_Locality(locality));
-            VkMemoryPropertyFlags supportedProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            constexpr VkMemoryPropertyFlags supportedProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
             SDL_assert(((supportedProperties & properties) == supportedProperties) &&
                        "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
             MXC_CHK(k_Device.CreateAllocateBindBuffer(usage,
@@ -64,15 +59,15 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        inline void CopyBuffer(const T &srcBuffer)
+        void CopyBuffer(const T &srcBuffer)
         {
             memcpy(m_pMappedBuffer, &srcBuffer, Size());
         }
 
-        inline T &mapped() { return *(T *) (m_pMappedBuffer); }
-        inline auto vkBuffer() const { return m_VkBuffer; }
+        T &mapped() { return *static_cast<T *>(m_pMappedBuffer); }
+        const auto& vkBuffer() const { return m_VkBuffer; }
 
-        inline constexpr VkDeviceSize Size() const { return sizeof(T); }
+        static constexpr VkDeviceSize Size() { return sizeof(T); }
 
     private:
         const Device &k_Device;

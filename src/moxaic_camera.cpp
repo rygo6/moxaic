@@ -5,15 +5,15 @@
 
 using namespace Moxaic;
 
-Moxaic::Camera::Camera()
+Camera::Camera()
 {
     UpdateView();
     UpdateProjection();
 }
 
-Moxaic::Camera::~Camera() {}
+Camera::~Camera() {}
 
-bool Moxaic::Camera::UserCommandUpdate(uint32_t deltaTime)
+bool Camera::UserCommandUpdate(const uint32_t deltaTime)
 {
     bool updated = false;
 
@@ -27,7 +27,7 @@ bool Moxaic::Camera::UserCommandUpdate(uint32_t deltaTime)
     }
 
     if (m_CameraLocked && userCommand.mouseMoved) {
-        auto rotation = glm::radians(-userCommand.mouseDelta.x) * 1.0f;
+        const auto rotation = glm::radians(-userCommand.mouseDelta.x) * 1.0f;
         m_Transform.Rotate(0, rotation, 0);
         updated = true;
     }
@@ -61,13 +61,13 @@ bool Moxaic::Camera::UserCommandUpdate(uint32_t deltaTime)
     return false;
 }
 
-void Moxaic::Camera::UpdateView()
+void Camera::UpdateView()
 {
     m_InverseView = m_Transform.modelMatrix();
     m_View = glm::inverse(m_InverseView);
 }
 
-void Moxaic::Camera::UpdateProjection()
+void Camera::UpdateProjection()
 {
     m_Projection = glm::perspective(m_FOV, m_Aspect, m_Near, m_Far);
     m_InverseProjection = glm::inverse(m_Projection);

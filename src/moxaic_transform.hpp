@@ -15,49 +15,49 @@ namespace Moxaic
         Transform();
         virtual ~Transform();
 
-        inline void LocalTranslate(glm::vec3 delta)
+        void LocalTranslate(glm::vec3 delta)
         {
             delta = glm::rotate(m_Orientation, delta);
             m_Position += delta;
         }
 
-        inline void LocalTranslate(float x, float y, float z)
+        void LocalTranslate(const float x, const float y, const float z)
         {
             auto delta = glm::vec3(x, y, z);
             delta = glm::rotate(m_Orientation, delta);
             m_Position += delta;
         }
 
-        inline void Rotate(float x, float y, float z)
+        void Rotate(const float x, const float y, const float z)
         {
-            auto rotation = glm::quat(glm::vec3(
+            const auto rotation = glm::quat(glm::vec3(
                     glm::radians(x),
                     glm::radians(y),
                     glm::radians(z)));
             m_Orientation = rotation * m_Orientation;
         }
 
-        inline void Rotate(glm::vec3 euler)
+        void Rotate(const glm::vec3 euler)
         {
-            auto rotation = glm::quat(euler);
+            const auto rotation = glm::quat(euler);
             m_Orientation = rotation * m_Orientation;
         }
 
-        inline const auto &position() const { return m_Position; }
-        inline void setPosition(glm::vec3 position)
+        const auto &position() const { return m_Position; }
+        void setPosition(const glm::vec3& position)
         {
             m_Position = position;
         }
-        inline const auto &orientation() const { return m_Orientation; }
-        inline void setOrientation(glm::quat orientation)
+        const auto &orientation() const { return m_Orientation; }
+        void setOrientation(const glm::quat& orientation)
         {
             m_Orientation = orientation;
         }
 
-        inline const auto modelMatrix() const
+        auto modelMatrix() const
         {
-            glm::mat4 rot = glm::toMat4(m_Orientation);
-            glm::mat4 pos = glm::translate(glm::identity<glm::mat4>(), m_Position);
+            const glm::mat4 rot = glm::toMat4(m_Orientation);
+            const glm::mat4 pos = glm::translate(glm::identity<glm::mat4>(), m_Position);
             return pos * rot;
         }
 

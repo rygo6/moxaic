@@ -1,8 +1,7 @@
 #pragma once
 
 #include "moxaic_vulkan_descriptor.hpp"
-
-#include "../moxaic_vulkan_texture.hpp"
+#include "moxaic_vulkan_texture.hpp"
 
 namespace Moxaic::Vulkan
 {
@@ -31,7 +30,7 @@ namespace Moxaic::Vulkan
             MXC_CHK(AllocateDescriptorSet());
             const VkDescriptorImageInfo imageInfo{
                     .sampler = k_Device.vkLinearSampler(),
-                    .imageView = texture.vkImageView,
+                    .imageView = texture.vkImageView(),
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             };
             std::array writes{

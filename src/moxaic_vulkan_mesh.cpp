@@ -4,44 +4,45 @@
 #include <glm/glm.hpp>
 
 using namespace Moxaic;
+using namespace Moxaic::Vulkan;
 
 #define PI 3.14159265358979323846f
 
-static int GenerateSphereVertexCount(int nslices, int nstacks)
+static int GenerateSphereVertexCount(const int nslices, const int nstacks)
 {
     return (nslices + 1) * (nstacks + 1);
 }
 
-static int GenerateSphereIndexCount(int nslices, int nstacks)
+static int GenerateSphereIndexCount(const int nslices, const int nstacks)
 {
     return nslices * nstacks * 2 * 3;
 }
 
-static void GenerateSphere(int nslices, int nstacks, float radius, Vulkan::Vertex *pVertex)
+static void GenerateSphere(const int nslices, const int nstacks, const float radius, Vertex*pVertex)
 {
-    float fnslices = (float) nslices;
-    float fnstacks = (float) nstacks;
+    const float fnslices = (float) nslices;
+    const float fnstacks = (float) nstacks;
 
-    float dtheta = 2.0f * PI / fnslices;
-    float dphi = PI / fnstacks;
+    const float dtheta = 2.0f * PI / fnslices;
+    const float dphi = PI / fnstacks;
 
     int idx = 0;
     for (int i = 0; +i <= nstacks; i++) {
-        float fi = (float) i;
-        float phi = fi * dphi;
+        const float fi = (float) i;
+        const float phi = fi * dphi;
         for (int j = 0; j <= nslices; j++) {
-            float ji = (float) j;
-            float theta = ji * dtheta;
+            const float ji = (float) j;
+            const float theta = ji * dtheta;
 
-            float x = radius * sinf(phi) * cosf(theta);
-            float y = radius * sinf(phi) * sinf(theta);
-            float z = radius * cosf(phi);
+            const float x = radius * sinf(phi) * cosf(theta);
+            const float y = radius * sinf(phi) * sinf(theta);
+            const float z = radius * cosf(phi);
 
-            glm::vec3 pos = {x, y, z};
-            glm::vec3 normal = {x, y, z};
-            glm::vec2 uv = {ji / fnslices, fi / fnstacks};
+            const glm::vec3 pos = {x, y, z};
+            const glm::vec3 normal = {x, y, z};
+            const glm::vec2 uv = {ji / fnslices, fi / fnstacks};
 
-            Vulkan::Vertex vertexData = {};
+            Vertex vertexData = {};
             vertexData.pos = pos;
             vertexData.normal = normal;
             vertexData.uv = uv;
@@ -51,15 +52,15 @@ static void GenerateSphere(int nslices, int nstacks, float radius, Vulkan::Verte
     }
 }
 
-static void GenerateSphereIndices(int nslices, int nstacks, uint16_t *pIndices)
+static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t *pIndices)
 {
     int idx = 0;
     for (int i = 0; i < nstacks; i++) {
         for (int j = 0; j < nslices; j++) {
-            uint16_t v1 = i * (nslices + 1) + j;
-            uint16_t v2 = i * (nslices + 1) + j + 1;
-            uint16_t v3 = (i + 1) * (nslices + 1) + j;
-            uint16_t v4 = (i + 1) * (nslices + 1) + j + 1;
+            const uint16_t v1 = i * (nslices + 1) + j;
+            const uint16_t v2 = i * (nslices + 1) + j + 1;
+            const uint16_t v3 = (i + 1) * (nslices + 1) + j;
+            const uint16_t v4 = (i + 1) * (nslices + 1) + j + 1;
 
             pIndices[idx++] = v1;
             pIndices[idx++] = v2;
@@ -72,10 +73,10 @@ static void GenerateSphereIndices(int nslices, int nstacks, uint16_t *pIndices)
     }
 }
 
-Vulkan::Mesh::Mesh(const Device &device)
+Mesh::Mesh(const Device &device)
         : k_Device(device) {}
 
-Vulkan::Mesh::~Mesh()
+Mesh::~Mesh()
 {
     vkDestroyBuffer(k_Device.vkDevice(), m_VkIndexBuffer, VK_ALLOC);
     vkFreeMemory(k_Device.vkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
@@ -83,14 +84,14 @@ Vulkan::Mesh::~Mesh()
     vkFreeMemory(k_Device.vkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
 }
 
-MXC_RESULT Vulkan::Mesh::InitSphere()
+MXC_RESULT Mesh::InitSphere()
 {
     const int nSlices = 32;
     const int nStack = 32;
-    int vertexCount = GenerateSphereVertexCount(nSlices, nStack);
+    const int vertexCount = GenerateSphereVertexCount(nSlices, nStack);
     Vertex pVertices[vertexCount];
     GenerateSphere(nSlices, nStack, 0.5f, pVertices);
-    int indexCount = GenerateSphereIndexCount(nSlices, nStack);
+    const int indexCount = GenerateSphereIndexCount(nSlices, nStack);
     uint16_t pIndices[indexCount];
     GenerateSphereIndices(nSlices, nStack, pIndices);
     MXC_CHK(CreateVertexBuffer(pVertices, vertexCount));
@@ -98,8 +99,8 @@ MXC_RESULT Vulkan::Mesh::InitSphere()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Mesh::CreateVertexBuffer(const Vertex *pVertices,
-                                            const int vertexCount)
+MXC_RESULT Mesh::CreateVertexBuffer(const Vertex *pVertices,
+                                    const int vertexCount)
 {
     m_VertexCount = vertexCount;
     const VkDeviceSize bufferSize = (sizeof(Vertex) * vertexCount);
@@ -111,8 +112,8 @@ MXC_RESULT Vulkan::Mesh::CreateVertexBuffer(const Vertex *pVertices,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Mesh::CreateIndexBuffer(const uint16_t *pIndices,
-                                           const int indexCount)
+MXC_RESULT Mesh::CreateIndexBuffer(const uint16_t *pIndices,
+                                   const int indexCount)
 {
     m_IndexCount = indexCount;
     const VkDeviceSize bufferSize = (sizeof(uint16_t) * indexCount);
@@ -123,10 +124,10 @@ MXC_RESULT Vulkan::Mesh::CreateIndexBuffer(const uint16_t *pIndices,
                                                                 m_VkIndexBufferMemory));
     return MXC_SUCCESS;
 }
-void Vulkan::Mesh::RecordRender()
+void Mesh::RecordRender() const
 {
-    VkBuffer vertexBuffers[] = {m_VkVertexBuffer};
-    VkDeviceSize offsets[] = {0};
+    const VkBuffer vertexBuffers[] = {m_VkVertexBuffer};
+    constexpr VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(k_Device.vkGraphicsCommandBuffer(),
                            0,
                            1,

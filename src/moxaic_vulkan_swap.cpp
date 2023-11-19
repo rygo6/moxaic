@@ -98,7 +98,7 @@ Swap::~Swap()
 {
     vkDestroySemaphore(k_Device.vkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
     vkDestroySemaphore(k_Device.vkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
-    for (int i = 0; i < k_SwapCount; ++i) {
+    for (int i = 0; i < SwapCount; ++i) {
         vkDestroyImageView(k_Device.vkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
         vkDestroyImage(k_Device.vkDevice(), m_VkSwapImages[i], VK_ALLOC);
     }
@@ -113,8 +113,8 @@ MXC_RESULT Swap::Init(VkExtent2D dimensions, bool computeStorage)
                                                      &capabilities));
 
     // I am setting this to 2 on the premise you get the least latency in VR.
-    if (k_SwapCount < capabilities.minImageCount) {
-        MXC_LOG_ERROR("FBR_SWAP_COUNT is less than minImageCount", k_SwapCount, capabilities.minImageCount);
+    if (SwapCount < capabilities.minImageCount) {
+        MXC_LOG_ERROR("FBR_SWAP_COUNT is less than minImageCount", SwapCount, capabilities.minImageCount);
         return MXC_FAIL;
     }
 
@@ -130,7 +130,7 @@ MXC_RESULT Swap::Init(VkExtent2D dimensions, bool computeStorage)
             .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
             .pNext = VK_NULL_HANDLE,
             .surface = Vulkan::vkSurface(),
-            .minImageCount = k_SwapCount,
+            .minImageCount = SwapCount,
             .imageFormat = surfaceFormat.format,
             .imageColorSpace = surfaceFormat.colorSpace,
             .imageExtent = dimensions,
@@ -266,9 +266,8 @@ MXC_RESULT Swap::Acquire()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
+void Swap::BlitToSwap(const Texture &srcTexture) const
 {
-    uint32_t graphicsQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex();
     const std::array transitionBlitBarrier{
             (VkImageMemoryBarrier) {
                     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -276,9 +275,9 @@ MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
                     .dstAccessMask = 0,
                     .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                    .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = srcTexture.vkImage,
+                    .srcQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
+                    .dstQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
+                    .image = srcTexture.vkImage(),
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
             (VkImageMemoryBarrier) {
@@ -287,8 +286,8 @@ MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
                     .dstAccessMask = 0,
                     .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                     .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
+                    .srcQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
+                    .dstQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
                     .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
@@ -300,7 +299,7 @@ MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
                          0, nullptr,
                          0, nullptr,
                          transitionBlitBarrier.size(), transitionBlitBarrier.data());
-    const VkImageSubresourceLayers imageSubresourceLayers{
+    constexpr VkImageSubresourceLayers imageSubresourceLayers{
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
             .mipLevel = 0,
             .baseArrayLayer = 0,
@@ -326,7 +325,7 @@ MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     vkCmdBlitImage(k_Device.vkGraphicsCommandBuffer(),
-                   srcTexture.vkImage,
+                   srcTexture.vkImage(),
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    m_VkSwapImages[m_LastAcquiredSwapIndex],
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -340,9 +339,9 @@ MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
                     .dstAccessMask = 0,
                     .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                     .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                    .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = srcTexture.vkImage,
+                    .srcQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
+                    .dstQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
+                    .image = srcTexture.vkImage(),
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
             (VkImageMemoryBarrier) {
@@ -351,8 +350,8 @@ MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
                     .dstAccessMask = 0,
                     .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                    .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
+                    .srcQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
+                    .dstQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex(),
                     .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
@@ -364,7 +363,6 @@ MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
                          0, nullptr,
                          0, nullptr,
                          transitionPresentBarrier.size(), transitionPresentBarrier.data());
-    return MXC_SUCCESS;
 }
 
 MXC_RESULT Swap::QueuePresent() const

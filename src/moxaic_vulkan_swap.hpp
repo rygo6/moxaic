@@ -10,27 +10,24 @@ namespace Moxaic::Vulkan
     class Device;
     class Texture;
 
-    const uint32_t k_SwapCount = 2;
+    inline constexpr uint32_t SwapCount = 2;
 
     class Swap
     {
         MXC_NO_VALUE_PASS(Swap);
     public:
-        Swap(const Device &device);
+        explicit Swap(const Device &device);
         virtual ~Swap();
 
         MXC_RESULT Init(VkExtent2D dimensions, bool computeStorage);
 
         MXC_RESULT Acquire();
-        MXC_RESULT BlitToSwap(const Texture &srcTexture) const;
+        void BlitToSwap(const Texture &srcTexture) const;
         MXC_RESULT QueuePresent() const;
 
-        inline auto vkSwapchain() const { return m_VkSwapchain; }
-        inline auto vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
-        inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
-        inline auto vkSwapImages(int i) const { return m_VkSwapImages[i]; }
-        inline auto vkSwapImageViews(int i) const { return m_VkSwapImageViews[i]; }
-        inline auto format() const { return m_Format; }
+        const auto& vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
+        const auto& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
+        const auto& format() const { return m_Format; }
 
     private:
         const Device &k_Device;
@@ -39,8 +36,8 @@ namespace Moxaic::Vulkan
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        std::array<VkImage, k_SwapCount> m_VkSwapImages{VK_NULL_HANDLE};
-        std::array<VkImageView, k_SwapCount> m_VkSwapImageViews{VK_NULL_HANDLE};
+        std::array<VkImage, SwapCount> m_VkSwapImages{VK_NULL_HANDLE};
+        std::array<VkImageView, SwapCount> m_VkSwapImageViews{VK_NULL_HANDLE};
 
         VkFormat m_Format;
         VkExtent2D m_Dimensions;

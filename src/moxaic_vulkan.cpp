@@ -24,7 +24,7 @@ static VkSurfaceKHR g_VulkanSurface;
 static bool g_VulkanValidationLayers;
 static VkDebugUtilsMessengerEXT g_VulkanDebugMessenger;
 
-static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severity)
+static const char* SeverityToName(const VkDebugUtilsMessageSeverityFlagBitsEXT severity)
 {
     switch (severity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
@@ -34,14 +34,15 @@ static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severit
             return "!";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
             return "!!!";
+        default:
+            return "";
     }
-    return "";
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                                    const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                                                    void *pUserData)
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    void* pUserData)
 {
     printf("%s %s (%s:%d) %s\n%s\n",
            SeverityToName(messageSeverity),
@@ -53,7 +54,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
     return VK_FALSE;
 }
 
-static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *> &requiredInstanceLayerNames)
+static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *>& requiredInstanceLayerNames)
 {
     MXC_LOG_FUNCTION();
 
@@ -62,7 +63,7 @@ static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *> &
     std::vector<VkLayerProperties> properties(count);
     VK_CHK(vkEnumerateInstanceLayerProperties(&count, properties.data()));
 
-    for (auto requiredName: requiredInstanceLayerNames) {
+    for (const auto requiredName: requiredInstanceLayerNames) {
         MXC_LOG("Loading InstanceLayer: ", requiredName);
         bool found = false;
         for (VkLayerProperties property: properties) {
@@ -79,7 +80,7 @@ static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *> &
     return true;
 }
 
-static bool CheckVulkanInstanceExtensions(const std::vector<const char *> &requiredInstanceExtensionsNames)
+static bool CheckVulkanInstanceExtensions(const std::vector<const char *>& requiredInstanceExtensionsNames)
 {
     MXC_LOG_FUNCTION();
 
@@ -88,7 +89,7 @@ static bool CheckVulkanInstanceExtensions(const std::vector<const char *> &requi
     std::vector<VkExtensionProperties> properties(count);
     VK_CHK(vkEnumerateInstanceExtensionProperties(nullptr, &count, properties.data()));
 
-    for (auto requiredName: requiredInstanceExtensionsNames) {
+    for (const auto requiredName: requiredInstanceExtensionsNames) {
         MXC_LOG("Loading InstanceExtension:", requiredName);
         bool found = false;
         for (VkExtensionProperties property: properties) {
@@ -106,21 +107,21 @@ static bool CheckVulkanInstanceExtensions(const std::vector<const char *> &requi
     return true;
 }
 
-static bool CreateVulkanInstance(SDL_Window *const pWindow)
+static bool CreateVulkanInstance(SDL_Window* const pWindow)
 {
     MXC_LOG_FUNCTION();
 
-    const VkApplicationInfo applicationInfo = {
-            .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-            .pApplicationName = Moxaic::ApplicationName,
-            .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-            .pEngineName = "Vulkan",
-            .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-            .apiVersion = VK_HEADER_VERSION_COMPLETE,
+    constexpr VkApplicationInfo applicationInfo{
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pApplicationName = Moxaic::ApplicationName,
+        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+        .pEngineName = "Vulkan",
+        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+        .apiVersion = VK_HEADER_VERSION_COMPLETE,
     };
-    VkInstanceCreateInfo createInfo = {
-            .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-            .pApplicationInfo = &applicationInfo,
+    VkInstanceCreateInfo createInfo{
+        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+        .pApplicationInfo = &applicationInfo,
     };
 
     // Instance Layers
@@ -171,29 +172,27 @@ static bool LoadVulkanFunctionPointers()
     return true;
 }
 
-static bool CreateVulkanDebugOutput()
+static MXC_RESULT CreateVulkanDebugOutput()
 {
     MXC_LOG_FUNCTION();
-
-    const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-            .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                               VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-            .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-            .pfnUserCallback = DebugCallback,
+    constexpr VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+        .pfnUserCallback = DebugCallback,
     };
     VK_CHK(Vulkan::VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
-                                                       &debugUtilsMessengerCreateInfo,
-                                                       VK_ALLOC,
-                                                       &g_VulkanDebugMessenger));
-
-    return true;
+        &debugUtilsMessengerCreateInfo,
+        VK_ALLOC,
+        &g_VulkanDebugMessenger));
+    return MXC_SUCCESS;
 }
 
-bool Vulkan::Init(SDL_Window *const pWindow, const bool enableValidationLayers)
+bool Vulkan::Init(SDL_Window* const pWindow, const bool enableValidationLayers)
 {
     MXC_LOG_FUNCTION();
 
@@ -205,8 +204,8 @@ bool Vulkan::Init(SDL_Window *const pWindow, const bool enableValidationLayers)
 
     // should surface move into swap class?! or device class?
     MXC_CHK(SDL_Vulkan_CreateSurface(pWindow,
-                                     g_VulkanInstance,
-                                     &g_VulkanSurface));
+        g_VulkanInstance,
+        &g_VulkanSurface));
 
     return true;
 }

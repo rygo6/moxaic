@@ -9,8 +9,5 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
         MXC_RESULT Init();
-
-    private:
-
     };
 }

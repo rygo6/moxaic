@@ -31,7 +31,7 @@ namespace Moxaic
         return Role == Role::Compositor;
     }
 
-    inline const char *string_Role(enum Role role)
+    inline const char *string_Role(const enum Role role)
     {
         switch (role) {
             case Role::Compositor:

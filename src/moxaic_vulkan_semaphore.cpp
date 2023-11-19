@@ -86,7 +86,7 @@ MXC_RESULT Semaphore::Wait()
     return MXC_SUCCESS;
 }
 
-const HANDLE Semaphore::ClonedExternalHandle(HANDLE hTargetProcessHandle) const
+HANDLE Semaphore::ClonedExternalHandle(const HANDLE hTargetProcessHandle) const
 {
     HANDLE duplicateHandle;
     DuplicateHandle(GetCurrentProcess(),

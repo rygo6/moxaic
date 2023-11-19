@@ -22,14 +22,14 @@ namespace Moxaic
     }
 
     template <typename... Types>
-    void LogParams(const char* file, int line, Types... params)
+    void LogParams(const char* file, const int line, Types... params)
     {
         std::cout << string_Role(Moxaic::Role) << " (" << file << ':' << line << ")";
         LogParams(params...);
     }
 
     template <typename... Types>
-    void LogError(const char* file, int line, Types... params)
+    void LogError(const char* file, const int line, Types... params)
     {
         std::cout << "!!! " << string_Role(Moxaic::Role) << " (" << file << ':' << line << ")";
         LogParams(params...);

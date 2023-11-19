@@ -1,11 +1,11 @@
 #pragma once
 
 #include "moxaic_vulkan_descriptor.hpp"
-
-#include "../moxaic_vulkan_uniform.hpp"
-#include "../moxaic_camera.hpp"
+#include "moxaic_vulkan_uniform.hpp"
+#include "moxaic_camera.hpp"
 
 #include <glm/glm.hpp>
+#include <array>
 
 namespace Moxaic::Vulkan
 {
@@ -24,7 +24,7 @@ namespace Moxaic::Vulkan
             uint32_t height;
         };
 
-        inline MXC_RESULT Init(Camera &camera, VkExtent2D dimensions)
+        MXC_RESULT Init(const Camera &camera, const VkExtent2D& dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
             SDL_assert(m_VkDescriptorSet == nullptr);
@@ -44,7 +44,7 @@ namespace Moxaic::Vulkan
                 };
                 MXC_CHK(CreateDescriptorSetLayout(bindings.size(),
                                                   bindings.data()));
-            };
+            }
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -74,25 +74,25 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        inline void Update()
+        void Update()
         {
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
-        inline void Update(const Buffer& buffer)
+        void Update(const Buffer& buffer)
         {
             m_Buffer = buffer;
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
-        inline void UpdateView(Camera &camera)
+        void UpdateView(const Camera &camera)
         {
             m_Buffer.view = camera.view();
             m_Buffer.invView = camera.inverseView();
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
-        inline const auto &buffer() const { return m_Buffer; }
+        const auto &buffer() const { return m_Buffer; }
 
     private:
         Buffer m_Buffer{};

@@ -4,17 +4,12 @@
 using namespace Moxaic;
 
 constexpr std::array k_InterProcessTargetParamSize{
-        sizeof(Moxaic::Node::ImportParam),
+        sizeof(Node::ImportParam),
 };
 
-MXC_RESULT InterProcessProducer::Init(const std::string &sharedMemoryName)
+void InterProcessProducer::Enque(const InterProcessTargetFunc target, const void *param) const
 {
-    return InterProcessBuffer::Init(sharedMemoryName);
-}
-
-void InterProcessProducer::Enque(InterProcessTargetFunc target, void *param)
-{
-    auto pBuffer = (RingBuffer *) m_pBuffer;
+    const auto pBuffer = static_cast<RingBuffer *>(m_pBuffer);
     pBuffer->pRingBuffer[pBuffer->head] = target;
     memcpy(pBuffer->pRingBuffer + pBuffer->head + RingBuffer::HeaderSize, param, k_InterProcessTargetParamSize[target]);
     pBuffer->head = pBuffer->head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
@@ -24,21 +19,21 @@ MXC_RESULT InterProcessReceiver::Init(const std::string &sharedMemoryName,
                                       const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs)
 {
     m_TargetFuncs = targetFuncs;
-    return InterProcessBuffer::Init(sharedMemoryName);;
+    return InterProcessBuffer::Init(sharedMemoryName);
 }
 
-int InterProcessReceiver::Deque()
+int InterProcessReceiver::Deque() const
 {
     // TODO this needs to actually cycle around the ring buffer, this is only half done
 
-    auto pBuffer = (RingBuffer *) m_pBuffer;
+    const auto pBuffer = static_cast<RingBuffer *>(m_pBuffer);
 
     if (pBuffer->head == pBuffer->tail)
         return 0;
 
     MXC_LOG("IPC Polling.", pBuffer->head, pBuffer->tail);
 
-    InterProcessTargetFunc target = static_cast<InterProcessTargetFunc>(pBuffer->pRingBuffer[pBuffer->tail]);
+    const InterProcessTargetFunc target = static_cast<InterProcessTargetFunc>(pBuffer->pRingBuffer[pBuffer->tail]);
 
     // TODO do you copy it out of the IPC or just send that chunk of shared memory on through?
     // If consumer consumes too slow then producer might run out of data in a stream?

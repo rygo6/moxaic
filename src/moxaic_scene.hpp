@@ -22,14 +22,18 @@ namespace Moxaic
     class SceneBase
     {
         MXC_NO_VALUE_PASS(SceneBase);
+
     public:
-        SceneBase(const Vulkan::Device &device)
-                : k_Device(device) {}
+        SceneBase(const Vulkan::Device& device)
+            : k_Device(device)
+        {
+        }
         virtual ~SceneBase() = default;
         virtual MXC_RESULT Init() = 0;
         virtual MXC_RESULT Loop(const uint32_t deltaTime) = 0;
+
     protected:
-        const Vulkan::Device &k_Device;
+        const Vulkan::Device& k_Device;
     };
 
     class CompositorScene : public SceneBase
@@ -41,9 +45,12 @@ namespace Moxaic
         MXC_RESULT Loop(const uint32_t deltaTime) override;
 
     private:
-        std::array<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{k_Device, k_Device};
+        std::array<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{
+            Vulkan::Framebuffer(k_Device),
+            Vulkan::Framebuffer(k_Device)
+        };
         int m_FramebufferIndex{0};
-        
+
         Vulkan::Swap m_Swap{k_Device};
         Vulkan::Semaphore m_Semaphore{k_Device};
 

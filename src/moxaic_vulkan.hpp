@@ -11,10 +11,10 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-inline constinit VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;
-inline constinit VkFormat k_NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-inline constinit VkFormat k_GBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-inline constinit VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
+inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;
+inline constexpr VkFormat k_NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+inline constexpr VkFormat k_GBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+inline constexpr VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 
 #define VK_ALLOC nullptr
 
@@ -65,7 +65,7 @@ namespace Moxaic::Vulkan
         External,
     };
 
-    inline const char *string_Locality(Locality input_value)
+    inline const char *string_Locality(const Locality input_value)
     {
         switch (input_value) {
             case Locality::Local:
@@ -84,7 +84,7 @@ namespace Moxaic::Vulkan
         const char *DebugFile;
     };
 
-    extern struct Debug VkDebug;
+    extern Debug VkDebug;
 
     //inline?
     struct Func
@@ -100,5 +100,5 @@ namespace Moxaic::Vulkan
 #undef VK_FUNC
     };
 
-    extern struct Func VkFunc;
+    extern Func VkFunc;
 }

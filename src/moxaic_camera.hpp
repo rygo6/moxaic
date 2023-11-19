@@ -1,12 +1,7 @@
 #pragma once
 
-#include "moxaic_vulkan.hpp"
 #include "moxaic_transform.hpp"
-#include "moxaic_window.hpp"
-
 #include <vulkan/vulkan.h>
-#include <windows.h>
-
 #include <glm/glm.hpp>
 
 namespace Moxaic
@@ -23,12 +18,12 @@ namespace Moxaic
         void UpdateView();
         void UpdateProjection();
 
-        inline auto &transform() { return m_Transform; }
+        auto &transform() { return m_Transform; }
 
-        inline auto view() const { return m_View; }
-        inline auto projection() const { return m_Projection; }
-        inline auto inverseView() const { return m_InverseView; }
-        inline auto inverseProjection() const { return m_InverseProjection; }
+        auto view() const { return m_View; }
+        auto projection() const { return m_Projection; }
+        auto inverseView() const { return m_InverseView; }
+        auto inverseProjection() const { return m_InverseProjection; }
 
     private:
         float m_FOV{45.0f};

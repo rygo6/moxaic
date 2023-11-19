@@ -7,8 +7,8 @@
 
 using namespace Moxaic;
 
-const char k_TempSharedProducerName[] = "IPCProducer";
-const char k_TempSharedCamMemoryName[] = "IPCCamera";
+constexpr char k_TempSharedProducerName[] = "IPCProducer";
+constexpr char k_TempSharedCamMemoryName[] = "IPCCamera";
 
 static MXC_RESULT StartProcess(STARTUPINFO &si, PROCESS_INFORMATION &pi)
 {
@@ -21,14 +21,14 @@ static MXC_RESULT StartProcess(STARTUPINFO &si, PROCESS_INFORMATION &pi)
     snprintf(buf, sizeof(buf), "moxaic.exe -node");
     MXC_LOG("Process Command", buf);
 
-    if (!CreateProcess(NULL, // No module name (use command line)
+    if (!CreateProcess(nullptr, // No module name (use command line)
                        buf, // Command line
-                       NULL,  // Process handle not inheritable
-                       NULL, // Thread handle not inheritable
+                       nullptr,  // Process handle not inheritable
+                       nullptr, // Thread handle not inheritable
                        FALSE, // Set handle inheritance to FALSE
                        0, // No creation flags
-                       NULL, // Use parent's environment block
-                       NULL, // Use parent's starting directory
+                       nullptr, // Use parent's environment block
+                       nullptr, // Use parent's starting directory
                        &si, // Pointer to STARTUPINFO structure
                        &pi)) { // Pointer to PROCESS_INFORMATION structure
         MXC_LOG_ERROR("CreateProcess fail");
@@ -68,7 +68,7 @@ MXC_RESULT NodeReference::Init()
 
 MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore &compositorSemaphore)
 {
-    auto hProcess = m_ProcessInformation.hProcess;
+    const auto hProcess = m_ProcessInformation.hProcess;
     const Node::ImportParam importParam{
             .framebufferWidth = m_ExportedFramebuffers[0].extents().width,
             .framebufferHeight = m_ExportedFramebuffers[0].extents().height,
@@ -83,7 +83,7 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore &compositorSemap
             .compositorSemaphoreExternalHandle = compositorSemaphore.ClonedExternalHandle(hProcess),
             .nodeSemaphoreExternalHandle = m_ExportedNodeSemaphore.ClonedExternalHandle(hProcess),
     };
-    m_IPCToNode.Enque(InterProcessTargetFunc::ImportCompositor, (void *) &importParam);
+    m_IPCToNode.Enque(InterProcessTargetFunc::ImportCompositor, &importParam);
 
     return MXC_SUCCESS;
 }
@@ -97,7 +97,7 @@ MXC_RESULT Node::Init()
 {
     const std::array targetFuncs{
             (InterProcessFunc) [this](void *pParameters) {
-                auto pImportParameters = (ImportParam *) pParameters;
+                const auto pImportParameters = static_cast<ImportParam *>(pParameters);
                 this->InitImport(*pImportParameters);
             }
     };
@@ -105,7 +105,7 @@ MXC_RESULT Node::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Node::InitImport(ImportParam &parameters)
+MXC_RESULT Node::InitImport(const ImportParam &parameters)
 {
     MXC_LOG("Node Init Import");
     m_ImportedFramebuffers[0].InitFromImport({parameters.framebufferWidth, parameters.framebufferHeight},

@@ -19,36 +19,37 @@ namespace Moxaic
     class NodeReference
     {
         MXC_NO_VALUE_PASS(NodeReference);
+
     public:
-        NodeReference(const Vulkan::Device &device);
+        explicit NodeReference(const Vulkan::Device& device);
         virtual ~NodeReference();
 
         MXC_RESULT Init();
 
-        MXC_RESULT ExportOverIPC(const Vulkan::Semaphore &compositorSemaphore);
+        MXC_RESULT ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore);
 
-        inline void UpdateGlobalDescriptor(const Vulkan::GlobalDescriptor& globalDescriptor)
+        void UpdateGlobalDescriptor(const Vulkan::GlobalDescriptor& globalDescriptor)
         {
             m_ExportedGlobalDescriptor.CopyBuffer(globalDescriptor.buffer());
         }
 
-        inline const auto &framebuffer(int index) const
+        const auto& framebuffer(const int index) const
         {
             return m_ExportedFramebuffers[index];
         }
 
-        inline auto &ipcToNode()
+        auto& ipcToNode()
         {
             return m_IPCToNode;
         }
 
-        inline auto &ipcFromNode()
+        auto& ipcFromNode()
         {
             return m_IPCFromNode;
         }
 
     private:
-        const Vulkan::Device &k_Device;
+        const Vulkan::Device& k_Device;
 
         Transform m_Transform{};
 
@@ -57,14 +58,18 @@ namespace Moxaic
 
         Camera m_CompositingCamera{}; // Camera which compositor is using to reproject.
 
-        InterProcessBuffer<Vulkan::GlobalDescriptor::Buffer> m_ExportedGlobalDescriptor{}; // Buffer which the node is currently using to render
+        InterProcessBuffer<Vulkan::GlobalDescriptor::Buffer> m_ExportedGlobalDescriptor{};
+        // Buffer which the node is currently using to render
 
         InterProcessProducer m_IPCToNode{};
         InterProcessReceiver m_IPCFromNode{};
 
         Vulkan::Semaphore m_ExportedNodeSemaphore{k_Device};
 
-        std::array<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{k_Device, k_Device};
+        std::array<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
+            Vulkan::Framebuffer(k_Device),
+            Vulkan::Framebuffer(k_Device)
+        };
 
         STARTUPINFO m_Startupinfo{};
         PROCESS_INFORMATION m_ProcessInformation{};
@@ -73,6 +78,7 @@ namespace Moxaic
     class Node
     {
         MXC_NO_VALUE_PASS(Node);
+
     public:
         struct ImportParam
         {
@@ -90,52 +96,52 @@ namespace Moxaic
             HANDLE nodeSemaphoreExternalHandle;
         };
 
-        Node(const Vulkan::Device &device);
+        explicit Node(const Vulkan::Device& device);
         virtual ~Node();
 
         MXC_RESULT Init();
-        MXC_RESULT InitImport(ImportParam &parameters);
+        MXC_RESULT InitImport(const ImportParam& parameters);
 
-        inline const auto &globalDescriptor() const
+        const auto& globalDescriptor() const
         {
             return m_ImportedGlobalDescriptor;
         }
 
-        inline const auto &framebuffer(int index) const
+        const auto& framebuffer(const int index) const
         {
             return m_ImportedFramebuffers[index];
         }
 
-        inline const auto &CompositorSemaphore() const
+        const auto& CompositorSemaphore() const
         {
             return m_ImportedCompositorSemaphore;
         }
 
-        inline auto &NodeSemaphore()
+        auto& NodeSemaphore()
         {
             return m_ImportedNodeSemaphore;
         }
 
-        inline auto &ipcFromCompositor()
+        auto& ipcFromCompositor()
         {
             return m_IPCFromCompositor;
         }
 
-        inline auto &ipcToCompositor()
+        auto& ipcToCompositor()
         {
             return m_IPCFromCompositor;
         }
 
     private:
-        const Vulkan::Device &k_Device;
+        const Vulkan::Device& k_Device;
 
-        inline std::array<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
+        std::array<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
         {
             return {
-                    [this](void *pParameters) {
-                        auto pImportParameters = (ImportParam *) pParameters;
-                        this->InitImport(*pImportParameters);
-                    }
+                [this](void* pParameters) {
+                    const auto pImportParameters = static_cast<ImportParam *>(pParameters);
+                    this->InitImport(*pImportParameters);
+                }
             };
         }
 
@@ -152,6 +158,9 @@ namespace Moxaic
         Vulkan::Semaphore m_ImportedCompositorSemaphore{k_Device};
         Vulkan::Semaphore m_ImportedNodeSemaphore{k_Device};
 
-        std::array<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{k_Device, k_Device};
+        std::array<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{
+            Vulkan::Framebuffer(k_Device),
+            Vulkan::Framebuffer(k_Device)
+        };
     };
 }
