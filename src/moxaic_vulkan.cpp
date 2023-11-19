@@ -31,9 +31,9 @@ static const char *SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT severit
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
             return "";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-            return "! ";
+            return "!";
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-            return "!!! ";
+            return "!!!";
     }
     return "";
 }
@@ -43,8 +43,9 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
                                                     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
                                                     void *pUserData)
 {
-    printf("%s(%s:%d) %s\n%s\n",
+    printf("%s %s (%s:%d) %s\n%s\n",
            SeverityToName(messageSeverity),
+           string_Role(Moxaic::Role),
            Vulkan::VkDebug.DebugFile,
            Vulkan::VkDebug.DebugLine,
            Vulkan::VkDebug.DebugCommand,

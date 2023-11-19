@@ -38,12 +38,12 @@ namespace Moxaic::Vulkan
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Uniform.Mapped().model = transform.modelMatrix();
+            m_Uniform.mapped().model = transform.modelMatrix();
 
             MXC_CHK(AllocateDescriptorSet());
             const VkDescriptorBufferInfo objectUBOInfo{
                     .buffer = m_Uniform.vkBuffer(),
-                    .range = m_Uniform.BufferSize()
+                    .range = m_Uniform.Size()
             };
             std::array writes{
                     (VkWriteDescriptorSet) {

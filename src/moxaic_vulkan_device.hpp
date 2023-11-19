@@ -79,6 +79,7 @@ namespace Moxaic::Vulkan
         MXC_RESULT EndRenderPass() const;
         MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore &timelineSemaphore,
                                                  const Swap &swap) const;
+        MXC_RESULT SubmitGraphicsQueue(Semaphore &timelineSemaphore) const;
 
         // VulkanHandles are not encapsulated. Deal with vk vars and methods with care.
         // Reason? Vulkan safety is better enforced by validation layers, not C++, and

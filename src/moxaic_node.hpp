@@ -25,7 +25,7 @@ namespace Moxaic
 
         MXC_RESULT Init();
 
-        MXC_RESULT ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore);
+        MXC_RESULT ExportOverIPC(const Vulkan::Semaphore &compositorSemaphore);
 
         inline auto &ipcToNode()
         {
@@ -84,6 +84,26 @@ namespace Moxaic
 
         MXC_RESULT Init();
         MXC_RESULT InitImport(ImportParam &parameters);
+
+        inline auto &globalDescriptor()
+        {
+            return m_ImportedGlobalDescriptor;
+        }
+
+        inline const auto &framebuffer(int index) const
+        {
+            return m_ImportedFramebuffers[index];
+        }
+
+        inline const auto &CompositorSemaphore() const
+        {
+            return m_ImportedCompositorSemaphore;
+        }
+
+        inline auto &NodeSemaphore()
+        {
+            return m_ImportedNodeSemaphore;
+        }
 
         inline auto &ipcFromCompositor()
         {

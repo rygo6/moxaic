@@ -47,17 +47,17 @@ namespace Moxaic::Vulkan
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Uniform.Mapped().width = dimensions.width;
-            m_Uniform.Mapped().height = dimensions.height;
-            m_Uniform.Mapped().proj = camera.projection();
-            m_Uniform.Mapped().invProj = camera.inverseProjection();
-            m_Uniform.Mapped().view = camera.view();
-            m_Uniform.Mapped().invView = camera.inverseView();
+            m_Uniform.mapped().width = dimensions.width;
+            m_Uniform.mapped().height = dimensions.height;
+            m_Uniform.mapped().proj = camera.projection();
+            m_Uniform.mapped().invProj = camera.inverseProjection();
+            m_Uniform.mapped().view = camera.view();
+            m_Uniform.mapped().invView = camera.inverseView();
 
             MXC_CHK(AllocateDescriptorSet());
             const VkDescriptorBufferInfo globalUBOInfo{
                     .buffer = m_Uniform.vkBuffer(),
-                    .range = m_Uniform.BufferSize()
+                    .range = m_Uniform.Size()
             };
             std::array writes{
                     (VkWriteDescriptorSet) {
@@ -71,10 +71,15 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
+        inline void Update(const Buffer &buffer)
+        {
+            m_Uniform.CopyBuffer(buffer);
+        }
+
         inline void UpdateView(Camera &camera)
         {
-            m_Uniform.Mapped().view = camera.view();
-            m_Uniform.Mapped().invView = camera.inverseView();
+            m_Uniform.mapped().view = camera.view();
+            m_Uniform.mapped().invView = camera.inverseView();
         }
 
     private:

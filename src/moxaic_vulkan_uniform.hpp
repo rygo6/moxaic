@@ -42,14 +42,14 @@ namespace Moxaic::Vulkan
             MXC_LOG("Init Uniform:",
                     string_VkMemoryPropertyFlags(properties),
                     string_VkBufferUsageFlags(usage),
-                    BufferSize(),
+                    Size(),
                     string_Locality(locality));
             VkMemoryPropertyFlags supportedProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
             SDL_assert(((supportedProperties & properties) == supportedProperties) &&
                        "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
             MXC_CHK(k_Device.CreateAllocateBindBuffer(usage,
                                                       properties,
-                                                      BufferSize(),
+                                                      Size(),
                                                       locality,
                                                       m_VkBuffer,
                                                       m_VkDeviceMemory,
@@ -57,15 +57,19 @@ namespace Moxaic::Vulkan
             VK_CHK(vkMapMemory(k_Device.vkDevice(),
                                m_VkDeviceMemory,
                                0,
-                               BufferSize(),
+                               Size(),
                                0,
                                &m_pMappedBuffer));
             return MXC_SUCCESS;
         }
 
-        inline T &Mapped() { return *(T*)(m_pMappedBuffer); }
-        inline VkDeviceSize BufferSize() const { return sizeof(T); }
+        inline void CopyBuffer(const T &buffer)
+        {
+            memcpy(m_pMappedBuffer, &buffer, Size());
+        }
 
+        inline constexpr VkDeviceSize Size() const { return sizeof(T); }
+        inline T &mapped() { return *(T *) (m_pMappedBuffer); }
         inline auto vkBuffer() const { return m_VkBuffer; }
 
     private:

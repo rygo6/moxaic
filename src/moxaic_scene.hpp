@@ -71,18 +71,18 @@ namespace Moxaic
 
     private:
         // should node be here? maybe outside scene?
-        Node node{k_Device};
+        Node m_Node{k_Device};
+        int m_FramebufferIndex{0};
 
-        Vulkan::Mesh mesh{k_Device};
-        Vulkan::Texture texture{k_Device};
+        Vulkan::StandardPipeline m_StandardPipeline{k_Device};
+        Vulkan::GlobalDescriptor m_GlobalDescriptor{k_Device};
+        Vulkan::MaterialDescriptor m_MaterialDescriptor{k_Device};
+        Vulkan::ObjectDescriptor m_ObjectDescriptor{k_Device};
 
-        Vulkan::StandardPipeline standardPipeline{k_Device};
-        Vulkan::GlobalDescriptor globalDescriptor{k_Device};
-        Vulkan::MaterialDescriptor materialDescriptor{k_Device};
-        Vulkan::ObjectDescriptor objectDescriptor{k_Device};
+        Camera m_MainCamera{};
 
-        Camera camera{};
-
-        Transform transform{};
+        Vulkan::Mesh m_SphereTestMesh{k_Device};
+        Vulkan::Texture m_SphereTestTexture{k_Device};
+        Transform m_SpherTestTransform{};
     };
 }

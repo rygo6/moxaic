@@ -1011,15 +1011,12 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer() const
 {
     VK_CHK(vkResetCommandBuffer(m_VkGraphicsCommandBuffer,
                                 VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
-    const VkCommandBufferBeginInfo beginInfo = {
+    const VkCommandBufferBeginInfo beginInfo{
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-            .pInheritanceInfo = nullptr,
     };
     VK_CHK(vkBeginCommandBuffer(m_VkGraphicsCommandBuffer,
                                 &beginInfo));
-    const VkViewport viewport = {
+    const VkViewport viewport{
             .x = 0.0f,
             .y = 0.0f,
             .width = (float) Window::extents().width,
@@ -1031,7 +1028,7 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer() const
                      0,
                      1,
                      &viewport);
-    const VkRect2D scissor = {
+    const VkRect2D scissor{
             .offset = {0, 0},
             .extent = Window::extents(),
     };
@@ -1055,7 +1052,7 @@ MXC_RESULT Device::BeginRenderPass(const Framebuffer &framebuffer) const
     clearValues[1].color = (VkClearColorValue) {{0.0f, 0.0f, 0.0f, 0.0f}};
     clearValues[2].color = (VkClearColorValue) {{0.0f, 0.0f, 0.0f, 0.0f}};
     clearValues[3].depthStencil = (VkClearDepthStencilValue) {1.0f, 0};
-    const VkRenderPassBeginInfo vkRenderPassBeginInfo = {
+    const VkRenderPassBeginInfo renderPassBeginInfo {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .pNext = nullptr,
             .renderPass = m_VkRenderPass,
@@ -1068,7 +1065,7 @@ MXC_RESULT Device::BeginRenderPass(const Framebuffer &framebuffer) const
             .pClearValues = clearValues.data(),
     };
     vkCmdBeginRenderPass(m_VkGraphicsCommandBuffer,
-                         &vkRenderPassBeginInfo,
+                         &renderPassBeginInfo,
                          VK_SUBPASS_CONTENTS_INLINE);
     return MXC_SUCCESS;
 }
@@ -1076,6 +1073,53 @@ MXC_RESULT Device::BeginRenderPass(const Framebuffer &framebuffer) const
 MXC_RESULT Device::EndRenderPass() const
 {
     vkCmdEndRenderPass(m_VkGraphicsCommandBuffer);
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Device::SubmitGraphicsQueue(Semaphore &timelineSemaphore) const
+{
+    // https://www.khronos.org/blog/vulkan-timeline-semaphores
+    const uint64_t waitValue = timelineSemaphore.waitValue();
+    timelineSemaphore.IncrementWaitValue();
+    const uint64_t signalValue = timelineSemaphore.waitValue();
+    const std::array waitSemaphoreValues{
+            (uint64_t) waitValue,
+    };
+    const std::array signalSemaphoreValues{
+            (uint64_t) signalValue,
+    };
+    const VkTimelineSemaphoreSubmitInfo timelineSemaphoreSubmitInfo{
+            .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+            .pNext = nullptr,
+            .waitSemaphoreValueCount = waitSemaphoreValues.size(),
+            .pWaitSemaphoreValues =  waitSemaphoreValues.data(),
+            .signalSemaphoreValueCount = signalSemaphoreValues.size(),
+            .pSignalSemaphoreValues = signalSemaphoreValues.data(),
+    };
+    const std::array waitSemaphores{
+            (VkSemaphore) timelineSemaphore.vkSemaphore(),
+    };
+    const std::array waitDstStageMask{
+            (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    };
+    const std::array signalSemaphores{
+            (VkSemaphore) timelineSemaphore.vkSemaphore(),
+    };
+    const VkSubmitInfo submitInfo = {
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .pNext = &timelineSemaphoreSubmitInfo,
+            .waitSemaphoreCount = waitSemaphores.size(),
+            .pWaitSemaphores = waitSemaphores.data(),
+            .pWaitDstStageMask = waitDstStageMask.data(),
+            .commandBufferCount = 1,
+            .pCommandBuffers = &m_VkGraphicsCommandBuffer,
+            .signalSemaphoreCount = signalSemaphores.size(),
+            .pSignalSemaphores = signalSemaphores.data()
+    };
+    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
+                         1,
+                         &submitInfo,
+                         VK_NULL_HANDLE));
     return MXC_SUCCESS;
 }
 
@@ -1129,7 +1173,6 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore &timelineSemaphore,
                          1,
                          &submitInfo,
                          VK_NULL_HANDLE));
-    swap.QueuePresent();
-
+    MXC_CHK(swap.QueuePresent());
     return MXC_SUCCESS;
 }

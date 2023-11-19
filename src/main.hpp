@@ -1,16 +1,13 @@
 #pragma once
 
-#include "moxaic_logging.hpp"
-
 #include <cstdint>
+
+#define MXC_RESULT bool
+#define MXC_SUCCESS true
+#define MXC_FAIL false
 
 namespace Moxaic
 {
-    enum class Role {
-        Compositor,
-        Node
-    };
-
     inline constexpr uint32_t DefaultWidth = 1280;
     inline constexpr uint32_t DefaultHeight = 1024;
     inline constexpr char ApplicationName[] = "moxaic";
@@ -18,9 +15,26 @@ namespace Moxaic
 
     inline MXC_RESULT Running = MXC_SUCCESS;
 
+    enum class Role {
+        Compositor,
+        Node
+    };
+
     inline Role Role = Role::Compositor;
 
     inline bool IsCompositor() {
         return Role == Role::Compositor;
+    }
+
+    inline const char *string_Role(enum Role role)
+    {
+        switch (role) {
+            case Role::Compositor:
+                return "Comp";
+            case Role::Node:
+                return "Node";
+            default:
+                return "Unknown Role";
+        }
     }
 }

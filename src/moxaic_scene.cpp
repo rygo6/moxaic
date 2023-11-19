@@ -58,6 +58,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
     }
 
     k_Device.BeginGraphicsCommandBuffer();
+
     k_Device.BeginRenderPass(m_Framebuffers[m_FramebufferIndex]);
 
     m_StandardPipeline.BindPipeline();
@@ -85,29 +86,29 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
 
 MXC_RESULT NodeScene::Init()
 {
-    MXC_CHK(node.Init());
+    MXC_CHK(m_Node.Init());
 
-    transform.setPosition({0, 0, 0});
+    m_SpherTestTransform.setPosition({0, 0, 0});
 
-    MXC_CHK(globalDescriptor.Init(camera,
-                                  Window::extents()));
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
+                                    Window::extents()));
 
-    MXC_CHK(texture.InitFromFile("textures/test.jpg",
-                                 Vulkan::Locality::Local));
-    MXC_CHK(texture.TransitionImmediateInitialToGraphicsRead());
+    MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
+                                             Vulkan::Locality::Local));
+    MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
 
-    MXC_CHK(materialDescriptor.Init(texture));
+    MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
 
-    MXC_CHK(objectDescriptor.Init(transform));
+    MXC_CHK(m_ObjectDescriptor.Init(m_SpherTestTransform));
 
-    MXC_CHK(standardPipeline.Init(globalDescriptor,
-                                  materialDescriptor,
-                                  objectDescriptor));
+    MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
+                                    m_MaterialDescriptor,
+                                    m_ObjectDescriptor));
 
-    MXC_CHK(mesh.Init());
+    MXC_CHK(m_SphereTestMesh.Init());
 
     // spin lock for now until initial ipc message is received
-    while (node.ipcFromCompositor().Deque() == 0) {
+    while (m_Node.ipcFromCompositor().Deque() == 0) {
         MXC_LOG("Node Waiting for IPC");
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
@@ -117,5 +118,28 @@ MXC_RESULT NodeScene::Init()
 
 MXC_RESULT NodeScene::Loop(const uint32_t deltaTime)
 {
+    m_GlobalDescriptor.Update(m_Node.globalDescriptor().buffer());
+
+    k_Device.BeginGraphicsCommandBuffer();
+
+    k_Device.BeginRenderPass(m_Node.framebuffer(m_FramebufferIndex));
+
+    m_StandardPipeline.BindPipeline();
+    m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
+    m_StandardPipeline.BindDescriptor(m_MaterialDescriptor);
+    m_StandardPipeline.BindDescriptor(m_ObjectDescriptor);
+
+    m_SphereTestMesh.RecordRender();
+
+    k_Device.EndRenderPass();
+
+    k_Device.EndGraphicsCommandBuffer();
+
+    k_Device.SubmitGraphicsQueue(m_Node.NodeSemaphore());
+
+    m_Node.NodeSemaphore().Wait();
+
+    m_FramebufferIndex = !m_FramebufferIndex;
+
     return MXC_SUCCESS;
 }

@@ -50,6 +50,7 @@ namespace Moxaic::Vulkan
 
         VkExtent2D m_Extents;
 
+        MXC_RESULT InitFramebuffer();
         MXC_RESULT InitSemaphore();
     };
 }

@@ -29,7 +29,7 @@ namespace Moxaic
                     NULL, // default security
                     PAGE_READWRITE, // read/write access
                     0, // maximum object size (high-order DWORD)
-                    BufferSize(), // maximum object size (low-order DWORD)
+                    Size(), // maximum object size (low-order DWORD)
                     sharedMemoryName.c_str()); // name of mapping object
             if (m_hMapFile == nullptr) {
                 MXC_LOG_ERROR("Could not create file mapping object.", GetLastError());
@@ -40,8 +40,8 @@ namespace Moxaic
                                       FILE_MAP_ALL_ACCESS,
                                       0,
                                       0,
-                                      BufferSize());
-            memset(m_pBuffer, 0, BufferSize());
+                                      Size());
+            memset(m_pBuffer, 0, Size());
             if (m_pBuffer == nullptr) {
                 MXC_LOG_ERROR("Could not map view of file.", GetLastError());
                 CloseHandle(m_pBuffer);
@@ -58,7 +58,7 @@ namespace Moxaic
         }
 
         inline T &buffer() { return *(T *) (m_pBuffer); }
-        inline int BufferSize() const { return sizeof(T); }
+        inline constexpr int Size() const { return sizeof(T); }
 
     private:
 #ifdef WIN32

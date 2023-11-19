@@ -3,20 +3,22 @@
 #include "moxaic_vulkan_texture.hpp"
 
 using namespace Moxaic;
+using namespace Moxaic::Vulkan;
 
 constinit VkImageUsageFlags k_ColorBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 constinit VkImageUsageFlags k_NormalBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 constinit VkImageUsageFlags k_GBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 constinit VkImageUsageFlags k_DepthBufferUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
 
-Vulkan::Framebuffer::Framebuffer(const Vulkan::Device &device)
+Framebuffer::Framebuffer(const Device &device)
         : k_Device(device) {}
 
-Vulkan::Framebuffer::~Framebuffer() = default;
+Framebuffer::~Framebuffer() = default;
 
-bool Vulkan::Framebuffer::Init(const VkExtent2D extents,
-                               const Vulkan::Locality locality)
+bool Framebuffer::Init(const VkExtent2D extents,
+                       const Locality locality)
 {
+    m_Extents = extents;
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
                                 extents,
                                 k_ColorBufferUsage,
@@ -41,38 +43,18 @@ bool Vulkan::Framebuffer::Init(const VkExtent2D extents,
                                 VK_IMAGE_ASPECT_DEPTH_BIT,
                                 locality));
     MXC_CHK(m_DepthTexture.TransitionImmediateInitialToGraphicsRead());
-    const std::array attachments{
-            m_ColorTexture.vkImageView,
-            m_NormalTexture.vkImageView,
-            m_GBufferTexture.vkImageView,
-            m_DepthTexture.vkImageView,
-    };
-    const VkFramebufferCreateInfo framebufferCreateInfo{
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .pNext = nullptr,
-            .flags = 0,
-            .renderPass = k_Device.vkRenderPass(),
-            .attachmentCount = attachments.size(),
-            .pAttachments = attachments.data(),
-            .width = extents.width,
-            .height = extents.height,
-            .layers = 1,
-    };
-    VK_CHK(vkCreateFramebuffer(k_Device.vkDevice(),
-                               &framebufferCreateInfo,
-                               VK_ALLOC,
-                               &m_VkFramebuffer));
+    MXC_CHK(InitFramebuffer());
     MXC_CHK(InitSemaphore());
-    m_Extents = extents;
     return true;
 }
 
-MXC_RESULT Vulkan::Framebuffer::InitFromImport(const VkExtent2D extents,
-                                               const HANDLE colorExternalHandle,
-                                               const HANDLE normalExternalHandle,
-                                               const HANDLE gBufferExternalHandle,
-                                               const HANDLE depthExternalHandle)
+MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D extents,
+                                       const HANDLE colorExternalHandle,
+                                       const HANDLE normalExternalHandle,
+                                       const HANDLE gBufferExternalHandle,
+                                       const HANDLE depthExternalHandle)
 {
+    m_Extents = extents;
     MXC_CHK(m_ColorTexture.InitFromImport(k_ColorBufferFormat,
                                           extents,
                                           k_ColorBufferUsage,
@@ -97,12 +79,38 @@ MXC_RESULT Vulkan::Framebuffer::InitFromImport(const VkExtent2D extents,
                                           VK_IMAGE_ASPECT_DEPTH_BIT,
                                           depthExternalHandle));
     MXC_CHK(m_DepthTexture.TransitionImmediateInitialToGraphicsRead());
+    MXC_CHK(InitFramebuffer());
     MXC_CHK(InitSemaphore());
-    m_Extents = extents;
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Framebuffer::InitSemaphore()
+MXC_RESULT Framebuffer::InitFramebuffer()
+{
+    const std::array attachments{
+            m_ColorTexture.vkImageView,
+            m_NormalTexture.vkImageView,
+            m_GBufferTexture.vkImageView,
+            m_DepthTexture.vkImageView,
+    };
+    const VkFramebufferCreateInfo framebufferCreateInfo{
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .renderPass = k_Device.vkRenderPass(),
+            .attachmentCount = attachments.size(),
+            .pAttachments = attachments.data(),
+            .width = m_Extents.width,
+            .height = m_Extents.height,
+            .layers = 1,
+    };
+    VK_CHK(vkCreateFramebuffer(k_Device.vkDevice(),
+                               &framebufferCreateInfo,
+                               VK_ALLOC,
+                               &m_VkFramebuffer));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Framebuffer::InitSemaphore()
 {
     const VkSemaphoreCreateInfo renderCompleteCreateInfo{
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
