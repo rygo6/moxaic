@@ -19,59 +19,65 @@
 
 namespace Moxaic
 {
-    class CompositorScene
+    class SceneBase
     {
     public:
-        CompositorScene(const Vulkan::Device &device);
-        virtual ~CompositorScene() = default;
+        SceneBase(const Vulkan::Device &device)
+                : k_Device(device) {}
+        virtual ~SceneBase() = default;
+        virtual MXC_RESULT Init() = 0;
+        virtual MXC_RESULT Loop(const uint32_t deltaTime) = 0;
+    protected:
+        const Vulkan::Device &k_Device;
+    };
 
-        MXC_RESULT Init();
-        MXC_RESULT Loop(const uint32_t deltaTime);
+    class CompositorScene : public SceneBase
+    {
+    public:
+        using SceneBase::SceneBase;
+
+        MXC_RESULT Init() override;
+        MXC_RESULT Loop(const uint32_t deltaTime) override;
 
     private:
-        const Vulkan::Device &device;
+        Vulkan::Framebuffer framebuffer{k_Device};
+        Vulkan::Swap swap{k_Device};
+        Vulkan::Semaphore semaphore{k_Device};
+        Vulkan::Mesh mesh{k_Device};
+        Vulkan::Texture texture{k_Device};
 
-        Vulkan::Framebuffer framebuffer{device};
-        Vulkan::Swap swap{device};
-        Vulkan::Semaphore semaphore{device};
-        Vulkan::Mesh mesh{device};
-        Vulkan::Texture texture{device};
-
-        Vulkan::StandardPipeline standardPipeline{device};
-        Vulkan::GlobalDescriptor globalDescriptor{device};
-        Vulkan::MaterialDescriptor materialDescriptor{device};
-        Vulkan::ObjectDescriptor objectDescriptor{device};
+        Vulkan::StandardPipeline standardPipeline{k_Device};
+        Vulkan::GlobalDescriptor globalDescriptor{k_Device};
+        Vulkan::MaterialDescriptor materialDescriptor{k_Device};
+        Vulkan::ObjectDescriptor objectDescriptor{k_Device};
 
         Camera camera{};
 
         Transform transform{};
 
         // should node be here? maybe outside scene?
-        CompositorNode compositorNode{device};
+        CompositorNode compositorNode{k_Device};
     };
 
-    class NodeScene
+    class NodeScene : public SceneBase
     {
     public:
-        NodeScene(const Vulkan::Device &device);
-        virtual ~NodeScene() = default;
+        using SceneBase::SceneBase;
 
-        MXC_RESULT Init();
-        MXC_RESULT Loop(const uint32_t deltaTime);
+        MXC_RESULT Init() override;
+        MXC_RESULT Loop(const uint32_t deltaTime) override;
 
     private:
-        const Vulkan::Device &device;
-
         // should node be here? maybe outside scene?
-        Node node{device};
+        Node node{k_Device};
 
-        Vulkan::Mesh mesh{device};
-        Vulkan::Texture texture{device};
+        Vulkan::Mesh mesh{k_Device};
+        Vulkan::Texture texture{k_Device};
 
-        Vulkan::StandardPipeline standardPipeline{device};
-        Vulkan::GlobalDescriptor globalDescriptor{device};
-        Vulkan::MaterialDescriptor materialDescriptor{device};
-        Vulkan::ObjectDescriptor objectDescriptor{device};
+        Vulkan::StandardPipeline standardPipeline{k_Device};
+        Vulkan::GlobalDescriptor globalDescriptor{k_Device};
+        Vulkan::MaterialDescriptor materialDescriptor{k_Device};
+        Vulkan::ObjectDescriptor objectDescriptor{k_Device};
 
         Camera camera{};
 

@@ -111,7 +111,7 @@ static bool CreateVulkanInstance(SDL_Window *const pWindow)
 
     const VkApplicationInfo applicationInfo = {
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-            .pApplicationName = Moxaic::k_ApplicationName,
+            .pApplicationName = Moxaic::ApplicationName,
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "Vulkan",
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),

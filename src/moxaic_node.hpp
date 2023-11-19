@@ -54,7 +54,7 @@ namespace Moxaic
 
         Vulkan::Semaphore m_ExportedNodeSemaphore{k_Device};
 
-        std::array<Vulkan::Framebuffer, k_FramebufferCount> m_ExportedFramebuffers{k_Device, k_Device};
+        std::array<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{k_Device, k_Device};
 
         STARTUPINFO m_Startupinfo{};
         PROCESS_INFORMATION m_ProcessInformation{};
@@ -121,6 +121,6 @@ namespace Moxaic
         Vulkan::Semaphore m_ImportedCompositorSemaphore{k_Device};
         Vulkan::Semaphore m_ImportedNodeSemaphore{k_Device};
 
-        std::array<Vulkan::Framebuffer, k_FramebufferCount> m_ImportedFramebuffers{k_Device, k_Device};
+        std::array<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{k_Device, k_Device};
     };
 }

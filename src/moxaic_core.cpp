@@ -17,23 +17,21 @@ MXC_RESULT Core::Run()
     auto device = std::make_unique<Vulkan::Device>();
     MXC_CHK(device->Init());
 
-    std::unique_ptr<CompositorScene> compositorScene;
-    std::unique_ptr<NodeScene> nodeScene;
-    switch (g_Role) {
+    std::unique_ptr<SceneBase> scene;
+    switch (Role) {
         case Role::Compositor:
-            compositorScene = std::make_unique<CompositorScene>(*device);
-            compositorScene->Init();
+            scene = std::make_unique<CompositorScene>(*device);
             break;
         case Role::Node:
-            nodeScene = std::make_unique<NodeScene>(*device);
-            nodeScene->Init();
+            scene = std::make_unique<NodeScene>(*device);
             break;
     }
+    scene->Init();
 
     Uint32 time = 0;
     Uint32 priorTime = 0;
 
-    while (g_ApplicationRunning == MXC_SUCCESS) {
+    while (Running == MXC_SUCCESS) {
 
         time = SDL_GetTicks();
         Uint32 deltaTime = time - priorTime;
@@ -41,14 +39,7 @@ MXC_RESULT Core::Run()
 
         Window::Poll();
 
-        switch (g_Role) {
-            case Role::Compositor:
-                g_ApplicationRunning = compositorScene->Loop(deltaTime);
-                break;
-            case Role::Node:
-                g_ApplicationRunning = nodeScene->Loop(deltaTime);
-                break;
-        }
+        Running = scene->Loop(deltaTime);
     }
 
     Window::Shutdown();

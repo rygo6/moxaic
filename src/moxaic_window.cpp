@@ -56,15 +56,15 @@ SDL_Window *Window::window()
 bool Window::Init()
 {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
-    g_pSDLWindow = SDL_CreateWindow(k_ApplicationName,
+    g_pSDLWindow = SDL_CreateWindow(ApplicationName,
                                     SDL_WINDOWPOS_CENTERED,
                                     SDL_WINDOWPOS_CENTERED,
-                                    k_DefaultWidth, k_DefaultHeight,
+                                    DefaultWidth, DefaultHeight,
                                     SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
     int x, y;
     SDL_GetWindowPosition(g_pSDLWindow, &x, &y);
-    SDL_SetWindowPosition(g_pSDLWindow, x + (g_Role == Role::Compositor ? -(int)(k_DefaultWidth / 2) : (int)(k_DefaultWidth / 2)), y);
-    g_WindowDimensions = VkExtent2D{k_DefaultWidth, k_DefaultHeight};
+    SDL_SetWindowPosition(g_pSDLWindow, x + (Role == Role::Compositor ? -(int)(DefaultWidth / 2) : (int)(DefaultWidth / 2)), y);
+    g_WindowDimensions = VkExtent2D{DefaultWidth, DefaultHeight};
     return g_pSDLWindow != nullptr;
 }
 
@@ -79,7 +79,7 @@ void Window::Poll()
     while (SDL_PollEvent(&pollEvent)) {
         switch (pollEvent.type) {
             case SDL_QUIT: {
-                g_ApplicationRunning = false;
+                Running = false;
                 break;
             }
             case SDL_KEYDOWN: {

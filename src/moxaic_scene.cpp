@@ -5,9 +5,6 @@
 
 using namespace Moxaic;
 
-CompositorScene::CompositorScene(const Vulkan::Device &device)
-        : device(device) {}
-
 MXC_RESULT CompositorScene::Init()
 {
     MXC_CHK(framebuffer.Init(Window::extents(),
@@ -58,8 +55,8 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
         globalDescriptor.UpdateView(camera);
     }
 
-    device.BeginGraphicsCommandBuffer();
-    device.BeginRenderPass(framebuffer);
+    k_Device.BeginGraphicsCommandBuffer();
+    k_Device.BeginRenderPass(framebuffer);
 
     standardPipeline.BindPipeline();
     standardPipeline.BindDescriptor(globalDescriptor);
@@ -68,21 +65,18 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
 
     mesh.RecordRender();
 
-    device.EndRenderPass();
+    k_Device.EndRenderPass();
 
     swap.BlitToSwap(framebuffer.colorTexture());
 
-    device.EndGraphicsCommandBuffer();
+    k_Device.EndGraphicsCommandBuffer();
 
-    device.SubmitGraphicsQueueAndPresent(semaphore, swap);
+    k_Device.SubmitGraphicsQueueAndPresent(semaphore, swap);
 
     semaphore.Wait();
 
     return MXC_SUCCESS;
 }
-
-NodeScene::NodeScene(const Vulkan::Device &device)
-        : device(device) {}
 
 MXC_RESULT NodeScene::Init()
 {
@@ -109,6 +103,7 @@ MXC_RESULT NodeScene::Init()
 
     return MXC_SUCCESS;
 }
+
 MXC_RESULT NodeScene::Loop(const uint32_t deltaTime)
 {
     node.ipcFromCompositor().Deque();
