@@ -42,10 +42,10 @@ bool Vulkan::Framebuffer::Init(const VkExtent2D extents,
                                 locality));
     MXC_CHK(m_DepthTexture.TransitionImmediateInitialToGraphicsRead());
     const std::array attachments{
-            m_ColorTexture.vkImageView(),
-            m_NormalTexture.vkImageView(),
-            m_GBufferTexture.vkImageView(),
-            m_DepthTexture.vkImageView(),
+            m_ColorTexture.vkImageView,
+            m_NormalTexture.vkImageView,
+            m_GBufferTexture.vkImageView,
+            m_DepthTexture.vkImageView,
     };
     const VkFramebufferCreateInfo framebufferCreateInfo{
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,

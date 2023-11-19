@@ -67,6 +67,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
 
     k_Device.EndRenderPass();
 
+    swap.Acquire();
     swap.BlitToSwap(framebuffer.colorTexture());
 
     k_Device.EndGraphicsCommandBuffer();

@@ -20,14 +20,15 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(VkExtent2D dimensions, bool computeStorage);
 
-        MXC_RESULT BlitToSwap(const Texture &srcTexture);
+        MXC_RESULT Acquire();
+        MXC_RESULT BlitToSwap(const Texture &srcTexture) const;
+        MXC_RESULT QueuePresent() const;
 
         inline auto vkSwapchain() const { return m_VkSwapchain; }
         inline auto vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
         inline auto vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
         inline auto vkSwapImages(int i) const { return m_VkSwapImages[i]; }
         inline auto vkSwapImageViews(int i) const { return m_VkSwapImageViews[i]; }
-        inline auto blitIndex() const { return m_BlitIndex; }
         inline auto format() const { return m_Format; }
 
     private:
@@ -43,6 +44,6 @@ namespace Moxaic::Vulkan
         VkFormat m_Format;
         VkExtent2D m_Dimensions;
 
-        uint32_t m_BlitIndex;
+        uint32_t m_LastAcquiredSwapIndex;
     };
 }

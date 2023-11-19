@@ -38,17 +38,13 @@ namespace Moxaic::Vulkan
 
         const HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
 
-        inline auto vkImage() const { return m_VkImage; }
-        inline auto vkImageView() const { return m_VkImageView; }
-        inline auto vkDeviceMemory() const { return m_VkDeviceMemory; }
+        VkImage vkImage{VK_NULL_HANDLE};
+        VkImageView vkImageView{VK_NULL_HANDLE};
 
     private:
         const Device &k_Device;
 
-        VkImage m_VkImage{VK_NULL_HANDLE};
-        VkImageView m_VkImageView{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
-
         VkExtent2D m_Extents{};
         VkImageAspectFlags m_AspectMask{};
 

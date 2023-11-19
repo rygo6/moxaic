@@ -7,6 +7,7 @@
 #include <vulkan/vk_enum_string_helper.h>
 
 using namespace Moxaic;
+using namespace Moxaic::Vulkan;
 
 static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice, VkPresentModeKHR &outPresentMode)
 {
@@ -90,10 +91,10 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
     return MXC_SUCCESS;
 }
 
-Vulkan::Swap::Swap(const Vulkan::Device &device)
+Swap::Swap(const Vulkan::Device &device)
         : k_Device(device) {}
 
-Vulkan::Swap::~Swap()
+Swap::~Swap()
 {
     vkDestroySemaphore(k_Device.vkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
     vkDestroySemaphore(k_Device.vkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
@@ -103,7 +104,7 @@ Vulkan::Swap::~Swap()
     }
 }
 
-MXC_RESULT Vulkan::Swap::Init(VkExtent2D dimensions, bool computeStorage)
+MXC_RESULT Swap::Init(VkExtent2D dimensions, bool computeStorage)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
@@ -247,33 +248,26 @@ MXC_RESULT Vulkan::Swap::Init(VkExtent2D dimensions, bool computeStorage)
     m_Dimensions = dimensions;
     m_Format = surfaceFormat.format;
 
-    if (m_Format != VK_FORMAT_B8G8R8A8_SRGB){
+    if (m_Format != VK_FORMAT_B8G8R8A8_SRGB) {
         MXC_LOG_ERROR("Format is not VK_FORMAT_B8G8R8A8_SRGB! Was expecting VK_FORMAT_B8G8R8A8_SRGB!");
     }
 
     return MXC_SUCCESS;
 }
 
-//MXC_RESULT Vulkan::VulkanSwap::AcquireSwap(uint32_t &outSwapIndex)
-//{
-//    VK_CHK(vkAcquireNextImageKHR(k_Device.vkDevice(),
-//                                 m_Swapchain,
-//                                 UINT64_MAX,
-//                                 m_AcquireCompleteSemaphore,
-//                                 VK_NULL_HANDLE,
-//                                 &outSwapIndex));
-//    return MXC_SUCCESS;
-//}
-
-MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
+MXC_RESULT Swap::Acquire()
 {
     VK_CHK(vkAcquireNextImageKHR(k_Device.vkDevice(),
                                  m_VkSwapchain,
                                  UINT64_MAX,
                                  m_VkAcquireCompleteSemaphore,
                                  VK_NULL_HANDLE,
-                                 &m_BlitIndex));
-    auto srcImage = srcTexture.vkImage();
+                                 &m_LastAcquiredSwapIndex));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Swap::BlitToSwap(const Texture &srcTexture) const
+{
     uint32_t graphicsQueueFamilyIndex = k_Device.graphicsQueueFamilyIndex();
     const std::array transitionBlitBarrier{
             (VkImageMemoryBarrier) {
@@ -284,7 +278,7 @@ MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
                     .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = srcImage,
+                    .image = srcTexture.vkImage,
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
             (VkImageMemoryBarrier) {
@@ -295,7 +289,7 @@ MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
                     .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = m_VkSwapImages[m_BlitIndex],
+                    .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
     };
@@ -332,9 +326,9 @@ MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     vkCmdBlitImage(k_Device.vkGraphicsCommandBuffer(),
-                   srcImage,
+                   srcTexture.vkImage,
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   m_VkSwapImages[m_BlitIndex],
+                   m_VkSwapImages[m_LastAcquiredSwapIndex],
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    1,
                    &imageBlit,
@@ -348,7 +342,7 @@ MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
                     .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = srcImage,
+                    .image = srcTexture.vkImage,
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
             (VkImageMemoryBarrier) {
@@ -359,7 +353,7 @@ MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
                     .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                     .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
                     .dstQueueFamilyIndex = graphicsQueueFamilyIndex,
-                    .image = m_VkSwapImages[m_BlitIndex],
+                    .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
                     .subresourceRange = Vulkan::defaultColorSubresourceRange,
             },
     };
@@ -373,3 +367,18 @@ MXC_RESULT Vulkan::Swap::BlitToSwap(const Texture &srcTexture)
     return MXC_SUCCESS;
 }
 
+MXC_RESULT Swap::QueuePresent() const
+{
+    // TODO want to use this?? https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_present_id.html
+    const VkPresentInfoKHR presentInfo{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .waitSemaphoreCount = 1,
+            .pWaitSemaphores = &m_VkRenderCompleteSemaphore,
+            .swapchainCount = 1,
+            .pSwapchains = &m_VkSwapchain,
+            .pImageIndices = &m_LastAcquiredSwapIndex,
+    };
+    VK_CHK(vkQueuePresentKHR(k_Device.vkGraphicsQueue(),
+                             &presentInfo));
+    return MXC_SUCCESS;
+}
