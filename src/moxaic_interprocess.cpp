@@ -7,50 +7,47 @@ constexpr std::array k_InterProcessTargetParamSize{
         sizeof(Moxaic::Node::ImportParam),
 };
 
-MXC_RESULT Moxaic::InterProcessProducer::Init(const std::string &sharedMemoryName)
+MXC_RESULT InterProcessProducer::Init(const std::string &sharedMemoryName)
 {
-    m_RingBuffer.Init(sharedMemoryName);
-    return MXC_SUCCESS;
+    return InterProcessBuffer::Init(sharedMemoryName);
 }
 
-void Moxaic::InterProcessProducer::Enque(InterProcessTargetFunc target, void *param)
+void InterProcessProducer::Enque(InterProcessTargetFunc target, void *param)
 {
-    auto &buffer = m_RingBuffer.buffer();
-    buffer.pRingBuffer[buffer.head] = target;
-    memcpy(buffer.pRingBuffer + buffer.head + RingBuffer::HeaderSize, param, k_InterProcessTargetParamSize[target]);
-    buffer.head = buffer.head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
+    auto pBuffer = (RingBuffer *) m_pBuffer;
+    pBuffer->pRingBuffer[pBuffer->head] = target;
+    memcpy(pBuffer->pRingBuffer + pBuffer->head + RingBuffer::HeaderSize, param, k_InterProcessTargetParamSize[target]);
+    pBuffer->head = pBuffer->head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
 }
 
-MXC_RESULT Moxaic::InterProcessReceiver::Init(const std::string &sharedMemoryName,
-                                              const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs)
+MXC_RESULT InterProcessReceiver::Init(const std::string &sharedMemoryName,
+                                      const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs)
 {
-    m_RingBuffer.Init(sharedMemoryName);
     m_TargetFuncs = targetFuncs;
-    return MXC_SUCCESS;
+    return InterProcessBuffer::Init(sharedMemoryName);;
 }
 
-int Moxaic::InterProcessReceiver::Deque()
+int InterProcessReceiver::Deque()
 {
     // TODO this needs to actually cycle around the ring buffer, this is only half done
 
-    auto &buffer = m_RingBuffer.buffer();
+    auto pBuffer = (RingBuffer *) m_pBuffer;
 
-//    printf("%s %d %d", "IPC", buffer.head, buffer.tail);
-    if (buffer.head == buffer.tail)
+    if (pBuffer->head == pBuffer->tail)
         return 0;
 
-    MXC_LOG("IPC Polling.", buffer.head, buffer.tail);
+    MXC_LOG("IPC Polling.", pBuffer->head, pBuffer->tail);
 
-    InterProcessTargetFunc target = static_cast<InterProcessTargetFunc>(buffer.pRingBuffer[buffer.tail]);
+    InterProcessTargetFunc target = static_cast<InterProcessTargetFunc>(pBuffer->pRingBuffer[pBuffer->tail]);
 
     // TODO do you copy it out of the IPC or just send that chunk of shared memory on through?
     // If consumer consumes too slow then producer might run out of data in a stream?
     // From trusted parent app sending shared memory through is probably fine
 //    void *param = malloc(fbrIPCTargetParamSize(target));
 //    memcpy(param, pRingBuffer->pRingBuffer + pRingBuffer->tail + FBR_IPC_RING_HEADER_SIZE, fbrIPCTargetParamSize(target));
-    void *param = buffer.pRingBuffer + buffer.tail + RingBuffer::HeaderSize;
+    void *param = pBuffer->pRingBuffer + pBuffer->tail + RingBuffer::HeaderSize;
 
-    if (buffer.tail + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target] > RingBuffer::RingBufferSize) {
+    if (pBuffer->tail + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target] > RingBuffer::RingBufferSize) {
         // TODO this needs to actually cycle around the ring buffer, this is only half done
         MXC_LOG_ERROR("IPC BYTE ARRAY REACHED END!!!");
     }
@@ -58,7 +55,7 @@ int Moxaic::InterProcessReceiver::Deque()
     MXC_LOG("Calling IPC Target", target);
     m_TargetFuncs[target](param);
 
-    buffer.tail = buffer.tail + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
+    pBuffer->tail = pBuffer->tail + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
 
     return 1;
 }

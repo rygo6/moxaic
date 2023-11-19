@@ -41,6 +41,10 @@ MXC_RESULT CompositorScene::Init()
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     MXC_CHK(m_NodeReference.ExportOverIPC(m_Semaphore));
 
+    // and must wait again after node is inited on other side... wHyy!?!
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    m_NodeReference.UpdateGlobalDescriptor(m_GlobalDescriptor);
+
     return MXC_SUCCESS;
 }
 
@@ -87,7 +91,7 @@ MXC_RESULT NodeScene::Init()
                                     Window::extents()));
 
     m_SpherTestTransform.setPosition({0, 0, 0});
-    MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
+    MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));

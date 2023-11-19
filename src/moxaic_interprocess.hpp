@@ -67,9 +67,9 @@ namespace Moxaic
 
         inline constexpr int Size() const { return sizeof(T); }
 
-        inline T &buffer() const { return *(T *) (m_pBuffer); }
+        inline const T &buffer() const { return *(T *) (m_pBuffer); }
 
-    private:
+    protected:
 #ifdef WIN32
         LPVOID m_pBuffer{nullptr};
         HANDLE m_hMapFile{nullptr};
@@ -97,18 +97,14 @@ namespace Moxaic
         Count,
     };
 
-    class InterProcessProducer
+    class InterProcessProducer : InterProcessBuffer<RingBuffer>
     {
-        MXC_NO_VALUE_PASS(InterProcessProducer);
     public:
-        InterProcessProducer() = default;
         MXC_RESULT Init(const std::string &sharedMemoryName);
         void Enque(InterProcessTargetFunc, void *param);
-    private:
-        InterProcessBuffer<RingBuffer> m_RingBuffer{};
     };
 
-    class InterProcessReceiver
+    class InterProcessReceiver : InterProcessBuffer<RingBuffer>
     {
         MXC_NO_VALUE_PASS(InterProcessReceiver);
     public:
