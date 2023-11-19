@@ -577,8 +577,8 @@ MXC_RESULT Device::Init()
 {
     MXC_LOG("Init Vulkan Device.");
 
-    SDL_assert_always(Vulkan::vkInstance() != VK_NULL_HANDLE);
-    SDL_assert_always(Vulkan::vkSurface() != VK_NULL_HANDLE);
+    SDL_assert(Vulkan::vkInstance() != VK_NULL_HANDLE);
+    SDL_assert(Vulkan::vkSurface() != VK_NULL_HANDLE);
 
     MXC_CHK(PickPhysicalDevice());
     MXC_CHK(FindQueues());

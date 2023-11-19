@@ -16,16 +16,26 @@
 
 namespace Moxaic
 {
-    class CompositorNode
+    class NodeReference
     {
+        MXC_NO_VALUE_PASS(NodeReference);
     public:
-
-        CompositorNode(const Vulkan::Device &device);
-        virtual ~CompositorNode();
+        NodeReference(const Vulkan::Device &device);
+        virtual ~NodeReference();
 
         MXC_RESULT Init();
 
         MXC_RESULT ExportOverIPC(const Vulkan::Semaphore &compositorSemaphore);
+
+        inline void UpdateGlobalDescriptor(const Vulkan::GlobalDescriptor& globalDescriptor)
+        {
+            m_ExportedGlobalDescriptor.CopyBuffer(globalDescriptor.buffer());
+        }
+
+        inline const auto &framebuffer(int index) const
+        {
+            return m_ExportedFramebuffers[index];
+        }
 
         inline auto &ipcToNode()
         {
@@ -62,6 +72,7 @@ namespace Moxaic
 
     class Node
     {
+        MXC_NO_VALUE_PASS(Node);
     public:
         struct ImportParam
         {
@@ -85,7 +96,7 @@ namespace Moxaic
         MXC_RESULT Init();
         MXC_RESULT InitImport(ImportParam &parameters);
 
-        inline auto &globalDescriptor()
+        inline const auto &globalDescriptor() const
         {
             return m_ImportedGlobalDescriptor;
         }

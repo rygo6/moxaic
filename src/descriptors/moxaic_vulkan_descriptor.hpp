@@ -1,9 +1,9 @@
 #pragma once
 
-#include "../moxaic_logging.hpp"
-
-#include "../moxaic_vulkan.hpp"
-#include "../moxaic_vulkan_device.hpp"
+#include "main.hpp"
+#include "moxaic_logging.hpp"
+#include "moxaic_vulkan.hpp"
+#include "moxaic_vulkan_device.hpp"
 
 #include <vulkan/vulkan.h>
 #include <vector>
@@ -15,6 +15,7 @@ namespace Moxaic::Vulkan
     template<typename T>
     class VulkanDescriptorBase
     {
+        MXC_NO_VALUE_PASS(VulkanDescriptorBase)
     public:
         VulkanDescriptorBase(const Device &device)
                 : k_Device(device) {}

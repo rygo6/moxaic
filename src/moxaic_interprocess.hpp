@@ -15,7 +15,10 @@ namespace Moxaic
     template<typename T>
     class InterProcessBuffer
     {
+        MXC_NO_VALUE_PASS(InterProcessBuffer);
     public:
+        InterProcessBuffer() = default;
+
         virtual ~InterProcessBuffer()
         {
             UnmapViewOfFile(m_pBuffer);
@@ -57,8 +60,14 @@ namespace Moxaic
             return Init(sharedMemoryName);
         }
 
-        inline T &buffer() { return *(T *) (m_pBuffer); }
+        void CopyBuffer(const T &srcBuffer)
+        {
+            memcpy(m_pBuffer, &srcBuffer, Size());
+        }
+
         inline constexpr int Size() const { return sizeof(T); }
+
+        inline T &buffer() const { return *(T *) (m_pBuffer); }
 
     private:
 #ifdef WIN32
@@ -90,7 +99,9 @@ namespace Moxaic
 
     class InterProcessProducer
     {
+        MXC_NO_VALUE_PASS(InterProcessProducer);
     public:
+        InterProcessProducer() = default;
         MXC_RESULT Init(const std::string &sharedMemoryName);
         void Enque(InterProcessTargetFunc, void *param);
     private:
@@ -99,7 +110,9 @@ namespace Moxaic
 
     class InterProcessReceiver
     {
+        MXC_NO_VALUE_PASS(InterProcessReceiver);
     public:
+        InterProcessReceiver() = default;
         MXC_RESULT Init(const std::string &sharedMemoryName,
                         const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs);
         int Deque();

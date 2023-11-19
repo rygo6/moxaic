@@ -15,6 +15,7 @@ namespace Moxaic::Vulkan
 
     class Texture
     {
+        MXC_NO_VALUE_PASS(Texture);
     public:
         explicit Texture(const Device &device);
         virtual ~Texture();

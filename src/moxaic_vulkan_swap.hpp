@@ -14,6 +14,7 @@ namespace Moxaic::Vulkan
 
     class Swap
     {
+        MXC_NO_VALUE_PASS(Swap);
     public:
         Swap(const Device &device);
         virtual ~Swap();

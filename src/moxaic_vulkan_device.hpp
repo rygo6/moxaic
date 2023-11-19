@@ -19,6 +19,7 @@ namespace Moxaic::Vulkan
 
     class Device
     {
+        MXC_NO_VALUE_PASS(Device);
     public:
         Device();
         virtual ~Device();

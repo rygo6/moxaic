@@ -1,5 +1,7 @@
 #pragma once
 
+#include "main.hpp"
+
 #include <glm/glm.hpp>
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -8,6 +10,7 @@ namespace Moxaic
 {
     class Transform
     {
+        MXC_NO_VALUE_PASS(Transform);
     public:
         Transform();
         virtual ~Transform();

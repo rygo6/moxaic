@@ -13,6 +13,7 @@ namespace Moxaic::Vulkan
 
     class Framebuffer
     {
+        MXC_NO_VALUE_PASS(Framebuffer);
     public:
         Framebuffer(const Device &device);
         virtual ~Framebuffer();

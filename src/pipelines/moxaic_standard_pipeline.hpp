@@ -25,7 +25,7 @@ namespace Moxaic::Vulkan
         using VulkanPipeline::VulkanPipeline;
 
         MXC_RESULT Init(const GlobalDescriptor &globalDescriptor,
-                        const MaterialDescriptor &materialDescriptor,
+                        const StandardMaterialDescriptor &materialDescriptor,
                         const ObjectDescriptor &objectDescriptor)
         {
             if (initializeLayout()) {
@@ -91,7 +91,7 @@ namespace Moxaic::Vulkan
                                     nullptr);
         }
 
-        void BindDescriptor(const MaterialDescriptor &descriptor)
+        void BindDescriptor(const StandardMaterialDescriptor &descriptor)
         {
             auto descriptorSet = descriptor.vkDescriptorSet();
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),

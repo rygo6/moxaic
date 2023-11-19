@@ -13,6 +13,7 @@ namespace Moxaic
 {
     class Camera
     {
+        MXC_NO_VALUE_PASS(Camera);
     public:
         Camera();
         virtual ~Camera();

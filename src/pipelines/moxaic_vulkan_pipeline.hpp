@@ -38,6 +38,7 @@ namespace Moxaic::Vulkan
     template<typename T>
     class VulkanPipeline
     {
+        MXC_NO_VALUE_PASS(VulkanPipeline)
     public:
         VulkanPipeline(const Device &device)
                 : k_Device(device) {}

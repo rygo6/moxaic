@@ -38,17 +38,17 @@ static MXC_RESULT StartProcess(STARTUPINFO &si, PROCESS_INFORMATION &pi)
     return MXC_SUCCESS;
 }
 
-CompositorNode::CompositorNode(const Vulkan::Device &device)
+NodeReference::NodeReference(const Vulkan::Device &device)
         : k_Device(device) {}
 
-CompositorNode::~CompositorNode()
+NodeReference::~NodeReference()
 {
     WaitForSingleObject(m_ProcessInformation.hProcess, INFINITE);
     CloseHandle(m_ProcessInformation.hProcess);
     CloseHandle(m_ProcessInformation.hThread);
 }
 
-MXC_RESULT CompositorNode::Init()
+MXC_RESULT NodeReference::Init()
 {
     MXC_CHK(m_ExportedNodeSemaphore.Init(false,
                                          Vulkan::Locality::External));
@@ -66,7 +66,7 @@ MXC_RESULT CompositorNode::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT CompositorNode::ExportOverIPC(const Vulkan::Semaphore &compositorSemaphore)
+MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore &compositorSemaphore)
 {
     auto hProcess = m_ProcessInformation.hProcess;
     const Node::ImportParam importParam{

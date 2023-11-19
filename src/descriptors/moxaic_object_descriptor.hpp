@@ -22,7 +22,9 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init(const Transform &transform)
         {
             MXC_LOG("Init ObjectDescriptor");
+            SDL_assert(m_VkDescriptorSet == nullptr);
 
+            // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 std::array bindings{
                         (VkDescriptorSetLayoutBinding) {

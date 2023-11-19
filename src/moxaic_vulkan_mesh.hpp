@@ -18,12 +18,13 @@ namespace Moxaic::Vulkan
 
     class Mesh
     {
+        MXC_NO_VALUE_PASS(Mesh);
     public:
         /// Really just a test sphere mesh right now.
         Mesh(const Device &device);
         virtual ~Mesh();
 
-        MXC_RESULT Init();
+        MXC_RESULT InitSphere();
 
         void RecordRender();
 

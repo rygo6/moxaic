@@ -27,7 +27,9 @@ namespace Moxaic::Vulkan
         inline MXC_RESULT Init(Camera &camera, VkExtent2D dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
+            SDL_assert(m_VkDescriptorSet == nullptr);
 
+            // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 std::array bindings{
                         (VkDescriptorSetLayoutBinding) {
@@ -47,12 +49,13 @@ namespace Moxaic::Vulkan
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Uniform.mapped().width = dimensions.width;
-            m_Uniform.mapped().height = dimensions.height;
-            m_Uniform.mapped().proj = camera.projection();
-            m_Uniform.mapped().invProj = camera.inverseProjection();
-            m_Uniform.mapped().view = camera.view();
-            m_Uniform.mapped().invView = camera.inverseView();
+            m_Buffer.width = dimensions.width;
+            m_Buffer.height = dimensions.height;
+            m_Buffer.proj = camera.projection();
+            m_Buffer.invProj = camera.inverseProjection();
+            m_Buffer.view = camera.view();
+            m_Buffer.invView = camera.inverseView();
+            Update();
 
             MXC_CHK(AllocateDescriptorSet());
             const VkDescriptorBufferInfo globalUBOInfo{
@@ -71,18 +74,28 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        inline void Update(const Buffer &buffer)
+        inline void Update()
         {
-            m_Uniform.CopyBuffer(buffer);
+            m_Uniform.CopyBuffer(m_Buffer);
+        }
+
+        inline void Update(const Buffer& buffer)
+        {
+            m_Buffer = buffer;
+            m_Uniform.CopyBuffer(m_Buffer);
         }
 
         inline void UpdateView(Camera &camera)
         {
-            m_Uniform.mapped().view = camera.view();
-            m_Uniform.mapped().invView = camera.inverseView();
+            m_Buffer.view = camera.view();
+            m_Buffer.invView = camera.inverseView();
+            m_Uniform.CopyBuffer(m_Buffer);
         }
 
+        inline const auto &buffer() const { return m_Buffer; }
+
     private:
+        Buffer m_Buffer{};
         Uniform<Buffer> m_Uniform{k_Device};
     };
 }

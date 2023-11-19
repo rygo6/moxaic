@@ -1,7 +1,6 @@
 #include "moxaic_scene.hpp"
 
 #include <thread>
-#include <chrono>
 
 using namespace Moxaic;
 
@@ -16,21 +15,18 @@ MXC_RESULT CompositorScene::Init()
     m_MainCamera.transform().Rotate(0, 180, 0);
     m_MainCamera.UpdateView();
 
-    m_SphereTestTransform.setPosition({2, 0, 0});
-
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
-                                    Window::extents()));
-
+    m_SphereTestTransform.setPosition({1, 0, 0});
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
+    MXC_CHK(m_SphereTestMesh.InitSphere());
 
-    MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
-
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
+                                    Window::extents()));
+    MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(m_ObjectDescriptor.Init(m_SphereTestTransform));
-
     MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
-                                    m_MaterialDescriptor,
+                                    m_StandardMaterialDescriptor,
                                     m_ObjectDescriptor));
 
     MXC_CHK(m_Swap.Init(Window::extents(),
@@ -39,13 +35,11 @@ MXC_RESULT CompositorScene::Init()
     MXC_CHK(m_Semaphore.Init(true,
                              Vulkan::Locality::External));
 
-    MXC_CHK(m_SphereTestMesh.Init());
-
-    MXC_CHK(m_CompositorNode.Init());
+    MXC_CHK(m_NodeReference.Init());
 
 //    // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    MXC_CHK(m_CompositorNode.ExportOverIPC(m_Semaphore));
+    MXC_CHK(m_NodeReference.ExportOverIPC(m_Semaphore));
 
     return MXC_SUCCESS;
 }
@@ -55,6 +49,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
     if (m_MainCamera.UserCommandUpdate(deltaTime)) {
         // should camera auto update descriptor somehow?
         m_GlobalDescriptor.UpdateView(m_MainCamera);
+        m_NodeReference.UpdateGlobalDescriptor(m_GlobalDescriptor);
     }
 
     k_Device.BeginGraphicsCommandBuffer();
@@ -63,7 +58,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
 
     m_StandardPipeline.BindPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
-    m_StandardPipeline.BindDescriptor(m_MaterialDescriptor);
+    m_StandardPipeline.BindDescriptor(m_StandardMaterialDescriptor);
     m_StandardPipeline.BindDescriptor(m_ObjectDescriptor);
 
     m_SphereTestMesh.RecordRender();
@@ -88,24 +83,23 @@ MXC_RESULT NodeScene::Init()
 {
     MXC_CHK(m_Node.Init());
 
-    m_SpherTestTransform.setPosition({0, 0, 0});
-
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
                                     Window::extents()));
 
+    m_SpherTestTransform.setPosition({0, 0, 0});
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
-
     MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
-
     MXC_CHK(m_ObjectDescriptor.Init(m_SpherTestTransform));
-
     MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
                                     m_MaterialDescriptor,
                                     m_ObjectDescriptor));
 
-    MXC_CHK(m_SphereTestMesh.Init());
+    MXC_CHK(m_SphereTestMesh.InitSphere());
+
+    MXC_CHK(m_Swap.Init(Window::extents(),
+                        false));
 
     // spin lock for now until initial ipc message is received
     while (m_Node.ipcFromCompositor().Deque() == 0) {
@@ -133,9 +127,13 @@ MXC_RESULT NodeScene::Loop(const uint32_t deltaTime)
 
     k_Device.EndRenderPass();
 
+    m_Swap.Acquire();
+    m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());
+
     k_Device.EndGraphicsCommandBuffer();
 
-    k_Device.SubmitGraphicsQueue(m_Node.NodeSemaphore());
+//    k_Device.SubmitGraphicsQueue(m_Node.NodeSemaphore());
+    k_Device.SubmitGraphicsQueueAndPresent(m_Node.NodeSemaphore(), m_Swap);
 
     m_Node.NodeSemaphore().Wait();
 

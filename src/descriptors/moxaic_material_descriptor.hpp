@@ -6,7 +6,7 @@
 
 namespace Moxaic::Vulkan
 {
-    class MaterialDescriptor : public VulkanDescriptorBase<MaterialDescriptor>
+    class StandardMaterialDescriptor : public VulkanDescriptorBase<StandardMaterialDescriptor>
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
@@ -14,7 +14,9 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init(const Texture &texture)
         {
             MXC_LOG("Init MaterialDescriptor");
+            SDL_assert(m_VkDescriptorSet == nullptr);
 
+            // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 std::array bindings{
                         (VkDescriptorSetLayoutBinding) {

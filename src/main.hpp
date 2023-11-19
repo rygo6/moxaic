@@ -6,6 +6,11 @@
 #define MXC_SUCCESS true
 #define MXC_FAIL false
 
+// delete copy constructors to disallow pass by value
+#define MXC_NO_VALUE_PASS(name) \
+name(const name&) = delete; \
+name& operator=(const name&) = delete;
+
 namespace Moxaic
 {
     inline constexpr uint32_t DefaultWidth = 1280;

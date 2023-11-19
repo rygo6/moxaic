@@ -21,6 +21,7 @@ namespace Moxaic
 {
     class SceneBase
     {
+        MXC_NO_VALUE_PASS(SceneBase);
     public:
         SceneBase(const Vulkan::Device &device)
                 : k_Device(device) {}
@@ -48,7 +49,7 @@ namespace Moxaic
 
         Vulkan::StandardPipeline m_StandardPipeline{k_Device};
         Vulkan::GlobalDescriptor m_GlobalDescriptor{k_Device};
-        Vulkan::MaterialDescriptor m_MaterialDescriptor{k_Device};
+        Vulkan::StandardMaterialDescriptor m_StandardMaterialDescriptor{k_Device};
         Vulkan::ObjectDescriptor m_ObjectDescriptor{k_Device};
 
         Camera m_MainCamera{};
@@ -58,7 +59,7 @@ namespace Moxaic
         Transform m_SphereTestTransform{};
 
         // should node be here? maybe outside scene?
-        CompositorNode m_CompositorNode{k_Device};
+        NodeReference m_NodeReference{k_Device};
     };
 
     class NodeScene : public SceneBase
@@ -74,9 +75,11 @@ namespace Moxaic
         Node m_Node{k_Device};
         int m_FramebufferIndex{0};
 
+        Vulkan::Swap m_Swap{k_Device};
+
         Vulkan::StandardPipeline m_StandardPipeline{k_Device};
         Vulkan::GlobalDescriptor m_GlobalDescriptor{k_Device};
-        Vulkan::MaterialDescriptor m_MaterialDescriptor{k_Device};
+        Vulkan::StandardMaterialDescriptor m_MaterialDescriptor{k_Device};
         Vulkan::ObjectDescriptor m_ObjectDescriptor{k_Device};
 
         Camera m_MainCamera{};

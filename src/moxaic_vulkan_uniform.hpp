@@ -13,6 +13,7 @@ namespace Moxaic::Vulkan
     template<typename T>
     class Uniform
     {
+        MXC_NO_VALUE_PASS(Uniform);
     public:
         Uniform(const Device &device)
                 : k_Device(device) {}
@@ -63,14 +64,15 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        inline void CopyBuffer(const T &buffer)
+        inline void CopyBuffer(const T &srcBuffer)
         {
-            memcpy(m_pMappedBuffer, &buffer, Size());
+            memcpy(m_pMappedBuffer, &srcBuffer, Size());
         }
 
-        inline constexpr VkDeviceSize Size() const { return sizeof(T); }
         inline T &mapped() { return *(T *) (m_pMappedBuffer); }
         inline auto vkBuffer() const { return m_VkBuffer; }
+
+        inline constexpr VkDeviceSize Size() const { return sizeof(T); }
 
     private:
         const Device &k_Device;

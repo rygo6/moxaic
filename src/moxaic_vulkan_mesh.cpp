@@ -83,7 +83,7 @@ Vulkan::Mesh::~Mesh()
     vkFreeMemory(k_Device.vkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
 }
 
-MXC_RESULT Vulkan::Mesh::Init()
+MXC_RESULT Vulkan::Mesh::InitSphere()
 {
     const int nSlices = 32;
     const int nStack = 32;

@@ -54,6 +54,8 @@ target_link_libraries(${TARGET_NAME}
         vulkan-1
 )
 
+target_compile_definitions(${TARGET_NAME} PRIVATE -DSDL_ASSERT_LEVEL=3)
+
 #target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)
 
 set(SHADER_COMPILER "${VULKAN_SDK_PATH}/Bin/glslc.exe")
