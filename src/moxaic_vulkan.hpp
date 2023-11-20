@@ -83,10 +83,8 @@ namespace Moxaic::Vulkan
         const char* DebugCommand;
         const char* DebugFile;
     };
+    inline Debug VkDebug;
 
-    extern Debug VkDebug;
-
-    //inline?
     struct Func
     {
 #define VK_FUNCS \
@@ -99,6 +97,5 @@ namespace Moxaic::Vulkan
         VK_FUNCS
 #undef VK_FUNC
     };
-
-    extern Func VkFunc;
+    inline Func VkFunc;
 }

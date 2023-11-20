@@ -62,7 +62,7 @@ MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
             .semaphore = m_vkSemaphore,
             .handleType = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
         };
-        VK_CHK(Vulkan::VkFunc.GetSemaphoreWin32HandleKHR(k_Device.vkDevice(),
+        VK_CHK(VkFunc.GetSemaphoreWin32HandleKHR(k_Device.vkDevice(),
             &semaphoreGetWin32HandleInfo,
             &m_ExternalHandle));
 #endif

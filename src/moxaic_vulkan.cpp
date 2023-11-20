@@ -14,9 +14,6 @@
 
 using namespace Moxaic;
 
-Vulkan::Func Vulkan::VkFunc;
-Vulkan::Debug Vulkan::VkDebug;
-
 static VkInstance g_VulkanInstance;
 static VkSurfaceKHR g_VulkanSurface;
 static bool g_VulkanValidationLayers;
@@ -52,7 +49,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSev
     return VK_FALSE;
 }
 
-static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *>& requiredInstanceLayerNames)
+static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const char *>& requiredInstanceLayerNames)
 {
     MXC_LOG_FUNCTION();
 
@@ -75,10 +72,10 @@ static bool CheckVulkanInstanceLayerProperties(const std::vector<const char *>& 
             return false;
         }
     }
-    return true;
+    return MXC_SUCCESS;
 }
 
-static bool CheckVulkanInstanceExtensions(const std::vector<const char *>& requiredInstanceExtensionsNames)
+static MXC_RESULT CheckVulkanInstanceExtensions(const std::vector<const char *>& requiredInstanceExtensionsNames)
 {
     MXC_LOG_FUNCTION();
 
@@ -102,10 +99,10 @@ static bool CheckVulkanInstanceExtensions(const std::vector<const char *>& requi
         }
     }
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-static bool CreateVulkanInstance()
+static MXC_RESULT CreateVulkanInstance()
 {
     MXC_LOG_FUNCTION();
 
@@ -145,10 +142,10 @@ static bool CreateVulkanInstance()
 
     VK_CHK(vkCreateInstance(&createInfo, VK_ALLOC, &g_VulkanInstance));
 
-    return true;
+    return MXC_SUCCESS;
 }
 
-static bool LoadVulkanFunctionPointers()
+static MXC_RESULT LoadVulkanFunctionPointers()
 {
     MXC_LOG_FUNCTION();
 
@@ -162,7 +159,9 @@ static bool LoadVulkanFunctionPointers()
     VK_FUNCS
 #undef VK_FUNC
 
-    return true;
+    auto test =Vulkan::VkFunc.CmdDrawMeshTasksEXT;
+
+    return MXC_SUCCESS;
 }
 
 static MXC_RESULT CreateVulkanDebugOutput()

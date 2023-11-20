@@ -151,7 +151,7 @@ MXC_RESULT Texture::Init(const VkFormat format,
             .memory = m_VkDeviceMemory,
             .handleType = MXC_EXTERNAL_HANDLE_TYPE
         };
-        VK_CHK(Vulkan::VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
+        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
             &getWin32HandleInfo,
             &m_ExternalHandle));
 #endif
