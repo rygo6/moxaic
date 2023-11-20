@@ -21,10 +21,10 @@ namespace Moxaic
 
         auto& transform() { return m_Transform; }
 
-        auto view() const { return m_View; }
-        auto projection() const { return m_Projection; }
-        auto inverseView() const { return m_InverseView; }
-        auto inverseProjection() const { return m_InverseProjection; }
+        const auto& view() const { return m_View; }
+        const auto& projection() const { return m_Projection; }
+        const auto& inverseView() const { return m_InverseView; }
+        const auto& inverseProjection() const { return m_InverseProjection; }
 
     private:
         float m_FOV{45.0f};
