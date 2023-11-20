@@ -21,14 +21,14 @@ namespace Moxaic
 {
     class SceneBase
     {
+    public:
         MXC_NO_VALUE_PASS(SceneBase);
 
-    public:
-        SceneBase(const Vulkan::Device& device)
-            : k_Device(device)
-        {
-        }
+        explicit SceneBase(const Vulkan::Device& device)
+            : k_Device(device) {}
+
         virtual ~SceneBase() = default;
+
         virtual MXC_RESULT Init() = 0;
         virtual MXC_RESULT Loop(const uint32_t deltaTime) = 0;
 

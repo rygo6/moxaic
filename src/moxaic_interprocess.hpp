@@ -15,8 +15,9 @@ namespace Moxaic
     template<typename T>
     class InterProcessBuffer
     {
-        MXC_NO_VALUE_PASS(InterProcessBuffer);
     public:
+        MXC_NO_VALUE_PASS(InterProcessBuffer);
+
         InterProcessBuffer() = default;
 
         virtual ~InterProcessBuffer()
@@ -28,12 +29,17 @@ namespace Moxaic
         MXC_RESULT Init(const std::string& sharedMemoryName)
         {
             m_hMapFile = CreateFileMapping(
-                    INVALID_HANDLE_VALUE, // use paging file
-                    nullptr, // default security
-                    PAGE_READWRITE, // read/write access
-                    0, // maximum object size (high-order DWORD)
-                    Size(), // maximum object size (low-order DWORD)
-                    sharedMemoryName.c_str()); // name of mapping object
+                INVALID_HANDLE_VALUE,
+                // use paging file
+                nullptr,
+                // default security
+                PAGE_READWRITE,
+                // read/write access
+                0,
+                // maximum object size (high-order DWORD)
+                Size(),
+                // maximum object size (low-order DWORD)
+                sharedMemoryName.c_str()); // name of mapping object
             if (m_hMapFile == nullptr) {
                 MXC_LOG_ERROR("Could not create file mapping object.", GetLastError());
                 return MXC_FAIL;
@@ -60,14 +66,14 @@ namespace Moxaic
             return Init(sharedMemoryName);
         }
 
-        void CopyBuffer(const T &srcBuffer)
+        void CopyBuffer(const T& srcBuffer)
         {
             memcpy(m_pBuffer, &srcBuffer, Size());
         }
 
         static constexpr int Size() { return sizeof(T); }
 
-        const T &buffer() const { return *static_cast<T *>(m_pBuffer); }
+        const T& buffer() const { return *static_cast<T *>(m_pBuffer); }
 
     protected:
 #ifdef WIN32
@@ -87,30 +93,32 @@ namespace Moxaic
         uint8_t pRingBuffer[RingBufferSize];
     };
 
-    using InterProcessFunc = std::function<void(void *)>;
+    using InterProcessFunc = std::function<void(void*)>;
 
     enum InterProcessTargetFunc
     {
         ImportCompositor = 0,
-//        ImportFramebuffer,
-//        ImportCamera,
+        //        ImportFramebuffer,
+        //        ImportCamera,
         Count,
     };
 
     class InterProcessProducer : public InterProcessBuffer<RingBuffer>
     {
     public:
-        void Enque(InterProcessTargetFunc, const void *param) const;
+        void Enque(InterProcessTargetFunc, const void* param) const;
     };
 
     class InterProcessReceiver : public InterProcessBuffer<RingBuffer>
     {
         MXC_NO_VALUE_PASS(InterProcessReceiver);
+
     public:
         InterProcessReceiver() = default;
-        MXC_RESULT Init(const std::string &sharedMemoryName,
-                        const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs);
+        MXC_RESULT Init(const std::string& sharedMemoryName,
+                        const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count>&& targetFuncs);
         int Deque() const;
+
     private:
         StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> m_TargetFuncs{};
     };

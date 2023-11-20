@@ -10,8 +10,9 @@ namespace Moxaic
 {
     class Transform
     {
-        MXC_NO_VALUE_PASS(Transform);
     public:
+        MXC_NO_VALUE_PASS(Transform);
+
         Transform();
         virtual ~Transform();
 
@@ -31,9 +32,9 @@ namespace Moxaic
         void Rotate(const float x, const float y, const float z)
         {
             const auto rotation = glm::quat(glm::vec3(
-                    glm::radians(x),
-                    glm::radians(y),
-                    glm::radians(z)));
+                glm::radians(x),
+                glm::radians(y),
+                glm::radians(z)));
             m_Orientation = rotation * m_Orientation;
         }
 
@@ -43,12 +44,12 @@ namespace Moxaic
             m_Orientation = rotation * m_Orientation;
         }
 
-        const auto &position() const { return m_Position; }
+        const auto& position() const { return m_Position; }
         void setPosition(const glm::vec3& position)
         {
             m_Position = position;
         }
-        const auto &orientation() const { return m_Orientation; }
+        const auto& orientation() const { return m_Orientation; }
         void setOrientation(const glm::quat& orientation)
         {
             m_Orientation = orientation;

@@ -13,12 +13,11 @@ namespace Moxaic::Vulkan
 
     class Framebuffer
     {
+    public:
         MXC_NO_VALUE_PASS(Framebuffer);
 
-    public:
         explicit Framebuffer(const Device& device);
         virtual ~Framebuffer();
-
 
         MXC_RESULT Init(VkExtent2D extents,
                         Locality locality);

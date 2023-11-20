@@ -1,6 +1,8 @@
 #pragma once
 
-#include "BitFlags.hpp"
+#include <vector>
+
+#include "bit_flags.hpp"
 
 #include <SDL2/SDL.h>
 #include <vulkan/vulkan.h>
@@ -24,11 +26,14 @@ namespace Moxaic::Window
         BitFlags<UserMove> userMove;
     };
 
-    bool Init();
+    MXC_RESULT Init();
+    MXC_RESULT InitSurface(const VkInstance& vkInstance,
+                           VkSurfaceKHR& outVkSurface);
+    std::vector<const char *> GetVulkanInstanceExtentions();
     void Poll();
-    void Shutdown();
+    void Cleanup();
 
-    const UserCommand &userCommand();
-    const VkExtent2D extents();
-    SDL_Window *window();
+    const UserCommand& userCommand();
+    const VkExtent2D& extents();
+    const SDL_Window* window();
 }

@@ -95,9 +95,7 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
 }
 
 Swap::Swap(const Vulkan::Device& device)
-    : k_Device(device)
-{
-}
+    : k_Device(device) {}
 
 Swap::~Swap()
 {

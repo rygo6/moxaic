@@ -37,13 +37,11 @@ namespace Moxaic::Vulkan
     template<typename>
     class VulkanPipeline
     {
+    public:
         MXC_NO_VALUE_PASS(VulkanPipeline)
 
-    public:
-        explicit VulkanPipeline(const Device&device)
-            : k_Device(device)
-        {
-        }
+        explicit VulkanPipeline(const Device& device)
+            : k_Device(device) {}
 
         virtual ~VulkanPipeline()
         {
@@ -63,14 +61,14 @@ namespace Moxaic::Vulkan
         const auto& vkPipeline() const { return m_VkPipeline; }
 
     protected:
-        const Device&k_Device;
+        const Device& k_Device;
         inline static VkPipelineLayout s_VkPipelineLayout = VK_NULL_HANDLE;
         VkPipeline m_VkPipeline{VK_NULL_HANDLE};
 
         static bool initializeLayout() { return s_VkPipelineLayout == VK_NULL_HANDLE; }
 
         MXC_RESULT CreateShaderModule(const char* pShaderPath,
-                                      VkShaderModule&shaderModule) const
+                                      VkShaderModule& shaderModule) const
         {
             uint32_t codeLength;
             char* pShaderCode;

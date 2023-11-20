@@ -18,9 +18,9 @@ namespace Moxaic
 {
     class NodeReference
     {
+    public:
         MXC_NO_VALUE_PASS(NodeReference);
 
-    public:
         explicit NodeReference(const Vulkan::Device& device);
         virtual ~NodeReference();
 

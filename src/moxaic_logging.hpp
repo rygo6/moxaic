@@ -11,31 +11,30 @@ namespace Moxaic
 {
     static void LogParams()
     {
-        std::cout  << '\n';
+        std::cout << '\n';
     }
 
-    template <typename T, typename... Types>
+    template<typename T, typename... Types>
     void LogParams(T param, Types... params)
     {
         std::cout << ' ' << param;
         LogParams(params...);
     }
 
-    template <typename... Types>
+    template<typename... Types>
     void LogParams(const char* file, const int line, Types... params)
     {
         std::cout << string_Role(Moxaic::Role) << " (" << file << ':' << line << ")";
         LogParams(params...);
     }
 
-    template <typename... Types>
+    template<typename... Types>
     void LogError(const char* file, const int line, Types... params)
     {
         std::cout << "!!! " << string_Role(Moxaic::Role) << " (" << file << ':' << line << ")";
         LogParams(params...);
     }
 }
-
 
 
 #define MXC_FILE_NO_PATH (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)

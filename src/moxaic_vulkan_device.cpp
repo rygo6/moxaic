@@ -8,13 +8,13 @@
 #include "static_array.hpp"
 #include "main.hpp"
 
+#include <vector>
 #include <vulkan/vulkan.h>
+
 #ifdef WIN32
 #include <vulkan/vulkan_win32.h>
 #define MXC_EXTERNAL_MEMORY_HANDLE VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR
 #endif
-
-#include <vector>
 
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;

@@ -12,7 +12,7 @@ using namespace Moxaic;
 MXC_RESULT Core::Run()
 {
     MXC_CHK(Window::Init());
-    MXC_CHK(Vulkan::Init(Window::window(), true));
+    MXC_CHK(Vulkan::Init(true));
 
     const auto device = std::make_unique<Vulkan::Device>();
     MXC_CHK(device->Init());
@@ -32,7 +32,6 @@ MXC_RESULT Core::Run()
     Uint32 priorTime = 0;
 
     while (Running == MXC_SUCCESS) {
-
         time = SDL_GetTicks();
         const Uint32 deltaTime = time - priorTime;
         priorTime = time;
@@ -42,7 +41,7 @@ MXC_RESULT Core::Run()
         Running = scene->Loop(deltaTime);
     }
 
-    Window::Shutdown();
+    Window::Cleanup();
 
     return MXC_SUCCESS;
 }

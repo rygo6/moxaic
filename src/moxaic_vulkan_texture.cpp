@@ -18,9 +18,7 @@ using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
 Texture::Texture(const Device& device)
-    : k_Device(device)
-{
-}
+    : k_Device(device) {}
 
 Texture::~Texture()
 {

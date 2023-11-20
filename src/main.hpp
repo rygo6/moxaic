@@ -20,18 +20,20 @@ namespace Moxaic
 
     inline MXC_RESULT Running = MXC_SUCCESS;
 
-    enum class Role {
+    enum class Role
+    {
         Compositor,
         Node
     };
 
     inline Role Role = Role::Compositor;
 
-    inline bool IsCompositor() {
+    inline bool IsCompositor()
+    {
         return Role == Role::Compositor;
     }
 
-    inline const char *string_Role(const enum Role role)
+    inline const char* string_Role(const enum Role role)
     {
         switch (role) {
             case Role::Compositor:

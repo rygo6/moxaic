@@ -44,19 +44,19 @@ inline constexpr VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 
 namespace Moxaic::Vulkan
 {
-    bool Init(SDL_Window *pWindow, bool enableValidationLayers);
+    bool Init(bool enableValidationLayers);
 
     VkInstance vkInstance();
 
     // should surface move into swap class?! or device class?
     VkSurfaceKHR vkSurface();
 
-    inline constinit VkImageSubresourceRange defaultColorSubresourceRange {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
+    inline constinit VkImageSubresourceRange defaultColorSubresourceRange{
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
     };
 
     enum class Locality : char
@@ -65,7 +65,7 @@ namespace Moxaic::Vulkan
         External,
     };
 
-    inline const char *string_Locality(const Locality input_value)
+    inline const char* string_Locality(const Locality input_value)
     {
         switch (input_value) {
             case Locality::Local:
@@ -80,8 +80,8 @@ namespace Moxaic::Vulkan
     struct Debug
     {
         int DebugLine;
-        const char *DebugCommand;
-        const char *DebugFile;
+        const char* DebugCommand;
+        const char* DebugFile;
     };
 
     extern Debug VkDebug;

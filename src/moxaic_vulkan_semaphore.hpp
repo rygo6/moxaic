@@ -15,9 +15,9 @@ namespace Moxaic::Vulkan
 
     class Semaphore
     {
+    public:
         MXC_NO_VALUE_PASS(Semaphore);
 
-    public:
         explicit Semaphore(const Device& device);
         virtual ~Semaphore();
 

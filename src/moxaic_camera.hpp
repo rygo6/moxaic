@@ -8,17 +8,18 @@ namespace Moxaic
 {
     class Camera
     {
-        MXC_NO_VALUE_PASS(Camera);
     public:
+        MXC_NO_VALUE_PASS(Camera);
+
         Camera();
-        virtual ~Camera();
+        virtual ~Camera() = default;
 
         bool UserCommandUpdate(uint32_t deltaTime);
 
         void UpdateView();
         void UpdateProjection();
 
-        auto &transform() { return m_Transform; }
+        auto& transform() { return m_Transform; }
 
         auto view() const { return m_View; }
         auto projection() const { return m_Projection; }

@@ -1,6 +1,7 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_logging.hpp"
+#include "moxaic_window.hpp"
 #include "main.hpp"
 
 #include <vector>
@@ -104,7 +105,7 @@ static bool CheckVulkanInstanceExtensions(const std::vector<const char *>& requi
     return true;
 }
 
-static bool CreateVulkanInstance(SDL_Window* const pWindow)
+static bool CreateVulkanInstance()
 {
     MXC_LOG_FUNCTION();
 
@@ -130,12 +131,7 @@ static bool CreateVulkanInstance(SDL_Window* const pWindow)
     createInfo.enabledLayerCount = requiredInstanceLayerNames.size();
     createInfo.ppEnabledLayerNames = requiredInstanceLayerNames.data();
 
-    // Instance Extensions
-    unsigned int extensionCount = 0;
-    SDL_Vulkan_GetInstanceExtensions(pWindow, &extensionCount, nullptr);
-    std::vector<const char *> requiredInstanceExtensionsNames(extensionCount);
-    SDL_Vulkan_GetInstanceExtensions(pWindow, &extensionCount, requiredInstanceExtensionsNames.data());
-
+    auto requiredInstanceExtensionsNames = Window::GetVulkanInstanceExtentions();
     requiredInstanceExtensionsNames.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     requiredInstanceExtensionsNames.push_back(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME);
     requiredInstanceExtensionsNames.push_back(VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME);
@@ -189,22 +185,20 @@ static MXC_RESULT CreateVulkanDebugOutput()
     return MXC_SUCCESS;
 }
 
-bool Vulkan::Init(SDL_Window* const pWindow, const bool enableValidationLayers)
+MXC_RESULT Vulkan::Init(const bool enableValidationLayers)
 {
     MXC_LOG_FUNCTION();
 
     g_VulkanValidationLayers = enableValidationLayers;
 
-    MXC_CHK(CreateVulkanInstance(pWindow));
+    MXC_CHK(CreateVulkanInstance());
     MXC_CHK(LoadVulkanFunctionPointers());
     MXC_CHK(CreateVulkanDebugOutput());
 
-    // should surface move into swap class?! or device class?
-    MXC_CHK(SDL_Vulkan_CreateSurface(pWindow,
-        g_VulkanInstance,
-        &g_VulkanSurface));
+    SDL_assert((Window::window() != nullptr) && "Window not initialized!");
+    MXC_CHK(Window::InitSurface(g_VulkanInstance, g_VulkanSurface));
 
-    return true;
+    return MXC_SUCCESS;
 }
 
 VkInstance Vulkan::vkInstance()

@@ -18,20 +18,20 @@ static int GenerateSphereIndexCount(const int nslices, const int nstacks)
     return nslices * nstacks * 2 * 3;
 }
 
-static void GenerateSphere(const int nslices, const int nstacks, const float radius, Vertex*pVertex)
+static void GenerateSphere(const int nslices, const int nstacks, const float radius, Vertex* pVertex)
 {
-    const float fnslices = (float) nslices;
-    const float fnstacks = (float) nstacks;
+    const float fnslices = (float)nslices;
+    const float fnstacks = (float)nstacks;
 
     const float dtheta = 2.0f * PI / fnslices;
     const float dphi = PI / fnstacks;
 
     int idx = 0;
     for (int i = 0; +i <= nstacks; i++) {
-        const float fi = (float) i;
+        const float fi = (float)i;
         const float phi = fi * dphi;
         for (int j = 0; j <= nslices; j++) {
-            const float ji = (float) j;
+            const float ji = (float)j;
             const float theta = ji * dtheta;
 
             const float x = radius * sinf(phi) * cosf(theta);
@@ -52,7 +52,7 @@ static void GenerateSphere(const int nslices, const int nstacks, const float rad
     }
 }
 
-static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t *pIndices)
+static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t* pIndices)
 {
     int idx = 0;
     for (int i = 0; i < nstacks; i++) {
@@ -73,8 +73,8 @@ static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t
     }
 }
 
-Mesh::Mesh(const Device &device)
-        : k_Device(device) {}
+Mesh::Mesh(const Device& device)
+    : k_Device(device) {}
 
 Mesh::~Mesh()
 {
@@ -99,29 +99,29 @@ MXC_RESULT Mesh::InitSphere()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Mesh::CreateVertexBuffer(const Vertex *pVertices,
+MXC_RESULT Mesh::CreateVertexBuffer(const Vertex* pVertices,
                                     const int vertexCount)
 {
     m_VertexCount = vertexCount;
     const VkDeviceSize bufferSize = (sizeof(Vertex) * vertexCount);
     MXC_CHK(k_Device.CreateAllocateBindPopulateBufferViaStaging(pVertices,
-                                                                VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                                bufferSize,
-                                                                m_VkVertexBuffer,
-                                                                m_VkVertexBufferMemory));
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        bufferSize,
+        m_VkVertexBuffer,
+        m_VkVertexBufferMemory));
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Mesh::CreateIndexBuffer(const uint16_t *pIndices,
+MXC_RESULT Mesh::CreateIndexBuffer(const uint16_t* pIndices,
                                    const int indexCount)
 {
     m_IndexCount = indexCount;
     const VkDeviceSize bufferSize = (sizeof(uint16_t) * indexCount);
     MXC_CHK(k_Device.CreateAllocateBindPopulateBufferViaStaging(pIndices,
-                                                                VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                                                                bufferSize,
-                                                                m_VkIndexBuffer,
-                                                                m_VkIndexBufferMemory));
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        bufferSize,
+        m_VkIndexBuffer,
+        m_VkIndexBufferMemory));
     return MXC_SUCCESS;
 }
 void Mesh::RecordRender() const

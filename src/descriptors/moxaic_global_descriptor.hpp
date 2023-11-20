@@ -24,7 +24,7 @@ namespace Moxaic::Vulkan
             uint32_t height;
         };
 
-        MXC_RESULT Init(const Camera &camera, const VkExtent2D& dimensions)
+        MXC_RESULT Init(const Camera& camera, const VkExtent2D& dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
             SDL_assert(m_VkDescriptorSet == nullptr);
@@ -32,23 +32,23 @@ namespace Moxaic::Vulkan
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 StaticArray bindings{
-                        (VkDescriptorSetLayoutBinding) {
-                                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                                              VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
-                                              VK_SHADER_STAGE_COMPUTE_BIT |
-                                              VK_SHADER_STAGE_FRAGMENT_BIT |
-                                              VK_SHADER_STAGE_MESH_BIT_EXT |
-                                              VK_SHADER_STAGE_TASK_BIT_EXT,
-                        }
+                    (VkDescriptorSetLayoutBinding){
+                        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                                      VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                                      VK_SHADER_STAGE_COMPUTE_BIT |
+                                      VK_SHADER_STAGE_FRAGMENT_BIT |
+                                      VK_SHADER_STAGE_MESH_BIT_EXT |
+                                      VK_SHADER_STAGE_TASK_BIT_EXT,
+                    }
                 };
                 MXC_CHK(CreateDescriptorSetLayout(bindings.size(),
-                                                  bindings.data()));
+                    bindings.data()));
             }
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                   Vulkan::Locality::Local));
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                Vulkan::Locality::Local));
             m_Buffer.width = dimensions.width;
             m_Buffer.height = dimensions.height;
             m_Buffer.proj = camera.projection();
@@ -59,14 +59,14 @@ namespace Moxaic::Vulkan
 
             MXC_CHK(AllocateDescriptorSet());
             const VkDescriptorBufferInfo globalUBOInfo{
-                    .buffer = m_Uniform.vkBuffer(),
-                    .range = m_Uniform.Size()
+                .buffer = m_Uniform.vkBuffer(),
+                .range = m_Uniform.Size()
             };
             StaticArray writes{
-                    (VkWriteDescriptorSet) {
-                            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                            .pBufferInfo = &globalUBOInfo
-                    },
+                (VkWriteDescriptorSet){
+                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                    .pBufferInfo = &globalUBOInfo
+                },
             };
             WriteDescriptors(writes.size(),
                              writes.data());
@@ -85,14 +85,14 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
-        void UpdateView(const Camera &camera)
+        void UpdateView(const Camera& camera)
         {
             m_Buffer.view = camera.view();
             m_Buffer.invView = camera.inverseView();
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
-        const auto &buffer() const { return m_Buffer; }
+        const auto& buffer() const { return m_Buffer; }
 
     private:
         Buffer m_Buffer{};

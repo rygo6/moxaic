@@ -18,9 +18,10 @@ namespace Moxaic::Vulkan
 
     class Mesh
     {
-        MXC_NO_VALUE_PASS(Mesh);
     public:
-        explicit Mesh(const Device &device);
+        MXC_NO_VALUE_PASS(Mesh);
+
+        explicit Mesh(const Device& device);
         virtual ~Mesh();
 
         /// Really just a test sphere mesh right now.
@@ -29,7 +30,7 @@ namespace Moxaic::Vulkan
         void RecordRender() const;
 
     private:
-        const Device &k_Device;
+        const Device& k_Device;
 
         uint32_t m_IndexCount{};
         uint32_t m_VertexCount{};
@@ -40,10 +41,10 @@ namespace Moxaic::Vulkan
         VkBuffer m_VkVertexBuffer;
         VkDeviceMemory m_VkVertexBufferMemory{};
 
-        MXC_RESULT CreateVertexBuffer(const Vertex *pVertices,
+        MXC_RESULT CreateVertexBuffer(const Vertex* pVertices,
                                       int vertexCount);
 
-        MXC_RESULT CreateIndexBuffer(const uint16_t *pIndices,
+        MXC_RESULT CreateIndexBuffer(const uint16_t* pIndices,
                                      int indexCount);
     };
 }

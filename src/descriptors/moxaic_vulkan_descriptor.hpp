@@ -15,13 +15,11 @@ namespace Moxaic::Vulkan
     template<typename T>
     class VulkanDescriptorBase
     {
+    public:
         MXC_NO_VALUE_PASS(VulkanDescriptorBase)
 
-    public:
-        explicit VulkanDescriptorBase(const Device&device)
-            : k_Device(device)
-        {
-        }
+        explicit VulkanDescriptorBase(const Device& device)
+            : k_Device(device) {}
 
         virtual ~VulkanDescriptorBase()
         {
@@ -35,7 +33,7 @@ namespace Moxaic::Vulkan
         const auto& vkDescriptorSet() const { return m_VkDescriptorSet; }
 
     protected:
-        const Device&k_Device;
+        const Device& k_Device;
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 

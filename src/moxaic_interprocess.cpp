@@ -4,10 +4,10 @@
 using namespace Moxaic;
 
 constexpr StaticArray k_InterProcessTargetParamSize{
-        sizeof(Node::ImportParam),
+    sizeof(Node::ImportParam),
 };
 
-void InterProcessProducer::Enque(const InterProcessTargetFunc target, const void *param) const
+void InterProcessProducer::Enque(const InterProcessTargetFunc target, const void* param) const
 {
     const auto pBuffer = static_cast<RingBuffer *>(m_pBuffer);
     pBuffer->pRingBuffer[pBuffer->head] = target;
@@ -15,8 +15,8 @@ void InterProcessProducer::Enque(const InterProcessTargetFunc target, const void
     pBuffer->head = pBuffer->head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
 }
 
-MXC_RESULT InterProcessReceiver::Init(const std::string &sharedMemoryName,
-                                      const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs)
+MXC_RESULT InterProcessReceiver::Init(const std::string& sharedMemoryName,
+                                      const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count>&& targetFuncs)
 {
     m_TargetFuncs = targetFuncs;
     return InterProcessBuffer::Init(sharedMemoryName);
@@ -38,9 +38,9 @@ int InterProcessReceiver::Deque() const
     // TODO do you copy it out of the IPC or just send that chunk of shared memory on through?
     // If consumer consumes too slow then producer might run out of data in a stream?
     // From trusted parent app sending shared memory through is probably fine
-//    void *param = malloc(fbrIPCTargetParamSize(target));
-//    memcpy(param, pRingBuffer->pRingBuffer + pRingBuffer->tail + FBR_IPC_RING_HEADER_SIZE, fbrIPCTargetParamSize(target));
-    void *param = pBuffer->pRingBuffer + pBuffer->tail + RingBuffer::HeaderSize;
+    //    void *param = malloc(fbrIPCTargetParamSize(target));
+    //    memcpy(param, pRingBuffer->pRingBuffer + pRingBuffer->tail + FBR_IPC_RING_HEADER_SIZE, fbrIPCTargetParamSize(target));
+    void* param = pBuffer->pRingBuffer + pBuffer->tail + RingBuffer::HeaderSize;
 
     if (pBuffer->tail + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target] > RingBuffer::RingBufferSize) {
         // TODO this needs to actually cycle around the ring buffer, this is only half done

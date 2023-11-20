@@ -11,17 +11,16 @@ Camera::Camera()
     UpdateProjection();
 }
 
-Camera::~Camera() {}
-
 bool Camera::UserCommandUpdate(const uint32_t deltaTime)
 {
     bool updated = false;
 
-    const auto &userCommand = Window::userCommand();
+    const auto& userCommand = Window::userCommand();
     if (!m_CameraLocked && userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
         m_CameraLocked = true;
-    } else if (m_CameraLocked && !userCommand.leftMouseButtonPressed) {
+    }
+    else if (m_CameraLocked && !userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_FALSE);
         m_CameraLocked = false;
     }
@@ -32,7 +31,7 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
         updated = true;
     }
 
-    const auto &userMove = userCommand.userMove;
+    const auto& userMove = userCommand.userMove;
     if (!userMove.None()) {
         auto delta = glm::zero<glm::vec3>();
         if (userMove.ContainsFlag(Window::UserMove::Forward)) {
@@ -48,7 +47,7 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
             delta.x += 1;
         }
         if (glm::length(delta) > 0.0f) {
-            m_Transform.LocalTranslate(glm::normalize(delta) * (float) deltaTime * 0.005f);
+            m_Transform.LocalTranslate(glm::normalize(delta) * (float)deltaTime * 0.005f);
             updated = true;
         }
     }

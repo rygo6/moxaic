@@ -9,7 +9,7 @@
 
 using namespace Moxaic;
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
     for (int i = 0; i < argc; ++i) {
         if (strcmp(argv[i], "-node") == 0) {

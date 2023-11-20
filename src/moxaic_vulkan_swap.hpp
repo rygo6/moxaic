@@ -14,15 +14,16 @@ namespace Moxaic::Vulkan
 
     class Swap
     {
-        MXC_NO_VALUE_PASS(Swap);
     public:
-        explicit Swap(const Device &device);
+        MXC_NO_VALUE_PASS(Swap);
+
+        explicit Swap(const Device& device);
         virtual ~Swap();
 
         MXC_RESULT Init(VkExtent2D dimensions, bool computeStorage);
 
         MXC_RESULT Acquire();
-        void BlitToSwap(const Texture &srcTexture) const;
+        void BlitToSwap(const Texture& srcTexture) const;
         MXC_RESULT QueuePresent() const;
 
         const auto& vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
@@ -30,7 +31,7 @@ namespace Moxaic::Vulkan
         const auto& format() const { return m_Format; }
 
     private:
-        const Device &k_Device;
+        const Device& k_Device;
 
         VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};
