@@ -1,18 +1,18 @@
 #pragma once
 
 #include "moxaic_vulkan_pipeline.hpp"
+#include "moxaic_vulkan.hpp"
+#include "moxaic_vulkan_device.hpp"
 
-#include "../descriptors/moxaic_global_descriptor.hpp"
-#include "../descriptors/moxaic_material_descriptor.hpp"
-#include "../descriptors/moxaic_object_descriptor.hpp"
+#include "moxaic_global_descriptor.hpp"
+#include "moxaic_material_descriptor.hpp"
+#include "moxaic_object_descriptor.hpp"
 
-#include "../moxaic_logging.hpp"
+#include "moxaic_logging.hpp"
 
-#include "../moxaic_vulkan.hpp"
-#include "../moxaic_vulkan_device.hpp"
+#include "static_array.hpp"
 
 #include <vulkan/vulkan.h>
-#include <array>
 #include <string>
 
 namespace Moxaic::Vulkan
@@ -28,7 +28,7 @@ namespace Moxaic::Vulkan
         {
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
-                const std::array setLayouts{
+                const StaticArray setLayouts{
                         globalDescriptor.vkDescriptorSetLayout(),
                         materialDescriptor.vkDescriptorSetLayout(),
                         objectDescriptor.vkDescriptorSetLayout(),
@@ -54,7 +54,7 @@ namespace Moxaic::Vulkan
             VkShaderModule fragShaderModule;
             MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv",
                                        fragShaderModule));
-            const std::array stages{
+            const StaticArray stages{
                     (VkPipelineShaderStageCreateInfo) {
                             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                             .stage = VK_SHADER_STAGE_VERTEX_BIT,

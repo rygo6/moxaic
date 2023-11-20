@@ -1,9 +1,9 @@
 #pragma once
 
 #include "moxaic_logging.hpp"
+#include "static_array.hpp"
 
 #include <cstdint>
-#include <array>
 #include <functional>
 
 #ifdef WIN32
@@ -109,9 +109,9 @@ namespace Moxaic
     public:
         InterProcessReceiver() = default;
         MXC_RESULT Init(const std::string &sharedMemoryName,
-                        const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs);
+                        const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs);
         int Deque() const;
     private:
-        std::array<InterProcessFunc, InterProcessTargetFunc::Count> m_TargetFuncs{};
+        StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> m_TargetFuncs{};
     };
 }

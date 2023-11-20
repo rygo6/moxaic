@@ -1,13 +1,14 @@
 #pragma once
 
-#include "../moxaic_logging.hpp"
+#include "moxaic_logging.hpp"
 
-#include "../moxaic_vulkan.hpp"
-#include "../moxaic_vulkan_device.hpp"
-#include "../moxaic_vulkan_mesh.hpp"
+#include "moxaic_vulkan.hpp"
+#include "moxaic_vulkan_device.hpp"
+#include "moxaic_vulkan_mesh.hpp"
+
+#include "moxaic_vulkan_pipeline.hpp"
 
 #include <vulkan/vulkan.h>
-#include <array>
 #include <string>
 
 namespace Moxaic::Vulkan
@@ -98,14 +99,14 @@ namespace Moxaic::Vulkan
         {
             MXC_LOG_FUNCTION();
             // Vertex Input
-            std::array vertexBindingDescriptions{
+            StaticArray vertexBindingDescriptions{
                 (VkVertexInputBindingDescription){
                     .binding = 0,
                     .stride = sizeof(Vertex),
                     .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
                 },
             };
-            std::array vertexAttributeDescriptions{
+            StaticArray vertexAttributeDescriptions{
                 (VkVertexInputAttributeDescription){
                     .location = 0,
                     .binding = 0,
@@ -155,7 +156,7 @@ namespace Moxaic::Vulkan
             MXC_LOG_FUNCTION();
             SDL_assert(s_VkPipelineLayout != nullptr);
             // Fragment
-            constexpr std::array pipelineColorBlendAttachmentStates{
+            constexpr StaticArray pipelineColorBlendAttachmentStates{
                 (VkPipelineColorBlendAttachmentState){
                     .blendEnable = VK_FALSE,
                     .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
@@ -234,7 +235,7 @@ namespace Moxaic::Vulkan
                 .viewportCount = 1,
                 .scissorCount = 1,
             };
-            constexpr std::array dynamicStates{
+            constexpr StaticArray dynamicStates{
                 (VkDynamicState)VK_DYNAMIC_STATE_VIEWPORT,
                 (VkDynamicState)VK_DYNAMIC_STATE_SCISSOR
             };

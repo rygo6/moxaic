@@ -1,12 +1,9 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
-
 #include "moxaic_logging.hpp"
-
 #include "main.hpp"
 
 #include <vector>
-#include <iostream>
 #include <cassert>
 #include <SDL2/SDL_Vulkan.h>
 

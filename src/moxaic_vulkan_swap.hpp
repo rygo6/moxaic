@@ -1,9 +1,9 @@
 #pragma once
 
 #include "moxaic_logging.hpp"
+#include "static_array.hpp"
 
 #include <vulkan/vulkan.h>
-#include <array>
 
 namespace Moxaic::Vulkan
 {
@@ -36,8 +36,8 @@ namespace Moxaic::Vulkan
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        std::array<VkImage, SwapCount> m_VkSwapImages{VK_NULL_HANDLE};
-        std::array<VkImageView, SwapCount> m_VkSwapImageViews{VK_NULL_HANDLE};
+        StaticArray<VkImage, SwapCount> m_VkSwapImages{VK_NULL_HANDLE};
+        StaticArray<VkImageView, SwapCount> m_VkSwapImageViews{VK_NULL_HANDLE};
 
         VkFormat m_Format;
         VkExtent2D m_Dimensions;

@@ -17,7 +17,7 @@ namespace Moxaic::Vulkan
 
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
-                std::array bindings{
+                StaticArray bindings{
                         (VkDescriptorSetLayoutBinding) {
                                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -33,7 +33,7 @@ namespace Moxaic::Vulkan
                     .imageView = texture.vkImageView(),
                     .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             };
-            std::array writes{
+            StaticArray writes{
                     (VkWriteDescriptorSet) {
                             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                             .pImageInfo = &imageInfo

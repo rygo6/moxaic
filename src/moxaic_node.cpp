@@ -95,7 +95,7 @@ Node::~Node() = default;
 
 MXC_RESULT Node::Init()
 {
-    const std::array targetFuncs{
+    const StaticArray targetFuncs{
             (InterProcessFunc) [this](void *pParameters) {
                 const auto pImportParameters = static_cast<ImportParam *>(pParameters);
                 this->InitImport(*pImportParameters);

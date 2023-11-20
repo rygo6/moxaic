@@ -1,10 +1,9 @@
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_texture.hpp"
+#include "static_array.hpp"
 
 #include <vulkan/vulkan.h>
-
-#include <array>
 
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
@@ -94,7 +93,7 @@ MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D extents,
 
 MXC_RESULT Framebuffer::InitFramebuffer()
 {
-    const std::array attachments{
+    const StaticArray attachments{
         m_ColorTexture.vkImageView(),
         m_NormalTexture.vkImageView(),
         m_GBufferTexture.vkImageView(),

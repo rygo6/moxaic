@@ -34,7 +34,7 @@ namespace Moxaic::Vulkan
         HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
 
         const auto& vkSemaphore() const { return m_vkSemaphore; }
-        const auto& waitValue() const { return m_WaitValue; }
+        auto waitValue() const { return m_WaitValue; }
 
     private:
         const Device& k_Device;

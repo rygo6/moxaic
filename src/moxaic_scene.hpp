@@ -45,7 +45,7 @@ namespace Moxaic
         MXC_RESULT Loop(const uint32_t deltaTime) override;
 
     private:
-        std::array<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{
+        StaticArray<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{
             Vulkan::Framebuffer(k_Device),
             Vulkan::Framebuffer(k_Device)
         };

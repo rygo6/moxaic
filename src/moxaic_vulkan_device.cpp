@@ -3,10 +3,10 @@
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_swap.hpp"
 #include "moxaic_vulkan_semaphore.hpp"
-
-#include "main.hpp"
 #include "moxaic_logging.hpp"
 #include "moxaic_window.hpp"
+#include "static_array.hpp"
+#include "main.hpp"
 
 #include <vulkan/vulkan.h>
 #ifdef WIN32
@@ -15,7 +15,6 @@
 #endif
 
 #include <vector>
-#include <array>
 
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
@@ -168,7 +167,7 @@ MXC_RESULT Device::CreateDevice()
                               ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT
                               : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT
     };
-    const std::array queueCreateInfos{
+    const StaticArray queueCreateInfos{
         (VkDeviceQueueCreateInfo){
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
             .pNext = &queueGlobalPriorityCreateInfo,
@@ -287,7 +286,7 @@ MXC_RESULT Device::CreateDevice()
         }
     };
 
-    constexpr std::array requiredDeviceExtensions{
+    constexpr StaticArray requiredDeviceExtensions{
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
         VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
@@ -326,7 +325,7 @@ MXC_RESULT Device::CreateRenderPass()
     MXC_LOG_FUNCTION();
 
     // supposedly most correct https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#swapchain-image-acquire-and-present
-    constexpr std::array colorAttachments{
+    constexpr StaticArray colorAttachments{
         (VkAttachmentReference){
             .attachment = 0,
             .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -344,7 +343,7 @@ MXC_RESULT Device::CreateRenderPass()
         .attachment = 3,
         .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
-    const std::array subpass{
+    const StaticArray subpass{
         (VkSubpassDescription){
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
             .colorAttachmentCount = colorAttachments.size(),
@@ -352,7 +351,7 @@ MXC_RESULT Device::CreateRenderPass()
             .pDepthStencilAttachment = &depthAttachmentReference,
         }
     };
-    constexpr std::array dependencies{
+    constexpr StaticArray dependencies{
         (VkSubpassDependency){
             .srcSubpass = VK_SUBPASS_EXTERNAL,
             .dstSubpass = 0,
@@ -372,7 +371,7 @@ MXC_RESULT Device::CreateRenderPass()
             .dependencyFlags = 0,
         },
     };
-    constexpr std::array attachments{
+    constexpr StaticArray attachments{
         (VkAttachmentDescription){
             .flags = 0,
             .format = k_ColorBufferFormat,
@@ -492,7 +491,7 @@ MXC_RESULT Device::CreatePools()
         .pipelineStatistics = 0,
     };
     vkCreateQueryPool(m_VkDevice, &queryPoolCreateInfo, VK_ALLOC, &m_VkQueryPool);
-    constexpr std::array poolSizes{
+    constexpr StaticArray poolSizes{
         (VkDescriptorPoolSize){
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .descriptorCount = 4,
@@ -1049,7 +1048,7 @@ MXC_RESULT Device::EndGraphicsCommandBuffer() const
 
 void Device::BeginRenderPass(const Framebuffer& framebuffer) const
 {
-    std::array<VkClearValue, 4> clearValues;
+    StaticArray<VkClearValue, 4> clearValues;
     clearValues[0].color = (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}};
     clearValues[1].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
     clearValues[2].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
@@ -1067,8 +1066,8 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer) const
         .pClearValues = clearValues.data(),
     };
     VK_CHK_VOID(vkCmdBeginRenderPass(m_VkGraphicsCommandBuffer,
-                         &renderPassBeginInfo,
-                         VK_SUBPASS_CONTENTS_INLINE));
+        &renderPassBeginInfo,
+        VK_SUBPASS_CONTENTS_INLINE));
 }
 
 void Device::EndRenderPass() const
@@ -1082,10 +1081,10 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore& timelineSemaphore) const
     const uint64_t waitValue = timelineSemaphore.waitValue();
     timelineSemaphore.IncrementWaitValue();
     const uint64_t signalValue = timelineSemaphore.waitValue();
-    const std::array waitSemaphoreValues{
+    const StaticArray waitSemaphoreValues{
         waitValue,
     };
-    const std::array signalSemaphoreValues{
+    const StaticArray signalSemaphoreValues{
         signalValue,
     };
     const VkTimelineSemaphoreSubmitInfo timelineSemaphoreSubmitInfo{
@@ -1096,13 +1095,13 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore& timelineSemaphore) const
         .signalSemaphoreValueCount = signalSemaphoreValues.size(),
         .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
-    const std::array waitSemaphores{
+    const StaticArray waitSemaphores{
         timelineSemaphore.vkSemaphore(),
     };
-    constexpr std::array waitDstStageMask{
+    constexpr StaticArray waitDstStageMask{
         (VkPipelineStageFlags)VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
     };
-    const std::array signalSemaphores{
+    const StaticArray signalSemaphores{
         timelineSemaphore.vkSemaphore(),
     };
     const VkSubmitInfo submitInfo = {
@@ -1130,11 +1129,11 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
     const uint64_t waitValue = timelineSemaphore.waitValue();
     timelineSemaphore.IncrementWaitValue();
     const uint64_t signalValue = timelineSemaphore.waitValue();
-    const std::array waitSemaphoreValues{
+    const StaticArray waitSemaphoreValues{
         (uint64_t)waitValue,
         (uint64_t)0
     };
-    const std::array signalSemaphoreValues{
+    const StaticArray signalSemaphoreValues{
         (uint64_t)signalValue,
         (uint64_t)0
     };
@@ -1146,15 +1145,15 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
         .signalSemaphoreValueCount = signalSemaphoreValues.size(),
         .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
-    const std::array waitSemaphores{
+    const StaticArray waitSemaphores{
         timelineSemaphore.vkSemaphore(),
         swap.vkAcquireCompleteSemaphore(),
     };
-    constexpr std::array waitDstStageMask{
+    constexpr StaticArray waitDstStageMask{
         (VkPipelineStageFlags)VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         (VkPipelineStageFlags)VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
     };
-    const std::array signalSemaphores{
+    const StaticArray signalSemaphores{
         timelineSemaphore.vkSemaphore(),
         swap.vkRenderCompleteSemaphore(),
     };

@@ -66,7 +66,7 @@ namespace Moxaic
 
         Vulkan::Semaphore m_ExportedNodeSemaphore{k_Device};
 
-        std::array<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
+        StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
             Vulkan::Framebuffer(k_Device),
             Vulkan::Framebuffer(k_Device)
         };
@@ -135,7 +135,7 @@ namespace Moxaic
     private:
         const Vulkan::Device& k_Device;
 
-        std::array<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
+        StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
         {
             return {
                 [this](void* pParameters) {
@@ -158,7 +158,7 @@ namespace Moxaic
         Vulkan::Semaphore m_ImportedCompositorSemaphore{k_Device};
         Vulkan::Semaphore m_ImportedNodeSemaphore{k_Device};
 
-        std::array<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{
+        StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{
             Vulkan::Framebuffer(k_Device),
             Vulkan::Framebuffer(k_Device)
         };

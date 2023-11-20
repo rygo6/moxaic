@@ -3,7 +3,7 @@
 
 using namespace Moxaic;
 
-constexpr std::array k_InterProcessTargetParamSize{
+constexpr StaticArray k_InterProcessTargetParamSize{
         sizeof(Node::ImportParam),
 };
 
@@ -16,7 +16,7 @@ void InterProcessProducer::Enque(const InterProcessTargetFunc target, const void
 }
 
 MXC_RESULT InterProcessReceiver::Init(const std::string &sharedMemoryName,
-                                      const std::array<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs)
+                                      const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> &&targetFuncs)
 {
     m_TargetFuncs = targetFuncs;
     return InterProcessBuffer::Init(sharedMemoryName);

@@ -3,9 +3,9 @@
 #include "moxaic_vulkan_descriptor.hpp"
 #include "moxaic_vulkan_uniform.hpp"
 #include "moxaic_camera.hpp"
+#include "static_array.hpp"
 
 #include <glm/glm.hpp>
-#include <array>
 
 namespace Moxaic::Vulkan
 {
@@ -31,7 +31,7 @@ namespace Moxaic::Vulkan
 
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
-                std::array bindings{
+                StaticArray bindings{
                         (VkDescriptorSetLayoutBinding) {
                                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
@@ -62,7 +62,7 @@ namespace Moxaic::Vulkan
                     .buffer = m_Uniform.vkBuffer(),
                     .range = m_Uniform.Size()
             };
-            std::array writes{
+            StaticArray writes{
                     (VkWriteDescriptorSet) {
                             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                             .pBufferInfo = &globalUBOInfo
