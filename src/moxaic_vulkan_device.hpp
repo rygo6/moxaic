@@ -19,7 +19,7 @@ namespace Moxaic::Vulkan
         MXC_NO_VALUE_PASS(Device);
 
     public:
-        Device();
+        Device() = default;
         virtual ~Device();
 
         MXC_RESULT Init();

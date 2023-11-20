@@ -19,7 +19,6 @@
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-
 // From OVR Vulkan example. Is this better/same as vulkan tutorial!?
 static MXC_RESULT MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties& physicalDeviceMemoryProperties,
                                            const VkMemoryPropertyFlags& requiredMemoryProperties,
@@ -40,8 +39,11 @@ static MXC_RESULT MemoryTypeFromProperties(const VkPhysicalDeviceMemoryPropertie
     return MXC_FAIL;
 }
 
-Device::Device() = default;
-Device::~Device() = default;
+Device::~Device()
+{
+    // todo should I even worry about cleaning up refs yet?
+    // maybe when I deal with recreating losts device
+};
 
 MXC_RESULT Device::PickPhysicalDevice()
 {

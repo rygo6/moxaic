@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utilities\bit_flags.hpp"
+#include "BitFlags.hpp"
 
 #include <SDL2/SDL.h>
 #include <vulkan/vulkan.h>
