@@ -68,7 +68,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_VkPipelineLayout,
+                                    s_vkPipelineLayout,
                                     0,
                                     1,
                                     &descriptor.vkDescriptorSet(),
@@ -80,7 +80,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_VkPipelineLayout,
+                                    s_vkPipelineLayout,
                                     1,
                                     1,
                                     &descriptor.vkDescriptorSet(),
@@ -92,7 +92,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_VkPipelineLayout,
+                                    s_vkPipelineLayout,
                                     2,
                                     1,
                                     &descriptor.vkDescriptorSet(),

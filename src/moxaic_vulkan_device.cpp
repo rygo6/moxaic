@@ -59,13 +59,13 @@ MXC_RESULT Device::PickPhysicalDevice()
     VK_CHK(vkEnumeratePhysicalDevices(Vulkan::vkInstance(), &deviceCount, devices.data()));
 
     // Todo Implement Query OpenVR for the physical vkDevice to use
-    m_VkPhysicalDevice = devices.front();
+    m_vkPhysicalDevice = devices.front();
 
     m_PhysicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
     m_PhysicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     m_PhysicalDeviceProperties.pNext = &m_PhysicalDeviceMeshShaderProperties;
-    vkGetPhysicalDeviceProperties2(m_VkPhysicalDevice, &m_PhysicalDeviceProperties);
-    vkGetPhysicalDeviceMemoryProperties(m_VkPhysicalDevice, &m_PhysicalDeviceMemoryProperties);
+    vkGetPhysicalDeviceProperties2(m_vkPhysicalDevice, &m_PhysicalDeviceProperties);
+    vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &m_PhysicalDeviceMemoryProperties);
 
     MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.timestampPeriod);
     MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[0]);
@@ -94,7 +94,7 @@ MXC_RESULT Device::FindQueues()
     MXC_LOG_FUNCTION();
 
     uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties2(m_VkPhysicalDevice, &queueFamilyCount, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties2(m_vkPhysicalDevice, &queueFamilyCount, nullptr);
     if (queueFamilyCount == 0) {
         MXC_LOG_ERROR("Failed to get graphicsQueue properties.");
         return MXC_FAIL;
@@ -110,7 +110,7 @@ MXC_RESULT Device::FindQueues()
             .pNext = &queueFamilyGlobalPriorityProperties[i],
         };
     }
-    vkGetPhysicalDeviceQueueFamilyProperties2(m_VkPhysicalDevice, &queueFamilyCount, queueFamilies.data());
+    vkGetPhysicalDeviceQueueFamilyProperties2(m_vkPhysicalDevice, &queueFamilyCount, queueFamilies.data());
 
     bool foundGraphics = false;
     bool foundCompute = false;
@@ -121,7 +121,7 @@ MXC_RESULT Device::FindQueues()
         const bool computeSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
 
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice,
+        vkGetPhysicalDeviceSurfaceSupportKHR(m_vkPhysicalDevice,
                                              i,
                                              Vulkan::vkSurface(),
                                              &presentSupport);
@@ -213,7 +213,7 @@ MXC_RESULT Device::CreateDevice()
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &supportedPhysicalDeviceVulkan11Features,
     };
-    vkGetPhysicalDeviceFeatures2(m_VkPhysicalDevice, &supportedPhysicalDeviceFeatures2);
+    vkGetPhysicalDeviceFeatures2(m_vkPhysicalDevice, &supportedPhysicalDeviceFeatures2);
     if (!supportedPhysicalDeviceFeatures2.features.robustBufferAccess)
         MXC_LOG_ERROR("robustBufferAccess no support!");
     if (!supportedPhysicalDeviceFeatures2.features.samplerAnisotropy)
@@ -316,7 +316,7 @@ MXC_RESULT Device::CreateDevice()
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.enabledExtensionCount = requiredDeviceExtensions.size();
     createInfo.ppEnabledExtensionNames = requiredDeviceExtensions.data();
-    VK_CHK(vkCreateDevice(m_VkPhysicalDevice, &createInfo, VK_ALLOC, &m_VkDevice));
+    VK_CHK(vkCreateDevice(m_vkPhysicalDevice, &createInfo, VK_ALLOC, &m_vkDevice));
 
     return MXC_SUCCESS;
 }
@@ -430,7 +430,7 @@ MXC_RESULT Device::CreateRenderPass()
         .dependencyCount = dependencies.size(),
         .pDependencies = dependencies.data(),
     };
-    VK_CHK(vkCreateRenderPass(m_VkDevice, &renderPassInfo, VK_ALLOC, &m_VkRenderPass));
+    VK_CHK(vkCreateRenderPass(m_vkDevice, &renderPassInfo, VK_ALLOC, &m_vkRenderPass));
     return MXC_SUCCESS;
 }
 
@@ -444,7 +444,7 @@ MXC_RESULT Device::CreateCommandBuffers()
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = m_GraphicsQueueFamilyIndex,
     };
-    VK_CHK(vkCreateCommandPool(m_VkDevice,
+    VK_CHK(vkCreateCommandPool(m_vkDevice,
         &graphicsPoolInfo,
         VK_ALLOC,
         &m_VkGraphicsCommandPool));
@@ -454,9 +454,9 @@ MXC_RESULT Device::CreateCommandBuffers()
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1,
     };
-    VK_CHK(vkAllocateCommandBuffers(m_VkDevice,
+    VK_CHK(vkAllocateCommandBuffers(m_vkDevice,
         &graphicsAllocateInfo,
-        &m_VkGraphicsCommandBuffer));
+        &m_vkGraphicsCommandBuffer));
 
     // Compute
     const VkCommandPoolCreateInfo computePoolInfo = {
@@ -464,7 +464,7 @@ MXC_RESULT Device::CreateCommandBuffers()
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = m_ComputeQueueFamilyIndex,
     };
-    VK_CHK(vkCreateCommandPool(m_VkDevice,
+    VK_CHK(vkCreateCommandPool(m_vkDevice,
         &computePoolInfo,
         VK_ALLOC,
         &m_VkComputeCommandPool));
@@ -474,9 +474,9 @@ MXC_RESULT Device::CreateCommandBuffers()
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1,
     };
-    VK_CHK(vkAllocateCommandBuffers(m_VkDevice,
+    VK_CHK(vkAllocateCommandBuffers(m_vkDevice,
         &computeAllocInfo,
-        &m_VkComputeCommandBuffer));
+        &m_vkComputeCommandBuffer));
 
     return MXC_SUCCESS;
 }
@@ -492,7 +492,7 @@ MXC_RESULT Device::CreatePools()
         .queryCount = 2,
         .pipelineStatistics = 0,
     };
-    vkCreateQueryPool(m_VkDevice, &queryPoolCreateInfo, VK_ALLOC, &m_VkQueryPool);
+    vkCreateQueryPool(m_vkDevice, &queryPoolCreateInfo, VK_ALLOC, &m_VkQueryPool);
     constexpr StaticArray poolSizes{
         (VkDescriptorPoolSize){
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -515,10 +515,10 @@ MXC_RESULT Device::CreatePools()
         .poolSizeCount = poolSizes.size(),
         .pPoolSizes = poolSizes.data(),
     };
-    VK_CHK(vkCreateDescriptorPool(m_VkDevice,
+    VK_CHK(vkCreateDescriptorPool(m_vkDevice,
         &poolInfo,
         VK_ALLOC,
-        &m_VkDescriptorPool));
+        &m_vkDescriptorPool));
     return MXC_SUCCESS;
 }
 
@@ -544,7 +544,7 @@ MXC_RESULT Device::CreateSamplers()
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
         .unnormalizedCoordinates = VK_FALSE,
     };
-    VK_CHK(vkCreateSampler(m_VkDevice, &linearSamplerInfo, VK_ALLOC, &m_VkLinearSampler));
+    VK_CHK(vkCreateSampler(m_vkDevice, &linearSamplerInfo, VK_ALLOC, &m_vkLinearSampler));
 
     const VkSamplerCreateInfo nearestSamplerInfo{
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -564,7 +564,7 @@ MXC_RESULT Device::CreateSamplers()
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
         .unnormalizedCoordinates = VK_FALSE,
     };
-    VK_CHK(vkCreateSampler(m_VkDevice, &nearestSamplerInfo, VK_ALLOC, &m_VkNearestSampler));
+    VK_CHK(vkCreateSampler(m_vkDevice, &nearestSamplerInfo, VK_ALLOC, &m_vkNearestSampler));
 
     return MXC_SUCCESS;
 }
@@ -580,8 +580,8 @@ MXC_RESULT Device::Init()
     MXC_CHK(FindQueues());
     MXC_CHK(CreateDevice());
 
-    vkGetDeviceQueue(m_VkDevice, m_GraphicsQueueFamilyIndex, 0, &m_VkGraphicsQueue);
-    vkGetDeviceQueue(m_VkDevice, m_ComputeQueueFamilyIndex, 0, &m_VkComputeQueue);
+    vkGetDeviceQueue(m_vkDevice, m_GraphicsQueueFamilyIndex, 0, &m_vkGraphicsQueue);
+    vkGetDeviceQueue(m_vkDevice, m_ComputeQueueFamilyIndex, 0, &m_vkComputeQueue);
 
     MXC_CHK(CreateRenderPass());
     MXC_CHK(CreateCommandBuffers());
@@ -598,7 +598,7 @@ MXC_RESULT Device::AllocateBindImageExport(const VkMemoryPropertyFlags propertie
 {
     VkMemoryRequirements memRequirements{};
     uint32_t memTypeIndex;
-    vkGetImageMemoryRequirements(m_VkDevice,
+    vkGetImageMemoryRequirements(m_vkDevice,
                                  image,
                                  &memRequirements);
     MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
@@ -622,11 +622,11 @@ MXC_RESULT Device::AllocateBindImageExport(const VkMemoryPropertyFlags propertie
         .allocationSize = memRequirements.size,
         .memoryTypeIndex = memTypeIndex,
     };
-    VK_CHK(vkAllocateMemory(m_VkDevice,
+    VK_CHK(vkAllocateMemory(m_vkDevice,
         &allocateInfo,
         VK_ALLOC,
         &outDeviceMemory));
-    VK_CHK(vkBindImageMemory(m_VkDevice,
+    VK_CHK(vkBindImageMemory(m_vkDevice,
         image,
         outDeviceMemory,
         0));
@@ -641,7 +641,7 @@ MXC_RESULT Device::AllocateBindImageImport(const VkMemoryPropertyFlags propertie
 {
     VkMemoryRequirements memRequirements{};
     uint32_t memTypeIndex;
-    vkGetImageMemoryRequirements(m_VkDevice,
+    vkGetImageMemoryRequirements(m_vkDevice,
                                  image,
                                  &memRequirements);
     MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
@@ -667,12 +667,12 @@ MXC_RESULT Device::AllocateBindImageImport(const VkMemoryPropertyFlags propertie
         .memoryTypeIndex = memTypeIndex,
     };
     VK_CHK(vkAllocateMemory(
-        m_VkDevice,
+        m_vkDevice,
         &allocateInfo,
         VK_ALLOC,
         &outDeviceMemory));
     VK_CHK(vkBindImageMemory(
-        m_VkDevice,
+        m_vkDevice,
         image,
         outDeviceMemory,
         0));
@@ -685,7 +685,7 @@ MXC_RESULT Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
 {
     VkMemoryRequirements memRequirements{};
     uint32_t memTypeIndex;
-    vkGetImageMemoryRequirements(m_VkDevice,
+    vkGetImageMemoryRequirements(m_vkDevice,
                                  image,
                                  &memRequirements);
     MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
@@ -699,12 +699,12 @@ MXC_RESULT Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
         .memoryTypeIndex = memTypeIndex,
     };
     VK_CHK(vkAllocateMemory(
-        m_VkDevice,
+        m_vkDevice,
         &allocateInfo,
         VK_ALLOC,
         &outDeviceMemory));
     VK_CHK(vkBindImageMemory(
-        m_VkDevice,
+        m_vkDevice,
         image,
         outDeviceMemory,
         0));
@@ -750,14 +750,14 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
         .queueFamilyIndexCount = 0,
         .pQueueFamilyIndices = nullptr,
     };
-    VK_CHK(vkCreateBuffer(m_VkDevice,
+    VK_CHK(vkCreateBuffer(m_vkDevice,
         &bufferCreateInfo,
         nullptr,
         &outBuffer));
 
     VkMemoryRequirements memRequirements = {};
     uint32_t memTypeIndex;
-    vkGetBufferMemoryRequirements(m_VkDevice,
+    vkGetBufferMemoryRequirements(m_vkDevice,
                                   outBuffer,
                                   &memRequirements);
     MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
@@ -790,11 +790,11 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
         .allocationSize = memRequirements.size,
         .memoryTypeIndex = memTypeIndex
     };
-    VK_CHK(vkAllocateMemory(m_VkDevice,
+    VK_CHK(vkAllocateMemory(m_vkDevice,
         &allocInfo,
         VK_ALLOC,
         &outDeviceMemory));
-    VK_CHK(vkBindBufferMemory(m_VkDevice,
+    VK_CHK(vkBindBufferMemory(m_vkDevice,
         outBuffer,
         outDeviceMemory,
         0));
@@ -807,7 +807,7 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
             .memory = outDeviceMemory,
             .handleType = MXC_EXTERNAL_MEMORY_HANDLE
         };
-        VK_CHK(Vulkan::VkFunc.GetMemoryWin32HandleKHR(m_VkDevice,
+        VK_CHK(Vulkan::VkFunc.GetMemoryWin32HandleKHR(m_vkDevice,
             &getWin32HandleInfo,
             &outExternalMemory));
 #endif
@@ -827,9 +827,9 @@ MXC_RESULT Device::CreateStagingBuffer(const void* srcData,
         outStagingBuffer,
         outStagingBufferMemory));
     void* dstData;
-    vkMapMemory(m_VkDevice, outStagingBufferMemory, 0, bufferSize, 0, &dstData);
+    vkMapMemory(m_vkDevice, outStagingBufferMemory, 0, bufferSize, 0, &dstData);
     memcpy(dstData, srcData, bufferSize);
-    vkUnmapMemory(m_VkDevice, outStagingBufferMemory);\
+    vkUnmapMemory(m_vkDevice, outStagingBufferMemory);\
     return MXC_SUCCESS;
 }
 
@@ -907,10 +907,10 @@ MXC_RESULT Device::CreateAllocateBindPopulateBufferViaStaging(const void* srcDat
     CopyBufferToBuffer(bufferSize,
                        stagingBuffer,
                        outBuffer);
-    vkDestroyBuffer(m_VkDevice,
+    vkDestroyBuffer(m_vkDevice,
                     stagingBuffer,
                     VK_ALLOC);
-    vkFreeMemory(m_VkDevice,
+    vkFreeMemory(m_vkDevice,
                  stagingBufferMemory,
                  VK_ALLOC);
     return MXC_SUCCESS;
@@ -970,7 +970,7 @@ MXC_RESULT Device::BeginImmediateCommandBuffer(VkCommandBuffer& outCommandBuffer
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
         .commandBufferCount = 1,
     };
-    VK_CHK(vkAllocateCommandBuffers(m_VkDevice,
+    VK_CHK(vkAllocateCommandBuffers(m_vkDevice,
         &allocInfo,
         &outCommandBuffer));
     constexpr VkCommandBufferBeginInfo beginInfo{
@@ -999,12 +999,12 @@ MXC_RESULT Device::EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffe
         .signalSemaphoreCount = 0,
         .pSignalSemaphores = nullptr
     };
-    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
+    VK_CHK(vkQueueSubmit(m_vkGraphicsQueue,
         1,
         &submitInfo,
         VK_NULL_HANDLE));
-    VK_CHK(vkQueueWaitIdle(m_VkGraphicsQueue));
-    vkFreeCommandBuffers(m_VkDevice,
+    VK_CHK(vkQueueWaitIdle(m_vkGraphicsQueue));
+    vkFreeCommandBuffers(m_vkDevice,
                          m_VkGraphicsCommandPool,
                          1,
                          &commandBuffer);
@@ -1013,12 +1013,12 @@ MXC_RESULT Device::EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffe
 
 MXC_RESULT Device::BeginGraphicsCommandBuffer() const
 {
-    VK_CHK(vkResetCommandBuffer(m_VkGraphicsCommandBuffer,
+    VK_CHK(vkResetCommandBuffer(m_vkGraphicsCommandBuffer,
         VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
     constexpr VkCommandBufferBeginInfo beginInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
-    VK_CHK(vkBeginCommandBuffer(m_VkGraphicsCommandBuffer, &beginInfo));
+    VK_CHK(vkBeginCommandBuffer(m_vkGraphicsCommandBuffer, &beginInfo));
     const VkViewport viewport{
         .x = 0.0f,
         .y = 0.0f,
@@ -1027,7 +1027,7 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer() const
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };
-    vkCmdSetViewport(m_VkGraphicsCommandBuffer,
+    vkCmdSetViewport(m_vkGraphicsCommandBuffer,
                      0,
                      1,
                      &viewport);
@@ -1035,7 +1035,7 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer() const
         .offset = {0, 0},
         .extent = Window::extents(),
     };
-    vkCmdSetScissor(m_VkGraphicsCommandBuffer,
+    vkCmdSetScissor(m_vkGraphicsCommandBuffer,
                     0,
                     1,
                     &scissor);
@@ -1044,7 +1044,7 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer() const
 
 MXC_RESULT Device::EndGraphicsCommandBuffer() const
 {
-    VK_CHK(vkEndCommandBuffer(m_VkGraphicsCommandBuffer));
+    VK_CHK(vkEndCommandBuffer(m_vkGraphicsCommandBuffer));
     return MXC_SUCCESS;
 }
 
@@ -1058,7 +1058,7 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer) const
     const VkRenderPassBeginInfo renderPassBeginInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .pNext = nullptr,
-        .renderPass = m_VkRenderPass,
+        .renderPass = m_vkRenderPass,
         .framebuffer = framebuffer.vkFramebuffer(),
         .renderArea = {
             .offset = {0, 0},
@@ -1067,14 +1067,14 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer) const
         .clearValueCount = clearValues.size(),
         .pClearValues = clearValues.data(),
     };
-    VK_CHK_VOID(vkCmdBeginRenderPass(m_VkGraphicsCommandBuffer,
+    VK_CHK_VOID(vkCmdBeginRenderPass(m_vkGraphicsCommandBuffer,
         &renderPassBeginInfo,
         VK_SUBPASS_CONTENTS_INLINE));
 }
 
 void Device::EndRenderPass() const
 {
-    VK_CHK_VOID(vkCmdEndRenderPass(m_VkGraphicsCommandBuffer));
+    VK_CHK_VOID(vkCmdEndRenderPass(m_vkGraphicsCommandBuffer));
 }
 
 MXC_RESULT Device::SubmitGraphicsQueue(Semaphore& timelineSemaphore) const
@@ -1113,11 +1113,11 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore& timelineSemaphore) const
         .pWaitSemaphores = waitSemaphores.data(),
         .pWaitDstStageMask = waitDstStageMask.data(),
         .commandBufferCount = 1,
-        .pCommandBuffers = &m_VkGraphicsCommandBuffer,
+        .pCommandBuffers = &m_vkGraphicsCommandBuffer,
         .signalSemaphoreCount = signalSemaphores.size(),
         .pSignalSemaphores = signalSemaphores.data()
     };
-    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
+    VK_CHK(vkQueueSubmit(m_vkGraphicsQueue,
         1,
         &submitInfo,
         VK_NULL_HANDLE));
@@ -1166,11 +1166,11 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
         .pWaitSemaphores = waitSemaphores.data(),
         .pWaitDstStageMask = waitDstStageMask.data(),
         .commandBufferCount = 1,
-        .pCommandBuffers = &m_VkGraphicsCommandBuffer,
+        .pCommandBuffers = &m_vkGraphicsCommandBuffer,
         .signalSemaphoreCount = signalSemaphores.size(),
         .pSignalSemaphores = signalSemaphores.data()
     };
-    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
+    VK_CHK(vkQueueSubmit(m_vkGraphicsQueue,
         1,
         &submitInfo,
         VK_NULL_HANDLE));

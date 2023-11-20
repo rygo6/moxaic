@@ -1,5 +1,7 @@
 #pragma once
 
+#include "main.hpp"
+
 #include "moxaic_logging.hpp"
 
 #include "moxaic_vulkan.hpp"
@@ -46,7 +48,7 @@ namespace Moxaic::Vulkan
         virtual ~VulkanPipeline()
         {
             vkDestroyPipeline(k_Device.vkDevice(),
-                              m_VkPipeline,
+                              m_vkPipeline,
                               VK_ALLOC);
         }
 
@@ -54,18 +56,19 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindPipeline(k_Device.vkGraphicsCommandBuffer(),
                               VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              m_VkPipeline);
+                              m_vkPipeline);
         }
 
-        const static VkPipelineLayout& vkPipelineLayout() { return s_VkPipelineLayout; }
-        const auto& vkPipeline() const { return m_VkPipeline; }
+        MXC_GET(vkPipeline);
+
+        const static VkPipelineLayout& vkPipelineLayout() { return s_vkPipelineLayout; }
 
     protected:
         const Device& k_Device;
-        inline static VkPipelineLayout s_VkPipelineLayout = VK_NULL_HANDLE;
-        VkPipeline m_VkPipeline{VK_NULL_HANDLE};
+        inline static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
+        VkPipeline m_vkPipeline{VK_NULL_HANDLE};
 
-        static bool initializeLayout() { return s_VkPipelineLayout == VK_NULL_HANDLE; }
+        static bool initializeLayout() { return s_vkPipelineLayout == VK_NULL_HANDLE; }
 
         template<uint32_t N>
         MXC_RESULT CreateLayout(const StaticArray<VkDescriptorSetLayout, N>& setLayouts) const
@@ -82,7 +85,7 @@ namespace Moxaic::Vulkan
             VK_CHK(vkCreatePipelineLayout(k_Device.vkDevice(),
                 &createInfo,
                 VK_ALLOC,
-                &s_VkPipelineLayout));
+                &s_vkPipelineLayout));
             return MXC_SUCCESS;
         }
 
@@ -171,7 +174,7 @@ namespace Moxaic::Vulkan
                                     const VkPipelineTessellationStateCreateInfo* pTessellationState)
         {
             MXC_LOG_FUNCTION();
-            SDL_assert(s_VkPipelineLayout != nullptr);
+            SDL_assert(s_vkPipelineLayout != nullptr);
             // Fragment
             constexpr StaticArray pipelineColorBlendAttachmentStates{
                 (VkPipelineColorBlendAttachmentState){
@@ -291,7 +294,7 @@ namespace Moxaic::Vulkan
                 .pDepthStencilState = &depthStencilState,
                 .pColorBlendState = &colorBlendState,
                 .pDynamicState = &dynamicState,
-                .layout = s_VkPipelineLayout,
+                .layout = s_vkPipelineLayout,
                 .renderPass = k_Device.vkRenderPass(),
                 .subpass = 0,
                 .basePipelineHandle = VK_NULL_HANDLE,
@@ -302,7 +305,7 @@ namespace Moxaic::Vulkan
                 1,
                 &pipelineInfo,
                 VK_ALLOC,
-                &m_VkPipeline));
+                &m_vkPipeline));
 
             return MXC_SUCCESS;
         }
