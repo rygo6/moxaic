@@ -64,7 +64,6 @@ namespace Moxaic
     }
 }
 
-
 #define MXC_FILE_NO_PATH (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define MXC_LOG(...) Moxaic::LogParams(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
 #define MXC_LOG_MULTILINE(...) Moxaic::LogParamsMultiline(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)

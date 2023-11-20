@@ -27,6 +27,7 @@ namespace Moxaic
     StaticArray(_Tp, _Up...) -> StaticArray<_Tp, 1 + sizeof...(_Up)>;
 
     // tf did I invent here....
+    // because C++ doesn't seem to support taking a ref of a nested designated initializer
     template<typename T>
     struct StaticRef
     {
