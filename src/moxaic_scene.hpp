@@ -11,11 +11,13 @@
 #include "moxaic_vulkan_mesh.hpp"
 #include "moxaic_node.hpp"
 
+#include "moxaic_standard_pipeline.hpp"
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_material_descriptor.hpp"
 #include "moxaic_object_descriptor.hpp"
 
-#include "moxaic_standard_pipeline.hpp"
+#include "moxaic_mesh_node_pipeline.hpp"
+#include "moxaic_mesh_node_descriptor.hpp"
 
 namespace Moxaic
 {
@@ -58,6 +60,9 @@ namespace Moxaic
         Vulkan::GlobalDescriptor m_GlobalDescriptor{k_Device};
         Vulkan::StandardMaterialDescriptor m_StandardMaterialDescriptor{k_Device};
         Vulkan::ObjectDescriptor m_ObjectDescriptor{k_Device};
+
+        Vulkan::MeshNodePipeline m_MeshNodePipeline{k_Device};
+        Vulkan::MeshNodeDescriptor m_MeshNodeDescriptor{k_Device};
 
         Camera m_MainCamera{};
 

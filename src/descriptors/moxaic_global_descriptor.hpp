@@ -40,13 +40,13 @@ namespace Moxaic::Vulkan
                                       VK_SHADER_STAGE_FRAGMENT_BIT |
                                       VK_SHADER_STAGE_MESH_BIT_EXT |
                                       VK_SHADER_STAGE_TASK_BIT_EXT,
-                    }
+                    },
                 };
-                MXC_CHK(CreateDescriptorSetLayout(bindings.size(),
-                    bindings.data()));
+                MXC_CHK(CreateDescriptorSetLayout(bindings));
             }
 
-            MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            MXC_CHK(m_Uniform.Init(
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                 Vulkan::Locality::Local));
             m_Buffer.width = dimensions.width;
@@ -58,18 +58,16 @@ namespace Moxaic::Vulkan
             Update();
 
             MXC_CHK(AllocateDescriptorSet());
-            const VkDescriptorBufferInfo globalUBOInfo{
-                .buffer = m_Uniform.vkBuffer(),
-                .range = m_Uniform.Size()
-            };
             StaticArray writes{
                 (VkWriteDescriptorSet){
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .pBufferInfo = &globalUBOInfo
+                    .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
+                        .buffer = m_Uniform.vkBuffer(),
+                        .range = m_Uniform.Size()
+                    })
                 },
             };
-            WriteDescriptors(writes.size(),
-                             writes.data());
+            WriteDescriptors(writes);
 
             return MXC_SUCCESS;
         }

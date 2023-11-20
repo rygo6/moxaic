@@ -2,6 +2,7 @@
 
 #include "moxaic_vulkan_descriptor.hpp"
 #include "moxaic_vulkan_texture.hpp"
+#include "static_array.hpp"
 
 namespace Moxaic::Vulkan
 {
@@ -21,26 +22,23 @@ namespace Moxaic::Vulkan
                     (VkDescriptorSetLayoutBinding){
                         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                         .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    }
+                    },
                 };
-                MXC_CHK(CreateDescriptorSetLayout(bindings.size(),
-                    bindings.data()));
+                MXC_CHK(CreateDescriptorSetLayout(bindings));
             }
 
             MXC_CHK(AllocateDescriptorSet());
-            const VkDescriptorImageInfo imageInfo{
-                .sampler = k_Device.vkLinearSampler(),
-                .imageView = texture.vkImageView(),
-                .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            };
             StaticArray writes{
                 (VkWriteDescriptorSet){
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .pImageInfo = &imageInfo
+                    .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                        .sampler = k_Device.vkLinearSampler(),
+                        .imageView = texture.vkImageView(),
+                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                    })
                 },
             };
-            WriteDescriptors(writes.size(),
-                             writes.data());
+            WriteDescriptors(writes);
 
             return MXC_SUCCESS;
         }

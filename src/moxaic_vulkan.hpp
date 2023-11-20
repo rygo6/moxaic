@@ -4,7 +4,6 @@
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
-#include <SDL2/SDL.h>
 
 #ifdef WIN32
 #include <windows.h>

@@ -67,8 +67,27 @@ namespace Moxaic::Vulkan
 
         static bool initializeLayout() { return s_VkPipelineLayout == VK_NULL_HANDLE; }
 
+        template<uint32_t N>
+        MXC_RESULT CreateLayout(const StaticArray<VkDescriptorSetLayout, N>& setLayouts) const
+        {
+            const VkPipelineLayoutCreateInfo createInfo{
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+                .setLayoutCount = setLayouts.size(),
+                .pSetLayouts = setLayouts.data(),
+                .pushConstantRangeCount = 0,
+                .pPushConstantRanges = nullptr,
+            };
+            VK_CHK(vkCreatePipelineLayout(k_Device.vkDevice(),
+                &createInfo,
+                VK_ALLOC,
+                &s_VkPipelineLayout));
+            return MXC_SUCCESS;
+        }
+
         MXC_RESULT CreateShaderModule(const char* pShaderPath,
-                                      VkShaderModule& shaderModule) const
+                                      VkShaderModule& outShaderModule) const
         {
             uint32_t codeLength;
             char* pShaderCode;
@@ -85,7 +104,7 @@ namespace Moxaic::Vulkan
             VK_CHK(vkCreateShaderModule(k_Device.vkDevice(),
                 &createInfo,
                 VK_ALLOC,
-                &shaderModule));
+                &outShaderModule));
             free(pShaderCode);
             return MXC_SUCCESS;
         }

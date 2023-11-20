@@ -5,8 +5,7 @@
 #include "moxaic_vulkan_device.hpp"
 
 #include "moxaic_global_descriptor.hpp"
-#include "moxaic_material_descriptor.hpp"
-#include "moxaic_object_descriptor.hpp"
+#include "moxaic_mesh_node_descriptor.hpp"
 
 #include "moxaic_logging.hpp"
 
@@ -17,34 +16,40 @@
 
 namespace Moxaic::Vulkan
 {
-    class StandardPipeline : public VulkanPipeline<StandardPipeline>
+    class MeshNodePipeline : public VulkanPipeline<MeshNodePipeline>
     {
     public:
         using VulkanPipeline::VulkanPipeline;
 
         MXC_RESULT Init(const GlobalDescriptor& globalDescriptor,
-                        const StandardMaterialDescriptor& materialDescriptor,
-                        const ObjectDescriptor& objectDescriptor)
+                        const MeshNodeDescriptor& meshNodeDescriptor)
         {
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 const StaticArray setLayouts{
                     globalDescriptor.vkDescriptorSetLayout(),
-                    materialDescriptor.vkDescriptorSetLayout(),
-                    objectDescriptor.vkDescriptorSetLayout(),
+                    meshNodeDescriptor.vkDescriptorSetLayout(),
                 };
                 MXC_CHK(CreateLayout(setLayouts));
             }
 
-            VkShaderModule vertShader;
-            MXC_CHK(CreateShaderModule("./shaders/shader_base.vert.spv", vertShader));
+            VkShaderModule taskShader;
+            MXC_CHK(CreateShaderModule("./shaders/node_mesh.task.spv", taskShader));
+            VkShaderModule meshShader;
+            MXC_CHK(CreateShaderModule("./shaders/node_mesh.mesh.spv", meshShader));
             VkShaderModule fragShader;
-            MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv", fragShader));
+            MXC_CHK(CreateShaderModule("./shaders/node_mesh.frag.spv", fragShader));
             const StaticArray stages{
                 (VkPipelineShaderStageCreateInfo){
                     .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                    .module = vertShader,
+                    .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
+                    .module = taskShader,
+                    .pName = "main",
+                },
+                (VkPipelineShaderStageCreateInfo){
+                    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                    .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
+                    .module = meshShader,
                     .pName = "main",
                 },
                 (VkPipelineShaderStageCreateInfo){
@@ -52,14 +57,16 @@ namespace Moxaic::Vulkan
                     .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                     .module = fragShader,
                     .pName = "main",
-                },
+                }
             };
-            MXC_CHK(CreateVertexInputOpaquePipe(
-                VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            MXC_CHK(CreateOpaquePipe(
                 stages.size(),
                 stages.data(),
+                nullptr,
+                nullptr,
                 nullptr));
-            vkDestroyShaderModule(k_Device.vkDevice(), vertShader, VK_ALLOC);
+            vkDestroyShaderModule(k_Device.vkDevice(), taskShader, VK_ALLOC);
+            vkDestroyShaderModule(k_Device.vkDevice(), meshShader, VK_ALLOC);
             vkDestroyShaderModule(k_Device.vkDevice(), fragShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
@@ -76,24 +83,12 @@ namespace Moxaic::Vulkan
                                     nullptr);
         }
 
-        void BindDescriptor(const StandardMaterialDescriptor& descriptor) const
+        void BindDescriptor(const MeshNodeDescriptor& descriptor) const
         {
             vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_VkPipelineLayout,
                                     1,
-                                    1,
-                                    &descriptor.vkDescriptorSet(),
-                                    0,
-                                    nullptr);
-        }
-
-        void BindDescriptor(const ObjectDescriptor& descriptor) const
-        {
-            vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_VkPipelineLayout,
-                                    2,
                                     1,
                                     &descriptor.vkDescriptorSet(),
                                     0,

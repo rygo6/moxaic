@@ -8,6 +8,8 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 
+#include "static_array.hpp"
+
 namespace Moxaic::Vulkan
 {
     class Device;
@@ -29,7 +31,7 @@ namespace Moxaic::Vulkan
                                  &m_VkDescriptorSet);
         }
 
-        static VkDescriptorSetLayout vkDescriptorSetLayout() { return s_VkDescriptorSetLayout; }
+        const static VkDescriptorSetLayout& vkDescriptorSetLayout() { return s_VkDescriptorSetLayout; }
         const auto& vkDescriptorSet() const { return m_VkDescriptorSet; }
 
     protected:
@@ -39,19 +41,19 @@ namespace Moxaic::Vulkan
 
         static bool initializeLayout() { return s_VkDescriptorSetLayout == VK_NULL_HANDLE; }
 
-        MXC_RESULT CreateDescriptorSetLayout(const uint32_t bindingCount,
-                                             VkDescriptorSetLayoutBinding* pBindings) const
+        template<uint32_t N>
+        MXC_RESULT CreateDescriptorSetLayout(StaticArray<VkDescriptorSetLayoutBinding, N>& bindings) const
         {
-            for (int i = 0; i < bindingCount; ++i) {
-                pBindings[i].binding = i;
-                pBindings[i].descriptorCount = pBindings[i].descriptorCount == 0 ? 1 : pBindings[i].descriptorCount;
+            for (int i = 0; i < bindings.size(); ++i) {
+                bindings[i].binding = i;
+                bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
             }
             const VkDescriptorSetLayoutCreateInfo layoutInfo{
                 .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
                 .pNext = nullptr,
                 .flags = 0,
-                .bindingCount = bindingCount,
-                .pBindings = pBindings,
+                .bindingCount = bindings.size(),
+                .pBindings = bindings.data(),
             };
             VK_CHK(vkCreateDescriptorSetLayout(k_Device.vkDevice(),
                 &layoutInfo,
@@ -75,20 +77,20 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void WriteDescriptors(const uint32_t descriptorWriteCount,
-                              VkWriteDescriptorSet* pDescriptorWrites) const
+        template<uint32_t N>
+        void WriteDescriptors(StaticArray<VkWriteDescriptorSet, N>& writes) const
         {
-            for (int i = 0; i < descriptorWriteCount; ++i) {
-                pDescriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                pDescriptorWrites[i].dstSet = m_VkDescriptorSet;
-                pDescriptorWrites[i].dstBinding = i;
-                pDescriptorWrites[i].descriptorCount = pDescriptorWrites[i].descriptorCount == 0
-                                                           ? 1
-                                                           : pDescriptorWrites[i].descriptorCount;
+            for (int i = 0; i < writes.size(); ++i) {
+                writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[i].dstSet = m_VkDescriptorSet;
+                writes[i].dstBinding = i;
+                writes[i].descriptorCount = writes[i].descriptorCount == 0
+                                                ? 1
+                                                : writes[i].descriptorCount;
             }
             VK_CHK_VOID(vkUpdateDescriptorSets(k_Device.vkDevice(),
-                descriptorWriteCount,
-                pDescriptorWrites,
+                writes.size(),
+                writes.data(),
                 0,
                 nullptr));
         }

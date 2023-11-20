@@ -24,8 +24,7 @@ MXC_RESULT CompositorScene::Init()
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
-        Window::extents()));
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(m_ObjectDescriptor.Init(m_SphereTestTransform));
     MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
@@ -39,6 +38,9 @@ MXC_RESULT CompositorScene::Init()
         Vulkan::Locality::External));
 
     MXC_CHK(m_NodeReference.Init());
+
+    MXC_CHK(m_MeshNodeDescriptor.Init(m_GlobalDescriptor.buffer(), m_NodeReference.framebuffer(0)));
+    MXC_CHK(m_MeshNodePipeline.Init(m_GlobalDescriptor, m_MeshNodeDescriptor));
 
     //    // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
