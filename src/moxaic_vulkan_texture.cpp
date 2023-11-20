@@ -94,11 +94,11 @@ MXC_RESULT Texture::InitFromImport(const VkFormat format,
                                    const VkImageAspectFlags aspectMask,
                                    const HANDLE externalMemory)
 {
-    MXC_LOG("Texture::InitFromImport",
-            string_VkFormat(format),
-            string_VkImageUsageFlags(usage),
-            string_VkImageAspectFlags(aspectMask),
-            externalMemory);
+    MXC_LOG_MULTILINE("Texture::InitFromImport",
+                      string_VkFormat(format),
+                      string_VkImageUsageFlags(usage),
+                      string_VkImageAspectFlags(aspectMask),
+                      externalMemory);
     MXC_CHK(InitImage(format,
         extents,
         usage,
@@ -120,11 +120,11 @@ MXC_RESULT Texture::Init(const VkFormat format,
                          const VkImageAspectFlags aspectMask,
                          const Locality locality)
 {
-    MXC_LOG("Texture::Init",
-            string_VkFormat(format),
-            string_VkImageUsageFlags(usage),
-            string_VkImageAspectFlags(aspectMask),
-            string_Locality(locality));
+    MXC_LOG_MULTILINE("Texture::Init",
+                      string_VkFormat(format),
+                      string_VkImageUsageFlags(usage),
+                      string_VkImageAspectFlags(aspectMask),
+                      string_Locality(locality));
     MXC_CHK(InitImage(format,
         extents,
         usage,

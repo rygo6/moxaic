@@ -55,7 +55,6 @@ namespace Moxaic::Vulkan
                 },
             };
             MXC_CHK(CreateVertexInputOpaquePipe(
-                VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
                 stages.size(),
                 stages.data(),
                 nullptr));

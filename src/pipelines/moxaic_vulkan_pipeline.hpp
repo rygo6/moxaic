@@ -28,7 +28,8 @@ namespace Moxaic::Vulkan
         *length = ftell(file);
         rewind(file);
         *ppContents = static_cast<char *>(calloc(1 + *length, sizeof(char)));
-        if (const size_t readCount = fread(*ppContents, *length, 1, file); readCount == 0) {
+        const size_t readCount = fread(*ppContents, *length, 1, file);
+        if (readCount == 0) {
             MXC_LOG("Failed to read file!", filename);
             return MXC_FAIL;
         }
@@ -112,8 +113,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateVertexInputOpaquePipe(const VkPrimitiveTopology topology,
-                                               const uint32_t stageCount,
+        MXC_RESULT CreateVertexInputOpaquePipe(const uint32_t stageCount,
                                                const VkPipelineShaderStageCreateInfo* pStages,
                                                const VkPipelineTessellationStateCreateInfo* pTessellationState)
         {
@@ -155,7 +155,7 @@ namespace Moxaic::Vulkan
             };
             const VkPipelineInputAssemblyStateCreateInfo inputAssemblyState{
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                .topology = topology,
+                .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
                 .primitiveRestartEnable = VK_FALSE,
             };
             MXC_CHK(CreateOpaquePipe(
