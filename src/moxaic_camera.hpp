@@ -11,7 +11,7 @@ namespace Moxaic
     public:
         MXC_NO_VALUE_PASS(Camera);
 
-        Camera();
+        Camera() = default;
         virtual ~Camera() = default;
 
         bool UserCommandUpdate(uint32_t deltaTime);
@@ -20,6 +20,12 @@ namespace Moxaic
         void UpdateProjection();
 
         auto& transform() { return m_Transform; }
+
+        // do I like this?
+        MXC_GETSET(FOV);
+        MXC_GETSET(Near);
+        MXC_GETSET(Far);
+        MXC_GETSET(Aspect);
 
         const auto& view() const { return m_View; }
         const auto& projection() const { return m_Projection; }

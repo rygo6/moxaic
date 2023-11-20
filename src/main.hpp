@@ -11,6 +11,13 @@
 name(const name&) = delete; \
 name& operator=(const name&) = delete;
 
+// do I like this? Maybe?
+#define MXC_GET(field) const auto& field() const { return m_##field; }
+#define MXC_SET(field) auto set##field(const auto& field) { m_##field = field; }
+#define MXC_GETSET(field) \
+    MXC_GET(field) \
+    MXC_SET(field)
+
 namespace Moxaic
 {
     inline constexpr uint32_t DefaultWidth = 1280;

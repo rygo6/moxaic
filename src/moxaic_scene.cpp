@@ -14,7 +14,9 @@ MXC_RESULT CompositorScene::Init()
 
     m_MainCamera.transform().setPosition({0, 0, -2});
     m_MainCamera.transform().Rotate(0, 180, 0);
+    m_MainCamera.setAspect(Window::extents().width / Window::extents().height);
     m_MainCamera.UpdateView();
+    m_MainCamera.UpdateProjection();
 
     m_SphereTestTransform.setPosition({1, 0, 0});
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",

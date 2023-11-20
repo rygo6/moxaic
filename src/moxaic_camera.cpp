@@ -5,12 +5,6 @@
 
 using namespace Moxaic;
 
-Camera::Camera()
-{
-    UpdateView();
-    UpdateProjection();
-}
-
 bool Camera::UserCommandUpdate(const uint32_t deltaTime)
 {
     bool updated = false;
