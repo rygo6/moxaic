@@ -8,10 +8,19 @@
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-constinit VkImageUsageFlags k_ColorBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-constinit VkImageUsageFlags k_NormalBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-constinit VkImageUsageFlags k_GBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-constinit VkImageUsageFlags k_DepthBufferUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+constinit VkImageUsageFlags k_ColorBufferUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_SAMPLED_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+constinit VkImageUsageFlags k_NormalBufferUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_SAMPLED_BIT;
+constinit VkImageUsageFlags k_GBufferUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_SAMPLED_BIT;
+constinit VkImageUsageFlags k_DepthBufferUsage =
+        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_SAMPLED_BIT;
 
 Framebuffer::Framebuffer(const Device& device)
     : k_Device(device) {}
@@ -125,4 +134,76 @@ MXC_RESULT Framebuffer::InitSemaphore()
         VK_ALLOC,
         &m_VkRenderCompleteSemaphore));
     return MXC_SUCCESS;
+}
+
+void Framebuffer::Transition(BarrierSrc src, BarrierDst dst) const
+{
+    const StaticArray acquireColorImageMemoryBarriers{
+        (VkImageMemoryBarrier){
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = src.colorAccessMask,
+            .dstAccessMask = dst.colorAccessMask,
+            .oldLayout = src.colorLayout,
+            .newLayout = dst.colorLayout,
+            .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
+            .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+            .image = m_ColorTexture.vkImage(),
+            .subresourceRange = DefaultColorSubresourceRange,
+        },
+        (VkImageMemoryBarrier){
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = src.colorAccessMask,
+            .dstAccessMask = dst.colorAccessMask,
+            .oldLayout = src.colorLayout,
+            .newLayout = dst.colorLayout,
+            .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
+            .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+            .image = m_NormalTexture.vkImage(),
+            .subresourceRange = DefaultColorSubresourceRange,
+        },
+        (VkImageMemoryBarrier){
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = src.colorAccessMask,
+            .dstAccessMask = dst.colorAccessMask,
+            .oldLayout = src.colorLayout,
+            .newLayout = dst.colorLayout,
+            .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
+            .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+            .image = m_GBufferTexture.vkImage(),
+            .subresourceRange = DefaultColorSubresourceRange,
+        }
+    };
+    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
+        src.colorStageMask,
+        dst.colorStageMask,
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        acquireColorImageMemoryBarriers.size(),
+        acquireColorImageMemoryBarriers.data()));
+    const StaticArray acquireDepthImageMemoryBarriers{
+        (VkImageMemoryBarrier){
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            .srcAccessMask = src.depthAccessMask,
+            .dstAccessMask = dst.depthAccessMask,
+            .oldLayout = src.depthLayout,
+            .newLayout = dst.depthLayout,
+            .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
+            .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+            .image = m_DepthTexture.vkImage(),
+            .subresourceRange = DefaultDepthSubresourceRange,
+        }
+    };
+    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
+        src.depthStageMask,
+        dst.depthStageMask,
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        acquireDepthImageMemoryBarriers.size(),
+        acquireDepthImageMemoryBarriers.data()));
 }

@@ -33,6 +33,11 @@ namespace Moxaic
             m_ExportedGlobalDescriptor.CopyBuffer(globalDescriptor.buffer());
         }
 
+        auto& Semaphore()
+        {
+            return m_ExportedNodeSemaphore;
+        }
+
         const auto& framebuffer(const int index) const
         {
             return m_ExportedFramebuffers[index];
@@ -112,7 +117,7 @@ namespace Moxaic
             return m_ImportedFramebuffers[index];
         }
 
-        const auto& CompositorSemaphore() const
+        auto& CompositorSemaphore()
         {
             return m_ImportedCompositorSemaphore;
         }

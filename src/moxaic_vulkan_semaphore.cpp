@@ -117,3 +117,9 @@ MXC_RESULT Semaphore::InitFromImport(const bool readOnly, const HANDLE externalH
 #endif
     return MXC_SUCCESS;
 }
+
+MXC_RESULT Semaphore::SyncWaitValue()
+{
+    VK_CHK(vkGetSemaphoreCounterValue(k_Device.vkDevice(), m_vkSemaphore, &m_WaitValue));
+    return MXC_SUCCESS;
+}

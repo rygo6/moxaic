@@ -28,6 +28,9 @@ namespace Moxaic::Vulkan
                                   HANDLE gBufferExternalHandle,
                                   HANDLE depthExternalHandle);
 
+        void AcquireFramebufferFromExternalToGraphicsAttach();
+        void Transition(BarrierSrc src, BarrierDst dst) const;
+
         const auto& vkFramebuffer() const { return m_VkFramebuffer; }
         const auto& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
 
@@ -53,5 +56,6 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT InitFramebuffer();
         MXC_RESULT InitSemaphore();
+
     };
 }

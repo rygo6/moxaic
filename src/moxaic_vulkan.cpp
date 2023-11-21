@@ -39,13 +39,19 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSev
                                                     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                                                     void* pUserData)
 {
-    printf("%s %s (%s:%d) %s\n%s\n",
-           SeverityToName(messageSeverity),
-           string_Role(Moxaic::Role),
-           Vulkan::VkDebug.DebugFile,
-           Vulkan::VkDebug.DebugLine,
-           Vulkan::VkDebug.DebugCommand,
-           pCallbackData->pMessage);
+    MXC_LOG_ERROR(SeverityToName(messageSeverity),
+                  string_Role(Moxaic::Role),
+                  Vulkan::VkDebug.DebugFile,
+                  Vulkan::VkDebug.DebugLine,
+                  Vulkan::VkDebug.DebugCommand,
+                  pCallbackData->pMessage);
+    // printf("%s %s (%s:%d) %s\n%s\n",
+    //        SeverityToName(messageSeverity),
+    //        string_Role(Moxaic::Role),
+    //        Vulkan::VkDebug.DebugFile,
+    //        Vulkan::VkDebug.DebugLine,
+    //        Vulkan::VkDebug.DebugCommand,
+    //        pCallbackData->pMessage);
     return VK_FALSE;
 }
 
@@ -159,7 +165,7 @@ static MXC_RESULT LoadVulkanFunctionPointers()
     VK_FUNCS
 #undef VK_FUNC
 
-    auto test =Vulkan::VkFunc.CmdDrawMeshTasksEXT;
+    auto test = Vulkan::VkFunc.CmdDrawMeshTasksEXT;
 
     return MXC_SUCCESS;
 }

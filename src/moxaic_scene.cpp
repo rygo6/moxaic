@@ -63,7 +63,17 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
 
     k_Device.BeginGraphicsCommandBuffer();
 
-    k_Device.BeginRenderPass(m_Framebuffers[m_FramebufferIndex]);
+    auto& nodeSemaphore = m_NodeReference.Semaphore();
+    nodeSemaphore.SyncWaitValue();
+    if (nodeSemaphore.waitValue() != m_PriorNodeSemaphoreWaitValue) {
+        m_PriorNodeSemaphoreWaitValue = nodeSemaphore.waitValue();
+
+        auto& nodeFramebuffer = m_NodeReference.framebuffer(m_NodeFramebufferIndex);
+        nodeFramebuffer.Transition(Vulkan::AcquireFromExternalGraphicsAttach, Vulkan::ToGraphicsRead);
+    }
+
+    const auto& framebuffer = m_Framebuffers[m_FramebufferIndex];
+    k_Device.BeginRenderPass(framebuffer);
 
     m_StandardPipeline.BindPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
@@ -75,7 +85,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
     k_Device.EndRenderPass();
 
     m_Swap.Acquire();
-    m_Swap.BlitToSwap(m_Framebuffers[m_FramebufferIndex].colorTexture());
+    m_Swap.BlitToSwap(framebuffer.colorTexture());
 
     k_Device.EndGraphicsCommandBuffer();
 
@@ -118,6 +128,9 @@ MXC_RESULT NodeScene::Init()
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
+    MXC_CHK(m_Node.CompositorSemaphore().SyncWaitValue());
+    MXC_CHK(m_Node.NodeSemaphore().SyncWaitValue());
+
     return MXC_SUCCESS;
 }
 
@@ -127,7 +140,11 @@ MXC_RESULT NodeScene::Loop(const uint32_t deltaTime)
 
     k_Device.BeginGraphicsCommandBuffer();
 
-    k_Device.BeginRenderPass(m_Node.framebuffer(m_FramebufferIndex));
+    const auto& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
+    framebuffer.Transition(Vulkan::AcquireFromExternal,
+                           Vulkan::ToGraphicsAttach);
+
+    k_Device.BeginRenderPass(framebuffer);
 
     m_StandardPipeline.BindPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
@@ -138,15 +155,20 @@ MXC_RESULT NodeScene::Loop(const uint32_t deltaTime)
 
     k_Device.EndRenderPass();
 
-    m_Swap.Acquire();
-    m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());
+    framebuffer.Transition(Vulkan::FromGraphicsAttach,
+                           Vulkan::ReleaseToExternalGraphicsRead);
+
+    // m_Swap.Acquire();
+    // m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
     k_Device.EndGraphicsCommandBuffer();
 
-    //    k_Device.SubmitGraphicsQueue(m_Node.NodeSemaphore());
-    k_Device.SubmitGraphicsQueueAndPresent(m_Node.NodeSemaphore(), m_Swap);
+    k_Device.SubmitGraphicsQueue(m_Node.NodeSemaphore());
+    // k_Device.SubmitGraphicsQueueAndPresent(m_Node.NodeSemaphore(), m_Swap);
 
     m_Node.NodeSemaphore().Wait();
+    m_Node.CompositorSemaphore().IncrementWaitValue(m_CompositorSempahoreStep);
+    m_Node.CompositorSemaphore().Wait();
 
     m_FramebufferIndex = !m_FramebufferIndex;
 

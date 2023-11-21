@@ -161,6 +161,7 @@ MXC_RESULT Texture::Init(const VkFormat format,
     return MXC_SUCCESS;
 }
 
+// todo replace with Transition structs
 MXC_RESULT Texture::TransitionImmediateInitialToGraphicsRead() const
 {
     return k_Device.TransitionImageLayoutImmediate(m_VkImage,

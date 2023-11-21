@@ -80,6 +80,21 @@ namespace Moxaic::Vulkan
                                                  const Swap& swap) const;
         MXC_RESULT SubmitGraphicsQueue(Semaphore& timelineSemaphore) const;
 
+        uint32_t GetQueue(const Queue queue) const
+        {
+            switch (queue) {
+                case Queue::None:
+                    return 0;
+                case Queue::Graphics:
+                    return m_GraphicsQueueFamilyIndex;
+                case Queue::Compute:
+                    return m_ComputeQueueFamilyIndex;
+                case Queue::FamilyExternal:
+                    return VK_QUEUE_FAMILY_EXTERNAL;
+                default: ;
+            }
+        }
+
         // VulkanHandles are not encapsulated. Deal with vk vars and methods with care.
         // Reason? Vulkan safety is better enforced by validation layers, not C++, and
         // the attempt to encapsulate these to more so rely on C++ type safety ends up

@@ -11,37 +11,6 @@
 
 namespace Moxaic::Vulkan
 {
-    static inline const char* string_VkImageAspectFlagBits(VkImageAspectFlagBits input_value) {
-        switch (input_value) {
-            case VK_IMAGE_ASPECT_COLOR_BIT:
-                return "COLOR_BIT";
-            case VK_IMAGE_ASPECT_DEPTH_BIT:
-                return "DEPTH_BIT";
-            case VK_IMAGE_ASPECT_STENCIL_BIT:
-                return "STENCIL_BIT";
-            case VK_IMAGE_ASPECT_METADATA_BIT:
-                return "METADATA_BIT";
-            case VK_IMAGE_ASPECT_PLANE_0_BIT:
-                return "PLANE_0_BIT";
-            case VK_IMAGE_ASPECT_PLANE_1_BIT:
-                return "PLANE_1_BIT";
-            case VK_IMAGE_ASPECT_PLANE_2_BIT:
-                return "PLANE_2_BIT";
-            case VK_IMAGE_ASPECT_NONE:
-                return "NONE";
-            case VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT:
-                return "MEMORY_PLANE_0_BIT_EXT";
-            case VK_IMAGE_ASPECT_MEMORY_PLANE_1_BIT_EXT:
-                return "MEMORY_PLANE_1_BIT_EXT";
-            case VK_IMAGE_ASPECT_MEMORY_PLANE_2_BIT_EXT:
-                return "MEMORY_PLANE_2_BIT_EXT";
-            case VK_IMAGE_ASPECT_MEMORY_PLANE_3_BIT_EXT:
-                return "MEMORY_PLANE_3_BIT_EXT";
-            default:
-                return "Unhandled VkImageAspectFlagBits";
-        }
-    }
-
     class Device;
 
     class Texture

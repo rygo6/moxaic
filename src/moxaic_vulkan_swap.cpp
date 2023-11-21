@@ -290,7 +290,7 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
             .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .image = srcTexture.vkImage(),
-            .subresourceRange = Vulkan::defaultColorSubresourceRange,
+            .subresourceRange = Vulkan::DefaultColorSubresourceRange,
         },
         (VkImageMemoryBarrier){
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -301,7 +301,7 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
             .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
-            .subresourceRange = Vulkan::defaultColorSubresourceRange,
+            .subresourceRange = Vulkan::DefaultColorSubresourceRange,
         },
     };
     vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
@@ -357,7 +357,7 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
             .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .image = srcTexture.vkImage(),
-            .subresourceRange = Vulkan::defaultColorSubresourceRange,
+            .subresourceRange = Vulkan::DefaultColorSubresourceRange,
         },
         (VkImageMemoryBarrier){
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -368,7 +368,7 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
             .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
             .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
-            .subresourceRange = Vulkan::defaultColorSubresourceRange,
+            .subresourceRange = Vulkan::DefaultColorSubresourceRange,
         },
     };
     vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),

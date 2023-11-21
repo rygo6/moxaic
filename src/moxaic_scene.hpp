@@ -72,6 +72,8 @@ namespace Moxaic
 
         // should node be here? maybe outside scene?
         NodeReference m_NodeReference{k_Device};
+        uint64_t m_PriorNodeSemaphoreWaitValue{0};
+        uint64_t m_NodeFramebufferIndex{0};
     };
 
     class NodeScene : public SceneBase
@@ -86,6 +88,7 @@ namespace Moxaic
         // should node be here? maybe outside scene?
         Node m_Node{k_Device};
         int m_FramebufferIndex{0};
+        uint64_t m_CompositorSempahoreStep{30};
 
         Vulkan::Swap m_Swap{k_Device};
 

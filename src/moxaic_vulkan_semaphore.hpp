@@ -27,11 +27,15 @@ namespace Moxaic::Vulkan
         MXC_RESULT InitFromImport(bool readOnly,
                                   HANDLE externalHandle);
 
+        MXC_RESULT SyncWaitValue();
+
         MXC_RESULT Wait();
+
+        HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
 
         void IncrementWaitValue() { m_WaitValue++; }
 
-        HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
+        void IncrementWaitValue(const uint64_t step) { m_WaitValue += step; }
 
         const auto& vkSemaphore() const { return m_vkSemaphore; }
         auto waitValue() const { return m_WaitValue; }

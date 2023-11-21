@@ -50,8 +50,109 @@ namespace Moxaic::Vulkan
     // should surface move into swap class?! or device class?
     VkSurfaceKHR vkSurface();
 
-    inline constinit VkImageSubresourceRange defaultColorSubresourceRange{
+    enum class Queue
+    {
+        None,
+        Graphics,
+        Compute,
+        FamilyExternal,
+    };
+
+    struct BarrierSrc
+    {
+        VkAccessFlags colorAccessMask;
+        VkAccessFlags depthAccessMask;
+        VkImageLayout colorLayout;
+        VkImageLayout depthLayout;
+        Queue queueFamilyIndex;
+        VkPipelineStageFlags colorStageMask;
+        VkPipelineStageFlags depthStageMask;
+    };
+
+    struct BarrierDst
+    {
+        VkAccessFlags colorAccessMask;
+        VkAccessFlags depthAccessMask;
+        VkImageLayout colorLayout;
+        VkImageLayout depthLayout;
+        Queue queueFamilyIndex;
+        VkPipelineStageFlags colorStageMask;
+        VkPipelineStageFlags depthStageMask;
+    };
+
+    /// Omits any of the incoming external data
+    inline constinit BarrierSrc AcquireFromExternal{
+        .colorAccessMask = VK_ACCESS_NONE,
+        .depthAccessMask = VK_ACCESS_NONE,
+        .colorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .depthLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .queueFamilyIndex = Queue::FamilyExternal,
+        .colorStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    };
+
+    /// Retains data from prior external graphics attach
+    inline constinit BarrierSrc AcquireFromExternalGraphicsAttach{
+        .colorAccessMask = VK_ACCESS_NONE,
+        .depthAccessMask = VK_ACCESS_NONE,
+        .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .queueFamilyIndex = Queue::FamilyExternal,
+        .colorStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    };
+
+    inline constinit BarrierSrc FromGraphicsAttach{
+        .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .queueFamilyIndex = Queue::Graphics,
+        .colorStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+    };
+
+    inline constinit BarrierDst ToGraphicsAttach{
+        .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        .queueFamilyIndex = Queue::Graphics,
+        .colorStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+    };
+
+    inline constinit BarrierDst ToGraphicsRead{
+        .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .depthLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .queueFamilyIndex = Queue::Graphics,
+        .colorStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    };
+
+    /// Release to retain data
+    inline constinit BarrierDst ReleaseToExternalGraphicsRead{
+        .colorAccessMask = VK_ACCESS_NONE,
+        .depthAccessMask = VK_ACCESS_NONE,
+        .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .depthLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .queueFamilyIndex = Queue::FamilyExternal,
+        .colorStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    };
+
+    inline constinit VkImageSubresourceRange DefaultColorSubresourceRange{
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+    };
+
+    inline constinit VkImageSubresourceRange DefaultDepthSubresourceRange{
+        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
         .baseMipLevel = 0,
         .levelCount = 1,
         .baseArrayLayer = 0,
