@@ -21,17 +21,17 @@ namespace Moxaic::Vulkan
         explicit Semaphore(const Device& device);
         virtual ~Semaphore();
 
-        MXC_RESULT Init(bool readOnly,
-                        Locality locality);
+        MXC_RESULT Init(const bool& readOnly,
+                        const Locality& locality);
 
-        MXC_RESULT InitFromImport(bool readOnly,
-                                  HANDLE externalHandle);
+        MXC_RESULT InitFromImport(const bool& readOnly,
+                                  const HANDLE& externalHandle);
 
         MXC_RESULT SyncWaitValue();
 
         MXC_RESULT Wait();
 
-        HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
+        HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
 
         void IncrementWaitValue() { m_WaitValue++; }
 

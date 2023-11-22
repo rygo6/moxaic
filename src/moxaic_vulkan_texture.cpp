@@ -30,7 +30,7 @@ Texture::~Texture()
 }
 
 MXC_RESULT Texture::InitFromFile(const std::string& file,
-                                 const Locality locality)
+                                 const Locality& locality)
 {
     MXC_LOG("Texture::InitFromFile",
             file,
@@ -87,11 +87,11 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::InitFromImport(const VkFormat format,
-                                   const VkExtent2D extents,
-                                   const VkImageUsageFlags usage,
-                                   const VkImageAspectFlags aspectMask,
-                                   const HANDLE externalMemory)
+MXC_RESULT Texture::InitFromImport(const VkFormat& format,
+                                   const VkExtent2D& extents,
+                                   const VkImageUsageFlags& usage,
+                                   const VkImageAspectFlags& aspectMask,
+                                   const HANDLE& externalMemory)
 {
     MXC_LOG_MULTILINE("Texture::InitFromImport",
                       string_VkFormat(format),
@@ -113,11 +113,11 @@ MXC_RESULT Texture::InitFromImport(const VkFormat format,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::Init(const VkFormat format,
-                         const VkExtent2D extents,
-                         const VkImageUsageFlags usage,
-                         const VkImageAspectFlags aspectMask,
-                         const Locality locality)
+MXC_RESULT Texture::Init(const VkFormat& format,
+                         const VkExtent2D& extents,
+                         const VkImageUsageFlags& usage,
+                         const VkImageAspectFlags& aspectMask,
+                         const Locality& locality)
 {
     MXC_LOG_MULTILINE("Texture::Init",
                       string_VkFormat(format),
@@ -196,7 +196,7 @@ MXC_RESULT Texture::TransitionImmediateTransferDstToGraphicsRead() const
                                                    m_AspectMask);
 }
 
-HANDLE Texture::ClonedExternalHandle(const HANDLE hTargetProcessHandle) const
+HANDLE Texture::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
 {
     HANDLE duplicateHandle;
     DuplicateHandle(GetCurrentProcess(),
@@ -209,8 +209,8 @@ HANDLE Texture::ClonedExternalHandle(const HANDLE hTargetProcessHandle) const
     return duplicateHandle;
 }
 
-MXC_RESULT Texture::InitImageView(const VkFormat format,
-                                  const VkImageAspectFlags aspectMask)
+MXC_RESULT Texture::InitImageView(const VkFormat& format,
+                                  const VkImageAspectFlags& aspectMask)
 {
     const VkImageViewCreateInfo imageViewCreateInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -238,10 +238,10 @@ MXC_RESULT Texture::InitImageView(const VkFormat format,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::InitImage(const VkFormat format,
-                              const VkExtent2D extents,
-                              const VkImageUsageFlags usage,
-                              const Locality locality)
+MXC_RESULT Texture::InitImage(const VkFormat& format,
+                              const VkExtent2D& extents,
+                              const VkImageUsageFlags& usage,
+                              const Locality& locality)
 {
     constexpr VkExternalMemoryImageCreateInfo externalImageInfo{
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,

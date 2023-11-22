@@ -27,8 +27,8 @@ Framebuffer::Framebuffer(const Device& device)
 
 Framebuffer::~Framebuffer() = default;
 
-bool Framebuffer::Init(const VkExtent2D extents,
-                       const Locality locality)
+bool Framebuffer::Init(const VkExtent2D& extents,
+                       const Locality& locality)
 {
     m_Extents = extents;
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
@@ -60,11 +60,11 @@ bool Framebuffer::Init(const VkExtent2D extents,
     return true;
 }
 
-MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D extents,
-                                       const HANDLE colorExternalHandle,
-                                       const HANDLE normalExternalHandle,
-                                       const HANDLE gBufferExternalHandle,
-                                       const HANDLE depthExternalHandle)
+MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D& extents,
+                                       const HANDLE& colorExternalHandle,
+                                       const HANDLE& normalExternalHandle,
+                                       const HANDLE& gBufferExternalHandle,
+                                       const HANDLE& depthExternalHandle)
 {
     m_Extents = extents;
     MXC_CHK(m_ColorTexture.InitFromImport(k_ColorBufferFormat,
@@ -136,7 +136,7 @@ MXC_RESULT Framebuffer::InitSemaphore()
     return MXC_SUCCESS;
 }
 
-void Framebuffer::Transition(BarrierSrc src, BarrierDst dst) const
+void Framebuffer::Transition(const BarrierSrc& src, const BarrierDst& dst) const
 {
     const StaticArray acquireColorImageMemoryBarriers{
       (VkImageMemoryBarrier){

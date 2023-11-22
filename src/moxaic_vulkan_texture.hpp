@@ -22,23 +22,23 @@ namespace Moxaic::Vulkan
         virtual ~Texture();
 
         MXC_RESULT InitFromFile(const std::string& file,
-                                Locality locality);
+                                const Locality& locality);
 
-        MXC_RESULT InitFromImport(VkFormat format,
-                                  VkExtent2D extents,
-                                  VkImageUsageFlags usage,
-                                  VkImageAspectFlags aspectMask,
-                                  HANDLE externalMemory);
+        MXC_RESULT InitFromImport(const VkFormat& format,
+                                  const VkExtent2D& extents,
+                                  const VkImageUsageFlags& usage,
+                                  const VkImageAspectFlags& aspectMask,
+                                  const HANDLE& externalMemory);
 
-        MXC_RESULT Init(VkFormat format,
-                        VkExtent2D extents,
-                        VkImageUsageFlags usage,
-                        VkImageAspectFlags aspectMask,
-                        Locality locality);
+        MXC_RESULT Init(const VkFormat& format,
+                        const VkExtent2D& extents,
+                        const VkImageUsageFlags& usage,
+                        const VkImageAspectFlags& aspectMask,
+                        const Locality& locality);
 
         MXC_RESULT TransitionImmediateInitialToGraphicsRead() const;
 
-        HANDLE ClonedExternalHandle(HANDLE hTargetProcessHandle) const;
+        HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
 
         const auto& vkImage() const { return m_VkImage; }
         const auto& vkImageView() const { return m_VkImageView; }
@@ -56,15 +56,16 @@ namespace Moxaic::Vulkan
 #ifdef WIN32
         HANDLE m_ExternalHandle{};
 #endif
-        bool TransitionImmediateInitialToTransferDst() const;
-        bool TransitionImmediateTransferDstToGraphicsRead() const;
 
-        MXC_RESULT InitImage(VkFormat format,
-                             VkExtent2D extents,
-                             VkImageUsageFlags usage,
-                             Locality locality);
+        MXC_RESULT TransitionImmediateInitialToTransferDst() const;
+        MXC_RESULT TransitionImmediateTransferDstToGraphicsRead() const;
 
-        MXC_RESULT InitImageView(VkFormat format,
-                                 VkImageAspectFlags aspectMask);
+        MXC_RESULT InitImage(const VkFormat& format,
+                             const VkExtent2D& extents,
+                             const VkImageUsageFlags& usage,
+                             const Locality& locality);
+
+        MXC_RESULT InitImageView(const VkFormat& format,
+                                 const VkImageAspectFlags& aspectMask);
     };
 }// namespace Moxaic::Vulkan

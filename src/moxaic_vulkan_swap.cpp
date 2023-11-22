@@ -107,7 +107,7 @@ Swap::~Swap()
     }
 }
 
-MXC_RESULT Swap::Init(VkExtent2D dimensions, bool computeStorage)
+MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;

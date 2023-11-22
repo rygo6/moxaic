@@ -22,7 +22,7 @@ Semaphore::~Semaphore()
     vkDestroySemaphore(k_Device.vkDevice(), m_vkSemaphore, VK_ALLOC);
 }
 
-MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
+MXC_RESULT Semaphore::Init(const bool& readOnly, const Locality& locality)
 {
     MXC_LOG("Vulkan::Semaphore::Init");
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
@@ -86,7 +86,7 @@ MXC_RESULT Semaphore::Wait()
     return MXC_SUCCESS;
 }
 
-HANDLE Semaphore::ClonedExternalHandle(const HANDLE hTargetProcessHandle) const
+HANDLE Semaphore::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
 {
     HANDLE duplicateHandle;
     DuplicateHandle(GetCurrentProcess(),
@@ -99,7 +99,7 @@ HANDLE Semaphore::ClonedExternalHandle(const HANDLE hTargetProcessHandle) const
     return duplicateHandle;
 }
 
-MXC_RESULT Semaphore::InitFromImport(const bool readOnly, const HANDLE externalHandle)
+MXC_RESULT Semaphore::InitFromImport(const bool& readOnly, const HANDLE& externalHandle)
 {
     MXC_LOG("Importing Semaphore", externalHandle);
     MXC_CHK(Init(readOnly, Locality::External));

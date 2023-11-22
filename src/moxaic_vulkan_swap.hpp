@@ -20,7 +20,8 @@ namespace Moxaic::Vulkan
         explicit Swap(const Device& device);
         virtual ~Swap();
 
-        MXC_RESULT Init(VkExtent2D dimensions, bool computeStorage);
+        MXC_RESULT Init(const VkExtent2D& dimensions,
+                        const bool& computeStorage);
 
         MXC_RESULT Acquire();
         void BlitToSwap(const Texture& srcTexture) const;
