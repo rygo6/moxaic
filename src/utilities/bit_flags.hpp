@@ -5,7 +5,6 @@ namespace Moxaic
     template<typename T>
     struct BitFlags
     {
-    public:
         bool None() const
         {
             return m_Flags == 0;
@@ -34,4 +33,4 @@ namespace Moxaic
     private:
         int m_Flags{0};
     };
-}
+}// namespace Moxaic

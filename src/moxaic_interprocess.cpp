@@ -4,12 +4,13 @@
 using namespace Moxaic;
 
 constexpr StaticArray k_InterProcessTargetParamSize{
-    sizeof(Node::ImportParam),
+  sizeof(Node::ImportParam),
 };
 
-void InterProcessProducer::Enque(const InterProcessTargetFunc target, const void* param) const
+void InterProcessProducer::Enque(const InterProcessTargetFunc target,
+                                 const void* param) const
 {
-    const auto pBuffer = static_cast<RingBuffer *>(m_pBuffer);
+    const auto pBuffer = static_cast<RingBuffer*>(m_pBuffer);
     pBuffer->pRingBuffer[pBuffer->head] = target;
     memcpy(pBuffer->pRingBuffer + pBuffer->head + RingBuffer::HeaderSize, param, k_InterProcessTargetParamSize[target]);
     pBuffer->head = pBuffer->head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
@@ -26,7 +27,7 @@ int InterProcessReceiver::Deque() const
 {
     // TODO this needs to actually cycle around the ring buffer, this is only half done
 
-    const auto pBuffer = static_cast<RingBuffer *>(m_pBuffer);
+    const auto pBuffer = static_cast<RingBuffer*>(m_pBuffer);
 
     if (pBuffer->head == pBuffer->tail)
         return 0;

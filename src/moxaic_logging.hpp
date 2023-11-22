@@ -2,8 +2,8 @@
 
 #include "main.hpp"
 
-#include <iostream>
 #include <cstring>
+#include <iostream>
 
 #include <SDL2/SDL.h>
 
@@ -62,7 +62,7 @@ namespace Moxaic
         LogParams(params...);
         SetConsoleTextDefault();
     }
-}
+}// namespace Moxaic
 
 #define MXC_FILE_NO_PATH (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define MXC_LOG(...) Moxaic::LogParams(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
@@ -74,10 +74,10 @@ namespace Moxaic
 #define MXC_CHK2(command) command
 
 
-#define MXC_CHK(command) \
-({ \
-    if (command != MXC_SUCCESS) [[unlikely]] { \
-        printf("(%s:%d) Fail: %s\n", MXC_FILE_NO_PATH, __LINE__, #command); \
-        return false; \
-    } \
-})
+#define MXC_CHK(command)                                                        \
+    ({                                                                          \
+        if (command != MXC_SUCCESS) [[unlikely]] {                              \
+            printf("(%s:%d) Fail: %s\n", MXC_FILE_NO_PATH, __LINE__, #command); \
+            return false;                                                       \
+        }                                                                       \
+    })

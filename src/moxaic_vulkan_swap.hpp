@@ -45,4 +45,4 @@ namespace Moxaic::Vulkan
 
         uint32_t m_LastAcquiredSwapIndex;
     };
-}
+}// namespace Moxaic::Vulkan

@@ -3,21 +3,21 @@
 #include "moxaic_logging.hpp"
 
 #include "moxaic_camera.hpp"
+#include "moxaic_node.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
-#include "moxaic_vulkan_swap.hpp"
-#include "moxaic_vulkan_semaphore.hpp"
 #include "moxaic_vulkan_mesh.hpp"
-#include "moxaic_node.hpp"
+#include "moxaic_vulkan_semaphore.hpp"
+#include "moxaic_vulkan_swap.hpp"
 
-#include "moxaic_standard_pipeline.hpp"
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_material_descriptor.hpp"
 #include "moxaic_object_descriptor.hpp"
+#include "moxaic_standard_pipeline.hpp"
 
-#include "moxaic_mesh_node_pipeline.hpp"
 #include "moxaic_mesh_node_descriptor.hpp"
+#include "moxaic_mesh_node_pipeline.hpp"
 
 namespace Moxaic
 {
@@ -32,7 +32,7 @@ namespace Moxaic
         virtual ~SceneBase() = default;
 
         virtual MXC_RESULT Init() = 0;
-        virtual MXC_RESULT Loop(const uint32_t deltaTime) = 0;
+        virtual MXC_RESULT Loop(uint32_t deltaTime) = 0;
 
     protected:
         const Vulkan::Device& k_Device;
@@ -48,9 +48,8 @@ namespace Moxaic
 
     private:
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{
-            Vulkan::Framebuffer(k_Device),
-            Vulkan::Framebuffer(k_Device)
-        };
+          Vulkan::Framebuffer(k_Device),
+          Vulkan::Framebuffer(k_Device)};
         int m_FramebufferIndex{0};
 
         Vulkan::Swap m_Swap{k_Device};
@@ -63,9 +62,8 @@ namespace Moxaic
 
         Vulkan::MeshNodePipeline m_MeshNodePipeline{k_Device};
         StaticArray<Vulkan::MeshNodeDescriptor, FramebufferCount> m_MeshNodeDescriptor{
-            Vulkan::MeshNodeDescriptor(k_Device),
-            Vulkan::MeshNodeDescriptor(k_Device)
-        };
+          Vulkan::MeshNodeDescriptor(k_Device),
+          Vulkan::MeshNodeDescriptor(k_Device)};
 
         Camera m_MainCamera{};
 
@@ -106,4 +104,4 @@ namespace Moxaic
         Vulkan::Texture m_SphereTestTexture{k_Device};
         Transform m_SpherTestTransform{};
     };
-}
+}// namespace Moxaic

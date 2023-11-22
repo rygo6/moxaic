@@ -5,8 +5,8 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 
-#include <vulkan/vulkan.h>
 #include <vector>
+#include <vulkan/vulkan.h>
 
 #include "static_array.hpp"
 
@@ -49,31 +49,31 @@ namespace Moxaic::Vulkan
                 bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
             }
             const VkDescriptorSetLayoutCreateInfo layoutInfo{
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                .pNext = nullptr,
-                .flags = 0,
-                .bindingCount = bindings.size(),
-                .pBindings = bindings.data(),
+              .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+              .pNext = nullptr,
+              .flags = 0,
+              .bindingCount = bindings.size(),
+              .pBindings = bindings.data(),
             };
             VK_CHK(vkCreateDescriptorSetLayout(k_Device.vkDevice(),
-                &layoutInfo,
-                VK_ALLOC,
-                &s_VkDescriptorSetLayout));
+                                               &layoutInfo,
+                                               VK_ALLOC,
+                                               &s_VkDescriptorSetLayout));
             return MXC_SUCCESS;
         }
 
         MXC_RESULT AllocateDescriptorSet()
         {
             const VkDescriptorSetAllocateInfo allocInfo{
-                .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-                .pNext = nullptr,
-                .descriptorPool = k_Device.vkDescriptorPool(),
-                .descriptorSetCount = 1,
-                .pSetLayouts = &s_VkDescriptorSetLayout,
+              .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+              .pNext = nullptr,
+              .descriptorPool = k_Device.vkDescriptorPool(),
+              .descriptorSetCount = 1,
+              .pSetLayouts = &s_VkDescriptorSetLayout,
             };
             VK_CHK(vkAllocateDescriptorSets(k_Device.vkDevice(),
-                &allocInfo,
-                &m_VkDescriptorSet));
+                                            &allocInfo,
+                                            &m_VkDescriptorSet));
             return MXC_SUCCESS;
         }
 
@@ -85,14 +85,14 @@ namespace Moxaic::Vulkan
                 writes[i].dstSet = m_VkDescriptorSet;
                 writes[i].dstBinding = i;
                 writes[i].descriptorCount = writes[i].descriptorCount == 0
-                                                ? 1
-                                                : writes[i].descriptorCount;
+                                              ? 1
+                                              : writes[i].descriptorCount;
             }
             VK_CHK_VOID(vkUpdateDescriptorSets(k_Device.vkDevice(),
-                writes.size(),
-                writes.data(),
-                0,
-                nullptr));
+                                               writes.size(),
+                                               writes.data(),
+                                               0,
+                                               nullptr));
         }
     };
-}
+}// namespace Moxaic::Vulkan

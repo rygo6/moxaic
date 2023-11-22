@@ -13,8 +13,7 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
     if (!m_CameraLocked && userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
         m_CameraLocked = true;
-    }
-    else if (m_CameraLocked && !userCommand.leftMouseButtonPressed) {
+    } else if (m_CameraLocked && !userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_FALSE);
         m_CameraLocked = false;
     }
@@ -41,7 +40,7 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
             delta.x += 1;
         }
         if (glm::length(delta) > 0.0f) {
-            m_Transform.LocalTranslate(glm::normalize(delta) * (float)deltaTime * 0.005f);
+            m_Transform.LocalTranslate(glm::normalize(delta) * (float) deltaTime * 0.005f);
             updated = true;
         }
     }

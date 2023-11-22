@@ -1,8 +1,8 @@
 #pragma once
 
-#include "moxaic_vulkan_pipeline.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
+#include "moxaic_vulkan_pipeline.hpp"
 
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_material_descriptor.hpp"
@@ -12,8 +12,8 @@
 
 #include "static_array.hpp"
 
-#include <vulkan/vulkan.h>
 #include <string>
+#include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
 {
@@ -29,35 +29,36 @@ namespace Moxaic::Vulkan
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 const StaticArray setLayouts{
-                    globalDescriptor.vkDescriptorSetLayout(),
-                    materialDescriptor.vkDescriptorSetLayout(),
-                    objectDescriptor.vkDescriptorSetLayout(),
+                  globalDescriptor.vkDescriptorSetLayout(),
+                  materialDescriptor.vkDescriptorSetLayout(),
+                  objectDescriptor.vkDescriptorSetLayout(),
                 };
                 MXC_CHK(CreateLayout(setLayouts));
             }
 
             VkShaderModule vertShader;
-            MXC_CHK(CreateShaderModule("./shaders/shader_base.vert.spv", vertShader));
+            MXC_CHK(CreateShaderModule("./shaders/shader_base.vert.spv",
+                                       vertShader));
             VkShaderModule fragShader;
-            MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv", fragShader));
+            MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv",
+                                       fragShader));
             const StaticArray stages{
-                (VkPipelineShaderStageCreateInfo){
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    .stage = VK_SHADER_STAGE_VERTEX_BIT,
-                    .module = vertShader,
-                    .pName = "main",
-                },
-                (VkPipelineShaderStageCreateInfo){
-                    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    .module = fragShader,
-                    .pName = "main",
-                },
+              (VkPipelineShaderStageCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = VK_SHADER_STAGE_VERTEX_BIT,
+                .module = vertShader,
+                .pName = "main",
+              },
+              (VkPipelineShaderStageCreateInfo){
+                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .module = fragShader,
+                .pName = "main",
+              },
             };
-            MXC_CHK(CreateVertexInputOpaquePipe(
-                stages.size(),
-                stages.data(),
-                nullptr));
+            MXC_CHK(CreateVertexInputOpaquePipe(stages.size(),
+                                                stages.data(),
+                                                nullptr));
             vkDestroyShaderModule(k_Device.vkDevice(), vertShader, VK_ALLOC);
             vkDestroyShaderModule(k_Device.vkDevice(), fragShader, VK_ALLOC);
             return MXC_SUCCESS;
@@ -99,4 +100,4 @@ namespace Moxaic::Vulkan
                                     nullptr);
         }
     };
-}
+}// namespace Moxaic::Vulkan

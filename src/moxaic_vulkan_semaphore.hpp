@@ -1,7 +1,7 @@
 #pragma once
 
-#include "moxaic_vulkan.hpp"
 #include "moxaic_logging.hpp"
+#include "moxaic_vulkan.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -50,4 +50,4 @@ namespace Moxaic::Vulkan
         HANDLE m_ExternalHandle{nullptr};
 #endif
     };
-}
+}// namespace Moxaic::Vulkan

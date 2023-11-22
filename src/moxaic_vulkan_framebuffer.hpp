@@ -3,8 +3,8 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_texture.hpp"
 
-#include <vulkan/vulkan.h>
 #include <memory>
+#include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
 {
@@ -56,6 +56,5 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT InitFramebuffer();
         MXC_RESULT InitSemaphore();
-
     };
-}
+}// namespace Moxaic::Vulkan

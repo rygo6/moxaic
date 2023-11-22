@@ -5,7 +5,8 @@
 
 using namespace Moxaic;
 
-MXC_RESULT CompositorScene::Init() {
+MXC_RESULT CompositorScene::Init()
+{
     for (int i = 0; i < m_Framebuffers.size(); ++i) {
         MXC_CHK(m_Framebuffers[i].Init(Window::extents(),
                                        Vulkan::Locality::Local));
@@ -40,8 +41,8 @@ MXC_RESULT CompositorScene::Init() {
 
     for (int i = 0; i < m_MeshNodeDescriptor.size(); ++i) {
         MXC_CHK(m_MeshNodeDescriptor[i].Init(
-                m_GlobalDescriptor.buffer(),
-                m_NodeReference.framebuffer(i)));
+          m_GlobalDescriptor.buffer(),
+          m_NodeReference.framebuffer(i)));
     }
     MXC_CHK(m_MeshNodePipeline.Init(m_GlobalDescriptor,
                                     m_MeshNodeDescriptor[0]));
@@ -57,7 +58,8 @@ MXC_RESULT CompositorScene::Init() {
     return MXC_SUCCESS;
 }
 
-MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime) {
+MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
+{
     if (m_MainCamera.UserCommandUpdate(deltaTime)) {
         // should camera auto update descriptor somehow?
         m_GlobalDescriptor.UpdateView(m_MainCamera);
@@ -65,13 +67,13 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime) {
 
     k_Device.BeginGraphicsCommandBuffer();
 
-    auto &nodeSemaphore = m_NodeReference.Semaphore();
+    auto& nodeSemaphore = m_NodeReference.Semaphore();
     nodeSemaphore.SyncWaitValue();
     if (nodeSemaphore.waitValue() != m_PriorNodeSemaphoreWaitValue) {
         m_PriorNodeSemaphoreWaitValue = nodeSemaphore.waitValue();
         m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
 
-        auto &nodeFramebuffer = m_NodeReference.framebuffer(m_NodeFramebufferIndex);
+        auto& nodeFramebuffer = m_NodeReference.framebuffer(m_NodeFramebufferIndex);
         nodeFramebuffer.Transition(Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
@@ -79,7 +81,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime) {
         m_NodeReference.GlobalDescriptor().CopyBuffer(m_GlobalDescriptor.buffer());
     }
 
-    const auto &framebuffer = m_Framebuffers[m_FramebufferIndex];
+    const auto& framebuffer = m_Framebuffers[m_FramebufferIndex];
     k_Device.BeginRenderPass(framebuffer,
                              (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
@@ -92,7 +94,10 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime) {
     m_MeshNodePipeline.BindPipeline();
     m_MeshNodePipeline.BindDescriptor(m_GlobalDescriptor);
     m_MeshNodePipeline.BindDescriptor(m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
-    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_Device.vkGraphicsCommandBuffer(), 1, 1, 1);
+    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_Device.vkGraphicsCommandBuffer(),
+                                       1,
+                                       1,
+                                       1);
 
     k_Device.EndRenderPass();
 
@@ -110,23 +115,22 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime) {
     return MXC_SUCCESS;
 }
 
-MXC_RESULT NodeScene::Init() {
+MXC_RESULT NodeScene::Init()
+{
     MXC_CHK(m_Node.Init());
 
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
                                     Window::extents()));
 
     m_SpherTestTransform.setPosition({0, 0, 0});
-    MXC_CHK(m_SphereTestTexture.InitFromFile(
-            "textures/uvgrid.jpg",
-            Vulkan::Locality::Local));
+    MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
+                                             Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(m_ObjectDescriptor.Init(m_SpherTestTransform));
-    MXC_CHK(m_StandardPipeline.Init(
-            m_GlobalDescriptor,
-            m_MaterialDescriptor,
-            m_ObjectDescriptor));
+    MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
+                                    m_MaterialDescriptor,
+                                    m_ObjectDescriptor));
 
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
@@ -145,16 +149,17 @@ MXC_RESULT NodeScene::Init() {
     return MXC_SUCCESS;
 }
 
-MXC_RESULT NodeScene::Loop(const uint32_t deltaTime) {
+MXC_RESULT NodeScene::Loop(const uint32_t deltaTime)
+{
     m_GlobalDescriptor.Update(m_Node.globalDescriptor().buffer());
 
     k_Device.BeginGraphicsCommandBuffer();
 
-    const auto &framebuffer = m_Node.framebuffer(m_FramebufferIndex);
+    const auto& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
     framebuffer.Transition(Vulkan::AcquireFromExternal, Vulkan::ToGraphicsAttach);
 
     k_Device.BeginRenderPass(framebuffer,
-        (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
+                             (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
 
     m_StandardPipeline.BindPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
@@ -165,7 +170,8 @@ MXC_RESULT NodeScene::Loop(const uint32_t deltaTime) {
 
     k_Device.EndRenderPass();
 
-    framebuffer.Transition(Vulkan::FromGraphicsAttach, Vulkan::ReleaseToExternalGraphicsRead);
+    framebuffer.Transition(Vulkan::FromGraphicsAttach,
+                           Vulkan::ReleaseToExternalGraphicsRead);
 
     // m_Swap.Acquire();
     // m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());

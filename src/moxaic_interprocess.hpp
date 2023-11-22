@@ -29,17 +29,17 @@ namespace Moxaic
         MXC_RESULT Init(const std::string& sharedMemoryName)
         {
             m_hMapFile = CreateFileMapping(
-                INVALID_HANDLE_VALUE,
-                // use paging file
-                nullptr,
-                // default security
-                PAGE_READWRITE,
-                // read/write access
-                0,
-                // maximum object size (high-order DWORD)
-                Size(),
-                // maximum object size (low-order DWORD)
-                sharedMemoryName.c_str()); // name of mapping object
+              INVALID_HANDLE_VALUE,
+              // use paging file
+              nullptr,
+              // default security
+              PAGE_READWRITE,
+              // read/write access
+              0,
+              // maximum object size (high-order DWORD)
+              Size(),
+              // maximum object size (low-order DWORD)
+              sharedMemoryName.c_str());// name of mapping object
             if (m_hMapFile == nullptr) {
                 MXC_LOG_ERROR("Could not create file mapping object.", GetLastError());
                 return MXC_FAIL;
@@ -73,7 +73,7 @@ namespace Moxaic
 
         static constexpr int Size() { return sizeof(T); }
 
-        const T& buffer() const { return *static_cast<T *>(m_pBuffer); }
+        const T& buffer() const { return *static_cast<T*>(m_pBuffer); }
 
     protected:
 #ifdef WIN32
@@ -95,8 +95,7 @@ namespace Moxaic
 
     using InterProcessFunc = std::function<void(void*)>;
 
-    enum InterProcessTargetFunc
-    {
+    enum InterProcessTargetFunc {
         ImportCompositor = 0,
         //        ImportFramebuffer,
         //        ImportCamera,
@@ -122,4 +121,4 @@ namespace Moxaic
     private:
         StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> m_TargetFuncs{};
     };
-}
+}// namespace Moxaic

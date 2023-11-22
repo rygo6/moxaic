@@ -8,14 +8,16 @@
 
 // delete copy constructors to disallow pass by value
 #define MXC_NO_VALUE_PASS(name) \
-name(const name&) = delete; \
-name& operator=(const name&) = delete;
+    name(const name&) = delete; \
+    name& operator=(const name&) = delete;
 
 // do I like this? Maybe?
-#define MXC_GET(field) const auto& field() const { return m_##field; }
-#define MXC_SET(field) auto set##field(const auto& field) { m_##field = field; }
+#define MXC_GET(field) \
+    const auto& field() const { return m_##field; }
+#define MXC_SET(field) \
+    auto set##field(const auto& field) { m_##field = field; }
 #define MXC_GETSET(field) \
-    MXC_GET(field) \
+    MXC_GET(field)        \
     MXC_SET(field)
 
 namespace Moxaic
@@ -27,8 +29,7 @@ namespace Moxaic
 
     inline MXC_RESULT Running = MXC_SUCCESS;
 
-    enum class Role
-    {
+    enum class Role {
         Compositor,
         Node
     };
@@ -51,4 +52,4 @@ namespace Moxaic
                 return "Unknown Role";
         }
     }
-}
+}// namespace Moxaic

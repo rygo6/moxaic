@@ -1,10 +1,10 @@
 #pragma once
 
 #include "main.hpp"
-#include "moxaic_transform.hpp"
 #include "moxaic_camera.hpp"
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_interprocess.hpp"
+#include "moxaic_transform.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_semaphore.hpp"
 
@@ -61,7 +61,7 @@ namespace Moxaic
         std::string m_Name{"default"};
         float m_DrawRadius{1.0f};
 
-        Camera m_CompositingCamera{}; // Camera which compositor is using to reproject.
+        Camera m_CompositingCamera{};// Camera which compositor is using to reproject.
 
         InterProcessBuffer<Vulkan::GlobalDescriptor::Buffer> m_ExportedGlobalDescriptor{};
         // Buffer which the node is currently using to render
@@ -72,9 +72,8 @@ namespace Moxaic
         Vulkan::Semaphore m_ExportedNodeSemaphore{k_Device};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
-            Vulkan::Framebuffer(k_Device),
-            Vulkan::Framebuffer(k_Device)
-        };
+          Vulkan::Framebuffer(k_Device),
+          Vulkan::Framebuffer(k_Device)};
 
         STARTUPINFO m_Startupinfo{};
         PROCESS_INFORMATION m_ProcessInformation{};
@@ -143,11 +142,10 @@ namespace Moxaic
         StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
         {
             return {
-                [this](void* pParameters) {
-                    const auto pImportParameters = static_cast<ImportParam *>(pParameters);
-                    this->InitImport(*pImportParameters);
-                }
-            };
+              [this](void* pParameters) {
+                  const auto pImportParameters = static_cast<ImportParam*>(pParameters);
+                  this->InitImport(*pImportParameters);
+              }};
         }
 
         Transform m_Transform{};
@@ -164,8 +162,7 @@ namespace Moxaic
         Vulkan::Semaphore m_ImportedNodeSemaphore{k_Device};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{
-            Vulkan::Framebuffer(k_Device),
-            Vulkan::Framebuffer(k_Device)
-        };
+          Vulkan::Framebuffer(k_Device),
+          Vulkan::Framebuffer(k_Device)};
     };
-}
+}// namespace Moxaic

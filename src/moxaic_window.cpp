@@ -1,5 +1,5 @@
-#include "main.hpp"
 #include "moxaic_window.hpp"
+#include "main.hpp"
 #include "moxaic_logging.hpp"
 
 #include <SDL2/SDL_Vulkan.h>
@@ -17,7 +17,7 @@ static void SetMouseButton(const int index, const bool pressed)
     switch (index) {
         case SDL_BUTTON_LEFT:
             g_UserCommand.leftMouseButtonPressed = pressed;
-        default: ;
+        default:;
     }
 }
 
@@ -36,7 +36,7 @@ static void SetKey(const SDL_Keycode keycode, const bool pressed)
         case SDLK_d:
             g_UserCommand.userMove.ToggleFlag(UserMove::Right, pressed);
             break;
-        default: ;
+        default:;
     }
 }
 
@@ -67,31 +67,32 @@ MXC_RESULT Window::Init()
     int x, y;
     SDL_GetWindowPosition(g_pSDLWindow, &x, &y);
     SDL_SetWindowPosition(g_pSDLWindow,
-                          x + (Role == Role::Compositor ? -(int)(DefaultWidth / 2) : (int)(DefaultWidth / 2)),
+                          x + (Role == Role::Compositor ?
+                                 -(int) (DefaultWidth / 2) :
+                                 (int) (DefaultWidth / 2)),
                           y);
     g_WindowDimensions = VkExtent2D{DefaultWidth, DefaultHeight};
     return g_pSDLWindow != nullptr;
 }
 
 MXC_RESULT Window::InitSurface(const VkInstance& vkInstance,
-                               VkSurfaceKHR& outVkSurface)
+                               VkSurfaceKHR* pVkSurface)
 {
     SDL_assert((g_pSDLWindow != nullptr) && "Window not initialized!");
     // should surface move into swap class?! or device class?
-    MXC_CHK(SDL_Vulkan_CreateSurface(
-        g_pSDLWindow,
-        vkInstance,
-        &outVkSurface));
+    MXC_CHK(SDL_Vulkan_CreateSurface(g_pSDLWindow,
+                                     vkInstance,
+                                     pVkSurface));
     return MXC_SUCCESS;
 }
 
-std::vector<const char *> Window::GetVulkanInstanceExtentions()
+std::vector<const char*> Window::GetVulkanInstanceExtentions()
 {
     unsigned int extensionCount = 0;
     SDL_Vulkan_GetInstanceExtensions(g_pSDLWindow, &extensionCount, nullptr);
-    std::vector<const char *> requiredInstanceExtensionsNames(extensionCount);
+    std::vector<const char*> requiredInstanceExtensionsNames(extensionCount);
     SDL_Vulkan_GetInstanceExtensions(g_pSDLWindow, &extensionCount, requiredInstanceExtensionsNames.data());
-    return requiredInstanceExtensionsNames; // rvo deals with this right?
+    return requiredInstanceExtensionsNames;// rvo deals with this right?
 }
 
 void Window::Poll()
@@ -126,7 +127,7 @@ void Window::Poll()
             }
             case SDL_MOUSEMOTION: {
                 // accumulate, multiples may come
-                g_UserCommand.mouseDelta += glm::vec2((float)pollEvent.motion.xrel, (float)pollEvent.motion.yrel);
+                g_UserCommand.mouseDelta += glm::vec2((float) pollEvent.motion.xrel, (float) pollEvent.motion.yrel);
                 g_UserCommand.mouseMoved = true;
                 break;
             }

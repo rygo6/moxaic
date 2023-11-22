@@ -1,9 +1,9 @@
-#include "main.hpp"
 #include "moxaic_core.hpp"
-#include "moxaic_window.hpp"
+#include "main.hpp"
+#include "moxaic_scene.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
-#include "moxaic_scene.hpp"
+#include "moxaic_window.hpp"
 
 #include <memory>
 

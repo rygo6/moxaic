@@ -19,28 +19,27 @@ namespace Moxaic::Vulkan
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 StaticArray bindings{
-                    (VkDescriptorSetLayoutBinding){
-                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                    },
+                  (VkDescriptorSetLayoutBinding){
+                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                  },
                 };
                 MXC_CHK(CreateDescriptorSetLayout(bindings));
             }
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
-                (VkWriteDescriptorSet){
-                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                        .sampler = k_Device.vkLinearSampler(),
-                        .imageView = texture.vkImageView(),
-                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                    })
-                },
+              (VkWriteDescriptorSet){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_Device.vkLinearSampler(),
+                  .imageView = texture.vkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                })},
             };
             WriteDescriptors(writes);
 
             return MXC_SUCCESS;
         }
     };
-}
+}// namespace Moxaic::Vulkan

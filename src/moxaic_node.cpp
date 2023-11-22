@@ -1,8 +1,8 @@
 #include "moxaic_node.hpp"
 
+#include "moxaic_logging.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_semaphore.hpp"
-#include "moxaic_logging.hpp"
 #include "moxaic_window.hpp"
 
 using namespace Moxaic;
@@ -61,7 +61,7 @@ NodeReference::~NodeReference()
 MXC_RESULT NodeReference::Init()
 {
     MXC_CHK(m_ExportedNodeSemaphore.Init(false,
-        Vulkan::Locality::External));
+                                         Vulkan::Locality::External));
 
     m_IPCToNode.Init(k_TempSharedProducerName);
     m_ExportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
@@ -80,18 +80,18 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemap
 {
     const auto hProcess = m_ProcessInformation.hProcess;
     const Node::ImportParam importParam{
-        .framebufferWidth = m_ExportedFramebuffers[0].extents().width,
-        .framebufferHeight = m_ExportedFramebuffers[0].extents().height,
-        .colorFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].colorTexture().ClonedExternalHandle(hProcess),
-        .colorFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].colorTexture().ClonedExternalHandle(hProcess),
-        .normalFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].normalTexture().ClonedExternalHandle(hProcess),
-        .normalFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].normalTexture().ClonedExternalHandle(hProcess),
-        .gBufferFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].gBufferTexture().ClonedExternalHandle(hProcess),
-        .gBufferFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].gBufferTexture().ClonedExternalHandle(hProcess),
-        .depthFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].depthTexture().ClonedExternalHandle(hProcess),
-        .depthFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].depthTexture().ClonedExternalHandle(hProcess),
-        .compositorSemaphoreExternalHandle = compositorSemaphore.ClonedExternalHandle(hProcess),
-        .nodeSemaphoreExternalHandle = m_ExportedNodeSemaphore.ClonedExternalHandle(hProcess),
+      .framebufferWidth = m_ExportedFramebuffers[0].extents().width,
+      .framebufferHeight = m_ExportedFramebuffers[0].extents().height,
+      .colorFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].colorTexture().ClonedExternalHandle(hProcess),
+      .colorFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].colorTexture().ClonedExternalHandle(hProcess),
+      .normalFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].normalTexture().ClonedExternalHandle(hProcess),
+      .normalFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].normalTexture().ClonedExternalHandle(hProcess),
+      .gBufferFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].gBufferTexture().ClonedExternalHandle(hProcess),
+      .gBufferFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].gBufferTexture().ClonedExternalHandle(hProcess),
+      .depthFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].depthTexture().ClonedExternalHandle(hProcess),
+      .depthFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].depthTexture().ClonedExternalHandle(hProcess),
+      .compositorSemaphoreExternalHandle = compositorSemaphore.ClonedExternalHandle(hProcess),
+      .nodeSemaphoreExternalHandle = m_ExportedNodeSemaphore.ClonedExternalHandle(hProcess),
     };
     m_IPCToNode.Enque(InterProcessTargetFunc::ImportCompositor, &importParam);
 
@@ -106,13 +106,14 @@ Node::~Node() = default;
 MXC_RESULT Node::Init()
 {
     const StaticArray targetFuncs{
-        (InterProcessFunc)[this](void* pParameters) {
-            const auto pImportParameters = static_cast<ImportParam *>(pParameters);
-            this->InitImport(*pImportParameters);
-        }
-    };
-    m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
-    return MXC_SUCCESS;
+      (InterProcessFunc)[this](void* pParameters){
+        const auto pImportParameters = static_cast<ImportParam*>(pParameters);
+    this->InitImport(*pImportParameters);
+}
+}
+;
+m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
+return MXC_SUCCESS;
 }
 
 MXC_RESULT Node::InitImport(const ImportParam& parameters)

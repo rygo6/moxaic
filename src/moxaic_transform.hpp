@@ -3,8 +3,8 @@
 #include "main.hpp"
 
 #include <glm/glm.hpp>
-#include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 namespace Moxaic
 {
@@ -13,8 +13,8 @@ namespace Moxaic
     public:
         MXC_NO_VALUE_PASS(Transform);
 
-        Transform();
-        virtual ~Transform();
+        Transform() = default;
+        virtual ~Transform() = default;
 
         void LocalTranslate(glm::vec3 delta)
         {
@@ -32,9 +32,9 @@ namespace Moxaic
         void Rotate(const float x, const float y, const float z)
         {
             const auto rotation = glm::quat(glm::vec3(
-                glm::radians(x),
-                glm::radians(y),
-                glm::radians(z)));
+              glm::radians(x),
+              glm::radians(y),
+              glm::radians(z)));
             m_Orientation = rotation * m_Orientation;
         }
 
@@ -66,4 +66,4 @@ namespace Moxaic
         glm::vec3 m_Position{glm::zero<glm::vec3>()};
         glm::quat m_Orientation{glm::identity<glm::quat>()};
     };
-}
+}// namespace Moxaic

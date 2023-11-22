@@ -1,8 +1,8 @@
 #pragma once
 
 #include "moxaic_transform.hpp"
-#include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 
 namespace Moxaic
 {
@@ -46,4 +46,4 @@ namespace Moxaic
 
         bool m_CameraLocked{};
     };
-}
+}// namespace Moxaic

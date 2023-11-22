@@ -42,22 +42,22 @@ namespace Moxaic::Vulkan
                     Size(),
                     string_Locality(locality));
             constexpr VkMemoryPropertyFlags supportedProperties =
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
             SDL_assert(((supportedProperties & properties) == supportedProperties) &&
-                "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
+                       "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
             MXC_CHK(k_Device.CreateAllocateBindBuffer(usage,
-                properties,
-                Size(),
-                locality,
-                m_VkBuffer,
-                m_VkDeviceMemory,
-                m_ExternalMemory));
+                                                      properties,
+                                                      Size(),
+                                                      locality,
+                                                      &m_VkBuffer,
+                                                      &m_VkDeviceMemory,
+                                                      &m_ExternalMemory));
             VK_CHK(vkMapMemory(k_Device.vkDevice(),
-                m_VkDeviceMemory,
-                0,
-                Size(),
-                0,
-                &m_pMappedBuffer));
+                               m_VkDeviceMemory,
+                               0,
+                               Size(),
+                               0,
+                               &m_pMappedBuffer));
             return MXC_SUCCESS;
         }
 
@@ -66,7 +66,7 @@ namespace Moxaic::Vulkan
             memcpy(m_pMappedBuffer, &srcBuffer, Size());
         }
 
-        T& mapped() { return *static_cast<T *>(m_pMappedBuffer); }
+        T& mapped() { return *static_cast<T*>(m_pMappedBuffer); }
         const auto& vkBuffer() const { return m_VkBuffer; }
 
         static constexpr VkDeviceSize Size() { return sizeof(T); }
@@ -80,4 +80,4 @@ namespace Moxaic::Vulkan
         HANDLE m_ExternalMemory{nullptr};
 #endif
     };
-}
+}// namespace Moxaic::Vulkan

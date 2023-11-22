@@ -2,8 +2,8 @@
 
 #include "moxaic_vulkan.hpp"
 
-#include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
 {
@@ -47,4 +47,4 @@ namespace Moxaic::Vulkan
         MXC_RESULT CreateIndexBuffer(const uint16_t* pIndices,
                                      int indexCount);
     };
-}
+}// namespace Moxaic::Vulkan

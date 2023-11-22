@@ -1,7 +1,7 @@
 #include "main.hpp"
 #include "moxaic_core.hpp"
-#include "moxaic_window.hpp"
 #include "moxaic_logging.hpp"
+#include "moxaic_window.hpp"
 
 #include "moxaic_vulkan_device.hpp"
 

@@ -33,7 +33,7 @@ namespace Moxaic
     {
         StaticRef(T data) { m_Data = data; }
         T m_Data;
-        operator T *() { return &m_Data; }
-        operator const T *() const { return &m_Data; }
+        operator T*() { return &m_Data; }
+        operator const T*() const { return &m_Data; }
     };
-}
+}// namespace Moxaic

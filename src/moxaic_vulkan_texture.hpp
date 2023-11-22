@@ -2,8 +2,8 @@
 
 #include "moxaic_vulkan.hpp"
 
-#include <vulkan/vulkan.h>
 #include <string>
+#include <vulkan/vulkan.h>
 
 #ifdef WIN32
 #include <windows.h>
@@ -67,4 +67,4 @@ namespace Moxaic::Vulkan
         MXC_RESULT InitImageView(VkFormat format,
                                  VkImageAspectFlags aspectMask);
     };
-}
+}// namespace Moxaic::Vulkan

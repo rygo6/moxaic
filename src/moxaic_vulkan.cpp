@@ -1,12 +1,11 @@
 #include "moxaic_vulkan.hpp"
-#include "moxaic_vulkan_device.hpp"
-#include "moxaic_logging.hpp"
-#include "moxaic_window.hpp"
 #include "main.hpp"
+#include "moxaic_logging.hpp"
+#include "moxaic_vulkan_device.hpp"
+#include "moxaic_window.hpp"
 
-#include <vector>
 #include <cassert>
-#include <SDL2/SDL_Vulkan.h>
+#include <vector>
 
 #ifdef WIN32
 #include <vulkan/vulkan_win32.h>
@@ -45,17 +44,10 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSev
                   Vulkan::VkDebug.DebugLine,
                   Vulkan::VkDebug.DebugCommand,
                   pCallbackData->pMessage);
-    // printf("%s %s (%s:%d) %s\n%s\n",
-    //        SeverityToName(messageSeverity),
-    //        string_Role(Moxaic::Role),
-    //        Vulkan::VkDebug.DebugFile,
-    //        Vulkan::VkDebug.DebugLine,
-    //        Vulkan::VkDebug.DebugCommand,
-    //        pCallbackData->pMessage);
     return VK_FALSE;
 }
 
-static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const char *>& requiredInstanceLayerNames)
+static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const char*>& requiredInstanceLayerNames)
 {
     MXC_LOG_FUNCTION();
 
@@ -81,7 +73,7 @@ static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const cha
     return MXC_SUCCESS;
 }
 
-static MXC_RESULT CheckVulkanInstanceExtensions(const std::vector<const char *>& requiredInstanceExtensionsNames)
+static MXC_RESULT CheckVulkanInstanceExtensions(const std::vector<const char*>& requiredInstanceExtensionsNames)
 {
     MXC_LOG_FUNCTION();
 
@@ -113,20 +105,20 @@ static MXC_RESULT CreateVulkanInstance()
     MXC_LOG_FUNCTION();
 
     constexpr VkApplicationInfo applicationInfo{
-        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-        .pApplicationName = Moxaic::ApplicationName,
-        .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-        .pEngineName = "Vulkan",
-        .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-        .apiVersion = VK_HEADER_VERSION_COMPLETE,
+      .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+      .pApplicationName = Moxaic::ApplicationName,
+      .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+      .pEngineName = "Vulkan",
+      .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+      .apiVersion = VK_HEADER_VERSION_COMPLETE,
     };
     VkInstanceCreateInfo createInfo{
-        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pApplicationInfo = &applicationInfo,
+      .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+      .pApplicationInfo = &applicationInfo,
     };
 
     // Instance Layers
-    std::vector<const char *> requiredInstanceLayerNames;
+    std::vector<const char*> requiredInstanceLayerNames;
     if (g_VulkanValidationLayers) {
         requiredInstanceLayerNames.push_back("VK_LAYER_KHRONOS_validation");
     }
@@ -155,12 +147,12 @@ static MXC_RESULT LoadVulkanFunctionPointers()
 {
     MXC_LOG_FUNCTION();
 
-#define VK_FUNC(func) \
-    MXC_LOG(#func); \
-    Moxaic::Vulkan::VkFunc.func = (PFN_vk##func) vkGetInstanceProcAddr(g_VulkanInstance, "vk"#func); \
-    if (Moxaic::Vulkan::VkFunc.func == nullptr) { \
-        MXC_LOG_ERROR("Load Fail: ", #func); \
-        return false; \
+#define VK_FUNC(func)                                                                                 \
+    MXC_LOG(#func);                                                                                   \
+    Moxaic::Vulkan::VkFunc.func = (PFN_vk##func) vkGetInstanceProcAddr(g_VulkanInstance, "vk" #func); \
+    if (Moxaic::Vulkan::VkFunc.func == nullptr) {                                                     \
+        MXC_LOG_ERROR("Load Fail: ", #func);                                                          \
+        return false;                                                                                 \
     }
     VK_FUNCS
 #undef VK_FUNC
@@ -174,19 +166,19 @@ static MXC_RESULT CreateVulkanDebugOutput()
 {
     MXC_LOG_FUNCTION();
     constexpr VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-        .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                           VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-        .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                       VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
-        .pfnUserCallback = DebugCallback,
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+      .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                         VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+      .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+      .pfnUserCallback = DebugCallback,
     };
     VK_CHK(Vulkan::VkFunc.CreateDebugUtilsMessengerEXT(g_VulkanInstance,
-        &debugUtilsMessengerCreateInfo,
-        VK_ALLOC,
-        &g_VulkanDebugMessenger));
+                                                       &debugUtilsMessengerCreateInfo,
+                                                       VK_ALLOC,
+                                                       &g_VulkanDebugMessenger));
     return MXC_SUCCESS;
 }
 
@@ -201,19 +193,20 @@ MXC_RESULT Vulkan::Init(const bool enableValidationLayers)
     MXC_CHK(CreateVulkanDebugOutput());
 
     SDL_assert((Window::window() != nullptr) && "Window not initialized!");
-    MXC_CHK(Window::InitSurface(g_VulkanInstance, g_VulkanSurface));
+    MXC_CHK(Window::InitSurface(g_VulkanInstance,
+                                &g_VulkanSurface));
 
     return MXC_SUCCESS;
 }
 
 VkInstance Vulkan::vkInstance()
 {
-    assert((g_VulkanInstance != nullptr) && "Vulkan not initialized!");
+    SDL_assert((g_VulkanInstance != nullptr) && "Vulkan not initialized!");
     return g_VulkanInstance;
 }
 
 VkSurfaceKHR Vulkan::vkSurface()
 {
-    assert((g_VulkanSurface != nullptr) && "Vulkan not initialized!");
+    SDL_assert((g_VulkanSurface != nullptr) && "Vulkan not initialized!");
     return g_VulkanSurface;
 }

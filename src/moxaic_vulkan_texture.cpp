@@ -1,13 +1,13 @@
 #include "moxaic_vulkan_texture.hpp"
-#include "moxaic_vulkan_device.hpp"
-#include "moxaic_vulkan.hpp"
 #include "moxaic_logging.hpp"
+#include "moxaic_vulkan.hpp"
+#include "moxaic_vulkan_device.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
+#include <vulkan/vulkan.h>
 
 #if WIN32
 #include <vulkan/vulkan_win32.h>
@@ -53,16 +53,15 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
     }
 
     const VkExtent2D extents = {
-        static_cast<uint32_t>(width),
-        static_cast<uint32_t>(height)
-    };
+      static_cast<uint32_t>(width),
+      static_cast<uint32_t>(height)};
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     k_Device.CreateStagingBuffer(pixels,
                                  imageBufferSize,
-                                 stagingBuffer,
-                                 stagingBufferMemory);
+                                 &stagingBuffer,
+                                 &stagingBufferMemory);
 
     stbi_image_free(pixels);
 
@@ -100,14 +99,14 @@ MXC_RESULT Texture::InitFromImport(const VkFormat format,
                       string_VkImageAspectFlags(aspectMask),
                       externalMemory);
     MXC_CHK(InitImage(format,
-        extents,
-        usage,
-        Locality::External));
+                      extents,
+                      usage,
+                      Locality::External));
     MXC_CHK(k_Device.AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        m_VkImage,
-        MXC_EXTERNAL_HANDLE_TYPE,
-        externalMemory,
-        m_VkDeviceMemory));
+                                             m_VkImage,
+                                             MXC_EXTERNAL_HANDLE_TYPE,
+                                             externalMemory,
+                                             &m_VkDeviceMemory));
     MXC_CHK(InitImageView(format, aspectMask));
     m_Extents = extents;
     m_AspectMask = aspectMask;
@@ -126,34 +125,33 @@ MXC_RESULT Texture::Init(const VkFormat format,
                       string_VkImageAspectFlags(aspectMask),
                       string_Locality(locality));
     MXC_CHK(InitImage(format,
-        extents,
-        usage,
-        locality));
+                      extents,
+                      usage,
+                      locality));
     switch (locality) {
         case Locality::Local:
             MXC_CHK(k_Device.AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                m_VkImage,
-                m_VkDeviceMemory));
+                                               m_VkImage,
+                                               &m_VkDeviceMemory));
             break;
         case Locality::External:
             MXC_CHK(k_Device.AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                m_VkImage,
-                MXC_EXTERNAL_HANDLE_TYPE,
-                m_VkDeviceMemory));
+                                                     m_VkImage,
+                                                     MXC_EXTERNAL_HANDLE_TYPE,
+                                                     &m_VkDeviceMemory));
             break;
     }
     MXC_CHK(InitImageView(format, aspectMask));
     if (locality == Locality::External) {
 #if WIN32
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
-            .pNext = nullptr,
-            .memory = m_VkDeviceMemory,
-            .handleType = MXC_EXTERNAL_HANDLE_TYPE
-        };
+          .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+          .pNext = nullptr,
+          .memory = m_VkDeviceMemory,
+          .handleType = MXC_EXTERNAL_HANDLE_TYPE};
         VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
-            &getWin32HandleInfo,
-            &m_ExternalHandle));
+                                              &getWin32HandleInfo,
+                                              &m_ExternalHandle));
 #endif
     }
     m_Extents = extents;
@@ -215,30 +213,28 @@ MXC_RESULT Texture::InitImageView(const VkFormat format,
                                   const VkImageAspectFlags aspectMask)
 {
     const VkImageViewCreateInfo imageViewCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .image = m_VkImage,
-        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-        .format = format,
-        .components{
-            .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-            .a = VK_COMPONENT_SWIZZLE_IDENTITY
-        },
-        .subresourceRange{
-            .aspectMask = aspectMask,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        }
-    };
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .image = m_VkImage,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = format,
+      .components{
+        .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .a = VK_COMPONENT_SWIZZLE_IDENTITY},
+      .subresourceRange{
+        .aspectMask = aspectMask,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      }};
     VK_CHK(vkCreateImageView(k_Device.vkDevice(),
-        &imageViewCreateInfo,
-        VK_ALLOC,
-        &m_VkImageView));
+                             &imageViewCreateInfo,
+                             VK_ALLOC,
+                             &m_VkImageView));
     return MXC_SUCCESS;
 }
 
@@ -248,29 +244,29 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
                               const Locality locality)
 {
     constexpr VkExternalMemoryImageCreateInfo externalImageInfo{
-        .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-        .pNext = nullptr,
-        .handleTypes = MXC_EXTERNAL_HANDLE_TYPE,
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+      .pNext = nullptr,
+      .handleTypes = MXC_EXTERNAL_HANDLE_TYPE,
     };
     const VkImageCreateInfo imageCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .pNext = locality == Locality::External ? &externalImageInfo : nullptr,
-        .imageType = VK_IMAGE_TYPE_2D,
-        .format = format,
-        .extent = {extents.width, extents.height, 1},
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = usage,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .queueFamilyIndexCount = 0,
-        .pQueueFamilyIndices = nullptr,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .pNext = locality == Locality::External ? &externalImageInfo : nullptr,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = format,
+      .extent = {extents.width, extents.height, 1},
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .tiling = VK_IMAGE_TILING_OPTIMAL,
+      .usage = usage,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .queueFamilyIndexCount = 0,
+      .pQueueFamilyIndices = nullptr,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
     VK_CHK(vkCreateImage(k_Device.vkDevice(),
-        &imageCreateInfo,
-        VK_ALLOC,
-        &m_VkImage));
+                         &imageCreateInfo,
+                         VK_ALLOC,
+                         &m_VkImage));
     return MXC_SUCCESS;
 }
