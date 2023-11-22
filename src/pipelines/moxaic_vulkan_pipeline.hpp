@@ -117,7 +117,6 @@ namespace Moxaic::Vulkan
                                                const VkPipelineShaderStageCreateInfo* pStages,
                                                const VkPipelineTessellationStateCreateInfo* pTessellationState)
         {
-            MXC_LOG_FUNCTION();
             // Vertex Input
             StaticArray vertexBindingDescriptions{
               (VkVertexInputBindingDescription){
@@ -171,7 +170,6 @@ namespace Moxaic::Vulkan
                                     const VkPipelineInputAssemblyStateCreateInfo* pInputAssemblyState,
                                     const VkPipelineTessellationStateCreateInfo* pTessellationState)
         {
-            MXC_LOG_FUNCTION();
             SDL_assert(s_vkPipelineLayout != nullptr);
             // Fragment
             constexpr StaticArray pipelineColorBlendAttachmentStates{

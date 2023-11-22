@@ -90,7 +90,7 @@ MXC_RESULT Device::PickPhysicalDevice()
 
 MXC_RESULT Device::FindQueues()
 {
-    MXC_LOG_FUNCTION();
+    MXC_LOG("Vulkan::Device::FindQueues");
 
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties2(m_vkPhysicalDevice, &queueFamilyCount, nullptr);
@@ -158,7 +158,7 @@ MXC_RESULT Device::FindQueues()
 
 MXC_RESULT Device::CreateDevice()
 {
-    MXC_LOG_FUNCTION();
+    MXC_LOG("Vulkan::Device::CreateDevice");
 
     const float queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
     const VkDeviceQueueGlobalPriorityCreateInfoEXT queueGlobalPriorityCreateInfo = {
@@ -312,8 +312,7 @@ MXC_RESULT Device::CreateDevice()
 
 MXC_RESULT Device::CreateRenderPass()
 {
-    MXC_LOG_FUNCTION();
-
+    MXC_LOG("Vulkan::Device::CreateRenderPass");
     // supposedly most correct https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#swapchain-image-acquire-and-present
     constexpr StaticArray colorAttachments{
       (VkAttachmentReference){
@@ -421,8 +420,7 @@ MXC_RESULT Device::CreateRenderPass()
 
 MXC_RESULT Device::CreateCommandBuffers()
 {
-    MXC_LOG_FUNCTION();
-
+    MXC_LOG("Vulkan::Device::CreateCommandBuffers");
     // Graphics + Compute
     const VkCommandPoolCreateInfo graphicsPoolInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -468,7 +466,7 @@ MXC_RESULT Device::CreateCommandBuffers()
 
 MXC_RESULT Device::CreatePools()
 {
-    MXC_LOG_FUNCTION();
+    MXC_LOG("Vulkan::Device::CreatePools");
     constexpr VkQueryPoolCreateInfo queryPoolCreateInfo{
       .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
       .pNext = nullptr,
@@ -508,8 +506,7 @@ MXC_RESULT Device::CreatePools()
 
 MXC_RESULT Device::CreateSamplers()
 {
-    MXC_LOG_FUNCTION();
-
+    MXC_LOG("Vulkan::Device::CreateSamplers");
     const VkSamplerCreateInfo linearSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .magFilter = VK_FILTER_LINEAR,
@@ -555,7 +552,7 @@ MXC_RESULT Device::CreateSamplers()
 
 MXC_RESULT Device::Init()
 {
-    MXC_LOG("Init Vulkan Device.");
+    MXC_LOG("Vulkan::Device::Init");
 
     SDL_assert(Vulkan::vkInstance() != VK_NULL_HANDLE);
     SDL_assert(Vulkan::vkSurface() != VK_NULL_HANDLE);

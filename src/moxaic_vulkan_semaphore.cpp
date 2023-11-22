@@ -24,7 +24,7 @@ Semaphore::~Semaphore()
 
 MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
 {
-    MXC_LOG("Init VulkanTimelineSemaphore");
+    MXC_LOG("Vulkan::Semaphore::Init");
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
       .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
       .pNext = nullptr,

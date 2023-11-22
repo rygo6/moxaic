@@ -50,7 +50,6 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSev
 static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const char*>& requiredInstanceLayerNames)
 {
     MXC_LOG_FUNCTION();
-
     unsigned int count = 0;
     VK_CHK(vkEnumerateInstanceLayerProperties(&count, nullptr));
     std::vector<VkLayerProperties> properties(count);
@@ -76,7 +75,6 @@ static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const cha
 static MXC_RESULT CheckVulkanInstanceExtensions(const std::vector<const char*>& requiredInstanceExtensionsNames)
 {
     MXC_LOG_FUNCTION();
-
     unsigned int count = 0;
     VK_CHK(vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr));
     std::vector<VkExtensionProperties> properties(count);
@@ -103,7 +101,6 @@ static MXC_RESULT CheckVulkanInstanceExtensions(const std::vector<const char*>& 
 static MXC_RESULT CreateVulkanInstance()
 {
     MXC_LOG_FUNCTION();
-
     constexpr VkApplicationInfo applicationInfo{
       .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
       .pApplicationName = Moxaic::ApplicationName,
@@ -146,7 +143,6 @@ static MXC_RESULT CreateVulkanInstance()
 static MXC_RESULT LoadVulkanFunctionPointers()
 {
     MXC_LOG_FUNCTION();
-
 #define VK_FUNC(func)                                                                                 \
     MXC_LOG(#func);                                                                                   \
     Moxaic::Vulkan::VkFunc.func = (PFN_vk##func) vkGetInstanceProcAddr(g_VulkanInstance, "vk" #func); \
@@ -156,9 +152,6 @@ static MXC_RESULT LoadVulkanFunctionPointers()
     }
     VK_FUNCS
 #undef VK_FUNC
-
-    auto test = Vulkan::VkFunc.CmdDrawMeshTasksEXT;
-
     return MXC_SUCCESS;
 }
 
@@ -184,7 +177,7 @@ static MXC_RESULT CreateVulkanDebugOutput()
 
 MXC_RESULT Vulkan::Init(const bool enableValidationLayers)
 {
-    MXC_LOG_FUNCTION();
+    MXC_LOG("Vulkan::Init");
 
     g_VulkanValidationLayers = enableValidationLayers;
 
