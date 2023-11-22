@@ -8,14 +8,12 @@
 #include <windows.h>
 #endif
 
-namespace Moxaic::Vulkan
-{
+namespace Moxaic::Vulkan {
     class Framebuffer;
     class Swap;
     class Semaphore;
 
-    class Device
-    {
+    class Device {
     public:
         MXC_NO_VALUE_PASS(Device);
 
@@ -27,35 +25,35 @@ namespace Moxaic::Vulkan
                                            VkImage image,
                                            VkExternalMemoryHandleTypeFlagBits externalHandleType,
                                            HANDLE externalHandle,
-                                           VkDeviceMemory& outDeviceMemory) const;
+                                           VkDeviceMemory &outDeviceMemory) const;
         MXC_RESULT AllocateBindImageExport(VkMemoryPropertyFlags properties,
                                            VkImage image,
                                            VkExternalMemoryHandleTypeFlags externalHandleType,
-                                           VkDeviceMemory& outDeviceMemory) const;
+                                           VkDeviceMemory &outDeviceMemory) const;
         MXC_RESULT AllocateBindImage(VkMemoryPropertyFlags properties,
                                      VkImage image,
-                                     VkDeviceMemory& outDeviceMemory) const;
-        MXC_RESULT CreateStagingBuffer(const void* srcData,
+                                     VkDeviceMemory &outDeviceMemory) const;
+        MXC_RESULT CreateStagingBuffer(const void *srcData,
                                        VkDeviceSize bufferSize,
-                                       VkBuffer& outStagingBuffer,
-                                       VkDeviceMemory& outStagingBufferMemory) const;
+                                       VkBuffer &outStagingBuffer,
+                                       VkDeviceMemory &outStagingBufferMemory) const;
         MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
                                             VkMemoryPropertyFlags properties,
                                             VkDeviceSize bufferSize,
-                                            VkBuffer& outBuffer,
-                                            VkDeviceMemory& outDeviceMemory) const;
+                                            VkBuffer &outBuffer,
+                                            VkDeviceMemory &outDeviceMemory) const;
         MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
                                             VkMemoryPropertyFlags properties,
                                             VkDeviceSize bufferSize,
                                             Vulkan::Locality locality,
-                                            VkBuffer& outBuffer,
-                                            VkDeviceMemory& outDeviceMemory,
-                                            HANDLE& outExternalMemory) const;
-        MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(const void* srcData,
+                                            VkBuffer &outBuffer,
+                                            VkDeviceMemory &outDeviceMemory,
+                                            HANDLE &outExternalMemory) const;
+        MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(const void *srcData,
                                                               VkBufferUsageFlagBits usage,
                                                               VkDeviceSize bufferSize,
-                                                              VkBuffer& outBuffer,
-                                                              VkDeviceMemory& outBufferMemory) const;
+                                                              VkBuffer &outBuffer,
+                                                              VkDeviceMemory &outBufferMemory) const;
         MXC_RESULT CopyBufferToBuffer(VkDeviceSize bufferSize,
                                       VkBuffer srcBuffer,
                                       VkBuffer dstBuffer) const;
@@ -70,18 +68,18 @@ namespace Moxaic::Vulkan
                                                   VkPipelineStageFlags srcStageMask,
                                                   VkPipelineStageFlags dstStageMask,
                                                   VkImageAspectFlags aspectMask) const;
-        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer& outCommandBuffer) const;
-        MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffer) const;
+        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer &outCommandBuffer) const;
+        MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer &commandBuffer) const;
         MXC_RESULT BeginGraphicsCommandBuffer() const;
         MXC_RESULT EndGraphicsCommandBuffer() const;
-        void BeginRenderPass(const Framebuffer& framebuffer) const;
+        void BeginRenderPass(const Framebuffer &framebuffer,
+                             const VkClearColorValue &backgroundColor) const;
         void EndRenderPass() const;
-        MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
-                                                 const Swap& swap) const;
-        MXC_RESULT SubmitGraphicsQueue(Semaphore& timelineSemaphore) const;
+        MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore &timelineSemaphore,
+                                                 const Swap &swap) const;
+        MXC_RESULT SubmitGraphicsQueue(Semaphore &timelineSemaphore) const;
 
-        uint32_t GetQueue(const Queue queue) const
-        {
+        uint32_t GetQueue(const Queue queue) const {
             switch (queue) {
                 case Queue::None:
                     return 0;
@@ -91,7 +89,7 @@ namespace Moxaic::Vulkan
                     return m_ComputeQueueFamilyIndex;
                 case Queue::FamilyExternal:
                     return VK_QUEUE_FAMILY_EXTERNAL;
-                default: ;
+                default:;
             }
         }
 
@@ -157,4 +155,4 @@ namespace Moxaic::Vulkan
         bool CreatePools();
         bool CreateSamplers();
     };
-}
+}// namespace Moxaic::Vulkan

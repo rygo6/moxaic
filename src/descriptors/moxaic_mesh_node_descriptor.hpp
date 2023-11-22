@@ -108,8 +108,14 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
+        void Update(const GlobalDescriptor::Buffer& buffer)
+        {
+            m_Buffer = buffer;
+            Update();
+        }
+
     private:
-        GlobalDescriptor::Buffer m_Buffer{};
+        GlobalDescriptor::Buffer m_Buffer{}; // is there a case where I wouldn't want a local copy!?
         Uniform<GlobalDescriptor::Buffer> m_Uniform{k_Device};
     };
 }

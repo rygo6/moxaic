@@ -80,20 +80,20 @@ namespace Moxaic::Vulkan
         void Update(const Buffer& buffer)
         {
             m_Buffer = buffer;
-            m_Uniform.CopyBuffer(m_Buffer);
+            Update();
         }
 
         void UpdateView(const Camera& camera)
         {
             m_Buffer.view = camera.view();
             m_Buffer.invView = camera.inverseView();
-            m_Uniform.CopyBuffer(m_Buffer);
+            Update();
         }
 
         const auto& buffer() const { return m_Buffer; }
 
     private:
-        Buffer m_Buffer{};
+        Buffer m_Buffer{}; // is there a case where I wouldn't want a local copy!?
         Uniform<Buffer> m_Uniform{k_Device};
     };
 }

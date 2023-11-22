@@ -62,7 +62,10 @@ namespace Moxaic
         Vulkan::ObjectDescriptor m_ObjectDescriptor{k_Device};
 
         Vulkan::MeshNodePipeline m_MeshNodePipeline{k_Device};
-        Vulkan::MeshNodeDescriptor m_MeshNodeDescriptor{k_Device};
+        StaticArray<Vulkan::MeshNodeDescriptor, FramebufferCount> m_MeshNodeDescriptor{
+            Vulkan::MeshNodeDescriptor(k_Device),
+            Vulkan::MeshNodeDescriptor(k_Device)
+        };
 
         Camera m_MainCamera{};
 

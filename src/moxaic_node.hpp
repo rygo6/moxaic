@@ -28,9 +28,9 @@ namespace Moxaic
 
         MXC_RESULT ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore);
 
-        void UpdateGlobalDescriptor(const Vulkan::GlobalDescriptor& globalDescriptor)
+        auto& GlobalDescriptor()
         {
-            m_ExportedGlobalDescriptor.CopyBuffer(globalDescriptor.buffer());
+            return m_ExportedGlobalDescriptor;
         }
 
         auto& Semaphore()

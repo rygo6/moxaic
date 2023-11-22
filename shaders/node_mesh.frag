@@ -16,5 +16,5 @@ void main()
     const vec4 colorValue = texture(nodeColor, vertexInput.uv);
 //    if (vertexInput.color.a < .99)
 //        discard;
-    outFragColor = colorValue;
+    outFragColor = vec4(colorValue.rgb, 1);
 }
