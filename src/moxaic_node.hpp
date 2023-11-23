@@ -28,6 +28,8 @@ namespace Moxaic
 
         MXC_RESULT ExportOverIPC(Vulkan::Semaphore const& compositorSemaphore);
 
+        void SetZCondensedExportedGlobalDescriptorLocalBuffer(Camera const& camera);
+
         MXC_ACCESS(Transform);
         MXC_ACCESS(ExportedGlobalDescriptor);
         MXC_ACCESS(ExportedSemaphore);

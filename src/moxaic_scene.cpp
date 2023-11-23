@@ -64,16 +64,12 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
 {
     if (m_MainCamera.UserCommandUpdate(deltaTime)) {
         // should camera auto update descriptor somehow?
-        auto const localBuffer = m_GlobalDescriptor.LocalBuffer();
-        localBuffer->view = m_MainCamera.GetView();
-        localBuffer->invView = m_MainCamera.GetInverseView();
+        m_GlobalDescriptor.SetLocalBufferView(m_MainCamera);
         m_GlobalDescriptor.PushLocalBuffer();
     }
 
     k_pDevice->BeginGraphicsCommandBuffer();
 
-    // auto const nodeSemaphore = m_NodeReference.Semaphore();
-    // auto* const nodeSemaphore = m_NodeReference.Semaphore();
     auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
     if (nodeSemaphore->GetLocalWaitValue() != m_PriorNodeSemaphoreWaitValue) {
@@ -87,22 +83,7 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
         auto& lastUsedNodeDescriptorBuffer = m_NodeReference.ExportedGlobalDescriptor()->GetLocalBuffer();
         m_MeshNodeDescriptor[m_NodeFramebufferIndex].Update(lastUsedNodeDescriptorBuffer);
 
-        // Condense nearz/farz to draw radius of node
-        auto const viewPosition = m_MainCamera.GetView() * glm::vec4(m_NodeReference.Transform()->GetPosition(), 1);
-        float const viewDistanceToCenter = -viewPosition.z;
-        float const offset = m_NodeReference.GetDrawRadius() * 0.5f;
-        float const farZ = viewDistanceToCenter + offset;
-        float nearZ = viewDistanceToCenter - offset;
-        if (nearZ < m_MainCamera.GetNear()) {
-            nearZ = m_MainCamera.GetNear();
-        }
-        auto const localBuffer = m_NodeReference.ExportedGlobalDescriptor()->LocalBuffer();
-        *localBuffer = m_GlobalDescriptor.GetLocalBuffer();
-        localBuffer->proj = glm::perspective(m_MainCamera.GetFOV(),
-                                             m_MainCamera.GetAspect(),
-                                             nearZ,
-                                             farZ);
-        localBuffer->invProj = glm::inverse(localBuffer->proj);
+        m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
         m_NodeReference.ExportedGlobalDescriptor()->PushLocalBuffer();
     }
 

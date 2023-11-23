@@ -79,6 +79,12 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(buffer);
         }
 
+        void SetLocalBufferView(Camera const& camera)
+        {
+            m_LocalBuffer.view = camera.GetView();
+            m_LocalBuffer.invView = camera.GetInverseView();
+        }
+
         MXC_ACCESS(LocalBuffer);
         MXC_GETSET(LocalBuffer);
 

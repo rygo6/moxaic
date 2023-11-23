@@ -98,6 +98,27 @@ MXC_RESULT NodeReference::ExportOverIPC(Vulkan::Semaphore const& compositorSemap
     return MXC_SUCCESS;
 }
 
+void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(Camera const& camera)
+{
+    // Condense nearz/farz to draw radius of node
+    auto const viewPosition = camera.GetView() * glm::vec4(m_Transform.GetPosition(), 1);
+    float const viewDistanceToCenter = -viewPosition.z;
+    float const offset = m_DrawRadius * 0.5f;
+    float const farZ = viewDistanceToCenter + offset;
+    float nearZ = viewDistanceToCenter - offset;
+    if (nearZ < camera.GetNear()) {
+        nearZ = camera.GetNear();
+    }
+    auto* const localBuffer = m_ExportedGlobalDescriptor.LocalBuffer();
+    localBuffer->proj = glm::perspective(camera.GetFOV(),
+                                         camera.GetAspect(),
+                                         nearZ,
+                                         farZ);
+    localBuffer->invProj = glm::inverse(localBuffer->proj);
+    localBuffer->view = camera.GetView();
+    localBuffer->invView = camera.GetInverseView();
+}
+
 Node::Node(Vulkan::Device const& device)
     : k_pDevice(&device) {}
 
