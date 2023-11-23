@@ -60,7 +60,7 @@ NodeReference::~NodeReference()
 
 MXC_RESULT NodeReference::Init()
 {
-    MXC_CHK(m_ExportedNodeSemaphore.Init(false,
+    MXC_CHK(m_ExportedSemaphore.Init(false,
                                          Vulkan::Locality::External));
 
     m_IPCToNode.Init(k_TempSharedProducerName);
@@ -91,7 +91,7 @@ MXC_RESULT NodeReference::ExportOverIPC(Vulkan::Semaphore const& compositorSemap
       .depthFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].depthTexture().ClonedExternalHandle(hProcess),
       .depthFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].depthTexture().ClonedExternalHandle(hProcess),
       .compositorSemaphoreExternalHandle = compositorSemaphore.ClonedExternalHandle(hProcess),
-      .nodeSemaphoreExternalHandle = m_ExportedNodeSemaphore.ClonedExternalHandle(hProcess),
+      .nodeSemaphoreExternalHandle = m_ExportedSemaphore.ClonedExternalHandle(hProcess),
     };
     m_IPCToNode.Enque(InterProcessTargetFunc::ImportCompositor, &importParam);
 

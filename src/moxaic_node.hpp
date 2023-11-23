@@ -28,25 +28,18 @@ namespace Moxaic
 
         MXC_RESULT ExportOverIPC(Vulkan::Semaphore const& compositorSemaphore);
 
-        auto* GlobalDescriptor()
-        {
-            return &m_ExportedGlobalDescriptor;
-        }
+        MXC_ACCESS(Transform);
+        MXC_ACCESS(ExportedGlobalDescriptor);
+        MXC_ACCESS(ExportedSemaphore);
 
-        auto* Semaphore()
-        {
-            return &m_ExportedNodeSemaphore;
-        }
+        MXC_GET(DrawRadius);
 
-        auto const& Framebuffer(int const index) const
-        {
-            return m_ExportedFramebuffers[index];
-        }
+        MXC_GETARR(ExportedFramebuffers);
 
     private:
         Vulkan::Device const* const k_pDevice;
 
-        Transform m_Transform{};
+        Moxaic::Transform m_Transform{};
 
         std::string m_Name{"default"};
         float m_DrawRadius{1.0f};
@@ -59,7 +52,7 @@ namespace Moxaic
         InterProcessProducer m_IPCToNode{};
         InterProcessReceiver m_IPCFromNode{};
 
-        Vulkan::Semaphore m_ExportedNodeSemaphore{*k_pDevice};
+        Vulkan::Semaphore m_ExportedSemaphore{*k_pDevice};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
           Vulkan::Framebuffer(*k_pDevice),
@@ -96,10 +89,7 @@ namespace Moxaic
         MXC_RESULT Init();
         MXC_RESULT InitImport(ImportParam const& parameters);
 
-        auto const& globalDescriptor() const
-        {
-            return m_ImportedGlobalDescriptor;
-        }
+        MXC_ACCESS(ImportedGlobalDescriptor);
 
         auto const& framebuffer(int const index) const
         {

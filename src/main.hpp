@@ -6,19 +6,25 @@
 #define MXC_SUCCESS true
 #define MXC_FAIL false
 
-// delete copy constructors to disallow pass by value
 #define MXC_NO_VALUE_PASS(name) \
     name(const name&) = delete; \
     name& operator=(const name&) = delete;
 
-// do I like this? Maybe?
 #define MXC_GET(field) \
     auto const& Get##field() const { return m_##field; }
+
 #define MXC_SET(field) \
     void Set##field(auto const& field) { m_##field = field; }
+
 #define MXC_GETSET(field) \
     MXC_GET(field)        \
     MXC_SET(field)
+
+#define MXC_GETARR(field) \
+    auto const& field(int const i) const { return m_##field[i]; }
+
+#define MXC_ACCESS(field) \
+    auto* field() { return &m_##field; }
 
 namespace Moxaic
 {

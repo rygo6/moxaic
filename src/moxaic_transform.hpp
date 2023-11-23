@@ -44,18 +44,10 @@ namespace Moxaic
             m_Orientation = rotation * m_Orientation;
         }
 
-        auto const& position() const { return m_Position; }
-        void setPosition(glm::vec3 const& position)
-        {
-            m_Position = position;
-        }
-        auto const& orientation() const { return m_Orientation; }
-        void setOrientation(glm::quat const& orientation)
-        {
-            m_Orientation = orientation;
-        }
+        MXC_GETSET(Position);
+        MXC_GETSET(Orientation);
 
-        auto modelMatrix() const
+        auto ModelMatrix() const
         {
             glm::mat4 const rot = glm::toMat4(m_Orientation);
             glm::mat4 const pos = glm::translate(glm::identity<glm::mat4>(), m_Position);

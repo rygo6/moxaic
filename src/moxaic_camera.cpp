@@ -55,7 +55,7 @@ bool Camera::UserCommandUpdate(uint32_t const deltaTime)
 
 void Camera::UpdateView()
 {
-    m_InverseView = m_Transform.modelMatrix();
+    m_InverseView = m_Transform.ModelMatrix();
     m_View = glm::inverse(m_InverseView);
 }
 

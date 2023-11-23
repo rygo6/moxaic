@@ -27,22 +27,22 @@ namespace Moxaic::Vulkan
         MXC_RESULT InitFromImport(bool const& readOnly,
                                   HANDLE const& externalHandle);
 
-        MXC_RESULT SyncWaitValue();
+        MXC_RESULT SyncLocalWaitValue();
 
         MXC_RESULT Wait() const;
 
         HANDLE ClonedExternalHandle(HANDLE const& hTargetProcessHandle) const;
 
-        void IncrementWaitValue() { m_WaitValue++; }
-        void IncrementWaitValue(uint64_t const step) { m_WaitValue += step; }
+        void IncrementWaitValue() { m_LocalWaitValue++; }
+        void IncrementWaitValue(uint64_t const step) { m_LocalWaitValue += step; }
 
         MXC_GET(VkSemaphore);
-        MXC_GET(WaitValue)
+        MXC_GET(LocalWaitValue)
 
     private:
         Device const* const k_pDevice;;
 
-        uint64_t m_WaitValue{0};
+        uint64_t m_LocalWaitValue{0};
         VkSemaphore m_VkSemaphore{VK_NULL_HANDLE};
 
 #ifdef WIN32

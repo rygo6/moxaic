@@ -78,7 +78,7 @@ MXC_RESULT Semaphore::Wait() const
       .flags = 0,
       .semaphoreCount = 1,
       .pSemaphores = &m_VkSemaphore,
-      .pValues = &m_WaitValue,
+      .pValues = &m_LocalWaitValue,
     };
     VK_CHK(vkWaitSemaphores(k_pDevice->GetVkDevice(),
                             &waitInfo,
@@ -118,8 +118,8 @@ MXC_RESULT Semaphore::InitFromImport(bool const& readOnly, const HANDLE& externa
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Semaphore::SyncWaitValue()
+MXC_RESULT Semaphore::SyncLocalWaitValue()
 {
-    VK_CHK(vkGetSemaphoreCounterValue(k_pDevice->GetVkDevice(), m_VkSemaphore, &m_WaitValue));
+    VK_CHK(vkGetSemaphoreCounterValue(k_pDevice->GetVkDevice(), m_VkSemaphore, &m_LocalWaitValue));
     return MXC_SUCCESS;
 }

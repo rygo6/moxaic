@@ -12,19 +12,20 @@ MXC_RESULT CompositorScene::Init()
                                        Vulkan::Locality::Local));
     }
 
-    m_MainCamera.transform().setPosition({0, 0, -2});
-    m_MainCamera.transform().Rotate(0, 180, 0);
+    m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
+    m_MainCamera.Transform()->Rotate(0, 180, 0);
     m_MainCamera.SetAspect(Window::extents().width / Window::extents().height);
     m_MainCamera.UpdateView();
     m_MainCamera.UpdateProjection();
 
-    m_SphereTestTransform.setPosition({1, 0, 0});
+    m_SphereTestTransform.SetPosition(glm::vec3(1, 0, 0));
     MXC_CHK2(m_SphereTestTexture.InitFromFile("textures/test.jpg",
                                               Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
+                                    Window::extents()));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(m_ObjectDescriptor.Init(m_SphereTestTransform));
     MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
@@ -41,8 +42,8 @@ MXC_RESULT CompositorScene::Init()
 
     for (int i = 0; i < m_MeshNodeDescriptor.size(); ++i) {
         MXC_CHK(m_MeshNodeDescriptor[i].Init(
-          m_GlobalDescriptor.buffer(),
-          m_NodeReference.Framebuffer(i)));
+          m_GlobalDescriptor.GetLocalBuffer(),
+          m_NodeReference.ExportedFramebuffers(i)));
     }
     MXC_CHK(m_MeshNodePipeline.Init(m_GlobalDescriptor,
                                     m_MeshNodeDescriptor[0]));
@@ -53,7 +54,8 @@ MXC_RESULT CompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    m_NodeReference.GlobalDescriptor()->CopyBuffer(m_GlobalDescriptor.buffer());
+    m_NodeReference.ExportedGlobalDescriptor()->SetLocalBuffer(m_GlobalDescriptor.GetLocalBuffer());
+    m_NodeReference.ExportedGlobalDescriptor()->PushLocalBuffer();
 
     return MXC_SUCCESS;
 }
@@ -62,30 +64,51 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
 {
     if (m_MainCamera.UserCommandUpdate(deltaTime)) {
         // should camera auto update descriptor somehow?
-        m_GlobalDescriptor.UpdateView(m_MainCamera);
+        auto const localBuffer = m_GlobalDescriptor.LocalBuffer();
+        localBuffer->view = m_MainCamera.GetView();
+        localBuffer->invView = m_MainCamera.GetInverseView();
+        m_GlobalDescriptor.PushLocalBuffer();
     }
 
     k_pDevice->BeginGraphicsCommandBuffer();
 
     // auto const nodeSemaphore = m_NodeReference.Semaphore();
     // auto* const nodeSemaphore = m_NodeReference.Semaphore();
-    auto* const nodeSemaphore = m_NodeReference.Semaphore();
-    nodeSemaphore->SyncWaitValue();
-    if (nodeSemaphore->GetWaitValue() != m_PriorNodeSemaphoreWaitValue) {
-        m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetWaitValue();
+    auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
+    nodeSemaphore->SyncLocalWaitValue();
+    if (nodeSemaphore->GetLocalWaitValue() != m_PriorNodeSemaphoreWaitValue) {
+        m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetLocalWaitValue();
         m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
 
-        auto const& nodeFramebuffer = m_NodeReference.Framebuffer(m_NodeFramebufferIndex);
+        auto const& nodeFramebuffer = m_NodeReference.ExportedFramebuffers(m_NodeFramebufferIndex);
         nodeFramebuffer.Transition(Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
-        m_MeshNodeDescriptor[m_NodeFramebufferIndex].Update(m_GlobalDescriptor.buffer());
-        m_NodeReference.GlobalDescriptor()->CopyBuffer(m_GlobalDescriptor.buffer());
+        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.ExportedGlobalDescriptor()->GetLocalBuffer();
+        m_MeshNodeDescriptor[m_NodeFramebufferIndex].Update(lastUsedNodeDescriptorBuffer);
+
+        // Condense nearz/farz to draw radius of node
+        auto const viewPosition = m_MainCamera.GetView() * glm::vec4(m_NodeReference.Transform()->GetPosition(), 1);
+        float const viewDistanceToCenter = -viewPosition.z;
+        float const offset = m_NodeReference.GetDrawRadius() * 0.5f;
+        float const farZ = viewDistanceToCenter + offset;
+        float nearZ = viewDistanceToCenter - offset;
+        if (nearZ < m_MainCamera.GetNear()) {
+            nearZ = m_MainCamera.GetNear();
+        }
+        auto const localBuffer = m_NodeReference.ExportedGlobalDescriptor()->LocalBuffer();
+        *localBuffer = m_GlobalDescriptor.GetLocalBuffer();
+        localBuffer->proj = glm::perspective(m_MainCamera.GetFOV(),
+                                             m_MainCamera.GetAspect(),
+                                             nearZ,
+                                             farZ);
+        localBuffer->invProj = glm::inverse(localBuffer->proj);
+        m_NodeReference.ExportedGlobalDescriptor()->PushLocalBuffer();
     }
 
     auto const& framebuffer = m_Framebuffers[m_FramebufferIndex];
     k_pDevice->BeginRenderPass(framebuffer,
-                             (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
+                               (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
     m_StandardPipeline.BindPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
@@ -124,7 +147,7 @@ MXC_RESULT NodeScene::Init()
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
                                     Window::extents()));
 
-    m_SpherTestTransform.setPosition({0, 0, 0});
+    m_SpherTestTransform.SetPosition(glm::vec3(0, 0, 0));
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
@@ -145,15 +168,17 @@ MXC_RESULT NodeScene::Init()
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    MXC_CHK(m_Node.CompositorSemaphore().SyncWaitValue());
-    MXC_CHK(m_Node.NodeSemaphore().SyncWaitValue());
+    MXC_CHK(m_Node.CompositorSemaphore().SyncLocalWaitValue());
+    MXC_CHK(m_Node.NodeSemaphore().SyncLocalWaitValue());
 
     return MXC_SUCCESS;
 }
 
+int temp = 0;
+
 MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
 {
-    m_GlobalDescriptor.Update(m_Node.globalDescriptor().buffer());
+    m_GlobalDescriptor.PushBuffer(m_Node.ImportedGlobalDescriptor()->GetSharedBuffer());
 
     k_pDevice->BeginGraphicsCommandBuffer();
 
@@ -161,7 +186,7 @@ MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
     framebuffer.Transition(Vulkan::AcquireFromExternal, Vulkan::ToGraphicsAttach);
 
     k_pDevice->BeginRenderPass(framebuffer,
-                             (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
+                               (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
 
     m_StandardPipeline.BindPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
@@ -188,6 +213,11 @@ MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
     m_Node.CompositorSemaphore().Wait();
 
     m_FramebufferIndex = !m_FramebufferIndex;
+
+    // temp++;
+    // if (temp == 10) {
+    //     _exit(1);
+    // }
 
     return MXC_SUCCESS;
 }

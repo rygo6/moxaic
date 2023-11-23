@@ -10,7 +10,7 @@ constexpr StaticArray k_InterProcessTargetParamSize{
 void InterProcessProducer::Enque(InterProcessTargetFunc const target,
                                  void const* param) const
 {
-    auto const pBuffer = static_cast<RingBuffer*>(m_pBuffer);
+    auto const pBuffer = static_cast<RingBuffer*>(m_pSharedBuffer);
     pBuffer->pRingBuffer[pBuffer->head] = target;
     memcpy(pBuffer->pRingBuffer + pBuffer->head + RingBuffer::HeaderSize, param, k_InterProcessTargetParamSize[target]);
     pBuffer->head = pBuffer->head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
@@ -27,7 +27,7 @@ int InterProcessReceiver::Deque() const
 {
     // TODO this needs to actually cycle around the ring buffer, this is only half done
 
-    auto const pBuffer = static_cast<RingBuffer*>(m_pBuffer);
+    auto const pBuffer = static_cast<RingBuffer*>(m_pSharedBuffer);
 
     if (pBuffer->head == pBuffer->tail)
         return 0;

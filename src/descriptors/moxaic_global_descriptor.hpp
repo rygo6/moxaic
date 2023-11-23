@@ -48,13 +48,13 @@ namespace Moxaic::Vulkan
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Buffer.width = dimensions.width;
-            m_Buffer.height = dimensions.height;
-            m_Buffer.proj = camera.projection();
-            m_Buffer.invProj = camera.inverseProjection();
-            m_Buffer.view = camera.view();
-            m_Buffer.invView = camera.inverseView();
-            Update();
+            m_LocalBuffer.width = dimensions.width;
+            m_LocalBuffer.height = dimensions.height;
+            m_LocalBuffer.proj = camera.GetProjection();
+            m_LocalBuffer.invProj = camera.GetInverseProjection();
+            m_LocalBuffer.view = camera.GetView();
+            m_LocalBuffer.invView = camera.GetInverseView();
+            PushLocalBuffer();
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
@@ -69,28 +69,21 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void Update()
+        void PushLocalBuffer()
         {
-            m_Uniform.CopyBuffer(m_Buffer);
+            m_Uniform.CopyBuffer(m_LocalBuffer);
         }
 
-        void Update(Buffer const& buffer)
+        void PushBuffer(Buffer const& buffer)
         {
-            m_Buffer = buffer;
-            Update();
+            m_Uniform.CopyBuffer(buffer);
         }
 
-        void UpdateView(Camera const& camera)
-        {
-            m_Buffer.view = camera.view();
-            m_Buffer.invView = camera.inverseView();
-            Update();
-        }
-
-        auto const& buffer() const { return m_Buffer; }
+        MXC_ACCESS(LocalBuffer);
+        MXC_GETSET(LocalBuffer);
 
     private:
-        Buffer m_Buffer{};// is there a case where I wouldn't want a local copy!?
+        Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
         Uniform<Buffer> m_Uniform{*k_pDevice};
     };
 }// namespace Moxaic::Vulkan

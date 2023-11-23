@@ -22,7 +22,7 @@ namespace Moxaic
 
         virtual ~InterProcessBuffer()
         {
-            UnmapViewOfFile(m_pBuffer);
+            UnmapViewOfFile(m_pSharedBuffer);
             CloseHandle(m_hMapFile);
         };
 
@@ -45,15 +45,15 @@ namespace Moxaic
                 return MXC_FAIL;
             }
 
-            m_pBuffer = MapViewOfFile(m_hMapFile,
-                                      FILE_MAP_ALL_ACCESS,
-                                      0,
-                                      0,
-                                      Size());
-            memset(m_pBuffer, 0, Size());
-            if (m_pBuffer == nullptr) {
+            m_pSharedBuffer = MapViewOfFile(m_hMapFile,
+                                            FILE_MAP_ALL_ACCESS,
+                                            0,
+                                            0,
+                                            Size());
+            memset(m_pSharedBuffer, 0, Size());
+            if (m_pSharedBuffer == nullptr) {
                 MXC_LOG_ERROR("Could not map view of file.", GetLastError());
-                CloseHandle(m_pBuffer);
+                CloseHandle(m_pSharedBuffer);
                 return MXC_FAIL;
             }
 
@@ -66,18 +66,28 @@ namespace Moxaic
             return Init(sharedMemoryName);
         }
 
-        void CopyBuffer(T const& srcBuffer)
+        void SyncLocalBuffer()
         {
-            memcpy(m_pBuffer, &srcBuffer, Size());
+            memcpy(&m_LocalBuffer, m_pSharedBuffer, Size());
         }
+
+        void PushLocalBuffer()
+        {
+            memcpy(m_pSharedBuffer, &m_LocalBuffer, Size());
+        }
+
+        MXC_ACCESS(LocalBuffer);
+        MXC_GETSET(LocalBuffer);
+
+        T const& GetSharedBuffer() const { return *static_cast<T*>(m_pSharedBuffer); }
 
         static constexpr int Size() { return sizeof(T); }
 
-        T const& buffer() const { return *static_cast<T*>(m_pBuffer); }
-
     protected:
+        T m_LocalBuffer;
+
 #ifdef WIN32
-        LPVOID m_pBuffer{nullptr};
+        LPVOID m_pSharedBuffer{nullptr};
         HANDLE m_hMapFile{nullptr};
 #endif
     };

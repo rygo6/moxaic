@@ -74,7 +74,7 @@ namespace Moxaic
         // should node be here? maybe outside scene?
         NodeReference m_NodeReference{*k_pDevice};
         uint64_t m_PriorNodeSemaphoreWaitValue{0};
-        uint64_t m_NodeFramebufferIndex{0};
+        uint64_t m_NodeFramebufferIndex{1}; // yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
     };
 
     class NodeScene : public SceneBase

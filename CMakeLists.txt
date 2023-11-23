@@ -54,7 +54,9 @@ target_link_libraries(${TARGET_NAME}
         vulkan-1
 )
 
-target_compile_definitions(${TARGET_NAME} PRIVATE -DSDL_ASSERT_LEVEL=3)
+target_compile_definitions(${TARGET_NAME} PRIVATE
+        -DSDL_ASSERT_LEVEL=3
+        -DGLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 #target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)
 
@@ -66,7 +68,7 @@ file(GLOB SHADER_SOURCE_FILES
         shaders/*.task
         shaders/*.comp
 )
-foreach(SHADER IN LISTS SHADER_SOURCE_FILES)
+foreach (SHADER IN LISTS SHADER_SOURCE_FILES)
     get_filename_component(SHADER_NAME ${SHADER} NAME)
     set(SHADER_OUTPUT "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv")
     add_custom_command(
@@ -76,6 +78,6 @@ foreach(SHADER IN LISTS SHADER_SOURCE_FILES)
             COMMENT "Compiling ${SHADER_NAME}"
     )
     list(APPEND SHADER_OUTPUT_FILES ${SHADER_OUTPUT})
-endforeach()
+endforeach ()
 add_custom_target(CompileShaders ALL DEPENDS ${SHADER_OUTPUT_FILES})
 add_dependencies(${TARGET_NAME} CompileShaders)

@@ -40,7 +40,7 @@ namespace Moxaic::Vulkan
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Uniform.mapped().model = transform.modelMatrix();
+            m_Uniform.mapped().model = transform.ModelMatrix();
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{

@@ -1049,9 +1049,9 @@ void Device::EndRenderPass() const
 MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    uint64_t const waitValue = pTimelineSemaphore->GetWaitValue();
+    uint64_t const waitValue = pTimelineSemaphore->GetLocalWaitValue();
     pTimelineSemaphore->IncrementWaitValue();
-    uint64_t const signalValue = pTimelineSemaphore->GetWaitValue();
+    uint64_t const signalValue = pTimelineSemaphore->GetLocalWaitValue();
     StaticArray const waitSemaphoreValues{
       waitValue,
     };
@@ -1096,9 +1096,9 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
                                                  Swap const& swap) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    uint64_t const waitValue = timelineSemaphore.GetWaitValue();
+    uint64_t const waitValue = timelineSemaphore.GetLocalWaitValue();
     timelineSemaphore.IncrementWaitValue();
-    uint64_t const signalValue = timelineSemaphore.GetWaitValue();
+    uint64_t const signalValue = timelineSemaphore.GetLocalWaitValue();
     StaticArray const waitSemaphoreValues{
       (uint64_t) waitValue,
       (uint64_t) 0};
