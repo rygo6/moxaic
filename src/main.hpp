@@ -13,9 +13,9 @@
 
 // do I like this? Maybe?
 #define MXC_GET(field) \
-    const auto& field() const { return m_##field; }
+    auto const& Get##field() const { return m_##field; }
 #define MXC_SET(field) \
-    auto set##field(const auto& field) { m_##field = field; }
+    void Set##field(auto const& field) { m_##field = field; }
 #define MXC_GETSET(field) \
     MXC_GET(field)        \
     MXC_SET(field)

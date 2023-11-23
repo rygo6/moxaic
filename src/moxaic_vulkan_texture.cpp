@@ -22,9 +22,9 @@ Texture::Texture(const Device& device)
 
 Texture::~Texture()
 {
-    vkDestroyImageView(k_Device.vkDevice(), m_VkImageView, VK_ALLOC);
-    vkFreeMemory(k_Device.vkDevice(), m_VkDeviceMemory, VK_ALLOC);
-    vkDestroyImage(k_Device.vkDevice(), m_VkImage, VK_ALLOC);
+    vkDestroyImageView(k_Device.GetVkDevice(), m_VkImageView, VK_ALLOC);
+    vkFreeMemory(k_Device.GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
+    vkDestroyImage(k_Device.GetVkDevice(), m_VkImage, VK_ALLOC);
     if (m_ExternalHandle != nullptr)
         CloseHandle(m_ExternalHandle);
 }
@@ -77,10 +77,10 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
                                m_VkImage);
     MXC_CHK(TransitionImmediateTransferDstToGraphicsRead());
 
-    vkDestroyBuffer(k_Device.vkDevice(),
+    vkDestroyBuffer(k_Device.GetVkDevice(),
                     stagingBuffer,
                     VK_ALLOC);
-    vkFreeMemory(k_Device.vkDevice(),
+    vkFreeMemory(k_Device.GetVkDevice(),
                  stagingBufferMemory,
                  VK_ALLOC);
 
@@ -149,7 +149,7 @@ MXC_RESULT Texture::Init(const VkFormat& format,
           .pNext = nullptr,
           .memory = m_VkDeviceMemory,
           .handleType = MXC_EXTERNAL_HANDLE_TYPE};
-        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.vkDevice(),
+        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.GetVkDevice(),
                                               &getWin32HandleInfo,
                                               &m_ExternalHandle));
 #endif
@@ -231,7 +231,7 @@ MXC_RESULT Texture::InitImageView(const VkFormat& format,
         .baseArrayLayer = 0,
         .layerCount = 1,
       }};
-    VK_CHK(vkCreateImageView(k_Device.vkDevice(),
+    VK_CHK(vkCreateImageView(k_Device.GetVkDevice(),
                              &imageViewCreateInfo,
                              VK_ALLOC,
                              &m_VkImageView));
@@ -264,7 +264,7 @@ MXC_RESULT Texture::InitImage(const VkFormat& format,
       .pQueueFamilyIndices = nullptr,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VK_CHK(vkCreateImage(k_Device.vkDevice(),
+    VK_CHK(vkCreateImage(k_Device.GetVkDevice(),
                          &imageCreateInfo,
                          VK_ALLOC,
                          &m_VkImage));

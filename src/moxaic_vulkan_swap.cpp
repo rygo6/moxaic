@@ -9,7 +9,7 @@
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice,
+static MXC_RESULT ChooseSwapPresentMode(VkPhysicalDevice const physicalDevice,
                                         VkPresentModeKHR* pPresentMode)
 {
     uint32_t presentModeCount;
@@ -60,7 +60,7 @@ static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
+MXC_RESULT ChooseSwapSurfaceFormat(VkPhysicalDevice const physicalDevice,
                                    bool computeStorage,
                                    VkSurfaceFormatKHR* pSurfaceFormat)
 {
@@ -94,24 +94,24 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
     return MXC_SUCCESS;
 }
 
-Swap::Swap(const Vulkan::Device& device)
-    : k_Device(device) {}
+Swap::Swap(Vulkan::Device const& device)
+    : k_Device(&device) {}
 
 Swap::~Swap()
 {
-    vkDestroySemaphore(k_Device.vkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
-    vkDestroySemaphore(k_Device.vkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_Device->GetVkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_Device->GetVkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
     for (int i = 0; i < SwapCount; ++i) {
-        vkDestroyImageView(k_Device.vkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
-        vkDestroyImage(k_Device.vkDevice(), m_VkSwapImages[i], VK_ALLOC);
+        vkDestroyImageView(k_Device->GetVkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
+        vkDestroyImage(k_Device->GetVkDevice(), m_VkSwapImages[i], VK_ALLOC);
     }
 }
 
-MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
+MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
-    VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(k_Device.vkPhysicalDevice(),
+    VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(k_Device->GetVkPhysicalDevice(),
                                                      Vulkan::vkSurface(),
                                                      &capabilities));
 
@@ -122,10 +122,10 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
     }
 
     VkPresentModeKHR presentMode;
-    MXC_CHK(ChooseSwapPresentMode(k_Device.vkPhysicalDevice(),
+    MXC_CHK(ChooseSwapPresentMode(k_Device->GetVkPhysicalDevice(),
                                   &presentMode));
     VkSurfaceFormatKHR surfaceFormat;
-    MXC_CHK(ChooseSwapSurfaceFormat(k_Device.vkPhysicalDevice(),
+    MXC_CHK(ChooseSwapSurfaceFormat(k_Device->GetVkPhysicalDevice(),
                                     computeStorage,
                                     &surfaceFormat));
 
@@ -180,13 +180,13 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
         return MXC_FAIL;
     }
 
-    VK_CHK(vkCreateSwapchainKHR(k_Device.vkDevice(),
+    VK_CHK(vkCreateSwapchainKHR(k_Device->GetVkDevice(),
                                 &createInfo,
                                 VK_ALLOC,
                                 &m_VkSwapchain));
 
     uint32_t swapCount;
-    VK_CHK(vkGetSwapchainImagesKHR(k_Device.vkDevice(),
+    VK_CHK(vkGetSwapchainImagesKHR(k_Device->GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    nullptr));
@@ -194,22 +194,22 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
         MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_VkSwapImages.size());
         return MXC_FAIL;
     }
-    VK_CHK(vkGetSwapchainImagesKHR(k_Device.vkDevice(),
+    VK_CHK(vkGetSwapchainImagesKHR(k_Device->GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    m_VkSwapImages.data()));
 
     for (int i = 0; i < m_VkSwapImages.size(); ++i) {
-        k_Device.TransitionImageLayoutImmediate(m_VkSwapImages[i],
-                                                VK_IMAGE_LAYOUT_UNDEFINED,
-                                                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                                VK_ACCESS_NONE,
-                                                VK_ACCESS_NONE,
-                                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                                VK_IMAGE_ASPECT_COLOR_BIT);
+        k_Device->TransitionImageLayoutImmediate(m_VkSwapImages[i],
+                                                 VK_IMAGE_LAYOUT_UNDEFINED,
+                                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                                 VK_ACCESS_NONE,
+                                                 VK_ACCESS_NONE,
+                                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                                 VK_IMAGE_ASPECT_COLOR_BIT);
         auto swapImage = m_VkSwapImages[i];
-        const VkImageViewCreateInfo viewInfo{
+        VkImageViewCreateInfo const viewInfo{
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
           .image = swapImage,
           .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -228,22 +228,22 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
             .layerCount = 1,
           }};
         auto swapImageView = m_VkSwapImageViews[i];
-        VK_CHK(vkCreateImageView(k_Device.vkDevice(),
+        VK_CHK(vkCreateImageView(k_Device->GetVkDevice(),
                                  &viewInfo,
                                  VK_ALLOC,
                                  &swapImageView));
     }
 
-    const VkSemaphoreCreateInfo swapchainSemaphoreCreateInfo = {
+    VkSemaphoreCreateInfo const swapchainSemaphoreCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_Device.vkDevice(),
+    VK_CHK(vkCreateSemaphore(k_Device->GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkAcquireCompleteSemaphore));
-    VK_CHK(vkCreateSemaphore(k_Device.vkDevice(),
+    VK_CHK(vkCreateSemaphore(k_Device->GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkRenderCompleteSemaphore));
@@ -263,7 +263,7 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
 
 MXC_RESULT Swap::Acquire()
 {
-    VK_CHK(vkAcquireNextImageKHR(k_Device.vkDevice(),
+    VK_CHK(vkAcquireNextImageKHR(k_Device->GetVkDevice(),
                                  m_VkSwapchain,
                                  UINT64_MAX,
                                  m_VkAcquireCompleteSemaphore,
@@ -272,17 +272,17 @@ MXC_RESULT Swap::Acquire()
     return MXC_SUCCESS;
 }
 
-void Swap::BlitToSwap(const Texture& srcTexture) const
+void Swap::BlitToSwap(Texture const& srcTexture) const
 {
-    const StaticArray transitionBlitBarrier{
+    StaticArray const transitionBlitBarrier{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = 0,
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.vkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -292,13 +292,13 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
-    vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
+    vkCmdPipelineBarrier(k_Device->GetVkGraphicsCommandBuffer(),
                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          0,
@@ -314,7 +314,7 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
       .baseArrayLayer = 0,
       .layerCount = 1,
     };
-    const VkOffset3D offsets[2]{
+    VkOffset3D const offsets[2]{
       (VkOffset3D){
         .x = 0,
         .y = 0,
@@ -333,7 +333,7 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
     imageBlit.dstSubresource = imageSubresourceLayers;
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
-    vkCmdBlitImage(k_Device.vkGraphicsCommandBuffer(),
+    vkCmdBlitImage(k_Device->GetVkGraphicsCommandBuffer(),
                    srcTexture.vkImage(),
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    m_VkSwapImages[m_LastAcquiredSwapIndex],
@@ -341,15 +341,15 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
                    1,
                    &imageBlit,
                    VK_FILTER_NEAREST);
-    const StaticArray transitionPresentBarrier{
+    StaticArray const transitionPresentBarrier{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = 0,
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.vkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -359,13 +359,13 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device.GraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
-    vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
+    vkCmdPipelineBarrier(k_Device->GetVkGraphicsCommandBuffer(),
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                          0,
@@ -380,7 +380,7 @@ void Swap::BlitToSwap(const Texture& srcTexture) const
 MXC_RESULT Swap::QueuePresent() const
 {
     // TODO want to use this?? https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_present_id.html
-    const VkPresentInfoKHR presentInfo{
+    VkPresentInfoKHR const presentInfo{
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
       .pWaitSemaphores = &m_VkRenderCompleteSemaphore,
@@ -388,7 +388,7 @@ MXC_RESULT Swap::QueuePresent() const
       .pSwapchains = &m_VkSwapchain,
       .pImageIndices = &m_LastAcquiredSwapIndex,
     };
-    VK_CHK(vkQueuePresentKHR(k_Device.vkGraphicsQueue(),
+    VK_CHK(vkQueuePresentKHR(k_Device->GetVkGraphicsQueue(),
                              &presentInfo));
     return MXC_SUCCESS;
 }

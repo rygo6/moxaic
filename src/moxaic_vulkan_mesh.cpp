@@ -78,10 +78,10 @@ Mesh::Mesh(const Device& device)
 
 Mesh::~Mesh()
 {
-    vkDestroyBuffer(k_Device.vkDevice(), m_VkIndexBuffer, VK_ALLOC);
-    vkFreeMemory(k_Device.vkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
-    vkDestroyBuffer(k_Device.vkDevice(), m_VkVertexBuffer, VK_ALLOC);
-    vkFreeMemory(k_Device.vkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(k_Device.GetVkDevice(), m_VkIndexBuffer, VK_ALLOC);
+    vkFreeMemory(k_Device.GetVkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(k_Device.GetVkDevice(), m_VkVertexBuffer, VK_ALLOC);
+    vkFreeMemory(k_Device.GetVkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
 }
 
 MXC_RESULT Mesh::InitSphere()
@@ -128,16 +128,16 @@ void Mesh::RecordRender() const
 {
     const VkBuffer vertexBuffers[] = {m_VkVertexBuffer};
     constexpr VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(k_Device.vkGraphicsCommandBuffer(),
+    vkCmdBindVertexBuffers(k_Device.GetVkGraphicsCommandBuffer(),
                            0,
                            1,
                            vertexBuffers,
                            offsets);
-    vkCmdBindIndexBuffer(k_Device.vkGraphicsCommandBuffer(),
+    vkCmdBindIndexBuffer(k_Device.GetVkGraphicsCommandBuffer(),
                          m_VkIndexBuffer,
                          0,
                          VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed(k_Device.vkGraphicsCommandBuffer(),
+    vkCmdDrawIndexed(k_Device.GetVkGraphicsCommandBuffer(),
                      m_IndexCount,
                      1,
                      0,

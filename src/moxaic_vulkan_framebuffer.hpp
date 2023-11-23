@@ -16,34 +16,34 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Framebuffer);
 
-        explicit Framebuffer(const Device& device);
+        explicit Framebuffer(Device const& device);
         virtual ~Framebuffer();
 
-        MXC_RESULT Init(const VkExtent2D& extents,
-                        const Locality& locality);
+        MXC_RESULT Init(VkExtent2D const& extents,
+                        Locality const& locality);
 
-        MXC_RESULT InitFromImport(const VkExtent2D& extents,
+        MXC_RESULT InitFromImport(VkExtent2D const& extents,
                                   const HANDLE& colorExternalHandle,
                                   const HANDLE& normalExternalHandle,
                                   const HANDLE& gBufferExternalHandle,
                                   const HANDLE& depthExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
-        void Transition(const BarrierSrc& src,
-                        const BarrierDst& dst) const;
+        void Transition(BarrierSrc const& src,
+                        BarrierDst const& dst) const;
 
-        const auto& vkFramebuffer() const { return m_VkFramebuffer; }
-        const auto& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
+        auto const& vkFramebuffer() const { return m_VkFramebuffer; }
+        auto const& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
 
-        const auto& colorTexture() const { return m_ColorTexture; }
-        const auto& normalTexture() const { return m_NormalTexture; }
-        const auto& gBufferTexture() const { return m_GBufferTexture; }
-        const auto& depthTexture() const { return m_DepthTexture; }
+        auto const& colorTexture() const { return m_ColorTexture; }
+        auto const& normalTexture() const { return m_NormalTexture; }
+        auto const& gBufferTexture() const { return m_GBufferTexture; }
+        auto const& depthTexture() const { return m_DepthTexture; }
 
-        const auto& extents() const { return m_Extents; }
+        auto const& extents() const { return m_Extents; }
 
     private:
-        const Device& k_Device;
+        Device const& k_Device;
 
         VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};

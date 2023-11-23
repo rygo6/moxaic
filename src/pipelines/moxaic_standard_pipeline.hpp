@@ -59,14 +59,14 @@ namespace Moxaic::Vulkan
             MXC_CHK(CreateVertexInputOpaquePipe(stages.size(),
                                                 stages.data(),
                                                 nullptr));
-            vkDestroyShaderModule(k_Device.vkDevice(), vertShader, VK_ALLOC);
-            vkDestroyShaderModule(k_Device.vkDevice(), fragShader, VK_ALLOC);
+            vkDestroyShaderModule(k_Device.GetVkDevice(), vertShader, VK_ALLOC);
+            vkDestroyShaderModule(k_Device.GetVkDevice(), fragShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
 
         void BindDescriptor(const GlobalDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
+            vkCmdBindDescriptorSets(k_Device.GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
                                     0,
@@ -78,7 +78,7 @@ namespace Moxaic::Vulkan
 
         void BindDescriptor(const StandardMaterialDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
+            vkCmdBindDescriptorSets(k_Device.GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
                                     1,
@@ -90,7 +90,7 @@ namespace Moxaic::Vulkan
 
         void BindDescriptor(const ObjectDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_Device.vkGraphicsCommandBuffer(),
+            vkCmdBindDescriptorSets(k_Device.GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
                                     2,

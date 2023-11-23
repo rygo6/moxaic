@@ -25,8 +25,8 @@ namespace Moxaic::Vulkan
 
         virtual ~VulkanDescriptorBase()
         {
-            vkFreeDescriptorSets(k_Device.vkDevice(),
-                                 k_Device.vkDescriptorPool(),
+            vkFreeDescriptorSets(k_Device.GetVkDevice(),
+                                 k_Device.GetVkDescriptorPool(),
                                  1,
                                  &m_VkDescriptorSet);
         }
@@ -55,7 +55,7 @@ namespace Moxaic::Vulkan
               .bindingCount = bindings.size(),
               .pBindings = bindings.data(),
             };
-            VK_CHK(vkCreateDescriptorSetLayout(k_Device.vkDevice(),
+            VK_CHK(vkCreateDescriptorSetLayout(k_Device.GetVkDevice(),
                                                &layoutInfo,
                                                VK_ALLOC,
                                                &s_VkDescriptorSetLayout));
@@ -67,11 +67,11 @@ namespace Moxaic::Vulkan
             const VkDescriptorSetAllocateInfo allocInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
               .pNext = nullptr,
-              .descriptorPool = k_Device.vkDescriptorPool(),
+              .descriptorPool = k_Device.GetVkDescriptorPool(),
               .descriptorSetCount = 1,
               .pSetLayouts = &s_VkDescriptorSetLayout,
             };
-            VK_CHK(vkAllocateDescriptorSets(k_Device.vkDevice(),
+            VK_CHK(vkAllocateDescriptorSets(k_Device.GetVkDevice(),
                                             &allocInfo,
                                             &m_VkDescriptorSet));
             return MXC_SUCCESS;
@@ -88,7 +88,7 @@ namespace Moxaic::Vulkan
                                               ? 1
                                               : writes[i].descriptorCount;
             }
-            VK_CHK_VOID(vkUpdateDescriptorSets(k_Device.vkDevice(),
+            VK_CHK_VOID(vkUpdateDescriptorSets(k_Device.GetVkDevice(),
                                                writes.size(),
                                                writes.data(),
                                                0,

@@ -48,14 +48,14 @@ namespace Moxaic::Vulkan
 
         virtual ~VulkanPipeline()
         {
-            vkDestroyPipeline(k_Device.vkDevice(),
+            vkDestroyPipeline(k_Device.GetVkDevice(),
                               m_vkPipeline,
                               VK_ALLOC);
         }
 
         void BindPipeline() const
         {
-            vkCmdBindPipeline(k_Device.vkGraphicsCommandBuffer(),
+            vkCmdBindPipeline(k_Device.GetVkGraphicsCommandBuffer(),
                               VK_PIPELINE_BIND_POINT_GRAPHICS,
                               m_vkPipeline);
         }
@@ -83,7 +83,7 @@ namespace Moxaic::Vulkan
               .pushConstantRangeCount = 0,
               .pPushConstantRanges = nullptr,
             };
-            VK_CHK(vkCreatePipelineLayout(k_Device.vkDevice(),
+            VK_CHK(vkCreatePipelineLayout(k_Device.GetVkDevice(),
                                           &createInfo,
                                           VK_ALLOC,
                                           &s_vkPipelineLayout));
@@ -105,7 +105,7 @@ namespace Moxaic::Vulkan
               .codeSize = codeLength,
               .pCode = reinterpret_cast<const uint32_t*>(pShaderCode),
             };
-            VK_CHK(vkCreateShaderModule(k_Device.vkDevice(),
+            VK_CHK(vkCreateShaderModule(k_Device.GetVkDevice(),
                                         &createInfo,
                                         VK_ALLOC,
                                         &outShaderModule));
@@ -288,12 +288,12 @@ namespace Moxaic::Vulkan
               .pColorBlendState = &colorBlendState,
               .pDynamicState = &dynamicState,
               .layout = s_vkPipelineLayout,
-              .renderPass = k_Device.vkRenderPass(),
+              .renderPass = k_Device.GetVkRenderPass(),
               .subpass = 0,
               .basePipelineHandle = VK_NULL_HANDLE,
               .basePipelineIndex = 0,
             };
-            VK_CHK(vkCreateGraphicsPipelines(k_Device.vkDevice(),
+            VK_CHK(vkCreateGraphicsPipelines(k_Device.GetVkDevice(),
                                              VK_NULL_HANDLE,
                                              1,
                                              &pipelineInfo,

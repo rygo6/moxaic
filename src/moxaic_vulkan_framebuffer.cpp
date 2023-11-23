@@ -108,14 +108,14 @@ MXC_RESULT Framebuffer::InitFramebuffer()
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .renderPass = k_Device.vkRenderPass(),
+      .renderPass = k_Device.GetVkRenderPass(),
       .attachmentCount = attachments.size(),
       .pAttachments = attachments.data(),
       .width = m_Extents.width,
       .height = m_Extents.height,
       .layers = 1,
     };
-    VK_CHK(vkCreateFramebuffer(k_Device.vkDevice(),
+    VK_CHK(vkCreateFramebuffer(k_Device.GetVkDevice(),
                                &framebufferCreateInfo,
                                VK_ALLOC,
                                &m_VkFramebuffer));
@@ -129,7 +129,7 @@ MXC_RESULT Framebuffer::InitSemaphore()
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_Device.vkDevice(),
+    VK_CHK(vkCreateSemaphore(k_Device.GetVkDevice(),
                              &renderCompleteCreateInfo,
                              VK_ALLOC,
                              &m_VkRenderCompleteSemaphore));
@@ -172,7 +172,7 @@ void Framebuffer::Transition(const BarrierSrc& src, const BarrierDst& dst) const
         .image = m_GBufferTexture.vkImage(),
         .subresourceRange = DefaultColorSubresourceRange,
       }};
-    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
+    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.GetVkGraphicsCommandBuffer(),
                                      src.colorStageMask,
                                      dst.colorStageMask,
                                      0,
@@ -194,7 +194,7 @@ void Framebuffer::Transition(const BarrierSrc& src, const BarrierDst& dst) const
         .image = m_DepthTexture.vkImage(),
         .subresourceRange = DefaultDepthSubresourceRange,
       }};
-    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.vkGraphicsCommandBuffer(),
+    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.GetVkGraphicsCommandBuffer(),
                                      src.depthStageMask,
                                      dst.depthStageMask,
                                      0,

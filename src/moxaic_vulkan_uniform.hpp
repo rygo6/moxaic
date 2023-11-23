@@ -16,25 +16,25 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Uniform);
 
-        explicit Uniform(const Device& device)
+        explicit Uniform(Device const& device)
             : k_Device(device) {}
 
         virtual ~Uniform()
         {
-            vkDestroyBuffer(k_Device.vkDevice(), m_VkBuffer, VK_ALLOC);
+            vkDestroyBuffer(k_Device.GetVkDevice(), m_VkBuffer, VK_ALLOC);
 
             if (m_pMappedBuffer != nullptr)
-                vkUnmapMemory(k_Device.vkDevice(), m_VkDeviceMemory);
+                vkUnmapMemory(k_Device.GetVkDevice(), m_VkDeviceMemory);
 
-            vkFreeMemory(k_Device.vkDevice(), m_VkDeviceMemory, VK_ALLOC);
+            vkFreeMemory(k_Device.GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
 
             if (m_ExternalMemory != nullptr)
                 CloseHandle(m_ExternalMemory);
         }
 
-        bool Init(const VkMemoryPropertyFlags properties,
-                  const VkBufferUsageFlags usage,
-                  const Locality locality)
+        bool Init(VkMemoryPropertyFlags const properties,
+                  VkBufferUsageFlags const usage,
+                  Locality const locality)
         {
             MXC_LOG_MULTILINE("Init Uniform:",
                               string_VkMemoryPropertyFlags(properties),
@@ -52,7 +52,7 @@ namespace Moxaic::Vulkan
                                                       &m_VkBuffer,
                                                       &m_VkDeviceMemory,
                                                       &m_ExternalMemory));
-            VK_CHK(vkMapMemory(k_Device.vkDevice(),
+            VK_CHK(vkMapMemory(k_Device.GetVkDevice(),
                                m_VkDeviceMemory,
                                0,
                                Size(),
@@ -61,18 +61,18 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void CopyBuffer(const T& srcBuffer)
+        void CopyBuffer(T const& srcBuffer)
         {
             memcpy(m_pMappedBuffer, &srcBuffer, Size());
         }
 
         T& mapped() { return *static_cast<T*>(m_pMappedBuffer); }
-        const auto& vkBuffer() const { return m_VkBuffer; }
+        auto const& vkBuffer() const { return m_VkBuffer; }
 
         static constexpr VkDeviceSize Size() { return sizeof(T); }
 
     private:
-        const Device& k_Device;
+        Device const& k_Device;
         VkBuffer m_VkBuffer{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
         void* m_pMappedBuffer{nullptr};

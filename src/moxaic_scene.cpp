@@ -14,7 +14,7 @@ MXC_RESULT CompositorScene::Init()
 
     m_MainCamera.transform().setPosition({0, 0, -2});
     m_MainCamera.transform().Rotate(0, 180, 0);
-    m_MainCamera.setAspect(Window::extents().width / Window::extents().height);
+    m_MainCamera.SetAspect(Window::extents().width / Window::extents().height);
     m_MainCamera.UpdateView();
     m_MainCamera.UpdateProjection();
 
@@ -42,7 +42,7 @@ MXC_RESULT CompositorScene::Init()
     for (int i = 0; i < m_MeshNodeDescriptor.size(); ++i) {
         MXC_CHK(m_MeshNodeDescriptor[i].Init(
           m_GlobalDescriptor.buffer(),
-          m_NodeReference.framebuffer(i)));
+          m_NodeReference.Framebuffer(i)));
     }
     MXC_CHK(m_MeshNodePipeline.Init(m_GlobalDescriptor,
                                     m_MeshNodeDescriptor[0]));
@@ -53,7 +53,7 @@ MXC_RESULT CompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    m_NodeReference.GlobalDescriptor().CopyBuffer(m_GlobalDescriptor.buffer());
+    m_NodeReference.GlobalDescriptor()->CopyBuffer(m_GlobalDescriptor.buffer());
 
     return MXC_SUCCESS;
 }
@@ -67,18 +67,20 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
 
     k_Device.BeginGraphicsCommandBuffer();
 
-    auto& nodeSemaphore = m_NodeReference.Semaphore();
-    nodeSemaphore.SyncWaitValue();
-    if (nodeSemaphore.waitValue() != m_PriorNodeSemaphoreWaitValue) {
-        m_PriorNodeSemaphoreWaitValue = nodeSemaphore.waitValue();
+    // auto const nodeSemaphore = m_NodeReference.Semaphore();
+    // auto* const nodeSemaphore = m_NodeReference.Semaphore();
+    auto* const nodeSemaphore = m_NodeReference.Semaphore();
+    nodeSemaphore->SyncWaitValue();
+    if (nodeSemaphore->GetWaitValue() != m_PriorNodeSemaphoreWaitValue) {
+        m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetWaitValue();
         m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
 
-        auto& nodeFramebuffer = m_NodeReference.framebuffer(m_NodeFramebufferIndex);
+        auto const& nodeFramebuffer = m_NodeReference.Framebuffer(m_NodeFramebufferIndex);
         nodeFramebuffer.Transition(Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
         m_MeshNodeDescriptor[m_NodeFramebufferIndex].Update(m_GlobalDescriptor.buffer());
-        m_NodeReference.GlobalDescriptor().CopyBuffer(m_GlobalDescriptor.buffer());
+        m_NodeReference.GlobalDescriptor()->CopyBuffer(m_GlobalDescriptor.buffer());
     }
 
     const auto& framebuffer = m_Framebuffers[m_FramebufferIndex];
@@ -94,7 +96,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
     m_MeshNodePipeline.BindPipeline();
     m_MeshNodePipeline.BindDescriptor(m_GlobalDescriptor);
     m_MeshNodePipeline.BindDescriptor(m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
-    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_Device.vkGraphicsCommandBuffer(),
+    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_Device.GetVkGraphicsCommandBuffer(),
                                        1,
                                        1,
                                        1);

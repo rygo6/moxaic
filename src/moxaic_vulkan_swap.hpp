@@ -17,22 +17,23 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Swap);
 
-        explicit Swap(const Device& device);
+        explicit Swap(Device const& device);
         virtual ~Swap();
 
-        MXC_RESULT Init(const VkExtent2D& dimensions,
-                        const bool& computeStorage);
+        MXC_RESULT Init(VkExtent2D const& dimensions,
+                        bool const& computeStorage);
 
         MXC_RESULT Acquire();
-        void BlitToSwap(const Texture& srcTexture) const;
+        void BlitToSwap(Texture const& srcTexture) const;
         MXC_RESULT QueuePresent() const;
 
-        const auto& vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
-        const auto& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
-        const auto& format() const { return m_Format; }
+        MXC_GET(VkAcquireCompleteSemaphore)
+        // const auto& vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
+        auto const& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
+        auto const& format() const { return m_Format; }
 
     private:
-        const Device& k_Device;
+        Device const* k_Device;
 
         VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};
@@ -41,9 +42,9 @@ namespace Moxaic::Vulkan
         StaticArray<VkImage, SwapCount> m_VkSwapImages{VK_NULL_HANDLE};
         StaticArray<VkImageView, SwapCount> m_VkSwapImageViews{VK_NULL_HANDLE};
 
-        VkFormat m_Format;
-        VkExtent2D m_Dimensions;
+        VkFormat m_Format{};
+        VkExtent2D m_Dimensions{};
 
-        uint32_t m_LastAcquiredSwapIndex;
+        uint32_t m_LastAcquiredSwapIndex{0};
     };
 }// namespace Moxaic::Vulkan

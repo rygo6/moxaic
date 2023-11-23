@@ -106,16 +106,16 @@ namespace Moxaic::Vulkan
         // Return vkHandles via const ref even though they are single pointers so that
         // the pointer can be taken to them in designated initializers without having to first
         // make a stack copy
-        MXC_GET(vkDevice);
-        MXC_GET(vkPhysicalDevice);
-        MXC_GET(vkGraphicsQueue);
-        MXC_GET(vkComputeQueue);
-        MXC_GET(vkRenderPass);
-        MXC_GET(vkDescriptorPool);
-        MXC_GET(vkGraphicsCommandBuffer);
-        MXC_GET(vkComputeCommandBuffer);
-        MXC_GET(vkLinearSampler);
-        MXC_GET(vkNearestSampler);
+        MXC_GET(VkDevice);
+        MXC_GET(VkPhysicalDevice);
+        MXC_GET(VkGraphicsQueue);
+        MXC_GET(VkComputeQueue);
+        MXC_GET(VkRenderPass);
+        MXC_GET(VkDescriptorPool);
+        MXC_GET(VkGraphicsCommandBuffer);
+        MXC_GET(VkComputeCommandBuffer);
+        MXC_GET(VkLinearSampler);
+        MXC_GET(VkNearestSampler);
 
         MXC_GET(GraphicsQueueFamilyIndex);
         MXC_GET(ComputeQueueFamilyIndex);
@@ -125,25 +125,25 @@ namespace Moxaic::Vulkan
         MXC_GET(PhysicalDeviceMemoryProperties);
 
     private:
-        VkDevice m_vkDevice{VK_NULL_HANDLE};
+        VkDevice m_VkDevice{VK_NULL_HANDLE};
 
-        VkPhysicalDevice m_vkPhysicalDevice{VK_NULL_HANDLE};
+        VkPhysicalDevice m_VkPhysicalDevice{VK_NULL_HANDLE};
 
-        VkQueue m_vkGraphicsQueue{VK_NULL_HANDLE};
-        VkQueue m_vkComputeQueue{VK_NULL_HANDLE};
+        VkQueue m_VkGraphicsQueue{VK_NULL_HANDLE};
+        VkQueue m_VkComputeQueue{VK_NULL_HANDLE};
 
-        VkRenderPass m_vkRenderPass{VK_NULL_HANDLE};
+        VkRenderPass m_VkRenderPass{VK_NULL_HANDLE};
 
-        VkDescriptorPool m_vkDescriptorPool{VK_NULL_HANDLE};
+        VkDescriptorPool m_VkDescriptorPool{VK_NULL_HANDLE};
         VkQueryPool m_VkQueryPool{VK_NULL_HANDLE};
         VkCommandPool m_VkGraphicsCommandPool{VK_NULL_HANDLE};
         VkCommandPool m_VkComputeCommandPool{VK_NULL_HANDLE};
 
-        VkCommandBuffer m_vkGraphicsCommandBuffer{VK_NULL_HANDLE};
-        VkCommandBuffer m_vkComputeCommandBuffer{VK_NULL_HANDLE};
+        VkCommandBuffer m_VkGraphicsCommandBuffer{VK_NULL_HANDLE};
+        VkCommandBuffer m_VkComputeCommandBuffer{VK_NULL_HANDLE};
 
-        VkSampler m_vkLinearSampler{VK_NULL_HANDLE};
-        VkSampler m_vkNearestSampler{VK_NULL_HANDLE};
+        VkSampler m_VkLinearSampler{VK_NULL_HANDLE};
+        VkSampler m_VkNearestSampler{VK_NULL_HANDLE};
 
         uint32_t m_GraphicsQueueFamilyIndex{};
         uint32_t m_ComputeQueueFamilyIndex{};
