@@ -65,25 +65,25 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_Device.GetVkLinearSampler(),
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.colorTexture().vkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_Device.GetVkLinearSampler(),
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.normalTexture().vkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_Device.GetVkLinearSampler(),
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.gBufferTexture().vkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_Device.GetVkLinearSampler(),
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.depthTexture().vkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
             };
@@ -105,6 +105,6 @@ namespace Moxaic::Vulkan
 
     private:
         GlobalDescriptor::Buffer m_Buffer{};// is there a case where I wouldn't want a local copy!?
-        Uniform<GlobalDescriptor::Buffer> m_Uniform{k_Device};
+        Uniform<GlobalDescriptor::Buffer> m_Uniform{*k_pDevice};
     };
 }// namespace Moxaic::Vulkan

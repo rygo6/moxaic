@@ -44,7 +44,7 @@ namespace Moxaic::Vulkan
         auto const& vkImageView() const { return m_VkImageView; }
 
     private:
-        Device const& k_Device;
+        Device const* const k_pDevice;;
 
         VkImage m_VkImage{VK_NULL_HANDLE};
         VkImageView m_VkImageView{VK_NULL_HANDLE};

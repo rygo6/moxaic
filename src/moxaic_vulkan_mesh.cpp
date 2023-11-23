@@ -74,14 +74,14 @@ static void GenerateSphereIndices(int const nslices, int const nstacks, uint16_t
 }
 
 Mesh::Mesh(Device const& device)
-    : k_Device(device) {}
+    : k_pDevice(&device) {}
 
 Mesh::~Mesh()
 {
-    vkDestroyBuffer(k_Device.GetVkDevice(), m_VkIndexBuffer, VK_ALLOC);
-    vkFreeMemory(k_Device.GetVkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
-    vkDestroyBuffer(k_Device.GetVkDevice(), m_VkVertexBuffer, VK_ALLOC);
-    vkFreeMemory(k_Device.GetVkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(k_pDevice->GetVkDevice(), m_VkIndexBuffer, VK_ALLOC);
+    vkFreeMemory(k_pDevice->GetVkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(k_pDevice->GetVkDevice(), m_VkVertexBuffer, VK_ALLOC);
+    vkFreeMemory(k_pDevice->GetVkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
 }
 
 MXC_RESULT Mesh::InitSphere()
@@ -104,7 +104,7 @@ MXC_RESULT Mesh::CreateVertexBuffer(Vertex const* pVertices,
 {
     m_VertexCount = vertexCount;
     VkDeviceSize const bufferSize = (sizeof(Vertex) * vertexCount);
-    MXC_CHK(k_Device.CreateAllocateBindPopulateBufferViaStaging(pVertices,
+    MXC_CHK(k_pDevice->CreateAllocateBindPopulateBufferViaStaging(pVertices,
                                                                 VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                                                 bufferSize,
                                                                 &m_VkVertexBuffer,
@@ -117,7 +117,7 @@ MXC_RESULT Mesh::CreateIndexBuffer(uint16_t const* pIndices,
 {
     m_IndexCount = indexCount;
     VkDeviceSize const bufferSize = (sizeof(uint16_t) * indexCount);
-    MXC_CHK(k_Device.CreateAllocateBindPopulateBufferViaStaging(pIndices,
+    MXC_CHK(k_pDevice->CreateAllocateBindPopulateBufferViaStaging(pIndices,
                                                                 VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                                                 bufferSize,
                                                                 &m_VkIndexBuffer,
@@ -128,16 +128,16 @@ void Mesh::RecordRender() const
 {
     VkBuffer const vertexBuffers[] = {m_VkVertexBuffer};
     constexpr VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(k_Device.GetVkGraphicsCommandBuffer(),
+    vkCmdBindVertexBuffers(k_pDevice->GetVkGraphicsCommandBuffer(),
                            0,
                            1,
                            vertexBuffers,
                            offsets);
-    vkCmdBindIndexBuffer(k_Device.GetVkGraphicsCommandBuffer(),
+    vkCmdBindIndexBuffer(k_pDevice->GetVkGraphicsCommandBuffer(),
                          m_VkIndexBuffer,
                          0,
                          VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed(k_Device.GetVkGraphicsCommandBuffer(),
+    vkCmdDrawIndexed(k_pDevice->GetVkGraphicsCommandBuffer(),
                      m_IndexCount,
                      1,
                      0,

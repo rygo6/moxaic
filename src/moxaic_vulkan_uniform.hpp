@@ -17,16 +17,16 @@ namespace Moxaic::Vulkan
         MXC_NO_VALUE_PASS(Uniform);
 
         explicit Uniform(Device const& device)
-            : k_Device(device) {}
+            : k_pDevice(&device) {}
 
         virtual ~Uniform()
         {
-            vkDestroyBuffer(k_Device.GetVkDevice(), m_VkBuffer, VK_ALLOC);
+            vkDestroyBuffer(k_pDevice->GetVkDevice(), m_VkBuffer, VK_ALLOC);
 
             if (m_pMappedBuffer != nullptr)
-                vkUnmapMemory(k_Device.GetVkDevice(), m_VkDeviceMemory);
+                vkUnmapMemory(k_pDevice->GetVkDevice(), m_VkDeviceMemory);
 
-            vkFreeMemory(k_Device.GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
+            vkFreeMemory(k_pDevice->GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
 
             if (m_ExternalMemory != nullptr)
                 CloseHandle(m_ExternalMemory);
@@ -45,14 +45,14 @@ namespace Moxaic::Vulkan
               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
             SDL_assert(((supportedProperties & properties) == supportedProperties) &&
                        "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
-            MXC_CHK(k_Device.CreateAllocateBindBuffer(usage,
+            MXC_CHK(k_pDevice->CreateAllocateBindBuffer(usage,
                                                       properties,
                                                       Size(),
                                                       locality,
                                                       &m_VkBuffer,
                                                       &m_VkDeviceMemory,
                                                       &m_ExternalMemory));
-            VK_CHK(vkMapMemory(k_Device.GetVkDevice(),
+            VK_CHK(vkMapMemory(k_pDevice->GetVkDevice(),
                                m_VkDeviceMemory,
                                0,
                                Size(),
@@ -72,7 +72,7 @@ namespace Moxaic::Vulkan
         static constexpr VkDeviceSize Size() { return sizeof(T); }
 
     private:
-        Device const& k_Device;
+        Device const* const k_pDevice;;
         VkBuffer m_VkBuffer{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
         void* m_pMappedBuffer{nullptr};

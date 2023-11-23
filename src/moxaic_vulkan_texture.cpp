@@ -18,13 +18,13 @@ using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
 Texture::Texture(Device const& device)
-    : k_Device(device) {}
+    : k_pDevice(&device) {}
 
 Texture::~Texture()
 {
-    vkDestroyImageView(k_Device.GetVkDevice(), m_VkImageView, VK_ALLOC);
-    vkFreeMemory(k_Device.GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
-    vkDestroyImage(k_Device.GetVkDevice(), m_VkImage, VK_ALLOC);
+    vkDestroyImageView(k_pDevice->GetVkDevice(), m_VkImageView, VK_ALLOC);
+    vkFreeMemory(k_pDevice->GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
+    vkDestroyImage(k_pDevice->GetVkDevice(), m_VkImage, VK_ALLOC);
     if (m_ExternalHandle != nullptr)
         CloseHandle(m_ExternalHandle);
 }
@@ -58,7 +58,7 @@ MXC_RESULT Texture::InitFromFile(std::string const& file,
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    k_Device.CreateStagingBuffer(pixels,
+    k_pDevice->CreateStagingBuffer(pixels,
                                  imageBufferSize,
                                  &stagingBuffer,
                                  &stagingBufferMemory);
@@ -72,15 +72,15 @@ MXC_RESULT Texture::InitFromFile(std::string const& file,
          locality);
 
     MXC_CHK(TransitionImmediateInitialToTransferDst());
-    k_Device.CopyBufferToImage(extents,
+    k_pDevice->CopyBufferToImage(extents,
                                stagingBuffer,
                                m_VkImage);
     MXC_CHK(TransitionImmediateTransferDstToGraphicsRead());
 
-    vkDestroyBuffer(k_Device.GetVkDevice(),
+    vkDestroyBuffer(k_pDevice->GetVkDevice(),
                     stagingBuffer,
                     VK_ALLOC);
-    vkFreeMemory(k_Device.GetVkDevice(),
+    vkFreeMemory(k_pDevice->GetVkDevice(),
                  stagingBufferMemory,
                  VK_ALLOC);
 
@@ -102,7 +102,7 @@ MXC_RESULT Texture::InitFromImport(VkFormat const& format,
                       extents,
                       usage,
                       Locality::External));
-    MXC_CHK(k_Device.AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    MXC_CHK(k_pDevice->AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                              m_VkImage,
                                              MXC_EXTERNAL_HANDLE_TYPE,
                                              externalMemory,
@@ -130,12 +130,12 @@ MXC_RESULT Texture::Init(VkFormat const& format,
                       locality));
     switch (locality) {
         case Locality::Local:
-            MXC_CHK(k_Device.AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            MXC_CHK(k_pDevice->AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                                m_VkImage,
                                                &m_VkDeviceMemory));
             break;
         case Locality::External:
-            MXC_CHK(k_Device.AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            MXC_CHK(k_pDevice->AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                                      m_VkImage,
                                                      MXC_EXTERNAL_HANDLE_TYPE,
                                                      &m_VkDeviceMemory));
@@ -149,7 +149,7 @@ MXC_RESULT Texture::Init(VkFormat const& format,
           .pNext = nullptr,
           .memory = m_VkDeviceMemory,
           .handleType = MXC_EXTERNAL_HANDLE_TYPE};
-        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_Device.GetVkDevice(),
+        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_pDevice->GetVkDevice(),
                                               &getWin32HandleInfo,
                                               &m_ExternalHandle));
 #endif
@@ -162,7 +162,7 @@ MXC_RESULT Texture::Init(VkFormat const& format,
 // todo replace with Transition structs
 MXC_RESULT Texture::TransitionImmediateInitialToGraphicsRead() const
 {
-    return k_Device.TransitionImageLayoutImmediate(m_VkImage,
+    return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_UNDEFINED,
                                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                    VK_ACCESS_NONE,
@@ -174,7 +174,7 @@ MXC_RESULT Texture::TransitionImmediateInitialToGraphicsRead() const
 
 MXC_RESULT Texture::TransitionImmediateInitialToTransferDst() const
 {
-    return k_Device.TransitionImageLayoutImmediate(m_VkImage,
+    return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_UNDEFINED,
                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                    VK_ACCESS_NONE,
@@ -186,7 +186,7 @@ MXC_RESULT Texture::TransitionImmediateInitialToTransferDst() const
 
 MXC_RESULT Texture::TransitionImmediateTransferDstToGraphicsRead() const
 {
-    return k_Device.TransitionImageLayoutImmediate(m_VkImage,
+    return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                    VK_ACCESS_MEMORY_WRITE_BIT,
@@ -231,7 +231,7 @@ MXC_RESULT Texture::InitImageView(VkFormat const& format,
         .baseArrayLayer = 0,
         .layerCount = 1,
       }};
-    VK_CHK(vkCreateImageView(k_Device.GetVkDevice(),
+    VK_CHK(vkCreateImageView(k_pDevice->GetVkDevice(),
                              &imageViewCreateInfo,
                              VK_ALLOC,
                              &m_VkImageView));
@@ -264,7 +264,7 @@ MXC_RESULT Texture::InitImage(VkFormat const& format,
       .pQueueFamilyIndices = nullptr,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VK_CHK(vkCreateImage(k_Device.GetVkDevice(),
+    VK_CHK(vkCreateImage(k_pDevice->GetVkDevice(),
                          &imageCreateInfo,
                          VK_ALLOC,
                          &m_VkImage));

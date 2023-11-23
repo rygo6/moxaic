@@ -95,15 +95,15 @@ MXC_RESULT ChooseSwapSurfaceFormat(VkPhysicalDevice const physicalDevice,
 }
 
 Swap::Swap(Vulkan::Device const& device)
-    : k_Device(&device) {}
+    : k_pDevice(&device) {}
 
 Swap::~Swap()
 {
-    vkDestroySemaphore(k_Device->GetVkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
-    vkDestroySemaphore(k_Device->GetVkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_pDevice->GetVkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_pDevice->GetVkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
     for (int i = 0; i < SwapCount; ++i) {
-        vkDestroyImageView(k_Device->GetVkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
-        vkDestroyImage(k_Device->GetVkDevice(), m_VkSwapImages[i], VK_ALLOC);
+        vkDestroyImageView(k_pDevice->GetVkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
+        vkDestroyImage(k_pDevice->GetVkDevice(), m_VkSwapImages[i], VK_ALLOC);
     }
 }
 
@@ -111,7 +111,7 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
-    VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(k_Device->GetVkPhysicalDevice(),
+    VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(k_pDevice->GetVkPhysicalDevice(),
                                                      Vulkan::vkSurface(),
                                                      &capabilities));
 
@@ -122,10 +122,10 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
     }
 
     VkPresentModeKHR presentMode;
-    MXC_CHK(ChooseSwapPresentMode(k_Device->GetVkPhysicalDevice(),
+    MXC_CHK(ChooseSwapPresentMode(k_pDevice->GetVkPhysicalDevice(),
                                   &presentMode));
     VkSurfaceFormatKHR surfaceFormat;
-    MXC_CHK(ChooseSwapSurfaceFormat(k_Device->GetVkPhysicalDevice(),
+    MXC_CHK(ChooseSwapSurfaceFormat(k_pDevice->GetVkPhysicalDevice(),
                                     computeStorage,
                                     &surfaceFormat));
 
@@ -180,13 +180,13 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
         return MXC_FAIL;
     }
 
-    VK_CHK(vkCreateSwapchainKHR(k_Device->GetVkDevice(),
+    VK_CHK(vkCreateSwapchainKHR(k_pDevice->GetVkDevice(),
                                 &createInfo,
                                 VK_ALLOC,
                                 &m_VkSwapchain));
 
     uint32_t swapCount;
-    VK_CHK(vkGetSwapchainImagesKHR(k_Device->GetVkDevice(),
+    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    nullptr));
@@ -194,13 +194,13 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
         MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_VkSwapImages.size());
         return MXC_FAIL;
     }
-    VK_CHK(vkGetSwapchainImagesKHR(k_Device->GetVkDevice(),
+    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    m_VkSwapImages.data()));
 
     for (int i = 0; i < m_VkSwapImages.size(); ++i) {
-        k_Device->TransitionImageLayoutImmediate(m_VkSwapImages[i],
+        k_pDevice->TransitionImageLayoutImmediate(m_VkSwapImages[i],
                                                  VK_IMAGE_LAYOUT_UNDEFINED,
                                                  VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                                  VK_ACCESS_NONE,
@@ -228,7 +228,7 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
             .layerCount = 1,
           }};
         auto swapImageView = m_VkSwapImageViews[i];
-        VK_CHK(vkCreateImageView(k_Device->GetVkDevice(),
+        VK_CHK(vkCreateImageView(k_pDevice->GetVkDevice(),
                                  &viewInfo,
                                  VK_ALLOC,
                                  &swapImageView));
@@ -239,11 +239,11 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_Device->GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(k_pDevice->GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkAcquireCompleteSemaphore));
-    VK_CHK(vkCreateSemaphore(k_Device->GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(k_pDevice->GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkRenderCompleteSemaphore));
@@ -263,7 +263,7 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
 
 MXC_RESULT Swap::Acquire()
 {
-    VK_CHK(vkAcquireNextImageKHR(k_Device->GetVkDevice(),
+    VK_CHK(vkAcquireNextImageKHR(k_pDevice->GetVkDevice(),
                                  m_VkSwapchain,
                                  UINT64_MAX,
                                  m_VkAcquireCompleteSemaphore,
@@ -281,8 +281,8 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.vkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -292,13 +292,13 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
-    vkCmdPipelineBarrier(k_Device->GetVkGraphicsCommandBuffer(),
+    vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          0,
@@ -333,7 +333,7 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
     imageBlit.dstSubresource = imageSubresourceLayers;
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
-    vkCmdBlitImage(k_Device->GetVkGraphicsCommandBuffer(),
+    vkCmdBlitImage(k_pDevice->GetVkGraphicsCommandBuffer(),
                    srcTexture.vkImage(),
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    m_VkSwapImages[m_LastAcquiredSwapIndex],
@@ -348,8 +348,8 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.vkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -359,13 +359,13 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
         .dstAccessMask = 0,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_Device->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
-    vkCmdPipelineBarrier(k_Device->GetVkGraphicsCommandBuffer(),
+    vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                          0,
@@ -388,7 +388,7 @@ MXC_RESULT Swap::QueuePresent() const
       .pSwapchains = &m_VkSwapchain,
       .pImageIndices = &m_LastAcquiredSwapIndex,
     };
-    VK_CHK(vkQueuePresentKHR(k_Device->GetVkGraphicsQueue(),
+    VK_CHK(vkQueuePresentKHR(k_pDevice->GetVkGraphicsQueue(),
                              &presentInfo));
     return MXC_SUCCESS;
 }

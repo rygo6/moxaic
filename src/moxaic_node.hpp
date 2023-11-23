@@ -44,7 +44,7 @@ namespace Moxaic
         }
 
     private:
-        Vulkan::Device const k_Device;
+        Vulkan::Device const* const k_pDevice;
 
         Transform m_Transform{};
 
@@ -59,11 +59,11 @@ namespace Moxaic
         InterProcessProducer m_IPCToNode{};
         InterProcessReceiver m_IPCFromNode{};
 
-        Vulkan::Semaphore m_ExportedNodeSemaphore{k_Device};
+        Vulkan::Semaphore m_ExportedNodeSemaphore{*k_pDevice};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
-          Vulkan::Framebuffer(k_Device),
-          Vulkan::Framebuffer(k_Device)};
+          Vulkan::Framebuffer(*k_pDevice),
+          Vulkan::Framebuffer(*k_pDevice)};
 
         STARTUPINFO m_Startupinfo{};
         PROCESS_INFORMATION m_ProcessInformation{};
@@ -127,7 +127,8 @@ namespace Moxaic
         }
 
     private:
-        Vulkan::Device const& k_Device;
+        Vulkan::Device const* const k_pDevice;
+        ;
 
         StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
         {
@@ -148,11 +149,11 @@ namespace Moxaic
         InterProcessReceiver m_IPCFromCompositor{};
         InterProcessProducer m_IPCToCompositor{};
 
-        Vulkan::Semaphore m_ImportedCompositorSemaphore{k_Device};
-        Vulkan::Semaphore m_ImportedNodeSemaphore{k_Device};
+        Vulkan::Semaphore m_ImportedCompositorSemaphore{*k_pDevice};
+        Vulkan::Semaphore m_ImportedNodeSemaphore{*k_pDevice};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{
-          Vulkan::Framebuffer(k_Device),
-          Vulkan::Framebuffer(k_Device)};
+          Vulkan::Framebuffer(*k_pDevice),
+          Vulkan::Framebuffer(*k_pDevice)};
     };
 }// namespace Moxaic

@@ -23,7 +23,7 @@ constinit VkImageUsageFlags k_DepthBufferUsage =
   VK_IMAGE_USAGE_SAMPLED_BIT;
 
 Framebuffer::Framebuffer(Device const& device)
-    : k_Device(device) {}
+    : k_pDevice(&device) {}
 
 Framebuffer::~Framebuffer() = default;
 
@@ -108,14 +108,14 @@ MXC_RESULT Framebuffer::InitFramebuffer()
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .renderPass = k_Device.GetVkRenderPass(),
+      .renderPass = k_pDevice->GetVkRenderPass(),
       .attachmentCount = attachments.size(),
       .pAttachments = attachments.data(),
       .width = m_Extents.width,
       .height = m_Extents.height,
       .layers = 1,
     };
-    VK_CHK(vkCreateFramebuffer(k_Device.GetVkDevice(),
+    VK_CHK(vkCreateFramebuffer(k_pDevice->GetVkDevice(),
                                &framebufferCreateInfo,
                                VK_ALLOC,
                                &m_VkFramebuffer));
@@ -129,7 +129,7 @@ MXC_RESULT Framebuffer::InitSemaphore()
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_Device.GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(k_pDevice->GetVkDevice(),
                              &renderCompleteCreateInfo,
                              VK_ALLOC,
                              &m_VkRenderCompleteSemaphore));
@@ -145,8 +145,8 @@ void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
         .dstAccessMask = dst.colorAccessMask,
         .oldLayout = src.colorLayout,
         .newLayout = dst.colorLayout,
-        .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
-        .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+        .srcQueueFamilyIndex = k_pDevice->GetQueue(src.queueFamilyIndex),
+        .dstQueueFamilyIndex = k_pDevice->GetQueue(dst.queueFamilyIndex),
         .image = m_ColorTexture.vkImage(),
         .subresourceRange = DefaultColorSubresourceRange,
       },
@@ -156,8 +156,8 @@ void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
         .dstAccessMask = dst.colorAccessMask,
         .oldLayout = src.colorLayout,
         .newLayout = dst.colorLayout,
-        .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
-        .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+        .srcQueueFamilyIndex = k_pDevice->GetQueue(src.queueFamilyIndex),
+        .dstQueueFamilyIndex = k_pDevice->GetQueue(dst.queueFamilyIndex),
         .image = m_NormalTexture.vkImage(),
         .subresourceRange = DefaultColorSubresourceRange,
       },
@@ -167,12 +167,12 @@ void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
         .dstAccessMask = dst.colorAccessMask,
         .oldLayout = src.colorLayout,
         .newLayout = dst.colorLayout,
-        .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
-        .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+        .srcQueueFamilyIndex = k_pDevice->GetQueue(src.queueFamilyIndex),
+        .dstQueueFamilyIndex = k_pDevice->GetQueue(dst.queueFamilyIndex),
         .image = m_GBufferTexture.vkImage(),
         .subresourceRange = DefaultColorSubresourceRange,
       }};
-    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.GetVkGraphicsCommandBuffer(),
+    VK_CHK_VOID(vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
                                      src.colorStageMask,
                                      dst.colorStageMask,
                                      0,
@@ -189,12 +189,12 @@ void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
         .dstAccessMask = dst.depthAccessMask,
         .oldLayout = src.depthLayout,
         .newLayout = dst.depthLayout,
-        .srcQueueFamilyIndex = k_Device.GetQueue(src.queueFamilyIndex),
-        .dstQueueFamilyIndex = k_Device.GetQueue(dst.queueFamilyIndex),
+        .srcQueueFamilyIndex = k_pDevice->GetQueue(src.queueFamilyIndex),
+        .dstQueueFamilyIndex = k_pDevice->GetQueue(dst.queueFamilyIndex),
         .image = m_DepthTexture.vkImage(),
         .subresourceRange = DefaultDepthSubresourceRange,
       }};
-    VK_CHK_VOID(vkCmdPipelineBarrier(k_Device.GetVkGraphicsCommandBuffer(),
+    VK_CHK_VOID(vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
                                      src.depthStageMask,
                                      dst.depthStageMask,
                                      0,

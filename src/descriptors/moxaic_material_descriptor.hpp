@@ -32,7 +32,7 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_Device.GetVkLinearSampler(),
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = texture.vkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 })},

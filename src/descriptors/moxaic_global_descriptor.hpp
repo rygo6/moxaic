@@ -91,6 +91,6 @@ namespace Moxaic::Vulkan
 
     private:
         Buffer m_Buffer{};// is there a case where I wouldn't want a local copy!?
-        Uniform<Buffer> m_Uniform{k_Device};
+        Uniform<Buffer> m_Uniform{*k_pDevice};
     };
 }// namespace Moxaic::Vulkan

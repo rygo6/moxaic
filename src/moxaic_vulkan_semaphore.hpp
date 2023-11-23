@@ -40,7 +40,7 @@ namespace Moxaic::Vulkan
         MXC_GET(WaitValue)
 
     private:
-        Device const& k_Device;
+        Device const* const k_pDevice;;
 
         uint64_t m_WaitValue{0};
         VkSemaphore m_VkSemaphore{VK_NULL_HANDLE};

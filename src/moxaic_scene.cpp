@@ -65,7 +65,7 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
         m_GlobalDescriptor.UpdateView(m_MainCamera);
     }
 
-    k_Device.BeginGraphicsCommandBuffer();
+    k_pDevice->BeginGraphicsCommandBuffer();
 
     // auto const nodeSemaphore = m_NodeReference.Semaphore();
     // auto* const nodeSemaphore = m_NodeReference.Semaphore();
@@ -84,7 +84,7 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
     }
 
     auto const& framebuffer = m_Framebuffers[m_FramebufferIndex];
-    k_Device.BeginRenderPass(framebuffer,
+    k_pDevice->BeginRenderPass(framebuffer,
                              (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
     m_StandardPipeline.BindPipeline();
@@ -96,19 +96,19 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
     m_MeshNodePipeline.BindPipeline();
     m_MeshNodePipeline.BindDescriptor(m_GlobalDescriptor);
     m_MeshNodePipeline.BindDescriptor(m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
-    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_Device.GetVkGraphicsCommandBuffer(),
+    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_pDevice->GetVkGraphicsCommandBuffer(),
                                        1,
                                        1,
                                        1);
 
-    k_Device.EndRenderPass();
+    k_pDevice->EndRenderPass();
 
     m_Swap.Acquire();
     m_Swap.BlitToSwap(framebuffer.colorTexture());
 
-    k_Device.EndGraphicsCommandBuffer();
+    k_pDevice->EndGraphicsCommandBuffer();
 
-    k_Device.SubmitGraphicsQueueAndPresent(m_Semaphore, m_Swap);
+    k_pDevice->SubmitGraphicsQueueAndPresent(m_Semaphore, m_Swap);
 
     m_Semaphore.Wait();
 
@@ -155,12 +155,12 @@ MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
 {
     m_GlobalDescriptor.Update(m_Node.globalDescriptor().buffer());
 
-    k_Device.BeginGraphicsCommandBuffer();
+    k_pDevice->BeginGraphicsCommandBuffer();
 
     auto const& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
     framebuffer.Transition(Vulkan::AcquireFromExternal, Vulkan::ToGraphicsAttach);
 
-    k_Device.BeginRenderPass(framebuffer,
+    k_pDevice->BeginRenderPass(framebuffer,
                              (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
 
     m_StandardPipeline.BindPipeline();
@@ -170,7 +170,7 @@ MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
 
     m_SphereTestMesh.RecordRender();
 
-    k_Device.EndRenderPass();
+    k_pDevice->EndRenderPass();
 
     framebuffer.Transition(Vulkan::FromGraphicsAttach,
                            Vulkan::ReleaseToExternalGraphicsRead);
@@ -178,10 +178,10 @@ MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
     // m_Swap.Acquire();
     // m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
-    k_Device.EndGraphicsCommandBuffer();
+    k_pDevice->EndGraphicsCommandBuffer();
 
-    k_Device.SubmitGraphicsQueue(m_Node.NodeSemaphore());
-    // k_Device.SubmitGraphicsQueueAndPresent(m_Node.NodeSemaphore(), m_Swap);
+    k_pDevice->SubmitGraphicsQueue(&m_Node.NodeSemaphore());
+    // k_pDevice->SubmitGraphicsQueueAndPresent(m_Node.NodeSemaphore(), m_Swap);
 
     m_Node.NodeSemaphore().Wait();
     m_Node.CompositorSemaphore().IncrementWaitValue(m_CompositorSempahoreStep);

@@ -23,10 +23,10 @@ namespace Moxaic::Vulkan
                         Locality const& locality);
 
         MXC_RESULT InitFromImport(VkExtent2D const& extents,
-                                  HANDLE& const colorExternalHandle,
-                                  HANDLE& const normalExternalHandle,
-                                  HANDLE& const gBufferExternalHandle,
-                                  HANDLE& const depthExternalHandle);
+                                  HANDLE const& colorExternalHandle,
+                                  HANDLE const& normalExternalHandle,
+                                  HANDLE const& gBufferExternalHandle,
+                                  HANDLE const& depthExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
         void Transition(BarrierSrc const& src,
@@ -43,15 +43,15 @@ namespace Moxaic::Vulkan
         auto const& extents() const { return m_Extents; }
 
     private:
-        Device const& k_Device;
+        Device const* const k_pDevice;
 
         VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        Texture m_ColorTexture{k_Device};
-        Texture m_NormalTexture{k_Device};
-        Texture m_GBufferTexture{k_Device};
-        Texture m_DepthTexture{k_Device};
+        Texture m_ColorTexture{*k_pDevice};
+        Texture m_NormalTexture{*k_pDevice};
+        Texture m_GBufferTexture{*k_pDevice};
+        Texture m_DepthTexture{*k_pDevice};
 
         VkExtent2D m_Extents{};
 

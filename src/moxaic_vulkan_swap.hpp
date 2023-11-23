@@ -17,7 +17,7 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Swap);
 
-        explicit Swap(Device const& device);
+        Swap(Device const& device);
         virtual ~Swap();
 
         MXC_RESULT Init(VkExtent2D const& dimensions,
@@ -33,7 +33,7 @@ namespace Moxaic::Vulkan
         auto const& format() const { return m_Format; }
 
     private:
-        Device const* k_Device;
+        Device const* const k_pDevice;
 
         VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};

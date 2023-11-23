@@ -6,8 +6,8 @@
 #include <vulkan/vulkan.h>
 
 #ifdef WIN32
-#include <vulkan/vulkan_win32.h>
 #include <windows.h>
+#include <vulkan/vulkan_win32.h>
 #endif
 
 inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;

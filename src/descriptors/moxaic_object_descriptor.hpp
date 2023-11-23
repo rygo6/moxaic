@@ -57,6 +57,6 @@ namespace Moxaic::Vulkan
 
     private
         :
-        Uniform<Buffer> m_Uniform{k_Device};
+        Uniform<Buffer> m_Uniform{*k_pDevice};
     };
 }// namespace Moxaic::Vulkan

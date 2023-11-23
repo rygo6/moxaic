@@ -49,7 +49,7 @@ static MXC_RESULT StartProcess(STARTUPINFO& si, PROCESS_INFORMATION& pi)
 }
 
 NodeReference::NodeReference(Vulkan::Device const& device)
-    : k_Device(device) {}
+    : k_pDevice(&device) {}
 
 NodeReference::~NodeReference()
 {
@@ -99,7 +99,7 @@ MXC_RESULT NodeReference::ExportOverIPC(Vulkan::Semaphore const& compositorSemap
 }
 
 Node::Node(Vulkan::Device const& device)
-    : k_Device(device) {}
+    : k_pDevice(&device) {}
 
 Node::~Node() = default;
 
