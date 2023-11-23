@@ -10,16 +10,16 @@ namespace Moxaic
         T m_Data[N];
 
         T& operator[](size_t i) { return m_Data[i]; }
-        const T& operator[](size_t i) const { return m_Data[i]; }
+        T const& operator[](size_t i) const { return m_Data[i]; }
 
         // operator T*() { return m_Data; }
         // operator const T*() const { return m_Data; }
 
-        const T* begin() const { return m_Data; }
-        const T* end() const { return m_Data + N; }
+        T const* begin() const { return m_Data; }
+        T const* end() const { return m_Data + N; }
 
         T* data() { return m_Data; }
-        const T* data() const { return m_Data; }
+        T const* data() const { return m_Data; }
         static uint32_t size() { return N; }
     };
 
@@ -34,6 +34,6 @@ namespace Moxaic
         StaticRef(T data) { m_Data = data; }
         T m_Data;
         operator T*() { return &m_Data; }
-        operator const T*() const { return &m_Data; }
+        operator T const*() const { return &m_Data; }
     };
 }// namespace Moxaic

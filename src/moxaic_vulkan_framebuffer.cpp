@@ -22,13 +22,13 @@ constinit VkImageUsageFlags k_DepthBufferUsage =
   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
   VK_IMAGE_USAGE_SAMPLED_BIT;
 
-Framebuffer::Framebuffer(const Device& device)
+Framebuffer::Framebuffer(Device const& device)
     : k_Device(device) {}
 
 Framebuffer::~Framebuffer() = default;
 
-bool Framebuffer::Init(const VkExtent2D& extents,
-                       const Locality& locality)
+bool Framebuffer::Init(VkExtent2D const& extents,
+                       Locality const& locality)
 {
     m_Extents = extents;
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
@@ -60,7 +60,7 @@ bool Framebuffer::Init(const VkExtent2D& extents,
     return true;
 }
 
-MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D& extents,
+MXC_RESULT Framebuffer::InitFromImport(VkExtent2D const& extents,
                                        const HANDLE& colorExternalHandle,
                                        const HANDLE& normalExternalHandle,
                                        const HANDLE& gBufferExternalHandle,
@@ -98,13 +98,13 @@ MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D& extents,
 
 MXC_RESULT Framebuffer::InitFramebuffer()
 {
-    const StaticArray attachments{
+    StaticArray const attachments{
       m_ColorTexture.vkImageView(),
       m_NormalTexture.vkImageView(),
       m_GBufferTexture.vkImageView(),
       m_DepthTexture.vkImageView(),
     };
-    const VkFramebufferCreateInfo framebufferCreateInfo{
+    VkFramebufferCreateInfo const framebufferCreateInfo{
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
@@ -136,9 +136,9 @@ MXC_RESULT Framebuffer::InitSemaphore()
     return MXC_SUCCESS;
 }
 
-void Framebuffer::Transition(const BarrierSrc& src, const BarrierDst& dst) const
+void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
 {
-    const StaticArray acquireColorImageMemoryBarriers{
+    StaticArray const acquireColorImageMemoryBarriers{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = src.colorAccessMask,
@@ -182,7 +182,7 @@ void Framebuffer::Transition(const BarrierSrc& src, const BarrierDst& dst) const
                                      nullptr,
                                      acquireColorImageMemoryBarriers.size(),
                                      acquireColorImageMemoryBarriers.data()));
-    const StaticArray acquireDepthImageMemoryBarriers{
+    StaticArray const acquireDepthImageMemoryBarriers{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = src.depthAccessMask,

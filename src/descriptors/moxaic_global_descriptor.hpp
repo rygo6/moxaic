@@ -24,7 +24,7 @@ namespace Moxaic::Vulkan
             uint32_t height;
         };
 
-        MXC_RESULT Init(const Camera& camera, const VkExtent2D& dimensions)
+        MXC_RESULT Init(Camera const& camera, VkExtent2D const& dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
             SDL_assert(m_VkDescriptorSet == nullptr);
@@ -74,20 +74,20 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
-        void Update(const Buffer& buffer)
+        void Update(Buffer const& buffer)
         {
             m_Buffer = buffer;
             Update();
         }
 
-        void UpdateView(const Camera& camera)
+        void UpdateView(Camera const& camera)
         {
             m_Buffer.view = camera.view();
             m_Buffer.invView = camera.inverseView();
             Update();
         }
 
-        const auto& buffer() const { return m_Buffer; }
+        auto const& buffer() const { return m_Buffer; }
 
     private:
         Buffer m_Buffer{};// is there a case where I wouldn't want a local copy!?

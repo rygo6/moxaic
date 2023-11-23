@@ -35,7 +35,7 @@ namespace Moxaic::Vulkan
         MXC_RESULT AllocateBindImage(VkMemoryPropertyFlags properties,
                                      VkImage image,
                                      VkDeviceMemory* pDeviceMemory) const;
-        MXC_RESULT CreateStagingBuffer(const void* srcData,
+        MXC_RESULT CreateStagingBuffer(void const* srcData,
                                        VkDeviceSize bufferSize,
                                        VkBuffer* pStagingBuffer,
                                        VkDeviceMemory* pStagingBufferMemory) const;
@@ -51,7 +51,7 @@ namespace Moxaic::Vulkan
                                             VkBuffer* pBuffer,
                                             VkDeviceMemory* pDeviceMemory,
                                             HANDLE* pExternalMemory) const;
-        MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(const void* srcData,
+        MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(void const* srcData,
                                                               VkBufferUsageFlagBits usage,
                                                               VkDeviceSize bufferSize,
                                                               VkBuffer* pBuffer,
@@ -71,17 +71,17 @@ namespace Moxaic::Vulkan
                                                   VkPipelineStageFlags dstStageMask,
                                                   VkImageAspectFlags aspectMask) const;
         MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer& outCommandBuffer) const;
-        MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffer) const;
+        MXC_RESULT EndImmediateCommandBuffer(VkCommandBuffer const& commandBuffer) const;
         MXC_RESULT BeginGraphicsCommandBuffer() const;
         MXC_RESULT EndGraphicsCommandBuffer() const;
-        void BeginRenderPass(const Framebuffer& framebuffer,
-                             const VkClearColorValue& backgroundColor) const;
+        void BeginRenderPass(Framebuffer const& framebuffer,
+                             VkClearColorValue const& backgroundColor) const;
         void EndRenderPass() const;
         MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
-                                                 const Swap& swap) const;
+                                                 Swap const& swap) const;
         MXC_RESULT SubmitGraphicsQueue(Semaphore& timelineSemaphore) const;
 
-        uint32_t GetQueue(const Queue queue) const
+        uint32_t GetQueue(Queue const queue) const
         {
             switch (queue) {
                 case Queue::None:

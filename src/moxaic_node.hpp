@@ -44,7 +44,7 @@ namespace Moxaic
         }
 
     private:
-        Vulkan::Device const& k_Device;
+        Vulkan::Device const k_Device;
 
         Transform m_Transform{};
 

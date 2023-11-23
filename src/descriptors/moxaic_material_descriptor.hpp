@@ -11,7 +11,7 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
-        MXC_RESULT Init(const Texture& texture)
+        MXC_RESULT Init(Texture const& texture)
         {
             MXC_LOG("Init MaterialDescriptor");
             SDL_assert(m_VkDescriptorSet == nullptr);

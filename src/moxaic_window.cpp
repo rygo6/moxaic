@@ -12,7 +12,7 @@ SDL_Window* g_pSDLWindow;
 VkExtent2D g_WindowDimensions;
 UserCommand g_UserCommand;
 
-static void SetMouseButton(const int index, const bool pressed)
+static void SetMouseButton(int const index, bool const pressed)
 {
     switch (index) {
         case SDL_BUTTON_LEFT:
@@ -21,7 +21,7 @@ static void SetMouseButton(const int index, const bool pressed)
     }
 }
 
-static void SetKey(const SDL_Keycode keycode, const bool pressed)
+static void SetKey(SDL_Keycode const keycode, bool const pressed)
 {
     switch (keycode) {
         case SDLK_w:
@@ -40,17 +40,17 @@ static void SetKey(const SDL_Keycode keycode, const bool pressed)
     }
 }
 
-const UserCommand& Window::userCommand()
+UserCommand const& Window::userCommand()
 {
     return g_UserCommand;
 }
 
-const VkExtent2D& Window::extents()
+VkExtent2D const& Window::extents()
 {
     return g_WindowDimensions;
 }
 
-const SDL_Window* Window::window()
+SDL_Window const* Window::window()
 {
     return g_pSDLWindow;
 }
@@ -75,7 +75,7 @@ MXC_RESULT Window::Init()
     return g_pSDLWindow != nullptr;
 }
 
-MXC_RESULT Window::InitSurface(const VkInstance& vkInstance,
+MXC_RESULT Window::InitSurface(VkInstance const& vkInstance,
                                VkSurfaceKHR* pVkSurface)
 {
     SDL_assert((g_pSDLWindow != nullptr) && "Window not initialized!");
@@ -86,11 +86,11 @@ MXC_RESULT Window::InitSurface(const VkInstance& vkInstance,
     return MXC_SUCCESS;
 }
 
-std::vector<const char*> Window::GetVulkanInstanceExtentions()
+std::vector<char const*> Window::GetVulkanInstanceExtentions()
 {
     unsigned int extensionCount = 0;
     SDL_Vulkan_GetInstanceExtensions(g_pSDLWindow, &extensionCount, nullptr);
-    std::vector<const char*> requiredInstanceExtensionsNames(extensionCount);
+    std::vector<char const*> requiredInstanceExtensionsNames(extensionCount);
     SDL_Vulkan_GetInstanceExtensions(g_pSDLWindow, &extensionCount, requiredInstanceExtensionsNames.data());
     return requiredInstanceExtensionsNames;// rvo deals with this right?
 }

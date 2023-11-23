@@ -12,7 +12,7 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
-        MXC_RESULT Init(const GlobalDescriptor::Buffer& buffer, const Framebuffer& framebuffer)
+        MXC_RESULT Init(GlobalDescriptor::Buffer const& buffer, Framebuffer const& framebuffer)
         {
             MXC_LOG("Init MaterialDescriptor");
             SDL_assert(m_VkDescriptorSet == nullptr);
@@ -97,7 +97,7 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(m_Buffer);
         }
 
-        void Update(const GlobalDescriptor::Buffer& buffer)
+        void Update(GlobalDescriptor::Buffer const& buffer)
         {
             m_Buffer = buffer;
             Update();

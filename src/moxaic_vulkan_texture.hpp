@@ -18,33 +18,33 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Texture);
 
-        explicit Texture(const Device& device);
+        explicit Texture(Device const& device);
         virtual ~Texture();
 
-        MXC_RESULT InitFromFile(const std::string& file,
-                                const Locality& locality);
+        MXC_RESULT InitFromFile(std::string const& file,
+                                Locality const& locality);
 
-        MXC_RESULT InitFromImport(const VkFormat& format,
-                                  const VkExtent2D& extents,
-                                  const VkImageUsageFlags& usage,
-                                  const VkImageAspectFlags& aspectMask,
+        MXC_RESULT InitFromImport(VkFormat const& format,
+                                  VkExtent2D const& extents,
+                                  VkImageUsageFlags const& usage,
+                                  VkImageAspectFlags const& aspectMask,
                                   const HANDLE& externalMemory);
 
-        MXC_RESULT Init(const VkFormat& format,
-                        const VkExtent2D& extents,
-                        const VkImageUsageFlags& usage,
-                        const VkImageAspectFlags& aspectMask,
-                        const Locality& locality);
+        MXC_RESULT Init(VkFormat const& format,
+                        VkExtent2D const& extents,
+                        VkImageUsageFlags const& usage,
+                        VkImageAspectFlags const& aspectMask,
+                        Locality const& locality);
 
         MXC_RESULT TransitionImmediateInitialToGraphicsRead() const;
 
         HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
 
-        const auto& vkImage() const { return m_VkImage; }
-        const auto& vkImageView() const { return m_VkImageView; }
+        auto const& vkImage() const { return m_VkImage; }
+        auto const& vkImageView() const { return m_VkImageView; }
 
     private:
-        const Device& k_Device;
+        Device const& k_Device;
 
         VkImage m_VkImage{VK_NULL_HANDLE};
         VkImageView m_VkImageView{VK_NULL_HANDLE};
@@ -60,12 +60,12 @@ namespace Moxaic::Vulkan
         MXC_RESULT TransitionImmediateInitialToTransferDst() const;
         MXC_RESULT TransitionImmediateTransferDstToGraphicsRead() const;
 
-        MXC_RESULT InitImage(const VkFormat& format,
-                             const VkExtent2D& extents,
-                             const VkImageUsageFlags& usage,
-                             const Locality& locality);
+        MXC_RESULT InitImage(VkFormat const& format,
+                             VkExtent2D const& extents,
+                             VkImageUsageFlags const& usage,
+                             Locality const& locality);
 
-        MXC_RESULT InitImageView(const VkFormat& format,
-                                 const VkImageAspectFlags& aspectMask);
+        MXC_RESULT InitImageView(VkFormat const& format,
+                                 VkImageAspectFlags const& aspectMask);
     };
 }// namespace Moxaic::Vulkan

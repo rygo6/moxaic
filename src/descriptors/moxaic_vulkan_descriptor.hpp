@@ -20,7 +20,7 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(VulkanDescriptorBase)
 
-        explicit VulkanDescriptorBase(const Device& device)
+        explicit VulkanDescriptorBase(Device const& device)
             : k_Device(device) {}
 
         virtual ~VulkanDescriptorBase()
@@ -31,11 +31,11 @@ namespace Moxaic::Vulkan
                                  &m_VkDescriptorSet);
         }
 
-        const static VkDescriptorSetLayout& vkDescriptorSetLayout() { return s_VkDescriptorSetLayout; }
-        const auto& vkDescriptorSet() const { return m_VkDescriptorSet; }
+        static VkDescriptorSetLayout const& vkDescriptorSetLayout() { return s_VkDescriptorSetLayout; }
+        auto const& vkDescriptorSet() const { return m_VkDescriptorSet; }
 
     protected:
-        const Device& k_Device;
+        Device const& k_Device;
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 
@@ -48,7 +48,7 @@ namespace Moxaic::Vulkan
                 bindings[i].binding = i;
                 bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
             }
-            const VkDescriptorSetLayoutCreateInfo layoutInfo{
+            VkDescriptorSetLayoutCreateInfo const layoutInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
               .pNext = nullptr,
               .flags = 0,
@@ -64,7 +64,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT AllocateDescriptorSet()
         {
-            const VkDescriptorSetAllocateInfo allocInfo{
+            VkDescriptorSetAllocateInfo const allocInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
               .pNext = nullptr,
               .descriptorPool = k_Device.GetVkDescriptorPool(),
@@ -84,9 +84,7 @@ namespace Moxaic::Vulkan
                 writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[i].dstSet = m_VkDescriptorSet;
                 writes[i].dstBinding = i;
-                writes[i].descriptorCount = writes[i].descriptorCount == 0
-                                              ? 1
-                                              : writes[i].descriptorCount;
+                writes[i].descriptorCount = writes[i].descriptorCount == 0 ? 1 : writes[i].descriptorCount;
             }
             VK_CHK_VOID(vkUpdateDescriptorSets(k_Device.GetVkDevice(),
                                                writes.size(),

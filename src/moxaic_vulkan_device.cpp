@@ -20,8 +20,8 @@ using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
 // From OVR Vulkan example. Is this better/same as vulkan tutorial!?
-static MXC_RESULT MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties& physicalDeviceMemoryProperties,
-                                           const VkMemoryPropertyFlags& requiredMemoryProperties,
+static MXC_RESULT MemoryTypeFromProperties(VkPhysicalDeviceMemoryProperties const& physicalDeviceMemoryProperties,
+                                           VkMemoryPropertyFlags const& requiredMemoryProperties,
                                            uint32_t requiredMemoryTypeBits,
                                            uint32_t* pMemTypeIndex)
 {
@@ -114,9 +114,9 @@ MXC_RESULT Device::FindQueues()
     bool foundCompute = false;
 
     for (int i = 0; i < queueFamilyCount; ++i) {
-        const bool globalQueueSupport = queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
-        const bool graphicsSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
-        const bool computeSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
+        bool const globalQueueSupport = queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
+        bool const graphicsSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
+        bool const computeSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
 
         VkBool32 presentSupport = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice,
@@ -160,13 +160,11 @@ MXC_RESULT Device::CreateDevice()
 {
     MXC_LOG("Vulkan::Device::CreateDevice");
 
-    const float queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
-    const VkDeviceQueueGlobalPriorityCreateInfoEXT queueGlobalPriorityCreateInfo = {
+    float const queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
+    VkDeviceQueueGlobalPriorityCreateInfoEXT const queueGlobalPriorityCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
-      .globalPriority = Moxaic::IsCompositor()
-                          ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT
-                          : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT};
-    const StaticArray queueCreateInfos{
+      .globalPriority = Moxaic::IsCompositor() ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT};
+    StaticArray const queueCreateInfos{
       (VkDeviceQueueCreateInfo){
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext = &queueGlobalPriorityCreateInfo,
@@ -331,7 +329,7 @@ MXC_RESULT Device::CreateRenderPass()
       .attachment = 3,
       .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
-    const StaticArray subpass{
+    StaticArray const subpass{
       (VkSubpassDescription){
         .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
         .colorAttachmentCount = colorAttachments.size(),
@@ -405,7 +403,7 @@ MXC_RESULT Device::CreateRenderPass()
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
       }};
-    const VkRenderPassCreateInfo renderPassInfo = {
+    VkRenderPassCreateInfo const renderPassInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
       .attachmentCount = attachments.size(),
       .pAttachments = attachments.data(),
@@ -422,7 +420,7 @@ MXC_RESULT Device::CreateCommandBuffers()
 {
     MXC_LOG("Vulkan::Device::CreateCommandBuffers");
     // Graphics + Compute
-    const VkCommandPoolCreateInfo graphicsPoolInfo = {
+    VkCommandPoolCreateInfo const graphicsPoolInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
       .queueFamilyIndex = m_GraphicsQueueFamilyIndex,
@@ -431,7 +429,7 @@ MXC_RESULT Device::CreateCommandBuffers()
                                &graphicsPoolInfo,
                                VK_ALLOC,
                                &m_VkGraphicsCommandPool));
-    const VkCommandBufferAllocateInfo graphicsAllocateInfo = {
+    VkCommandBufferAllocateInfo const graphicsAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = m_VkGraphicsCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
@@ -442,7 +440,7 @@ MXC_RESULT Device::CreateCommandBuffers()
                                     &m_VkGraphicsCommandBuffer));
 
     // Compute
-    const VkCommandPoolCreateInfo computePoolInfo = {
+    VkCommandPoolCreateInfo const computePoolInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
       .queueFamilyIndex = m_ComputeQueueFamilyIndex,
@@ -451,7 +449,7 @@ MXC_RESULT Device::CreateCommandBuffers()
                                &computePoolInfo,
                                VK_ALLOC,
                                &m_VkComputeCommandPool));
-    const VkCommandBufferAllocateInfo computeAllocInfo = {
+    VkCommandBufferAllocateInfo const computeAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = m_VkComputeCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
@@ -489,7 +487,7 @@ MXC_RESULT Device::CreatePools()
         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 4,
       }};
-    const VkDescriptorPoolCreateInfo poolInfo{
+    VkDescriptorPoolCreateInfo const poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
       .pNext = nullptr,
       .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
@@ -507,7 +505,7 @@ MXC_RESULT Device::CreatePools()
 MXC_RESULT Device::CreateSamplers()
 {
     MXC_LOG("Vulkan::Device::CreateSamplers");
-    const VkSamplerCreateInfo linearSamplerInfo{
+    VkSamplerCreateInfo const linearSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .magFilter = VK_FILTER_LINEAR,
       .minFilter = VK_FILTER_LINEAR,
@@ -527,7 +525,7 @@ MXC_RESULT Device::CreateSamplers()
     };
     VK_CHK(vkCreateSampler(m_VkDevice, &linearSamplerInfo, VK_ALLOC, &m_VkLinearSampler));
 
-    const VkSamplerCreateInfo nearestSamplerInfo{
+    VkSamplerCreateInfo const nearestSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .magFilter = VK_FILTER_LINEAR,
       .minFilter = VK_FILTER_LINEAR,
@@ -572,9 +570,9 @@ MXC_RESULT Device::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::AllocateBindImageExport(const VkMemoryPropertyFlags properties,
-                                           const VkImage image,
-                                           const VkExternalMemoryHandleTypeFlags externalHandleType,
+MXC_RESULT Device::AllocateBindImageExport(VkMemoryPropertyFlags const properties,
+                                           VkImage const image,
+                                           VkExternalMemoryHandleTypeFlags const externalHandleType,
                                            VkDeviceMemory* pDeviceMemory) const
 {
     VkMemoryRequirements memRequirements{};
@@ -592,11 +590,11 @@ MXC_RESULT Device::AllocateBindImageExport(const VkMemoryPropertyFlags propertie
     //            .image = pTestTexture->image,
     //            .buffer = VK_NULL_HANDLE,
     //    };
-    const VkExportMemoryAllocateInfo exportAllocInfo{
+    VkExportMemoryAllocateInfo const exportAllocInfo{
       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
       //            .pNext =&dedicatedAllocInfo,
       .handleTypes = externalHandleType};
-    const VkMemoryAllocateInfo allocateInfo{
+    VkMemoryAllocateInfo const allocateInfo{
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &exportAllocInfo,
       .allocationSize = memRequirements.size,
@@ -613,9 +611,9 @@ MXC_RESULT Device::AllocateBindImageExport(const VkMemoryPropertyFlags propertie
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::AllocateBindImageImport(const VkMemoryPropertyFlags properties,
-                                           const VkImage image,
-                                           const VkExternalMemoryHandleTypeFlagBits externalHandleType,
+MXC_RESULT Device::AllocateBindImageImport(VkMemoryPropertyFlags const properties,
+                                           VkImage const image,
+                                           VkExternalMemoryHandleTypeFlagBits const externalHandleType,
                                            const HANDLE externalHandle,
                                            VkDeviceMemory* pDeviceMemory) const
 {
@@ -634,13 +632,13 @@ MXC_RESULT Device::AllocateBindImageImport(const VkMemoryPropertyFlags propertie
     //            .image = pTestTexture->image,
     //            .buffer = VK_NULL_HANDLE,
     //    };
-    const VkImportMemoryWin32HandleInfoKHR importMemoryInfo{
+    VkImportMemoryWin32HandleInfoKHR const importMemoryInfo{
       .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
       //            .pNext = &dedicatedAllocInfo,
       .handleType = externalHandleType,
       .handle = externalHandle,
     };
-    const VkMemoryAllocateInfo allocateInfo{
+    VkMemoryAllocateInfo const allocateInfo{
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = &importMemoryInfo,
       .allocationSize = memRequirements.size,
@@ -659,8 +657,8 @@ MXC_RESULT Device::AllocateBindImageImport(const VkMemoryPropertyFlags propertie
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
-                                     const VkImage image,
+MXC_RESULT Device::AllocateBindImage(VkMemoryPropertyFlags const properties,
+                                     VkImage const image,
                                      VkDeviceMemory* pDeviceMemory) const
 {
     VkMemoryRequirements memRequirements{};
@@ -672,7 +670,7 @@ MXC_RESULT Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
                                      properties,
                                      memRequirements.memoryTypeBits,
                                      &memTypeIndex));
-    const VkMemoryAllocateInfo allocateInfo{
+    VkMemoryAllocateInfo const allocateInfo{
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = nullptr,
       .allocationSize = memRequirements.size,
@@ -691,9 +689,9 @@ MXC_RESULT Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
-                                            const VkMemoryPropertyFlags properties,
-                                            const VkDeviceSize bufferSize,
+MXC_RESULT Device::CreateAllocateBindBuffer(VkBufferUsageFlags const usage,
+                                            VkMemoryPropertyFlags const properties,
+                                            VkDeviceSize const bufferSize,
                                             VkBuffer* pBuffer,
                                             VkDeviceMemory* pDeviceMemory) const
 {
@@ -706,10 +704,10 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
                                     nullptr);
 }
 
-MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
-                                            const VkMemoryPropertyFlags properties,
-                                            const VkDeviceSize bufferSize,
-                                            const Vulkan::Locality locality,
+MXC_RESULT Device::CreateAllocateBindBuffer(VkBufferUsageFlags const usage,
+                                            VkMemoryPropertyFlags const properties,
+                                            VkDeviceSize const bufferSize,
+                                            Vulkan::Locality const locality,
                                             VkBuffer* pBuffer,
                                             VkDeviceMemory* pDeviceMemory,
                                             HANDLE* pExternalMemory) const
@@ -718,7 +716,7 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_BUFFER_CREATE_INFO_KHR,
       .pNext = nullptr,
       .handleTypes = MXC_EXTERNAL_MEMORY_HANDLE};
-    const VkBufferCreateInfo bufferCreateInfo{
+    VkBufferCreateInfo const bufferCreateInfo{
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .pNext = locality == Locality::Local ? nullptr : &externalBufferInfo,
       .flags = 0,
@@ -757,11 +755,11 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
       .dwAccess = GENERIC_READ,
       .name = nullptr,
     };
-    const VkExportMemoryAllocateInfo exportAllocInfo{
+    VkExportMemoryAllocateInfo const exportAllocInfo{
       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
       .pNext = &exportMemoryWin32HandleInfo,
       .handleTypes = MXC_EXTERNAL_MEMORY_HANDLE};
-    const VkMemoryAllocateInfo allocInfo = {
+    VkMemoryAllocateInfo const allocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = locality == Locality::Local ? nullptr : &exportAllocInfo,
       .allocationSize = memRequirements.size,
@@ -777,7 +775,7 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
 
     if (locality == Locality::External) {
 #if WIN32
-        const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+        VkMemoryGetWin32HandleInfoKHR const getWin32HandleInfo = {
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .pNext = nullptr,
           .memory = *pDeviceMemory,
@@ -791,8 +789,8 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::CreateStagingBuffer(const void* srcData,
-                                       const VkDeviceSize bufferSize,
+MXC_RESULT Device::CreateStagingBuffer(void const* srcData,
+                                       VkDeviceSize const bufferSize,
                                        VkBuffer* pStagingBuffer,
                                        VkDeviceMemory* pStagingBufferMemory) const
 {
@@ -808,13 +806,13 @@ MXC_RESULT Device::CreateStagingBuffer(const void* srcData,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::CopyBufferToBuffer(const VkDeviceSize bufferSize,
-                                      const VkBuffer srcBuffer,
-                                      const VkBuffer dstBuffer) const
+MXC_RESULT Device::CopyBufferToBuffer(VkDeviceSize const bufferSize,
+                                      VkBuffer const srcBuffer,
+                                      VkBuffer const dstBuffer) const
 {
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
-    const VkBufferCopy copyRegion = {
+    VkBufferCopy const copyRegion = {
       .srcOffset = 0,
       .dstOffset = 0,
       .size = bufferSize,
@@ -828,13 +826,13 @@ MXC_RESULT Device::CopyBufferToBuffer(const VkDeviceSize bufferSize,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::CopyBufferToImage(const VkExtent2D imageExtent,
-                                     const VkBuffer srcBuffer,
-                                     const VkImage dstImage) const
+MXC_RESULT Device::CopyBufferToImage(VkExtent2D const imageExtent,
+                                     VkBuffer const srcBuffer,
+                                     VkImage const dstImage) const
 {
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
-    const VkBufferImageCopy region{
+    VkBufferImageCopy const region{
       .bufferOffset = 0,
       .bufferRowLength = 0,
       .bufferImageHeight = 0,
@@ -861,9 +859,9 @@ MXC_RESULT Device::CopyBufferToImage(const VkExtent2D imageExtent,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::CreateAllocateBindPopulateBufferViaStaging(const void* srcData,
-                                                              const VkBufferUsageFlagBits usage,
-                                                              const VkDeviceSize bufferSize,
+MXC_RESULT Device::CreateAllocateBindPopulateBufferViaStaging(void const* srcData,
+                                                              VkBufferUsageFlagBits const usage,
+                                                              VkDeviceSize const bufferSize,
                                                               VkBuffer* pBuffer,
                                                               VkDeviceMemory* pBufferMemory) const
 {
@@ -892,18 +890,18 @@ MXC_RESULT Device::CreateAllocateBindPopulateBufferViaStaging(const void* srcDat
 
 // TODO implemented for unified graphics + transfer only right now
 //  https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#transfer-dependencies
-MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage image,
-                                                  const VkImageLayout oldLayout,
-                                                  const VkImageLayout newLayout,
-                                                  const VkAccessFlags srcAccessMask,
-                                                  const VkAccessFlags dstAccessMask,
-                                                  const VkPipelineStageFlags srcStageMask,
-                                                  const VkPipelineStageFlags dstStageMask,
-                                                  const VkImageAspectFlags aspectMask) const
+MXC_RESULT Device::TransitionImageLayoutImmediate(VkImage const image,
+                                                  VkImageLayout const oldLayout,
+                                                  VkImageLayout const newLayout,
+                                                  VkAccessFlags const srcAccessMask,
+                                                  VkAccessFlags const dstAccessMask,
+                                                  VkPipelineStageFlags const srcStageMask,
+                                                  VkPipelineStageFlags const dstStageMask,
+                                                  VkImageAspectFlags const aspectMask) const
 {
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(commandBuffer));
-    const VkImageMemoryBarrier imageMemoryBarrier{
+    VkImageMemoryBarrier const imageMemoryBarrier{
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
       .srcAccessMask = srcAccessMask,
       .dstAccessMask = dstAccessMask,
@@ -935,7 +933,7 @@ MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage image,
 // TODO make use transfer queue
 MXC_RESULT Device::BeginImmediateCommandBuffer(VkCommandBuffer& outCommandBuffer) const
 {
-    const VkCommandBufferAllocateInfo allocInfo = {
+    VkCommandBufferAllocateInfo const allocInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .pNext = nullptr,
       .commandPool = m_VkGraphicsCommandPool,
@@ -957,10 +955,10 @@ MXC_RESULT Device::BeginImmediateCommandBuffer(VkCommandBuffer& outCommandBuffer
 }
 
 // TODO make use transfer queue
-MXC_RESULT Device::EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffer) const
+MXC_RESULT Device::EndImmediateCommandBuffer(VkCommandBuffer const& commandBuffer) const
 {
     VK_CHK(vkEndCommandBuffer(commandBuffer));
-    const VkSubmitInfo submitInfo = {
+    VkSubmitInfo const submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
       .pNext = nullptr,
       .waitSemaphoreCount = 0,
@@ -990,7 +988,7 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer() const
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
     VK_CHK(vkBeginCommandBuffer(m_VkGraphicsCommandBuffer, &beginInfo));
-    const VkViewport viewport{
+    VkViewport const viewport{
       .x = 0.0f,
       .y = 0.0f,
       .width = static_cast<float>(Window::extents().width),
@@ -1002,7 +1000,7 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer() const
                      0,
                      1,
                      &viewport);
-    const VkRect2D scissor{
+    VkRect2D const scissor{
       .offset = {0, 0},
       .extent = Window::extents(),
     };
@@ -1019,14 +1017,14 @@ MXC_RESULT Device::EndGraphicsCommandBuffer() const
     return MXC_SUCCESS;
 }
 
-void Device::BeginRenderPass(const Framebuffer& framebuffer, const VkClearColorValue& backgroundColor) const
+void Device::BeginRenderPass(Framebuffer const& framebuffer, VkClearColorValue const& backgroundColor) const
 {
     StaticArray<VkClearValue, 4> clearValues;
     clearValues[0].color = backgroundColor;
     clearValues[1].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
     clearValues[2].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
     clearValues[3].depthStencil = (VkClearDepthStencilValue){1.0f, 0};
-    const VkRenderPassBeginInfo renderPassBeginInfo{
+    VkRenderPassBeginInfo const renderPassBeginInfo{
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = nullptr,
       .renderPass = m_VkRenderPass,
@@ -1051,16 +1049,16 @@ void Device::EndRenderPass() const
 MXC_RESULT Device::SubmitGraphicsQueue(Semaphore& timelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    const uint64_t waitValue = timelineSemaphore.GetWaitValue();
+    uint64_t const waitValue = timelineSemaphore.GetWaitValue();
     timelineSemaphore.IncrementWaitValue();
-    const uint64_t signalValue = timelineSemaphore.GetWaitValue();
-    const StaticArray waitSemaphoreValues{
+    uint64_t const signalValue = timelineSemaphore.GetWaitValue();
+    StaticArray const waitSemaphoreValues{
       waitValue,
     };
-    const StaticArray signalSemaphoreValues{
+    StaticArray const signalSemaphoreValues{
       signalValue,
     };
-    const VkTimelineSemaphoreSubmitInfo timelineSemaphoreSubmitInfo{
+    VkTimelineSemaphoreSubmitInfo const timelineSemaphoreSubmitInfo{
       .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
       .pNext = nullptr,
       .waitSemaphoreValueCount = waitSemaphoreValues.size(),
@@ -1068,16 +1066,16 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore& timelineSemaphore) const
       .signalSemaphoreValueCount = signalSemaphoreValues.size(),
       .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
-    const StaticArray waitSemaphores{
+    StaticArray const waitSemaphores{
       timelineSemaphore.GetVkSemaphore(),
     };
     constexpr StaticArray waitDstStageMask{
       (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
     };
-    const StaticArray signalSemaphores{
+    StaticArray const signalSemaphores{
       timelineSemaphore.GetVkSemaphore(),
     };
-    const VkSubmitInfo submitInfo = {
+    VkSubmitInfo const submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
       .pNext = &timelineSemaphoreSubmitInfo,
       .waitSemaphoreCount = waitSemaphores.size(),
@@ -1095,19 +1093,19 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore& timelineSemaphore) const
 }
 
 MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
-                                                 const Swap& swap) const
+                                                 Swap const& swap) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    const uint64_t waitValue = timelineSemaphore.GetWaitValue();
+    uint64_t const waitValue = timelineSemaphore.GetWaitValue();
     timelineSemaphore.IncrementWaitValue();
-    const uint64_t signalValue = timelineSemaphore.GetWaitValue();
-    const StaticArray waitSemaphoreValues{
+    uint64_t const signalValue = timelineSemaphore.GetWaitValue();
+    StaticArray const waitSemaphoreValues{
       (uint64_t) waitValue,
       (uint64_t) 0};
-    const StaticArray signalSemaphoreValues{
+    StaticArray const signalSemaphoreValues{
       (uint64_t) signalValue,
       (uint64_t) 0};
-    const VkTimelineSemaphoreSubmitInfo timelineSemaphoreSubmitInfo{
+    VkTimelineSemaphoreSubmitInfo const timelineSemaphoreSubmitInfo{
       .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
       .pNext = nullptr,
       .waitSemaphoreValueCount = waitSemaphoreValues.size(),
@@ -1115,18 +1113,18 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
       .signalSemaphoreValueCount = signalSemaphoreValues.size(),
       .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
-    const StaticArray waitSemaphores{
+    StaticArray const waitSemaphores{
       timelineSemaphore.GetVkSemaphore(),
       swap.GetVkAcquireCompleteSemaphore(),
     };
     constexpr StaticArray waitDstStageMask{
       (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
       (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    const StaticArray signalSemaphores{
+    StaticArray const signalSemaphores{
       timelineSemaphore.GetVkSemaphore(),
       swap.vkRenderCompleteSemaphore(),
     };
-    const VkSubmitInfo submitInfo = {
+    VkSubmitInfo const submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
       .pNext = &timelineSemaphoreSubmitInfo,
       .waitSemaphoreCount = waitSemaphores.size(),

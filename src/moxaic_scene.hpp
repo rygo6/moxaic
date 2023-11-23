@@ -26,16 +26,16 @@ namespace Moxaic
     public:
         MXC_NO_VALUE_PASS(SceneBase);
 
-        explicit SceneBase(const Vulkan::Device& device)
+        explicit SceneBase(Vulkan::Device const& device)
             : k_Device(device) {}
 
         virtual ~SceneBase() = default;
 
         virtual MXC_RESULT Init() = 0;
-        virtual MXC_RESULT Loop(uint32_t deltaTime) = 0;
+        virtual MXC_RESULT Loop(uint32_t const& deltaTime) = 0;
 
     protected:
-        const Vulkan::Device& k_Device;
+        Vulkan::Device const& k_Device;
     };
 
     class CompositorScene : public SceneBase
@@ -44,7 +44,7 @@ namespace Moxaic
         using SceneBase::SceneBase;
 
         MXC_RESULT Init() override;
-        MXC_RESULT Loop(const uint32_t deltaTime) override;
+        MXC_RESULT Loop(uint32_t const& deltaTime) override;
 
     private:
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{
@@ -83,7 +83,7 @@ namespace Moxaic
         using SceneBase::SceneBase;
 
         MXC_RESULT Init() override;
-        MXC_RESULT Loop(const uint32_t deltaTime) override;
+        MXC_RESULT Loop(uint32_t const& deltaTime) override;
 
     private:
         // should node be here? maybe outside scene?

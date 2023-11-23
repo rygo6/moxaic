@@ -26,7 +26,7 @@ namespace Moxaic
             CloseHandle(m_hMapFile);
         };
 
-        MXC_RESULT Init(const std::string& sharedMemoryName)
+        MXC_RESULT Init(std::string const& sharedMemoryName)
         {
             m_hMapFile = CreateFileMapping(
               INVALID_HANDLE_VALUE,
@@ -60,20 +60,20 @@ namespace Moxaic
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT InitFromImport(const std::string& sharedMemoryName)
+        MXC_RESULT InitFromImport(std::string const& sharedMemoryName)
         {
             // todo properly receive handle
             return Init(sharedMemoryName);
         }
 
-        void CopyBuffer(const T& srcBuffer)
+        void CopyBuffer(T const& srcBuffer)
         {
             memcpy(m_pBuffer, &srcBuffer, Size());
         }
 
         static constexpr int Size() { return sizeof(T); }
 
-        const T& buffer() const { return *static_cast<T*>(m_pBuffer); }
+        T const& buffer() const { return *static_cast<T*>(m_pBuffer); }
 
     protected:
 #ifdef WIN32
@@ -105,7 +105,7 @@ namespace Moxaic
     class InterProcessProducer : public InterProcessBuffer<RingBuffer>
     {
     public:
-        void Enque(InterProcessTargetFunc, const void* param) const;
+        void Enque(InterProcessTargetFunc, void const* param) const;
     };
 
     class InterProcessReceiver : public InterProcessBuffer<RingBuffer>
@@ -114,8 +114,8 @@ namespace Moxaic
 
     public:
         InterProcessReceiver() = default;
-        MXC_RESULT Init(const std::string& sharedMemoryName,
-                        const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count>&& targetFuncs);
+        MXC_RESULT Init(std::string const& sharedMemoryName,
+                        StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> const&& targetFuncs);
         int Deque() const;
 
     private:

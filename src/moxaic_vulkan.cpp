@@ -18,7 +18,7 @@ static VkSurfaceKHR g_VulkanSurface;
 static bool g_VulkanValidationLayers;
 static VkDebugUtilsMessengerEXT g_VulkanDebugMessenger;
 
-static const char* SeverityToName(const VkDebugUtilsMessageSeverityFlagBitsEXT severity)
+static char const* SeverityToName(VkDebugUtilsMessageSeverityFlagBitsEXT const severity)
 {
     switch (severity) {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
@@ -33,9 +33,9 @@ static const char* SeverityToName(const VkDebugUtilsMessageSeverityFlagBitsEXT s
     }
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT const messageSeverity,
                                                     VkDebugUtilsMessageTypeFlagsEXT messageType,
-                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    VkDebugUtilsMessengerCallbackDataEXT const* pCallbackData,
                                                     void* pUserData)
 {
     MXC_LOG_ERROR(SeverityToName(messageSeverity),
@@ -47,7 +47,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSev
     return VK_FALSE;
 }
 
-static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const char*>& requiredInstanceLayerNames)
+static MXC_RESULT CheckVulkanInstanceLayerProperties(std::vector<char const*> const& requiredInstanceLayerNames)
 {
     MXC_LOG_FUNCTION();
     unsigned int count = 0;
@@ -55,7 +55,7 @@ static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const cha
     std::vector<VkLayerProperties> properties(count);
     VK_CHK(vkEnumerateInstanceLayerProperties(&count, properties.data()));
 
-    for (const auto requiredName: requiredInstanceLayerNames) {
+    for (auto const requiredName: requiredInstanceLayerNames) {
         MXC_LOG("Loading InstanceLayer: ", requiredName);
         bool found = false;
         for (VkLayerProperties property: properties) {
@@ -72,7 +72,7 @@ static MXC_RESULT CheckVulkanInstanceLayerProperties(const std::vector<const cha
     return MXC_SUCCESS;
 }
 
-static MXC_RESULT CheckVulkanInstanceExtensions(const std::vector<const char*>& requiredInstanceExtensionsNames)
+static MXC_RESULT CheckVulkanInstanceExtensions(std::vector<char const*> const& requiredInstanceExtensionsNames)
 {
     MXC_LOG_FUNCTION();
     unsigned int count = 0;
@@ -80,7 +80,7 @@ static MXC_RESULT CheckVulkanInstanceExtensions(const std::vector<const char*>& 
     std::vector<VkExtensionProperties> properties(count);
     VK_CHK(vkEnumerateInstanceExtensionProperties(nullptr, &count, properties.data()));
 
-    for (const auto requiredName: requiredInstanceExtensionsNames) {
+    for (auto const requiredName: requiredInstanceExtensionsNames) {
         MXC_LOG("Loading InstanceExtension:", requiredName);
         bool found = false;
         for (VkExtensionProperties property: properties) {
@@ -115,7 +115,7 @@ static MXC_RESULT CreateVulkanInstance()
     };
 
     // Instance Layers
-    std::vector<const char*> requiredInstanceLayerNames;
+    std::vector<char const*> requiredInstanceLayerNames;
     if (g_VulkanValidationLayers) {
         requiredInstanceLayerNames.push_back("VK_LAYER_KHRONOS_validation");
     }
@@ -175,7 +175,7 @@ static MXC_RESULT CreateVulkanDebugOutput()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Vulkan::Init(const bool enableValidationLayers)
+MXC_RESULT Vulkan::Init(bool const enableValidationLayers)
 {
     MXC_LOG("Vulkan::Init");
 

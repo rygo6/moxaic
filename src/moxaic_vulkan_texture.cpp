@@ -17,7 +17,7 @@
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-Texture::Texture(const Device& device)
+Texture::Texture(Device const& device)
     : k_Device(device) {}
 
 Texture::~Texture()
@@ -29,8 +29,8 @@ Texture::~Texture()
         CloseHandle(m_ExternalHandle);
 }
 
-MXC_RESULT Texture::InitFromFile(const std::string& file,
-                                 const Locality& locality)
+MXC_RESULT Texture::InitFromFile(std::string const& file,
+                                 Locality const& locality)
 {
     MXC_LOG("Texture::InitFromFile",
             file,
@@ -43,7 +43,7 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
                                 &height,
                                 &texChannels,
                                 STBI_rgb_alpha);
-    const VkDeviceSize imageBufferSize = width * height * 4;
+    VkDeviceSize const imageBufferSize = width * height * 4;
 
     MXC_LOG("Loading texture from file.", file, width, height, texChannels);
 
@@ -52,7 +52,7 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
         return MXC_FAIL;
     }
 
-    const VkExtent2D extents = {
+    VkExtent2D const extents = {
       static_cast<uint32_t>(width),
       static_cast<uint32_t>(height)};
 
@@ -87,10 +87,10 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::InitFromImport(const VkFormat& format,
-                                   const VkExtent2D& extents,
-                                   const VkImageUsageFlags& usage,
-                                   const VkImageAspectFlags& aspectMask,
+MXC_RESULT Texture::InitFromImport(VkFormat const& format,
+                                   VkExtent2D const& extents,
+                                   VkImageUsageFlags const& usage,
+                                   VkImageAspectFlags const& aspectMask,
                                    const HANDLE& externalMemory)
 {
     MXC_LOG_MULTILINE("Texture::InitFromImport",
@@ -113,11 +113,11 @@ MXC_RESULT Texture::InitFromImport(const VkFormat& format,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::Init(const VkFormat& format,
-                         const VkExtent2D& extents,
-                         const VkImageUsageFlags& usage,
-                         const VkImageAspectFlags& aspectMask,
-                         const Locality& locality)
+MXC_RESULT Texture::Init(VkFormat const& format,
+                         VkExtent2D const& extents,
+                         VkImageUsageFlags const& usage,
+                         VkImageAspectFlags const& aspectMask,
+                         Locality const& locality)
 {
     MXC_LOG_MULTILINE("Texture::Init",
                       string_VkFormat(format),
@@ -144,7 +144,7 @@ MXC_RESULT Texture::Init(const VkFormat& format,
     MXC_CHK(InitImageView(format, aspectMask));
     if (locality == Locality::External) {
 #if WIN32
-        const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+        VkMemoryGetWin32HandleInfoKHR const getWin32HandleInfo = {
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .pNext = nullptr,
           .memory = m_VkDeviceMemory,
@@ -209,10 +209,10 @@ HANDLE Texture::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
     return duplicateHandle;
 }
 
-MXC_RESULT Texture::InitImageView(const VkFormat& format,
-                                  const VkImageAspectFlags& aspectMask)
+MXC_RESULT Texture::InitImageView(VkFormat const& format,
+                                  VkImageAspectFlags const& aspectMask)
 {
-    const VkImageViewCreateInfo imageViewCreateInfo{
+    VkImageViewCreateInfo const imageViewCreateInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
@@ -238,17 +238,17 @@ MXC_RESULT Texture::InitImageView(const VkFormat& format,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::InitImage(const VkFormat& format,
-                              const VkExtent2D& extents,
-                              const VkImageUsageFlags& usage,
-                              const Locality& locality)
+MXC_RESULT Texture::InitImage(VkFormat const& format,
+                              VkExtent2D const& extents,
+                              VkImageUsageFlags const& usage,
+                              Locality const& locality)
 {
     constexpr VkExternalMemoryImageCreateInfo externalImageInfo{
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .pNext = nullptr,
       .handleTypes = MXC_EXTERNAL_HANDLE_TYPE,
     };
-    const VkImageCreateInfo imageCreateInfo{
+    VkImageCreateInfo const imageCreateInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .pNext = locality == Locality::External ? &externalImageInfo : nullptr,
       .imageType = VK_IMAGE_TYPE_2D,

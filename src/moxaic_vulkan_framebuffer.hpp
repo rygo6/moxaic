@@ -23,10 +23,10 @@ namespace Moxaic::Vulkan
                         Locality const& locality);
 
         MXC_RESULT InitFromImport(VkExtent2D const& extents,
-                                  const HANDLE& colorExternalHandle,
-                                  const HANDLE& normalExternalHandle,
-                                  const HANDLE& gBufferExternalHandle,
-                                  const HANDLE& depthExternalHandle);
+                                  HANDLE& const colorExternalHandle,
+                                  HANDLE& const normalExternalHandle,
+                                  HANDLE& const gBufferExternalHandle,
+                                  HANDLE& const depthExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
         void Transition(BarrierSrc const& src,

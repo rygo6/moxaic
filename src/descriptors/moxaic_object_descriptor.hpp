@@ -20,7 +20,7 @@ namespace Moxaic::Vulkan
             glm::mat4 model;
         };
 
-        MXC_RESULT Init(const Transform& transform)
+        MXC_RESULT Init(Transform const& transform)
         {
             MXC_LOG("Init ObjectDescriptor");
             SDL_assert(m_VkDescriptorSet == nullptr);

@@ -6,8 +6,8 @@
 #include <vulkan/vulkan.h>
 
 #ifdef WIN32
-#include <windows.h>
 #include <vulkan/vulkan_win32.h>
+#include <windows.h>
 #endif
 
 inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;
@@ -163,7 +163,7 @@ namespace Moxaic::Vulkan
         External,
     };
 
-    inline const char* string_Locality(const Locality input_value)
+    inline char const* string_Locality(Locality const input_value)
     {
         switch (input_value) {
             case Locality::Local:
@@ -178,8 +178,8 @@ namespace Moxaic::Vulkan
     struct Debug
     {
         int DebugLine;
-        const char* DebugCommand;
-        const char* DebugFile;
+        char const* DebugCommand;
+        char const* DebugFile;
     };
     inline Debug VkDebug;
 

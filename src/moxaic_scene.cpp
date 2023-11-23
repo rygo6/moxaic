@@ -58,7 +58,7 @@ MXC_RESULT CompositorScene::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
+MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
 {
     if (m_MainCamera.UserCommandUpdate(deltaTime)) {
         // should camera auto update descriptor somehow?
@@ -83,7 +83,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t deltaTime)
         m_NodeReference.GlobalDescriptor()->CopyBuffer(m_GlobalDescriptor.buffer());
     }
 
-    const auto& framebuffer = m_Framebuffers[m_FramebufferIndex];
+    auto const& framebuffer = m_Framebuffers[m_FramebufferIndex];
     k_Device.BeginRenderPass(framebuffer,
                              (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
@@ -151,13 +151,13 @@ MXC_RESULT NodeScene::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT NodeScene::Loop(const uint32_t deltaTime)
+MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
 {
     m_GlobalDescriptor.Update(m_Node.globalDescriptor().buffer());
 
     k_Device.BeginGraphicsCommandBuffer();
 
-    const auto& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
+    auto const& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
     framebuffer.Transition(Vulkan::AcquireFromExternal, Vulkan::ToGraphicsAttach);
 
     k_Device.BeginRenderPass(framebuffer,

@@ -48,7 +48,7 @@ static MXC_RESULT StartProcess(STARTUPINFO& si, PROCESS_INFORMATION& pi)
     return MXC_SUCCESS;
 }
 
-NodeReference::NodeReference(const Vulkan::Device& device)
+NodeReference::NodeReference(Vulkan::Device const& device)
     : k_Device(device) {}
 
 NodeReference::~NodeReference()
@@ -76,10 +76,10 @@ MXC_RESULT NodeReference::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore)
+MXC_RESULT NodeReference::ExportOverIPC(Vulkan::Semaphore const& compositorSemaphore)
 {
-    const auto hProcess = m_ProcessInformation.hProcess;
-    const Node::ImportParam importParam{
+    auto const hProcess = m_ProcessInformation.hProcess;
+    Node::ImportParam const importParam{
       .framebufferWidth = m_ExportedFramebuffers[0].extents().width,
       .framebufferHeight = m_ExportedFramebuffers[0].extents().height,
       .colorFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].colorTexture().ClonedExternalHandle(hProcess),
@@ -98,16 +98,16 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemap
     return MXC_SUCCESS;
 }
 
-Node::Node(const Vulkan::Device& device)
+Node::Node(Vulkan::Device const& device)
     : k_Device(device) {}
 
 Node::~Node() = default;
 
 MXC_RESULT Node::Init()
 {
-    const StaticArray targetFuncs{
+    StaticArray const targetFuncs{
       (InterProcessFunc)[this](void* pParameters){
-        const auto pImportParameters = static_cast<ImportParam*>(pParameters);
+        auto const pImportParameters = static_cast<ImportParam*>(pParameters);
     this->InitImport(*pImportParameters);
 }
 }
@@ -116,7 +116,7 @@ m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
 return MXC_SUCCESS;
 }
 
-MXC_RESULT Node::InitImport(const ImportParam& parameters)
+MXC_RESULT Node::InitImport(ImportParam const& parameters)
 {
     MXC_LOG("Node Init Import");
     m_ImportedFramebuffers[0].InitFromImport({parameters.framebufferWidth, parameters.framebufferHeight},

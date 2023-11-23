@@ -27,10 +27,10 @@ namespace Moxaic
         MXC_GETSET(Far);
         MXC_GETSET(Aspect);
 
-        const auto& view() const { return m_View; }
-        const auto& projection() const { return m_Projection; }
-        const auto& inverseView() const { return m_InverseView; }
-        const auto& inverseProjection() const { return m_InverseProjection; }
+        auto const& view() const { return m_View; }
+        auto const& projection() const { return m_Projection; }
+        auto const& inverseView() const { return m_InverseView; }
+        auto const& inverseProjection() const { return m_InverseProjection; }
 
     private:
         float m_FOV{45.0f};

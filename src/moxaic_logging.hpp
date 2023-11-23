@@ -41,21 +41,21 @@ namespace Moxaic
     }
 
     template<typename... Types>
-    void LogParams(const char* file, const int line, Types... params)
+    void LogParams(char const* file, int const line, Types... params)
     {
         std::cerr << string_Role(Moxaic::Role) << " " << file << ':' << line;
         LogParams(params...);
     }
 
     template<typename... Types>
-    void LogParamsMultiline(const char* file, const int line, Types... params)
+    void LogParamsMultiline(char const* file, int const line, Types... params)
     {
         std::cerr << string_Role(Moxaic::Role) << " " << file << ':' << line;
         LogParamsMultiline(params...);
     }
 
     template<typename... Types>
-    void LogError(const char* file, const int line, Types... params)
+    void LogError(char const* file, int const line, Types... params)
     {
         SetConsoleTextRed();
         std::cerr << "!!! " << string_Role(Moxaic::Role) << " " << file << ':' << line;

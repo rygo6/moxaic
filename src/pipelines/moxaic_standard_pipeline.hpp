@@ -22,13 +22,13 @@ namespace Moxaic::Vulkan
     public:
         using VulkanPipeline::VulkanPipeline;
 
-        MXC_RESULT Init(const GlobalDescriptor& globalDescriptor,
-                        const StandardMaterialDescriptor& materialDescriptor,
-                        const ObjectDescriptor& objectDescriptor)
+        MXC_RESULT Init(GlobalDescriptor const& globalDescriptor,
+                        StandardMaterialDescriptor const& materialDescriptor,
+                        ObjectDescriptor const& objectDescriptor)
         {
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
-                const StaticArray setLayouts{
+                StaticArray const setLayouts{
                   globalDescriptor.vkDescriptorSetLayout(),
                   materialDescriptor.vkDescriptorSetLayout(),
                   objectDescriptor.vkDescriptorSetLayout(),
@@ -42,7 +42,7 @@ namespace Moxaic::Vulkan
             VkShaderModule fragShader;
             MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv",
                                        fragShader));
-            const StaticArray stages{
+            StaticArray const stages{
               (VkPipelineShaderStageCreateInfo){
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -64,7 +64,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void BindDescriptor(const GlobalDescriptor& descriptor) const
+        void BindDescriptor(GlobalDescriptor const& descriptor) const
         {
             vkCmdBindDescriptorSets(k_Device.GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -76,7 +76,7 @@ namespace Moxaic::Vulkan
                                     nullptr);
         }
 
-        void BindDescriptor(const StandardMaterialDescriptor& descriptor) const
+        void BindDescriptor(StandardMaterialDescriptor const& descriptor) const
         {
             vkCmdBindDescriptorSets(k_Device.GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -88,7 +88,7 @@ namespace Moxaic::Vulkan
                                     nullptr);
         }
 
-        void BindDescriptor(const ObjectDescriptor& descriptor) const
+        void BindDescriptor(ObjectDescriptor const& descriptor) const
         {
             vkCmdBindDescriptorSets(k_Device.GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,

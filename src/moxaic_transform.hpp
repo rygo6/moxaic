@@ -22,43 +22,43 @@ namespace Moxaic
             m_Position += delta;
         }
 
-        void LocalTranslate(const float x, const float y, const float z)
+        void LocalTranslate(float const x, float const y, float const z)
         {
             auto delta = glm::vec3(x, y, z);
             delta = glm::rotate(m_Orientation, delta);
             m_Position += delta;
         }
 
-        void Rotate(const float x, const float y, const float z)
+        void Rotate(float const x, float const y, float const z)
         {
-            const auto rotation = glm::quat(glm::vec3(
+            auto const rotation = glm::quat(glm::vec3(
               glm::radians(x),
               glm::radians(y),
               glm::radians(z)));
             m_Orientation = rotation * m_Orientation;
         }
 
-        void Rotate(const glm::vec3 euler)
+        void Rotate(glm::vec3 const euler)
         {
-            const auto rotation = glm::quat(euler);
+            auto const rotation = glm::quat(euler);
             m_Orientation = rotation * m_Orientation;
         }
 
-        const auto& position() const { return m_Position; }
-        void setPosition(const glm::vec3& position)
+        auto const& position() const { return m_Position; }
+        void setPosition(glm::vec3 const& position)
         {
             m_Position = position;
         }
-        const auto& orientation() const { return m_Orientation; }
-        void setOrientation(const glm::quat& orientation)
+        auto const& orientation() const { return m_Orientation; }
+        void setOrientation(glm::quat const& orientation)
         {
             m_Orientation = orientation;
         }
 
         auto modelMatrix() const
         {
-            const glm::mat4 rot = glm::toMat4(m_Orientation);
-            const glm::mat4 pos = glm::translate(glm::identity<glm::mat4>(), m_Position);
+            glm::mat4 const rot = glm::toMat4(m_Orientation);
+            glm::mat4 const pos = glm::translate(glm::identity<glm::mat4>(), m_Position);
             return pos * rot;
         }
 

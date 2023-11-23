@@ -14,7 +14,7 @@ MXC_RESULT Core::Run()
     MXC_CHK(Window::Init());
     MXC_CHK(Vulkan::Init(true));
 
-    const auto device = std::make_unique<Vulkan::Device>();
+    auto const device = std::make_unique<Vulkan::Device>();
     MXC_CHK(device->Init());
 
     std::unique_ptr<SceneBase> scene;
@@ -33,7 +33,7 @@ MXC_RESULT Core::Run()
 
     while (Running == MXC_SUCCESS) {
         time = SDL_GetTicks();
-        const Uint32 deltaTime = time - priorTime;
+        Uint32 const deltaTime = time - priorTime;
         priorTime = time;
 
         Window::Poll();
