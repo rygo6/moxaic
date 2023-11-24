@@ -27,10 +27,11 @@ namespace Moxaic::Vulkan
         void BlitToSwap(Texture const& srcTexture) const;
         MXC_RESULT QueuePresent() const;
 
-        MXC_GET(VkAcquireCompleteSemaphore)
-        // const auto& vkAcquireCompleteSemaphore() const { return m_VkAcquireCompleteSemaphore; }
-        auto const& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
-        auto const& format() const { return m_Format; }
+        MXC_GET(VkAcquireCompleteSemaphore);
+        MXC_GET(VkRenderCompleteSemaphore);
+        MXC_GET(Format);
+
+        MXC_GETARR(VkSwapImageViews);
 
     private:
         Device const* const k_pDevice;

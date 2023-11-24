@@ -25,9 +25,9 @@ namespace Moxaic::Vulkan
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
             StaticArray const setLayouts{
-              Vulkan::GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              Vulkan::StandardMaterialDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              Vulkan::ObjectDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              StandardMaterialDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              ObjectDescriptor::GetOrInitVkDescriptorSetLayout(device),
             };
             MXC_CHK(CreateLayout(device, setLayouts));
             return MXC_SUCCESS;
@@ -70,7 +70,7 @@ namespace Moxaic::Vulkan
             vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
-                                    0,
+                                    GlobalDescriptor::SetIndex,
                                     1,
                                     &descriptor.GetVkDescriptorSet(),
                                     0,
@@ -82,7 +82,7 @@ namespace Moxaic::Vulkan
             vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
-                                    1,
+                                    StandardMaterialDescriptor::SetIndex,
                                     1,
                                     &descriptor.GetVkDescriptorSet(),
                                     0,
@@ -94,7 +94,7 @@ namespace Moxaic::Vulkan
             vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
-                                    2,
+                                    ObjectDescriptor::SetIndex,
                                     1,
                                     &descriptor.GetVkDescriptorSet(),
                                     0,

@@ -21,7 +21,7 @@
     MXC_SET(field)
 
 #define MXC_GETARR(field) \
-    auto const& field(int const i) const { return m_##field[i]; }
+    auto const& Get##field(int const i) const { return m_##field[i]; }
 
 #define MXC_ACCESS(field) \
     auto* field() { return &m_##field; }

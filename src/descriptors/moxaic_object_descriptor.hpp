@@ -15,6 +15,8 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
+        constexpr static int SetIndex = 2;
+
         struct Buffer
         {
             glm::mat4 model;
@@ -27,8 +29,7 @@ namespace Moxaic::Vulkan
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                              VK_SHADER_STAGE_FRAGMENT_BIT,
-              },
+                              VK_SHADER_STAGE_FRAGMENT_BIT},
             };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;

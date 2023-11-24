@@ -12,6 +12,8 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
+        constexpr static int SetIndex = 1;
+
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
             MXC_LOG("Init MeshNodeDescriptor Layout");

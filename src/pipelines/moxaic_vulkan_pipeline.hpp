@@ -70,7 +70,7 @@ namespace Moxaic::Vulkan
 
     protected:
         Device const* const k_pDevice;
-        ;
+        // at some point layout will need to be a map on the device to support multiple devices
         inline static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
         VkPipeline m_vkPipeline{VK_NULL_HANDLE};
 
@@ -101,7 +101,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateShaderModule(char const* pShaderPath,
+        MXC_RESULT CreateShaderModule(char const* const pShaderPath,
                                       VkShaderModule* pShaderModule) const
         {
             uint32_t codeLength;
@@ -175,7 +175,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateOpaquePipe(uint32_t stageCount,
+        MXC_RESULT CreateOpaquePipe(uint32_t const stageCount,
                                     VkPipelineShaderStageCreateInfo const* pStages,
                                     VkPipelineVertexInputStateCreateInfo const* pVertexInputState,
                                     VkPipelineInputAssemblyStateCreateInfo const* pInputAssemblyState,
@@ -312,6 +312,27 @@ namespace Moxaic::Vulkan
                                              VK_ALLOC,
                                              &m_vkPipeline));
 
+            return MXC_SUCCESS;
+        }
+
+        MXC_RESULT CreateComputePipe(VkPipelineShaderStageCreateInfo const& stage)
+        {
+            CheckLayoutInitialized(*k_pDevice);
+            VkComputePipelineCreateInfo const pipelineInfo{
+                .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+                .stage = stage,
+                .layout = s_vkPipelineLayout,
+                .basePipelineHandle = nullptr,
+                .basePipelineIndex = 0,
+              };
+            MXC_CHK(vkCreateComputePipelines(k_pDevice->GetVkDevice(),
+                                             VK_NULL_HANDLE,
+                                             1,
+                                             &pipelineInfo,
+                                             VK_ALLOC,
+                                             &m_vkPipeline));
             return MXC_SUCCESS;
         }
     };

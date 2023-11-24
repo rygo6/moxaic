@@ -41,7 +41,7 @@ namespace Moxaic::Vulkan
 
     protected:
         Device const* const k_pDevice;
-        ;
+        // at some point layout will need to be a map on the device to support multiple devices
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 

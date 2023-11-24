@@ -1150,7 +1150,7 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
       (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     StaticArray const signalSemaphores{
       timelineSemaphore.GetVkSemaphore(),
-      swap.vkRenderCompleteSemaphore(),
+      swap.GetVkRenderCompleteSemaphore(),
     };
     VkSubmitInfo const submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,

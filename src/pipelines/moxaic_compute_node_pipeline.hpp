@@ -4,8 +4,8 @@
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_pipeline.hpp"
 
+#include "moxaic_compute_node_descriptor.hpp"
 #include "moxaic_global_descriptor.hpp"
-#include "moxaic_mesh_node_descriptor.hpp"
 
 #include "moxaic_logging.hpp"
 
@@ -25,8 +25,8 @@ namespace Moxaic::Vulkan
         {
             SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
             StaticArray const setLayouts{
-              Vulkan::GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              Vulkan::MeshNodeDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              ComputeNodeDescriptor::GetOrInitVkDescriptorSetLayout(device),
             };
             MXC_CHK(CreateLayout(device, setLayouts));
             return MXC_SUCCESS;
@@ -36,42 +36,17 @@ namespace Moxaic::Vulkan
         {
             MXC_LOG("Init ComputeNodePipeline");
 
-            VkShaderModule taskShader;
-            MXC_CHK(CreateShaderModule("./shaders/node_mesh.task.spv",
-                                       &taskShader));
-            VkShaderModule meshShader;
-            MXC_CHK(CreateShaderModule("./shaders/node_mesh.mesh.spv",
-                                       &meshShader));
-            VkShaderModule fragShader;
-            MXC_CHK(CreateShaderModule("./shaders/node_mesh.frag.spv",
-                                       &fragShader));
-            StaticArray const stages{
-              (VkPipelineShaderStageCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
-                .module = taskShader,
-                .pName = "main",
-              },
-              (VkPipelineShaderStageCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
-                .module = meshShader,
-                .pName = "main",
-              },
-              (VkPipelineShaderStageCreateInfo){
-                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .module = fragShader,
-                .pName = "main",
-              }};
-            MXC_CHK(CreateOpaquePipe(stages.size(),
-                                     stages.data(),
-                                     nullptr,
-                                     nullptr,
-                                     nullptr));
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), taskShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), meshShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), fragShader, VK_ALLOC);
+            VkShaderModule compShader;
+            MXC_CHK(CreateShaderModule("./shaders/node_compute.comp.spv",
+                                       &compShader));
+            VkPipelineShaderStageCreateInfo const stage{
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+              .module = compShader,
+              .pName = "main",
+            };
+            CreateComputePipe(stage);
+            vkDestroyShaderModule(k_pDevice->GetVkDevice(), compShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
 
@@ -80,19 +55,19 @@ namespace Moxaic::Vulkan
             vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
-                                    0,
+                                    GlobalDescriptor::SetIndex,
                                     1,
                                     &descriptor.GetVkDescriptorSet(),
                                     0,
                                     nullptr);
         }
 
-        void BindDescriptor(MeshNodeDescriptor const& descriptor) const
+        void BindDescriptor(ComputeNodeDescriptor const& descriptor) const
         {
             vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
-                                    1,
+                                    ComputeNodeDescriptor::SetIndex,
                                     1,
                                     &descriptor.GetVkDescriptorSet(),
                                     0,

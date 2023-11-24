@@ -29,6 +29,7 @@ MXC_RESULT CompositorScene::Init()
 
     MXC_CHK(m_StandardPipeline.Init());
     MXC_CHK(m_MeshNodePipeline.Init());
+    MXC_CHK(m_ComputeNodePipeline.Init());
 
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
@@ -37,9 +38,11 @@ MXC_RESULT CompositorScene::Init()
     MXC_CHK(m_NodeReference.Init());
 
     for (int i = 0; i < m_MeshNodeDescriptor.size(); ++i) {
-        MXC_CHK(m_MeshNodeDescriptor[i].Init(
-          m_GlobalDescriptor.GetLocalBuffer(),
-          m_NodeReference.ExportedFramebuffers(i)));
+        MXC_CHK(m_MeshNodeDescriptor[i].Init(m_GlobalDescriptor.GetLocalBuffer(),
+                                             m_NodeReference.GetExportedFramebuffers(i)));
+        MXC_CHK(m_ComputeNodeDescriptor[i].Init(m_GlobalDescriptor.GetLocalBuffer(),
+                                                m_NodeReference.GetExportedFramebuffers(i),
+                                                m_Swap.GetVkSwapImageViews(i)));
     }
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
@@ -70,7 +73,7 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
         m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetLocalWaitValue();
         m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
 
-        auto const& nodeFramebuffer = m_NodeReference.ExportedFramebuffers(m_NodeFramebufferIndex);
+        auto const& nodeFramebuffer = m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex);
         nodeFramebuffer.Transition(Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 

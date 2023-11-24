@@ -11,15 +11,17 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
+        constexpr static int SetIndex = 1;
+
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
             MXC_LOG("Init StandardMaterialDescriptor Layout");
             StaticArray bindings{
-                (VkDescriptorSetLayoutBinding){
-                    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                  },
-                };
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+              },
+            };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
         }

@@ -25,8 +25,8 @@ namespace Moxaic::Vulkan
         {
             SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
             StaticArray const setLayouts{
-              Vulkan::GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              Vulkan::MeshNodeDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              MeshNodeDescriptor::GetOrInitVkDescriptorSetLayout(device),
             };
             MXC_CHK(CreateLayout(device, setLayouts));
             return MXC_SUCCESS;
@@ -63,7 +63,8 @@ namespace Moxaic::Vulkan
                 .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
                 .module = fragShader,
                 .pName = "main",
-              }};
+              },
+            };
             MXC_CHK(CreateOpaquePipe(stages.size(),
                                      stages.data(),
                                      nullptr,
@@ -80,7 +81,7 @@ namespace Moxaic::Vulkan
             vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
-                                    0,
+                                    GlobalDescriptor::SetIndex,
                                     1,
                                     &descriptor.GetVkDescriptorSet(),
                                     0,
@@ -92,7 +93,7 @@ namespace Moxaic::Vulkan
             vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
-                                    1,
+                                    MeshNodeDescriptor::SetIndex,
                                     1,
                                     &descriptor.GetVkDescriptorSet(),
                                     0,

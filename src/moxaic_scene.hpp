@@ -16,6 +16,8 @@
 #include "moxaic_object_descriptor.hpp"
 #include "moxaic_standard_pipeline.hpp"
 
+#include "moxaic_compute_node_descriptor.hpp"
+#include "moxaic_compute_node_pipeline.hpp"
 #include "moxaic_mesh_node_descriptor.hpp"
 #include "moxaic_mesh_node_pipeline.hpp"
 
@@ -35,7 +37,7 @@ namespace Moxaic
         virtual MXC_RESULT Loop(uint32_t const& deltaTime) = 0;
 
     protected:
-        Vulkan::Device const* const k_pDevice; // do I really want this be a pointer?!
+        Vulkan::Device const* const k_pDevice;// do I really want this be a pointer?!
     };
 
     class CompositorScene : public SceneBase
@@ -65,6 +67,11 @@ namespace Moxaic
           Vulkan::MeshNodeDescriptor(*k_pDevice),
           Vulkan::MeshNodeDescriptor(*k_pDevice)};
 
+        Vulkan::ComputeNodePipeline m_ComputeNodePipeline{*k_pDevice};
+        StaticArray<Vulkan::ComputeNodeDescriptor, FramebufferCount> m_ComputeNodeDescriptor{
+          Vulkan::ComputeNodeDescriptor(*k_pDevice),
+          Vulkan::ComputeNodeDescriptor(*k_pDevice)};
+
         Camera m_MainCamera{};
 
         Vulkan::Mesh m_SphereTestMesh{*k_pDevice};
@@ -74,7 +81,7 @@ namespace Moxaic
         // should node be here? maybe outside scene?
         NodeReference m_NodeReference{*k_pDevice};
         uint64_t m_PriorNodeSemaphoreWaitValue{0};
-        uint64_t m_NodeFramebufferIndex{1}; // yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
+        uint64_t m_NodeFramebufferIndex{1};// yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
     };
 
     class NodeScene : public SceneBase
