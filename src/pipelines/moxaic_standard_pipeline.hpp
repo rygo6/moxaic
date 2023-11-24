@@ -29,9 +29,9 @@ namespace Moxaic::Vulkan
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 StaticArray const setLayouts{
-                  globalDescriptor.vkDescriptorSetLayout(),
-                  materialDescriptor.vkDescriptorSetLayout(),
-                  objectDescriptor.vkDescriptorSetLayout(),
+                  globalDescriptor.GetVkDescriptorSetLayout(),
+                  materialDescriptor.GetVkDescriptorSetLayout(),
+                  objectDescriptor.GetVkDescriptorSetLayout(),
                 };
                 MXC_CHK(CreateLayout(setLayouts));
             }
@@ -71,7 +71,7 @@ namespace Moxaic::Vulkan
                                     s_vkPipelineLayout,
                                     0,
                                     1,
-                                    &descriptor.vkDescriptorSet(),
+                                    &descriptor.GetVkDescriptorSet(),
                                     0,
                                     nullptr);
         }
@@ -83,7 +83,7 @@ namespace Moxaic::Vulkan
                                     s_vkPipelineLayout,
                                     1,
                                     1,
-                                    &descriptor.vkDescriptorSet(),
+                                    &descriptor.GetVkDescriptorSet(),
                                     0,
                                     nullptr);
         }
@@ -95,7 +95,7 @@ namespace Moxaic::Vulkan
                                     s_vkPipelineLayout,
                                     2,
                                     1,
-                                    &descriptor.vkDescriptorSet(),
+                                    &descriptor.GetVkDescriptorSet(),
                                     0,
                                     nullptr);
         }

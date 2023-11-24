@@ -31,8 +31,9 @@ namespace Moxaic::Vulkan
                                  &m_VkDescriptorSet);
         }
 
-        static VkDescriptorSetLayout const& vkDescriptorSetLayout() { return s_VkDescriptorSetLayout; }
-        auto const& vkDescriptorSet() const { return m_VkDescriptorSet; }
+        MXC_GET(VkDescriptorSet);
+
+        static VkDescriptorSetLayout const& GetVkDescriptorSetLayout() { return s_VkDescriptorSetLayout; }
 
     protected:
         Device const* const k_pDevice;

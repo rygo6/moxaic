@@ -19,17 +19,19 @@ MXC_RESULT CompositorScene::Init()
     m_MainCamera.UpdateProjection();
 
     m_SphereTestTransform.SetPosition(glm::vec3(1, 0, 0));
-    MXC_CHK2(m_SphereTestTexture.InitFromFile("textures/test.jpg",
+    MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
                                               Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
     MXC_CHK(Vulkan::GlobalDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
     MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
+
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
+    MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(m_ObjectDescriptor.Init(m_SphereTestTransform));
+
     MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
                                     m_StandardMaterialDescriptor,
                                     m_ObjectDescriptor));
