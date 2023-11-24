@@ -14,7 +14,7 @@ namespace Moxaic::Vulkan
 {
     class Device;
 
-    template<typename T>
+    template<typename Derived>
     class VulkanDescriptorBase
     {
     public:
@@ -33,7 +33,11 @@ namespace Moxaic::Vulkan
 
         MXC_GET(VkDescriptorSet);
 
-        static VkDescriptorSetLayout const& GetVkDescriptorSetLayout() { return s_VkDescriptorSetLayout; }
+        static VkDescriptorSetLayout const& GetOrInitVkDescriptorSetLayout(Vulkan::Device const& device)
+        {
+            CheckLayoutInitialized(device);
+            return s_VkDescriptorSetLayout;
+        }
 
     protected:
         Device const* const k_pDevice;
@@ -41,12 +45,17 @@ namespace Moxaic::Vulkan
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 
-        static bool LayoutInitialized() { return s_VkDescriptorSetLayout == VK_NULL_HANDLE; }
+        static void CheckLayoutInitialized(Vulkan::Device const& device)
+        {
+            if (s_VkDescriptorSetLayout == VK_NULL_HANDLE)
+                Derived::InitLayout(device);
+        }
 
         template<uint32_t N>
         static MXC_RESULT CreateDescriptorSetLayout(Vulkan::Device const& device,
                                                     StaticArray<VkDescriptorSetLayoutBinding, N>& bindings)
         {
+            SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
             for (int i = 0; i < bindings.size(); ++i) {
                 bindings[i].binding = i;
                 bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
@@ -67,6 +76,8 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT AllocateDescriptorSet()
         {
+            SDL_assert(m_VkDescriptorSet == nullptr);
+            CheckLayoutInitialized(*k_pDevice);
             VkDescriptorSetAllocateInfo const allocInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
               .pNext = nullptr,
@@ -83,6 +94,8 @@ namespace Moxaic::Vulkan
         template<uint32_t N>
         void WriteDescriptors(StaticArray<VkWriteDescriptorSet, N>& writes) const
         {
+            SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
+            SDL_assert(m_VkDescriptorSet != nullptr);
             for (int i = 0; i < writes.size(); ++i) {
                 writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[i].dstSet = m_VkDescriptorSet;

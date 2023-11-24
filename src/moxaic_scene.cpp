@@ -27,15 +27,8 @@ MXC_RESULT CompositorScene::Init()
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
-    MXC_CHK(Vulkan::GlobalDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(Vulkan::MeshNodeDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(m_StandardPipeline.Init(Vulkan::GlobalDescriptor::GetVkDescriptorSetLayout(),
-                                    Vulkan::StandardMaterialDescriptor::GetVkDescriptorSetLayout(),
-                                    Vulkan::ObjectDescriptor::GetVkDescriptorSetLayout()));
-    MXC_CHK(m_MeshNodePipeline.Init(Vulkan::GlobalDescriptor::GetVkDescriptorSetLayout(),
-                                    Vulkan::MeshNodeDescriptor::GetVkDescriptorSetLayout()));
+    MXC_CHK(m_StandardPipeline.Init());
+    MXC_CHK(m_MeshNodePipeline.Init());
 
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
@@ -133,13 +126,7 @@ MXC_RESULT NodeScene::Init()
 
     MXC_CHK(m_Swap.Init(Window::extents(), false));
 
-    MXC_CHK(Vulkan::GlobalDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
-    MXC_CHK(m_StandardPipeline.Init(Vulkan::GlobalDescriptor::GetVkDescriptorSetLayout(),
-                                    Vulkan::StandardMaterialDescriptor::GetVkDescriptorSetLayout(),
-                                    Vulkan::ObjectDescriptor::GetVkDescriptorSetLayout()));
-
+    MXC_CHK(m_StandardPipeline.Init());
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
 
     m_SpherTestTransform.SetPosition(glm::vec3(0, 0, 0));

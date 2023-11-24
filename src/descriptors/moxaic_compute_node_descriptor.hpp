@@ -5,6 +5,8 @@
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "static_array.hpp"
 
+#include <vulkan/vulkan.h>
+
 namespace Moxaic::Vulkan
 {
     class ComputeNodeDescriptor : public VulkanDescriptorBase<ComputeNodeDescriptor>
@@ -14,38 +16,40 @@ namespace Moxaic::Vulkan
 
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
-            SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
+            MXC_LOG("Init ComputeNodeDescriptor Layout");
             StaticArray bindings{
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
             };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init(GlobalDescriptor::Buffer const& buffer, Framebuffer const& framebuffer)
+        MXC_RESULT Init(GlobalDescriptor::Buffer const& buffer, Framebuffer const& framebuffer, VkImageView const& outputColorImage)
         {
             MXC_LOG("Init ComputeNodeDescriptor");
-            SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
-            SDL_assert(m_VkDescriptorSet == nullptr);
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -84,6 +88,11 @@ namespace Moxaic::Vulkan
                   .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.depthTexture().vkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
+              (VkWriteDescriptorSet){
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .imageView = outputColorImage,
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };
             WriteDescriptors(writes);
 

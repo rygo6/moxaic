@@ -22,26 +22,27 @@ namespace Moxaic::Vulkan
     public:
         using VulkanPipeline::VulkanPipeline;
 
-        MXC_RESULT Init(VkDescriptorSetLayout const& globalDescriptorSetLayout,
-                        VkDescriptorSetLayout const& materialDescriptorSetLayout,
-                        VkDescriptorSetLayout const& objectDescriptorSetLayout)
+        static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
-            // todo should this be ina  different method so I can call them all before trying make any descriptors???
-            if (initializeLayout()) {
-                StaticArray const setLayouts{
-                  globalDescriptorSetLayout,
-                  materialDescriptorSetLayout,
-                  objectDescriptorSetLayout,
-                };
-                MXC_CHK(CreateLayout(setLayouts));
-            }
+            StaticArray const setLayouts{
+              Vulkan::GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              Vulkan::StandardMaterialDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              Vulkan::ObjectDescriptor::GetOrInitVkDescriptorSetLayout(device),
+            };
+            MXC_CHK(CreateLayout(device, setLayouts));
+            return MXC_SUCCESS;
+        }
+
+        MXC_RESULT Init()
+        {
+            MXC_LOG("Init StandardPipeline");
 
             VkShaderModule vertShader;
             MXC_CHK(CreateShaderModule("./shaders/shader_base.vert.spv",
-                                       vertShader));
+                                       &vertShader));
             VkShaderModule fragShader;
             MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv",
-                                       fragShader));
+                                       &fragShader));
             StaticArray const stages{
               (VkPipelineShaderStageCreateInfo){
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

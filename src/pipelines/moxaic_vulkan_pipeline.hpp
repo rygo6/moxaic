@@ -15,9 +15,9 @@
 
 namespace Moxaic::Vulkan
 {
-    static MXC_RESULT AllocReadFile(char const* filename,
-                                    uint32_t* length,
-                                    char** ppContents)
+    static MXC_RESULT ReadFile(char const* filename,
+                               uint32_t* length,
+                               char** ppContents)
     {
         FILE* file = fopen(filename, "rb");
         if (file == nullptr) {
@@ -37,7 +37,7 @@ namespace Moxaic::Vulkan
         return MXC_SUCCESS;
     }
 
-    template<typename>
+    template<typename Derived>
     class VulkanPipeline
     {
     public:
@@ -62,18 +62,29 @@ namespace Moxaic::Vulkan
 
         MXC_GET(vkPipeline);
 
-        static VkPipelineLayout const& vkPipelineLayout() { return s_vkPipelineLayout; }
+        static VkPipelineLayout const& GetVkPipelineLayout(Vulkan::Device const& device)
+        {
+            CheckLayoutInitialized(device);
+            return s_vkPipelineLayout;
+        }
 
     protected:
-        Device const* const k_pDevice;;
+        Device const* const k_pDevice;
+        ;
         inline static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
         VkPipeline m_vkPipeline{VK_NULL_HANDLE};
 
-        static bool initializeLayout() { return s_vkPipelineLayout == VK_NULL_HANDLE; }
+        static void CheckLayoutInitialized(Vulkan::Device const& device)
+        {
+            if (s_vkPipelineLayout == VK_NULL_HANDLE)
+                Derived::InitLayout(device);
+        }
 
         template<uint32_t N>
-        MXC_RESULT CreateLayout(StaticArray<VkDescriptorSetLayout, N> const& setLayouts) const
+        static MXC_RESULT CreateLayout(Vulkan::Device const& device,
+                                       StaticArray<VkDescriptorSetLayout, N> const& setLayouts)
         {
+            SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
             VkPipelineLayoutCreateInfo const createInfo{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
               .pNext = nullptr,
@@ -83,7 +94,7 @@ namespace Moxaic::Vulkan
               .pushConstantRangeCount = 0,
               .pPushConstantRanges = nullptr,
             };
-            VK_CHK(vkCreatePipelineLayout(k_pDevice->GetVkDevice(),
+            VK_CHK(vkCreatePipelineLayout(device.GetVkDevice(),
                                           &createInfo,
                                           VK_ALLOC,
                                           &s_vkPipelineLayout));
@@ -91,13 +102,13 @@ namespace Moxaic::Vulkan
         }
 
         MXC_RESULT CreateShaderModule(char const* pShaderPath,
-                                      VkShaderModule& outShaderModule) const
+                                      VkShaderModule* pShaderModule) const
         {
             uint32_t codeLength;
             char* pShaderCode;
-            MXC_CHK(AllocReadFile(pShaderPath,
-                                  &codeLength,
-                                  &pShaderCode));
+            MXC_CHK(ReadFile(pShaderPath,
+                             &codeLength,
+                             &pShaderCode));
             VkShaderModuleCreateInfo const createInfo{
               .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
               .pNext = nullptr,
@@ -108,7 +119,7 @@ namespace Moxaic::Vulkan
             VK_CHK(vkCreateShaderModule(k_pDevice->GetVkDevice(),
                                         &createInfo,
                                         VK_ALLOC,
-                                        &outShaderModule));
+                                        pShaderModule));
             free(pShaderCode);
             return MXC_SUCCESS;
         }
@@ -170,7 +181,8 @@ namespace Moxaic::Vulkan
                                     VkPipelineInputAssemblyStateCreateInfo const* pInputAssemblyState,
                                     VkPipelineTessellationStateCreateInfo const* pTessellationState)
         {
-            SDL_assert(s_vkPipelineLayout != nullptr);
+            SDL_assert(m_vkPipeline == nullptr);
+            CheckLayoutInitialized(*k_pDevice);
             // Fragment
             constexpr StaticArray pipelineColorBlendAttachmentStates{
               (VkPipelineColorBlendAttachmentState){

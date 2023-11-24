@@ -35,7 +35,7 @@ namespace Moxaic
         virtual MXC_RESULT Loop(uint32_t const& deltaTime) = 0;
 
     protected:
-        Vulkan::Device const* const k_pDevice;;
+        Vulkan::Device const* const k_pDevice; // do I really want this be a pointer?!
     };
 
     class CompositorScene : public SceneBase

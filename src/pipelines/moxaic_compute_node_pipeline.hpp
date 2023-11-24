@@ -16,7 +16,7 @@
 
 namespace Moxaic::Vulkan
 {
-    class MeshNodePipeline : public VulkanPipeline<MeshNodePipeline>
+    class ComputeNodePipeline : public VulkanPipeline<ComputeNodePipeline>
     {
     public:
         using VulkanPipeline::VulkanPipeline;
@@ -34,7 +34,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init()
         {
-            MXC_LOG("Init MeshNodePipeline");
+            MXC_LOG("Init ComputeNodePipeline");
 
             VkShaderModule taskShader;
             MXC_CHK(CreateShaderModule("./shaders/node_mesh.task.spv",

@@ -14,7 +14,7 @@ namespace Moxaic::Vulkan
 
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
-            SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
+            MXC_LOG("Init MeshNodeDescriptor Layout");
             StaticArray bindings{
                 (VkDescriptorSetLayoutBinding){
                     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,

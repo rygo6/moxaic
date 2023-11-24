@@ -38,12 +38,15 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityF
                                                     VkDebugUtilsMessengerCallbackDataEXT const* pCallbackData,
                                                     void* pUserData)
 {
-    MXC_LOG_ERROR(SeverityToName(messageSeverity),
-                  string_Role(Moxaic::Role),
-                  Vulkan::VkDebug.DebugFile,
-                  Vulkan::VkDebug.DebugLine,
-                  Vulkan::VkDebug.DebugCommand,
-                  pCallbackData->pMessage);
+    SetConsoleTextRed();
+    printf("%s %s (%s:%d) %s\n%s\n",
+           SeverityToName(messageSeverity),
+           string_Role(Moxaic::Role),
+           Vulkan::VkDebug.DebugFile,
+           Vulkan::VkDebug.DebugLine,
+           Vulkan::VkDebug.DebugCommand,
+           pCallbackData->pMessage);
+    SetConsoleTextDefault();
     return VK_FALSE;
 }
 

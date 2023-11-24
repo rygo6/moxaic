@@ -26,7 +26,7 @@ namespace Moxaic::Vulkan
 
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
-            SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
+            MXC_LOG("Init GlobalDescriptor Layout");
             StaticArray bindings{
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -45,8 +45,6 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init(Camera const& camera, VkExtent2D const& dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
-            SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
-            SDL_assert(m_VkDescriptorSet == nullptr);
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
