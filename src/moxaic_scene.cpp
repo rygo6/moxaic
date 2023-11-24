@@ -12,6 +12,9 @@ MXC_RESULT CompositorScene::Init()
                                        Vulkan::Locality::Local));
     }
 
+    MXC_CHK(m_Swap.Init(Window::extents(), false));
+    MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
+
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
     m_MainCamera.Transform()->Rotate(0, 180, 0);
     m_MainCamera.SetAspect(Window::extents().width / Window::extents().height);
@@ -20,40 +23,33 @@ MXC_RESULT CompositorScene::Init()
 
     m_SphereTestTransform.SetPosition(glm::vec3(1, 0, 0));
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
-                                              Vulkan::Locality::Local));
+                                             Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
     MXC_CHK(Vulkan::GlobalDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
+    MXC_CHK(Vulkan::MeshNodeDescriptor::InitLayout(*k_pDevice));
+    MXC_CHK(m_StandardPipeline.Init(Vulkan::GlobalDescriptor::GetVkDescriptorSetLayout(),
+                                    Vulkan::StandardMaterialDescriptor::GetVkDescriptorSetLayout(),
+                                    Vulkan::ObjectDescriptor::GetVkDescriptorSetLayout()));
+    MXC_CHK(m_MeshNodePipeline.Init(Vulkan::GlobalDescriptor::GetVkDescriptorSetLayout(),
+                                    Vulkan::MeshNodeDescriptor::GetVkDescriptorSetLayout()));
 
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(m_ObjectDescriptor.Init(m_SphereTestTransform));
 
-    MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
-                                    m_StandardMaterialDescriptor,
-                                    m_ObjectDescriptor));
-
-    MXC_CHK(m_Swap.Init(Window::extents(),
-                        false));
-
-    MXC_CHK(m_Semaphore.Init(true,
-                             Vulkan::Locality::External));
-
     MXC_CHK(m_NodeReference.Init());
 
-    MXC_CHK(Vulkan::MeshNodeDescriptor::InitLayout(*k_pDevice));
     for (int i = 0; i < m_MeshNodeDescriptor.size(); ++i) {
         MXC_CHK(m_MeshNodeDescriptor[i].Init(
           m_GlobalDescriptor.GetLocalBuffer(),
           m_NodeReference.ExportedFramebuffers(i)));
     }
-    MXC_CHK(m_MeshNodePipeline.Init(m_GlobalDescriptor,
-                                    m_MeshNodeDescriptor[0]));
 
-    //    // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
+    // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     MXC_CHK(m_NodeReference.ExportOverIPC(m_Semaphore));
 
@@ -135,26 +131,25 @@ MXC_RESULT NodeScene::Init()
 {
     MXC_CHK(m_Node.Init());
 
+    MXC_CHK(m_Swap.Init(Window::extents(), false));
+
     MXC_CHK(Vulkan::GlobalDescriptor::InitLayout(*k_pDevice));
+    MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
+    MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
+    MXC_CHK(m_StandardPipeline.Init(Vulkan::GlobalDescriptor::GetVkDescriptorSetLayout(),
+                                    Vulkan::StandardMaterialDescriptor::GetVkDescriptorSetLayout(),
+                                    Vulkan::ObjectDescriptor::GetVkDescriptorSetLayout()));
+
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
 
     m_SpherTestTransform.SetPosition(glm::vec3(0, 0, 0));
+    MXC_CHK(m_SphereTestMesh.InitSphere());
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
 
-    MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
-    MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(m_ObjectDescriptor.Init(m_SpherTestTransform));
-    MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
-                                    m_MaterialDescriptor,
-                                    m_ObjectDescriptor));
-
-    MXC_CHK(m_SphereTestMesh.InitSphere());
-
-    MXC_CHK(m_Swap.Init(Window::extents(),
-                        false));
 
     // spin lock for now until initial ipc message is received
     while (m_Node.ipcFromCompositor().Deque() == 0) {

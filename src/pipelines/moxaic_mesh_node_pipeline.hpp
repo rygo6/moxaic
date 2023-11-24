@@ -21,14 +21,14 @@ namespace Moxaic::Vulkan
     public:
         using VulkanPipeline::VulkanPipeline;
 
-        MXC_RESULT Init(GlobalDescriptor const& globalDescriptor,
-                        MeshNodeDescriptor const& meshNodeDescriptor)
+        MXC_RESULT Init(VkDescriptorSetLayout const& globalDescriptorSetLayout,
+                        VkDescriptorSetLayout const& meshNodeDescriptorSetLayout)
         {
             // todo should this be ina  different method so I can call them all before trying make any descriptors???
             if (initializeLayout()) {
                 StaticArray const setLayouts{
-                  globalDescriptor.GetVkDescriptorSetLayout(),
-                  meshNodeDescriptor.GetVkDescriptorSetLayout(),
+                  globalDescriptorSetLayout,
+                  meshNodeDescriptorSetLayout,
                 };
                 MXC_CHK(CreateLayout(setLayouts));
             }
