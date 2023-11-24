@@ -1,6 +1,7 @@
 #pragma once
 
 #include "moxaic_vulkan.hpp"
+#include "static_array.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -18,6 +19,8 @@ namespace Moxaic::Vulkan
     {
     public:
         MXC_NO_VALUE_PASS(Device);
+
+        constexpr static uint32_t QueryPoolCount = 2;
 
         Device() = default;
         virtual ~Device();
@@ -81,6 +84,11 @@ namespace Moxaic::Vulkan
                                                  Swap const& swap) const;
         MXC_RESULT SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const;
 
+        void ResetTimestamps() const;
+        void WriteTimestamp(VkPipelineStageFlagBits const& pipelineStage,
+                                    uint32_t const& query) const;
+        StaticArray<double, QueryPoolCount> GetTimestamps() const;
+
         uint32_t GetQueue(Queue const queue) const
         {
             switch (queue) {
@@ -112,6 +120,7 @@ namespace Moxaic::Vulkan
         MXC_GET(VkComputeQueue);
         MXC_GET(VkRenderPass);
         MXC_GET(VkDescriptorPool);
+        MXC_GET(VkQueryPool);
         MXC_GET(VkGraphicsCommandBuffer);
         MXC_GET(VkComputeCommandBuffer);
         MXC_GET(VkLinearSampler);

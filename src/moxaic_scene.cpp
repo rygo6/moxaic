@@ -100,10 +100,11 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
     m_MeshNodePipeline.BindPipeline();
     m_MeshNodePipeline.BindDescriptor(m_GlobalDescriptor);
     m_MeshNodePipeline.BindDescriptor(m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
-    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_pDevice->GetVkGraphicsCommandBuffer(),
-                                       1,
-                                       1,
-                                       1);
+
+    k_pDevice->ResetTimestamps();
+    k_pDevice->WriteTimestamp(VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT, 0);
+    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_pDevice->GetVkGraphicsCommandBuffer(), 1, 1, 1);
+    k_pDevice->WriteTimestamp(VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, 1);
 
     k_pDevice->EndRenderPass();
 
@@ -117,6 +118,10 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
     m_Semaphore.Wait();
 
     m_FramebufferIndex = !m_FramebufferIndex;
+
+    auto const timestamps = k_pDevice->GetTimestamps();
+    float const taskMeshMs = timestamps[1] - timestamps[0];
+    MXC_LOG_NAMED(taskMeshMs);
 
     return MXC_SUCCESS;
 }

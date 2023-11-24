@@ -470,7 +470,7 @@ MXC_RESULT Device::CreatePools()
       .pNext = nullptr,
       .flags = 0,
       .queryType = VK_QUERY_TYPE_TIMESTAMP,
-      .queryCount = 2,
+      .queryCount = Device::QueryPoolCount,
       .pipelineStatistics = 0,
     };
     vkCreateQueryPool(m_VkDevice, &queryPoolCreateInfo, VK_ALLOC, &m_VkQueryPool);
@@ -1090,6 +1090,34 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const
                          &submitInfo,
                          VK_NULL_HANDLE));
     return MXC_SUCCESS;
+}
+
+void Device::ResetTimestamps() const
+{
+    vkResetQueryPool(m_VkDevice, m_VkQueryPool, 0, QueryPoolCount);
+}
+
+void Device::WriteTimestamp(VkPipelineStageFlagBits const& pipelineStage, uint32_t const& query) const
+{
+    vkCmdWriteTimestamp(m_VkGraphicsCommandBuffer, pipelineStage, m_VkQueryPool, query);
+}
+
+StaticArray<double, Device::QueryPoolCount> Device::GetTimestamps() const
+{
+    uint64_t timestampsNS[QueryPoolCount];
+    vkGetQueryPoolResults(m_VkDevice,
+                      m_VkQueryPool,
+                      0,
+                      QueryPoolCount,
+                      sizeof(uint64_t) * QueryPoolCount,
+                      timestampsNS,
+                      sizeof(uint64_t),
+                      VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    StaticArray<double, QueryPoolCount> timestampsMS;
+    for (int i = 0; i < QueryPoolCount; ++i) {
+        timestampsMS[i] = double(timestampsNS[i]) / double(1000000); // ns to ms
+    }
+    return timestampsMS;
 }
 
 MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
