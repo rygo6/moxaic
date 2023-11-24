@@ -24,9 +24,11 @@ MXC_RESULT CompositorScene::Init()
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
-                                    Window::extents()));
+    MXC_CHK(Vulkan::GlobalDescriptor::InitLayout(*k_pDevice));
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
+    MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
+    MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(m_ObjectDescriptor.Init(m_SphereTestTransform));
     MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
                                     m_StandardMaterialDescriptor,
@@ -40,6 +42,7 @@ MXC_RESULT CompositorScene::Init()
 
     MXC_CHK(m_NodeReference.Init());
 
+    MXC_CHK(Vulkan::MeshNodeDescriptor::InitLayout(*k_pDevice));
     for (int i = 0; i < m_MeshNodeDescriptor.size(); ++i) {
         MXC_CHK(m_MeshNodeDescriptor[i].Init(
           m_GlobalDescriptor.GetLocalBuffer(),
@@ -130,14 +133,17 @@ MXC_RESULT NodeScene::Init()
 {
     MXC_CHK(m_Node.Init());
 
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
-                                    Window::extents()));
+    MXC_CHK(Vulkan::GlobalDescriptor::InitLayout(*k_pDevice));
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
 
     m_SpherTestTransform.SetPosition(glm::vec3(0, 0, 0));
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
+
+    MXC_CHK(Vulkan::StandardMaterialDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
+    MXC_CHK(Vulkan::ObjectDescriptor::InitLayout(*k_pDevice));
     MXC_CHK(m_ObjectDescriptor.Init(m_SpherTestTransform));
     MXC_CHK(m_StandardPipeline.Init(m_GlobalDescriptor,
                                     m_MaterialDescriptor,

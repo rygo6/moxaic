@@ -20,22 +20,25 @@ namespace Moxaic::Vulkan
             glm::mat4 model;
         };
 
+        static MXC_RESULT InitLayout(Vulkan::Device const& device)
+        {
+            SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
+            StaticArray bindings{
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                              VK_SHADER_STAGE_FRAGMENT_BIT,
+              },
+            };
+            MXC_CHK(CreateDescriptorSetLayout(device, bindings));
+            return MXC_SUCCESS;
+        }
+
         MXC_RESULT Init(Transform const& transform)
         {
             MXC_LOG("Init ObjectDescriptor");
+            SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
             SDL_assert(m_VkDescriptorSet == nullptr);
-
-            // todo should this be ina  different method so I can call them all before trying make any descriptors???
-            if (initializeLayout()) {
-                StaticArray bindings{
-                  (VkDescriptorSetLayoutBinding){
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                                  VK_SHADER_STAGE_FRAGMENT_BIT,
-                  },
-                };
-                MXC_CHK(CreateDescriptorSetLayout(bindings));
-            }
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,

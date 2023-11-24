@@ -7,7 +7,7 @@
 
 namespace Moxaic::Vulkan
 {
-    class MeshNodeDescriptor : public VulkanDescriptorBase<MeshNodeDescriptor>
+    class ComputeNodeDescriptor : public VulkanDescriptorBase<ComputeNodeDescriptor>
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
@@ -16,39 +16,34 @@ namespace Moxaic::Vulkan
         {
             SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
             StaticArray bindings{
-                (VkDescriptorSetLayoutBinding){
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                  VK_SHADER_STAGE_MESH_BIT_EXT,
-                  },
-                  (VkDescriptorSetLayoutBinding){
-                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                    VK_SHADER_STAGE_MESH_BIT_EXT,
-                    },
-                    (VkDescriptorSetLayoutBinding){
-                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                      VK_SHADER_STAGE_MESH_BIT_EXT,
-                      },
-                      (VkDescriptorSetLayoutBinding){
-                          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                          .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                        VK_SHADER_STAGE_MESH_BIT_EXT,
-                        },
-                        (VkDescriptorSetLayoutBinding){
-                            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                          VK_SHADER_STAGE_MESH_BIT_EXT,
-                          },
-                        };
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              },
+            };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
         }
 
         MXC_RESULT Init(GlobalDescriptor::Buffer const& buffer, Framebuffer const& framebuffer)
         {
-            MXC_LOG("Init MaterialDescriptor");
+            MXC_LOG("Init ComputeNodeDescriptor");
             SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
             SDL_assert(m_VkDescriptorSet == nullptr);
 

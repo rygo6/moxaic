@@ -11,21 +11,24 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
-        MXC_RESULT Init(Texture const& texture)
+        static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
-            MXC_LOG("Init MaterialDescriptor");
-            SDL_assert(m_VkDescriptorSet == nullptr);
-
-            // todo should this be ina  different method so I can call them all before trying make any descriptors???
-            if (initializeLayout()) {
-                StaticArray bindings{
-                  (VkDescriptorSetLayoutBinding){
+            SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
+            StaticArray bindings{
+                (VkDescriptorSetLayoutBinding){
                     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                     .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
                   },
                 };
-                MXC_CHK(CreateDescriptorSetLayout(bindings));
-            }
+            MXC_CHK(CreateDescriptorSetLayout(device, bindings));
+            return MXC_SUCCESS;
+        }
+
+        MXC_RESULT Init(Texture const& texture)
+        {
+            MXC_LOG("Init MaterialDescriptor");
+            SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
+            SDL_assert(m_VkDescriptorSet == nullptr);
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{

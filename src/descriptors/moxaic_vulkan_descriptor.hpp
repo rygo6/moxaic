@@ -35,14 +35,16 @@ namespace Moxaic::Vulkan
         auto const& vkDescriptorSet() const { return m_VkDescriptorSet; }
 
     protected:
-        Device const* const k_pDevice;;
+        Device const* const k_pDevice;
+        ;
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 
-        static bool initializeLayout() { return s_VkDescriptorSetLayout == VK_NULL_HANDLE; }
+        static bool LayoutInitialized() { return s_VkDescriptorSetLayout == VK_NULL_HANDLE; }
 
         template<uint32_t N>
-        MXC_RESULT CreateDescriptorSetLayout(StaticArray<VkDescriptorSetLayoutBinding, N>& bindings) const
+        static MXC_RESULT CreateDescriptorSetLayout(Vulkan::Device const& device,
+                                                    StaticArray<VkDescriptorSetLayoutBinding, N>& bindings)
         {
             for (int i = 0; i < bindings.size(); ++i) {
                 bindings[i].binding = i;
@@ -55,7 +57,7 @@ namespace Moxaic::Vulkan
               .bindingCount = bindings.size(),
               .pBindings = bindings.data(),
             };
-            VK_CHK(vkCreateDescriptorSetLayout(k_pDevice->GetVkDevice(),
+            VK_CHK(vkCreateDescriptorSetLayout(device.GetVkDevice(),
                                                &layoutInfo,
                                                VK_ALLOC,
                                                &s_VkDescriptorSetLayout));
