@@ -129,14 +129,14 @@ namespace Moxaic::Vulkan
                                                VkPipelineTessellationStateCreateInfo const* pTessellationState)
         {
             // Vertex Input
-            StaticArray vertexBindingDescriptions{
+            constexpr StaticArray vertexBindingDescriptions{
               (VkVertexInputBindingDescription){
                 .binding = 0,
                 .stride = sizeof(Vertex),
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
               },
             };
-            StaticArray vertexAttributeDescriptions{
+            StaticArray const vertexAttributeDescriptions{
               (VkVertexInputAttributeDescription){
                 .location = 0,
                 .binding = 0,

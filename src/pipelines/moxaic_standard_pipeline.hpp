@@ -38,10 +38,10 @@ namespace Moxaic::Vulkan
             MXC_LOG("Init StandardPipeline");
 
             VkShaderModule vertShader;
-            MXC_CHK(CreateShaderModule("./shaders/shader_base.vert.spv",
+            MXC_CHK(CreateShaderModule("./shaders/basic_material.vert.spv",
                                        &vertShader));
             VkShaderModule fragShader;
-            MXC_CHK(CreateShaderModule("./shaders/shader_base.frag.spv",
+            MXC_CHK(CreateShaderModule("./shaders/basic_material.frag.spv",
                                        &fragShader));
             StaticArray const stages{
               (VkPipelineShaderStageCreateInfo){

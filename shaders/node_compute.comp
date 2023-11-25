@@ -1,9 +1,0 @@
-#version 450
-
-#include "binding_global.glsl"
-#include "binding_node_mesh.glsl"
-
-void main()
-{
-
-}

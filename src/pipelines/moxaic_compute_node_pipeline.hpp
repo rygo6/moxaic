@@ -37,7 +37,7 @@ namespace Moxaic::Vulkan
             MXC_LOG("Init ComputeNodePipeline");
 
             VkShaderModule compShader;
-            MXC_CHK(CreateShaderModule("./shaders/node_compute.comp.spv",
+            MXC_CHK(CreateShaderModule("./shaders/compute_node.comp.spv",
                                        &compShader));
             VkPipelineShaderStageCreateInfo const stage{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,

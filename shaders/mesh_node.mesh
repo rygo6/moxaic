@@ -4,14 +4,12 @@
 /* https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/
 	"We recommend using up to 64 vertices and 126 primitives"
 */
-#include "node_mesh_constants.glsl"
-#include "binding_global.glsl"
-#include "binding_node_mesh.glsl"
+#include "global_binding.glsl"
+#include "mesh_node_binding.glsl"
+#include "mesh_node_constants.glsl"
 
 layout(local_size_x = VERTEX_DIMENSION_COUNT, local_size_y = VERTEX_DIMENSION_COUNT, local_size_z = 1) in;
 layout(triangles, max_vertices = VERTEX_COUNT, max_primitives = PRIMITIVE_COUNT) out;
-
-layout (set = 1, binding = 3) uniform sampler2D nodeGBuffer;
 
 layout(location = 0) out VertexOutput {
 	vec2 uv;

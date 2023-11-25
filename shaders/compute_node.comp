@@ -1,0 +1,9 @@
+#version 450
+
+#include "global_binding.glsl"
+#include "compute_node_binding.glsl"
+
+void main()
+{
+
+}

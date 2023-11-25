@@ -1,9 +1,9 @@
 #version 450
 #extension GL_EXT_control_flow_attributes : enable
 
-#include "binding_global.glsl"
-#include "binding_basic_material.glsl"
-#include "binding_object.glsl"
+#include "global_binding.glsl"
+#include "basic_material_binding.glsl"
+#include "object_binding.glsl"
 
 layout(location = 0) in vec3 fragColor;
 layout(location = 1) in vec2 fragTexCoord;

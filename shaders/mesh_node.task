@@ -1,9 +1,9 @@
 #version 450
 #extension GL_EXT_mesh_shader : require
 
-#include "node_mesh_constants.glsl"
-#include "binding_global.glsl"
-#include "binding_node_mesh.glsl"
+#include "global_binding.glsl"
+#include "mesh_node_binding.glsl"
+#include "mesh_node_constants.glsl"
 
 taskPayloadSharedEXT MeshTaskPayload payload;
 

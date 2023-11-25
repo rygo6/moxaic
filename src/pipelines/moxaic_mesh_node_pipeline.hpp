@@ -37,13 +37,13 @@ namespace Moxaic::Vulkan
             MXC_LOG("Init MeshNodePipeline");
 
             VkShaderModule taskShader;
-            MXC_CHK(CreateShaderModule("./shaders/node_mesh.task.spv",
+            MXC_CHK(CreateShaderModule("./shaders/mesh_node.task.spv",
                                        &taskShader));
             VkShaderModule meshShader;
-            MXC_CHK(CreateShaderModule("./shaders/node_mesh.mesh.spv",
+            MXC_CHK(CreateShaderModule("./shaders/mesh_node.mesh.spv",
                                        &meshShader));
             VkShaderModule fragShader;
-            MXC_CHK(CreateShaderModule("./shaders/node_mesh.frag.spv",
+            MXC_CHK(CreateShaderModule("./shaders/mesh_node.frag.spv",
                                        &fragShader));
             StaticArray const stages{
               (VkPipelineShaderStageCreateInfo){

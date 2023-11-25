@@ -1,9 +1,8 @@
 #version 450
 
-layout (set = 1, binding = 1) uniform sampler2D nodeColor;
-layout (set = 1, binding = 2) uniform sampler2D nodeNormal;
-layout (set = 1, binding = 3) uniform sampler2D nodeGBuffer;
-layout (set = 1, binding = 4) uniform sampler2D nodeDepth;
+#include "global_binding.glsl"
+#include "mesh_node_binding.glsl"
+#include "mesh_node_constants.glsl"
 
 layout (location = 0) in VertexInput {
     vec2 uv;
