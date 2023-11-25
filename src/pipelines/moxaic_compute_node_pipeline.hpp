@@ -16,10 +16,10 @@
 
 namespace Moxaic::Vulkan
 {
-    class ComputeNodePipeline : public VulkanPipeline<ComputeNodePipeline>
+    class ComputeNodePipeline : public VulkanComputePipeline<ComputeNodePipeline>
     {
     public:
-        using VulkanPipeline::VulkanPipeline;
+        using VulkanComputePipeline::VulkanComputePipeline;
 
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {
@@ -52,7 +52,7 @@ namespace Moxaic::Vulkan
 
         void BindDescriptor(GlobalDescriptor const& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
+            vkCmdBindDescriptorSets(k_pDevice->GetVkComputeCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
                                     GlobalDescriptor::SetIndex,
@@ -64,7 +64,7 @@ namespace Moxaic::Vulkan
 
         void BindDescriptor(ComputeNodeDescriptor const& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
+            vkCmdBindDescriptorSets(k_pDevice->GetVkComputeCommandBuffer(),
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
                                     s_vkPipelineLayout,
                                     ComputeNodeDescriptor::SetIndex,

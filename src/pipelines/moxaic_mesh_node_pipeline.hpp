@@ -16,10 +16,10 @@
 
 namespace Moxaic::Vulkan
 {
-    class MeshNodePipeline : public VulkanPipeline<MeshNodePipeline>
+    class MeshNodePipeline : public VulkanGraphicsPipeline<MeshNodePipeline>
     {
     public:
-        using VulkanPipeline::VulkanPipeline;
+        using VulkanGraphicsPipeline::VulkanGraphicsPipeline;
 
         static MXC_RESULT InitLayout(Vulkan::Device const& device)
         {

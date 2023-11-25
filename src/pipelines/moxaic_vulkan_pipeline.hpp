@@ -53,12 +53,12 @@ namespace Moxaic::Vulkan
                               VK_ALLOC);
         }
 
-        void BindPipeline() const
-        {
-            vkCmdBindPipeline(k_pDevice->GetVkGraphicsCommandBuffer(),
-                              VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              m_vkPipeline);
-        }
+        // void BindPipeline(VkCommandBuffer const& commandBuffer) const
+        // {
+        //     vkCmdBindPipeline(commandBuffer,
+        //                       VK_PIPELINE_BIND_POINT_GRAPHICS,
+        //                       m_vkPipeline);
+        // }
 
         MXC_GET(vkPipeline);
 
@@ -319,14 +319,14 @@ namespace Moxaic::Vulkan
         {
             CheckLayoutInitialized(*k_pDevice);
             VkComputePipelineCreateInfo const pipelineInfo{
-                .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-                .pNext = nullptr,
-                .flags = 0,
-                .stage = stage,
-                .layout = s_vkPipelineLayout,
-                .basePipelineHandle = nullptr,
-                .basePipelineIndex = 0,
-              };
+              .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+              .pNext = nullptr,
+              .flags = 0,
+              .stage = stage,
+              .layout = s_vkPipelineLayout,
+              .basePipelineHandle = nullptr,
+              .basePipelineIndex = 0,
+            };
             MXC_CHK(vkCreateComputePipelines(k_pDevice->GetVkDevice(),
                                              VK_NULL_HANDLE,
                                              1,
@@ -336,4 +336,31 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
     };
+
+    template<typename Derived>
+    class VulkanGraphicsPipeline : public VulkanPipeline<Derived>
+    {
+    public:
+        using VulkanPipeline<Derived>::VulkanPipeline;
+        void BindPipeline() const
+        {
+            vkCmdBindPipeline(this->k_pDevice->GetVkGraphicsCommandBuffer(),
+                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              this->m_vkPipeline);
+        }
+    };
+
+    template<typename Derived>
+    class VulkanComputePipeline : public VulkanPipeline<Derived>
+    {
+    public:
+        using VulkanPipeline<Derived>::VulkanPipeline;
+        void BindPipeline() const
+        {
+            vkCmdBindPipeline(this->k_pDevice->GetVkComputeCommandBuffer(),
+                              VK_PIPELINE_BIND_POINT_COMPUTE,
+                              this->m_vkPipeline);
+        }
+    };
+
 }// namespace Moxaic::Vulkan

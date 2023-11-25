@@ -105,6 +105,10 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
 
     k_pDevice->EndRenderPass();
 
+    // m_ComputeNodePipeline.BindPipeline();
+    // m_ComputeNodePipeline.BindDescriptor(m_GlobalDescriptor);
+    // m_ComputeNodePipeline.BindDescriptor(m_ComputeNodeDescriptor[0]);
+
     m_Swap.Acquire();
     m_Swap.BlitToSwap(framebuffer.colorTexture());
 
