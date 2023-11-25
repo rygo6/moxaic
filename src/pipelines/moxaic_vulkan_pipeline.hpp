@@ -327,12 +327,12 @@ namespace Moxaic::Vulkan
               .basePipelineHandle = nullptr,
               .basePipelineIndex = 0,
             };
-            MXC_CHK(vkCreateComputePipelines(k_pDevice->GetVkDevice(),
-                                             VK_NULL_HANDLE,
-                                             1,
-                                             &pipelineInfo,
-                                             VK_ALLOC,
-                                             &m_vkPipeline));
+            VK_CHK(vkCreateComputePipelines(k_pDevice->GetVkDevice(),
+                                            VK_NULL_HANDLE,
+                                            1,
+                                            &pipelineInfo,
+                                            VK_ALLOC,
+                                            &m_vkPipeline));
             return MXC_SUCCESS;
         }
     };
@@ -342,10 +342,11 @@ namespace Moxaic::Vulkan
     {
     public:
         using VulkanPipeline<Derived>::VulkanPipeline;
-        void BindPipeline() const
+        constexpr static VkPipelineBindPoint BindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        void BindGraphicsPipeline() const
         {
             vkCmdBindPipeline(this->k_pDevice->GetVkGraphicsCommandBuffer(),
-                              VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              BindPoint,
                               this->m_vkPipeline);
         }
     };
@@ -355,11 +356,26 @@ namespace Moxaic::Vulkan
     {
     public:
         using VulkanPipeline<Derived>::VulkanPipeline;
-        void BindPipeline() const
+        constexpr static VkPipelineBindPoint BindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+        void BindComputePipeline() const
         {
             vkCmdBindPipeline(this->k_pDevice->GetVkComputeCommandBuffer(),
-                              VK_PIPELINE_BIND_POINT_COMPUTE,
+                              BindPoint,
                               this->m_vkPipeline);
+        }
+
+    protected:
+        void BindDescriptor(VkDescriptorSet const& descriptorSet,
+                            int const& setIndex) const
+        {
+            vkCmdBindDescriptorSets(this->k_pDevice->GetVkComputeCommandBuffer(),
+                                    BindPoint,
+                                    this->s_vkPipelineLayout,
+                                    setIndex,
+                                    1,
+                                    &descriptorSet,
+                                    0,
+                                    nullptr);
         }
     };
 

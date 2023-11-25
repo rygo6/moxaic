@@ -45,33 +45,21 @@ namespace Moxaic::Vulkan
               .module = compShader,
               .pName = "main",
             };
-            CreateComputePipe(stage);
+            MXC_CHK(CreateComputePipe(stage));
             vkDestroyShaderModule(k_pDevice->GetVkDevice(), compShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
 
         void BindDescriptor(GlobalDescriptor const& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkComputeCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_vkPipelineLayout,
-                                    GlobalDescriptor::SetIndex,
-                                    1,
-                                    &descriptor.GetVkDescriptorSet(),
-                                    0,
-                                    nullptr);
+            VulkanComputePipeline::BindDescriptor(descriptor.GetVkDescriptorSet(),
+                                                  GlobalDescriptor::SetIndex);
         }
 
         void BindDescriptor(ComputeNodeDescriptor const& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkComputeCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_vkPipelineLayout,
-                                    ComputeNodeDescriptor::SetIndex,
-                                    1,
-                                    &descriptor.GetVkDescriptorSet(),
-                                    0,
-                                    nullptr);
+            VulkanComputePipeline::BindDescriptor(descriptor.GetVkDescriptorSet(),
+                                                  ComputeNodeDescriptor::SetIndex);
         }
     };
 }// namespace Moxaic::Vulkan

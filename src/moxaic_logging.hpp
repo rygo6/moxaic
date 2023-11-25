@@ -71,10 +71,10 @@ namespace Moxaic
 #define MXC_LOG_ERROR(...) Moxaic::LogError(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
 #define MXC_LOG_NAMED(var) std::cerr << string_Role(Moxaic::Role) << " " << MXC_FILE_NO_PATH << ':' << __LINE__ << " " << #var << " = " << var << '\n';
 
-#define MXC_CHK(command)                                                        \
-    ({                                                                          \
-        if (command != MXC_SUCCESS) [[unlikely]] {                              \
-            printf("(%s:%d) Fail: %s\n", MXC_FILE_NO_PATH, __LINE__, #command); \
-            return false;                                                       \
-        }                                                                       \
+#define MXC_CHK(command)                                                                                          \
+    ({                                                                                                            \
+        if (command != MXC_SUCCESS) [[unlikely]] {                                                                \
+            printf("%s %s:%d CHECK FAIL: %s\n", string_Role(Moxaic::Role), MXC_FILE_NO_PATH, __LINE__, #command); \
+            return false;                                                                                         \
+        }                                                                                                         \
     })

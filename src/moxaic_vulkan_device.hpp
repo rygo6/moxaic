@@ -80,13 +80,17 @@ namespace Moxaic::Vulkan
         void BeginRenderPass(Framebuffer const& framebuffer,
                              VkClearColorValue const& backgroundColor) const;
         void EndRenderPass() const;
-        MXC_RESULT SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
-                                                 Swap const& swap) const;
+        MXC_RESULT SubmitGraphicsQueueAndPresent(Swap const& swap,
+                                                 Semaphore* const pTimelineSemaphore) const;
         MXC_RESULT SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const;
+        MXC_RESULT BeginComputeCommandBuffer() const;
+        MXC_RESULT EndComputeCommandBuffer() const;
+        bool SubmitComputeQueue(Semaphore* pTimelineSemaphore) const;
+        MXC_RESULT SubmitComputeQueueAndPresent(Swap const& swap, Semaphore* pTimelineSemaphore) const;
 
         void ResetTimestamps() const;
         void WriteTimestamp(VkPipelineStageFlagBits const& pipelineStage,
-                                    uint32_t const& query) const;
+                            uint32_t const& query) const;
         StaticArray<double, QueryPoolCount> GetTimestamps() const;
 
         uint32_t GetQueue(Queue const queue) const
@@ -168,5 +172,15 @@ namespace Moxaic::Vulkan
         bool CreateCommandBuffers();
         bool CreatePools();
         bool CreateSamplers();
+
+        MXC_RESULT SubmitQueueAndPresent(VkCommandBuffer const& commandBuffer,
+                                         VkQueue const& queue,
+                                         Swap const& swap,
+                                         VkPipelineStageFlags const& waitDstStageMask,
+                                         Semaphore* const pTimelineSemaphore) const;
+        MXC_RESULT SubmitQueue(VkCommandBuffer const& commandBuffer,
+                               VkQueue const& queue,
+                               VkPipelineStageFlags const& waitDstStageMask,
+                               Semaphore* const pTimelineSemaphore) const;
     };
 }// namespace Moxaic::Vulkan

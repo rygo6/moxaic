@@ -88,13 +88,13 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
     k_pDevice->BeginRenderPass(framebuffer,
                                (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
-    m_StandardPipeline.BindPipeline();
+    m_StandardPipeline.BindGraphicsPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
     m_StandardPipeline.BindDescriptor(m_StandardMaterialDescriptor);
     m_StandardPipeline.BindDescriptor(m_ObjectDescriptor);
     m_SphereTestMesh.RecordRender();
 
-    m_MeshNodePipeline.BindPipeline();
+    m_MeshNodePipeline.BindGraphicsPipeline();
     m_MeshNodePipeline.BindDescriptor(m_GlobalDescriptor);
     m_MeshNodePipeline.BindDescriptor(m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
 
@@ -105,16 +105,25 @@ MXC_RESULT CompositorScene::Loop(uint32_t const& deltaTime)
 
     k_pDevice->EndRenderPass();
 
-    // m_ComputeNodePipeline.BindPipeline();
-    // m_ComputeNodePipeline.BindDescriptor(m_GlobalDescriptor);
-    // m_ComputeNodePipeline.BindDescriptor(m_ComputeNodeDescriptor[0]);
-
     m_Swap.Acquire();
     m_Swap.BlitToSwap(framebuffer.colorTexture());
 
     k_pDevice->EndGraphicsCommandBuffer();
+    k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap, &m_Semaphore);
 
-    k_pDevice->SubmitGraphicsQueueAndPresent(m_Semaphore, m_Swap);
+    m_Semaphore.Wait();
+
+
+    k_pDevice->BeginComputeCommandBuffer();
+
+    m_ComputeNodePipeline.BindComputePipeline();
+    m_ComputeNodePipeline.BindDescriptor(m_GlobalDescriptor);
+    m_ComputeNodePipeline.BindDescriptor(m_ComputeNodeDescriptor[0]);
+
+    vkCmdDispatch(k_pDevice->GetVkComputeCommandBuffer(), 100, 100, 1);
+
+    k_pDevice->EndComputeCommandBuffer();
+    k_pDevice->SubmitComputeQueue(&m_Semaphore);
 
     m_Semaphore.Wait();
 
@@ -171,7 +180,7 @@ MXC_RESULT NodeScene::Loop(uint32_t const& deltaTime)
     k_pDevice->BeginRenderPass(framebuffer,
                                (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
 
-    m_StandardPipeline.BindPipeline();
+    m_StandardPipeline.BindGraphicsPipeline();
     m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
     m_StandardPipeline.BindDescriptor(m_MaterialDescriptor);
     m_StandardPipeline.BindDescriptor(m_ObjectDescriptor);

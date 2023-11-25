@@ -1046,7 +1046,150 @@ void Device::EndRenderPass() const
     VK_CHK_VOID(vkCmdEndRenderPass(m_VkGraphicsCommandBuffer));
 }
 
-MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const
+MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* const pTimelineSemaphore) const
+{
+    return SubmitQueue(m_VkGraphicsCommandBuffer,
+                       m_VkGraphicsQueue,
+                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                       pTimelineSemaphore);
+}
+
+MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Swap const& swap,
+                                                 Semaphore* const pTimelineSemaphore) const
+{
+    return SubmitQueueAndPresent(m_VkGraphicsCommandBuffer,
+                                 m_VkGraphicsQueue,
+                                 swap,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 pTimelineSemaphore);
+}
+
+MXC_RESULT Device::BeginComputeCommandBuffer() const
+{
+    VK_CHK(vkResetCommandBuffer(m_VkComputeCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
+    VkCommandBufferBeginInfo const beginInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .pInheritanceInfo = nullptr,
+    };
+    VK_CHK(vkBeginCommandBuffer(m_VkComputeCommandBuffer, &beginInfo));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Device::EndComputeCommandBuffer() const
+{
+    VK_CHK(vkEndCommandBuffer(m_VkComputeCommandBuffer));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Device::SubmitComputeQueue(Semaphore* pTimelineSemaphore) const
+{
+    return SubmitQueue(m_VkComputeCommandBuffer,
+                       m_VkComputeQueue,
+                       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                       pTimelineSemaphore);
+}
+
+MXC_RESULT Device::SubmitComputeQueueAndPresent(Swap const& swap,
+                                                Semaphore* const pTimelineSemaphore) const
+{
+    return SubmitQueueAndPresent(m_VkComputeCommandBuffer,
+                                 m_VkComputeQueue,
+                                 swap,
+                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                 pTimelineSemaphore);
+}
+
+void Device::ResetTimestamps() const
+{
+    vkResetQueryPool(m_VkDevice, m_VkQueryPool, 0, QueryPoolCount);
+}
+
+void Device::WriteTimestamp(VkPipelineStageFlagBits const& pipelineStage,
+                            uint32_t const& query) const
+{
+    vkCmdWriteTimestamp(m_VkGraphicsCommandBuffer, pipelineStage, m_VkQueryPool, query);
+}
+
+StaticArray<double, Device::QueryPoolCount> Device::GetTimestamps() const
+{
+    uint64_t timestampsNS[QueryPoolCount];
+    vkGetQueryPoolResults(m_VkDevice,
+                          m_VkQueryPool,
+                          0,
+                          QueryPoolCount,
+                          sizeof(uint64_t) * QueryPoolCount,
+                          timestampsNS,
+                          sizeof(uint64_t),
+                          VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+    StaticArray<double, QueryPoolCount> timestampsMS;
+    for (int i = 0; i < QueryPoolCount; ++i) {
+        timestampsMS[i] = double(timestampsNS[i]) / double(1000000);// ns to ms
+    }
+    return timestampsMS;
+}
+
+MXC_RESULT Device::SubmitQueueAndPresent(VkCommandBuffer const& commandBuffer,
+                                         VkQueue const& queue,
+                                         Swap const& swap,
+                                         VkPipelineStageFlags const& waitDstStageMask,
+                                         Semaphore* const pTimelineSemaphore) const
+{
+    // https://www.khronos.org/blog/vulkan-timeline-semaphores
+    uint64_t const waitValue = pTimelineSemaphore->GetLocalWaitValue();
+    pTimelineSemaphore->IncrementWaitValue();
+    uint64_t const signalValue = pTimelineSemaphore->GetLocalWaitValue();
+    StaticArray const waitSemaphoreValues{
+      (uint64_t) waitValue,
+      (uint64_t) 0,
+    };
+    StaticArray const signalSemaphoreValues{
+      (uint64_t) signalValue,
+      (uint64_t) 0,
+    };
+    VkTimelineSemaphoreSubmitInfo const timelineSemaphoreSubmitInfo{
+      .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+      .pNext = nullptr,
+      .waitSemaphoreValueCount = waitSemaphoreValues.size(),
+      .pWaitSemaphoreValues = waitSemaphoreValues.data(),
+      .signalSemaphoreValueCount = signalSemaphoreValues.size(),
+      .pSignalSemaphoreValues = signalSemaphoreValues.data(),
+    };
+    StaticArray const waitSemaphores{
+      pTimelineSemaphore->GetVkSemaphore(),
+      swap.GetVkAcquireCompleteSemaphore(),
+    };
+    StaticArray const waitDstStageMasks{
+      waitDstStageMask,
+      waitDstStageMask,
+    };
+    StaticArray const signalSemaphores{
+      pTimelineSemaphore->GetVkSemaphore(),
+      swap.GetVkRenderCompleteSemaphore(),
+    };
+    VkSubmitInfo const submitInfo = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .pNext = &timelineSemaphoreSubmitInfo,
+      .waitSemaphoreCount = waitSemaphores.size(),
+      .pWaitSemaphores = waitSemaphores.data(),
+      .pWaitDstStageMask = waitDstStageMasks.data(),
+      .commandBufferCount = 1,
+      .pCommandBuffers = &commandBuffer,
+      .signalSemaphoreCount = signalSemaphores.size(),
+      .pSignalSemaphores = signalSemaphores.data()};
+    VK_CHK(vkQueueSubmit(queue,
+                         1,
+                         &submitInfo,
+                         VK_NULL_HANDLE));
+    MXC_CHK(swap.QueuePresent());
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Device::SubmitQueue(VkCommandBuffer const& commandBuffer,
+                               VkQueue const& queue,
+                               VkPipelineStageFlags const& waitDstStageMask,
+                               Semaphore* const pTimelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
     uint64_t const waitValue = pTimelineSemaphore->GetLocalWaitValue();
@@ -1069,8 +1212,8 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const
     StaticArray const waitSemaphores{
       pTimelineSemaphore->GetVkSemaphore(),
     };
-    constexpr StaticArray waitDstStageMask{
-      (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    StaticArray const waitDstStageMasks{
+      waitDstStageMask,
     };
     StaticArray const signalSemaphores{
       pTimelineSemaphore->GetVkSemaphore(),
@@ -1080,92 +1223,14 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const
       .pNext = &timelineSemaphoreSubmitInfo,
       .waitSemaphoreCount = waitSemaphores.size(),
       .pWaitSemaphores = waitSemaphores.data(),
-      .pWaitDstStageMask = waitDstStageMask.data(),
+      .pWaitDstStageMask = waitDstStageMasks.data(),
       .commandBufferCount = 1,
-      .pCommandBuffers = &m_VkGraphicsCommandBuffer,
+      .pCommandBuffers = &commandBuffer,
       .signalSemaphoreCount = signalSemaphores.size(),
       .pSignalSemaphores = signalSemaphores.data()};
-    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
+    VK_CHK(vkQueueSubmit(queue,
                          1,
                          &submitInfo,
                          VK_NULL_HANDLE));
-    return MXC_SUCCESS;
-}
-
-void Device::ResetTimestamps() const
-{
-    vkResetQueryPool(m_VkDevice, m_VkQueryPool, 0, QueryPoolCount);
-}
-
-void Device::WriteTimestamp(VkPipelineStageFlagBits const& pipelineStage, uint32_t const& query) const
-{
-    vkCmdWriteTimestamp(m_VkGraphicsCommandBuffer, pipelineStage, m_VkQueryPool, query);
-}
-
-StaticArray<double, Device::QueryPoolCount> Device::GetTimestamps() const
-{
-    uint64_t timestampsNS[QueryPoolCount];
-    vkGetQueryPoolResults(m_VkDevice,
-                      m_VkQueryPool,
-                      0,
-                      QueryPoolCount,
-                      sizeof(uint64_t) * QueryPoolCount,
-                      timestampsNS,
-                      sizeof(uint64_t),
-                      VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-    StaticArray<double, QueryPoolCount> timestampsMS;
-    for (int i = 0; i < QueryPoolCount; ++i) {
-        timestampsMS[i] = double(timestampsNS[i]) / double(1000000); // ns to ms
-    }
-    return timestampsMS;
-}
-
-MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Semaphore& timelineSemaphore,
-                                                 Swap const& swap) const
-{
-    // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    uint64_t const waitValue = timelineSemaphore.GetLocalWaitValue();
-    timelineSemaphore.IncrementWaitValue();
-    uint64_t const signalValue = timelineSemaphore.GetLocalWaitValue();
-    StaticArray const waitSemaphoreValues{
-      (uint64_t) waitValue,
-      (uint64_t) 0};
-    StaticArray const signalSemaphoreValues{
-      (uint64_t) signalValue,
-      (uint64_t) 0};
-    VkTimelineSemaphoreSubmitInfo const timelineSemaphoreSubmitInfo{
-      .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-      .pNext = nullptr,
-      .waitSemaphoreValueCount = waitSemaphoreValues.size(),
-      .pWaitSemaphoreValues = waitSemaphoreValues.data(),
-      .signalSemaphoreValueCount = signalSemaphoreValues.size(),
-      .pSignalSemaphoreValues = signalSemaphoreValues.data(),
-    };
-    StaticArray const waitSemaphores{
-      timelineSemaphore.GetVkSemaphore(),
-      swap.GetVkAcquireCompleteSemaphore(),
-    };
-    constexpr StaticArray waitDstStageMask{
-      (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      (VkPipelineStageFlags) VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    StaticArray const signalSemaphores{
-      timelineSemaphore.GetVkSemaphore(),
-      swap.GetVkRenderCompleteSemaphore(),
-    };
-    VkSubmitInfo const submitInfo = {
-      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .pNext = &timelineSemaphoreSubmitInfo,
-      .waitSemaphoreCount = waitSemaphores.size(),
-      .pWaitSemaphores = waitSemaphores.data(),
-      .pWaitDstStageMask = waitDstStageMask.data(),
-      .commandBufferCount = 1,
-      .pCommandBuffers = &m_VkGraphicsCommandBuffer,
-      .signalSemaphoreCount = signalSemaphores.size(),
-      .pSignalSemaphores = signalSemaphores.data()};
-    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
-                         1,
-                         &submitInfo,
-                         VK_NULL_HANDLE));
-    MXC_CHK(swap.QueuePresent());
     return MXC_SUCCESS;
 }
