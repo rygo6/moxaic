@@ -8,7 +8,7 @@ void main()
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 //    vec2 uv = vec2(float(gl_GlobalInvocationID.x) / float(globalUBO.width), float(gl_GlobalInvocationID.y) / float(globalUBO.height));
 
-    vec4 color = imageLoad(inputColor, ivec2(gl_GlobalInvocationID.xy));
+//    vec4 color = imageLoad(inputColor, coord);
 //    vec4 color = texture(inputColor, uv);
 //    float depth = texture(inputDepth, uv).r;
 //    vec3 normal = texture(inputNormal, uv).rgb;

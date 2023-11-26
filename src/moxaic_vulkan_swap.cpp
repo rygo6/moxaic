@@ -118,7 +118,7 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
 
     // I am setting this to 2 on the premise you get the least latency in VR.
     if (SwapCount < capabilities.minImageCount) {
-        MXC_LOG_ERROR("FBR_SWAP_COUNT is less than minImageCount", SwapCount, capabilities.minImageCount);
+        MXC_LOG_ERROR("SwapCount is less than minImageCount", SwapCount, capabilities.minImageCount);
         return MXC_FAIL;
     }
 
@@ -151,7 +151,7 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
 
     // OBS is adding VK_IMAGE_USAGE_TRANSFER_SRC_BIT is there a way to detect that!?
     // Let's just add it anyway...
-    if ((capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT)) {
+    if (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
         MXC_LOG("Swap support VK_IMAGE_USAGE_TRANSFER_DST_BIT adding!");
         createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     } else {

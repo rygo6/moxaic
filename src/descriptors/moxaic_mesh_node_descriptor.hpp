@@ -14,41 +14,41 @@ namespace Moxaic::Vulkan
 
         constexpr static int SetIndex = 1;
 
-        static MXC_RESULT InitLayout(Vulkan::Device const& device)
+        static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
             MXC_LOG("Init MeshNodeDescriptor Layout");
             StaticArray bindings{
-                (VkDescriptorSetLayoutBinding){
-                    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                  VK_SHADER_STAGE_MESH_BIT_EXT,
-                  },
-                  (VkDescriptorSetLayoutBinding){
-                      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                    VK_SHADER_STAGE_MESH_BIT_EXT,
-                    },
-                    (VkDescriptorSetLayoutBinding){
-                        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                      VK_SHADER_STAGE_MESH_BIT_EXT,
-                      },
-                      (VkDescriptorSetLayoutBinding){
-                          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                          .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                        VK_SHADER_STAGE_MESH_BIT_EXT,
-                        },
-                        (VkDescriptorSetLayoutBinding){
-                            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                                          VK_SHADER_STAGE_MESH_BIT_EXT,
-                          },
-                        };
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
+                              VK_SHADER_STAGE_MESH_BIT_EXT,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
+                              VK_SHADER_STAGE_MESH_BIT_EXT,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
+                              VK_SHADER_STAGE_MESH_BIT_EXT,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
+                              VK_SHADER_STAGE_MESH_BIT_EXT,
+              },
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
+                              VK_SHADER_STAGE_MESH_BIT_EXT,
+              },
+            };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init(GlobalDescriptor::Buffer const& buffer, Framebuffer const& framebuffer)
+        MXC_RESULT Init(const GlobalDescriptor::Buffer& buffer, const Framebuffer& framebuffer)
         {
             MXC_LOG("Init MaterialDescriptor");
             SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
@@ -102,7 +102,7 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(m_LocalBuffer);
         }
 
-        void SetLocalBuffer(GlobalDescriptor::Buffer const& buffer)
+        void SetLocalBuffer(const GlobalDescriptor::Buffer& buffer)
         {
             m_LocalBuffer = buffer;
         }

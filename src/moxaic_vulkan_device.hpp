@@ -106,6 +106,8 @@ namespace Moxaic::Vulkan
                     return m_ComputeQueueFamilyIndex;
                 case Queue::FamilyExternal:
                     return VK_QUEUE_FAMILY_EXTERNAL;
+                case Queue::Ignore:
+                    return VK_QUEUE_FAMILY_IGNORED;
                 default:
                     SDL_assert(false && "Unknown Queue Type");
                     return -1;
@@ -139,7 +141,7 @@ namespace Moxaic::Vulkan
         MXC_GET(PhysicalDeviceProperties);
         MXC_GET(PhysicalDeviceMemoryProperties);
 
-    private:
+    public:
         VkDevice m_VkDevice{VK_NULL_HANDLE};
 
         VkPhysicalDevice m_VkPhysicalDevice{VK_NULL_HANDLE};

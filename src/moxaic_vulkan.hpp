@@ -58,6 +58,7 @@ namespace Moxaic::Vulkan
         Graphics,
         Compute,
         FamilyExternal,
+        Ignore,
     };
 
     struct BarrierSrc
@@ -124,6 +125,39 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     };
 
+    inline constinit BarrierSrc FromComputeRead{
+      .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamilyIndex = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    };
+
+    inline constinit BarrierSrc AcquireFromComputeRead{
+      .colorAccessMask = VK_ACCESS_NONE,
+      .depthAccessMask = VK_ACCESS_NONE,
+      .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamilyIndex = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    };
+
+    // Seems acquireFromExternal can be used in place of this
+    // if this is used it wants queueFamilyIndex to be ignore
+    // for both src/dst which would need to implement some logic to do that
+    inline constinit BarrierSrc AcquireFromAnywhere{
+        .colorAccessMask = VK_ACCESS_NONE,
+        .depthAccessMask = VK_ACCESS_NONE,
+        .colorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .depthLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .queueFamilyIndex = Queue::Ignore,
+        .colorStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      };
+
     inline constinit BarrierSrc FromGraphicsAttach{
       .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -132,6 +166,16 @@ namespace Moxaic::Vulkan
       .queueFamilyIndex = Queue::Graphics,
       .colorStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
       .depthStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+    };
+
+    inline constinit BarrierSrc AcquireFromGraphicsAttach{
+      .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+      .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+      .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .depthLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+      .queueFamilyIndex = Queue::Graphics,
+      .colorStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     };
 
     inline constinit BarrierDst ToGraphicsAttach{
@@ -152,6 +196,16 @@ namespace Moxaic::Vulkan
       .queueFamilyIndex = Queue::Graphics,
       .colorStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
       .depthStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    };
+
+    inline constinit BarrierDst ReleaseToComputeRead{
+      .colorAccessMask = VK_ACCESS_NONE,
+      .depthAccessMask = VK_ACCESS_NONE,
+      .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamilyIndex = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
     };
 
     inline constinit BarrierDst ToComputeRead{
@@ -186,8 +240,8 @@ namespace Moxaic::Vulkan
     };
 
     inline constinit BarrierDst ToComputeSwapPresent{
-      .colorAccessMask = 0,
-      .depthAccessMask = 0,
+      .colorAccessMask = VK_ACCESS_NONE,
+      .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       .depthLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       .queueFamilyIndex = Queue::Compute,

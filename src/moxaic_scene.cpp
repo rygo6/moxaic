@@ -12,7 +12,7 @@ MXC_RESULT CompositorScene::Init()
                                        Vulkan::Locality::Local));
     }
 
-    MXC_CHK(m_Swap.Init(Window::extents(), false));
+    MXC_CHK(m_Swap.Init(Window::extents(), true));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
@@ -242,7 +242,7 @@ MXC_RESULT NodeScene::Init()
 {
     MXC_CHK(m_Node.Init());
 
-    MXC_CHK(m_Swap.Init(Window::extents(), false));
+    MXC_CHK(m_Swap.Init(Window::extents(), true));
 
     MXC_CHK(m_StandardPipeline.Init());
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
