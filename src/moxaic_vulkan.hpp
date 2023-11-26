@@ -7,6 +7,8 @@
 
 #ifdef WIN32
 #include <windows.h>
+#endif
+#ifdef WIN32
 #include <vulkan/vulkan_win32.h>
 #endif
 
@@ -101,6 +103,26 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     };
 
+    inline constinit BarrierSrc FromComputeSwapPresent{
+      .colorAccessMask = 0,
+      .depthAccessMask = 0,
+      .colorLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      .depthLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      .queueFamilyIndex = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    };
+
+    inline constinit BarrierSrc FromComputeWrite{
+      .colorAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+      .depthAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+      .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamilyIndex = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    };
+
     inline constinit BarrierSrc FromGraphicsAttach{
       .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -132,14 +154,24 @@ namespace Moxaic::Vulkan
     };
 
     inline constinit BarrierDst ToComputeRead{
-        .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .depthLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .queueFamilyIndex = Queue::Compute,
-        .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-      };
+      .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .depthLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .queueFamilyIndex = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    };
+
+    inline constinit BarrierDst ToComputeWrite{
+      .colorAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+      .depthAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+      .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamilyIndex = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    };
 
     /// Release to retain data
     inline constinit BarrierDst ReleaseToExternalGraphicsRead{
@@ -148,6 +180,16 @@ namespace Moxaic::Vulkan
       .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
       .depthLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
       .queueFamilyIndex = Queue::FamilyExternal,
+      .colorStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    };
+
+    inline constinit BarrierDst ToComputeSwapPresent{
+      .colorAccessMask = 0,
+      .depthAccessMask = 0,
+      .colorLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      .depthLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+      .queueFamilyIndex = Queue::Compute,
       .colorStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
       .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
     };
@@ -173,7 +215,7 @@ namespace Moxaic::Vulkan
         External,
     };
 
-    inline char const* string_Locality(Locality const input_value)
+    inline const char* string_Locality(const Locality input_value)
     {
         switch (input_value) {
             case Locality::Local:
@@ -188,8 +230,8 @@ namespace Moxaic::Vulkan
     struct Debug
     {
         int DebugLine;
-        char const* DebugCommand;
-        char const* DebugFile;
+        const char* DebugCommand;
+        const char* DebugFile;
     };
     inline Debug VkDebug;
 

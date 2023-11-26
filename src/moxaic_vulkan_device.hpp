@@ -79,11 +79,15 @@ namespace Moxaic::Vulkan
         void BeginRenderPass(const Framebuffer& framebuffer,
                              const VkClearColorValue& backgroundColor) const;
         MXC_RESULT SubmitGraphicsQueueAndPresent(const Swap& swap,
+                                                 const uint32_t swapIndex,
                                                  Semaphore* const pTimelineSemaphore) const;
         MXC_RESULT SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const;
         MXC_RESULT BeginComputeCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
         bool SubmitComputeQueue(Semaphore* pTimelineSemaphore) const;
-        MXC_RESULT SubmitComputeQueueAndPresent(const Swap& swap, Semaphore* pTimelineSemaphore) const;
+        MXC_RESULT SubmitComputeQueueAndPresent(const VkCommandBuffer commandBuffer,
+                                                const Swap& swap,
+                                                const uint32_t swapIndex,
+                                                Semaphore* pTimelineSemaphore) const;
 
         void ResetTimestamps() const;
         void WriteTimestamp(const VkCommandBuffer commandbuffer,
@@ -174,8 +178,8 @@ namespace Moxaic::Vulkan
         MXC_RESULT SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
                                          const VkQueue& queue,
                                          const Swap& swap,
-                                         const VkPipelineStageFlags& waitDstStageMask,
-                                         Semaphore* const pTimelineSemaphore) const;
+                                         const uint32_t swapIndex,
+                                         const VkPipelineStageFlags& waitDstStageMask, Semaphore* const pTimelineSemaphore) const;
         MXC_RESULT SubmitQueue(const VkCommandBuffer& commandBuffer,
                                const VkQueue& queue,
                                const VkPipelineStageFlags& waitDstStageMask,

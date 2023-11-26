@@ -9,7 +9,7 @@
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-static MXC_RESULT ChooseSwapPresentMode(VkPhysicalDevice const physicalDevice,
+static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice,
                                         VkPresentModeKHR* pPresentMode)
 {
     uint32_t presentModeCount;
@@ -60,7 +60,7 @@ static MXC_RESULT ChooseSwapPresentMode(VkPhysicalDevice const physicalDevice,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT ChooseSwapSurfaceFormat(VkPhysicalDevice const physicalDevice,
+MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
                                    bool computeStorage,
                                    VkSurfaceFormatKHR* pSurfaceFormat)
 {
@@ -80,9 +80,10 @@ MXC_RESULT ChooseSwapSurfaceFormat(VkPhysicalDevice const physicalDevice,
             formats[i].format == VK_FORMAT_B8G8R8A8_UNORM) {
             *pSurfaceFormat = formats[i];
             return MXC_SUCCESS;
-        } else if (!computeStorage &&
-                     formats[i].format == VK_FORMAT_B8G8R8A8_SRGB ||
-                   formats[i].format == VK_FORMAT_R8G8B8A8_SRGB) {
+        }
+        if (!computeStorage &&
+              formats[i].format == VK_FORMAT_B8G8R8A8_SRGB ||
+            formats[i].format == VK_FORMAT_R8G8B8A8_SRGB) {
             *pSurfaceFormat = formats[i];
             return MXC_SUCCESS;
         }
@@ -94,7 +95,7 @@ MXC_RESULT ChooseSwapSurfaceFormat(VkPhysicalDevice const physicalDevice,
     return MXC_SUCCESS;
 }
 
-Swap::Swap(Vulkan::Device const& device)
+Swap::Swap(const Vulkan::Device& device)
     : k_pDevice(&device) {}
 
 Swap::~Swap()
@@ -107,7 +108,7 @@ Swap::~Swap()
     }
 }
 
-MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
+MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
@@ -201,15 +202,15 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
 
     for (int i = 0; i < m_VkSwapImages.size(); ++i) {
         k_pDevice->TransitionImageLayoutImmediate(m_VkSwapImages[i],
-                                                 VK_IMAGE_LAYOUT_UNDEFINED,
-                                                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                                 VK_ACCESS_NONE,
-                                                 VK_ACCESS_NONE,
-                                                 VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                                 VK_IMAGE_ASPECT_COLOR_BIT);
+                                                  VK_IMAGE_LAYOUT_UNDEFINED,
+                                                  VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                                                  VK_ACCESS_NONE,
+                                                  VK_ACCESS_NONE,
+                                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                                  VK_IMAGE_ASPECT_COLOR_BIT);
         auto swapImage = m_VkSwapImages[i];
-        VkImageViewCreateInfo const viewInfo{
+        const VkImageViewCreateInfo viewInfo{
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
           .image = swapImage,
           .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -234,7 +235,7 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
                                  &swapImageView));
     }
 
-    VkSemaphoreCreateInfo const swapchainSemaphoreCreateInfo = {
+    const VkSemaphoreCreateInfo swapchainSemaphoreCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
@@ -254,27 +255,54 @@ MXC_RESULT Swap::Init(VkExtent2D const& dimensions, bool const& computeStorage)
     m_Dimensions = dimensions;
     m_Format = surfaceFormat.format;
 
-    if (m_Format != VK_FORMAT_B8G8R8A8_SRGB) {
-        MXC_LOG_ERROR("Format is not VK_FORMAT_B8G8R8A8_SRGB! Was expecting VK_FORMAT_B8G8R8A8_SRGB!");
-    }
-
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Swap::Acquire()
+MXC_RESULT Swap::Acquire(uint32_t* pSwapIndex)
 {
     VK_CHK(vkAcquireNextImageKHR(k_pDevice->GetVkDevice(),
                                  m_VkSwapchain,
                                  UINT64_MAX,
                                  m_VkAcquireCompleteSemaphore,
                                  VK_NULL_HANDLE,
-                                 &m_LastAcquiredSwapIndex));
+                                 pSwapIndex));
     return MXC_SUCCESS;
 }
 
-void Swap::BlitToSwap(Texture const& srcTexture) const
+void Swap::Transition(const VkCommandBuffer commandBuffer,
+                      const uint32_t swapIndex,
+                      const BarrierSrc& src,
+                      const BarrierDst& dst) const
 {
-    StaticArray const transitionBlitBarrier{
+    const StaticArray transitionBlitBarrier{
+      (VkImageMemoryBarrier){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = src.colorAccessMask,
+        .dstAccessMask = dst.colorAccessMask,
+        .oldLayout = src.colorLayout,
+        .newLayout = dst.colorLayout,
+        .srcQueueFamilyIndex = k_pDevice->GetQueue(src.queueFamilyIndex),
+        .dstQueueFamilyIndex = k_pDevice->GetQueue(dst.queueFamilyIndex),
+        .image = m_VkSwapImages[swapIndex],
+        .subresourceRange = DefaultColorSubresourceRange,
+      },
+    };
+    vkCmdPipelineBarrier(commandBuffer,
+                         src.colorStageMask,
+                         dst.colorStageMask,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         transitionBlitBarrier.size(),
+                         transitionBlitBarrier.data());
+}
+
+void Swap::BlitToSwap(const uint32_t swapIndex,
+                      const Texture& srcTexture) const
+{
+    const StaticArray transitionBlitBarrier{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = 0,
@@ -294,7 +322,7 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
+        .image = m_VkSwapImages[swapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
@@ -314,7 +342,7 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
       .baseArrayLayer = 0,
       .layerCount = 1,
     };
-    VkOffset3D const offsets[2]{
+    const VkOffset3D offsets[2]{
       (VkOffset3D){
         .x = 0,
         .y = 0,
@@ -336,12 +364,12 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
     vkCmdBlitImage(k_pDevice->GetVkGraphicsCommandBuffer(),
                    srcTexture.vkImage(),
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   m_VkSwapImages[m_LastAcquiredSwapIndex],
+                   m_VkSwapImages[swapIndex],
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                    1,
                    &imageBlit,
                    VK_FILTER_NEAREST);
-    StaticArray const transitionPresentBarrier{
+    const StaticArray transitionPresentBarrier{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = 0,
@@ -361,7 +389,7 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .image = m_VkSwapImages[m_LastAcquiredSwapIndex],
+        .image = m_VkSwapImages[swapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
@@ -377,16 +405,16 @@ void Swap::BlitToSwap(Texture const& srcTexture) const
                          transitionPresentBarrier.data());
 }
 
-MXC_RESULT Swap::QueuePresent() const
+MXC_RESULT Swap::QueuePresent(const uint32_t swapIndex) const
 {
     // TODO want to use this?? https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_present_id.html
-    VkPresentInfoKHR const presentInfo{
+    const VkPresentInfoKHR presentInfo{
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
       .pWaitSemaphores = &m_VkRenderCompleteSemaphore,
       .swapchainCount = 1,
       .pSwapchains = &m_VkSwapchain,
-      .pImageIndices = &m_LastAcquiredSwapIndex,
+      .pImageIndices = &swapIndex,
     };
     VK_CHK(vkQueuePresentKHR(k_pDevice->GetVkGraphicsQueue(),
                              &presentInfo));

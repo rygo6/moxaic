@@ -104,11 +104,15 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 
     vkCmdEndRenderPass(commandBuffer);
 
-    m_Swap.Acquire();
-    m_Swap.BlitToSwap(framebuffer.colorTexture());
+    uint32_t swapIndex;
+    m_Swap.Acquire(&swapIndex);
+    m_Swap.BlitToSwap(swapIndex,
+                      framebuffer.colorTexture());
 
     VK_CHK(vkEndCommandBuffer(commandBuffer));
-    k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap, &m_Semaphore);
+    k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
+                                             swapIndex,
+                                             &m_Semaphore);
 
     m_Semaphore.Wait();
 
@@ -123,7 +127,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 
 MXC_RESULT ComputeCompositorScene::Init()
 {
-    MXC_CHK(m_Swap.Init(Window::extents(), false));
+    MXC_CHK(m_Swap.Init(Window::extents(), true));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
@@ -186,8 +190,15 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         m_NodeReference.ExportedGlobalDescriptor()->WriteLocalBuffer();
     }
 
-    m_Swap.Acquire();
-    m_ComputeNodeDescriptor.WriteOutputColorImage(m_Swap.GetLastAcquiredVkSwapImageView());
+    uint32_t swapIndex;
+    m_Swap.Acquire(&swapIndex);
+
+    m_Swap.Transition(commandBuffer,
+                      swapIndex,
+                      Vulkan::FromComputeSwapPresent,
+                      Vulkan::ToComputeWrite);
+
+    m_ComputeNodeDescriptor.WriteOutputColorImage(m_Swap.GetVkSwapImageViews(swapIndex));
     m_ComputeNodePipeline.BindComputePipeline();
     m_ComputeNodePipeline.BindDescriptor(m_GlobalDescriptor);
     m_ComputeNodePipeline.BindDescriptor(m_ComputeNodeDescriptor);
@@ -200,8 +211,16 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                   1);
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 1);
 
+    m_Swap.Transition(commandBuffer,
+                  swapIndex,
+                  Vulkan::FromComputeWrite,
+                  Vulkan::ToComputeSwapPresent);
+
     VK_CHK(vkEndCommandBuffer(commandBuffer));
-    k_pDevice->SubmitComputeQueueAndPresent(m_Swap, &m_Semaphore);
+    k_pDevice->SubmitComputeQueueAndPresent(commandBuffer,
+                                            m_Swap,
+                                            swapIndex,
+                                            &m_Semaphore);
 
     m_Semaphore.Wait();
 
@@ -272,16 +291,20 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                            Vulkan::FromGraphicsAttach,
                            Vulkan::ReleaseToExternalGraphicsRead);
 
-    m_Swap.Acquire();
-    m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());
+    uint32_t swapIndex;
+    m_Swap.Acquire(&swapIndex);
+    m_Swap.BlitToSwap(swapIndex,
+                      m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
     vkEndCommandBuffer(commandBuffer);
     // k_pDevice->SubmitGraphicsQueue(&m_Node.NodeSemaphore());
-    k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap, m_Node.ImportedNodeSemaphore());
+    k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
+                                             swapIndex,
+                                             m_Node.ImportedNodeSemaphore());
 
     m_Node.ImportedNodeSemaphore()->Wait();
-    // m_Node.ImportedCompositorSemaphore()->IncrementLocalWaitValue(m_CompositorSempahoreStep);
-    // m_Node.ImportedCompositorSemaphore()->Wait();
+    m_Node.ImportedCompositorSemaphore()->IncrementLocalWaitValue(m_CompositorSempahoreStep);
+    m_Node.ImportedCompositorSemaphore()->Wait();
 
     m_FramebufferIndex = !m_FramebufferIndex;
 
