@@ -16,15 +16,15 @@
 
 namespace Moxaic::Vulkan
 {
-    class MeshNodePipeline : public VulkanGraphicsPipeline<MeshNodePipeline>
+    class MeshNodePipeline : public GraphicsPipeline<MeshNodePipeline>
     {
     public:
-        using VulkanGraphicsPipeline::VulkanGraphicsPipeline;
+        using GraphicsPipeline::GraphicsPipeline;
 
-        static MXC_RESULT InitLayout(Vulkan::Device const& device)
+        static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
             SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
-            StaticArray const setLayouts{
+            const StaticArray setLayouts{
               GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
               MeshNodeDescriptor::GetOrInitVkDescriptorSetLayout(device),
             };
@@ -45,7 +45,7 @@ namespace Moxaic::Vulkan
             VkShaderModule fragShader;
             MXC_CHK(CreateShaderModule("./shaders/mesh_node.frag.spv",
                                        &fragShader));
-            StaticArray const stages{
+            const StaticArray stages{
               (VkPipelineShaderStageCreateInfo){
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
@@ -76,28 +76,20 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void BindDescriptor(GlobalDescriptor const& descriptor) const
+        void BindDescriptor(const VkCommandBuffer commandBuffer,
+                            const GlobalDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_vkPipelineLayout,
-                                    GlobalDescriptor::SetIndex,
-                                    1,
-                                    &descriptor.GetVkDescriptorSet(),
-                                    0,
-                                    nullptr);
+            GraphicsPipeline::BindDescriptor(commandBuffer,
+                                                   descriptor.GetVkDescriptorSet(),
+                                                   GlobalDescriptor::SetIndex);
         }
 
-        void BindDescriptor(MeshNodeDescriptor const& descriptor) const
+        void BindDescriptor(const VkCommandBuffer commandBuffer,
+                            const MeshNodeDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_vkPipelineLayout,
-                                    MeshNodeDescriptor::SetIndex,
-                                    1,
-                                    &descriptor.GetVkDescriptorSet(),
-                                    0,
-                                    nullptr);
+            GraphicsPipeline::BindDescriptor(commandBuffer,
+                                                   descriptor.GetVkDescriptorSet(),
+                                                   MeshNodeDescriptor::SetIndex);
         }
     };
 }// namespace Moxaic::Vulkan

@@ -474,19 +474,21 @@ MXC_RESULT Device::CreatePools()
       .pipelineStatistics = 0,
     };
     vkCreateQueryPool(m_VkDevice, &queryPoolCreateInfo, VK_ALLOC, &m_VkQueryPool);
+
     constexpr StaticArray poolSizes{
       (VkDescriptorPoolSize){
         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .descriptorCount = 4,
       },
       (VkDescriptorPoolSize){
-        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .descriptorCount = 4,
       },
       (VkDescriptorPoolSize){
-        .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
         .descriptorCount = 4,
-      }};
+      },
+    };
     const VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
       .pNext = nullptr,
@@ -1057,7 +1059,8 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(const Swap& swap,
 
 MXC_RESULT Device::BeginComputeCommandBuffer(VkCommandBuffer* pCommandBuffer) const
 {
-    VK_CHK(vkResetCommandBuffer(m_VkComputeCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
+    VK_CHK(vkResetCommandBuffer(m_VkComputeCommandBuffer,
+                                VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
     const VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
@@ -1124,7 +1127,8 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
                                          const VkQueue& queue,
                                          const Swap& swap,
                                          const uint32_t swapIndex,
-                                         const VkPipelineStageFlags& waitDstStageMask, Semaphore* const pTimelineSemaphore) const
+                                         const VkPipelineStageFlags& waitDstStageMask,
+                                         Semaphore* const pTimelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
     const uint64_t waitValue = pTimelineSemaphore->GetLocalWaitValue();
@@ -1172,7 +1176,8 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
                          1,
                          &submitInfo,
                          VK_NULL_HANDLE));
-    MXC_CHK(swap.QueuePresent(swapIndex));
+    MXC_CHK(swap.QueuePresent(queue,
+                              swapIndex));
     return MXC_SUCCESS;
 }
 

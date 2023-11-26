@@ -87,29 +87,30 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     k_pDevice->BeginRenderPass(framebuffer,
                                (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
-    m_StandardPipeline.BindGraphicsPipeline();
-    m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
-    m_StandardPipeline.BindDescriptor(m_StandardMaterialDescriptor);
-    m_StandardPipeline.BindDescriptor(m_ObjectDescriptor);
-    m_SphereTestMesh.RecordRender();
+    m_StandardPipeline.BindGraphicsPipeline(commandBuffer);
+    m_StandardPipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
+    m_StandardPipeline.BindDescriptor(commandBuffer, m_StandardMaterialDescriptor);
+    m_StandardPipeline.BindDescriptor(commandBuffer, m_ObjectDescriptor);
+    m_SphereTestMesh.RecordRender(commandBuffer);
 
-    m_MeshNodePipeline.BindGraphicsPipeline();
-    m_MeshNodePipeline.BindDescriptor(m_GlobalDescriptor);
-    m_MeshNodePipeline.BindDescriptor(m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
+    m_MeshNodePipeline.BindGraphicsPipeline(commandBuffer);
+    m_MeshNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
+    m_MeshNodePipeline.BindDescriptor(commandBuffer, m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
 
     k_pDevice->ResetTimestamps();
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT, 0);
-    Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_pDevice->GetVkGraphicsCommandBuffer(), 1, 1, 1);
+    Vulkan::VkFunc.CmdDrawMeshTasksEXT(commandBuffer, 1, 1, 1);
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, 1);
 
     vkCmdEndRenderPass(commandBuffer);
 
     uint32_t swapIndex;
     m_Swap.Acquire(&swapIndex);
-    m_Swap.BlitToSwap(swapIndex,
+    m_Swap.BlitToSwap(commandBuffer,
+                      swapIndex,
                       framebuffer.colorTexture());
 
-    VK_CHK(vkEndCommandBuffer(commandBuffer));
+    vkEndCommandBuffer(commandBuffer);
     k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
                                              swapIndex,
                                              &m_Semaphore);
@@ -145,7 +146,6 @@ MXC_RESULT ComputeCompositorScene::Init()
     MXC_CHK(m_ComputeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
                                          m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
                                          m_Swap.GetVkSwapImageViews(m_NodeFramebufferIndex)));
-
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -199,9 +199,16 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                       Vulkan::ToComputeWrite);
 
     m_ComputeNodeDescriptor.WriteOutputColorImage(m_Swap.GetVkSwapImageViews(swapIndex));
-    m_ComputeNodePipeline.BindComputePipeline();
-    m_ComputeNodePipeline.BindDescriptor(m_GlobalDescriptor);
-    m_ComputeNodePipeline.BindDescriptor(m_ComputeNodeDescriptor);
+
+    auto computeNodeDescriptor = Vulkan::ComputeNodeDescriptor(*k_pDevice);
+    computeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
+                               m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
+                               m_Swap.GetVkSwapImageViews(swapIndex));
+
+    m_ComputeNodePipeline.BindComputePipeline(commandBuffer);
+    m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
+    // m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_ComputeNodeDescriptor);
+    m_ComputeNodePipeline.BindDescriptor(commandBuffer, computeNodeDescriptor);
 
     k_pDevice->ResetTimestamps();
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0);
@@ -212,9 +219,9 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 1);
 
     m_Swap.Transition(commandBuffer,
-                  swapIndex,
-                  Vulkan::FromComputeWrite,
-                  Vulkan::ToComputeSwapPresent);
+                      swapIndex,
+                      Vulkan::FromComputeWrite,
+                      Vulkan::ToComputeSwapPresent);
 
     VK_CHK(vkEndCommandBuffer(commandBuffer));
     k_pDevice->SubmitComputeQueueAndPresent(commandBuffer,
@@ -225,8 +232,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     m_Semaphore.Wait();
 
     const auto timestamps = k_pDevice->GetTimestamps();
-    const float taskMeshMs = timestamps[1] - timestamps[0];
-    MXC_LOG_NAMED(taskMeshMs);
+    const float computeMs = timestamps[1] - timestamps[0];
+    MXC_LOG_NAMED(computeMs);
 
     return MXC_SUCCESS;
 }
@@ -278,12 +285,12 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     k_pDevice->BeginRenderPass(framebuffer,
                                (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
 
-    m_StandardPipeline.BindGraphicsPipeline();
-    m_StandardPipeline.BindDescriptor(m_GlobalDescriptor);
-    m_StandardPipeline.BindDescriptor(m_MaterialDescriptor);
-    m_StandardPipeline.BindDescriptor(m_ObjectDescriptor);
+    m_StandardPipeline.BindGraphicsPipeline(commandBuffer);
+    m_StandardPipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
+    m_StandardPipeline.BindDescriptor(commandBuffer, m_MaterialDescriptor);
+    m_StandardPipeline.BindDescriptor(commandBuffer, m_ObjectDescriptor);
 
-    m_SphereTestMesh.RecordRender();
+    m_SphereTestMesh.RecordRender(commandBuffer);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -293,7 +300,8 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 
     uint32_t swapIndex;
     m_Swap.Acquire(&swapIndex);
-    m_Swap.BlitToSwap(swapIndex,
+    m_Swap.BlitToSwap(commandBuffer,
+                      swapIndex,
                       m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
     vkEndCommandBuffer(commandBuffer);

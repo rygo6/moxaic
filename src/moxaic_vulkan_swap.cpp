@@ -299,7 +299,8 @@ void Swap::Transition(const VkCommandBuffer commandBuffer,
                          transitionBlitBarrier.data());
 }
 
-void Swap::BlitToSwap(const uint32_t swapIndex,
+void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
+                      const uint32_t swapIndex,
                       const Texture& srcTexture) const
 {
     const StaticArray transitionBlitBarrier{
@@ -326,7 +327,7 @@ void Swap::BlitToSwap(const uint32_t swapIndex,
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
-    vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
+    vkCmdPipelineBarrier(commandBuffer,
                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          0,
@@ -361,7 +362,7 @@ void Swap::BlitToSwap(const uint32_t swapIndex,
     imageBlit.dstSubresource = imageSubresourceLayers;
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
-    vkCmdBlitImage(k_pDevice->GetVkGraphicsCommandBuffer(),
+    vkCmdBlitImage(commandBuffer,
                    srcTexture.vkImage(),
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    m_VkSwapImages[swapIndex],
@@ -393,7 +394,7 @@ void Swap::BlitToSwap(const uint32_t swapIndex,
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
     };
-    vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
+    vkCmdPipelineBarrier(commandBuffer,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                          0,
@@ -405,7 +406,8 @@ void Swap::BlitToSwap(const uint32_t swapIndex,
                          transitionPresentBarrier.data());
 }
 
-MXC_RESULT Swap::QueuePresent(const uint32_t swapIndex) const
+MXC_RESULT Swap::QueuePresent(const VkQueue& queue,
+                              const uint32_t swapIndex) const
 {
     // TODO want to use this?? https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_present_id.html
     const VkPresentInfoKHR presentInfo{
@@ -416,7 +418,7 @@ MXC_RESULT Swap::QueuePresent(const uint32_t swapIndex) const
       .pSwapchains = &m_VkSwapchain,
       .pImageIndices = &swapIndex,
     };
-    VK_CHK(vkQueuePresentKHR(k_pDevice->GetVkGraphicsQueue(),
+    VK_CHK(vkQueuePresentKHR(queue,
                              &presentInfo));
     return MXC_SUCCESS;
 }

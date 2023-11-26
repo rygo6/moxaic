@@ -17,14 +17,14 @@
 
 namespace Moxaic::Vulkan
 {
-    class StandardPipeline : public VulkanGraphicsPipeline<StandardPipeline>
+    class StandardPipeline : public GraphicsPipeline<StandardPipeline>
     {
     public:
-        using VulkanGraphicsPipeline::VulkanGraphicsPipeline;
+        using GraphicsPipeline::GraphicsPipeline;
 
-        static MXC_RESULT InitLayout(Vulkan::Device const& device)
+        static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
-            StaticArray const setLayouts{
+            const StaticArray setLayouts{
               GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
               StandardMaterialDescriptor::GetOrInitVkDescriptorSetLayout(device),
               ObjectDescriptor::GetOrInitVkDescriptorSetLayout(device),
@@ -43,7 +43,7 @@ namespace Moxaic::Vulkan
             VkShaderModule fragShader;
             MXC_CHK(CreateShaderModule("./shaders/basic_material.frag.spv",
                                        &fragShader));
-            StaticArray const stages{
+            const StaticArray stages{
               (VkPipelineShaderStageCreateInfo){
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
                 .stage = VK_SHADER_STAGE_VERTEX_BIT,
@@ -65,40 +65,28 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void BindDescriptor(GlobalDescriptor const& descriptor) const
+        void BindDescriptor(const VkCommandBuffer commandBuffer,
+                            const GlobalDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_vkPipelineLayout,
-                                    GlobalDescriptor::SetIndex,
-                                    1,
-                                    &descriptor.GetVkDescriptorSet(),
-                                    0,
-                                    nullptr);
+            GraphicsPipeline::BindDescriptor(commandBuffer,
+                                       descriptor.GetVkDescriptorSet(),
+                                       GlobalDescriptor::SetIndex);
         }
 
-        void BindDescriptor(StandardMaterialDescriptor const& descriptor) const
+        void BindDescriptor(const VkCommandBuffer commandBuffer,
+                            const StandardMaterialDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_vkPipelineLayout,
-                                    StandardMaterialDescriptor::SetIndex,
-                                    1,
-                                    &descriptor.GetVkDescriptorSet(),
-                                    0,
-                                    nullptr);
+            GraphicsPipeline::BindDescriptor(commandBuffer,
+                                       descriptor.GetVkDescriptorSet(),
+                                       StandardMaterialDescriptor::SetIndex);
         }
 
-        void BindDescriptor(ObjectDescriptor const& descriptor) const
+        void BindDescriptor(const VkCommandBuffer commandBuffer,
+                            const ObjectDescriptor& descriptor) const
         {
-            vkCmdBindDescriptorSets(k_pDevice->GetVkGraphicsCommandBuffer(),
-                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    s_vkPipelineLayout,
-                                    ObjectDescriptor::SetIndex,
-                                    1,
-                                    &descriptor.GetVkDescriptorSet(),
-                                    0,
-                                    nullptr);
+            GraphicsPipeline::BindDescriptor(commandBuffer,
+                                       descriptor.GetVkDescriptorSet(),
+                                       ObjectDescriptor::SetIndex);
         }
     };
 }// namespace Moxaic::Vulkan

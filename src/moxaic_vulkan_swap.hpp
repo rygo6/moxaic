@@ -29,9 +29,11 @@ namespace Moxaic::Vulkan
                         const uint32_t swapIndex,
                         const BarrierSrc& src,
                         const BarrierDst& dst) const;
-        void BlitToSwap(const uint32_t swapIndex,
+        void BlitToSwap(const VkCommandBuffer commandBuffer,
+                        const uint32_t swapIndex,
                         const Texture& srcTexture) const;
-        MXC_RESULT QueuePresent(const uint32_t swapIndex) const;
+        MXC_RESULT QueuePresent(const VkQueue& queue,
+                                const uint32_t swapIndex) const;
 
         MXC_GET(VkAcquireCompleteSemaphore);
         MXC_GET(VkRenderCompleteSemaphore);

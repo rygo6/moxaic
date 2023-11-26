@@ -16,5 +16,6 @@ void main()
     vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
     vec4 sRGBswapped = vec4(sRGB.bgr, color.a);
 
-    imageStore(outputColor, coord, color);
+//    imageStore(outputColor, coord, color);
+    imageStore(outputColor, coord, vec4(0,1,0,1));
 }

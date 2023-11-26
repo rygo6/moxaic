@@ -127,8 +127,8 @@ namespace Moxaic::Vulkan
         MXC_GET(VkRenderPass);
         MXC_GET(VkDescriptorPool);
         MXC_GET(VkQueryPool);
-        MXC_GET(VkGraphicsCommandBuffer);
-        MXC_GET(VkComputeCommandBuffer);
+        // MXC_GET(VkGraphicsCommandBuffer);
+        // MXC_GET(VkComputeCommandBuffer);
         MXC_GET(VkLinearSampler);
         MXC_GET(VkNearestSampler);
 

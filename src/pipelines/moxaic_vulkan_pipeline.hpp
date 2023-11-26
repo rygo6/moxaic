@@ -15,7 +15,7 @@
 
 namespace Moxaic::Vulkan
 {
-    static MXC_RESULT ReadFile(char const* filename,
+    static MXC_RESULT ReadFile(const char* filename,
                                uint32_t* length,
                                char** ppContents)
     {
@@ -28,7 +28,7 @@ namespace Moxaic::Vulkan
         *length = ftell(file);
         rewind(file);
         *ppContents = static_cast<char*>(calloc(1 + *length, sizeof(char)));
-        size_t const readCount = fread(*ppContents, *length, 1, file);
+        const size_t readCount = fread(*ppContents, *length, 1, file);
         if (readCount == 0) {
             MXC_LOG("Failed to read file!", filename);
             return MXC_FAIL;
@@ -38,15 +38,15 @@ namespace Moxaic::Vulkan
     }
 
     template<typename Derived>
-    class VulkanPipeline
+    class Pipeline
     {
     public:
-        MXC_NO_VALUE_PASS(VulkanPipeline)
+        MXC_NO_VALUE_PASS(Pipeline)
 
-        explicit VulkanPipeline(Device const& device)
+        explicit Pipeline(const Device& device)
             : k_pDevice(&device) {}
 
-        virtual ~VulkanPipeline()
+        virtual ~Pipeline()
         {
             vkDestroyPipeline(k_pDevice->GetVkDevice(),
                               m_vkPipeline,
@@ -62,30 +62,30 @@ namespace Moxaic::Vulkan
 
         MXC_GET(vkPipeline);
 
-        static VkPipelineLayout const& GetVkPipelineLayout(Vulkan::Device const& device)
+        static const VkPipelineLayout& GetVkPipelineLayout(const Vulkan::Device& device)
         {
             CheckLayoutInitialized(device);
             return s_vkPipelineLayout;
         }
 
     protected:
-        Device const* const k_pDevice;
+        const Device* const k_pDevice;
         // at some point layout will need to be a map on the device to support multiple devices
         inline static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
         VkPipeline m_vkPipeline{VK_NULL_HANDLE};
 
-        static void CheckLayoutInitialized(Vulkan::Device const& device)
+        static void CheckLayoutInitialized(const Vulkan::Device& device)
         {
             if (s_vkPipelineLayout == VK_NULL_HANDLE)
                 Derived::InitLayout(device);
         }
 
         template<uint32_t N>
-        static MXC_RESULT CreateLayout(Vulkan::Device const& device,
-                                       StaticArray<VkDescriptorSetLayout, N> const& setLayouts)
+        static MXC_RESULT CreateLayout(const Vulkan::Device& device,
+                                       const StaticArray<VkDescriptorSetLayout, N>& setLayouts)
         {
             SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
-            VkPipelineLayoutCreateInfo const createInfo{
+            const VkPipelineLayoutCreateInfo createInfo{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
               .pNext = nullptr,
               .flags = 0,
@@ -101,7 +101,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateShaderModule(char const* const pShaderPath,
+        MXC_RESULT CreateShaderModule(const char* const pShaderPath,
                                       VkShaderModule* pShaderModule) const
         {
             uint32_t codeLength;
@@ -109,12 +109,12 @@ namespace Moxaic::Vulkan
             MXC_CHK(ReadFile(pShaderPath,
                              &codeLength,
                              &pShaderCode));
-            VkShaderModuleCreateInfo const createInfo{
+            const VkShaderModuleCreateInfo createInfo{
               .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
               .pNext = nullptr,
               .flags = 0,
               .codeSize = codeLength,
-              .pCode = reinterpret_cast<uint32_t const*>(pShaderCode),
+              .pCode = reinterpret_cast<const uint32_t*>(pShaderCode),
             };
             VK_CHK(vkCreateShaderModule(k_pDevice->GetVkDevice(),
                                         &createInfo,
@@ -124,9 +124,9 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateVertexInputOpaquePipe(uint32_t const stageCount,
-                                               VkPipelineShaderStageCreateInfo const* pStages,
-                                               VkPipelineTessellationStateCreateInfo const* pTessellationState)
+        MXC_RESULT CreateVertexInputOpaquePipe(const uint32_t stageCount,
+                                               const VkPipelineShaderStageCreateInfo* pStages,
+                                               const VkPipelineTessellationStateCreateInfo* pTessellationState)
         {
             // Vertex Input
             constexpr StaticArray vertexBindingDescriptions{
@@ -136,7 +136,7 @@ namespace Moxaic::Vulkan
                 .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
               },
             };
-            StaticArray const vertexAttributeDescriptions{
+            const StaticArray vertexAttributeDescriptions{
               (VkVertexInputAttributeDescription){
                 .location = 0,
                 .binding = 0,
@@ -155,7 +155,7 @@ namespace Moxaic::Vulkan
                 .format = VK_FORMAT_R32G32_SFLOAT,
                 .offset = offsetof(Vertex, uv),
               }};
-            VkPipelineVertexInputStateCreateInfo const vertexInputState{
+            const VkPipelineVertexInputStateCreateInfo vertexInputState{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
               .vertexBindingDescriptionCount = vertexBindingDescriptions.size(),
               .pVertexBindingDescriptions = vertexBindingDescriptions.data(),
@@ -175,11 +175,11 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateOpaquePipe(uint32_t const stageCount,
-                                    VkPipelineShaderStageCreateInfo const* pStages,
-                                    VkPipelineVertexInputStateCreateInfo const* pVertexInputState,
-                                    VkPipelineInputAssemblyStateCreateInfo const* pInputAssemblyState,
-                                    VkPipelineTessellationStateCreateInfo const* pTessellationState)
+        MXC_RESULT CreateOpaquePipe(const uint32_t stageCount,
+                                    const VkPipelineShaderStageCreateInfo* pStages,
+                                    const VkPipelineVertexInputStateCreateInfo* pVertexInputState,
+                                    const VkPipelineInputAssemblyStateCreateInfo* pInputAssemblyState,
+                                    const VkPipelineTessellationStateCreateInfo* pTessellationState)
         {
             SDL_assert(m_vkPipeline == nullptr);
             CheckLayoutInitialized(*k_pDevice);
@@ -209,7 +209,7 @@ namespace Moxaic::Vulkan
                                   VK_COLOR_COMPONENT_A_BIT,
 
               }};
-            VkPipelineColorBlendStateCreateInfo const colorBlendState{
+            const VkPipelineColorBlendStateCreateInfo colorBlendState{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
               .pNext = nullptr,
               .logicOpEnable = VK_FALSE,
@@ -264,7 +264,7 @@ namespace Moxaic::Vulkan
             constexpr StaticArray dynamicStates{
               (VkDynamicState) VK_DYNAMIC_STATE_VIEWPORT,
               (VkDynamicState) VK_DYNAMIC_STATE_SCISSOR};
-            VkPipelineDynamicStateCreateInfo const dynamicState{
+            const VkPipelineDynamicStateCreateInfo dynamicState{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
               .dynamicStateCount = dynamicStates.size(),
               .pDynamicStates = dynamicStates.data(),
@@ -284,7 +284,7 @@ namespace Moxaic::Vulkan
             };
 
             // Create
-            VkGraphicsPipelineCreateInfo const pipelineInfo{
+            const VkGraphicsPipelineCreateInfo pipelineInfo{
               .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
               .pNext = &pipelineRobustnessCreateInfo,
               .flags = 0,
@@ -315,10 +315,10 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateComputePipe(VkPipelineShaderStageCreateInfo const& stage)
+        MXC_RESULT CreateComputePipe(const VkPipelineShaderStageCreateInfo& stage)
         {
             CheckLayoutInitialized(*k_pDevice);
-            VkComputePipelineCreateInfo const pipelineInfo{
+            const VkComputePipelineCreateInfo pipelineInfo{
               .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
               .pNext = nullptr,
               .flags = 0,
@@ -338,37 +338,53 @@ namespace Moxaic::Vulkan
     };
 
     template<typename Derived>
-    class VulkanGraphicsPipeline : public VulkanPipeline<Derived>
+    class GraphicsPipeline : public Pipeline<Derived>
     {
     public:
-        using VulkanPipeline<Derived>::VulkanPipeline;
+        using Pipeline<Derived>::Pipeline;
         constexpr static VkPipelineBindPoint BindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        void BindGraphicsPipeline() const
+        void BindGraphicsPipeline(const VkCommandBuffer commandBuffer) const
         {
-            vkCmdBindPipeline(this->k_pDevice->GetVkGraphicsCommandBuffer(),
-                              BindPoint,
-                              this->m_vkPipeline);
-        }
-    };
-
-    template<typename Derived>
-    class VulkanComputePipeline : public VulkanPipeline<Derived>
-    {
-    public:
-        using VulkanPipeline<Derived>::VulkanPipeline;
-        constexpr static VkPipelineBindPoint BindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
-        void BindComputePipeline() const
-        {
-            vkCmdBindPipeline(this->k_pDevice->GetVkComputeCommandBuffer(),
+            vkCmdBindPipeline(commandBuffer,
                               BindPoint,
                               this->m_vkPipeline);
         }
 
     protected:
-        void BindDescriptor(VkDescriptorSet const& descriptorSet,
-                            int const& setIndex) const
+        void BindDescriptor(const VkCommandBuffer commandBuffer,
+                            const VkDescriptorSet& descriptorSet,
+                            const int& setIndex) const
         {
-            vkCmdBindDescriptorSets(this->k_pDevice->GetVkComputeCommandBuffer(),
+            vkCmdBindDescriptorSets(commandBuffer,
+                                    BindPoint,
+                                    this->s_vkPipelineLayout,
+                                    setIndex,
+                                    1,
+                                    &descriptorSet,
+                                    0,
+                                    nullptr);
+        }
+    };
+
+    template<typename Derived>
+    class ComputePipeline : public Pipeline<Derived>
+    {
+    public:
+        using Pipeline<Derived>::Pipeline;
+        constexpr static VkPipelineBindPoint BindPoint = VK_PIPELINE_BIND_POINT_COMPUTE;
+        void BindComputePipeline(const VkCommandBuffer commandBuffer) const
+        {
+            vkCmdBindPipeline(commandBuffer,
+                              BindPoint,
+                              this->m_vkPipeline);
+        }
+
+    protected:
+        void BindDescriptor(const VkCommandBuffer commandBuffer,
+                            const VkDescriptorSet& descriptorSet,
+                            const int& setIndex) const
+        {
+            vkCmdBindDescriptorSets(commandBuffer,
                                     BindPoint,
                                     this->s_vkPipelineLayout,
                                     setIndex,
