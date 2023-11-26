@@ -209,10 +209,9 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
                                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                                   VK_IMAGE_ASPECT_COLOR_BIT);
-        auto swapImage = m_VkSwapImages[i];
         const VkImageViewCreateInfo viewInfo{
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-          .image = swapImage,
+          .image = m_VkSwapImages[i],
           .viewType = VK_IMAGE_VIEW_TYPE_2D,
           .format = surfaceFormat.format,
           .components{
@@ -228,11 +227,10 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
             .baseArrayLayer = 0,
             .layerCount = 1,
           }};
-        auto swapImageView = m_VkSwapImageViews[i];
         VK_CHK(vkCreateImageView(k_pDevice->GetVkDevice(),
                                  &viewInfo,
                                  VK_ALLOC,
-                                 &swapImageView));
+                                 &m_VkSwapImageViews[i]));
     }
 
     constexpr VkSemaphoreCreateInfo swapchainSemaphoreCreateInfo = {

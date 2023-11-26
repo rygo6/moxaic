@@ -20,8 +20,8 @@ MXC_RESULT Core::Run()
     std::unique_ptr<SceneBase> scene;
     switch (Role) {
         case Role::Compositor:
-            scene = std::make_unique<CompositorScene>(*device);
-            // scene = std::make_unique<ComputeCompositorScene>(*device);
+            // scene = std::make_unique<CompositorScene>(*device);
+            scene = std::make_unique<ComputeCompositorScene>(*device);
             break;
         case Role::Node:
             scene = std::make_unique<NodeScene>(*device);

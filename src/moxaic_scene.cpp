@@ -29,6 +29,7 @@ MXC_RESULT CompositorScene::Init()
 
     MXC_CHK(m_StandardPipeline.Init());
     MXC_CHK(m_MeshNodePipeline.Init());
+    MXC_CHK(m_ComputeNodePipeline.Init());
 
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
@@ -107,8 +108,8 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     uint32_t swapIndex;
     m_Swap.Acquire(&swapIndex);
     m_Swap.BlitToSwap(commandBuffer,
-                      swapIndex,
-                      framebuffer.colorTexture());
+                  swapIndex,
+                  framebuffer.colorTexture());
 
     vkEndCommandBuffer(commandBuffer);
     k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
@@ -200,15 +201,15 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     m_ComputeNodeDescriptor.WriteOutputColorImage(m_Swap.GetVkSwapImageViews(swapIndex));
 
-    auto computeNodeDescriptor = Vulkan::ComputeNodeDescriptor(*k_pDevice);
-    computeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
-                               m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
-                               m_Swap.GetVkSwapImageViews(swapIndex));
+    // auto computeNodeDescriptor = Vulkan::ComputeNodeDescriptor(*k_pDevice);
+    // computeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
+    //                            m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
+    //                            m_Swap.GetVkSwapImageViews(swapIndex));
 
     m_ComputeNodePipeline.BindComputePipeline(commandBuffer);
     m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
-    // m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_ComputeNodeDescriptor);
-    m_ComputeNodePipeline.BindDescriptor(commandBuffer, computeNodeDescriptor);
+    m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_ComputeNodeDescriptor);
+    // m_ComputeNodePipeline.BindDescriptor(commandBuffer, computeNodeDescriptor);
 
     k_pDevice->ResetTimestamps();
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0);
@@ -223,7 +224,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                       Vulkan::FromComputeWrite,
                       Vulkan::ToComputeSwapPresent);
 
-    VK_CHK(vkEndCommandBuffer(commandBuffer));
+    vkEndCommandBuffer(commandBuffer);
     k_pDevice->SubmitComputeQueueAndPresent(commandBuffer,
                                             m_Swap,
                                             swapIndex,
