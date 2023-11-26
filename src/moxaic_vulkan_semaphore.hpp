@@ -33,8 +33,8 @@ namespace Moxaic::Vulkan
 
         HANDLE ClonedExternalHandle(HANDLE const& hTargetProcessHandle) const;
 
-        void IncrementWaitValue() { m_LocalWaitValue++; }
-        void IncrementWaitValue(uint64_t const step) { m_LocalWaitValue += step; }
+        void IncrementLocalWaitValue() { m_LocalWaitValue++; }
+        void IncrementLocalWaitValue(uint64_t const step) { m_LocalWaitValue += step; }
 
         MXC_GET(VkSemaphore);
         MXC_GET(LocalWaitValue)

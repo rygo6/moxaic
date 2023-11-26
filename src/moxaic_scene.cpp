@@ -61,7 +61,8 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
         m_GlobalDescriptor.WriteLocalBuffer();
     }
 
-    k_pDevice->BeginGraphicsCommandBuffer();
+    VkCommandBuffer commandBuffer;
+    k_pDevice->BeginGraphicsCommandBuffer(&commandBuffer);
 
     auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
@@ -70,7 +71,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
         m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
 
         const auto& nodeFramebuffer = m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex);
-        nodeFramebuffer.Transition(k_pDevice->GetVkGraphicsCommandBuffer(),
+        nodeFramebuffer.Transition(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
@@ -97,16 +98,16 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     m_MeshNodePipeline.BindDescriptor(m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
 
     k_pDevice->ResetTimestamps();
-    k_pDevice->WriteTimestamp(VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT, 0);
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT, 0);
     Vulkan::VkFunc.CmdDrawMeshTasksEXT(k_pDevice->GetVkGraphicsCommandBuffer(), 1, 1, 1);
-    k_pDevice->WriteTimestamp(VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, 1);
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, 1);
 
-    k_pDevice->EndRenderPass();
+    vkCmdEndRenderPass(commandBuffer);
 
     m_Swap.Acquire();
     m_Swap.BlitToSwap(framebuffer.colorTexture());
 
-    k_pDevice->EndGraphicsCommandBuffer();
+    VK_CHK(vkEndCommandBuffer(commandBuffer));
     k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap, &m_Semaphore);
 
     m_Semaphore.Wait();
@@ -162,7 +163,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         m_GlobalDescriptor.WriteLocalBuffer();
     }
 
-    k_pDevice->BeginComputeCommandBuffer();
+    VkCommandBuffer commandBuffer;
+    k_pDevice->BeginComputeCommandBuffer(&commandBuffer);
 
     auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
@@ -171,7 +173,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
 
         const auto& nodeFramebuffer = m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex);
-        nodeFramebuffer.Transition(k_pDevice->GetVkComputeCommandBuffer(),
+        nodeFramebuffer.Transition(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToComputeRead);
         m_ComputeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
@@ -190,12 +192,15 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     m_ComputeNodePipeline.BindDescriptor(m_GlobalDescriptor);
     m_ComputeNodePipeline.BindDescriptor(m_ComputeNodeDescriptor);
 
-    vkCmdDispatch(k_pDevice->GetVkComputeCommandBuffer(),
+    k_pDevice->ResetTimestamps();
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0);
+    vkCmdDispatch(commandBuffer,
                   Window::extents().width,
                   Window::extents().height,
                   1);
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 1);
 
-    k_pDevice->EndComputeCommandBuffer();
+    VK_CHK(vkEndCommandBuffer(commandBuffer));
     k_pDevice->SubmitComputeQueueAndPresent(m_Swap, &m_Semaphore);
 
     m_Semaphore.Wait();
@@ -231,8 +236,8 @@ MXC_RESULT NodeScene::Init()
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    MXC_CHK(m_Node.CompositorSemaphore().SyncLocalWaitValue());
-    MXC_CHK(m_Node.NodeSemaphore().SyncLocalWaitValue());
+    MXC_CHK(m_Node.ImportedCompositorSemaphore()->SyncLocalWaitValue());
+    MXC_CHK(m_Node.ImportedNodeSemaphore()->SyncLocalWaitValue());
 
     return MXC_SUCCESS;
 }
@@ -243,10 +248,11 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 {
     m_GlobalDescriptor.WriteBuffer(m_Node.ImportedGlobalDescriptor()->GetSharedBuffer());
 
-    k_pDevice->BeginGraphicsCommandBuffer();
+    VkCommandBuffer commandBuffer;
+    k_pDevice->BeginGraphicsCommandBuffer(&commandBuffer);
 
     const auto& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
-    framebuffer.Transition(k_pDevice->GetVkGraphicsCommandBuffer(),
+    framebuffer.Transition(commandBuffer,
                            Vulkan::AcquireFromExternal,
                            Vulkan::ToGraphicsAttach);
 
@@ -260,23 +266,22 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 
     m_SphereTestMesh.RecordRender();
 
-    k_pDevice->EndRenderPass();
+    vkCmdEndRenderPass(commandBuffer);
 
-    framebuffer.Transition(k_pDevice->GetVkGraphicsCommandBuffer(),
+    framebuffer.Transition(commandBuffer,
                            Vulkan::FromGraphicsAttach,
                            Vulkan::ReleaseToExternalGraphicsRead);
 
-    // m_Swap.Acquire();
-    // m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());
+    m_Swap.Acquire();
+    m_Swap.BlitToSwap(m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
-    k_pDevice->EndGraphicsCommandBuffer();
+    vkEndCommandBuffer(commandBuffer);
+    // k_pDevice->SubmitGraphicsQueue(&m_Node.NodeSemaphore());
+    k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap, m_Node.ImportedNodeSemaphore());
 
-    k_pDevice->SubmitGraphicsQueue(&m_Node.NodeSemaphore());
-    // k_pDevice->SubmitGraphicsQueueAndPresent(m_Node.NodeSemaphore(), m_Swap);
-
-    m_Node.NodeSemaphore().Wait();
-    m_Node.CompositorSemaphore().IncrementWaitValue(m_CompositorSempahoreStep);
-    m_Node.CompositorSemaphore().Wait();
+    m_Node.ImportedNodeSemaphore()->Wait();
+    // m_Node.ImportedCompositorSemaphore()->IncrementLocalWaitValue(m_CompositorSempahoreStep);
+    // m_Node.ImportedCompositorSemaphore()->Wait();
 
     m_FramebufferIndex = !m_FramebufferIndex;
 

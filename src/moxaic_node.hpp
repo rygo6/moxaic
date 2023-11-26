@@ -92,20 +92,12 @@ namespace Moxaic
         MXC_RESULT InitImport(ImportParam const& parameters);
 
         MXC_ACCESS(ImportedGlobalDescriptor);
+        MXC_ACCESS(ImportedNodeSemaphore);
+        MXC_ACCESS(ImportedCompositorSemaphore);
 
         auto const& framebuffer(int const index) const
         {
             return m_ImportedFramebuffers[index];
-        }
-
-        auto& CompositorSemaphore()
-        {
-            return m_ImportedCompositorSemaphore;
-        }
-
-        auto& NodeSemaphore()
-        {
-            return m_ImportedNodeSemaphore;
         }
 
         auto& ipcFromCompositor()
