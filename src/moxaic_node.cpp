@@ -48,7 +48,7 @@ static MXC_RESULT StartProcess(STARTUPINFO& si, PROCESS_INFORMATION& pi)
     return MXC_SUCCESS;
 }
 
-NodeReference::NodeReference(Vulkan::Device const& device)
+NodeReference::NodeReference(const Vulkan::Device& device)
     : k_pDevice(&device) {}
 
 NodeReference::~NodeReference()
@@ -60,8 +60,9 @@ NodeReference::~NodeReference()
 
 MXC_RESULT NodeReference::Init()
 {
+    MXC_LOG("Init NodeReference");
     MXC_CHK(m_ExportedSemaphore.Init(false,
-                                         Vulkan::Locality::External));
+                                     Vulkan::Locality::External));
 
     m_IPCToNode.Init(k_TempSharedProducerName);
     m_ExportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
@@ -76,10 +77,10 @@ MXC_RESULT NodeReference::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT NodeReference::ExportOverIPC(Vulkan::Semaphore const& compositorSemaphore)
+MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore)
 {
-    auto const hProcess = m_ProcessInformation.hProcess;
-    Node::ImportParam const importParam{
+    const auto hProcess = m_ProcessInformation.hProcess;
+    const Node::ImportParam importParam{
       .framebufferWidth = m_ExportedFramebuffers[0].extents().width,
       .framebufferHeight = m_ExportedFramebuffers[0].extents().height,
       .colorFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].colorTexture().ClonedExternalHandle(hProcess),
@@ -98,13 +99,13 @@ MXC_RESULT NodeReference::ExportOverIPC(Vulkan::Semaphore const& compositorSemap
     return MXC_SUCCESS;
 }
 
-void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(Camera const& camera)
+void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camera& camera)
 {
     // Condense nearz/farz to draw radius of node
-    auto const viewPosition = camera.GetView() * glm::vec4(m_Transform.GetPosition(), 1);
-    float const viewDistanceToCenter = -viewPosition.z;
-    float const offset = m_DrawRadius * 0.5f;
-    float const farZ = viewDistanceToCenter + offset;
+    const auto viewPosition = camera.GetView() * glm::vec4(m_Transform.GetPosition(), 1);
+    const float viewDistanceToCenter = -viewPosition.z;
+    const float offset = m_DrawRadius * 0.5f;
+    const float farZ = viewDistanceToCenter + offset;
     float nearZ = viewDistanceToCenter - offset;
     if (nearZ < camera.GetNear()) {
         nearZ = camera.GetNear();
@@ -119,16 +120,16 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(Camera cons
     localBuffer->invView = camera.GetInverseView();
 }
 
-Node::Node(Vulkan::Device const& device)
+Node::Node(const Vulkan::Device& device)
     : k_pDevice(&device) {}
 
 Node::~Node() = default;
 
 MXC_RESULT Node::Init()
 {
-    StaticArray const targetFuncs{
+    const StaticArray targetFuncs{
       (InterProcessFunc)[this](void* pParameters){
-        auto const pImportParameters = static_cast<ImportParam*>(pParameters);
+        const auto pImportParameters = static_cast<ImportParam*>(pParameters);
     this->InitImport(*pImportParameters);
 }
 }
@@ -137,7 +138,7 @@ m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
 return MXC_SUCCESS;
 }
 
-MXC_RESULT Node::InitImport(ImportParam const& parameters)
+MXC_RESULT Node::InitImport(const ImportParam& parameters)
 {
     MXC_LOG("Node Init Import");
     m_ImportedFramebuffers[0].InitFromImport({parameters.framebufferWidth, parameters.framebufferHeight},

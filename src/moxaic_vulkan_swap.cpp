@@ -143,7 +143,7 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
                     VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .queueFamilyIndexCount = 0,
-      .pQueueFamilyIndices = NULL,
+      .pQueueFamilyIndices = nullptr,
       .presentMode = presentMode,
       .clipped = VK_TRUE,
       .oldSwapchain = VK_NULL_HANDLE,
@@ -235,7 +235,7 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
                                  &swapImageView));
     }
 
-    const VkSemaphoreCreateInfo swapchainSemaphoreCreateInfo = {
+    constexpr VkSemaphoreCreateInfo swapchainSemaphoreCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,

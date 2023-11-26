@@ -6,15 +6,16 @@
 void main()
 {
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    vec2 uv = vec2(float(gl_GlobalInvocationID.x) / float(globalUBO.width), float(gl_GlobalInvocationID.y) / float(globalUBO.height));
+//    vec2 uv = vec2(float(gl_GlobalInvocationID.x) / float(globalUBO.width), float(gl_GlobalInvocationID.y) / float(globalUBO.height));
 
-    vec4 color = texture(inputColor, uv);
-    float depth = texture(inputDepth, uv).r;
-    vec3 normal = texture(inputNormal, uv).rgb;
-    vec4 gBuffer = texture(inputGBuffer, uv);
+    vec4 color = imageLoad(inputColor, ivec2(gl_GlobalInvocationID.xy));
+//    vec4 color = texture(inputColor, uv);
+//    float depth = texture(inputDepth, uv).r;
+//    vec3 normal = texture(inputNormal, uv).rgb;
+//    vec4 gBuffer = texture(inputGBuffer, uv);
 
-    vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
-    vec4 sRGBswapped = vec4(sRGB.bgr, color.a);
+//    vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
+//    vec4 sRGBswapped = vec4(sRGB.bgr, color.a);
 
 //    imageStore(outputColor, coord, color);
     imageStore(outputColor, coord, vec4(0,1,0,1));

@@ -12,7 +12,8 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;
+// inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;
+inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
 inline constexpr VkFormat k_NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constexpr VkFormat k_GBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constexpr VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
@@ -156,8 +157,8 @@ namespace Moxaic::Vulkan
     inline constinit BarrierDst ToComputeRead{
       .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
       .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
-      .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-      .depthLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+      .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
       .queueFamilyIndex = Queue::Compute,
       .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
       .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,

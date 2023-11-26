@@ -11,24 +11,27 @@ using namespace Moxaic::Vulkan;
 constinit VkImageUsageFlags k_ColorBufferUsage =
   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
   VK_IMAGE_USAGE_SAMPLED_BIT |
-  VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+  VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+  VK_IMAGE_USAGE_STORAGE_BIT;
 constinit VkImageUsageFlags k_NormalBufferUsage =
   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-  VK_IMAGE_USAGE_SAMPLED_BIT;
+  VK_IMAGE_USAGE_SAMPLED_BIT |
+  VK_IMAGE_USAGE_STORAGE_BIT;
 constinit VkImageUsageFlags k_GBufferUsage =
   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-  VK_IMAGE_USAGE_SAMPLED_BIT;
+  VK_IMAGE_USAGE_SAMPLED_BIT |
+  VK_IMAGE_USAGE_STORAGE_BIT;
 constinit VkImageUsageFlags k_DepthBufferUsage =
   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
   VK_IMAGE_USAGE_SAMPLED_BIT;
 
-Framebuffer::Framebuffer(Device const& device)
+Framebuffer::Framebuffer(const Device& device)
     : k_pDevice(&device) {}
 
 Framebuffer::~Framebuffer() = default;
 
-bool Framebuffer::Init(VkExtent2D const& extents,
-                       Locality const& locality)
+bool Framebuffer::Init(const VkExtent2D& extents,
+                       const Locality& locality)
 {
     m_Extents = extents;
     MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
@@ -60,7 +63,7 @@ bool Framebuffer::Init(VkExtent2D const& extents,
     return true;
 }
 
-MXC_RESULT Framebuffer::InitFromImport(VkExtent2D const& extents,
+MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D& extents,
                                        const HANDLE& colorExternalHandle,
                                        const HANDLE& normalExternalHandle,
                                        const HANDLE& gBufferExternalHandle,
@@ -98,13 +101,13 @@ MXC_RESULT Framebuffer::InitFromImport(VkExtent2D const& extents,
 
 MXC_RESULT Framebuffer::InitFramebuffer()
 {
-    StaticArray const attachments{
+    const StaticArray attachments{
       m_ColorTexture.vkImageView(),
       m_NormalTexture.vkImageView(),
       m_GBufferTexture.vkImageView(),
       m_DepthTexture.vkImageView(),
     };
-    VkFramebufferCreateInfo const framebufferCreateInfo{
+    const VkFramebufferCreateInfo framebufferCreateInfo{
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
@@ -136,11 +139,11 @@ MXC_RESULT Framebuffer::InitSemaphore()
     return MXC_SUCCESS;
 }
 
-void Framebuffer::Transition(VkCommandBuffer const commandbuffer,
-                             BarrierSrc const& src,
-                             BarrierDst const& dst) const
+void Framebuffer::Transition(const VkCommandBuffer commandbuffer,
+                             const BarrierSrc& src,
+                             const BarrierDst& dst) const
 {
-    StaticArray const acquireColorImageMemoryBarriers{
+    const StaticArray acquireColorImageMemoryBarriers{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = src.colorAccessMask,
@@ -184,7 +187,7 @@ void Framebuffer::Transition(VkCommandBuffer const commandbuffer,
                                      nullptr,
                                      acquireColorImageMemoryBarriers.size(),
                                      acquireColorImageMemoryBarriers.data()));
-    StaticArray const acquireDepthImageMemoryBarriers{
+    const StaticArray acquireDepthImageMemoryBarriers{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = src.depthAccessMask,
