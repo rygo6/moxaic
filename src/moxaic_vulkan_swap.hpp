@@ -27,6 +27,8 @@ namespace Moxaic::Vulkan
         void BlitToSwap(Texture const& srcTexture) const;
         MXC_RESULT QueuePresent() const;
 
+        auto const& GetLastAcquiredVkSwapImageView() const { return m_VkSwapImageViews[m_LastAcquiredSwapIndex]; }
+
         MXC_GET(VkAcquireCompleteSemaphore);
         MXC_GET(VkRenderCompleteSemaphore);
         MXC_GET(Format);

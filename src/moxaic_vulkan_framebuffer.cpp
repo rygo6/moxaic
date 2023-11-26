@@ -136,7 +136,9 @@ MXC_RESULT Framebuffer::InitSemaphore()
     return MXC_SUCCESS;
 }
 
-void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
+void Framebuffer::Transition(VkCommandBuffer const commandbuffer,
+                             BarrierSrc const& src,
+                             BarrierDst const& dst) const
 {
     StaticArray const acquireColorImageMemoryBarriers{
       (VkImageMemoryBarrier){
@@ -172,7 +174,7 @@ void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
         .image = m_GBufferTexture.vkImage(),
         .subresourceRange = DefaultColorSubresourceRange,
       }};
-    VK_CHK_VOID(vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
+    VK_CHK_VOID(vkCmdPipelineBarrier(commandbuffer,
                                      src.colorStageMask,
                                      dst.colorStageMask,
                                      0,
@@ -194,7 +196,7 @@ void Framebuffer::Transition(BarrierSrc const& src, BarrierDst const& dst) const
         .image = m_DepthTexture.vkImage(),
         .subresourceRange = DefaultDepthSubresourceRange,
       }};
-    VK_CHK_VOID(vkCmdPipelineBarrier(k_pDevice->GetVkGraphicsCommandBuffer(),
+    VK_CHK_VOID(vkCmdPipelineBarrier(commandbuffer,
                                      src.depthStageMask,
                                      dst.depthStageMask,
                                      0,

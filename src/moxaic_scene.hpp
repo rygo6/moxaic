@@ -28,16 +28,16 @@ namespace Moxaic
     public:
         MXC_NO_VALUE_PASS(SceneBase);
 
-        explicit SceneBase(Vulkan::Device const& device)
+        explicit SceneBase(const Vulkan::Device& device)
             : k_pDevice(&device) {}
 
         virtual ~SceneBase() = default;
 
         virtual MXC_RESULT Init() = 0;
-        virtual MXC_RESULT Loop(uint32_t const& deltaTime) = 0;
+        virtual MXC_RESULT Loop(const uint32_t& deltaTime) = 0;
 
     protected:
-        Vulkan::Device const* const k_pDevice;// do I really want this be a pointer?!
+        const Vulkan::Device* const k_pDevice;// do I really want this be a pointer?!
     };
 
     class CompositorScene : public SceneBase
@@ -46,7 +46,7 @@ namespace Moxaic
         using SceneBase::SceneBase;
 
         MXC_RESULT Init() override;
-        MXC_RESULT Loop(uint32_t const& deltaTime) override;
+        MXC_RESULT Loop(const uint32_t& deltaTime) override;
 
     private:
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{
@@ -67,16 +67,36 @@ namespace Moxaic
           Vulkan::MeshNodeDescriptor(*k_pDevice),
           Vulkan::MeshNodeDescriptor(*k_pDevice)};
 
-        Vulkan::ComputeNodePipeline m_ComputeNodePipeline{*k_pDevice};
-        StaticArray<Vulkan::ComputeNodeDescriptor, FramebufferCount> m_ComputeNodeDescriptor{
-          Vulkan::ComputeNodeDescriptor(*k_pDevice),
-          Vulkan::ComputeNodeDescriptor(*k_pDevice)};
-
         Camera m_MainCamera{};
 
         Vulkan::Mesh m_SphereTestMesh{*k_pDevice};
         Vulkan::Texture m_SphereTestTexture{*k_pDevice};
         Transform m_SphereTestTransform{};
+
+        // should node be here? maybe outside scene?
+        NodeReference m_NodeReference{*k_pDevice};
+        uint64_t m_PriorNodeSemaphoreWaitValue{0};
+        uint64_t m_NodeFramebufferIndex{1};// yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
+    };
+
+    class ComputeCompositorScene : public SceneBase
+    {
+    public:
+        using SceneBase::SceneBase;
+
+        MXC_RESULT Init() override;
+        MXC_RESULT Loop(const uint32_t& deltaTime) override;
+
+    private:
+        Vulkan::Swap m_Swap{*k_pDevice};
+        Vulkan::Semaphore m_Semaphore{*k_pDevice};
+
+        Vulkan::ComputeNodePipeline m_ComputeNodePipeline{*k_pDevice};
+
+        Vulkan::GlobalDescriptor m_GlobalDescriptor{*k_pDevice};
+        Vulkan::ComputeNodeDescriptor m_ComputeNodeDescriptor{*k_pDevice};
+
+        Camera m_MainCamera{};
 
         // should node be here? maybe outside scene?
         NodeReference m_NodeReference{*k_pDevice};
@@ -90,7 +110,7 @@ namespace Moxaic
         using SceneBase::SceneBase;
 
         MXC_RESULT Init() override;
-        MXC_RESULT Loop(uint32_t const& deltaTime) override;
+        MXC_RESULT Loop(const uint32_t& deltaTime) override;
 
     private:
         // should node be here? maybe outside scene?

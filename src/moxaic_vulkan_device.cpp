@@ -570,9 +570,9 @@ MXC_RESULT Device::Init()
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::AllocateBindImageExport(VkMemoryPropertyFlags const& properties,
-                                           VkImage const& image,
-                                           VkExternalMemoryHandleTypeFlags const& externalHandleType,
+MXC_RESULT Device::AllocateBindImageExport(VkMemoryPropertyFlags const properties,
+                                           VkImage const image,
+                                           VkExternalMemoryHandleTypeFlags const externalHandleType,
                                            VkDeviceMemory* pDeviceMemory) const
 {
     VkMemoryRequirements memRequirements{};
@@ -611,10 +611,10 @@ MXC_RESULT Device::AllocateBindImageExport(VkMemoryPropertyFlags const& properti
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::AllocateBindImageImport(VkMemoryPropertyFlags const& properties,
-                                           VkImage const& image,
-                                           VkExternalMemoryHandleTypeFlagBits const& externalHandleType,
-                                           HANDLE const& externalHandle,
+MXC_RESULT Device::AllocateBindImageImport(VkMemoryPropertyFlags const properties,
+                                           VkImage const image,
+                                           VkExternalMemoryHandleTypeFlagBits const externalHandleType,
+                                           HANDLE const externalHandle,
                                            VkDeviceMemory* pDeviceMemory) const
 {
     VkMemoryRequirements memRequirements{};
@@ -657,8 +657,8 @@ MXC_RESULT Device::AllocateBindImageImport(VkMemoryPropertyFlags const& properti
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::AllocateBindImage(VkMemoryPropertyFlags const& properties,
-                                     VkImage const& image,
+MXC_RESULT Device::AllocateBindImage(VkMemoryPropertyFlags const properties,
+                                     VkImage const image,
                                      VkDeviceMemory* pDeviceMemory) const
 {
     VkMemoryRequirements memRequirements{};
@@ -1055,7 +1055,7 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* const pTimelineSemaphore) cons
 }
 
 MXC_RESULT Device::SubmitGraphicsQueueAndPresent(Swap const& swap,
-                                                 Semaphore* const pTimelineSemaphore) const
+                                                        Semaphore* const pTimelineSemaphore) const
 {
     return SubmitQueueAndPresent(m_VkGraphicsCommandBuffer,
                                  m_VkGraphicsQueue,
@@ -1092,7 +1092,7 @@ MXC_RESULT Device::SubmitComputeQueue(Semaphore* pTimelineSemaphore) const
 }
 
 MXC_RESULT Device::SubmitComputeQueueAndPresent(Swap const& swap,
-                                                Semaphore* const pTimelineSemaphore) const
+                                                       Semaphore* const pTimelineSemaphore) const
 {
     return SubmitQueueAndPresent(m_VkComputeCommandBuffer,
                                  m_VkComputeQueue,

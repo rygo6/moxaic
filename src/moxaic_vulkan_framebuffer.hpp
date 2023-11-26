@@ -29,10 +29,14 @@ namespace Moxaic::Vulkan
                                   HANDLE const& depthExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
-        void Transition(BarrierSrc const& src,
+        void Transition(VkCommandBuffer const commandbuffer,
+                        BarrierSrc const& src,
                         BarrierDst const& dst) const;
 
-        auto const& vkFramebuffer() const { return m_VkFramebuffer; }
+        auto const& vkFramebuffer() const
+        {
+            return m_VkFramebuffer;
+        }
         auto const& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
 
         auto const& colorTexture() const { return m_ColorTexture; }

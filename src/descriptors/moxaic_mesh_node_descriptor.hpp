@@ -57,8 +57,8 @@ namespace Moxaic::Vulkan
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Buffer = buffer;
-            Update();
+            m_LocalBuffer = buffer;
+            WriteLocalBuffer();
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
@@ -97,19 +97,18 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void Update()
+        void WriteLocalBuffer()
         {
-            m_Uniform.CopyBuffer(m_Buffer);
+            m_Uniform.CopyBuffer(m_LocalBuffer);
         }
 
-        void Update(GlobalDescriptor::Buffer const& buffer)
+        void SetLocalBuffer(GlobalDescriptor::Buffer const& buffer)
         {
-            m_Buffer = buffer;
-            Update();
+            m_LocalBuffer = buffer;
         }
 
     private:
-        GlobalDescriptor::Buffer m_Buffer{};// is there a case where I wouldn't want a local copy!?
+        GlobalDescriptor::Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
         Uniform<GlobalDescriptor::Buffer> m_Uniform{*k_pDevice};
     };
 }// namespace Moxaic::Vulkan

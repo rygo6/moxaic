@@ -99,7 +99,7 @@ namespace Moxaic::Vulkan
             for (int i = 0; i < writes.size(); ++i) {
                 writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[i].dstSet = m_VkDescriptorSet;
-                writes[i].dstBinding = i;
+                writes[i].dstBinding = writes[i].dstBinding == 0 ? i : writes[i].dstBinding;
                 writes[i].descriptorCount = writes[i].descriptorCount == 0 ? 1 : writes[i].descriptorCount;
             }
             VK_CHK_VOID(vkUpdateDescriptorSets(k_pDevice->GetVkDevice(),

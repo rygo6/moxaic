@@ -49,15 +49,17 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init(GlobalDescriptor::Buffer const& buffer, Framebuffer const& framebuffer, VkImageView const& outputColorImage)
+        MXC_RESULT Init(GlobalDescriptor::Buffer const& buffer,
+                        Framebuffer const& framebuffer,
+                        VkImageView const& outputColorImage)
         {
             MXC_LOG("Init ComputeNodeDescriptor");
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Buffer = buffer;
-            Update();
+            m_LocalBuffer = buffer;
+            WriteLocalBuffer();
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
@@ -101,19 +103,68 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void Update()
+        MXC_RESULT WriteFramebuffer(Framebuffer const& framebuffer)
         {
-            m_Uniform.CopyBuffer(m_Buffer);
+            StaticArray writes{
+              (VkWriteDescriptorSet){
+                .dstBinding = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .imageView = framebuffer.colorTexture().vkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
+              (VkWriteDescriptorSet){
+                .dstBinding = 2,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .imageView = framebuffer.normalTexture().vkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
+              (VkWriteDescriptorSet){
+                .dstBinding = 3,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .imageView = framebuffer.gBufferTexture().vkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
+              (VkWriteDescriptorSet){
+                .dstBinding = 4,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .imageView = framebuffer.depthTexture().vkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
+            };
+            WriteDescriptors(writes);
+            return MXC_SUCCESS;
         }
 
-        void Update(GlobalDescriptor::Buffer const& buffer)
+        MXC_RESULT WriteOutputColorImage(VkImageView const& outputColorImage)
         {
-            m_Buffer = buffer;
-            Update();
+            StaticArray writes{
+              (VkWriteDescriptorSet){
+                .dstBinding = 5,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .imageView = outputColorImage,
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+            };
+            WriteDescriptors(writes);
+            return MXC_SUCCESS;
+        }
+
+        void WriteLocalBuffer()
+        {
+            m_Uniform.CopyBuffer(m_LocalBuffer);
+        }
+
+        void SetLocalBuffer(GlobalDescriptor::Buffer const& buffer)
+        {
+            m_LocalBuffer = buffer;
         }
 
     private:
-        GlobalDescriptor::Buffer m_Buffer{};// is there a case where I wouldn't want a local copy!?
+        GlobalDescriptor::Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
         Uniform<GlobalDescriptor::Buffer> m_Uniform{*k_pDevice};
     };
 }// namespace Moxaic::Vulkan

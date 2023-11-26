@@ -71,7 +71,7 @@ namespace Moxaic
             memcpy(&m_LocalBuffer, m_pSharedBuffer, Size());
         }
 
-        void PushLocalBuffer()
+        void WriteLocalBuffer()
         {
             memcpy(m_pSharedBuffer, &m_LocalBuffer, Size());
         }

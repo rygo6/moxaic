@@ -136,9 +136,9 @@ namespace Moxaic::Vulkan
         .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
         .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .depthLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .queueFamilyIndex = Queue::Graphics,
-        .colorStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .depthStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .queueFamilyIndex = Queue::Compute,
+        .colorStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
       };
 
     /// Release to retain data

@@ -131,8 +131,8 @@ MXC_RESULT Texture::Init(VkFormat const& format,
     switch (locality) {
         case Locality::Local:
             MXC_CHK(k_pDevice->AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                               m_VkImage,
-                                               &m_VkDeviceMemory));
+                                                 m_VkImage,
+                                                 &m_VkDeviceMemory));
             break;
         case Locality::External:
             MXC_CHK(k_pDevice->AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,

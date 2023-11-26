@@ -57,7 +57,7 @@ namespace Moxaic::Vulkan
             m_LocalBuffer.invProj = camera.GetInverseProjection();
             m_LocalBuffer.view = camera.GetView();
             m_LocalBuffer.invView = camera.GetInverseView();
-            PushLocalBuffer();
+            WriteLocalBuffer();
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
@@ -72,14 +72,15 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void PushLocalBuffer()
-        {
-            m_Uniform.CopyBuffer(m_LocalBuffer);
-        }
-
-        void PushBuffer(Buffer const& buffer)
+        /// Bypass local buffer copy
+        void WriteBuffer(Buffer const& buffer)
         {
             m_Uniform.CopyBuffer(buffer);
+        }
+
+        void WriteLocalBuffer()
+        {
+            m_Uniform.CopyBuffer(m_LocalBuffer);
         }
 
         void SetLocalBufferView(Camera const& camera)
