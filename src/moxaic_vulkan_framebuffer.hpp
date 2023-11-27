@@ -16,38 +16,39 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Framebuffer);
 
-        explicit Framebuffer(Device const& device);
+        explicit Framebuffer(const Device& device);
         virtual ~Framebuffer();
 
         MXC_RESULT Init(const VkExtent2D extents,
-                        const Locality locality);
+                        const PipelineType pipeline, const Locality locality);
 
-        MXC_RESULT InitFromImport(const VkExtent2D extents,
+        MXC_RESULT InitFromImport(const PipelineType pipeline,
+                                  const VkExtent2D extents,
                                   const HANDLE colorExternalHandle,
                                   const HANDLE normalExternalHandle,
                                   const HANDLE gBufferExternalHandle,
                                   const HANDLE depthExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
-        void Transition(VkCommandBuffer const commandbuffer,
-                        Barrier const& src,
-                        Barrier const& dst) const;
+        void Transition(const VkCommandBuffer commandbuffer,
+                        const Barrier& src,
+                        const Barrier& dst) const;
 
-        auto const& vkFramebuffer() const
+        const auto& vkFramebuffer() const
         {
             return m_VkFramebuffer;
         }
-        auto const& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
+        const auto& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
 
-        auto const& colorTexture() const { return m_ColorTexture; }
-        auto const& normalTexture() const { return m_NormalTexture; }
-        auto const& gBufferTexture() const { return m_GBufferTexture; }
-        auto const& depthTexture() const { return m_DepthTexture; }
+        const auto& colorTexture() const { return m_ColorTexture; }
+        const auto& normalTexture() const { return m_NormalTexture; }
+        const auto& gBufferTexture() const { return m_GBufferTexture; }
+        const auto& depthTexture() const { return m_DepthTexture; }
 
-        auto const& extents() const { return m_Extents; }
+        const auto& extents() const { return m_Extents; }
 
     private:
-        Device const* const k_pDevice;
+        const Device* const k_pDevice;
 
         VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};

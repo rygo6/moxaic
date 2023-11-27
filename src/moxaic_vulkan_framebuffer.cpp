@@ -3,31 +3,60 @@
 #include "moxaic_vulkan_texture.hpp"
 #include "static_array.hpp"
 
+#include <glm/ext/scalar_constants.hpp>
 #include <vulkan/vulkan.h>
 
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-constinit VkImageUsageFlags kColorBufferUsage =
-  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-  VK_IMAGE_USAGE_SAMPLED_BIT |
-  VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-  VK_IMAGE_USAGE_STORAGE_BIT;
-constinit VkImageUsageFlags kNormalBufferUsage =
-  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-  VK_IMAGE_USAGE_SAMPLED_BIT |
-  VK_IMAGE_USAGE_STORAGE_BIT;
-constinit VkImageUsageFlags kGBufferUsage =
-  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-  VK_IMAGE_USAGE_SAMPLED_BIT |
-  VK_IMAGE_USAGE_STORAGE_BIT;
-constinit VkImageUsageFlags kDepthBufferUsage =
-  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-  VK_IMAGE_USAGE_SAMPLED_BIT;
-// constinit VkImageUsageFlags kDepthBufferUsage =
-//   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-//   VK_IMAGE_USAGE_SAMPLED_BIT |
-//   VK_IMAGE_USAGE_STORAGE_BIT;
+static VkImageUsageFlags ColorBufferUsage(PipelineType pipeline)
+{
+    switch (pipeline) {
+        case PipelineType::Graphics:
+            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_SAMPLED_BIT |
+                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        case PipelineType::Compute:
+            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+}
+
+static VkImageUsageFlags NormalBufferUsage(PipelineType pipeline)
+{
+    switch (pipeline) {
+        case PipelineType::Graphics:
+            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_SAMPLED_BIT;
+        case PipelineType::Compute:
+            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+}
+
+static VkImageUsageFlags GBufferBufferUsage(PipelineType pipeline)
+{
+    switch (pipeline) {
+        case PipelineType::Graphics:
+            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_SAMPLED_BIT;
+        case PipelineType::Compute:
+            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+}
+
+static VkImageUsageFlags DepthBufferUsage(PipelineType pipeline)
+{
+    switch (pipeline) {
+        case PipelineType::Graphics:
+            return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_SAMPLED_BIT;
+        case PipelineType::Compute:
+            return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                   VK_IMAGE_USAGE_STORAGE_BIT;
+    }
+}
 
 Framebuffer::Framebuffer(const Device& device)
     : k_pDevice(&device) {}
@@ -35,30 +64,31 @@ Framebuffer::Framebuffer(const Device& device)
 Framebuffer::~Framebuffer() = default;
 
 bool Framebuffer::Init(const VkExtent2D extents,
+                       const PipelineType pipeline,
                        const Locality locality)
 {
     m_Extents = extents;
-    MXC_CHK(m_ColorTexture.Init(k_ColorBufferFormat,
+    MXC_CHK(m_ColorTexture.Init(kColorBufferFormat,
                                 extents,
-                                kColorBufferUsage,
+                                ColorBufferUsage(pipeline),
                                 VK_IMAGE_ASPECT_COLOR_BIT,
                                 locality));
     MXC_CHK(m_ColorTexture.TransitionImmediateInitialToGraphicsRead());
-    MXC_CHK(m_NormalTexture.Init(k_NormalBufferFormat,
+    MXC_CHK(m_NormalTexture.Init(kNormalBufferFormat,
                                  extents,
-                                 kNormalBufferUsage,
+                                 NormalBufferUsage(pipeline),
                                  VK_IMAGE_ASPECT_COLOR_BIT,
                                  locality));
     MXC_CHK(m_NormalTexture.TransitionImmediateInitialToGraphicsRead());
-    MXC_CHK(m_GBufferTexture.Init(k_GBufferFormat,
+    MXC_CHK(m_GBufferTexture.Init(kGBufferFormat,
                                   extents,
-                                  kGBufferUsage,
+                                  GBufferBufferUsage(pipeline),
                                   VK_IMAGE_ASPECT_COLOR_BIT,
                                   locality));
     MXC_CHK(m_GBufferTexture.TransitionImmediateInitialToGraphicsRead());
-    MXC_CHK(m_DepthTexture.Init(k_DepthBufferFormat,
+    MXC_CHK(m_DepthTexture.Init(kDepthBufferFormat,
                                 extents,
-                                kDepthBufferUsage,
+                                DepthBufferUsage(pipeline),
                                 VK_IMAGE_ASPECT_DEPTH_BIT,
                                 locality));
     MXC_CHK(m_DepthTexture.TransitionImmediateInitialToGraphicsRead());
@@ -67,34 +97,35 @@ bool Framebuffer::Init(const VkExtent2D extents,
     return true;
 }
 
-MXC_RESULT Framebuffer::InitFromImport(const VkExtent2D extents,
+MXC_RESULT Framebuffer::InitFromImport(const PipelineType pipeline,
+                                       const VkExtent2D extents,
                                        const HANDLE colorExternalHandle,
                                        const HANDLE normalExternalHandle,
                                        const HANDLE gBufferExternalHandle,
                                        const HANDLE depthExternalHandle)
 {
     m_Extents = extents;
-    MXC_CHK(m_ColorTexture.InitFromImport(k_ColorBufferFormat,
+    MXC_CHK(m_ColorTexture.InitFromImport(kColorBufferFormat,
                                           extents,
-                                          kColorBufferUsage,
+                                          ColorBufferUsage(pipeline),
                                           VK_IMAGE_ASPECT_COLOR_BIT,
                                           colorExternalHandle));
     MXC_CHK(m_ColorTexture.TransitionImmediateInitialToGraphicsRead());
-    MXC_CHK(m_NormalTexture.InitFromImport(k_NormalBufferFormat,
+    MXC_CHK(m_NormalTexture.InitFromImport(kNormalBufferFormat,
                                            extents,
-                                           kNormalBufferUsage,
+                                           NormalBufferUsage(pipeline),
                                            VK_IMAGE_ASPECT_COLOR_BIT,
                                            normalExternalHandle));
     MXC_CHK(m_NormalTexture.TransitionImmediateInitialToGraphicsRead());
-    MXC_CHK(m_GBufferTexture.InitFromImport(k_GBufferFormat,
+    MXC_CHK(m_GBufferTexture.InitFromImport(kGBufferFormat,
                                             extents,
-                                            kGBufferUsage,
+                                            GBufferBufferUsage(pipeline),
                                             VK_IMAGE_ASPECT_COLOR_BIT,
                                             gBufferExternalHandle));
     MXC_CHK(m_GBufferTexture.TransitionImmediateInitialToGraphicsRead());
-    MXC_CHK(m_DepthTexture.InitFromImport(k_DepthBufferFormat,
+    MXC_CHK(m_DepthTexture.InitFromImport(kDepthBufferFormat,
                                           extents,
-                                          kDepthBufferUsage,
+                                          DepthBufferUsage(pipeline),
                                           VK_IMAGE_ASPECT_DEPTH_BIT,
                                           depthExternalHandle));
     MXC_CHK(m_DepthTexture.TransitionImmediateInitialToGraphicsRead());

@@ -9,6 +9,7 @@ MXC_RESULT CompositorScene::Init()
 {
     for (int i = 0; i < m_Framebuffers.size(); ++i) {
         MXC_CHK(m_Framebuffers[i].Init(Window::extents(),
+                                       Vulkan::CompositorPipelineType,
                                        Vulkan::Locality::Local));
     }
 

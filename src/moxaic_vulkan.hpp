@@ -13,10 +13,10 @@
 #endif
 
 // inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_B8G8R8A8_SRGB;
-inline constexpr VkFormat k_ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
-inline constexpr VkFormat k_NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-inline constexpr VkFormat k_GBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-inline constexpr VkFormat k_DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
+inline constexpr VkFormat kColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
+inline constexpr VkFormat kNormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+inline constexpr VkFormat kGBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+inline constexpr VkFormat kDepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 // inline constexpr VkFormat k_DepthBufferFormat = VK_FORMAT_R32_SFLOAT;
 
 #define VK_ALLOC nullptr
@@ -53,6 +53,13 @@ namespace Moxaic::Vulkan
 
     // should surface move into swap class?! or device class?
     VkSurfaceKHR vkSurface();
+
+    enum class PipelineType {
+        Graphics,
+        Compute,
+    };
+
+    inline PipelineType CompositorPipelineType = PipelineType::Graphics;
 
     enum class Queue {
         None,

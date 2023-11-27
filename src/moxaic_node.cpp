@@ -69,6 +69,7 @@ MXC_RESULT NodeReference::Init()
 
     for (int i = 0; i < m_ExportedFramebuffers.size(); ++i) {
         m_ExportedFramebuffers[i].Init(Window::extents(),
+                                       Vulkan::CompositorPipelineType,
                                        Vulkan::Locality::External);
     }
 
@@ -127,26 +128,30 @@ Node::~Node() = default;
 
 MXC_RESULT Node::Init()
 {
-    const StaticArray targetFuncs{
-      (InterProcessFunc)[this](void* pParameters){
+    const InterProcessFunc importCompositorFunc = [this](void* pParameters) {
         const auto pImportParameters = static_cast<ImportParam*>(pParameters);
-    this->InitImport(*pImportParameters);
-}
-}
-;
-m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
-return MXC_SUCCESS;
+        this->InitImport(*pImportParameters);
+    };
+    const StaticArray targetFuncs{
+      importCompositorFunc,
+    };
+    m_IPCFromCompositor.Init(k_TempSharedProducerName, std::move(targetFuncs));
+    return MXC_SUCCESS;
 }
 
 MXC_RESULT Node::InitImport(const ImportParam& parameters)
 {
     MXC_LOG("Node Init Import");
-    m_ImportedFramebuffers[0].InitFromImport({parameters.framebufferWidth, parameters.framebufferHeight},
+    m_ImportedFramebuffers[0].InitFromImport(Vulkan::CompositorPipelineType,
+                                             (VkExtent2D){parameters.framebufferWidth,
+                                                          parameters.framebufferHeight},
                                              parameters.colorFramebuffer0ExternalHandle,
                                              parameters.normalFramebuffer0ExternalHandle,
                                              parameters.gBufferFramebuffer0ExternalHandle,
                                              parameters.depthFramebuffer0ExternalHandle);
-    m_ImportedFramebuffers[1].InitFromImport({parameters.framebufferWidth, parameters.framebufferHeight},
+    m_ImportedFramebuffers[1].InitFromImport(Vulkan::CompositorPipelineType,
+                                             (VkExtent2D){parameters.framebufferWidth,
+                                                          parameters.framebufferHeight},
                                              parameters.colorFramebuffer1ExternalHandle,
                                              parameters.normalFramebuffer1ExternalHandle,
                                              parameters.gBufferFramebuffer1ExternalHandle,

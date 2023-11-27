@@ -7,6 +7,7 @@
 #include "moxaic_transform.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_semaphore.hpp"
+#include "moxaic_vulkan.hpp"
 
 #include <string>
 

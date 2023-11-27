@@ -14,14 +14,22 @@ MXC_RESULT Core::Run()
     MXC_CHK(Window::Init());
     MXC_CHK(Vulkan::Init(true));
 
-    auto const device = std::make_unique<Vulkan::Device>();
+    const auto device = std::make_unique<Vulkan::Device>();
     MXC_CHK(device->Init());
+
+    Vulkan::CompositorPipelineType = Vulkan::PipelineType::Graphics;
 
     std::unique_ptr<SceneBase> scene;
     switch (Role) {
         case Role::Compositor:
-            scene = std::make_unique<CompositorScene>(*device);
-            // scene = std::make_unique<ComputeCompositorScene>(*device);
+            if (Vulkan::CompositorPipelineType == Vulkan::PipelineType::Graphics) {
+                scene = std::make_unique<CompositorScene>(*device);
+                break;
+            }
+            if (Vulkan::CompositorPipelineType == Vulkan::PipelineType::Compute) {
+                scene = std::make_unique<ComputeCompositorScene>(*device);
+                break;
+            }
             break;
         case Role::Node:
             scene = std::make_unique<NodeScene>(*device);
@@ -34,7 +42,7 @@ MXC_RESULT Core::Run()
 
     while (Running == MXC_SUCCESS) {
         time = SDL_GetTicks();
-        Uint32 const deltaTime = time - priorTime;
+        const Uint32 deltaTime = time - priorTime;
         priorTime = time;
 
         Window::Poll();

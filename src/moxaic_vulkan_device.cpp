@@ -361,7 +361,7 @@ MXC_RESULT Device::CreateRenderPass()
     constexpr StaticArray attachments{
       (VkAttachmentDescription){
         .flags = 0,
-        .format = k_ColorBufferFormat,
+        .format = kColorBufferFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -374,7 +374,7 @@ MXC_RESULT Device::CreateRenderPass()
       },
       (VkAttachmentDescription){
         .flags = 0,
-        .format = k_NormalBufferFormat,
+        .format = kNormalBufferFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -385,7 +385,7 @@ MXC_RESULT Device::CreateRenderPass()
       },
       (VkAttachmentDescription){
         .flags = 0,
-        .format = k_GBufferFormat,
+        .format = kGBufferFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -396,7 +396,7 @@ MXC_RESULT Device::CreateRenderPass()
       },
       (VkAttachmentDescription){
         .flags = 0,
-        .format = k_DepthBufferFormat,
+        .format = kDepthBufferFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
