@@ -5,20 +5,80 @@
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
+struct MeshTaskPayload
+{
+    vec4 ulClipPos, urClipPos, lrClipPos, llClipPos;
+    vec3 ulNDC, urNDC, lrNDC, llNDC;
+};
+
+MeshTaskPayload payload;
+
+// https://jcgt.org/published/0011/03/04/paper-lowres.pdf
+float area(vec2 a, vec2 b) { return (a.x*b.y)-(a.y*b.x); }
+vec2 barycentricQuadUV(vec2 ndc) {
+    const float w[4] = { payload.ulClipPos.w, payload.urClipPos.w, payload.lrClipPos.w, payload.llClipPos.w };
+    const vec2 v[4] = { payload.ulNDC.xy, payload.urNDC.xy, payload.lrNDC.xy, payload.llNDC.xy };
+    float r[4], t[4], u[4], f[4];
+    vec2 s[4];
+    for (int i = 0; i < 4; i++) {
+        s[i] = v[i] - ndc;
+        r[i] = length(s[i]) * sign(w[i]);
+    }
+    for (int i = 0; i < 4; i++) {
+        float A = area(s[i], s[(i + 1) % 4]);
+        float D = dot(s[i], s[(i + 1) % 4]);
+        t[i] = (r[i] * r[(i + 1) % 4] - D) / A;
+    }
+    for (int i = 0; i < 4; i++) {
+        u[i] = (t[(i + 3) % 4] + t[i]) / r[i];
+    }
+    const vec4 wt = vec4(u[0], u[1], u[2], u[3]) / (u[0] + u[1] + u[2] + u[3]);
+    for (int i = 0; i < 4; i++) {
+        f[i] =  wt[i] / w[i];
+    }
+    const vec2 ulUV = vec2(0, 1), urUV = vec2(1, 1), lrUV = vec2(1, 0), llUV = vec2(0, 0);
+    return (f[0] * ulUV + f[1] * urUV + f[2] * lrUV + f[3] * llUV) / (f[0] + f[1] + f[2] + f[3]);
+}
+
+vec4 nodeQuadWorldPoint(vec4 clipPos)
+{
+    vec4 worldPos = nodeUBO.invView * nodeUBO.invProj * clipPos;
+    return worldPos;
+}
+
 void main()
 {
+    const vec4 nodeOriginClipPos = nodeUBO.proj * nodeUBO.view * vec4(0, 0, 0, 1);
+    const vec4 ulWorldPos = nodeQuadWorldPoint(vec4(-nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    const vec4 urWorldPos = nodeQuadWorldPoint(vec4(nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    const vec4 lrWorldPos = nodeQuadWorldPoint(vec4(nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    const vec4 llWorldPos = nodeQuadWorldPoint(vec4(-nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    payload.ulClipPos = globalUBO.proj * globalUBO.view * ulWorldPos;
+    payload.urClipPos = globalUBO.proj * globalUBO.view * urWorldPos;
+    payload.lrClipPos = globalUBO.proj * globalUBO.view * lrWorldPos;
+    payload.llClipPos = globalUBO.proj * globalUBO.view * llWorldPos;
+    payload.ulNDC = payload.ulClipPos.xyz / payload.ulClipPos.w;
+    payload.urNDC = payload.urClipPos.xyz / payload.urClipPos.w;
+    payload.lrNDC = payload.lrClipPos.xyz / payload.lrClipPos.w;
+    payload.llNDC = payload.llClipPos.xyz / payload.llClipPos.w;
 
-    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-//    vec2 uv = vec2(float(gl_GlobalInvocationID.x) / float(globalUBO.width), float(gl_GlobalInvocationID.y) / float(globalUBO.height));
 
-    vec4 color = imageLoad(inputColor, coord);
-//    float depth = texture(inputDepth, uv).r;
-//    vec3 normal = texture(inputNormal, uv).rgb;
-//    vec4 gBuffer = texture(inputGBuffer, uv);
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
+    const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
+    const vec2 uv = gl_GlobalInvocationID.xy / screenSize;
+    const vec2 ndc = vec2((1, -1) * (uv * 2 - 1));
+    const vec2 inQuadUv = barycentricQuadUV(ndc);
+    const ivec2 inQuadCoord = ivec2(inQuadUv) * iScreenSize;
 
-    vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
-//    vec4 sRGBswapped = vec4(sRGB.bgr, color.a);
+    const vec4 color = imageLoad(inputColor, coord);
+    const vec4 normal = imageLoad(inputNormal, inQuadCoord);
+    const vec4 gBuffer = imageLoad(inputGBuffer, inQuadCoord);
+    const vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
+
+    const vec4 newNDC = dot(gBuffer, gBuffer) > 0 ? globalUBO.proj * globalUBO.view * gBuffer : vec4(ndc, 1, 1);
+    const vec2 newUV = (newNDC.xy / vec2(1, -1) + 1) / 2;
+    const ivec2 newCoord = ivec2(newUV) * iScreenSize;
 
     imageStore(outputColor, coord, vec4(sRGB, 1));
-//    imageStore(outputColor, coord, vec4(0,1,0,1));
 }
