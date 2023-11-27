@@ -159,13 +159,25 @@ MXC_RESULT Texture::Init(const VkFormat format,
     return MXC_SUCCESS;
 }
 
-// todo replace with Transition structs
-MXC_RESULT Texture::TransitionImmediateInitialToGraphicsRead() const
+MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) const
 {
-    return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
-                                                     Vulkan::FromInitial,
-                                                     Vulkan::ToGraphicsRead,
-                                                     m_AspectMask);
+    switch (pipelineType) {
+        case PipelineType::Graphics:
+            return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
+                                                 Vulkan::FromInitial,
+                                                 Vulkan::ToGraphicsRead,
+                                                 m_AspectMask);
+            break;
+        case PipelineType::Compute:
+            return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
+                                                 Vulkan::FromInitial,
+                                                 Vulkan::ToComputeRead,
+                                                 m_AspectMask);
+            break;
+        default:
+            SDL_assert(false);
+            return MXC_FAIL;
+    }
 }
 
 MXC_RESULT Texture::TransitionImmediateInitialToTransferDst() const
@@ -190,11 +202,6 @@ MXC_RESULT Texture::TransitionImmediateTransferDstToGraphicsRead() const
                                                      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                                                      m_AspectMask);
-}
-
-MXC_RESULT Texture::TransitionImmediateInitialToComputeRead() const
-{
-    return k_pDevice->TransitionImageLayoutImmediate(m_VkImage, Vulkan::FromInitial, Vulkan::ToComputeRead, m_AspectMask);
 }
 
 HANDLE Texture::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const

@@ -68,8 +68,8 @@ MXC_RESULT NodeReference::Init(const Vulkan::PipelineType pipelineType)
     m_ExportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
 
     for (int i = 0; i < m_ExportedFramebuffers.size(); ++i) {
-        m_ExportedFramebuffers[i].Init(Window::extents(),
-                                       pipelineType,
+        m_ExportedFramebuffers[i].Init(pipelineType,
+                                       Window::extents(),
                                        Vulkan::Locality::External);
     }
 

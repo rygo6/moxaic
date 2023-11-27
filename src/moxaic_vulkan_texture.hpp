@@ -36,8 +36,7 @@ namespace Moxaic::Vulkan
                         const VkImageAspectFlags aspectMask,
                         const Locality locality);
 
-        MXC_RESULT TransitionImmediateInitialToGraphicsRead() const;
-        MXC_RESULT TransitionImmediateInitialToComputeRead() const;
+        MXC_RESULT TransitionInitialImmediate(const PipelineType pipelineType) const;
 
         HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
 

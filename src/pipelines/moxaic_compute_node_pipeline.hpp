@@ -37,7 +37,6 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init()
         {
             MXC_LOG("Init ComputeNodePipeline");
-
             VkShaderModule compShader;
             MXC_CHK(CreateShaderModule("./shaders/compute_node.comp.spv",
                                        &compShader));

@@ -19,10 +19,10 @@ namespace Moxaic::Vulkan
         explicit Framebuffer(const Device& device);
         virtual ~Framebuffer();
 
-        MXC_RESULT Init(const VkExtent2D extents,
-                        const PipelineType pipeline, const Locality locality);
+        MXC_RESULT Init(const PipelineType pipelineType,
+                        const VkExtent2D extents, const Locality locality);
 
-        MXC_RESULT InitFromImport(const PipelineType pipeline,
+        MXC_RESULT InitFromImport(const PipelineType pipelineType,
                                   const VkExtent2D extents,
                                   const HANDLE colorExternalHandle,
                                   const HANDLE normalExternalHandle,

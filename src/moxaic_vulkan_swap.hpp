@@ -21,8 +21,8 @@ namespace Moxaic::Vulkan
         explicit Swap(const Device& device);
         virtual ~Swap();
 
-        MXC_RESULT Init(const VkExtent2D dimensions,
-                        const PipelineType pipelineType);
+        MXC_RESULT Init(const PipelineType pipelineType,
+                        const VkExtent2D dimensions);
 
         MXC_RESULT Acquire(uint32_t* pSwapIndex);
         void Transition(const VkCommandBuffer commandBuffer,

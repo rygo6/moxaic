@@ -108,8 +108,8 @@ Swap::~Swap()
     }
 }
 
-MXC_RESULT Swap::Init(const VkExtent2D dimensions,
-                      const PipelineType pipelineType)
+MXC_RESULT Swap::Init(const PipelineType pipelineType,
+                      const VkExtent2D dimensions)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;

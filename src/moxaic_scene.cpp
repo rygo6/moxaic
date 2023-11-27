@@ -7,13 +7,15 @@ using namespace Moxaic;
 
 MXC_RESULT CompositorScene::Init()
 {
+    const auto pipelineType = Vulkan::PipelineType::Graphics;
     for (int i = 0; i < m_Framebuffers.size(); ++i) {
-        MXC_CHK(m_Framebuffers[i].Init(Window::extents(),
-                                       Vulkan::PipelineType::Graphics,
+        MXC_CHK(m_Framebuffers[i].Init(pipelineType,
+                                       Window::extents(),
                                        Vulkan::Locality::Local));
     }
 
-    MXC_CHK(m_Swap.Init(Window::extents(), Vulkan::PipelineType::Graphics));
+    MXC_CHK(m_Swap.Init(pipelineType,
+                        Window::extents()));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
@@ -25,7 +27,7 @@ MXC_RESULT CompositorScene::Init()
     m_SphereTestTransform.SetPosition(glm::vec3(1, 0, 0));
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
                                              Vulkan::Locality::Local));
-    MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
+    MXC_CHK(m_SphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
     MXC_CHK(m_SphereTestMesh.InitSphere());
 
     MXC_CHK(m_StandardPipeline.Init());
@@ -130,7 +132,9 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 
 MXC_RESULT ComputeCompositorScene::Init()
 {
-    MXC_CHK(m_Swap.Init(Window::extents(), Vulkan::PipelineType::Compute));
+    const auto pipelineType = Vulkan::PipelineType::Compute;
+    MXC_CHK(m_Swap.Init(pipelineType,
+                        Window::extents()));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
@@ -143,7 +147,7 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
 
-    MXC_CHK(m_NodeReference.Init(Vulkan::PipelineType::Compute));
+    MXC_CHK(m_NodeReference.Init(pipelineType));
 
     MXC_CHK(m_ComputeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
                                          m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
@@ -253,7 +257,7 @@ MXC_RESULT NodeScene::Init()
     MXC_CHK(m_SphereTestMesh.InitSphere());
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
-    MXC_CHK(m_SphereTestTexture.TransitionImmediateInitialToGraphicsRead());
+    MXC_CHK(m_SphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
 
     MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
     MXC_CHK(m_ObjectDescriptor.Init(m_SpherTestTransform));
