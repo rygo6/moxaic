@@ -1054,7 +1054,8 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer(VkCommandBuffer* pCommandBuffer) c
     return MXC_SUCCESS;
 }
 
-void Device::BeginRenderPass(const Framebuffer& framebuffer, const VkClearColorValue& backgroundColor) const
+void Device::BeginRenderPass(const Framebuffer& framebuffer,
+                             const VkClearColorValue& backgroundColor) const
 {
     StaticArray<VkClearValue, 4> clearValues;
     clearValues[0].color = backgroundColor;
@@ -1065,10 +1066,10 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer, const VkClearColorV
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = nullptr,
       .renderPass = m_VkRenderPass,
-      .framebuffer = framebuffer.vkFramebuffer(),
+      .framebuffer = framebuffer.GetVkFramebuffer(),
       .renderArea = {
         .offset = {0, 0},
-        .extent = framebuffer.extents(),
+        .extent = framebuffer.GetExtents(),
       },
       .clearValueCount = clearValues.size(),
       .pClearValues = clearValues.data(),

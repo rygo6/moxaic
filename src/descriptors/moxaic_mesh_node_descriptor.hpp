@@ -38,11 +38,6 @@ namespace Moxaic::Vulkan
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
                               VK_SHADER_STAGE_MESH_BIT_EXT,
               },
-              (VkDescriptorSetLayoutBinding){
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_TASK_BIT_EXT |
-                              VK_SHADER_STAGE_MESH_BIT_EXT,
-              },
             };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
@@ -71,25 +66,19 @@ namespace Moxaic::Vulkan
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.colorTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetColorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.normalTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.gBufferTexture().GetVkImageView(),
-                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
-              (VkWriteDescriptorSet){
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.depthTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
             };
             WriteDescriptors(writes);

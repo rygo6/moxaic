@@ -32,7 +32,6 @@ MXC_RESULT CompositorScene::Init()
 
     MXC_CHK(m_StandardPipeline.Init());
     MXC_CHK(m_MeshNodePipeline.Init());
-    MXC_CHK(m_ComputeNodePipeline.Init());
 
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
     MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
@@ -112,7 +111,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     m_Swap.Acquire(&swapIndex);
     m_Swap.BlitToSwap(commandBuffer,
                       swapIndex,
-                      framebuffer.colorTexture());
+                      framebuffer.GetColorTexture());
 
     vkEndCommandBuffer(commandBuffer);
     k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
@@ -300,6 +299,8 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 
     vkCmdEndRenderPass(commandBuffer);
 
+    // framebuffer.GetDepthTexture().BlitTo(commandBuffer,
+    //                                      framebuffer.GetGBufferTexture());
     framebuffer.Transition(commandBuffer,
                            Vulkan::FromGraphicsAttach,
                            Vulkan::ReleaseToExternalGraphicsRead);

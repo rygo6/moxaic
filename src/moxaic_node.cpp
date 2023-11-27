@@ -82,16 +82,14 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemap
 {
     const auto hProcess = m_ProcessInformation.hProcess;
     const Node::ImportParam importParam{
-      .framebufferWidth = m_ExportedFramebuffers[0].extents().width,
-      .framebufferHeight = m_ExportedFramebuffers[0].extents().height,
-      .colorFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].colorTexture().ClonedExternalHandle(hProcess),
-      .colorFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].colorTexture().ClonedExternalHandle(hProcess),
-      .normalFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].normalTexture().ClonedExternalHandle(hProcess),
-      .normalFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].normalTexture().ClonedExternalHandle(hProcess),
-      .gBufferFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].gBufferTexture().ClonedExternalHandle(hProcess),
-      .gBufferFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].gBufferTexture().ClonedExternalHandle(hProcess),
-      .depthFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].depthTexture().ClonedExternalHandle(hProcess),
-      .depthFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].depthTexture().ClonedExternalHandle(hProcess),
+      .framebufferWidth = m_ExportedFramebuffers[0].GetExtents().width,
+      .framebufferHeight = m_ExportedFramebuffers[0].GetExtents().height,
+      .colorFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetColorTexture().ClonedExternalHandle(hProcess),
+      .colorFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetColorTexture().ClonedExternalHandle(hProcess),
+      .normalFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetNormalTexture().ClonedExternalHandle(hProcess),
+      .normalFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetNormalTexture().ClonedExternalHandle(hProcess),
+      .gBufferFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetGBufferTexture().ClonedExternalHandle(hProcess),
+      .gBufferFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetGBufferTexture().ClonedExternalHandle(hProcess),
       .compositorSemaphoreExternalHandle = compositorSemaphore.ClonedExternalHandle(hProcess),
       .nodeSemaphoreExternalHandle = m_ExportedSemaphore.ClonedExternalHandle(hProcess),
     };
@@ -147,15 +145,13 @@ MXC_RESULT Node::InitImport(const ImportParam& parameters)
                                                           parameters.framebufferHeight},
                                              parameters.colorFramebuffer0ExternalHandle,
                                              parameters.normalFramebuffer0ExternalHandle,
-                                             parameters.gBufferFramebuffer0ExternalHandle,
-                                             parameters.depthFramebuffer0ExternalHandle);
+                                             parameters.gBufferFramebuffer0ExternalHandle);
     m_ImportedFramebuffers[1].InitFromImport(Vulkan::CompositorPipelineType,
                                              (VkExtent2D){parameters.framebufferWidth,
                                                           parameters.framebufferHeight},
                                              parameters.colorFramebuffer1ExternalHandle,
                                              parameters.normalFramebuffer1ExternalHandle,
-                                             parameters.gBufferFramebuffer1ExternalHandle,
-                                             parameters.depthFramebuffer1ExternalHandle);
+                                             parameters.gBufferFramebuffer1ExternalHandle);
 
     m_ImportedCompositorSemaphore.InitFromImport(true, parameters.compositorSemaphoreExternalHandle);
     m_ImportedNodeSemaphore.InitFromImport(false, parameters.nodeSemaphoreExternalHandle);

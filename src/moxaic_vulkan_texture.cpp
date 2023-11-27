@@ -110,6 +110,7 @@ MXC_RESULT Texture::InitFromImport(const VkFormat format,
     MXC_CHK(InitImageView(format, aspectMask));
     m_Extents = extents;
     m_AspectMask = aspectMask;
+    m_Format = format;
     return MXC_SUCCESS;
 }
 
@@ -156,6 +157,7 @@ MXC_RESULT Texture::Init(const VkFormat format,
     }
     m_Extents = extents;
     m_AspectMask = aspectMask;
+    m_Format = format;
     return MXC_SUCCESS;
 }
 
@@ -164,15 +166,15 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
     switch (pipelineType) {
         case PipelineType::Graphics:
             return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
-                                                 Vulkan::FromInitial,
-                                                 Vulkan::ToGraphicsRead,
-                                                 m_AspectMask);
+                                                             Vulkan::FromInitial,
+                                                             Vulkan::ToGraphicsRead,
+                                                             m_AspectMask);
             break;
         case PipelineType::Compute:
             return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
-                                                 Vulkan::FromInitial,
-                                                 Vulkan::ToComputeRead,
-                                                 m_AspectMask);
+                                                             Vulkan::FromInitial,
+                                                             Vulkan::ToComputeRead,
+                                                             m_AspectMask);
             break;
         default:
             SDL_assert(false);
@@ -279,4 +281,120 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
                          VK_ALLOC,
                          &m_VkImage));
     return MXC_SUCCESS;
+}
+
+
+void Texture::BlitTo(const VkCommandBuffer commandBuffer,
+                     const Texture& dstTexture) const
+{
+    MXC_LOG_NAMED(IsDepth());
+    const StaticArray transitionBlitBarrier{
+      (VkImageMemoryBarrier){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_NONE,
+        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .oldLayout = IsDepth() ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .image = m_VkImage,
+        .subresourceRange = IsDepth() ? Vulkan::DefaultDepthSubresourceRange :
+                                        Vulkan::DefaultColorSubresourceRange,
+      },
+      (VkImageMemoryBarrier){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_NONE,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .image = dstTexture.GetVkImage(),
+        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+      },
+    };
+    VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
+                                     IsDepth() ?
+                                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT :
+                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                     0,
+                                     0,
+                                     nullptr,
+                                     0,
+                                     nullptr,
+                                     transitionBlitBarrier.size(),
+                                     transitionBlitBarrier.data()));
+    constexpr VkImageSubresourceLayers imageSubresourceLayers{
+      .mipLevel = 0,
+      .baseArrayLayer = 0,
+      .layerCount = 1,
+    };
+    const VkOffset3D offsets[2]{
+      (VkOffset3D){
+        .x = 0,
+        .y = 0,
+        .z = 0,
+      },
+      (VkOffset3D){
+        .x = int32_t(m_Extents.width),
+        .y = int32_t(m_Extents.height),
+        .z = 1,
+      },
+    };
+    VkImageBlit imageBlit{};
+    imageBlit.srcSubresource = imageSubresourceLayers;
+    imageBlit.srcSubresource.aspectMask = IsDepth() ?
+                                            VK_IMAGE_ASPECT_DEPTH_BIT :
+                                            VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBlit.srcOffsets[0] = offsets[0];
+    imageBlit.srcOffsets[1] = offsets[1];
+    imageBlit.dstSubresource = imageSubresourceLayers;
+    imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBlit.dstOffsets[0] = offsets[0];
+    imageBlit.dstOffsets[1] = offsets[1];
+    VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
+                               m_VkImage,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               dstTexture.GetVkImage(),
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               1,
+                               &imageBlit,
+                               VK_FILTER_NEAREST));
+    const StaticArray transitionPresentBarrier{
+      (VkImageMemoryBarrier){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .dstAccessMask = VK_ACCESS_NONE,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout = IsDepth() ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .image = m_VkImage,
+        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+      },
+      (VkImageMemoryBarrier){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_NONE,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .image = dstTexture.GetVkImage(),
+        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+      },
+    };
+    VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
+                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                     VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                     0,
+                                     0,
+                                     nullptr,
+                                     0,
+                                     nullptr,
+                                     transitionPresentBarrier.size(),
+                                     transitionPresentBarrier.data()));
 }

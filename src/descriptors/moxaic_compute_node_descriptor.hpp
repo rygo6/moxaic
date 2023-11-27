@@ -40,10 +40,6 @@ namespace Moxaic::Vulkan
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
-              (VkDescriptorSetLayoutBinding){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-              },
             };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
@@ -71,22 +67,17 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.colorTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetColorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.normalTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.gBufferTexture().GetVkImageView(),
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.depthTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -105,25 +96,19 @@ namespace Moxaic::Vulkan
                 .dstBinding = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.colorTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetColorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = 2,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.normalTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = 3,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.gBufferTexture().GetVkImageView(),
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
-                .dstBinding = 4,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.depthTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };
             WriteDescriptors(writes);

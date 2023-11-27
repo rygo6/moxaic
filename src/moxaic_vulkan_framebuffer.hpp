@@ -26,26 +26,20 @@ namespace Moxaic::Vulkan
                                   const VkExtent2D extents,
                                   const HANDLE colorExternalHandle,
                                   const HANDLE normalExternalHandle,
-                                  const HANDLE gBufferExternalHandle,
-                                  const HANDLE depthExternalHandle);
+                                  const HANDLE gBufferExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
         void Transition(const VkCommandBuffer commandbuffer,
                         const Barrier& src,
                         const Barrier& dst) const;
 
-        const auto& vkFramebuffer() const
-        {
-            return m_VkFramebuffer;
-        }
-        const auto& vkRenderCompleteSemaphore() const { return m_VkRenderCompleteSemaphore; }
-
-        const auto& colorTexture() const { return m_ColorTexture; }
-        const auto& normalTexture() const { return m_NormalTexture; }
-        const auto& gBufferTexture() const { return m_GBufferTexture; }
-        const auto& depthTexture() const { return m_DepthTexture; }
-
-        const auto& extents() const { return m_Extents; }
+        MXC_GET(VkFramebuffer);
+        MXC_GET(VkRenderCompleteSemaphore);
+        MXC_GET(ColorTexture);
+        MXC_GET(NormalTexture);
+        MXC_GET(GBufferTexture);
+        MXC_GET(DepthTexture);
+        MXC_GET(Extents);
 
     private:
         const Device* const k_pDevice;

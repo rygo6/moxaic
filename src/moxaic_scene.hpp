@@ -67,7 +67,6 @@ namespace Moxaic
           Vulkan::MeshNodeDescriptor(*k_pDevice),
           Vulkan::MeshNodeDescriptor(*k_pDevice)};
 
-        Vulkan::ComputeNodePipeline m_ComputeNodePipeline{*k_pDevice};
 
         Camera m_MainCamera{};
 

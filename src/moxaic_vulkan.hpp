@@ -17,7 +17,6 @@ inline constexpr VkFormat kColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
 inline constexpr VkFormat kNormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constexpr VkFormat kGBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 inline constexpr VkFormat kDepthBufferFormat = VK_FORMAT_D32_SFLOAT;
-// inline constexpr VkFormat k_DepthBufferFormat = VK_FORMAT_R32_SFLOAT;
 
 #define VK_ALLOC nullptr
 

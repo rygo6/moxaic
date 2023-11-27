@@ -38,7 +38,14 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT TransitionInitialImmediate(const PipelineType pipelineType) const;
 
+        void BlitTo(VkCommandBuffer commandBuffer, const Texture& dstTexture) const;
+
         HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
+
+        bool IsDepth() const
+        {
+            return m_Format == kDepthBufferFormat;
+        }
 
         MXC_GET(VkImage);
         MXC_GET(VkImageView);
@@ -52,6 +59,7 @@ namespace Moxaic::Vulkan
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
         VkExtent2D m_Extents{};
         VkImageAspectFlags m_AspectMask{};
+        VkFormat m_Format{};
 
 #ifdef WIN32
         HANDLE m_ExternalHandle{};
@@ -64,7 +72,6 @@ namespace Moxaic::Vulkan
                              const VkExtent2D extents,
                              const VkImageUsageFlags usage,
                              const Locality locality);
-
         MXC_RESULT InitImageView(const VkFormat& format,
                                  const VkImageAspectFlags& aspectMask);
     };
