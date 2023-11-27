@@ -303,7 +303,9 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     //                                      framebuffer.GetGBufferTexture());
     framebuffer.Transition(commandBuffer,
                            Vulkan::FromGraphicsAttach,
-                           Vulkan::ReleaseToExternalGraphicsRead);
+                           Vulkan::CompositorPipelineType == Vulkan::PipelineType::Graphics ?
+                             Vulkan::ReleaseToExternalGraphicsRead :
+                             Vulkan::ReleaseToExternalComputesRead);
 
     // uint32_t swapIndex;
     // m_Swap.Acquire(&swapIndex);

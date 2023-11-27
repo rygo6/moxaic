@@ -155,7 +155,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
         (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT)) {
         MXC_LOG("Swap support VK_IMAGE_USAGE_TRANSFER_DST_BIT adding!");
         createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    } else {
+    } else if (pipelineType == PipelineType::Graphics) {
         MXC_LOG_ERROR("Vulkan swapchain does not support VK_IMAGE_USAGE_TRANSFER_DST_BIT.");
     }
 

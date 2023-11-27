@@ -7,6 +7,7 @@ layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) 
 
 void main()
 {
+
     ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 //    vec2 uv = vec2(float(gl_GlobalInvocationID.x) / float(globalUBO.width), float(gl_GlobalInvocationID.y) / float(globalUBO.height));
 

@@ -281,6 +281,17 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
     };
 
+    /// Release to retain data
+    inline constinit Barrier ReleaseToExternalComputesRead{
+        .colorAccessMask = VK_ACCESS_NONE,
+        .depthAccessMask = VK_ACCESS_NONE,
+        .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .queueFamilyIndex = Queue::FamilyExternal,
+        .colorStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      };
+
     inline constinit Barrier ToComputeSwapPresent{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
