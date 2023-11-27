@@ -73,6 +73,10 @@ namespace Moxaic::Vulkan
                                                   const VkPipelineStageFlags& srcStageMask,
                                                   const VkPipelineStageFlags& dstStageMask,
                                                   const VkImageAspectFlags& aspectMask) const;
+        MXC_RESULT TransitionImageLayoutImmediate(const VkImage& image,
+                                                  const Barrier& src,
+                                                  const Barrier& dst,
+                                                  VkImageAspectFlags aspectMask) const;
         MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
         MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffer) const;
         MXC_RESULT BeginGraphicsCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
@@ -95,9 +99,9 @@ namespace Moxaic::Vulkan
                             const uint32_t query) const;
         StaticArray<double, QueryPoolCount> GetTimestamps() const;
 
-        uint32_t GetQueue(const Queue queue) const
+        uint32_t GetSrcQueue(const Barrier src) const
         {
-            switch (queue) {
+            switch (src.queueFamilyIndex) {
                 case Queue::None:
                     return 0;
                 case Queue::Graphics:
@@ -112,6 +116,16 @@ namespace Moxaic::Vulkan
                     SDL_assert(false && "Unknown Queue Type");
                     return -1;
             }
+        }
+
+        uint32_t GetDstQueue(const Barrier src, const Barrier dst) const
+        {
+            // This logic is needed because if src queue is ignored, then both must be ignored
+            if (src.queueFamilyIndex == Queue::Ignore) {
+                return VK_QUEUE_FAMILY_IGNORED;
+            }
+
+            return GetSrcQueue(dst);
         }
 
         // VulkanHandles are not encapsulated. Deal with vk vars and methods with care.
@@ -165,8 +179,10 @@ namespace Moxaic::Vulkan
         uint32_t m_GraphicsQueueFamilyIndex{};
         uint32_t m_ComputeQueueFamilyIndex{};
 
-        VkPhysicalDeviceMeshShaderPropertiesEXT m_PhysicalDeviceMeshShaderProperties{};
         VkPhysicalDeviceProperties2 m_PhysicalDeviceProperties{};
+        VkPhysicalDeviceMeshShaderPropertiesEXT m_PhysicalDeviceMeshShaderProperties{};
+        // VkExternalImageFormatProperties
+
         VkPhysicalDeviceMemoryProperties m_PhysicalDeviceMemoryProperties{};
 
         bool PickPhysicalDevice();

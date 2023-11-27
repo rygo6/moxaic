@@ -60,10 +60,12 @@ MXC_RESULT Device::PickPhysicalDevice()
     // Todo Implement Query OpenVR for the physical.GetVkDevice() to use
     m_VkPhysicalDevice = devices.front();
 
+
     m_PhysicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
     m_PhysicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     m_PhysicalDeviceProperties.pNext = &m_PhysicalDeviceMeshShaderProperties;
     vkGetPhysicalDeviceProperties2(m_VkPhysicalDevice, &m_PhysicalDeviceProperties);
+
     vkGetPhysicalDeviceMemoryProperties(m_VkPhysicalDevice, &m_PhysicalDeviceMemoryProperties);
 
     MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.timestampPeriod);
@@ -921,6 +923,44 @@ MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage& image,
     vkCmdPipelineBarrier(commandBuffer,
                          srcStageMask,
                          dstStageMask,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &imageMemoryBarrier);
+    MXC_CHK(EndImmediateCommandBuffer(commandBuffer));
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage& image,
+                                                  const Barrier& src,
+                                                  const Barrier& dst,
+                                                  const VkImageAspectFlags aspectMask) const
+{
+    VkCommandBuffer commandBuffer;
+    MXC_CHK(BeginImmediateCommandBuffer(&commandBuffer));
+    const VkImageMemoryBarrier imageMemoryBarrier{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+      .srcAccessMask = src.GetAccessMask(aspectMask),
+      .dstAccessMask = dst.GetAccessMask(aspectMask),
+      .oldLayout = src.GetLayout(aspectMask),
+      .newLayout = dst.GetLayout(aspectMask),
+      .srcQueueFamilyIndex = GetSrcQueue(src),
+      .dstQueueFamilyIndex = GetDstQueue(src, dst),
+      .image = image,
+      .subresourceRange = {
+        .aspectMask = aspectMask,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+      },
+    };
+    vkCmdPipelineBarrier(commandBuffer,
+                         src.GetStageMask(aspectMask),
+                         dst.GetStageMask(aspectMask),
                          0,
                          0,
                          nullptr,

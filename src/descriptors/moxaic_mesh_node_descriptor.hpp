@@ -71,25 +71,25 @@ namespace Moxaic::Vulkan
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.colorTexture().vkImageView(),
+                  .imageView = framebuffer.colorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.normalTexture().vkImageView(),
+                  .imageView = framebuffer.normalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.gBufferTexture().vkImageView(),
+                  .imageView = framebuffer.gBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = k_pDevice->GetVkLinearSampler(),
-                  .imageView = framebuffer.depthTexture().vkImageView(),
+                  .imageView = framebuffer.depthTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
             };
             WriteDescriptors(writes);

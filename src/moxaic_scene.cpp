@@ -108,8 +108,8 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     uint32_t swapIndex;
     m_Swap.Acquire(&swapIndex);
     m_Swap.BlitToSwap(commandBuffer,
-                  swapIndex,
-                  framebuffer.colorTexture());
+                      swapIndex,
+                      framebuffer.colorTexture());
 
     vkEndCommandBuffer(commandBuffer);
     k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
@@ -214,8 +214,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     k_pDevice->ResetTimestamps();
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0);
     vkCmdDispatch(commandBuffer,
-                  Window::extents().width,
-                  Window::extents().height,
+                  Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
+                  Window::extents().height / Vulkan::ComputeNodePipeline::LocalSize,
                   1);
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 1);
 

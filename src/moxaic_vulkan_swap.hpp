@@ -27,8 +27,8 @@ namespace Moxaic::Vulkan
         MXC_RESULT Acquire(uint32_t* pSwapIndex);
         void Transition(const VkCommandBuffer commandBuffer,
                         const uint32_t swapIndex,
-                        const BarrierSrc& src,
-                        const BarrierDst& dst) const;
+                        const Barrier& src,
+                        const Barrier& dst) const;
         void BlitToSwap(const VkCommandBuffer commandBuffer,
                         const uint32_t swapIndex,
                         const Texture& srcTexture) const;

@@ -71,22 +71,22 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.colorTexture().vkImageView(),
+                  .imageView = framebuffer.colorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.normalTexture().vkImageView(),
+                  .imageView = framebuffer.normalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.gBufferTexture().vkImageView(),
+                  .imageView = framebuffer.gBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.gBufferTexture().vkImageView(),
+                  .imageView = framebuffer.depthTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -105,25 +105,25 @@ namespace Moxaic::Vulkan
                 .dstBinding = 1,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.colorTexture().vkImageView(),
+                  .imageView = framebuffer.colorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = 2,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.normalTexture().vkImageView(),
+                  .imageView = framebuffer.normalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = 3,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.gBufferTexture().vkImageView(),
+                  .imageView = framebuffer.gBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = 4,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.gBufferTexture().vkImageView(),
+                  .imageView = framebuffer.depthTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };
             WriteDescriptors(writes);

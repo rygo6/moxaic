@@ -269,8 +269,8 @@ MXC_RESULT Swap::Acquire(uint32_t* pSwapIndex)
 
 void Swap::Transition(const VkCommandBuffer commandBuffer,
                       const uint32_t swapIndex,
-                      const BarrierSrc& src,
-                      const BarrierDst& dst) const
+                      const Barrier& src,
+                      const Barrier& dst) const
 {
     const StaticArray transitionBlitBarrier{
       (VkImageMemoryBarrier){
@@ -279,8 +279,8 @@ void Swap::Transition(const VkCommandBuffer commandBuffer,
         .dstAccessMask = dst.colorAccessMask,
         .oldLayout = src.colorLayout,
         .newLayout = dst.colorLayout,
-        .srcQueueFamilyIndex = k_pDevice->GetQueue(src.queueFamilyIndex),
-        .dstQueueFamilyIndex = k_pDevice->GetQueue(dst.queueFamilyIndex),
+        .srcQueueFamilyIndex = k_pDevice->GetSrcQueue(src),
+        .dstQueueFamilyIndex = k_pDevice->GetDstQueue(src, dst),
         .image = m_VkSwapImages[swapIndex],
         .subresourceRange = DefaultColorSubresourceRange,
       },
@@ -310,7 +310,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .image = srcTexture.vkImage(),
+        .image = srcTexture.GetVkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
       (VkImageMemoryBarrier){
@@ -361,7 +361,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     vkCmdBlitImage(commandBuffer,
-                   srcTexture.vkImage(),
+                   srcTexture.GetVkImage(),
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                    m_VkSwapImages[swapIndex],
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -377,7 +377,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .image = srcTexture.vkImage(),
+        .image = srcTexture.GetVkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
       (VkImageMemoryBarrier){

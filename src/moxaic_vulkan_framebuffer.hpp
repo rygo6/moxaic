@@ -19,19 +19,19 @@ namespace Moxaic::Vulkan
         explicit Framebuffer(Device const& device);
         virtual ~Framebuffer();
 
-        MXC_RESULT Init(VkExtent2D const& extents,
-                        Locality const& locality);
+        MXC_RESULT Init(const VkExtent2D extents,
+                        const Locality locality);
 
-        MXC_RESULT InitFromImport(VkExtent2D const& extents,
-                                  HANDLE const& colorExternalHandle,
-                                  HANDLE const& normalExternalHandle,
-                                  HANDLE const& gBufferExternalHandle,
-                                  HANDLE const& depthExternalHandle);
+        MXC_RESULT InitFromImport(const VkExtent2D extents,
+                                  const HANDLE colorExternalHandle,
+                                  const HANDLE normalExternalHandle,
+                                  const HANDLE gBufferExternalHandle,
+                                  const HANDLE depthExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
         void Transition(VkCommandBuffer const commandbuffer,
-                        BarrierSrc const& src,
-                        BarrierDst const& dst) const;
+                        Barrier const& src,
+                        Barrier const& dst) const;
 
         auto const& vkFramebuffer() const
         {

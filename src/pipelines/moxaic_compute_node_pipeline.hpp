@@ -21,6 +21,8 @@ namespace Moxaic::Vulkan
     public:
         using ComputePipeline::ComputePipeline;
 
+        constexpr static uint32_t LocalSize = 32;
+
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
             SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
