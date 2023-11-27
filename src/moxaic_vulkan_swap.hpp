@@ -18,11 +18,11 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Swap);
 
-        Swap(const Device& device);
+        explicit Swap(const Device& device);
         virtual ~Swap();
 
-        MXC_RESULT Init(const VkExtent2D& dimensions,
-                        const bool& computeStorage);
+        MXC_RESULT Init(const VkExtent2D dimensions,
+                        const PipelineType pipelineType);
 
         MXC_RESULT Acquire(uint32_t* pSwapIndex);
         void Transition(const VkCommandBuffer commandBuffer,

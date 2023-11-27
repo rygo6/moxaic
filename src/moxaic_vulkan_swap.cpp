@@ -61,7 +61,7 @@ static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice,
 }
 
 MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
-                                   bool computeStorage,
+                                   const PipelineType pipelineType,
                                    VkSurfaceFormatKHR* pSurfaceFormat)
 {
     uint32_t formatCount;
@@ -76,12 +76,12 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
                                                 (VkSurfaceFormatKHR*) &formats));
 
     for (int i = 0; i < formatCount; ++i) {
-        if (computeStorage &&
+        if (pipelineType == PipelineType::Compute &&
             formats[i].format == VK_FORMAT_B8G8R8A8_UNORM) {
             *pSurfaceFormat = formats[i];
             return MXC_SUCCESS;
         }
-        if (!computeStorage &&
+        if (pipelineType == PipelineType::Graphics &&
               formats[i].format == VK_FORMAT_B8G8R8A8_SRGB ||
             formats[i].format == VK_FORMAT_R8G8B8A8_SRGB) {
             *pSurfaceFormat = formats[i];
@@ -108,7 +108,8 @@ Swap::~Swap()
     }
 }
 
-MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
+MXC_RESULT Swap::Init(const VkExtent2D dimensions,
+                      const PipelineType pipelineType)
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
@@ -127,7 +128,7 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
                                   &presentMode));
     VkSurfaceFormatKHR surfaceFormat;
     MXC_CHK(ChooseSwapSurfaceFormat(k_pDevice->GetVkPhysicalDevice(),
-                                    computeStorage,
+                                    pipelineType,
                                     &surfaceFormat));
 
     VkSwapchainCreateInfoKHR createInfo = {
@@ -139,8 +140,7 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
       .imageColorSpace = surfaceFormat.colorSpace,
       .imageExtent = dimensions,
       .imageArrayLayers = 1,
-      .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                    VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+      .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
       .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .queueFamilyIndexCount = 0,
       .pQueueFamilyIndices = nullptr,
@@ -151,17 +151,19 @@ MXC_RESULT Swap::Init(const VkExtent2D& dimensions, const bool& computeStorage)
 
     // OBS is adding VK_IMAGE_USAGE_TRANSFER_SRC_BIT is there a way to detect that!?
     // Let's just add it anyway...
-    if (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) {
+    if (pipelineType == PipelineType::Graphics &&
+        (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT)) {
         MXC_LOG("Swap support VK_IMAGE_USAGE_TRANSFER_DST_BIT adding!");
         createInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     } else {
         MXC_LOG_ERROR("Vulkan swapchain does not support VK_IMAGE_USAGE_TRANSFER_DST_BIT.");
     }
 
-    if (computeStorage && (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT)) {
+    if (pipelineType == PipelineType::Compute &&
+        (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT)) {
         MXC_LOG("Swap support VK_IMAGE_USAGE_STORAGE_BIT adding!");
         createInfo.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
-    } else if (computeStorage) {
+    } else if (pipelineType == PipelineType::Compute) {
         MXC_LOG_ERROR("Vulkan Swap does not support VK_IMAGE_USAGE_STORAGE_BIT!");
     }
 

@@ -58,7 +58,7 @@ NodeReference::~NodeReference()
     CloseHandle(m_ProcessInformation.hThread);
 }
 
-MXC_RESULT NodeReference::Init()
+MXC_RESULT NodeReference::Init(const Vulkan::PipelineType pipelineType)
 {
     MXC_LOG("Init NodeReference");
     MXC_CHK(m_ExportedSemaphore.Init(false,
@@ -69,7 +69,7 @@ MXC_RESULT NodeReference::Init()
 
     for (int i = 0; i < m_ExportedFramebuffers.size(); ++i) {
         m_ExportedFramebuffers[i].Init(Window::extents(),
-                                       Vulkan::CompositorPipelineType,
+                                       pipelineType,
                                        Vulkan::Locality::External);
     }
 
@@ -142,7 +142,7 @@ MXC_RESULT Node::Init()
 MXC_RESULT Node::InitImport(const ImportParam& parameters)
 {
     MXC_LOG("Node Init Import");
-    m_ImportedFramebuffers[0].InitFromImport(Vulkan::CompositorPipelineType,
+    m_ImportedFramebuffers[0].InitFromImport(Vulkan::CompositorPipelineType, // TODO this pipelinetpye needs to come over IPC probably
                                              (VkExtent2D){parameters.framebufferWidth,
                                                           parameters.framebufferHeight},
                                              parameters.colorFramebuffer0ExternalHandle,

@@ -5,9 +5,9 @@
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_interprocess.hpp"
 #include "moxaic_transform.hpp"
+#include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_semaphore.hpp"
-#include "moxaic_vulkan.hpp"
 
 #include <string>
 
@@ -22,14 +22,14 @@ namespace Moxaic
     public:
         MXC_NO_VALUE_PASS(NodeReference);
 
-        explicit NodeReference(Vulkan::Device const& device);
+        explicit NodeReference(const Vulkan::Device& device);
         virtual ~NodeReference();
 
-        MXC_RESULT Init();
+        MXC_RESULT Init(const Vulkan::PipelineType pipelineType);
 
-        MXC_RESULT ExportOverIPC(Vulkan::Semaphore const& compositorSemaphore);
+        MXC_RESULT ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore);
 
-        void SetZCondensedExportedGlobalDescriptorLocalBuffer(Camera const& camera);
+        void SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camera& camera);
 
         MXC_ACCESS(Transform);
         MXC_ACCESS(ExportedGlobalDescriptor);
@@ -40,7 +40,7 @@ namespace Moxaic
         MXC_GETARR(ExportedFramebuffers);
 
     private:
-        Vulkan::Device const* const k_pDevice;
+        const Vulkan::Device* const k_pDevice;
 
         Moxaic::Transform m_Transform{};
 
@@ -86,17 +86,17 @@ namespace Moxaic
             HANDLE nodeSemaphoreExternalHandle;
         };
 
-        explicit Node(Vulkan::Device const& device);
+        explicit Node(const Vulkan::Device& device);
         virtual ~Node();
 
         MXC_RESULT Init();
-        MXC_RESULT InitImport(ImportParam const& parameters);
+        MXC_RESULT InitImport(const ImportParam& parameters);
 
         MXC_ACCESS(ImportedGlobalDescriptor);
         MXC_ACCESS(ImportedNodeSemaphore);
         MXC_ACCESS(ImportedCompositorSemaphore);
 
-        auto const& framebuffer(int const index) const
+        const auto& framebuffer(const int index) const
         {
             return m_ImportedFramebuffers[index];
         }
@@ -112,7 +112,7 @@ namespace Moxaic
         }
 
     private:
-        Vulkan::Device const* const k_pDevice;
+        const Vulkan::Device* const k_pDevice;
         ;
 
         StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
