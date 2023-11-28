@@ -62,23 +62,60 @@ void main()
     payload.lrNDC = payload.lrClipPos.xyz / payload.lrClipPos.w;
     payload.llNDC = payload.llClipPos.xyz / payload.llClipPos.w;
 
-
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    // honestly dont quite understand why this revcoord is needed compared to mesh shader
+    const ivec2 revCoord = ivec2(globalUBO.width - coord.x, coord.y);
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
-    const vec2 uv = gl_GlobalInvocationID.xy / screenSize;
+    const vec2 uv = vec2(revCoord) / screenSize;
     const vec2 ndc = vec2((1, -1) * (uv * 2 - 1));
-    const vec2 inQuadUv = barycentricQuadUV(ndc);
-    const ivec2 inQuadCoord = ivec2(inQuadUv) * iScreenSize;
 
-    const vec4 color = imageLoad(inputColor, coord);
+    // Clear
+    imageStore(outputColor, coord, vec4(0, 0, 0, 1));
+
+    vec4 originClip = globalUBO.proj * globalUBO.view * nodeOriginClipPos;
+    vec3 originNDC = originClip.xyz / originClip.w;
+    vec2 origin = originNDC.xy - ndc;
+    if (dot(origin, origin) < .001){
+        imageStore(outputColor, coord, vec4(0, 0, 1, 1));
+        return;
+    }
+    vec2 UL = payload.ulNDC.xy - ndc;
+    if (dot(UL, UL) < .001){
+        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
+        return;
+    }
+    vec2 UR = payload.urNDC.xy - ndc;
+    if (dot(UR, UR) < .001){
+        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
+        return;
+    }
+    vec2 LL = payload.llNDC.xy - ndc;
+    if (dot(LL, LL) < .001){
+        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
+        return;
+    }
+    vec2 LR = payload.lrNDC.xy - ndc;
+    if (dot(LR, LR) < .001){
+        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
+        return;
+    }
+
+    const vec2 inQuadUv = barycentricQuadUV(ndc);
+    const ivec2 inQuadCoord = ivec2(inQuadUv * screenSize);
+
+    const vec4 color = imageLoad(inputColor, inQuadCoord);
     const vec4 normal = imageLoad(inputNormal, inQuadCoord);
     const vec4 gBuffer = imageLoad(inputGBuffer, inQuadCoord);
     const vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
 
-    const vec4 newNDC = dot(gBuffer, gBuffer) > 0 ? globalUBO.proj * globalUBO.view * gBuffer : vec4(ndc, 1, 1);
+    const vec4 newClipPos = dot(gBuffer, gBuffer) > 0 ?
+                                globalUBO.proj * globalUBO.view * gBuffer :
+                                vec4(ndc, 1, 1);
+    //    const vec4 newClipPos = globalUBO.proj * globalUBO.view * vec4(gBuffer.xyz, 1);
+    const vec3 newNDC = newClipPos.xyz / newClipPos.w;
     const vec2 newUV = (newNDC.xy / vec2(1, -1) + 1) / 2;
-    const ivec2 newCoord = ivec2(newUV) * iScreenSize;
+    const ivec2 newCoord = ivec2(newUV * screenSize);
 
-    imageStore(outputColor, coord, vec4(sRGB, 1));
+    imageStore(outputColor, newCoord, color);
 }
