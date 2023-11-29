@@ -90,6 +90,8 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemap
       .normalFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetNormalTexture().ClonedExternalHandle(hProcess),
       .gBufferFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetGBufferTexture().ClonedExternalHandle(hProcess),
       .gBufferFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetGBufferTexture().ClonedExternalHandle(hProcess),
+      .depthFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetDepthTexture().ClonedExternalHandle(hProcess),
+      .depthFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetDepthTexture().ClonedExternalHandle(hProcess),
       .compositorSemaphoreExternalHandle = compositorSemaphore.ClonedExternalHandle(hProcess),
       .nodeSemaphoreExternalHandle = m_ExportedSemaphore.ClonedExternalHandle(hProcess),
     };
@@ -140,18 +142,20 @@ MXC_RESULT Node::Init()
 MXC_RESULT Node::InitImport(const ImportParam& parameters)
 {
     MXC_LOG("Node Init Import");
-    m_ImportedFramebuffers[0].InitFromImport(Vulkan::CompositorPipelineType, // TODO this pipelinetpye needs to come over IPC probably
+    m_ImportedFramebuffers[0].InitFromImport(Vulkan::CompositorPipelineType,// TODO this pipelinetpye needs to come over IPC probably
                                              (VkExtent2D){parameters.framebufferWidth,
                                                           parameters.framebufferHeight},
                                              parameters.colorFramebuffer0ExternalHandle,
                                              parameters.normalFramebuffer0ExternalHandle,
-                                             parameters.gBufferFramebuffer0ExternalHandle);
+                                             parameters.gBufferFramebuffer0ExternalHandle,
+                                             parameters.depthFramebuffer0ExternalHandle);
     m_ImportedFramebuffers[1].InitFromImport(Vulkan::CompositorPipelineType,
                                              (VkExtent2D){parameters.framebufferWidth,
                                                           parameters.framebufferHeight},
                                              parameters.colorFramebuffer1ExternalHandle,
                                              parameters.normalFramebuffer1ExternalHandle,
-                                             parameters.gBufferFramebuffer1ExternalHandle);
+                                             parameters.gBufferFramebuffer1ExternalHandle,
+                                             parameters.depthFramebuffer1ExternalHandle);
 
     m_ImportedCompositorSemaphore.InitFromImport(true, parameters.compositorSemaphoreExternalHandle);
     m_ImportedNodeSemaphore.InitFromImport(false, parameters.nodeSemaphoreExternalHandle);

@@ -315,7 +315,8 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT CreateComputePipe(const VkPipelineShaderStageCreateInfo& stage)
+        MXC_RESULT CreateComputePipe(const VkPipelineShaderStageCreateInfo& stage,
+                                     VkPipeline* pVkPipeline)
         {
             CheckLayoutInitialized(*k_pDevice);
             const VkComputePipelineCreateInfo pipelineInfo{
@@ -332,8 +333,13 @@ namespace Moxaic::Vulkan
                                             1,
                                             &pipelineInfo,
                                             VK_ALLOC,
-                                            &m_vkPipeline));
+                                            pVkPipeline));
             return MXC_SUCCESS;
+        }
+
+        MXC_RESULT CreateComputePipe(const VkPipelineShaderStageCreateInfo& stage)
+        {
+            return CreateComputePipe(stage, &m_vkPipeline);
         }
     };
 

@@ -1,0 +1,12 @@
+#version 450
+
+#include "global_binding.glsl"
+#include "compute_node_binding.glsl"
+
+layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    imageStore(outputColor, coord, vec4(0, 0, 0, 0));
+}

@@ -40,19 +40,32 @@ vec2 barycentricQuadUV(vec2 ndc) {
     return (f[0] * ulUV + f[1] * urUV + f[2] * lrUV + f[3] * llUV) / (f[0] + f[1] + f[2] + f[3]);
 }
 
-vec4 nodeQuadWorldPoint(vec4 clipPos)
+vec4 toNodeWorldPos(vec4 clipPos)
 {
     vec4 worldPos = nodeUBO.invView * nodeUBO.invProj * clipPos;
     return worldPos;
 }
 
+vec2 toNDC(vec2 uv)
+{
+    return vec2(vec2(1, -1) * (uv * 2 - 1));;
+}
+
+vec2 toUV(vec3 ndc)
+{
+//    return (ndc.xy / vec2(1, -1) + 1) / 2;
+    return (vec2((vec2(1, -1) * ndc.xy) + 1) * 0.5);
+}
+
 void main()
 {
+
+
     const vec4 nodeOriginClipPos = nodeUBO.proj * nodeUBO.view * vec4(0, 0, 0, 1);
-    const vec4 ulWorldPos = nodeQuadWorldPoint(vec4(-nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
-    const vec4 urWorldPos = nodeQuadWorldPoint(vec4(nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
-    const vec4 lrWorldPos = nodeQuadWorldPoint(vec4(nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
-    const vec4 llWorldPos = nodeQuadWorldPoint(vec4(-nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    const vec4 ulWorldPos = toNodeWorldPos(vec4(-nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    const vec4 urWorldPos = toNodeWorldPos(vec4(nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    const vec4 lrWorldPos = toNodeWorldPos(vec4(nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
+    const vec4 llWorldPos = toNodeWorldPos(vec4(-nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
     payload.ulClipPos = globalUBO.proj * globalUBO.view * ulWorldPos;
     payload.urClipPos = globalUBO.proj * globalUBO.view * urWorldPos;
     payload.lrClipPos = globalUBO.proj * globalUBO.view * lrWorldPos;
@@ -68,54 +81,64 @@ void main()
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
     const vec2 uv = vec2(revCoord) / screenSize;
-    const vec2 ndc = vec2((1, -1) * (uv * 2 - 1));
+    const vec2 ndc = toNDC(uv);
 
-    // Clear
-    imageStore(outputColor, coord, vec4(0, 0, 0, 1));
+    //    vec4 originClip = globalUBO.proj * globalUBO.view * nodeOriginClipPos;
+    //    vec3 originNDC = originClip.xyz / originClip.w;
+    //    vec2 origin = originNDC.xy - ndc;
+    //    if (dot(origin, origin) < .001){
+    //        imageStore(outputColor, coord, vec4(0, 0, 1, 1));
+    //        return;
+    //    }
+    //    vec2 UL = payload.ulNDC.xy - ndc;
+    //    if (dot(UL, UL) < .001){
+    //        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
+    //        return;
+    //    }
+    //    vec2 UR = payload.urNDC.xy - ndc;
+    //    if (dot(UR, UR) < .001){
+    //        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
+    //        return;
+    //    }
+    //    vec2 LL = payload.llNDC.xy - ndc;
+    //    if (dot(LL, LL) < .001){
+    //        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
+    //        return;
+    //    }
+    //    vec2 LR = payload.lrNDC.xy - ndc;
+    //    if (dot(LR, LR) < .001){
+    //        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
+    //        return;
+    //    }
 
-    vec4 originClip = globalUBO.proj * globalUBO.view * nodeOriginClipPos;
-    vec3 originNDC = originClip.xyz / originClip.w;
-    vec2 origin = originNDC.xy - ndc;
-    if (dot(origin, origin) < .001){
-        imageStore(outputColor, coord, vec4(0, 0, 1, 1));
-        return;
-    }
-    vec2 UL = payload.ulNDC.xy - ndc;
-    if (dot(UL, UL) < .001){
-        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
-        return;
-    }
-    vec2 UR = payload.urNDC.xy - ndc;
-    if (dot(UR, UR) < .001){
-        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
-        return;
-    }
-    vec2 LL = payload.llNDC.xy - ndc;
-    if (dot(LL, LL) < .001){
-        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
-        return;
-    }
-    vec2 LR = payload.lrNDC.xy - ndc;
-    if (dot(LR, LR) < .001){
-        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
-        return;
-    }
+    const vec2 nodeQuadUV = barycentricQuadUV(ndc);
+    //    const ivec2 inQuadCoord = ivec2(round(inQuadUv * screenSize));
 
-    const vec2 inQuadUv = barycentricQuadUV(ndc);
-    const ivec2 inQuadCoord = ivec2(inQuadUv * screenSize);
+    const vec4 color = texture(nodeColor, nodeQuadUV);
+    const vec4 normal = texture(nodeNormal, nodeQuadUV);
+    const vec4 gBuffer = texture(nodeGBuffer, nodeQuadUV);
+    const float depth = texture(nodeDepth, nodeQuadUV).r;
 
-    const vec4 color = imageLoad(inputColor, inQuadCoord);
-    const vec4 normal = imageLoad(inputNormal, inQuadCoord);
-    const vec4 gBuffer = imageLoad(inputGBuffer, inQuadCoord);
     const vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
 
-    const vec4 newClipPos = dot(gBuffer, gBuffer) > 0 ?
-                                globalUBO.proj * globalUBO.view * gBuffer :
-                                vec4(ndc, 1, 1);
-    //    const vec4 newClipPos = globalUBO.proj * globalUBO.view * vec4(gBuffer.xyz, 1);
-    const vec3 newNDC = newClipPos.xyz / newClipPos.w;
-    const vec2 newUV = (newNDC.xy / vec2(1, -1) + 1) / 2;
-    const ivec2 newCoord = ivec2(newUV * screenSize);
+    vec2 nodeQuadNDC = toNDC(nodeQuadUV);
+    vec4 nodeQuadClipPos = vec4(nodeQuadNDC.xy, depth, 1);
+    vec4 nodeQuadWorldPos = toNodeWorldPos(nodeQuadClipPos);
 
-    imageStore(outputColor, newCoord, color);
+    const vec4 newClipPos = globalUBO.proj * globalUBO.view * nodeQuadWorldPos;
+    const vec3 newNDC = newClipPos.xyz / newClipPos.w;
+    const vec2 newUV = toUV(newNDC);
+    const ivec2 newCoord = ivec2(round(newUV * screenSize));
+
+    imageStore(outputColor, newCoord, vec4(sRGB, 1));
+    //    imageStore(outputColor, newCoord + ivec2(0, 1), color);
+    //    imageStore(outputColor, newCoord + ivec2(1, 0), color);
+    //    imageStore(outputColor, newCoord + ivec2(1, 1), color);
+    //
+    //    imageStore(outputColor, newCoord + ivec2(-1, 1), color);
+    //    imageStore(outputColor, newCoord + ivec2(1, -1), color);
+    //
+    //    imageStore(outputColor, newCoord + ivec2(0, -1), color);
+    //    imageStore(outputColor, newCoord + ivec2(-1, 0), color);
+    //    imageStore(outputColor, newCoord + ivec2(-1, -1), color);
 }

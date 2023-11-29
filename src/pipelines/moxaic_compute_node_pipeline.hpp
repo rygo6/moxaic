@@ -37,17 +37,31 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init()
         {
             MXC_LOG("Init ComputeNodePipeline");
+
+            VkShaderModule clearShader;
+            MXC_CHK(CreateShaderModule("./shaders/compute_node_clear.comp.spv",
+                                       &clearShader));
+            const VkPipelineShaderStageCreateInfo clearStage{
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+              .module = clearShader,
+              .pName = "main",
+            };
+            MXC_CHK(CreateComputePipe(clearStage, &m_VkClearPipeline));
+            vkDestroyShaderModule(k_pDevice->GetVkDevice(), clearShader, VK_ALLOC);
+
             VkShaderModule compShader;
             MXC_CHK(CreateShaderModule("./shaders/compute_node.comp.spv",
                                        &compShader));
-            const VkPipelineShaderStageCreateInfo stage{
+            const VkPipelineShaderStageCreateInfo compStage{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = compShader,
               .pName = "main",
             };
-            MXC_CHK(CreateComputePipe(stage));
+            MXC_CHK(CreateComputePipe(compStage));
             vkDestroyShaderModule(k_pDevice->GetVkDevice(), compShader, VK_ALLOC);
+
             return MXC_SUCCESS;
         }
 
@@ -55,16 +69,26 @@ namespace Moxaic::Vulkan
                             const GlobalDescriptor& descriptor) const
         {
             ComputePipeline::BindDescriptor(commandBuffer,
-                                                  descriptor.GetVkDescriptorSet(),
-                                                  GlobalDescriptor::SetIndex);
+                                            descriptor.GetVkDescriptorSet(),
+                                            GlobalDescriptor::SetIndex);
         }
 
         void BindDescriptor(const VkCommandBuffer commandBuffer,
                             const ComputeNodeDescriptor& descriptor) const
         {
             ComputePipeline::BindDescriptor(commandBuffer,
-                                                  descriptor.GetVkDescriptorSet(),
-                                                  ComputeNodeDescriptor::SetIndex);
+                                            descriptor.GetVkDescriptorSet(),
+                                            ComputeNodeDescriptor::SetIndex);
         }
+
+        void BindComputeClearPipeline(const VkCommandBuffer commandBuffer) const
+        {
+            vkCmdBindPipeline(commandBuffer,
+                              VK_PIPELINE_BIND_POINT_COMPUTE,
+                              m_VkClearPipeline);
+        }
+
+    private:
+        VkPipeline m_VkClearPipeline{VK_NULL_HANDLE};
     };
 }// namespace Moxaic::Vulkan

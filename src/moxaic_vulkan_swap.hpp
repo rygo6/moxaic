@@ -40,6 +40,7 @@ namespace Moxaic::Vulkan
         MXC_GET(Format);
 
         MXC_GETARR(VkSwapImageViews);
+        MXC_GETARR(VkSwapImages);
 
     private:
         const Device* const k_pDevice;

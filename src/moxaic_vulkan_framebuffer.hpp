@@ -26,7 +26,8 @@ namespace Moxaic::Vulkan
                                   const VkExtent2D extents,
                                   const HANDLE colorExternalHandle,
                                   const HANDLE normalExternalHandle,
-                                  const HANDLE gBufferExternalHandle);
+                                  const HANDLE gBufferExternalHandle,
+                                  const HANDLE depthExternalHandle);
 
         void AcquireFramebufferFromExternalToGraphicsAttach();
         void Transition(const VkCommandBuffer commandbuffer,

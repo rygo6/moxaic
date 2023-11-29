@@ -203,6 +203,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                       Vulkan::FromComputeSwapPresent,
                       Vulkan::ToComputeWrite);
 
+    const auto& swap = m_Swap.GetVkSwapImages(swapIndex);
+    const auto& swapView = m_Swap.GetVkSwapImageViews(swapIndex);
     m_ComputeNodeDescriptor.WriteOutputColorImage(m_Swap.GetVkSwapImageViews(swapIndex));
 
     // auto computeNodeDescriptor = Vulkan::ComputeNodeDescriptor(*k_pDevice);
@@ -210,17 +212,45 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     //                            m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
     //                            m_Swap.GetVkSwapImageViews(swapIndex));
 
-    m_ComputeNodePipeline.BindComputePipeline(commandBuffer);
     m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
     m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_ComputeNodeDescriptor);
-    // m_ComputeNodePipeline.BindDescriptor(commandBuffer, computeNodeDescriptor);
+
+    VkExtent2D groupCount = VkExtent2D(Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
+                                       Window::extents().height / Vulkan::ComputeNodePipeline::LocalSize);
+
+    const VkImageMemoryBarrier imageMemoryBarrier{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+      .pNext = nullptr,
+      .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .image = swap,
+      .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+    };
 
     k_pDevice->ResetTimestamps();
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0);
-    vkCmdDispatch(commandBuffer,
-                  Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
-                  Window::extents().height / Vulkan::ComputeNodePipeline::LocalSize,
-                  1);
+
+    m_ComputeNodePipeline.BindComputeClearPipeline(commandBuffer);
+    vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
+
+    vkCmdPipelineBarrier(commandBuffer,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &imageMemoryBarrier);
+
+    m_ComputeNodePipeline.BindComputePipeline(commandBuffer);
+    vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
+
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 1);
 
     m_Swap.Transition(commandBuffer,

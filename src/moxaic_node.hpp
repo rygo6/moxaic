@@ -80,6 +80,8 @@ namespace Moxaic
             HANDLE normalFramebuffer1ExternalHandle;
             HANDLE gBufferFramebuffer0ExternalHandle;
             HANDLE gBufferFramebuffer1ExternalHandle;
+            HANDLE depthFramebuffer0ExternalHandle;
+            HANDLE depthFramebuffer1ExternalHandle;
             HANDLE compositorSemaphoreExternalHandle;
             HANDLE nodeSemaphoreExternalHandle;
         };

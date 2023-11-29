@@ -63,21 +63,21 @@ void main()
 																globalUBO.proj * globalUBO.view * gbufferValue :
 																vec4(ndc, 1, 1);
 
-	vec2 UL = payload.ulNDC.xy - ndc;
-	if (dot(UL, UL) < .001){
-		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
-		return;
-	}
+//	vec2 UL = payload.ulNDC.xy - ndc;
+//	if (dot(UL, UL) < .001){
+//		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
+//		return;
+//	}
 //	vec2 UR = payload.urNDC.xy - ndc;
 //	if (dot(UR, UR) < .001){
 //		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
 //		return;
 //	}
-	vec2 LL = payload.llNDC.xy - ndc;
-	if (dot(LL, LL) < .001){
-		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
-		return;
-	}
+//	vec2 LL = payload.llNDC.xy - ndc;
+//	if (dot(LL, LL) < .001){
+//		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
+//		return;
+//	}
 //	vec2 LR = payload.lrNDC.xy - ndc;
 //	if (dot(LR, LR) < .001){
 //		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);

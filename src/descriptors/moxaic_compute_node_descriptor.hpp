@@ -20,27 +20,32 @@ namespace Moxaic::Vulkan
         {
             MXC_LOG("Init ComputeNodeDescriptor Layout");
             StaticArray bindings{
-                // node ubo
+              // node ubo
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
-                // color
+              // color
               (VkDescriptorSetLayoutBinding){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
-                // normal
+              // normal
               (VkDescriptorSetLayoutBinding){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
-                // gbuffer
+              // gbuffer
               (VkDescriptorSetLayoutBinding){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
-                // outColor
+              // depth
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+              },
+              // outColor
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -64,31 +69,41 @@ namespace Moxaic::Vulkan
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
-                // node ubo
+              // node ubo
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
                   .buffer = m_Uniform.vkBuffer(),
                   .range = m_Uniform.Size()})},
-                //' color
+              //' color
               (VkWriteDescriptorSet){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.GetColorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-                // normal
+              // normal
               (VkWriteDescriptorSet){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-                // gbuffer
+              // gbuffer
               (VkWriteDescriptorSet){
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-                // outcolor
+              // depth
+              (VkWriteDescriptorSet){
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              // outcolor
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
@@ -104,21 +119,31 @@ namespace Moxaic::Vulkan
             StaticArray writes{
               (VkWriteDescriptorSet){
                 .dstBinding = 1,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.GetColorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = 2,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = 3,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              (VkWriteDescriptorSet){
+                .dstBinding = 4,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .imageView = framebuffer.GetDepthTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };
             WriteDescriptors(writes);
@@ -129,7 +154,7 @@ namespace Moxaic::Vulkan
         {
             StaticArray writes{
               (VkWriteDescriptorSet){
-                .dstBinding = 4,
+                .dstBinding = 5,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .imageView = outputColorImage,
