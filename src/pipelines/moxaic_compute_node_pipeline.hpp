@@ -39,7 +39,7 @@ namespace Moxaic::Vulkan
             MXC_LOG("Init ComputeNodePipeline");
 
             VkShaderModule clearShader;
-            MXC_CHK(CreateShaderModule("./shaders/compute_node_clear.comp.spv",
+            MXC_CHK(CreateShaderModule("./shaders/compute_node_pre.comp.spv",
                                        &clearShader));
             const VkPipelineShaderStageCreateInfo clearStage{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -47,7 +47,7 @@ namespace Moxaic::Vulkan
               .module = clearShader,
               .pName = "main",
             };
-            MXC_CHK(CreateComputePipe(clearStage, &m_VkClearPipeline));
+            MXC_CHK(CreateComputePipe(clearStage, &m_VkPrePipeline));
             vkDestroyShaderModule(k_pDevice->GetVkDevice(), clearShader, VK_ALLOC);
 
             VkShaderModule compShader;
@@ -85,10 +85,10 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindPipeline(commandBuffer,
                               VK_PIPELINE_BIND_POINT_COMPUTE,
-                              m_VkClearPipeline);
+                              m_VkPrePipeline);
         }
 
     private:
-        VkPipeline m_VkClearPipeline{VK_NULL_HANDLE};
+        VkPipeline m_VkPrePipeline{VK_NULL_HANDLE};
     };
 }// namespace Moxaic::Vulkan

@@ -13,6 +13,12 @@ struct MeshTaskPayload
 
 MeshTaskPayload payload;
 
+vec3 intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal) {
+    float facingRatio = dot(planeNormal, rayDir);
+    float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
+    return (facingRatio < 0) ? (rayOrigin + t * rayDir) : vec3(0,0,0);
+}
+
 // https://jcgt.org/published/0011/03/04/paper-lowres.pdf
 float area(vec2 a, vec2 b) { return (a.x*b.y)-(a.y*b.x); }
 vec2 barycentricQuadUV(vec2 ndc) {
@@ -46,88 +52,54 @@ vec4 toNodeWorldPos(vec4 clipPos)
     return worldPos;
 }
 
-vec2 toNDC(vec2 uv)
+vec3 ClipPosToNDC(vec4 clipPos)
+{
+    return clipPos.xyz / clipPos.w;
+}
+
+vec2 UVToNDC(vec2 uv)
 {
     return vec2(vec2(1, -1) * (uv * 2 - 1));;
 }
 
-vec2 toUV(vec3 ndc)
+vec2 NDCToUV(vec3 ndc)
 {
-//    return (ndc.xy / vec2(1, -1) + 1) / 2;
     return (vec2((vec2(1, -1) * ndc.xy) + 1) * 0.5);
 }
 
 void main()
 {
-
-
-    const vec4 nodeOriginClipPos = nodeUBO.proj * nodeUBO.view * vec4(0, 0, 0, 1);
-    const vec4 ulWorldPos = toNodeWorldPos(vec4(-nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
-    const vec4 urWorldPos = toNodeWorldPos(vec4(nodeOriginClipPos.w, nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
-    const vec4 lrWorldPos = toNodeWorldPos(vec4(nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
-    const vec4 llWorldPos = toNodeWorldPos(vec4(-nodeOriginClipPos.w, -nodeOriginClipPos.w, nodeOriginClipPos.z, nodeOriginClipPos.w));
-    payload.ulClipPos = globalUBO.proj * globalUBO.view * ulWorldPos;
-    payload.urClipPos = globalUBO.proj * globalUBO.view * urWorldPos;
-    payload.lrClipPos = globalUBO.proj * globalUBO.view * lrWorldPos;
-    payload.llClipPos = globalUBO.proj * globalUBO.view * llWorldPos;
-    payload.ulNDC = payload.ulClipPos.xyz / payload.ulClipPos.w;
-    payload.urNDC = payload.urClipPos.xyz / payload.urClipPos.w;
-    payload.lrNDC = payload.lrClipPos.xyz / payload.lrClipPos.w;
-    payload.llNDC = payload.llClipPos.xyz / payload.llClipPos.w;
+    const mat4 nodeProjView = nodeUBO.proj * nodeUBO.view;
+    const vec4 nodeOriginClipPos = nodeProjView * vec4(0, 0, 0, 1);
+    const vec4 nodeDirection = nodeProjView * vec4(0, 0, -1, 0); // -1 face towards view
 
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    // honestly dont quite understand why this revcoord is needed compared to mesh shader
-    const ivec2 revCoord = ivec2(globalUBO.width - coord.x, coord.y);
+    const ivec2 revCoord = ivec2(globalUBO.width - coord.x, coord.y); // honestly dont quite understand why this revcoord is needed compared to mesh shader
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
     const vec2 uv = vec2(revCoord) / screenSize;
-    const vec2 ndc = toNDC(uv);
+    const vec2 ndc = UVToNDC(uv);
 
-    //    vec4 originClip = globalUBO.proj * globalUBO.view * nodeOriginClipPos;
-    //    vec3 originNDC = originClip.xyz / originClip.w;
-    //    vec2 origin = originNDC.xy - ndc;
-    //    if (dot(origin, origin) < .001){
-    //        imageStore(outputColor, coord, vec4(0, 0, 1, 1));
-    //        return;
-    //    }
-    //    vec2 UL = payload.ulNDC.xy - ndc;
-    //    if (dot(UL, UL) < .001){
-    //        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
-    //        return;
-    //    }
-    //    vec2 UR = payload.urNDC.xy - ndc;
-    //    if (dot(UR, UR) < .001){
-    //        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
-    //        return;
-    //    }
-    //    vec2 LL = payload.llNDC.xy - ndc;
-    //    if (dot(LL, LL) < .001){
-    //        imageStore(outputColor, coord, vec4(0, 1, 0, 1));
-    //        return;
-    //    }
-    //    vec2 LR = payload.lrNDC.xy - ndc;
-    //    if (dot(LR, LR) < .001){
-    //        imageStore(outputColor, coord, vec4(1, 0, 0, 1));
-    //        return;
-    //    }
+    const vec3 intersectWorldPos = intersectRayPlane(vec3(ndc,0), vec3(0,0,1), nodeOriginClipPos.xyz, nodeDirection.xyz);
+    const vec4 intersectClipPos = nodeProjView * vec4(intersectWorldPos, 1);
+    const vec3 intersectNDC = ClipPosToNDC(intersectClipPos);
+    const vec2 intersectUV = NDCToUV(intersectNDC);
 
-    const vec2 nodeQuadUV = barycentricQuadUV(ndc);
-    //    const ivec2 inQuadCoord = ivec2(round(inQuadUv * screenSize));
-
+    const vec2 nodeQuadUV = intersectUV;
     const vec4 color = texture(nodeColor, nodeQuadUV);
-    const vec4 normal = texture(nodeNormal, nodeQuadUV);
-    const vec4 gBuffer = texture(nodeGBuffer, nodeQuadUV);
+//    const vec4 normal = texture(nodeNormal, nodeQuadUV);
+//    const vec4 gBuffer = texture(nodeGBuffer, nodeQuadUV);
     const float depth = texture(nodeDepth, nodeQuadUV).r;
 
     const vec3 sRGB = pow(color.rgb, vec3(1.0 / 2.2));
 
-    vec2 nodeQuadNDC = toNDC(nodeQuadUV);
-    vec4 nodeQuadClipPos = vec4(nodeQuadNDC.xy, depth, 1);
-    vec4 nodeQuadWorldPos = toNodeWorldPos(nodeQuadClipPos);
+    const vec2 nodeQuadNDC = UVToNDC(nodeQuadUV);
+    const vec4 nodeQuadClipPos = vec4(nodeQuadNDC.xy, depth, 1);
+    const vec4 nodeQuadWorldPos = toNodeWorldPos(nodeQuadClipPos);
 
     const vec4 newClipPos = globalUBO.proj * globalUBO.view * nodeQuadWorldPos;
     const vec3 newNDC = newClipPos.xyz / newClipPos.w;
-    const vec2 newUV = toUV(newNDC);
+    const vec2 newUV = NDCToUV(newNDC);
     const ivec2 newCoord = ivec2(round(newUV * screenSize));
 
     imageStore(outputColor, newCoord, vec4(sRGB, 1));
