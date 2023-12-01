@@ -355,10 +355,10 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 
     m_FramebufferIndex = !m_FramebufferIndex;
 
-    temp++;
-    if (temp == 10) {
-        _exit(1);
-    }
+    // temp++;
+    // if (temp == 5) {
+    //     _exit(1);
+    // }
 
     return MXC_SUCCESS;
 }
