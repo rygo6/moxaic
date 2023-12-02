@@ -67,7 +67,7 @@ vec2 CoordToUV(ivec2 coord, vec2 screenSize)
     return vec2(coord) / screenSize;
 }
 
-void NodeIntersetUV(const vec2 uv, out vec2 nodeUV, out vec2 outputUV)
+bool NodeIntersetUV(const vec2 uv, out vec2 nodeUV, out vec2 outputUV)
 {
     const vec2 ndc = UVToNDC(uv);
     const vec4 clipPos = vec4(ndc, 0, 1);
@@ -84,6 +84,9 @@ void NodeIntersetUV(const vec2 uv, out vec2 nodeUV, out vec2 outputUV)
 
     const float depth = texture(nodeDepth, nodeIntersectUV).r;
 
+    if (depth > .99)
+        return false;
+
     const vec4 nodeQuadClipPos = vec4(nodeIntersectNDC.xy, depth, 1);
     const vec3 nodeQuadWorldPos = NodeClipPosToWorldPos(nodeQuadClipPos);
 
@@ -93,10 +96,35 @@ void NodeIntersetUV(const vec2 uv, out vec2 nodeUV, out vec2 outputUV)
 
     nodeUV = nodeIntersectUV;
     outputUV = newUV;
+
+    return true;
+}
+
+void writeColor(const vec2 nodeUV, const ivec2 outputCoord){
+    const vec4 color = texture(nodeColor, nodeUV);
+    const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
+    imageStore(outputColor, outputCoord, vec4(colorSRGB, color.a));
 }
 
 const int offsetCount = 4;
-const ivec2 coordOffsets[offsetCount] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+const ivec2 coordOffsets[offsetCount] = {
+    { 0, 0 },
+    { 1, 0 },
+    { 1, 1 },
+    { 0, 1 }
+};
+
+const int writeOffsetcount = 8;
+const ivec2 writeOffsets[writeOffsetcount] = {
+    { -1, 1 },
+    { 0, 1 },
+    { 1, 1 },
+    { 1, 0 },
+    { 1, -1 },
+    { 0, -1 },
+    { -1, -1 },
+    { -1, 0 }
+};
 
 void main()
 {
@@ -106,15 +134,23 @@ void main()
 
     vec2 nodeUVs[offsetCount];
     vec2 outputUVs[offsetCount];
+    ivec2 outputCoords[offsetCount];
     for (int i = 0; i < offsetCount; ++i){
         const vec2 uv = CoordToUV(coord + coordOffsets[i], screenSize);
         vec2 ulnodeUV, uloutputUV;
-        NodeIntersetUV(uv, nodeUVs[i], outputUVs[i]);
+        if (!NodeIntersetUV(uv, nodeUVs[i], outputUVs[i]))
+            return;
+        outputCoords[i] = CoordFromUV(outputUVs[i], screenSize);
     }
 
     const vec4 color = texture(nodeColor, nodeUVs[0]);
-    const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
+    const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
+    imageStore(outputColor, outputCoords[0], colorSRGB);
 
-    const ivec2 outputCoord = CoordFromUV(outputUVs[0], screenSize);
-    imageStore(outputColor, outputCoord, vec4(colorSRGB, color.a));
+//    writeColor(nodeUVs[0], outputCoords[0]);
+
+//    for (int i = 0; i < writeOffsetcount; ++i){
+//        imageStore(outputColor, outputCoords[0] + writeOffsets[i], colorSRGB);
+//    }
+
 }

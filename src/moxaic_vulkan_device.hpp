@@ -79,14 +79,14 @@ namespace Moxaic::Vulkan
                                                   VkImageAspectFlags aspectMask) const;
         MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
         MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffer) const;
-        MXC_RESULT BeginGraphicsCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
+        VkCommandBuffer BeginGraphicsCommandBuffer() const;
         void BeginRenderPass(const Framebuffer& framebuffer,
                              const VkClearColorValue& backgroundColor) const;
         MXC_RESULT SubmitGraphicsQueueAndPresent(const Swap& swap,
                                                  const uint32_t swapIndex,
                                                  Semaphore* const pTimelineSemaphore) const;
         MXC_RESULT SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const;
-        MXC_RESULT BeginComputeCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
+        VkCommandBuffer BeginComputeCommandBuffer() const;
         bool SubmitComputeQueue(Semaphore* pTimelineSemaphore) const;
         MXC_RESULT SubmitComputeQueueAndPresent(const VkCommandBuffer commandBuffer,
                                                 const Swap& swap,

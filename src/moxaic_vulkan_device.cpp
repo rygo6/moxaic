@@ -1022,14 +1022,14 @@ MXC_RESULT Device::EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffe
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Device::BeginGraphicsCommandBuffer(VkCommandBuffer* pCommandBuffer) const
+// todo pull from a pool of command buffers
+VkCommandBuffer Device::BeginGraphicsCommandBuffer() const
 {
-    VK_CHK(vkResetCommandBuffer(m_VkGraphicsCommandBuffer,
-                                VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
+    vkResetCommandBuffer(m_VkGraphicsCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     constexpr VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
-    VK_CHK(vkBeginCommandBuffer(m_VkGraphicsCommandBuffer, &beginInfo));
+    vkBeginCommandBuffer(m_VkGraphicsCommandBuffer, &beginInfo);
     const VkViewport viewport{
       .x = 0.0f,
       .y = 0.0f,
@@ -1050,8 +1050,7 @@ MXC_RESULT Device::BeginGraphicsCommandBuffer(VkCommandBuffer* pCommandBuffer) c
                     0,
                     1,
                     &scissor);
-    *pCommandBuffer = m_VkGraphicsCommandBuffer;
-    return MXC_SUCCESS;
+    return m_VkGraphicsCommandBuffer;
 }
 
 void Device::BeginRenderPass(const Framebuffer& framebuffer,
@@ -1098,19 +1097,17 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(const Swap& swap,
                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, pTimelineSemaphore);
 }
 
-MXC_RESULT Device::BeginComputeCommandBuffer(VkCommandBuffer* pCommandBuffer) const
+VkCommandBuffer Device::BeginComputeCommandBuffer() const
 {
-    VK_CHK(vkResetCommandBuffer(m_VkComputeCommandBuffer,
-                                VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
-    const VkCommandBufferBeginInfo beginInfo{
+    vkResetCommandBuffer(m_VkComputeCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    constexpr VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
       .flags = 0,
       .pInheritanceInfo = nullptr,
     };
-    VK_CHK(vkBeginCommandBuffer(m_VkComputeCommandBuffer, &beginInfo));
-    *pCommandBuffer = m_VkComputeCommandBuffer;
-    return MXC_SUCCESS;
+    vkBeginCommandBuffer(m_VkComputeCommandBuffer, &beginInfo);
+    return m_VkComputeCommandBuffer;
 }
 
 MXC_RESULT Device::SubmitComputeQueue(Semaphore* pTimelineSemaphore) const

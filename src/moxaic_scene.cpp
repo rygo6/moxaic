@@ -20,7 +20,6 @@ MXC_RESULT CompositorScene::Init()
 
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
     m_MainCamera.Transform()->Rotate(0, 180, 0);
-    m_MainCamera.SetAspect(Window::extents().width / Window::extents().height);
     m_MainCamera.UpdateView();
     m_MainCamera.UpdateProjection();
 
@@ -64,8 +63,10 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
         m_GlobalDescriptor.WriteLocalBuffer();
     }
 
-    VkCommandBuffer commandBuffer;
-    k_pDevice->BeginGraphicsCommandBuffer(&commandBuffer);
+    const auto commandBuffer = k_pDevice->BeginGraphicsCommandBuffer();
+
+    k_pDevice->ResetTimestamps();
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
     auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
@@ -90,20 +91,18 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     k_pDevice->BeginRenderPass(framebuffer,
                                (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
-    m_StandardPipeline.BindGraphicsPipeline(commandBuffer);
-    m_StandardPipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
-    m_StandardPipeline.BindDescriptor(commandBuffer, m_StandardMaterialDescriptor);
-    m_StandardPipeline.BindDescriptor(commandBuffer, m_ObjectDescriptor);
-    m_SphereTestMesh.RecordRender(commandBuffer);
+    // m_StandardPipeline.BindGraphicsPipeline(commandBuffer);
+    // m_StandardPipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
+    // m_StandardPipeline.BindDescriptor(commandBuffer, m_StandardMaterialDescriptor);
+    // m_StandardPipeline.BindDescriptor(commandBuffer, m_ObjectDescriptor);
+    // m_SphereTestMesh.RecordRender(commandBuffer);
 
     m_MeshNodePipeline.BindGraphicsPipeline(commandBuffer);
     m_MeshNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
     m_MeshNodePipeline.BindDescriptor(commandBuffer, m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
 
-    k_pDevice->ResetTimestamps();
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TASK_SHADER_BIT_EXT, 0);
+
     Vulkan::VkFunc.CmdDrawMeshTasksEXT(commandBuffer, 1, 1, 1);
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_MESH_SHADER_BIT_EXT, 1);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -112,6 +111,8 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     m_Swap.BlitToSwap(commandBuffer,
                       swapIndex,
                       framebuffer.GetColorTexture());
+
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
     vkEndCommandBuffer(commandBuffer);
     k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
@@ -138,7 +139,6 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
     m_MainCamera.Transform()->Rotate(0, 180, 0);
-    m_MainCamera.SetAspect(Window::extents().width / Window::extents().height);
     m_MainCamera.UpdateView();
     m_MainCamera.UpdateProjection();
 
@@ -172,8 +172,10 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         m_GlobalDescriptor.WriteLocalBuffer();
     }
 
-    VkCommandBuffer commandBuffer;
-    k_pDevice->BeginComputeCommandBuffer(&commandBuffer);
+    const auto commandBuffer = k_pDevice->BeginComputeCommandBuffer();
+
+    k_pDevice->ResetTimestamps();
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
     auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
@@ -207,15 +209,10 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     const auto& swapView = m_Swap.GetVkSwapImageViews(swapIndex);
     m_ComputeNodeDescriptor.WriteOutputColorImage(m_Swap.GetVkSwapImageViews(swapIndex));
 
-    // auto computeNodeDescriptor = Vulkan::ComputeNodeDescriptor(*k_pDevice);
-    // computeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
-    //                            m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
-    //                            m_Swap.GetVkSwapImageViews(swapIndex));
-
     m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
     m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_ComputeNodeDescriptor);
 
-    VkExtent2D groupCount = VkExtent2D(Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
+    const auto groupCount = VkExtent2D(Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
                                        Window::extents().height / Vulkan::ComputeNodePipeline::LocalSize);
 
     const VkImageMemoryBarrier imageMemoryBarrier{
@@ -230,9 +227,6 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
       .image = swap,
       .subresourceRange = Vulkan::DefaultColorSubresourceRange,
     };
-
-    k_pDevice->ResetTimestamps();
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0);
 
     m_ComputeNodePipeline.BindComputeClearPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
@@ -251,12 +245,12 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     m_ComputeNodePipeline.BindComputePipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 1);
-
     m_Swap.Transition(commandBuffer,
                       swapIndex,
                       Vulkan::FromComputeWrite,
                       Vulkan::ToComputeSwapPresent);
+
+    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
     vkEndCommandBuffer(commandBuffer);
     k_pDevice->SubmitComputeQueueAndPresent(commandBuffer,
@@ -309,8 +303,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 {
     m_GlobalDescriptor.WriteBuffer(m_Node.ImportedGlobalDescriptor()->GetSharedBuffer());
 
-    VkCommandBuffer commandBuffer;
-    k_pDevice->BeginGraphicsCommandBuffer(&commandBuffer);
+    const auto commandBuffer = k_pDevice->BeginGraphicsCommandBuffer();
 
     const auto& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
     framebuffer.Transition(commandBuffer,

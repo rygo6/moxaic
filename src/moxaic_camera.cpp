@@ -5,11 +5,15 @@
 
 using namespace Moxaic;
 
-bool Camera::UserCommandUpdate(uint32_t const deltaTime)
+Camera::Camera()
+    : m_Aspect(float(Window::extents().width) / float(Window::extents().height))
+{}
+
+bool Camera::UserCommandUpdate(const uint32_t deltaTime)
 {
     bool updated = false;
 
-    auto const& userCommand = Window::userCommand();
+    const auto& userCommand = Window::userCommand();
     if (!m_CameraLocked && userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
         m_CameraLocked = true;
@@ -19,12 +23,12 @@ bool Camera::UserCommandUpdate(uint32_t const deltaTime)
     }
 
     if (m_CameraLocked && userCommand.mouseMoved) {
-        auto const rotation = glm::radians(-userCommand.mouseDelta.x) * 1.0f;
+        const auto rotation = glm::radians(-userCommand.mouseDelta.x) * 1.0f;
         m_Transform.Rotate(0, rotation, 0);
         updated = true;
     }
 
-    auto const& userMove = userCommand.userMove;
+    const auto& userMove = userCommand.userMove;
     if (!userMove.None()) {
         auto delta = glm::zero<glm::vec3>();
         if (userMove.ContainsFlag(Window::UserMove::Forward)) {

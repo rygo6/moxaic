@@ -28,8 +28,8 @@
 
 namespace Moxaic
 {
-    inline constexpr uint32_t DefaultWidth = 1280;
-    inline constexpr uint32_t DefaultHeight = 1024;
+    inline constexpr uint32_t DefaultWidth = 1920;
+    inline constexpr uint32_t DefaultHeight = 1080;
     inline constexpr char ApplicationName[] = "moxaic";
     inline constexpr uint8_t FramebufferCount = 2;
 

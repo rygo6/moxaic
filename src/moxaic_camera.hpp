@@ -11,7 +11,7 @@ namespace Moxaic
     public:
         MXC_NO_VALUE_PASS(Camera);
 
-        Camera() = default;
+        Camera();
         virtual ~Camera() = default;
 
         bool UserCommandUpdate(uint32_t deltaTime);
@@ -29,13 +29,14 @@ namespace Moxaic
         MXC_GETSET(FOV);
         MXC_GETSET(Near);
         MXC_GETSET(Far);
-        MXC_GETSET(Aspect);
+        // MXC_GETSET(Aspect);
+        MXC_GET(Aspect);
 
     private:
         float m_FOV{45.0f};
         float m_Near{0.0001f};
         float m_Far{100.0f};
-        float m_Aspect{800.0f / 600.0f};
+        float m_Aspect;
 
         Moxaic::Transform m_Transform{};
         glm::mat4x4 m_View{glm::identity<glm::mat4x4>()};
