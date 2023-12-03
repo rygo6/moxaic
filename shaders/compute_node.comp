@@ -69,12 +69,12 @@ vec3 NDCFromClipPos(vec4 clipPos)
 
 vec2 UVToNDC(vec2 uv)
 {
-    return vec2(vec2(1, -1) * (uv * 2 - 1));;
+    return uv * 2.0 - 1.0;
 }
 
 vec2 UVFromNDC(vec3 ndc)
 {
-    return (vec2((vec2(1, -1) * ndc.xy) + 1) * 0.5);
+    return (ndc.xy + 1.0) * 0.5;
 }
 
 ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
@@ -87,38 +87,51 @@ vec2 CoordToUV(ivec2 coord, vec2 screenSize)
     return vec2(coord) / screenSize;
 }
 
-bool NodeIntersetUV(const vec2 uv, out vec2 nodeUV, out vec2 outputUV)
+bool NodeIntersetUV(const vec2 uv, out vec2 nodeUV, out vec2 outputSurfaceUV, out vec2 outputDepthUV)
 {
     const vec2 ndc = UVToNDC(uv);
     const vec4 clipPos = vec4(ndc, 0, 1);
-    const vec3 globalWorldClipPos = WorldPosFromGlobalClipPos(clipPos);
+    const vec3 globalWorldPos = WorldPosFromGlobalClipPos(clipPos);
     const vec3 globalWorldRay = GlobalNDCRay(ndc);
 
+
+
+    // varying this .5 is probably solution to sperating pixels
+    // puling it closer makes less separation up close, probably a ratio to figure out
     const vec3 nodeOriginWorldPos = vec3(0, 0, -.5);
     const vec3 nodeOriginWorldDirection = vec3(0, 0, 1);// -1 face towards view
-    const vec3 intersectWorldPos = intersectRayPlane(globalWorldClipPos, globalWorldRay, nodeOriginWorldPos, nodeOriginWorldDirection);
+    const vec3 intersectWorldPos = intersectRayPlane(globalWorldPos, globalWorldRay, nodeOriginWorldPos, nodeOriginWorldDirection);
+
+    // for whatever reason recreated the uv from the intersect position
+    // seems to produce better results rather than just going off intial UV
+    // even though this should technically result in what the intial UV was..
+    const vec4 nodeSurfaceClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
+    const vec3 nodeSurfaceNDC = NDCFromClipPos(nodeSurfaceClipPos);
+    const vec2 nodeSurfaceUV = UVFromNDC(nodeSurfaceNDC);
+    outputSurfaceUV = nodeSurfaceUV;
+    //    // for whatever reason send uv through the whole projection math and back
+    //    // ends you up with the y inverted... so to get angle between src and target
+    //    // coord in project has to invert y of source coord
+    //    outputSurfaceUV = vec2(uv.x, 1 - uv.y);
 
     const vec4 nodeIntersectClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     const vec3 nodeIntersectNDC = NDCFromClipPos(nodeIntersectClipPos);
     const vec2 nodeIntersectUV = UVFromNDC(nodeIntersectNDC);
+    nodeUV = nodeIntersectUV;
 
     const float depth = texture(nodeDepth, nodeIntersectUV).r;
 
     if (nodeIntersectUV.x < 0 || nodeIntersectUV.x > 1 || nodeIntersectUV.y < 0 || nodeIntersectUV.y > 1 || depth > .99)
         return false;
 
-//    const vec4 nodeQuadSurfaceClipPos = vec4(nodeIntersectNDC.xy, 0, 1);
-//    const vec3 nodeQuadSurfaceWorldPos = NodeClipPosToWorldPos(nodeQuadDepthClipPos);
-
     const vec4 nodeQuadDepthClipPos = vec4(nodeIntersectNDC.xy, depth, 1);
     const vec3 nodeQuadDepthWorldPos = NodeClipPosToWorldPos(nodeQuadDepthClipPos);
-
     const vec4 nodeQuadDepthProjectedClipPos = GlobalClipPosFromWorldPos(nodeQuadDepthWorldPos);
     const vec3 nodeQuadDepthProjectedNDC = NDCFromClipPos(nodeQuadDepthProjectedClipPos);
     const vec2 nodeQuadDepthProjectedUV = UVFromNDC(nodeQuadDepthProjectedNDC);
+    outputDepthUV = nodeQuadDepthProjectedUV;
 
-    nodeUV = nodeIntersectUV;
-    outputUV = nodeQuadDepthProjectedUV;
+
 
     return true;
 }
@@ -136,43 +149,48 @@ void main()
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 uv = CoordToUV(coord, screenSize);
 
-    vec2 nodeUV, outputUV;
-    if (!NodeIntersetUV(uv, nodeUV, outputUV))
-        return;
+    vec2 nodeUV, outputSurfaceUV, outputDepthUV;
+    if (!NodeIntersetUV(uv, nodeUV, outputSurfaceUV, outputDepthUV)) return;
+
+    const ivec2 outputDepthCoord = CoordFromUV(outputDepthUV, screenSize);
+    const ivec2 outputSurfaceCoord = CoordFromUV(outputSurfaceUV, screenSize);
 
     const vec4 color = texture(nodeColor, nodeUV);
     const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
-    const ivec2 outputCoord = CoordFromUV(outputUV, screenSize);
-    imageStore(outputColor, outputCoord, colorSRGB);
+    imageStore(outputColor, outputDepthCoord, colorSRGB);
 
-    if (outputCoord == coord)
-        return;
+    const vec2 projectionDir = outputDepthUV  - outputSurfaceUV;
+//    const vec2 normalizedProjectionDir = normalize(projectionDir);
+    const vec2 absProjectionDir = abs(projectionDir);
+//    const vec2 absProjectionDirCoord = ivec2(round(absProjectionDir * screenSize));
+    if (absProjectionDir.x < absProjectionDir.y) return;
 
-    vec2 projectionDir = outputUV - nodeUV;
-    projectionDir *= (1.0f / projectionDir.x); // make x equal to 1
-    const ivec2 stepBackCoord = ivec2(round(outputCoord + projectionDir));
-    imageStore(outputColor, stepBackCoord, colorSRGB);
+    const vec2 xNormalizedProjectionDir = projectionDir * (1.0f / absProjectionDir.x);// make x equal to 1
+    const int stepbackCount = 10;
+    for (int i = 1; i < stepbackCount; ++i) {
+        const ivec2 stepBackCoord = ivec2(round(float(i) * xNormalizedProjectionDir + vec2(outputDepthCoord)));
+        imageStore(outputColor, stepBackCoord, colorSRGB);
+    }
 
 
+    //    vec2 nodeUVs[offsetCount];
+    //    vec2 outputUVs[offsetCount];
+    //    ivec2 outputCoords[offsetCount];
+    //    for (int i = 0; i < offsetCount; ++i){
+    //        const vec2 uv = CoordToUV(coord + coordOffsets[i], screenSize);
+    //        if (!NodeIntersetUV(uv, nodeUVs[i], outputUVs[i]))
+    //            return;
+    //        outputCoords[i] = CoordFromUV(outputUVs[i], screenSize);
+    //    }
 
-//    vec2 nodeUVs[offsetCount];
-//    vec2 outputUVs[offsetCount];
-//    ivec2 outputCoords[offsetCount];
-//    for (int i = 0; i < offsetCount; ++i){
-//        const vec2 uv = CoordToUV(coord + coordOffsets[i], screenSize);
-//        if (!NodeIntersetUV(uv, nodeUVs[i], outputUVs[i]))
-//            return;
-//        outputCoords[i] = CoordFromUV(outputUVs[i], screenSize);
-//    }
+    //    const vec4 color = texture(nodeColor, nodeUVs[0]);
+    //    const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
+    //    imageStore(outputColor, outputCoords[0], colorSRGB);
 
-//    const vec4 color = texture(nodeColor, nodeUVs[0]);
-//    const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
-//    imageStore(outputColor, outputCoords[0], colorSRGB);
+    //    writeColor(nodeUVs[0], outputCoords[0]);
 
-//    writeColor(nodeUVs[0], outputCoords[0]);
-
-//    for (int i = 0; i < writeOffsetcount; ++i){
-//        imageStore(outputColor, outputCoords[0] + writeOffsets[i], colorSRGB);
-//    }
+    //    for (int i = 0; i < writeOffsetcount; ++i){
+    //        imageStore(outputColor, outputCoords[0] + writeOffsets[i], colorSRGB);
+    //    }
 
 }
