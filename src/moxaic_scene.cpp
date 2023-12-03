@@ -27,7 +27,7 @@ MXC_RESULT CompositorScene::Init()
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
-    MXC_CHK(m_SphereTestMesh.InitSphere());
+    MXC_CHK(m_SphereTestMesh.InitSphere(0.5f));
 
     MXC_CHK(m_StandardPipeline.Init());
     MXC_CHK(m_MeshNodePipeline.Init());
@@ -277,7 +277,7 @@ MXC_RESULT NodeScene::Init()
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
 
     m_SpherTestTransform.SetPosition(glm::vec3(0, 0, 0));
-    MXC_CHK(m_SphereTestMesh.InitSphere());
+    MXC_CHK(m_SphereTestMesh.InitSphere(0.5f));
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));

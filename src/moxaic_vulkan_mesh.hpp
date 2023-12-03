@@ -25,7 +25,7 @@ namespace Moxaic::Vulkan
         virtual ~Mesh();
 
         /// Really just a test sphere mesh right now.
-        MXC_RESULT InitSphere();
+        MXC_RESULT InitSphere(float radius);
 
         void RecordRender(const VkCommandBuffer commandBuffer) const;
 

@@ -84,13 +84,13 @@ Mesh::~Mesh()
     vkFreeMemory(k_pDevice->GetVkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
 }
 
-MXC_RESULT Mesh::InitSphere()
+MXC_RESULT Mesh::InitSphere(float radius)
 {
     const int nSlices = 32;
     const int nStack = 32;
     const int vertexCount = GenerateSphereVertexCount(nSlices, nStack);
     Vertex pVertices[vertexCount];
-    GenerateSphere(nSlices, nStack, 0.5f, pVertices);
+    GenerateSphere(nSlices, nStack, radius, pVertices);
     const int indexCount = GenerateSphereIndexCount(nSlices, nStack);
     uint16_t pIndices[indexCount];
     GenerateSphereIndices(nSlices, nStack, pIndices);

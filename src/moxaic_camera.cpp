@@ -23,7 +23,7 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
     }
 
     if (m_CameraLocked && userCommand.mouseMoved) {
-        const auto rotation = glm::radians(-userCommand.mouseDelta.x) * 1.0f;
+        const auto rotation = glm::radians(-userCommand.mouseDelta.x) * 0.5f;
         m_Transform.Rotate(0, rotation, 0);
         updated = true;
     }
@@ -44,7 +44,7 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
             delta.x += 1;
         }
         if (glm::length(delta) > 0.0f) {
-            m_Transform.LocalTranslate(glm::normalize(delta) * (float) deltaTime * 0.005f);
+            m_Transform.LocalTranslate(glm::normalize(delta) * (float) deltaTime * 0.002f);
             updated = true;
         }
     }
