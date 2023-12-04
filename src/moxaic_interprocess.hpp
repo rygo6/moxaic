@@ -22,8 +22,10 @@ namespace Moxaic
 
         virtual ~InterProcessBuffer()
         {
-            UnmapViewOfFile(m_pSharedBuffer);
-            CloseHandle(m_hMapFile);
+            if (m_pSharedBuffer != nullptr)
+                UnmapViewOfFile(m_pSharedBuffer);
+            if (m_hMapFile != nullptr)
+                CloseHandle(m_hMapFile);
         };
 
         MXC_RESULT Init(std::string const& sharedMemoryName)
