@@ -147,7 +147,6 @@ void main()
     const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
     imageStore(outputColor, outputDepthCoord, colorSRGB);
 
-
     const vec2 projectionDir = projectedUV - uv;
     const vec2 absProjectionDir = abs(projectionDir);
     const bool walkX = absProjectionDir.x > absProjectionDir.y;
@@ -164,16 +163,16 @@ void main()
     if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackProjectedUV)) {
         return;
     }
-    const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
 
+    const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
+    const ivec2 stepbackCoordDiff = abs(stepbackOutputUVCoord - outputDepthCoord);
+    const int sepbackCount = walkX ? stepbackCoordDiff.x : stepbackCoordDiff.y;
     vec2 currentCoord = outputDepthCoord;
     ivec2 roundedCoord = outputDepthCoord;
-    int step = 0;
-    while (roundedCoord != stepbackOutputUVCoord && step < 10){
+    for (int step = 0; step < sepbackCount; ++step) {
         currentCoord += normalizedProjectionDir;
         roundedCoord = ivec2(round(currentCoord));
         imageStore(outputColor, roundedCoord, colorSRGB);
-        step++;
     }
 
 
