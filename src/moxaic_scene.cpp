@@ -144,13 +144,22 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     MXC_CHK(m_ComputeNodePipeline.Init());
 
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
+    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
+                                    Window::extents()));
 
     MXC_CHK(m_NodeReference.Init(pipelineType));
 
+    MXC_CHK(m_AtomicOutputTexture.Init(VK_FORMAT_R32_UINT,
+                                       Window::extents(),
+                                       VK_IMAGE_USAGE_STORAGE_BIT,
+                                       VK_IMAGE_ASPECT_COLOR_BIT,
+                                       Vulkan::Locality::Local));
+    MXC_CHK(m_AtomicOutputTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
+
     MXC_CHK(m_ComputeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
-                                         m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
-                                         m_Swap.GetVkSwapImageViews(m_NodeFramebufferIndex)));
+                                     m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
+                                     m_AtomicOutputTexture,
+                                     m_Swap.GetVkSwapImageViews(m_NodeFramebufferIndex)));
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));

@@ -169,13 +169,11 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
                                                              Vulkan::FromInitial,
                                                              Vulkan::ToGraphicsRead,
                                                              m_AspectMask);
-            break;
         case PipelineType::Compute:
             return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
                                                              Vulkan::FromInitial,
                                                              Vulkan::ToComputeRead,
                                                              m_AspectMask);
-            break;
         default:
             SDL_assert(false);
             return MXC_FAIL;

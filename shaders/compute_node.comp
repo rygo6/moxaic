@@ -127,11 +127,12 @@ void writeColor(const vec2 nodeUV, const ivec2 outputCoord){
     const vec4 color = texture(nodeColor, nodeUV);
     const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
     imageStore(outputColor, outputCoord, vec4(colorSRGB, color.a));
+
 }
 
 void main()
 {
-    const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
+    const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height) * RESOLUTION_SCALE;
     const vec2 screenSize = vec2(iScreenSize);
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 uv = uvFromCoord(coord, screenSize);
@@ -146,6 +147,7 @@ void main()
     const vec4 color = texture(nodeColor, nodeUV);
     const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
     imageStore(outputColor, outputDepthCoord, colorSRGB);
+//    imageStore(outputColor, coord, colorSRGB);
 
     const vec2 projectionDir = projectedUV - uv;
     const vec2 absProjectionDir = abs(projectionDir);
@@ -174,59 +176,4 @@ void main()
         roundedCoord = ivec2(round(currentCoord));
         imageStore(outputColor, roundedCoord, colorSRGB);
     }
-
-
-//    const vec2 stepbackNDC = NDCFromUV(stepbackUV);
-//    const vec4 stepbackClipPos = vec4(stepbackNDC, 0, 1);
-//    const vec3 stepBackSurfaceGlobalWorldPos = WorldPosFromGlobalClipPos(stepbackClipPos);
-//    const vec3 stepbackSurfaceGlobalWorldRay = GlobalNDCRay(stepbackNDC);
-//    const vec3 stepBackSurfaceIntersectWorldPos = intersectRayPlane(stepBackSurfaceGlobalWorldPos, stepbackSurfaceGlobalWorldRay, nodeOriginWorldPos, nodeOriginWorldDirection);
-//    const vec4 stepBackSurfaceNodeIntersectClipPos = NodeClipPosFromWorldPos(stepBackSurfaceIntersectWorldPos);
-//    const vec3 stepBackSurfaceNodeIntersectNDC = NDCFromClipPos(stepBackSurfaceNodeIntersectClipPos);
-//    const vec2 stepBackSurfaceNodeIntersectUV = UVFromNDC(stepBackSurfaceNodeIntersectNDC);
-//    //    const ivec2 stepBackSurfaceNodeIntersectCoord = CoordFromUV(stepBackSurfaceNodeIntersectUV, screenSize);
-//    const float stepBackSurfaceDepth = texture(nodeDepth, stepBackSurfaceNodeIntersectUV).r;
-//    imageStore(outputColor, stepbackCoord, colorSRGB);
-//    imageStore(outputColor, coord, colorSRGB);
-//
-//    const vec4 stepBackSurfaceDepthClipPos = vec4(stepBackSurfaceNodeIntersectNDC.xy, stepBackSurfaceDepth, 1);
-//    const vec3 stepBackSurfaceDepthWorldPos = WorldPosFromNodeClipPos(stepBackSurfaceDepthClipPos);
-//    const vec4 stepBackSurfaceDepthProjectedClipPos = GlobalClipPosFromWorldPos(stepBackSurfaceDepthWorldPos);
-//    const vec3 stepBackSurfaceDepthProjectedNDC = NDCFromClipPos(stepBackSurfaceDepthProjectedClipPos);
-//    const vec2 stepBackSurfaceDepthProjectedUV = UVFromNDC(stepBackSurfaceDepthProjectedNDC);
-//    const ivec2 stepBackSurfaceDepthProjectedCoord = CoordFromUV(stepBackSurfaceDepthProjectedUV, screenSize);
-    //    imageStore(outputColor, stepBackSurfaceDepthProjectedCoord, colorSRGB);
-
-
-    //    vec2 coordDiff = stepBackSurfaceDepthProjectedCoord - outputDepthCoord;
-
-    //    int stepbackCount = 10;
-    //    if (stepbackCount > 10)
-    //    stepbackCount = 10;
-    //    for (int i = 1; i < 10; ++i) {
-    //        const ivec2 stepBackCoord = ivec2(round(float(i) * (walkX ? xNormalizedProjectionDir : yNormalizedProjectionDir) + vec2(outputDepthCoord)));
-    //        imageStore(outputColor, stepBackCoord, colorSRGB);
-    //    }
-
-
-    //    vec2 nodeUVs[offsetCount];
-    //    vec2 outputUVs[offsetCount];
-    //    ivec2 outputCoords[offsetCount];
-    //    for (int i = 0; i < offsetCount; ++i){
-    //        const vec2 uv = CoordToUV(coord + coordOffsets[i], screenSize);
-    //        if (!NodeIntersetUV(uv, nodeUVs[i], outputUVs[i]))
-    //            return;
-    //        outputCoords[i] = CoordFromUV(outputUVs[i], screenSize);
-    //    }
-
-    //    const vec4 color = texture(nodeColor, nodeUVs[0]);
-    //    const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
-    //    imageStore(outputColor, outputCoords[0], colorSRGB);
-
-    //    writeColor(nodeUVs[0], outputCoords[0]);
-
-    //    for (int i = 0; i < writeOffsetcount; ++i){
-    //        imageStore(outputColor, outputCoords[0] + writeOffsets[i], colorSRGB);
-    //    }
-
 }

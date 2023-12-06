@@ -3,6 +3,7 @@
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_vulkan_descriptor.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
+#include "moxaic_vulkan_texture.hpp"
 #include "static_array.hpp"
 
 #include <vulkan/vulkan.h>
@@ -45,7 +46,12 @@ namespace Moxaic::Vulkan
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
-              // outColor
+              // output atomic color
+              (VkDescriptorSetLayoutBinding){
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+              },
+              // output swap/final
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -57,6 +63,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const GlobalDescriptor::Buffer& buffer,
                         const Framebuffer& framebuffer,
+                        const Texture& outputAtomicTexture,
                         const VkImageView outputColorImage)
         {
             MXC_LOG("Init ComputeNodeDescriptor");
@@ -103,7 +110,13 @@ namespace Moxaic::Vulkan
                   .sampler = k_pDevice->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              // outcolor
+              // output atomic image
+              (VkWriteDescriptorSet){
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .imageView = outputAtomicTexture.GetVkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              // output swap/final
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
@@ -154,7 +167,7 @@ namespace Moxaic::Vulkan
         {
             StaticArray writes{
               (VkWriteDescriptorSet){
-                .dstBinding = 5,
+                .dstBinding = 6,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .imageView = outputColorImage,
