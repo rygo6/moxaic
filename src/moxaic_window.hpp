@@ -26,7 +26,7 @@ namespace Moxaic::Window
     };
 
     MXC_RESULT Init();
-    MXC_RESULT InitSurface(VkInstance const& vkInstance,
+    MXC_RESULT InitSurface(VkInstance vkInstance,
                            VkSurfaceKHR* pVkSurface);
     std::vector<char const*> GetVulkanInstanceExtentions();
     void Poll();

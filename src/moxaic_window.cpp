@@ -75,7 +75,7 @@ MXC_RESULT Window::Init()
     return g_pSDLWindow != nullptr;
 }
 
-MXC_RESULT Window::InitSurface(const VkInstance& vkInstance,
+MXC_RESULT Window::InitSurface(VkInstance vkInstance,
                                VkSurfaceKHR* pVkSurface)
 {
     SDL_assert((g_pSDLWindow != nullptr) && "Window not initialized!");

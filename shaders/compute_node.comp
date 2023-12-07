@@ -5,6 +5,9 @@
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
+layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAtomic;
+layout (set = 1, binding = 6) uniform writeonly image2D outputColor;
+
 // varying this .5 is probably solution to sperating pixels
 // puling it closer makes less separation up close, probably a ratio to figure out
 const vec3 nodeOriginWorldPos = vec3(0, 0, -.5);
@@ -92,7 +95,7 @@ vec2 uvFromCoord(ivec2 coord, vec2 screenSize)
     return vec2(coord) / screenSize;
 }
 
-bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec2 outputUv)
+bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
 {
     // for whatever reason sending uv through the whole projection math and back
     // ends you up with the uv inverted so do 1 - uv here so outuv lines up with start uv
@@ -117,17 +120,33 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec2 outputUv)
     const vec3 nodeQuadDepthWorldPos = WorldPosFromNodeClipPos(nodeQuadDepthClipPos);
     const vec4 nodeQuadDepthProjectedClipPos = GlobalClipPosFromWorldPos(nodeQuadDepthWorldPos);
     const vec3 nodeQuadDepthProjectedNDC = NDCFromClipPos(nodeQuadDepthProjectedClipPos);
-    const vec2 nodeQuadDepthProjectedUV = UVFromNDC(nodeQuadDepthProjectedNDC);
-    outputUv = nodeQuadDepthProjectedUV;
+//    const vec2 nodeQuadDepthProjectedUV = UVFromNDC(nodeQuadDepthProjectedNDC);
+    depthProjectedNDC = nodeQuadDepthProjectedNDC;
+
 
     return true;
 }
 
-void writeColor(const vec2 nodeUV, const ivec2 outputCoord){
-    const vec4 color = texture(nodeColor, nodeUV);
-    const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
-    imageStore(outputColor, outputCoord, vec4(colorSRGB, color.a));
+//void writeColor(const vec2 nodeUV, const ivec2 outputCoord){
+//    const vec4 color = texture(nodeColor, nodeUV);
+//    const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
+//    imageStore(outputColor, outputCoord, vec4(colorSRGB, color.a));
+//}
 
+void writeAtomicData(ivec2 coord, uint data){
+    imageAtomicMin(outputAtomic, coord, data);
+}
+
+uint packFloatAndColor(float depth, vec3 color) {
+    float normalizedDepth = depth / 100.0f;
+    uint packedValue = uint(normalizedDepth * 65535.0);
+
+    uint r = uint(color.r * 31.0);
+    uint g = uint(color.g * 63.0);
+    uint b = uint(color.b * 31.0);
+    uint packedColor = (r << 11) | (g << 5) | b;
+
+    return (packedValue << 16) | packedColor;
 }
 
 void main()
@@ -137,19 +156,22 @@ void main()
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 uv = uvFromCoord(coord, screenSize);
 
-    vec2 nodeUV, projectedUV;
-    if (!NodeIntersectUV(uv, nodeUV, projectedUV)) {
+    vec2 nodeUV;
+    vec3 depthProjectedNDC;
+    if (!NodeIntersectUV(uv, nodeUV, depthProjectedNDC)) {
         return;
     }
-
-    const ivec2 outputDepthCoord = CoordFromUV(projectedUV, screenSize);
+    const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
+    const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
 
     const vec4 color = texture(nodeColor, nodeUV);
-    const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
-    imageStore(outputColor, outputDepthCoord, colorSRGB);
-//    imageStore(outputColor, coord, colorSRGB);
+//    const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
 
-    const vec2 projectionDir = projectedUV - uv;
+    const uint packedData = packFloatAndColor(depthProjectedNDC.z, color.xyz);
+//    imageStore(outputColor, outputDepthCoord, colorSRGB);
+    writeAtomicData(depthProjectedCoord, packedData);
+
+    const vec2 projectionDir = depthProjectUV - uv;
     const vec2 absProjectionDir = abs(projectionDir);
     const bool walkX = absProjectionDir.x > absProjectionDir.y;
     const vec2 xNormalizedProjectionDir = projectionDir * (1.0f / absProjectionDir.x);
@@ -161,19 +183,21 @@ void main()
     const ivec2 stepbackCoord = ivec2(round(normalizedProjectionDir + vec2(coord)));
     const vec2 stepbackUV = uvFromCoord(stepbackCoord, screenSize);
 
-    vec2 stepbackNodeUV, stepbackProjectedUV;
-    if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackProjectedUV)) {
+    vec2 stepbackNodeUV;
+    vec3 stepbackProjectedNDC;
+    if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackProjectedNDC)) {
         return;
     }
-
+    const vec2 stepbackProjectedUV = UVFromNDC(stepbackProjectedNDC);
     const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
-    const ivec2 stepbackCoordDiff = abs(stepbackOutputUVCoord - outputDepthCoord);
+    const ivec2 stepbackCoordDiff = abs(stepbackOutputUVCoord - depthProjectedCoord);
     const int sepbackCount = walkX ? stepbackCoordDiff.x : stepbackCoordDiff.y;
-    vec2 currentCoord = outputDepthCoord;
-    ivec2 roundedCoord = outputDepthCoord;
+    vec2 currentCoord = depthProjectedCoord;
+    ivec2 roundedCoord = depthProjectedCoord;
     for (int step = 0; step < sepbackCount; ++step) {
         currentCoord += normalizedProjectionDir;
         roundedCoord = ivec2(round(currentCoord));
-        imageStore(outputColor, roundedCoord, colorSRGB);
+//        imageStore(outputColor, roundedCoord, colorSRGB);
+        writeAtomicData(roundedCoord, packedData);
     }
 }

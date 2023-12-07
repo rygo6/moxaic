@@ -12,8 +12,5 @@ layout (set = 1, binding = 2) uniform sampler2D nodeNormal;
 layout (set = 1, binding = 3) uniform sampler2D nodeGBuffer;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepth;
 
-layout (set = 1, binding = 5) uniform writeonly image2D outputAtomic;
-layout (set = 1, binding = 6) uniform writeonly image2D outputColor;
-
 #define RESOLUTION_SCALE 1
 #define LOCAL_SIZE 32 * RESOLUTION_SCALE

@@ -224,20 +224,35 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     const auto groupCount = VkExtent2D(Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
                                        Window::extents().height / Vulkan::ComputeNodePipeline::LocalSize);
 
-    const VkImageMemoryBarrier imageMemoryBarrier{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .pNext = nullptr,
-      .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-      .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = swap,
-      .subresourceRange = Vulkan::DefaultColorSubresourceRange,
-    };
 
-    m_ComputeNodePipeline.BindComputeClearPipeline(commandBuffer);
+
+    m_ComputeNodePipeline.BindComputePrePipeline(commandBuffer);
+    vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
+
+    const VkImageMemoryBarrier atomicImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext = nullptr,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = m_AtomicOutputTexture.GetVkImage(),
+        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+      };
+    vkCmdPipelineBarrier(commandBuffer,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &atomicImageMemoryBarrier);
+
+    m_ComputeNodePipeline.BindComputePipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
     vkCmdPipelineBarrier(commandBuffer,
@@ -249,9 +264,9 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                          0,
                          nullptr,
                          1,
-                         &imageMemoryBarrier);
+                         &atomicImageMemoryBarrier);
 
-    m_ComputeNodePipeline.BindComputePipeline(commandBuffer);
+    m_ComputeNodePipeline.BindComputePostPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
     m_Swap.Transition(commandBuffer,
