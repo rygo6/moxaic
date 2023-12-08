@@ -5,19 +5,16 @@
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
-layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAtomic;
+layout (set = 1, binding = 5, r32ui) uniform readonly uimage2D outputAtomic;
 layout (set = 1, binding = 6) uniform writeonly image2D outputColor;
 
 vec3 unpackColor(uint packedData) {
-    // Extract the 16-bit color from the last 16 bits
     uint colorData = packedData & 0xFFFFu;
 
-    // Extract individual color components
     uint r = (colorData >> 11) & 0x1Fu;
     uint g = (colorData >> 5) & 0x3Fu;
     uint b = colorData & 0x1Fu;
 
-    // Normalize to [0.0, 1.0] range
     vec3 color;
     color.r = float(r) / 31.0;
     color.g = float(g) / 63.0;
@@ -30,6 +27,8 @@ void main()
 {
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const uint data = imageLoad(outputAtomic, coord).r;
+    const float dataf = data;
     const vec3 color = unpackColor(data);
-    imageStore(outputColor, coord, vec4(color, 1));
+    const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
+    imageStore(outputColor, coord, vec4(colorSRGB, 1));
 }

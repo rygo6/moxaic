@@ -97,7 +97,7 @@ namespace Moxaic
         Vulkan::GlobalDescriptor m_GlobalDescriptor{*k_pDevice};
         Vulkan::ComputeNodeDescriptor m_ComputeNodeDescriptor{*k_pDevice};
 
-        Vulkan::Texture m_AtomicOutputTexture{*k_pDevice};
+        Vulkan::Texture m_OutputAtomicTexture{*k_pDevice};
 
         Camera m_MainCamera{};
 

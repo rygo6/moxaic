@@ -163,6 +163,21 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
+
+        MXC_RESULT WriteOutputAtomicTexture(const Texture& outputeAtomicTexture)
+        {
+            StaticArray writes{
+              (VkWriteDescriptorSet){
+                .dstBinding = 5,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                  .imageView = outputeAtomicTexture.GetVkImageView(),
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+            };
+            WriteDescriptors(writes);
+            return MXC_SUCCESS;
+        }
+
         MXC_RESULT WriteOutputColorImage(const VkImageView outputColorImage)
         {
             StaticArray writes{

@@ -28,11 +28,11 @@ namespace Moxaic::Window
     MXC_RESULT Init();
     MXC_RESULT InitSurface(VkInstance vkInstance,
                            VkSurfaceKHR* pVkSurface);
-    std::vector<char const*> GetVulkanInstanceExtentions();
+    std::vector<const char*> GetVulkanInstanceExtentions();
     void Poll();
     void Cleanup();
 
-    UserCommand const& userCommand();
-    VkExtent2D const& extents();
-    SDL_Window const* window();
+    const UserCommand& userCommand();
+    const VkExtent2D& extents();
+    const SDL_Window* window();
 }// namespace Moxaic::Window

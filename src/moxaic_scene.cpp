@@ -149,16 +149,16 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     MXC_CHK(m_NodeReference.Init(pipelineType));
 
-    MXC_CHK(m_AtomicOutputTexture.Init(VK_FORMAT_R32_UINT,
+    MXC_CHK(m_OutputAtomicTexture.Init(VK_FORMAT_R32_UINT,
                                        Window::extents(),
                                        VK_IMAGE_USAGE_STORAGE_BIT,
                                        VK_IMAGE_ASPECT_COLOR_BIT,
                                        Vulkan::Locality::Local));
-    MXC_CHK(m_AtomicOutputTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
+    MXC_CHK(m_OutputAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
 
     MXC_CHK(m_ComputeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
                                      m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
-                                     m_AtomicOutputTexture,
+                                     m_OutputAtomicTexture,
                                      m_Swap.GetVkSwapImageViews(m_NodeFramebufferIndex)));
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
@@ -208,7 +208,6 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     uint32_t swapIndex;
     m_Swap.Acquire(&swapIndex);
-
     m_Swap.Transition(commandBuffer,
                       swapIndex,
                       Vulkan::FromComputeSwapPresent,
@@ -216,14 +215,14 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     const auto& swap = m_Swap.GetVkSwapImages(swapIndex);
     const auto& swapView = m_Swap.GetVkSwapImageViews(swapIndex);
-    m_ComputeNodeDescriptor.WriteOutputColorImage(m_Swap.GetVkSwapImageViews(swapIndex));
+    m_ComputeNodeDescriptor.WriteOutputColorImage(swapView);
+    m_ComputeNodeDescriptor.WriteOutputAtomicTexture(m_OutputAtomicTexture);
 
     m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
     m_ComputeNodePipeline.BindDescriptor(commandBuffer, m_ComputeNodeDescriptor);
 
     const auto groupCount = VkExtent2D(Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
                                        Window::extents().height / Vulkan::ComputeNodePipeline::LocalSize);
-
 
 
     m_ComputeNodePipeline.BindComputePrePipeline(commandBuffer);
@@ -238,7 +237,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         .newLayout = VK_IMAGE_LAYOUT_GENERAL,
         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = m_AtomicOutputTexture.GetVkImage(),
+        .image = m_OutputAtomicTexture.GetVkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       };
     vkCmdPipelineBarrier(commandBuffer,

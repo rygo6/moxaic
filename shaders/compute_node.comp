@@ -120,25 +120,18 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
     const vec3 nodeQuadDepthWorldPos = WorldPosFromNodeClipPos(nodeQuadDepthClipPos);
     const vec4 nodeQuadDepthProjectedClipPos = GlobalClipPosFromWorldPos(nodeQuadDepthWorldPos);
     const vec3 nodeQuadDepthProjectedNDC = NDCFromClipPos(nodeQuadDepthProjectedClipPos);
-//    const vec2 nodeQuadDepthProjectedUV = UVFromNDC(nodeQuadDepthProjectedNDC);
+    //    const vec2 nodeQuadDepthProjectedUV = UVFromNDC(nodeQuadDepthProjectedNDC);
     depthProjectedNDC = nodeQuadDepthProjectedNDC;
 
 
     return true;
 }
 
-//void writeColor(const vec2 nodeUV, const ivec2 outputCoord){
-//    const vec4 color = texture(nodeColor, nodeUV);
-//    const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
-//    imageStore(outputColor, outputCoord, vec4(colorSRGB, color.a));
-//}
-
 void writeAtomicData(ivec2 coord, uint data){
     imageAtomicMin(outputAtomic, coord, data);
 }
 
-uint packFloatAndColor(float depth, vec3 color) {
-    float normalizedDepth = depth / 100.0f;
+uint packFloatAndColor(float normalizedDepth, vec3 color) {
     uint packedValue = uint(normalizedDepth * 65535.0);
 
     uint r = uint(color.r * 31.0);
@@ -165,10 +158,8 @@ void main()
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
 
     const vec4 color = texture(nodeColor, nodeUV);
-//    const vec4 colorSRGB = vec4(pow(color.rgb, vec3(1.0 / 2.2)), color.a);
 
     const uint packedData = packFloatAndColor(depthProjectedNDC.z, color.xyz);
-//    imageStore(outputColor, outputDepthCoord, colorSRGB);
     writeAtomicData(depthProjectedCoord, packedData);
 
     const vec2 projectionDir = depthProjectUV - uv;
@@ -197,7 +188,6 @@ void main()
     for (int step = 0; step < sepbackCount; ++step) {
         currentCoord += normalizedProjectionDir;
         roundedCoord = ivec2(round(currentCoord));
-//        imageStore(outputColor, roundedCoord, colorSRGB);
         writeAtomicData(roundedCoord, packedData);
     }
 }

@@ -11,5 +11,6 @@ layout (set = 1, binding = 6) uniform writeonly image2D outputColor;
 void main()
 {
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    imageStore(outputAtomic, coord, uvec4(0, 0, 0, 0));
+    uint maxValue = -1;
+    imageStore(outputAtomic, coord, uvec4(maxValue, 0, 0, 0));
 }
