@@ -182,12 +182,18 @@ void main()
     const vec2 stepbackProjectedUV = UVFromNDC(stepbackProjectedNDC);
     const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
     const ivec2 stepbackCoordDiff = abs(stepbackOutputUVCoord - depthProjectedCoord);
-    const int sepbackCount = walkX ? stepbackCoordDiff.x : stepbackCoordDiff.y;
+    int stepbackCount = walkX ? stepbackCoordDiff.x : stepbackCoordDiff.y;
+    stepbackCount -= 1;
+    stepbackCount = stepbackCount < 0 ? 0 : stepbackCount;
+    stepbackCount = stepbackCount > 10 ? 10 : stepbackCount;
     vec2 currentCoord = depthProjectedCoord;
     ivec2 roundedCoord = depthProjectedCoord;
-    for (int step = 0; step < sepbackCount; ++step) {
+    int step = 0;
+    while (step < stepbackCount){
         currentCoord += normalizedProjectionDir;
         roundedCoord = ivec2(round(currentCoord));
         writeAtomicData(roundedCoord, packedData);
+//        step += step > 10 ? 2 : 1;
+        step++;
     }
 }

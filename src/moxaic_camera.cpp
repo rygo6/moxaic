@@ -23,8 +23,10 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
     }
 
     if (m_CameraLocked && userCommand.mouseMoved) {
-        const auto rotation = glm::radians(-userCommand.mouseDelta.x) * 0.5f;
-        m_Transform.Rotate(0, rotation, 0);
+        const auto rotationX = glm::radians(-userCommand.mouseDelta.x) * 0.5f;
+        const auto rotationY = glm::radians(userCommand.mouseDelta.y) * 0.5f;
+        m_Transform.Rotate(0, rotationX, 0);
+        m_Transform.LocalRotate(rotationY, 0, 0);
         updated = true;
     }
 
@@ -32,10 +34,10 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
     if (!userMove.None()) {
         auto delta = glm::zero<glm::vec3>();
         if (userMove.ContainsFlag(Window::UserMove::Forward)) {
-            delta.z -= 1;
+            delta.z += 1;
         }
         if (userMove.ContainsFlag(Window::UserMove::Back)) {
-            delta.z += 1;
+            delta.z -= 1;
         }
         if (userMove.ContainsFlag(Window::UserMove::Left)) {
             delta.x -= 1;
@@ -44,7 +46,8 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
             delta.x += 1;
         }
         if (glm::length(delta) > 0.0f) {
-            m_Transform.LocalTranslate(glm::normalize(delta) * (float) deltaTime * 0.002f);
+            constexpr auto zeroAxis = BitFlags<Transform::Axis>(Transform::X);
+            m_Transform.LocalTranslate(glm::normalize(delta) * float(deltaTime) * 0.002f, zeroAxis);
             updated = true;
         }
     }

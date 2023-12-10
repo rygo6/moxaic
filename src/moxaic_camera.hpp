@@ -34,8 +34,8 @@ namespace Moxaic
 
     private:
         float m_FOV{45.0f};
-        float m_Near{0.0001f};
-        float m_Far{100.0f};
+        float m_Near{0.01f};
+        float m_Far{1000.0f};
         float m_Aspect;
 
         Moxaic::Transform m_Transform{};

@@ -5,6 +5,12 @@ namespace Moxaic
     template<typename T>
     struct BitFlags
     {
+        template<typename... Args>
+        constexpr BitFlags(Args... flags)
+        {
+            (SetFlag(flags), ...);
+        }
+
         bool None() const
         {
             return m_Flags == 0;
@@ -20,7 +26,7 @@ namespace Moxaic
             state ? SetFlag(flag) : ClearFlag(flag);
         }
 
-        void SetFlag(T flag)
+        constexpr void SetFlag(T flag)
         {
             m_Flags = m_Flags | flag;
         }
