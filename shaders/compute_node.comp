@@ -22,7 +22,7 @@ vec3 intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeN
 
 vec3 WorldPosFromGlobalClipPos(vec4 clipPos)
 {
-    const vec4 worldPos = globalUBO.invView * globalUBO.invProj * clipPos;
+    const vec4 worldPos = globalUBO.invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
 }
 
@@ -47,18 +47,18 @@ vec3 NodeNDCRay(vec2 ndc)
 
 vec4 GlobalClipPosFromWorldPos(vec3 worldPos)
 {
-    return globalUBO.proj * globalUBO.view * vec4(worldPos, 1);
+    return globalUBO.viewProj * vec4(worldPos, 1);
 }
 
 vec3 WorldPosFromNodeClipPos(vec4 clipPos)
 {
-    const vec4 worldPos = nodeUBO.invView * nodeUBO.invProj * clipPos;
+    const vec4 worldPos = nodeUBO.invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
 }
 
 vec4 NodeClipPosFromWorldPos(vec3 worldPos)
 {
-    return nodeUBO.proj * nodeUBO.view * vec4(worldPos, 1);
+    return nodeUBO.viewProj * vec4(worldPos, 1);
 }
 
 vec3 NDCFromClipPos(vec4 clipPos)
@@ -266,11 +266,6 @@ void main()
     const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
 
-    const vec4 color = texture(nodeColor, nodeUV);
-
-    const uint packedData = packFloatAndColor(depthProjectedNDC.z, color.xyz);
-    writeAtomicData(depthProjectedCoord, packedData);
-
     const vec2 projectionDir = depthProjectUV - uv;
     const vec2 absProjectionDir = abs(projectionDir);
     const bool walkX = absProjectionDir.x > absProjectionDir.y;
@@ -288,6 +283,15 @@ void main()
     if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackProjectedNDC)) {
         return;
     }
+//    if (stepbackProjectedNDC.z > depthProjectedNDC.z){
+//        return;
+//    }
+
+    // source
+    const vec4 color = texture(nodeColor, nodeUV);
+    const uint packedData = packFloatAndColor(depthProjectedNDC.z, color.xyz);
+    writeAtomicData(depthProjectedCoord, packedData);
+
     const vec2 stepbackProjectedUV = UVFromNDC(stepbackProjectedNDC);
     const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
     const ivec2 stepbackCoordDiff = abs(stepbackOutputUVCoord - depthProjectedCoord);

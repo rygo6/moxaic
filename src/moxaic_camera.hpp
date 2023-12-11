@@ -25,8 +25,10 @@ namespace Moxaic
 
         MXC_GET(View);
         MXC_GET(Projection);
+        MXC_GET(ViewProjection);
         MXC_GET(InverseView);
         MXC_GET(InverseProjection);
+        MXC_GET(InverseViewProjection);
 
         MXC_GETSET(FOV);
         MXC_GETSET(Near);
@@ -43,8 +45,10 @@ namespace Moxaic
         Moxaic::Transform m_Transform{};
         glm::mat4x4 m_View{glm::identity<glm::mat4x4>()};
         glm::mat4x4 m_Projection{glm::identity<glm::mat4x4>()};
+        glm::mat4x4 m_ViewProjection{glm::identity<glm::mat4x4>()};
         glm::mat4x4 m_InverseView{glm::identity<glm::mat4x4>()};
         glm::mat4x4 m_InverseProjection{glm::identity<glm::mat4x4>()};
+        glm::mat4x4 m_InverseViewProjection{glm::identity<glm::mat4x4>()};
 
         bool m_CameraLocked{false};
     };

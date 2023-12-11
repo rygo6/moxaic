@@ -20,8 +20,10 @@ namespace Moxaic::Vulkan
         {
             glm::mat4 view;
             glm::mat4 proj;
+            glm::mat4 viewProj;
             glm::mat4 invView;
             glm::mat4 invProj;
+            glm::mat4 invViewProj;
             uint32_t width;
             uint32_t height;
         };
@@ -54,9 +56,11 @@ namespace Moxaic::Vulkan
             m_LocalBuffer.width = dimensions.width;
             m_LocalBuffer.height = dimensions.height;
             m_LocalBuffer.proj = camera.GetProjection();
-            m_LocalBuffer.invProj = camera.GetInverseProjection();
             m_LocalBuffer.view = camera.GetView();
+            m_LocalBuffer.viewProj = camera.GetViewProjection();
             m_LocalBuffer.invView = camera.GetInverseView();
+            m_LocalBuffer.invProj = camera.GetInverseProjection();
+            m_LocalBuffer.invViewProj = camera.GetInverseViewProjection();
             WriteLocalBuffer();
 
             MXC_CHK(AllocateDescriptorSet());
@@ -87,6 +91,8 @@ namespace Moxaic::Vulkan
         {
             m_LocalBuffer.view = camera.GetView();
             m_LocalBuffer.invView = camera.GetInverseView();
+            m_LocalBuffer.viewProj = camera.GetViewProjection();
+            m_LocalBuffer.invViewProj = camera.GetInverseViewProjection();
         }
 
         MXC_ACCESS(LocalBuffer);

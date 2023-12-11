@@ -64,6 +64,8 @@ void Camera::UpdateView()
 {
     m_InverseView = m_Transform.ModelMatrix();
     m_View = glm::inverse(m_InverseView);
+    m_InverseViewProjection = m_InverseView * m_InverseProjection;
+    m_ViewProjection = m_Projection * m_View;
 }
 
 void Camera::UpdateProjection()
