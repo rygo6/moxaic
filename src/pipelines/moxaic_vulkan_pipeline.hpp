@@ -348,7 +348,7 @@ namespace Moxaic::Vulkan
     {
     public:
         using Pipeline<Derived>::Pipeline;
-        void BindGraphicsPipeline(const VkCommandBuffer commandBuffer) const
+        void BindPipeline(const VkCommandBuffer commandBuffer) const
         {
             vkCmdBindPipeline(commandBuffer,
                               VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -376,7 +376,7 @@ namespace Moxaic::Vulkan
     {
     public:
         using Pipeline<Derived>::Pipeline;
-        void BindComputePipeline(const VkCommandBuffer commandBuffer) const
+        void BindPipeline(const VkCommandBuffer commandBuffer) const
         {
             vkCmdBindPipeline(commandBuffer,
                               VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -391,6 +391,20 @@ namespace Moxaic::Vulkan
             vkCmdBindDescriptorSets(commandBuffer,
                                     VK_PIPELINE_BIND_POINT_COMPUTE,
                                     this->s_vkPipelineLayout,
+                                    setIndex,
+                                    1,
+                                    &descriptorSet,
+                                    0,
+                                    nullptr);
+        }
+
+        static void BindDescriptorS(const VkCommandBuffer commandBuffer,
+                                    const VkDescriptorSet& descriptorSet,
+                                    const int& setIndex)
+        {
+            vkCmdBindDescriptorSets(commandBuffer,
+                                    VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    Pipeline<Derived>::s_vkPipelineLayout,
                                     setIndex,
                                     1,
                                     &descriptorSet,

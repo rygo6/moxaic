@@ -23,13 +23,14 @@
 #define MXC_GETARR(field) \
     auto const& Get##field(int const i) const { return m_##field[i]; }
 
+// add p prefix
 #define MXC_ACCESS(field) \
     auto* field() { return &m_##field; }
 
 namespace Moxaic
 {
-    inline constexpr uint32_t DefaultWidth = 1920;
-    inline constexpr uint32_t DefaultHeight = 1080;
+    inline constexpr uint32_t DefaultWidth = 1024;
+    inline constexpr uint32_t DefaultHeight = 1024;
     inline constexpr char ApplicationName[] = "moxaic";
     inline constexpr uint8_t FramebufferCount = 2;
 

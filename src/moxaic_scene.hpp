@@ -92,7 +92,8 @@ namespace Moxaic
         Vulkan::Swap m_Swap{*k_pDevice};
         Vulkan::Semaphore m_Semaphore{*k_pDevice};
 
-        Vulkan::ComputeNodePipeline m_ComputeNodePipeline{*k_pDevice};
+        Vulkan::ComputeNodePipeline m_ComputeNodeProjectPipeline{*k_pDevice};
+        Vulkan::ComputeNodePipeline m_ComputeNodePostPipeline{*k_pDevice};
 
         Vulkan::GlobalDescriptor m_GlobalDescriptor{*k_pDevice};
         Vulkan::ComputeNodeDescriptor m_ComputeNodeDescriptor{*k_pDevice};

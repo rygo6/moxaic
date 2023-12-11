@@ -108,8 +108,8 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camer
     const float offset = m_DrawRadius * 0.5f;
     const float farZ = viewDistanceToCenter + offset;
     float nearZ = viewDistanceToCenter - offset;
-    if (nearZ < camera.GetNear()) {
-        nearZ = camera.GetNear();
+    if (nearZ < MXC_CAMERA_MIN_Z) {
+        nearZ = MXC_CAMERA_MIN_Z;
     }
     auto* const localBuffer = m_ExportedGlobalDescriptor.LocalBuffer();
     localBuffer->proj = glm::perspective(camera.GetFOV(),
@@ -119,6 +119,7 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camer
     localBuffer->invProj = glm::inverse(localBuffer->proj);
     localBuffer->view = camera.GetView();
     localBuffer->invView = camera.GetInverseView();
+    MXC_LOG(nearZ, farZ);
 }
 
 Node::Node(const Vulkan::Device& device)

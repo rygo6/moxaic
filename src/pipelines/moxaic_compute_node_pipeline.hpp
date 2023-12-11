@@ -34,81 +34,39 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init()
+        MXC_RESULT Init(const char* shaderPath)
         {
-            MXC_LOG("Init ComputeNodePipeline");
+            MXC_LOG("Init ComputeNodePipeline", shaderPath);
 
-            VkShaderModule preShader;
-            MXC_CHK(CreateShaderModule("./shaders/compute_node_pre.comp.spv",
-                                       &preShader));
-            const VkPipelineShaderStageCreateInfo clearStage{
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-              .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-              .module = preShader,
-              .pName = "main",
-            };
-            MXC_CHK(CreateComputePipe(clearStage, &m_VkPrePipeline));
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), preShader, VK_ALLOC);
-
-            VkShaderModule compShader;
-            MXC_CHK(CreateShaderModule("./shaders/compute_node.comp.spv",
-                                       &compShader));
+            VkShaderModule shader;
+            MXC_CHK(CreateShaderModule(shaderPath,
+                                       &shader));
             const VkPipelineShaderStageCreateInfo compStage{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-              .module = compShader,
+              .module = shader,
               .pName = "main",
             };
             MXC_CHK(CreateComputePipe(compStage));
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), compShader, VK_ALLOC);
-
-            VkShaderModule postShader;
-            MXC_CHK(CreateShaderModule("./shaders/compute_node_post.comp.spv",
-                                       &postShader));
-            const VkPipelineShaderStageCreateInfo postStage{
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-              .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-              .module = postShader,
-              .pName = "main",
-            };
-            MXC_CHK(CreateComputePipe(postStage, &m_VkPostPipeline));
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), postShader, VK_ALLOC);
+            vkDestroyShaderModule(k_pDevice->GetVkDevice(), shader, VK_ALLOC);
 
             return MXC_SUCCESS;
         }
 
-        void BindDescriptor(const VkCommandBuffer commandBuffer,
-                            const GlobalDescriptor& descriptor) const
+        static void BindDescriptor(const VkCommandBuffer commandBuffer,
+                                   const GlobalDescriptor& descriptor)
         {
-            ComputePipeline::BindDescriptor(commandBuffer,
-                                            descriptor.GetVkDescriptorSet(),
-                                            GlobalDescriptor::SetIndex);
+            BindDescriptorS(commandBuffer,
+                            descriptor.GetVkDescriptorSet(),
+                            GlobalDescriptor::SetIndex);
         }
 
-        void BindDescriptor(const VkCommandBuffer commandBuffer,
-                            const ComputeNodeDescriptor& descriptor) const
+        static void BindDescriptor(const VkCommandBuffer commandBuffer,
+                                   const ComputeNodeDescriptor& descriptor)
         {
-            ComputePipeline::BindDescriptor(commandBuffer,
-                                            descriptor.GetVkDescriptorSet(),
-                                            ComputeNodeDescriptor::SetIndex);
+            BindDescriptorS(commandBuffer,
+                            descriptor.GetVkDescriptorSet(),
+                            ComputeNodeDescriptor::SetIndex);
         }
-
-        void BindComputePrePipeline(const VkCommandBuffer commandBuffer) const
-        {
-            vkCmdBindPipeline(commandBuffer,
-                              VK_PIPELINE_BIND_POINT_COMPUTE,
-                              m_VkPrePipeline);
-        }
-
-        void BindComputePostPipeline(const VkCommandBuffer commandBuffer) const
-        {
-            vkCmdBindPipeline(commandBuffer,
-                              VK_PIPELINE_BIND_POINT_COMPUTE,
-                              m_VkPostPipeline);
-        }
-
-    private:
-        VkPipeline m_VkPrePipeline{VK_NULL_HANDLE};
-        VkPipeline m_VkPostPipeline{VK_NULL_HANDLE};
     };
 }// namespace Moxaic::Vulkan

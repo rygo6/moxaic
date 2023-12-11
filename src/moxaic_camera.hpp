@@ -4,6 +4,8 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
+#define MXC_CAMERA_MIN_Z 0.0001f
+
 namespace Moxaic
 {
     class Camera
@@ -34,7 +36,7 @@ namespace Moxaic
 
     private:
         float m_FOV{45.0f};
-        float m_Near{0.01f};
+        float m_Near{MXC_CAMERA_MIN_Z};
         float m_Far{1000.0f};
         float m_Aspect;
 
