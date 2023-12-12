@@ -78,7 +78,7 @@ namespace Moxaic
             memcpy(m_pSharedBuffer, &m_LocalBuffer, Size());
         }
 
-        MXC_ACCESS(LocalBuffer);
+        MXC_PTR_ACCESS(LocalBuffer);
         MXC_GETSET(LocalBuffer);
 
         T const& GetSharedBuffer() const { return *static_cast<T*>(m_pSharedBuffer); }

@@ -21,7 +21,7 @@ namespace Moxaic
         void UpdateView();
         void UpdateProjection();
 
-        MXC_ACCESS(Transform);
+        MXC_PTR_ACCESS(Transform);
 
         MXC_GET(View);
         MXC_GET(Projection);

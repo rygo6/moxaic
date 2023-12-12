@@ -111,7 +111,7 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camer
     if (nearZ < MXC_CAMERA_MIN_Z) {
         nearZ = MXC_CAMERA_MIN_Z;
     }
-    auto* const localBuffer = m_ExportedGlobalDescriptor.LocalBuffer();
+    auto* const localBuffer = m_ExportedGlobalDescriptor.pLocalBuffer();
     localBuffer->view = camera.GetView();
     localBuffer->proj = glm::perspective(camera.GetFOV(),
                                          camera.GetAspect(),

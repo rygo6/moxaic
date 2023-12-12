@@ -31,9 +31,9 @@ namespace Moxaic
 
         void SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camera& camera);
 
-        MXC_ACCESS(Transform);
-        MXC_ACCESS(ExportedGlobalDescriptor);
-        MXC_ACCESS(ExportedSemaphore);
+        MXC_PTR_ACCESS(Transform);
+        MXC_PTR_ACCESS(ExportedGlobalDescriptor);
+        MXC_PTR_ACCESS(ExportedSemaphore);
 
         MXC_GET(DrawRadius);
 
@@ -92,9 +92,9 @@ namespace Moxaic
         MXC_RESULT Init();
         MXC_RESULT InitImport(const ImportParam& parameters);
 
-        MXC_ACCESS(ImportedGlobalDescriptor);
-        MXC_ACCESS(ImportedNodeSemaphore);
-        MXC_ACCESS(ImportedCompositorSemaphore);
+        MXC_PTR_ACCESS(ImportedGlobalDescriptor);
+        MXC_PTR_ACCESS(ImportedNodeSemaphore);
+        MXC_PTR_ACCESS(ImportedCompositorSemaphore);
 
         const auto& framebuffer(const int index) const
         {

@@ -155,7 +155,7 @@ namespace Moxaic::Vulkan
         MXC_GET(PhysicalDeviceProperties);
         MXC_GET(PhysicalDeviceMemoryProperties);
 
-    public:
+    private:
         VkDevice m_VkDevice{VK_NULL_HANDLE};
 
         VkPhysicalDevice m_VkPhysicalDevice{VK_NULL_HANDLE};

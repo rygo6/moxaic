@@ -94,7 +94,7 @@ namespace Moxaic::Vulkan
             m_LocalBuffer.invViewProj = camera.GetInverseViewProjection();
         }
 
-        MXC_ACCESS(LocalBuffer);
+        MXC_PTR_ACCESS(LocalBuffer);
         MXC_GETSET(LocalBuffer);
 
     private:

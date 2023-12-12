@@ -23,9 +23,10 @@
 #define MXC_GETARR(field) \
     auto const& Get##field(int const i) const { return m_##field[i]; }
 
-// add p prefix
-#define MXC_ACCESS(field) \
-    auto* field() { return &m_##field; }
+/// Exposes a field as a pointer to do occaional some unsafe lower level
+/// editing and have the -> syntax signify you are doing so.
+#define MXC_PTR_ACCESS(field) \
+    auto* p##field() { return &m_##field; }
 
 namespace Moxaic
 {

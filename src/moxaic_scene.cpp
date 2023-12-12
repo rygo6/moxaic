@@ -18,8 +18,8 @@ MXC_RESULT CompositorScene::Init()
                         Window::extents()));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
-    m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -1));
-    m_MainCamera.Transform()->Rotate(0, 180, 0);
+    m_MainCamera.pTransform()->SetPosition(glm::vec3(0, 0, -1));
+    m_MainCamera.pTransform()->Rotate(0, 180, 0);
     m_MainCamera.UpdateView();
     m_MainCamera.UpdateProjection();
 
@@ -49,8 +49,8 @@ MXC_RESULT CompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    m_NodeReference.ExportedGlobalDescriptor()->SetLocalBuffer(m_GlobalDescriptor.GetLocalBuffer());
-    m_NodeReference.ExportedGlobalDescriptor()->WriteLocalBuffer();
+    m_NodeReference.pExportedGlobalDescriptor()->SetLocalBuffer(m_GlobalDescriptor.GetLocalBuffer());
+    m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;
 }
@@ -68,7 +68,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     k_pDevice->ResetTimestamps();
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
-    auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
+    auto* const nodeSemaphore = m_NodeReference.pExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
     if (nodeSemaphore->GetLocalWaitValue() != m_PriorNodeSemaphoreWaitValue) {
         m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetLocalWaitValue();
@@ -79,12 +79,12 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
-        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.ExportedGlobalDescriptor()->GetLocalBuffer();
+        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->GetLocalBuffer();
         m_MeshNodeDescriptor[m_NodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         m_MeshNodeDescriptor[m_NodeFramebufferIndex].WriteLocalBuffer();
 
         m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
-        m_NodeReference.ExportedGlobalDescriptor()->WriteLocalBuffer();
+        m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
     }
 
     const auto& framebuffer = m_Framebuffers[m_FramebufferIndex];
@@ -137,8 +137,8 @@ MXC_RESULT ComputeCompositorScene::Init()
                         Window::extents()));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
-    m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
-    m_MainCamera.Transform()->Rotate(0, 180, 0);
+    m_MainCamera.pTransform()->SetPosition(glm::vec3(0, 0, -2));
+    m_MainCamera.pTransform()->Rotate(0, 180, 0);
     m_MainCamera.UpdateProjection();
     m_MainCamera.UpdateView();
 
@@ -169,7 +169,7 @@ MXC_RESULT ComputeCompositorScene::Init()
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
-    m_NodeReference.ExportedGlobalDescriptor()->WriteLocalBuffer();
+    m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;
 }
@@ -187,7 +187,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     k_pDevice->ResetTimestamps();
     k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
-    auto* const nodeSemaphore = m_NodeReference.ExportedSemaphore();
+    auto* const nodeSemaphore = m_NodeReference.pExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
     if (nodeSemaphore->GetLocalWaitValue() != m_PriorNodeSemaphoreWaitValue) {
         m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetLocalWaitValue();
@@ -199,12 +199,12 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                                    Vulkan::ToComputeRead);
         m_ComputeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
-        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.ExportedGlobalDescriptor()->GetLocalBuffer();
+        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->GetLocalBuffer();
         m_ComputeNodeDescriptor.SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         m_ComputeNodeDescriptor.WriteLocalBuffer();
 
         m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
-        m_NodeReference.ExportedGlobalDescriptor()->WriteLocalBuffer();
+        m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
         MXC_LOG("CHILD UPDATE");
     }
@@ -302,8 +302,8 @@ MXC_RESULT NodeScene::Init()
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    MXC_CHK(m_Node.ImportedCompositorSemaphore()->SyncLocalWaitValue());
-    MXC_CHK(m_Node.ImportedNodeSemaphore()->SyncLocalWaitValue());
+    MXC_CHK(m_Node.pImportedCompositorSemaphore()->SyncLocalWaitValue());
+    MXC_CHK(m_Node.pImportedNodeSemaphore()->SyncLocalWaitValue());
 
     return MXC_SUCCESS;
 }
@@ -312,7 +312,7 @@ int temp = 0;
 
 MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 {
-    m_GlobalDescriptor.WriteBuffer(m_Node.ImportedGlobalDescriptor()->GetSharedBuffer());
+    m_GlobalDescriptor.WriteBuffer(m_Node.pImportedGlobalDescriptor()->GetSharedBuffer());
 
     const auto commandBuffer = k_pDevice->BeginGraphicsCommandBuffer();
 
@@ -348,14 +348,14 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     //                   m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
     vkEndCommandBuffer(commandBuffer);
-    k_pDevice->SubmitGraphicsQueue(m_Node.ImportedNodeSemaphore());
+    k_pDevice->SubmitGraphicsQueue(m_Node.pImportedNodeSemaphore());
     // k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
     //                                          swapIndex,
     //                                          m_Node.ImportedNodeSemaphore());
 
-    m_Node.ImportedNodeSemaphore()->Wait();
-    m_Node.ImportedCompositorSemaphore()->IncrementLocalWaitValue(m_CompositorSempahoreStep);
-    m_Node.ImportedCompositorSemaphore()->Wait();
+    m_Node.pImportedNodeSemaphore()->Wait();
+    m_Node.pImportedCompositorSemaphore()->IncrementLocalWaitValue(m_CompositorSempahoreStep);
+    m_Node.pImportedCompositorSemaphore()->Wait();
 
     m_FramebufferIndex = !m_FramebufferIndex;
 
