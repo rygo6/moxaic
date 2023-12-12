@@ -23,16 +23,16 @@ MXC_RESULT Core::Run()
     switch (Role) {
         case Role::Compositor:
             if (Vulkan::CompositorPipelineType == Vulkan::PipelineType::Graphics) {
-                scene = std::make_unique<CompositorScene>(*device);
+                scene = std::make_unique<CompositorScene>(device.get());
                 break;
             }
             if (Vulkan::CompositorPipelineType == Vulkan::PipelineType::Compute) {
-                scene = std::make_unique<ComputeCompositorScene>(*device);
+                scene = std::make_unique<ComputeCompositorScene>(device.get());
                 break;
             }
             break;
         case Role::Node:
-            scene = std::make_unique<NodeScene>(*device);
+            scene = std::make_unique<NodeScene>(device.get());
             break;
     }
     scene->Init();

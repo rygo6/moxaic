@@ -16,7 +16,7 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Framebuffer);
 
-        explicit Framebuffer(const Device& device);
+        explicit Framebuffer(const Vulkan::Device* const pDevice);
         virtual ~Framebuffer();
 
         MXC_RESULT Init(const PipelineType pipelineType,
@@ -43,15 +43,15 @@ namespace Moxaic::Vulkan
         MXC_GET(Extents);
 
     private:
-        const Device* const k_pDevice;
+        const Vulkan::Device* const k_pDevice;
 
         VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        Texture m_ColorTexture{*k_pDevice};
-        Texture m_NormalTexture{*k_pDevice};
-        Texture m_GBufferTexture{*k_pDevice};
-        Texture m_DepthTexture{*k_pDevice};
+        Texture m_ColorTexture{k_pDevice};
+        Texture m_NormalTexture{k_pDevice};
+        Texture m_GBufferTexture{k_pDevice};
+        Texture m_DepthTexture{k_pDevice};
 
         VkExtent2D m_Extents{};
 

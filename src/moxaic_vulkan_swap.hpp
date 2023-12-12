@@ -18,7 +18,7 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Swap);
 
-        explicit Swap(const Device& device);
+        explicit Swap(const Vulkan::Device* const pDevice);
         virtual ~Swap();
 
         MXC_RESULT Init(const PipelineType pipelineType,
@@ -43,7 +43,7 @@ namespace Moxaic::Vulkan
         MXC_GETARR(VkSwapImages);
 
     private:
-        const Device* const k_pDevice;
+        const Vulkan::Device* const k_pDevice;
 
         VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};

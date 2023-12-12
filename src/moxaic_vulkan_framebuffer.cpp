@@ -52,8 +52,8 @@ constexpr VkImageUsageFlags kDepthBufferUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATT
                                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                 VK_IMAGE_USAGE_SAMPLED_BIT;
 
-Framebuffer::Framebuffer(const Device& device)
-    : k_pDevice(&device) {}
+Framebuffer::Framebuffer(const Vulkan::Device* const pDevice)
+    : k_pDevice(pDevice) {}
 
 Framebuffer::~Framebuffer() = default;
 

@@ -48,8 +48,8 @@ static MXC_RESULT StartProcess(STARTUPINFO& si, PROCESS_INFORMATION& pi)
     return MXC_SUCCESS;
 }
 
-NodeReference::NodeReference(const Vulkan::Device& device)
-    : k_pDevice(&device) {}
+NodeReference::NodeReference(const Vulkan::Device* const pDevice)
+    : k_pDevice(pDevice) {}
 
 NodeReference::~NodeReference()
 {
@@ -123,8 +123,8 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camer
     localBuffer->invViewProj = localBuffer->invView * localBuffer->invProj;
 }
 
-Node::Node(const Vulkan::Device& device)
-    : k_pDevice(&device) {}
+Node::Node(const Vulkan::Device* const pDevice)
+    : k_pDevice(pDevice) {}
 
 Node::~Node() = default;
 

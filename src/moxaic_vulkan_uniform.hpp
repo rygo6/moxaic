@@ -16,8 +16,8 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Uniform);
 
-        explicit Uniform(Device const& device)
-            : k_pDevice(&device) {}
+        explicit Uniform(const Vulkan::Device* const pDevice)
+            : k_pDevice(pDevice) {}
 
         virtual ~Uniform()
         {
@@ -32,9 +32,9 @@ namespace Moxaic::Vulkan
                 CloseHandle(m_ExternalMemory);
         }
 
-        bool Init(VkMemoryPropertyFlags const properties,
-                  VkBufferUsageFlags const usage,
-                  Locality const locality)
+        bool Init(const VkMemoryPropertyFlags properties,
+                  const VkBufferUsageFlags usage,
+                  const Locality locality)
         {
             MXC_LOG_MULTILINE("Init Uniform:",
                               string_VkMemoryPropertyFlags(properties),
@@ -46,12 +46,12 @@ namespace Moxaic::Vulkan
             SDL_assert(((supportedProperties & properties) == supportedProperties) &&
                        "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
             MXC_CHK(k_pDevice->CreateAllocateBindBuffer(usage,
-                                                      properties,
-                                                      Size(),
-                                                      locality,
-                                                      &m_VkBuffer,
-                                                      &m_VkDeviceMemory,
-                                                      &m_ExternalMemory));
+                                                        properties,
+                                                        Size(),
+                                                        locality,
+                                                        &m_VkBuffer,
+                                                        &m_VkDeviceMemory,
+                                                        &m_ExternalMemory));
             VK_CHK(vkMapMemory(k_pDevice->GetVkDevice(),
                                m_VkDeviceMemory,
                                0,
@@ -61,18 +61,19 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        void CopyBuffer(T const& srcBuffer)
+        void CopyBuffer(const T& srcBuffer)
         {
             memcpy(m_pMappedBuffer, &srcBuffer, Size());
         }
 
         T& mapped() { return *static_cast<T*>(m_pMappedBuffer); }
-        auto const& vkBuffer() const { return m_VkBuffer; }
+        const auto& vkBuffer() const { return m_VkBuffer; }
 
         static constexpr VkDeviceSize Size() { return sizeof(T); }
 
     private:
-        Device const* const k_pDevice;;
+        const Device* const k_pDevice;
+        ;
         VkBuffer m_VkBuffer{VK_NULL_HANDLE};
         VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
         void* m_pMappedBuffer{nullptr};

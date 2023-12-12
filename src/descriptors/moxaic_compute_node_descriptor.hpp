@@ -204,6 +204,6 @@ namespace Moxaic::Vulkan
 
     private:
         GlobalDescriptor::Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
-        Uniform<GlobalDescriptor::Buffer> m_Uniform{*k_pDevice};
+        Uniform<GlobalDescriptor::Buffer> m_Uniform{k_pDevice};
     };
 }// namespace Moxaic::Vulkan

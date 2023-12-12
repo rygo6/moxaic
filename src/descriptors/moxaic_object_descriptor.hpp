@@ -22,7 +22,7 @@ namespace Moxaic::Vulkan
             glm::mat4 model;
         };
 
-        static MXC_RESULT InitLayout(Vulkan::Device const& device)
+        static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
             MXC_LOG("Init ObjectDescriptor Layout");
             StaticArray bindings{
@@ -35,7 +35,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init(Transform const& transform)
+        MXC_RESULT Init(const Transform& transform)
         {
             MXC_LOG("Init ObjectDescriptor");
 
@@ -59,6 +59,6 @@ namespace Moxaic::Vulkan
 
     private
         :
-        Uniform<Buffer> m_Uniform{*k_pDevice};
+        Uniform<Buffer> m_Uniform{k_pDevice};
     };
 }// namespace Moxaic::Vulkan

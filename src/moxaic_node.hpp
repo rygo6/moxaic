@@ -22,7 +22,7 @@ namespace Moxaic
     public:
         MXC_NO_VALUE_PASS(NodeReference);
 
-        explicit NodeReference(const Vulkan::Device& device);
+        explicit NodeReference(const Vulkan::Device* const pDevice);
         virtual ~NodeReference();
 
         MXC_RESULT Init(const Vulkan::PipelineType pipelineType);
@@ -55,11 +55,11 @@ namespace Moxaic
         InterProcessProducer m_IPCToNode{};
         InterProcessReceiver m_IPCFromNode{};
 
-        Vulkan::Semaphore m_ExportedSemaphore{*k_pDevice};
+        Vulkan::Semaphore m_ExportedSemaphore{k_pDevice};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
-          Vulkan::Framebuffer(*k_pDevice),
-          Vulkan::Framebuffer(*k_pDevice)};
+          Vulkan::Framebuffer(k_pDevice),
+          Vulkan::Framebuffer(k_pDevice)};
 
         STARTUPINFO m_Startupinfo{};
         PROCESS_INFORMATION m_ProcessInformation{};
@@ -86,7 +86,7 @@ namespace Moxaic
             HANDLE nodeSemaphoreExternalHandle;
         };
 
-        explicit Node(const Vulkan::Device& device);
+        explicit Node(const Vulkan::Device* const pDevice);
         virtual ~Node();
 
         MXC_RESULT Init();
@@ -134,11 +134,11 @@ namespace Moxaic
         InterProcessReceiver m_IPCFromCompositor{};
         InterProcessProducer m_IPCToCompositor{};
 
-        Vulkan::Semaphore m_ImportedCompositorSemaphore{*k_pDevice};
-        Vulkan::Semaphore m_ImportedNodeSemaphore{*k_pDevice};
+        Vulkan::Semaphore m_ImportedCompositorSemaphore{k_pDevice};
+        Vulkan::Semaphore m_ImportedNodeSemaphore{k_pDevice};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{
-          Vulkan::Framebuffer(*k_pDevice),
-          Vulkan::Framebuffer(*k_pDevice)};
+          Vulkan::Framebuffer(k_pDevice),
+          Vulkan::Framebuffer(k_pDevice)};
     };
 }// namespace Moxaic

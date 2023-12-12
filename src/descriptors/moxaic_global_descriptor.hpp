@@ -28,7 +28,7 @@ namespace Moxaic::Vulkan
             uint32_t height;
         };
 
-        static MXC_RESULT InitLayout(Vulkan::Device const& device)
+        static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
             MXC_LOG("Init GlobalDescriptor Layout");
             StaticArray bindings{
@@ -39,14 +39,13 @@ namespace Moxaic::Vulkan
                               VK_SHADER_STAGE_COMPUTE_BIT |
                               VK_SHADER_STAGE_FRAGMENT_BIT |
                               VK_SHADER_STAGE_MESH_BIT_EXT |
-                              VK_SHADER_STAGE_TASK_BIT_EXT
-              },
+                              VK_SHADER_STAGE_TASK_BIT_EXT},
             };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init(Camera const& camera, VkExtent2D const& dimensions)
+        MXC_RESULT Init(const Camera& camera, const VkExtent2D& dimensions)
         {
             MXC_LOG("Init GlobalDescriptor");
 
@@ -77,7 +76,7 @@ namespace Moxaic::Vulkan
         }
 
         /// Bypass local buffer copy
-        void WriteBuffer(Buffer const& buffer)
+        void WriteBuffer(const Buffer& buffer)
         {
             m_Uniform.CopyBuffer(buffer);
         }
@@ -87,7 +86,7 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(m_LocalBuffer);
         }
 
-        void SetLocalBufferView(Camera const& camera)
+        void SetLocalBufferView(const Camera& camera)
         {
             m_LocalBuffer.view = camera.GetView();
             m_LocalBuffer.invView = camera.GetInverseView();
@@ -100,6 +99,6 @@ namespace Moxaic::Vulkan
 
     private:
         Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
-        Uniform<Buffer> m_Uniform{*k_pDevice};
+        Uniform<Buffer> m_Uniform{k_pDevice};
     };
 }// namespace Moxaic::Vulkan

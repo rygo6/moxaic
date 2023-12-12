@@ -18,7 +18,7 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Texture);
 
-        explicit Texture(const Device& device);
+        explicit Texture(const Vulkan::Device* const pDevice);
         virtual ~Texture();
 
         MXC_RESULT InitFromFile(const std::string& file,
@@ -51,7 +51,7 @@ namespace Moxaic::Vulkan
         MXC_GET(VkImageView);
 
     private:
-        const Device* const k_pDevice;
+        const Vulkan::Device* const k_pDevice;
 
         VkImage m_VkImage{VK_NULL_HANDLE};
         VkImageView m_VkImageView{VK_NULL_HANDLE};

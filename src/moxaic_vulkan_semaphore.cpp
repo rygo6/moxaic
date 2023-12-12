@@ -11,8 +11,8 @@
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-Semaphore::Semaphore(Device const& device)
-    : k_pDevice(&device) {}
+Semaphore::Semaphore(const Vulkan::Device* const pDevice)
+    : k_pDevice(pDevice) {}
 
 Semaphore::~Semaphore()
 {

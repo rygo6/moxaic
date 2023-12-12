@@ -20,8 +20,8 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(VulkanDescriptorBase)
 
-        explicit VulkanDescriptorBase(Device const& device)
-            : k_pDevice(&device) {}
+        explicit VulkanDescriptorBase(const Vulkan::Device* const pDevice)
+            : k_pDevice(pDevice) {}
 
         virtual ~VulkanDescriptorBase()
         {
@@ -33,26 +33,26 @@ namespace Moxaic::Vulkan
 
         MXC_GET(VkDescriptorSet);
 
-        static VkDescriptorSetLayout const& GetOrInitVkDescriptorSetLayout(Vulkan::Device const& device)
+        static const VkDescriptorSetLayout& GetOrInitVkDescriptorSetLayout(const Vulkan::Device& device)
         {
             CheckLayoutInitialized(device);
             return s_VkDescriptorSetLayout;
         }
 
     protected:
-        Device const* const k_pDevice;
+        const Device* const k_pDevice;
         // at some point layout will need to be a map on the device to support multiple devices
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
 
-        static void CheckLayoutInitialized(Vulkan::Device const& device)
+        static void CheckLayoutInitialized(const Vulkan::Device& device)
         {
             if (s_VkDescriptorSetLayout == VK_NULL_HANDLE)
                 Derived::InitLayout(device);
         }
 
         template<uint32_t N>
-        static MXC_RESULT CreateDescriptorSetLayout(Vulkan::Device const& device,
+        static MXC_RESULT CreateDescriptorSetLayout(const Vulkan::Device& device,
                                                     StaticArray<VkDescriptorSetLayoutBinding, N>& bindings)
         {
             SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
@@ -60,7 +60,7 @@ namespace Moxaic::Vulkan
                 bindings[i].binding = i;
                 bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
             }
-            VkDescriptorSetLayoutCreateInfo const layoutInfo{
+            const VkDescriptorSetLayoutCreateInfo layoutInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
               .pNext = nullptr,
               .flags = 0,
@@ -78,7 +78,7 @@ namespace Moxaic::Vulkan
         {
             SDL_assert(m_VkDescriptorSet == nullptr);
             CheckLayoutInitialized(*k_pDevice);
-            VkDescriptorSetAllocateInfo const allocInfo{
+            const VkDescriptorSetAllocateInfo allocInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
               .pNext = nullptr,
               .descriptorPool = k_pDevice->GetVkDescriptorPool(),

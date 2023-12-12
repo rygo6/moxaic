@@ -18,13 +18,13 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Semaphore);
 
-        explicit Semaphore(Device const& device);
+        explicit Semaphore(const Vulkan::Device* const pDevice);
         virtual ~Semaphore();
 
-        MXC_RESULT Init(bool const& readOnly,
-                        Locality const& locality);
+        MXC_RESULT Init(const bool& readOnly,
+                        const Locality& locality);
 
-        MXC_RESULT InitFromImport(bool const& readOnly,
+        MXC_RESULT InitFromImport(const bool& readOnly,
                                   HANDLE const& externalHandle);
 
         MXC_RESULT SyncLocalWaitValue();
@@ -34,13 +34,14 @@ namespace Moxaic::Vulkan
         HANDLE ClonedExternalHandle(HANDLE const& hTargetProcessHandle) const;
 
         void IncrementLocalWaitValue() { m_LocalWaitValue++; }
-        void IncrementLocalWaitValue(uint64_t const step) { m_LocalWaitValue += step; }
+        void IncrementLocalWaitValue(const uint64_t step) { m_LocalWaitValue += step; }
 
         MXC_GET(VkSemaphore);
         MXC_GET(LocalWaitValue)
 
     private:
-        Device const* const k_pDevice;;
+        const Device* const k_pDevice;
+        ;
 
         uint64_t m_LocalWaitValue{0};
         VkSemaphore m_VkSemaphore{VK_NULL_HANDLE};

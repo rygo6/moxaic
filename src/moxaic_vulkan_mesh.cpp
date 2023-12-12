@@ -73,8 +73,8 @@ static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t
     }
 }
 
-Mesh::Mesh(const Device& device)
-    : k_pDevice(&device) {}
+Mesh::Mesh(const Vulkan::Device* const pDevice)
+    : k_pDevice(pDevice) {}
 
 Mesh::~Mesh()
 {

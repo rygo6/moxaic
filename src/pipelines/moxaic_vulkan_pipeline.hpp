@@ -43,8 +43,8 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Pipeline)
 
-        explicit Pipeline(const Device& device)
-            : k_pDevice(&device) {}
+        explicit Pipeline(const Vulkan::Device* const pDevice)
+            : k_pDevice(pDevice) {}
 
         virtual ~Pipeline()
         {
@@ -69,7 +69,7 @@ namespace Moxaic::Vulkan
         }
 
     protected:
-        const Device* const k_pDevice;
+        const Vulkan::Device* const k_pDevice;
         // at some point layout will need to be a map on the device to support multiple devices
         inline static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
         VkPipeline m_vkPipeline{VK_NULL_HANDLE};
