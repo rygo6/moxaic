@@ -155,11 +155,11 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
         return false;
     }
 
-//    const vec4 nodeQuadSurfaceClipPos = vec4(nodeIntersectNDC.xy, .001, 1);
-//    const vec3 nodeQuadSurfaceWorldPos = WorldPosFromNodeClipPos(nodeQuadSurfaceClipPos);
-//    const vec4 nodeQuadSurfaceProjectedClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
-//    const vec3 nodeQuadSurfaceProjectedNDC = NDCFromClipPos(nodeQuadSurfaceProjectedClipPos);
-//    surfaceNDC = nodeQuadSurfaceProjectedNDC;
+    //    const vec4 nodeQuadSurfaceClipPos = vec4(nodeIntersectNDC.xy, .001, 1);
+    //    const vec3 nodeQuadSurfaceWorldPos = WorldPosFromNodeClipPos(nodeQuadSurfaceClipPos);
+    //    const vec4 nodeQuadSurfaceProjectedClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
+    //    const vec3 nodeQuadSurfaceProjectedNDC = NDCFromClipPos(nodeQuadSurfaceProjectedClipPos);
+    //    surfaceNDC = nodeQuadSurfaceProjectedNDC;
 
     const vec4 nodeQuadDepthClipPos = vec4(nodeIntersectNDC.xy, depth, 1);
     const vec3 nodeQuadDepthWorldPos = WorldPosFromNodeClipPos(nodeQuadDepthClipPos);
@@ -185,28 +185,6 @@ uint packFloatAndColor(float normalizedDepth, vec3 color) {
     return (packedValue << 16) | packedColor;
 }
 
-uint packFloatAndColorR(float normalizedDepth, vec3 color) {
-    uint packedValue = uint(normalizedDepth * 65535.0);
-
-    uint r = uint(color.r * 31.0);
-    uint g = uint(0 * 63.0);
-    uint b = uint(0 * 31.0);
-    uint packedColor = (r << 11) | (g << 5) | b;
-
-    return (packedValue << 16) | packedColor;
-}
-
-uint packFloatAndColorG(float normalizedDepth, vec3 color) {
-    uint packedValue = uint(normalizedDepth * 65535.0);
-
-    uint r = uint(0 * 31.0);
-    uint g = uint(color.g * 63.0);
-    uint b = uint(0 * 31.0);
-    uint packedColor = (r << 11) | (g << 5) | b;
-
-    return (packedValue << 16) | packedColor;
-}
-
 void WriteDebugUV(vec2 debugUV){
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 screenSize = vec2(globalUBO.width, globalUBO.height) * RESOLUTION_SCALE;
@@ -218,37 +196,78 @@ void WriteDebugUV(vec2 debugUV){
     }
 }
 
-float inverseLerp(float a, float b, float value) {
-    return a == b ? 0 : clamp((value - a) / (b - a), a, b);
+float inverseLerp(float value, float a, float b) {
+    return a == b ? 0 : (value - a) / (b - a);
 }
 
-vec2 GlobalUVFromNodeNDC(vec3 nodeNDC){
+vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
     const vec3 worldPos = WorldPosFromNodeClipPos(vec4(nodeNDC, 1));
     const vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos.xyz);
     const vec3 globalNDC = NDCFromClipPos(globalClipPos);
-    const vec2 globalUV = UVFromNDC(globalNDC);
-    return globalUV;
+    return globalNDC;
 }
 
+float areaOfQuadrilateral(vec2 a, vec2 b, vec2 c, vec2 d) {
+    return 0.5 * abs(
+    a.x * b.y + b.x * c.y + c.x * d.y + d.x * a.y -
+    (b.x * a.y + c.x * b.y + d.x * c.y + a.x * d.y)
+    );
+}
+
+float areaOfQuadrilateral(vec2 verts[4]) {
+    return areaOfQuadrilateral(verts[0], verts[1], verts[2], verts[3]);
+}
+
+float SqrMag(vec2 values[2]) {
+    const  vec2 diff = values[0] - values[1];
+    return dot(diff, diff);
+}
+
+//const int ndcCornerCount = 4;
+//const vec2 ndcCorners[] = {
+//{ -1, 1 },
+//{ 1, 1 },
+//{ -1, -1 },
+//{ 1, -1 },
+//};
+
+const int ndcCornerCount = 2;
+const vec2 ndcCorners[] = {
+{ -1, 1 },
+{ 1, -1 },
+};
+
 float CalcNodeZPlane(){
-    const vec2 frontUpperLeftGlobalUV = GlobalUVFromNodeNDC(vec3(-1, 1, -1));
-    const vec2 frontLowerRightGlobalUV = GlobalUVFromNodeNDC(vec3(1, -1, -1));
-    const vec2 frontDiff = frontUpperLeftGlobalUV - frontLowerRightGlobalUV;
-    const float frontMag = dot(frontDiff, frontDiff);
 
-    const vec2 backUpperLeftGlobalUV = GlobalUVFromNodeNDC(vec3(-1, 1, 1));
-    const vec2 backLowerRightGlobalUV = GlobalUVFromNodeNDC(vec3(1, -1, 1));
-    const vec2 backDiff = backUpperLeftGlobalUV - backLowerRightGlobalUV;
-    const float backMag = dot(backDiff, backDiff);
+    vec2 uvs[ndcCornerCount];
+    for (int i = 0; i < ndcCornerCount; ++i){
+        const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 0));
+        if (ndc.z < 0) {
+            return 1;// maybe -z?
+        }
+        uvs[i] = UVFromNDC(ndc);
+    }
+    const float frontMag = SqrMag(uvs);
 
-    const float nodeZPlane = frontMag < backMag ? 0.5f : -0.5f; // do some kind of gradient in between?
+    for (int i = 0; i < ndcCornerCount; ++i){
+        const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 1));
+        uvs[i] = UVFromNDC(ndc);
+    }
+    const float backMag = SqrMag(uvs);
+
+    float nodeZPlane = frontMag < backMag ? 1 : -1;
+    if (frontMag == backMag) {
+        nodeZPlane = 0;
+    }
 
     return nodeZPlane;
 }
 
 void main()
 {
-    nodeOriginWorldPos.z = CalcNodeZPlane();
+    nodeOriginWorldPos.z = CalcNodeZPlane() * 0.5;
+
+    WriteDebugUV(vec2(0.5, nodeOriginWorldPos.z + .5));
 
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height) * RESOLUTION_SCALE;
     const vec2 screenSize = vec2(iScreenSize);
@@ -256,13 +275,13 @@ void main()
     const vec2 uv = uvFromCoord(coord, screenSize);
 
     vec2 nodeUV;
-//    vec3 surfaceNDC;
+    //    vec3 surfaceNDC;
     vec3 depthProjectedNDC;
     if (!NodeIntersectUV(uv, nodeUV, depthProjectedNDC)) {
         return;
     }
-//    const vec2 surfaceUV = UVFromNDC(surfaceNDC);
-//    const ivec2 surfaceCoord = CoordFromUV(surfaceUV, screenSize);
+    //    const vec2 surfaceUV = UVFromNDC(surfaceNDC);
+    //    const ivec2 surfaceCoord = CoordFromUV(surfaceUV, screenSize);
     const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
 
@@ -278,14 +297,14 @@ void main()
     const ivec2 stepbackCoord = iRound(normalizedProjectionDir + vec2(coord));
     const vec2 stepbackUV = uvFromCoord(stepbackCoord, screenSize);
     vec2 stepbackNodeUV;
-//    vec3 stepbackSurfaceNDC;
+    //    vec3 stepbackSurfaceNDC;
     vec3 stepbackProjectedNDC;
     if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackProjectedNDC)) {
         return;
     }
-//    if (stepbackProjectedNDC.z > depthProjectedNDC.z){
-//        return;
-//    }
+    //    if (stepbackProjectedNDC.z > depthProjectedNDC.z){
+    //        return;
+    //    }
 
     // source
     const vec4 color = texture(nodeColor, nodeUV);
@@ -295,7 +314,7 @@ void main()
     const vec2 stepbackProjectedUV = UVFromNDC(stepbackProjectedNDC);
     const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
     const ivec2 stepbackCoordDiff = abs(stepbackOutputUVCoord - depthProjectedCoord);
-    const int stepbackCount = clamp((walkX ? stepbackCoordDiff.x : stepbackCoordDiff.y) - 1, 0, 4);// -1 so it doesn't overlap end pixel in stepback?
+    const int stepbackCount = clamp((walkX ? stepbackCoordDiff.x : stepbackCoordDiff.y) - 1, 0, 4);// -1 so it doesn't overlap end pixel in stepback
     vec2 currentCoord = depthProjectedCoord;
     ivec2 roundedCoord = depthProjectedCoord;
     for (int step = 0; step < stepbackCount; ++step){

@@ -2,6 +2,8 @@
 
 #include "main.hpp"
 
+#include <stdio.h>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 

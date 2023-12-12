@@ -139,8 +139,8 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     m_MainCamera.Transform()->SetPosition(glm::vec3(0, 0, -2));
     m_MainCamera.Transform()->Rotate(0, 180, 0);
-    m_MainCamera.UpdateView();
     m_MainCamera.UpdateProjection();
+    m_MainCamera.UpdateView();
 
     MXC_CHK(m_ComputeNodeProjectPipeline.Init("./shaders/compute_node.comp.spv"));
     MXC_CHK(m_ComputeNodePostPipeline.Init("./shaders/compute_node_post.comp.spv"));
@@ -168,7 +168,7 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    m_NodeReference.ExportedGlobalDescriptor()->SetLocalBuffer(m_GlobalDescriptor.GetLocalBuffer());
+    m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
     m_NodeReference.ExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;

@@ -76,7 +76,7 @@ namespace Moxaic::Vulkan
         MXC_RESULT TransitionImageLayoutImmediate(const VkImage& image,
                                                   const Barrier& src,
                                                   const Barrier& dst,
-                                                  VkImageAspectFlags aspectMask) const;
+                                                  const VkImageAspectFlags aspectMask) const;
         MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
         MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffer) const;
         VkCommandBuffer BeginGraphicsCommandBuffer() const;
