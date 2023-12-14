@@ -1,11 +1,10 @@
 #include "moxaic_core.hpp"
+
 #include "main.hpp"
 #include "moxaic_scene.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_window.hpp"
-
-#include <memory>
 
 using namespace Moxaic;
 
@@ -47,7 +46,7 @@ MXC_RESULT Core::Run()
 
         Window::Poll();
 
-        Running = scene->Loop(deltaTime);
+        scene->Loop(deltaTime);
     }
 
     Window::Cleanup();

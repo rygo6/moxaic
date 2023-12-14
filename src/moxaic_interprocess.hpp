@@ -70,24 +70,21 @@ namespace Moxaic
 
         void SyncLocalBuffer()
         {
-            memcpy(&m_LocalBuffer, m_pSharedBuffer, Size());
+            memcpy(&localBuffer_, m_pSharedBuffer, Size());
         }
 
         void WriteLocalBuffer()
         {
-            memcpy(m_pSharedBuffer, &m_LocalBuffer, Size());
+            memcpy(m_pSharedBuffer, &localBuffer_, Size());
         }
 
-        MXC_PTR_ACCESS(LocalBuffer);
-        MXC_GETSET(LocalBuffer);
+        T localBuffer_;
 
         T const& GetSharedBuffer() const { return *static_cast<T*>(m_pSharedBuffer); }
 
         static constexpr int Size() { return sizeof(T); }
 
     protected:
-        T m_LocalBuffer;
-
 #ifdef WIN32
         LPVOID m_pSharedBuffer{nullptr};
         HANDLE m_hMapFile{nullptr};

@@ -144,6 +144,8 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
     const vec2 nodeIntersectUV = UVFromNDC(nodeIntersectNDC);
     nodeUV = nodeIntersectUV;
 
+    vec4 normal = texture(nodeNormal, nodeUV);
+    normal.y *= -1;
     const float depth = texture(nodeDepth, nodeIntersectUV).r;
 
     if (nodeIntersectUV.x < 0
@@ -162,6 +164,7 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
     //    surfaceNDC = nodeQuadSurfaceProjectedNDC;
 
     const vec4 nodeQuadDepthClipPos = vec4(nodeIntersectNDC.xy, depth, 1);
+//    const vec3 nodeQuadDepthWorldPos = WorldPosFromNodeClipPos(nodeQuadDepthClipPos) + normal.xyz * .1;
     const vec3 nodeQuadDepthWorldPos = WorldPosFromNodeClipPos(nodeQuadDepthClipPos);
     const vec4 nodeQuadDepthProjectedClipPos = GlobalClipPosFromWorldPos(nodeQuadDepthWorldPos);
     const vec3 nodeQuadDepthProjectedNDC = NDCFromClipPos(nodeQuadDepthProjectedClipPos);
@@ -267,7 +270,7 @@ void main()
 {
     nodeOriginWorldPos.z = CalcNodeZPlane() * 0.5;
 
-    WriteDebugUV(vec2(0.5, nodeOriginWorldPos.z + .5));
+//    WriteDebugUV(vec2(0.5, nodeOriginWorldPos.z + .5));
 
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height) * RESOLUTION_SCALE;
     const vec2 screenSize = vec2(iScreenSize);
@@ -302,9 +305,6 @@ void main()
     if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackProjectedNDC)) {
         return;
     }
-    //    if (stepbackProjectedNDC.z > depthProjectedNDC.z){
-    //        return;
-    //    }
 
     // source
     const vec4 color = texture(nodeColor, nodeUV);

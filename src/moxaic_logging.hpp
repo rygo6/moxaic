@@ -2,12 +2,9 @@
 
 #include "main.hpp"
 
-#include <stdio.h>
 #include <cstdio>
 #include <cstring>
 #include <iostream>
-
-#include <SDL2/SDL.h>
 
 namespace Moxaic
 {

@@ -19,7 +19,7 @@ Semaphore::~Semaphore()
     if (m_ExternalHandle != nullptr)
         CloseHandle(m_ExternalHandle);
 
-    vkDestroySemaphore(k_pDevice->GetVkDevice(), m_VkSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_pDevice->vkDevice, m_VkSemaphore, VK_ALLOC);
 }
 
 MXC_RESULT Semaphore::Init(bool const& readOnly, Locality const& locality)
@@ -50,7 +50,7 @@ MXC_RESULT Semaphore::Init(bool const& readOnly, Locality const& locality)
       .pNext = &timelineSemaphoreTypeCreateInfo,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_pDevice->GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(k_pDevice->vkDevice,
                              &timelineSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkSemaphore));
@@ -62,7 +62,7 @@ MXC_RESULT Semaphore::Init(bool const& readOnly, Locality const& locality)
           .semaphore = m_VkSemaphore,
           .handleType = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
         };
-        VK_CHK(VkFunc.GetSemaphoreWin32HandleKHR(k_pDevice->GetVkDevice(),
+        VK_CHK(VkFunc.GetSemaphoreWin32HandleKHR(k_pDevice->vkDevice,
                                                  &semaphoreGetWin32HandleInfo,
                                                  &m_ExternalHandle));
 #endif
@@ -80,7 +80,7 @@ MXC_RESULT Semaphore::Wait() const
       .pSemaphores = &m_VkSemaphore,
       .pValues = &m_LocalWaitValue,
     };
-    VK_CHK(vkWaitSemaphores(k_pDevice->GetVkDevice(),
+    VK_CHK(vkWaitSemaphores(k_pDevice->vkDevice,
                             &waitInfo,
                             UINT64_MAX));
     return MXC_SUCCESS;
@@ -112,7 +112,7 @@ MXC_RESULT Semaphore::InitFromImport(bool const& readOnly, const HANDLE& externa
       .handle = externalHandle,
       .name = nullptr,
     };
-    VK_CHK(VkFunc.ImportSemaphoreWin32HandleKHR(k_pDevice->GetVkDevice(),
+    VK_CHK(VkFunc.ImportSemaphoreWin32HandleKHR(k_pDevice->vkDevice,
                                                 &importSemaphoreWin32HandleInfo));
 #endif
     return MXC_SUCCESS;
@@ -120,6 +120,6 @@ MXC_RESULT Semaphore::InitFromImport(bool const& readOnly, const HANDLE& externa
 
 MXC_RESULT Semaphore::SyncLocalWaitValue()
 {
-    VK_CHK(vkGetSemaphoreCounterValue(k_pDevice->GetVkDevice(), m_VkSemaphore, &m_LocalWaitValue));
+    VK_CHK(vkGetSemaphoreCounterValue(k_pDevice->vkDevice, m_VkSemaphore, &m_LocalWaitValue));
     return MXC_SUCCESS;
 }

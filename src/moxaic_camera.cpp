@@ -4,9 +4,10 @@
 #include <glm/glm.hpp>
 
 using namespace Moxaic;
+using namespace glm;
 
 Camera::Camera()
-    : m_Aspect(float(Window::extents().width) / float(Window::extents().height))
+    : aspectRatio_(float(Window::extents().width) / float(Window::extents().height))
 {}
 
 bool Camera::UserCommandUpdate(const uint32_t deltaTime)
@@ -14,25 +15,25 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
     bool updated = false;
 
     const auto& userCommand = Window::userCommand();
-    if (!m_CameraLocked && userCommand.leftMouseButtonPressed) {
+    if (!cameraLocked_ && userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
-        m_CameraLocked = true;
-    } else if (m_CameraLocked && !userCommand.leftMouseButtonPressed) {
+        cameraLocked_ = true;
+    } else if (cameraLocked_ && !userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_FALSE);
-        m_CameraLocked = false;
+        cameraLocked_ = false;
     }
 
-    if (m_CameraLocked && userCommand.mouseMoved) {
-        const auto rotationX = glm::radians(-userCommand.mouseDelta.x) * 0.5f;
-        const auto rotationY = glm::radians(userCommand.mouseDelta.y) * 0.5f;
-        m_Transform.Rotate(0, rotationX, 0);
-        m_Transform.LocalRotate(rotationY, 0, 0);
+    if (cameraLocked_ && userCommand.mouseMoved) {
+        const auto rotationX = radians(-userCommand.mouseDelta.x) * 0.5f;
+        const auto rotationY = radians(userCommand.mouseDelta.y) * 0.5f;
+        transform.Rotate(0, rotationX, 0);
+        transform.LocalRotate(rotationY, 0, 0);
         updated = true;
     }
 
     const auto& userMove = userCommand.userMove;
     if (!userMove.None()) {
-        auto delta = glm::zero<glm::vec3>();
+        auto delta = zero<vec3>();
         if (userMove.ContainsFlag(Window::UserMove::Forward)) {
             delta.z += 1;
         }
@@ -45,9 +46,9 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
         if (userMove.ContainsFlag(Window::UserMove::Right)) {
             delta.x += 1;
         }
-        if (glm::length(delta) > 0.0f) {
+        if (length(delta) > 0.0f) {
             constexpr auto zeroAxis = BitFlags<Transform::Axis>(Transform::X);
-            m_Transform.LocalTranslate(glm::normalize(delta) * float(deltaTime) * 0.002f, zeroAxis);
+            transform.LocalTranslate(normalize(delta) * float(deltaTime) * 0.002f, zeroAxis);
             updated = true;
         }
     }
@@ -62,18 +63,18 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
 
 void Camera::UpdateView()
 {
-    m_InverseView = m_Transform.ModelMatrix();
-    m_View = glm::inverse(m_InverseView);
+    inverseView_ = transform.ModelMatrix();
+    view_ = inverse(inverseView_);
 
-    m_InverseViewProjection = m_InverseView * m_InverseProjection;
-    m_ViewProjection = m_Projection * m_View;
+    inverseViewProjection_ = inverseView_ * inverseProjection_;
+    viewProjection_ = projection_ * view_;
 }
 
 void Camera::UpdateProjection()
 {
-    m_Projection = glm::perspective(m_FOV, m_Aspect, m_Near, m_Far);
-    m_InverseProjection = glm::inverse(m_Projection);
+    projection_ = perspective(fieldOfView_, aspectRatio_, nearZPlane_, farZPlane_);
+    inverseProjection_ = inverse(projection_);
 
-    m_InverseViewProjection = m_InverseView * m_InverseProjection;
-    m_ViewProjection = m_Projection * m_View;
+    inverseViewProjection_ = inverseView_ * inverseProjection_;
+    viewProjection_ = projection_ * view_;
 }

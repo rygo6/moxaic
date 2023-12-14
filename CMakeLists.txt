@@ -58,7 +58,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
         -DSDL_ASSERT_LEVEL=3
         -DGLM_FORCE_DEPTH_ZERO_TO_ONE)
 
-#target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)
+target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)
 
 set(SHADER_COMPILER "${VULKAN_SDK_PATH}/Bin/glslc.exe")
 set(SHADER_OPTIMIZER "${VULKAN_SDK_PATH}/Bin/spirv-opt.exe")

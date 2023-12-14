@@ -6,6 +6,8 @@
 
 #define MXC_CAMERA_MIN_Z 0.0001f
 
+using namespace glm;
+
 namespace Moxaic
 {
     class Camera
@@ -21,35 +23,34 @@ namespace Moxaic
         void UpdateView();
         void UpdateProjection();
 
-        MXC_PTR_ACCESS(Transform);
+        Moxaic::Transform transform{};
 
-        MXC_GET(View);
-        MXC_GET(Projection);
-        MXC_GET(ViewProjection);
-        MXC_GET(InverseView);
-        MXC_GET(InverseProjection);
-        MXC_GET(InverseViewProjection);
+        MXC_GET2(view);
+        MXC_GET2(projection);
+        MXC_GET2(viewProjection);
+        MXC_GET2(inverseView);
+        MXC_GET2(inverseProjection);
+        MXC_GET2(inverseViewProjection);
 
-        MXC_GETSET(FOV);
-        MXC_GETSET(Near);
-        MXC_GETSET(Far);
-        // MXC_GETSET(Aspect);
-        MXC_GET(Aspect);
+        MXC_GET2(fieldOfView);
+        MXC_GET2(nearZPlane);
+        MXC_GET2(farZPlane);
+        MXC_GET2(aspectRatio);
 
     private:
-        float m_FOV{45.0f};
-        float m_Near{MXC_CAMERA_MIN_Z};
-        float m_Far{1000.0f};
-        float m_Aspect;
 
-        Moxaic::Transform m_Transform{};
-        glm::mat4x4 m_View{glm::identity<glm::mat4x4>()};
-        glm::mat4x4 m_Projection{glm::identity<glm::mat4x4>()};
-        glm::mat4x4 m_ViewProjection{glm::identity<glm::mat4x4>()};
-        glm::mat4x4 m_InverseView{glm::identity<glm::mat4x4>()};
-        glm::mat4x4 m_InverseProjection{glm::identity<glm::mat4x4>()};
-        glm::mat4x4 m_InverseViewProjection{glm::identity<glm::mat4x4>()};
+        float fieldOfView_{45.0f};
+        float nearZPlane_{MXC_CAMERA_MIN_Z};
+        float farZPlane_{1000.0f};
+        float aspectRatio_{800.0/600.0};
 
-        bool m_CameraLocked{false};
+        mat4x4 view_{identity<mat4x4>()};
+        mat4x4 projection_{identity<mat4x4>()};
+        mat4x4 viewProjection_{identity<mat4x4>()};
+        mat4x4 inverseView_{identity<mat4x4>()};
+        mat4x4 inverseProjection_{identity<mat4x4>()};
+        mat4x4 inverseViewProjection_{identity<mat4x4>()};
+
+        bool cameraLocked_{false};
     };
 }// namespace Moxaic

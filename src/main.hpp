@@ -13,6 +13,9 @@
 #define MXC_GET(field) \
     auto const& Get##field() const { return m_##field; }
 
+#define MXC_GET2(field) \
+    auto const& field() const { return field##_; }
+
 #define MXC_SET(field) \
     void Set##field(auto const& field) { m_##field = field; }
 

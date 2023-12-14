@@ -78,10 +78,10 @@ Mesh::Mesh(const Vulkan::Device* const pDevice)
 
 Mesh::~Mesh()
 {
-    vkDestroyBuffer(k_pDevice->GetVkDevice(), m_VkIndexBuffer, VK_ALLOC);
-    vkFreeMemory(k_pDevice->GetVkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
-    vkDestroyBuffer(k_pDevice->GetVkDevice(), m_VkVertexBuffer, VK_ALLOC);
-    vkFreeMemory(k_pDevice->GetVkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(k_pDevice->vkDevice, m_VkIndexBuffer, VK_ALLOC);
+    vkFreeMemory(k_pDevice->vkDevice, m_VkIndexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(k_pDevice->vkDevice, m_VkVertexBuffer, VK_ALLOC);
+    vkFreeMemory(k_pDevice->vkDevice, m_VkVertexBufferMemory, VK_ALLOC);
 }
 
 MXC_RESULT Mesh::InitSphere(float radius)

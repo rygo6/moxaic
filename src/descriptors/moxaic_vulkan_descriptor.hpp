@@ -25,7 +25,7 @@ namespace Moxaic::Vulkan
 
         virtual ~VulkanDescriptorBase()
         {
-            vkFreeDescriptorSets(k_pDevice->GetVkDevice(),
+            vkFreeDescriptorSets(k_pDevice->vkDevice,
                                  k_pDevice->GetVkDescriptorPool(),
                                  1,
                                  &m_VkDescriptorSet);
@@ -67,7 +67,7 @@ namespace Moxaic::Vulkan
               .bindingCount = bindings.size(),
               .pBindings = bindings.data(),
             };
-            VK_CHK(vkCreateDescriptorSetLayout(device.GetVkDevice(),
+            VK_CHK(vkCreateDescriptorSetLayout(device.vkDevice,
                                                &layoutInfo,
                                                VK_ALLOC,
                                                &s_VkDescriptorSetLayout));
@@ -85,7 +85,7 @@ namespace Moxaic::Vulkan
               .descriptorSetCount = 1,
               .pSetLayouts = &s_VkDescriptorSetLayout,
             };
-            VK_CHK(vkAllocateDescriptorSets(k_pDevice->GetVkDevice(),
+            VK_CHK(vkAllocateDescriptorSets(k_pDevice->vkDevice,
                                             &allocInfo,
                                             &m_VkDescriptorSet));
             return MXC_SUCCESS;
@@ -102,7 +102,7 @@ namespace Moxaic::Vulkan
                 writes[i].dstBinding = writes[i].dstBinding == 0 ? i : writes[i].dstBinding;
                 writes[i].descriptorCount = writes[i].descriptorCount == 0 ? 1 : writes[i].descriptorCount;
             }
-            VK_CHK_VOID(vkUpdateDescriptorSets(k_pDevice->GetVkDevice(),
+            VK_CHK_VOID(vkUpdateDescriptorSets(k_pDevice->vkDevice,
                                                writes.size(),
                                                writes.data(),
                                                0,

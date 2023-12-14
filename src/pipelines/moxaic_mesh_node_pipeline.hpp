@@ -70,9 +70,9 @@ namespace Moxaic::Vulkan
                                      nullptr,
                                      nullptr,
                                      nullptr));
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), taskShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), meshShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), fragShader, VK_ALLOC);
+            vkDestroyShaderModule(k_pDevice->vkDevice, taskShader, VK_ALLOC);
+            vkDestroyShaderModule(k_pDevice->vkDevice, meshShader, VK_ALLOC);
+            vkDestroyShaderModule(k_pDevice->vkDevice, fragShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
 

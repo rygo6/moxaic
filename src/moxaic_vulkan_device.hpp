@@ -128,15 +128,9 @@ namespace Moxaic::Vulkan
             return GetSrcQueue(dst);
         }
 
-        // VulkanHandles are not encapsulated. Deal with vk vars and methods with care.
-        // Reason? Vulkan safety is better enforced by validation layers, not C++, and
-        // the attempt to encapsulate these to more so rely on C++ type safety ends up
-        // with something more complex and convoluted that doesn't add much over Vulkan
-        // Validation layers. Classes are more to organize relationship of VulkanHandles.
-        // Return vkHandles via const ref even though they are single pointers so that
-        // the pointer can be taken to them in designated initializers without having to first
-        // make a stack copy
-        MXC_GET(VkDevice);
+
+        VkDevice vkDevice{VK_NULL_HANDLE};
+
         MXC_GET(VkPhysicalDevice);
         MXC_GET(VkGraphicsQueue);
         MXC_GET(VkComputeQueue);
@@ -156,7 +150,6 @@ namespace Moxaic::Vulkan
         MXC_GET(PhysicalDeviceMemoryProperties);
 
     private:
-        VkDevice m_VkDevice{VK_NULL_HANDLE};
 
         VkPhysicalDevice m_VkPhysicalDevice{VK_NULL_HANDLE};
 

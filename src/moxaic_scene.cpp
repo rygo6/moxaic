@@ -4,6 +4,7 @@
 #include <thread>
 
 using namespace Moxaic;
+using namespace glm;
 
 MXC_RESULT CompositorScene::Init()
 {
@@ -18,12 +19,12 @@ MXC_RESULT CompositorScene::Init()
                         Window::extents()));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
-    m_MainCamera.pTransform()->SetPosition(glm::vec3(0, 0, -1));
-    m_MainCamera.pTransform()->Rotate(0, 180, 0);
+    m_MainCamera.transform.position_ = vec3(0, 0, -1);
+    m_MainCamera.transform.Rotate(0, 180, 0);
     m_MainCamera.UpdateView();
     m_MainCamera.UpdateProjection();
 
-    m_SphereTestTransform.SetPosition(glm::vec3(1, 0, 0));
+    m_SphereTestTransform.position_ = vec3(1, 0, 0);
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
                                              Vulkan::Locality::Local));
     MXC_CHK(m_SphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
@@ -49,7 +50,7 @@ MXC_RESULT CompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    m_NodeReference.pExportedGlobalDescriptor()->SetLocalBuffer(m_GlobalDescriptor.GetLocalBuffer());
+    m_NodeReference.pExportedGlobalDescriptor()->localBuffer_ = m_GlobalDescriptor.GetLocalBuffer();
     m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;
@@ -63,10 +64,10 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
         m_GlobalDescriptor.WriteLocalBuffer();
     }
 
-    const auto commandBuffer = k_pDevice->BeginGraphicsCommandBuffer();
+    const auto commandBuffer = device->BeginGraphicsCommandBuffer();
 
-    k_pDevice->ResetTimestamps();
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+    device->ResetTimestamps();
+    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
     auto* const nodeSemaphore = m_NodeReference.pExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
@@ -79,7 +80,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
-        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->GetLocalBuffer();
+        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->localBuffer_;
         m_MeshNodeDescriptor[m_NodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         m_MeshNodeDescriptor[m_NodeFramebufferIndex].WriteLocalBuffer();
 
@@ -88,7 +89,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     }
 
     const auto& framebuffer = m_Framebuffers[m_FramebufferIndex];
-    k_pDevice->BeginRenderPass(framebuffer,
+    device->BeginRenderPass(framebuffer,
                                (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
     // m_StandardPipeline.BindGraphicsPipeline(commandBuffer);
@@ -112,10 +113,10 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
                       swapIndex,
                       framebuffer.GetColorTexture());
 
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
     vkEndCommandBuffer(commandBuffer);
-    k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
+    device->SubmitGraphicsQueueAndPresent(m_Swap,
                                              swapIndex,
                                              &m_Semaphore);
 
@@ -123,7 +124,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 
     m_FramebufferIndex = !m_FramebufferIndex;
 
-    const auto timestamps = k_pDevice->GetTimestamps();
+    const auto timestamps = device->GetTimestamps();
     const float taskMeshMs = timestamps[1] - timestamps[0];
     MXC_LOG_NAMED(taskMeshMs);
 
@@ -137,8 +138,8 @@ MXC_RESULT ComputeCompositorScene::Init()
                         Window::extents()));
     MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
 
-    m_MainCamera.pTransform()->SetPosition(glm::vec3(0, 0, -2));
-    m_MainCamera.pTransform()->Rotate(0, 180, 0);
+    m_MainCamera.transform.position_ = vec3(0, 0, -2);
+    m_MainCamera.transform.Rotate(0, 180, 0);
     m_MainCamera.UpdateProjection();
     m_MainCamera.UpdateView();
 
@@ -182,10 +183,10 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         m_GlobalDescriptor.WriteLocalBuffer();
     }
 
-    const auto commandBuffer = k_pDevice->BeginComputeCommandBuffer();
+    const auto commandBuffer = device->BeginComputeCommandBuffer();
 
-    k_pDevice->ResetTimestamps();
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+    device->ResetTimestamps();
+    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
     auto* const nodeSemaphore = m_NodeReference.pExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
@@ -199,7 +200,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                                    Vulkan::ToComputeRead);
         m_ComputeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
-        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->GetLocalBuffer();
+        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->localBuffer_;
         m_ComputeNodeDescriptor.SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         m_ComputeNodeDescriptor.WriteLocalBuffer();
 
@@ -261,17 +262,17 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                       Vulkan::FromComputeWrite,
                       Vulkan::ToComputeSwapPresent);
 
-    k_pDevice->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
     vkEndCommandBuffer(commandBuffer);
-    k_pDevice->SubmitComputeQueueAndPresent(commandBuffer,
+    device->SubmitComputeQueueAndPresent(commandBuffer,
                                             m_Swap,
                                             swapIndex,
                                             &m_Semaphore);
 
     m_Semaphore.Wait();
 
-    const auto timestamps = k_pDevice->GetTimestamps();
+    const auto timestamps = device->GetTimestamps();
     const float computeMs = timestamps[1] - timestamps[0];
     MXC_LOG_NAMED(computeMs);
 
@@ -287,7 +288,7 @@ MXC_RESULT NodeScene::Init()
     MXC_CHK(m_StandardPipeline.Init());
     MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
 
-    m_SpherTestTransform.SetPosition(glm::vec3(0, 0, 0));
+    m_SpherTestTransform.position_ = vec3(0, 0, 0);
     MXC_CHK(m_SphereTestMesh.InitSphere(0.5f));
     MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
@@ -314,14 +315,14 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 {
     m_GlobalDescriptor.WriteBuffer(m_Node.pImportedGlobalDescriptor()->GetSharedBuffer());
 
-    const auto commandBuffer = k_pDevice->BeginGraphicsCommandBuffer();
+    const auto commandBuffer = device->BeginGraphicsCommandBuffer();
 
     const auto& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
     framebuffer.Transition(commandBuffer,
                            Vulkan::AcquireFromExternal,
                            Vulkan::ToGraphicsAttach);
 
-    k_pDevice->BeginRenderPass(framebuffer,
+    device->BeginRenderPass(framebuffer,
                                (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
 
     m_StandardPipeline.BindPipeline(commandBuffer);
@@ -348,7 +349,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     //                   m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
     vkEndCommandBuffer(commandBuffer);
-    k_pDevice->SubmitGraphicsQueue(m_Node.pImportedNodeSemaphore());
+    device->SubmitGraphicsQueue(m_Node.pImportedNodeSemaphore());
     // k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
     //                                          swapIndex,
     //                                          m_Node.ImportedNodeSemaphore());

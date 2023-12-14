@@ -48,7 +48,7 @@ namespace Moxaic::Vulkan
 
         virtual ~Pipeline()
         {
-            vkDestroyPipeline(k_pDevice->GetVkDevice(),
+            vkDestroyPipeline(k_pDevice->vkDevice,
                               m_vkPipeline,
                               VK_ALLOC);
         }
@@ -94,7 +94,7 @@ namespace Moxaic::Vulkan
               .pushConstantRangeCount = 0,
               .pPushConstantRanges = nullptr,
             };
-            VK_CHK(vkCreatePipelineLayout(device.GetVkDevice(),
+            VK_CHK(vkCreatePipelineLayout(device.vkDevice,
                                           &createInfo,
                                           VK_ALLOC,
                                           &s_vkPipelineLayout));
@@ -116,7 +116,7 @@ namespace Moxaic::Vulkan
               .codeSize = codeLength,
               .pCode = reinterpret_cast<const uint32_t*>(pShaderCode),
             };
-            VK_CHK(vkCreateShaderModule(k_pDevice->GetVkDevice(),
+            VK_CHK(vkCreateShaderModule(k_pDevice->vkDevice,
                                         &createInfo,
                                         VK_ALLOC,
                                         pShaderModule));
@@ -305,7 +305,7 @@ namespace Moxaic::Vulkan
               .basePipelineHandle = VK_NULL_HANDLE,
               .basePipelineIndex = 0,
             };
-            VK_CHK(vkCreateGraphicsPipelines(k_pDevice->GetVkDevice(),
+            VK_CHK(vkCreateGraphicsPipelines(k_pDevice->vkDevice,
                                              VK_NULL_HANDLE,
                                              1,
                                              &pipelineInfo,
@@ -328,7 +328,7 @@ namespace Moxaic::Vulkan
               .basePipelineHandle = nullptr,
               .basePipelineIndex = 0,
             };
-            VK_CHK(vkCreateComputePipelines(k_pDevice->GetVkDevice(),
+            VK_CHK(vkCreateComputePipelines(k_pDevice->vkDevice,
                                             VK_NULL_HANDLE,
                                             1,
                                             &pipelineInfo,

@@ -147,7 +147,7 @@ MXC_RESULT Framebuffer::InitFramebuffer()
       .height = m_Extents.height,
       .layers = 1,
     };
-    VK_CHK(vkCreateFramebuffer(k_pDevice->GetVkDevice(),
+    VK_CHK(vkCreateFramebuffer(k_pDevice->vkDevice,
                                &framebufferCreateInfo,
                                VK_ALLOC,
                                &m_VkFramebuffer));
@@ -161,7 +161,7 @@ MXC_RESULT Framebuffer::InitSemaphore()
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_pDevice->GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(k_pDevice->vkDevice,
                              &renderCompleteCreateInfo,
                              VK_ALLOC,
                              &m_VkRenderCompleteSemaphore));

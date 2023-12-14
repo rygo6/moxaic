@@ -7,6 +7,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
 
+using namespace glm;
+
 namespace Moxaic
 {
     class Transform
@@ -23,66 +25,62 @@ namespace Moxaic
         Transform() = default;
         virtual ~Transform() = default;
 
-        void LocalTranslate(glm::vec3 delta)
+        void LocalTranslate(vec3 delta)
         {
-            delta = glm::rotate(m_Orientation, delta);
-            m_Position += delta;
+            delta = rotate(orientation_, delta);
+            position_ += delta;
         }
 
-        void LocalTranslate(glm::vec3 delta, BitFlags<Axis> zeroOrientationAxis)
+        void LocalTranslate(vec3 delta, BitFlags<Axis> zeroOrientationAxis)
         {
-            glm::vec3 eulerAngles = glm::eulerAngles(m_Orientation);
-            eulerAngles.x = zeroOrientationAxis.ContainsFlag(X) ? 0 : eulerAngles.x;
-            eulerAngles.y = zeroOrientationAxis.ContainsFlag(Y) ? 0 : eulerAngles.y;
-            eulerAngles.z = zeroOrientationAxis.ContainsFlag(Z) ? 0 : eulerAngles.z;
-            const auto lockedOrientation = glm::quat(eulerAngles);
-            delta = glm::rotate(lockedOrientation, delta);
-            m_Position += delta;
+            vec3 euler = eulerAngles(orientation_);
+            euler.x = zeroOrientationAxis.ContainsFlag(X) ? 0 : euler.x;
+            euler.y = zeroOrientationAxis.ContainsFlag(Y) ? 0 : euler.y;
+            euler.z = zeroOrientationAxis.ContainsFlag(Z) ? 0 : euler.z;
+            const auto lockedOrientation = quat(euler);
+            delta = rotate(lockedOrientation, delta);
+            position_ += delta;
         }
 
         void LocalTranslate(const float x, const float y, const float z)
         {
-            auto delta = glm::vec3(x, y, z);
-            delta = glm::rotate(m_Orientation, delta);
-            m_Position += delta;
+            auto delta = vec3(x, y, z);
+            delta = rotate(orientation_, delta);
+            position_ += delta;
         }
 
         void Rotate(const float x, const float y, const float z)
         {
-            const auto rotation = glm::quat(glm::vec3(
-              glm::radians(x),
-              glm::radians(y),
-              glm::radians(z)));
-            m_Orientation = rotation * m_Orientation;
+            const auto rotation = quat(vec3(
+              radians(x),
+              radians(y),
+              radians(z)));
+            orientation_ = rotation * orientation_;
         }
 
-        void Rotate(const glm::vec3 euler)
+        void Rotate(const vec3 euler)
         {
-            const auto rotation = glm::quat(euler);
-            m_Orientation = rotation * m_Orientation;
+            const auto rotation = quat(euler);
+            orientation_ = rotation * orientation_;
         }
 
         void LocalRotate(const float x, const float y, const float z)
         {
-            auto rotation = glm::quat(glm::vec3(
-              glm::radians(x),
-              glm::radians(y),
-              glm::radians(z)));
-            m_Orientation = m_Orientation * rotation;
+            auto rotation = quat(vec3(
+              radians(x),
+              radians(y),
+              radians(z)));
+            orientation_ = orientation_ * rotation;
         }
 
-        MXC_GETSET(Position);
-        MXC_GETSET(Orientation);
+        vec3 position_{zero<vec3>()};
+        quat orientation_{identity<quat>()};
 
         auto ModelMatrix() const
         {
-            const glm::mat4 rot = glm::toMat4(m_Orientation);
-            const glm::mat4 pos = glm::translate(glm::identity<glm::mat4>(), m_Position);
+            const mat4 rot = toMat4(orientation_);
+            const mat4 pos = translate(identity<mat4>(), position_);
             return pos * rot;
         }
-
-    private:
-        glm::vec3 m_Position{glm::zero<glm::vec3>()};
-        glm::quat m_Orientation{glm::identity<glm::quat>()};
     };
 }// namespace Moxaic
