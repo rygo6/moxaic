@@ -8,15 +8,16 @@
 using namespace Moxaic;
 using namespace Moxaic::Window;
 
-SDL_Window* g_pSDLWindow;
-VkExtent2D g_WindowDimensions{800, 600};
-UserCommand g_UserCommand;
+
+SDL_Window* window;
+VkExtent2D extents{800, 600};
+UserCommand userCommand;
 
 static void SetMouseButton(const int index, const bool pressed)
 {
     switch (index) {
         case SDL_BUTTON_LEFT:
-            g_UserCommand.leftMouseButtonPressed = pressed;
+            userCommand.leftMouseButtonPressed = pressed;
         default:;
     }
 }
@@ -25,62 +26,62 @@ static void SetKey(const SDL_Keycode keycode, const bool pressed)
 {
     switch (keycode) {
         case SDLK_w:
-            g_UserCommand.userMove.ToggleFlag(UserMove::Forward, pressed);
+            userCommand.userMove.ToggleFlag(UserMove::Forward, pressed);
             break;
         case SDLK_s:
-            g_UserCommand.userMove.ToggleFlag(UserMove::Back, pressed);
+            userCommand.userMove.ToggleFlag(UserMove::Back, pressed);
             break;
         case SDLK_a:
-            g_UserCommand.userMove.ToggleFlag(UserMove::Left, pressed);
+            userCommand.userMove.ToggleFlag(UserMove::Left, pressed);
             break;
         case SDLK_d:
-            g_UserCommand.userMove.ToggleFlag(UserMove::Right, pressed);
+            userCommand.userMove.ToggleFlag(UserMove::Right, pressed);
             break;
         default:;
     }
 }
 
-const UserCommand& Window::userCommand()
+const UserCommand& Window::GetUserCommand()
 {
-    return g_UserCommand;
+    return userCommand;
 }
 
-const VkExtent2D& Window::extents()
+const VkExtent2D& Window::GetExtents()
 {
-    return g_WindowDimensions;
+    return extents;
 }
 
-const SDL_Window* Window::window()
+const SDL_Window* Window::GetWindow()
 {
-    return g_pSDLWindow;
+    return window;
 }
 
 MXC_RESULT Window::Init()
 {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
-    g_pSDLWindow = SDL_CreateWindow(ApplicationName,
+    window = SDL_CreateWindow(ApplicationName,
                                     SDL_WINDOWPOS_CENTERED,
                                     SDL_WINDOWPOS_CENTERED,
                                     DefaultWidth,
                                     DefaultHeight,
                                     SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
     int x, y;
-    SDL_GetWindowPosition(g_pSDLWindow, &x, &y);
-    SDL_SetWindowPosition(g_pSDLWindow,
+    SDL_GetWindowPosition(window, &x, &y);
+    SDL_SetWindowPosition(window,
                           x + (Role == Role::Compositor ?
                                  -(int) (DefaultWidth / 2) :
                                  (int) (DefaultWidth / 2)),
                           y);
-    g_WindowDimensions = VkExtent2D{DefaultWidth, DefaultHeight};
-    return g_pSDLWindow != nullptr;
+    extents = VkExtent2D{DefaultWidth, DefaultHeight};
+    return window != nullptr;
 }
 
 MXC_RESULT Window::InitSurface(VkInstance vkInstance,
                                VkSurfaceKHR* pVkSurface)
 {
-    SDL_assert((g_pSDLWindow != nullptr) && "Window not initialized!");
+    SDL_assert((window != nullptr) && "Window not initialized!");
     // should surface move into swap class?! or device class?
-    MXC_CHK(SDL_Vulkan_CreateSurface(g_pSDLWindow,
+    MXC_CHK(SDL_Vulkan_CreateSurface(window,
                                      vkInstance,
                                      pVkSurface));
     return MXC_SUCCESS;
@@ -89,17 +90,17 @@ MXC_RESULT Window::InitSurface(VkInstance vkInstance,
 std::vector<const char*> Window::GetVulkanInstanceExtentions()
 {
     unsigned int extensionCount = 0;
-    SDL_Vulkan_GetInstanceExtensions(g_pSDLWindow, &extensionCount, nullptr);
+    SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, nullptr);
     std::vector<const char*> requiredInstanceExtensionsNames(extensionCount);
-    SDL_Vulkan_GetInstanceExtensions(g_pSDLWindow, &extensionCount, requiredInstanceExtensionsNames.data());
+    SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, requiredInstanceExtensionsNames.data());
     return requiredInstanceExtensionsNames;// rvo deals with this right?
 }
 
 void Window::Poll()
 {
-    if (g_UserCommand.mouseMoved) {
-        g_UserCommand.mouseDelta = glm::zero<glm::vec2>();
-        g_UserCommand.mouseMoved = false;
+    if (userCommand.mouseMoved) {
+        userCommand.mouseDelta = glm::zero<glm::vec2>();
+        userCommand.mouseMoved = false;
     }
 
     static SDL_Event pollEvent;
@@ -127,8 +128,8 @@ void Window::Poll()
             }
             case SDL_MOUSEMOTION: {
                 // accumulate, multiples may come
-                g_UserCommand.mouseDelta += glm::vec2((float) pollEvent.motion.xrel, (float) pollEvent.motion.yrel);
-                g_UserCommand.mouseMoved = true;
+                userCommand.mouseDelta += glm::vec2((float) pollEvent.motion.xrel, (float) pollEvent.motion.yrel);
+                userCommand.mouseMoved = true;
                 break;
             }
         }
@@ -137,6 +138,6 @@ void Window::Poll()
 
 void Window::Cleanup()
 {
-    SDL_DestroyWindow(g_pSDLWindow);
+    SDL_DestroyWindow(window);
     SDL_Quit();
 }

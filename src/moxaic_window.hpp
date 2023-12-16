@@ -32,7 +32,7 @@ namespace Moxaic::Window
     void Poll();
     void Cleanup();
 
-    const UserCommand& userCommand();
-    const VkExtent2D& extents();
-    const SDL_Window* window();
+    const UserCommand& GetUserCommand();
+    const VkExtent2D& GetExtents();
+    const SDL_Window* GetWindow();
 }// namespace Moxaic::Window

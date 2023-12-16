@@ -26,7 +26,7 @@ namespace Moxaic
         MXC_NO_VALUE_PASS(SceneBase);
 
         explicit SceneBase(const Vulkan::Device* const device)
-            : device(device) {}
+            : Device(device) {}
 
         virtual ~SceneBase() = default;
 
@@ -34,7 +34,7 @@ namespace Moxaic
         virtual MXC_RESULT Loop(const uint32_t& deltaTime) = 0;
 
     protected:
-        const Vulkan::Device* const device;
+        const Vulkan::Device* const Device;
     };
 
     class CompositorScene : public SceneBase
@@ -46,35 +46,35 @@ namespace Moxaic
         MXC_RESULT Loop(const uint32_t& deltaTime) override;
 
     private:
-        StaticArray<Vulkan::Framebuffer, FramebufferCount> m_Framebuffers{
-          Vulkan::Framebuffer(device),
-          Vulkan::Framebuffer(device)};
-        int m_FramebufferIndex{0};
+        StaticArray<Vulkan::Framebuffer, FramebufferCount> framebuffers{
+          Vulkan::Framebuffer(Device),
+          Vulkan::Framebuffer(Device)};
+        int framebufferIndex{0};
 
-        Vulkan::Swap m_Swap{device};
-        Vulkan::Semaphore m_Semaphore{device};
+        Vulkan::Swap swap{Device};
+        Vulkan::Semaphore semaphore{Device};
 
-        Vulkan::StandardPipeline m_StandardPipeline{device};
-        Vulkan::GlobalDescriptor m_GlobalDescriptor{device};
-        Vulkan::StandardMaterialDescriptor m_StandardMaterialDescriptor{device};
-        Vulkan::ObjectDescriptor m_ObjectDescriptor{device};
+        Vulkan::StandardPipeline standardPipeline{Device};
+        Vulkan::GlobalDescriptor globalDescriptor{Device};
+        Vulkan::StandardMaterialDescriptor standardMaterialDescriptor{Device};
+        Vulkan::ObjectDescriptor objectDescriptor{Device};
 
-        Vulkan::MeshNodePipeline m_MeshNodePipeline{device};
-        StaticArray<Vulkan::MeshNodeDescriptor, FramebufferCount> m_MeshNodeDescriptor{
-          Vulkan::MeshNodeDescriptor(device),
-          Vulkan::MeshNodeDescriptor(device)};
+        Vulkan::MeshNodePipeline meshNodePipeline{Device};
+        StaticArray<Vulkan::MeshNodeDescriptor, FramebufferCount> meshNodeDescriptor{
+          Vulkan::MeshNodeDescriptor(Device),
+          Vulkan::MeshNodeDescriptor(Device)};
 
 
-        Camera m_MainCamera{};
+        Camera mainCamera{};
 
-        Vulkan::Mesh m_SphereTestMesh{device};
-        Vulkan::Texture m_SphereTestTexture{device};
-        Transform m_SphereTestTransform{};
+        Vulkan::Mesh sphereTestMesh{Device};
+        Vulkan::Texture sphereTestTexture{Device};
+        Transform sphereTestTransform{};
 
         // should node be here? maybe outside scene?
-        NodeReference m_NodeReference{device};
-        uint64_t m_PriorNodeSemaphoreWaitValue{0};
-        uint64_t m_NodeFramebufferIndex{1};// yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
+        NodeReference nodeReference{Device};
+        uint64_t priorNodeSemaphoreWaitValue{0};
+        uint64_t nodeFramebufferIndex{1};// yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
     };
 
     class ComputeCompositorScene : public SceneBase
@@ -86,23 +86,23 @@ namespace Moxaic
         MXC_RESULT Loop(const uint32_t& deltaTime) override;
 
     private:
-        Vulkan::Swap m_Swap{device};
-        Vulkan::Semaphore m_Semaphore{device};
+        Vulkan::Swap swap{Device};
+        Vulkan::Semaphore semaphore{Device};
 
-        Vulkan::ComputeNodePipeline m_ComputeNodeProjectPipeline{device};
-        Vulkan::ComputeNodePipeline m_ComputeNodePostPipeline{device};
+        Vulkan::ComputeNodePipeline computeNodeProjectPipeline{Device};
+        Vulkan::ComputeNodePipeline computeNodePostPipeline{Device};
 
-        Vulkan::GlobalDescriptor m_GlobalDescriptor{device};
-        Vulkan::ComputeNodeDescriptor m_ComputeNodeDescriptor{device};
+        Vulkan::GlobalDescriptor globalDescriptor{Device};
+        Vulkan::ComputeNodeDescriptor computeNodeDescriptor{Device};
 
-        Vulkan::Texture m_OutputAtomicTexture{device};
+        Vulkan::Texture outputAtomicTexture{Device};
 
-        Camera m_MainCamera{};
+        Camera mainCamera{};
 
         // should node be here? maybe outside scene?
-        NodeReference m_NodeReference{device};
-        uint64_t m_PriorNodeSemaphoreWaitValue{0};
-        uint64_t m_NodeFramebufferIndex{1};// yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
+        NodeReference nodeReference{Device};
+        uint64_t priorNodeSemaphoreWaitValue{0};
+        uint64_t nodeFramebufferIndex{1};// yes this has to default to one to sync with child properly... this should probably be sent over ipc somehow
     };
 
     class NodeScene : public SceneBase
@@ -115,21 +115,21 @@ namespace Moxaic
 
     private:
         // should node be here? maybe outside scene?
-        Node m_Node{device};
-        int m_FramebufferIndex{0};
-        uint64_t m_CompositorSempahoreStep{30};
+        Node node{Device};
+        int framebufferIndex{0};
+        uint64_t compositorSempahoreStep{30};
 
-        Vulkan::Swap m_Swap{device};
+        Vulkan::Swap swap{Device};
 
-        Vulkan::StandardPipeline m_StandardPipeline{device};
-        Vulkan::GlobalDescriptor m_GlobalDescriptor{device};
-        Vulkan::StandardMaterialDescriptor m_MaterialDescriptor{device};
-        Vulkan::ObjectDescriptor m_ObjectDescriptor{device};
+        Vulkan::StandardPipeline standardPipeline{Device};
+        Vulkan::GlobalDescriptor globalDescriptor{Device};
+        Vulkan::StandardMaterialDescriptor materialDescriptor{Device};
+        Vulkan::ObjectDescriptor objectDescriptor{Device};
 
-        Camera m_MainCamera{};
+        Camera mainCamera{};
 
-        Vulkan::Mesh m_SphereTestMesh{device};
-        Vulkan::Texture m_SphereTestTexture{device};
-        Transform m_SpherTestTransform{};
+        Vulkan::Mesh sphereTestMesh{Device};
+        Vulkan::Texture sphereTestTexture{Device};
+        Transform spherTestTransform{};
     };
-}// namespace Moxaic
+}

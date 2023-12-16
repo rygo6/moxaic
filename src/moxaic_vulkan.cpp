@@ -188,7 +188,7 @@ MXC_RESULT Vulkan::Init(bool const enableValidationLayers)
     MXC_CHK(LoadVulkanFunctionPointers());
     MXC_CHK(CreateVulkanDebugOutput());
 
-    SDL_assert((Window::window() != nullptr) && "Window not initialized!");
+    SDL_assert((Window::GetWindow() != nullptr) && "Window not initialized!");
     MXC_CHK(Window::InitSurface(g_VulkanInstance,
                                 &g_VulkanSurface));
 

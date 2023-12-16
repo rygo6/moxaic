@@ -9,88 +9,88 @@ using namespace glm;
 MXC_RESULT CompositorScene::Init()
 {
     const auto pipelineType = Vulkan::PipelineType::Graphics;
-    for (int i = 0; i < m_Framebuffers.size(); ++i) {
-        MXC_CHK(m_Framebuffers[i].Init(pipelineType,
-                                       Window::extents(),
-                                       Vulkan::Locality::Local));
+    for (int i = 0; i < framebuffers.size(); ++i) {
+        MXC_CHK(framebuffers[i].Init(pipelineType,
+                                      Window::GetExtents(),
+                                      Vulkan::Locality::Local));
     }
 
-    MXC_CHK(m_Swap.Init(pipelineType,
-                        Window::extents()));
-    MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
+    MXC_CHK(swap.Init(pipelineType,
+                       Window::GetExtents()));
+    MXC_CHK(semaphore.Init(true, Vulkan::Locality::External));
 
-    m_MainCamera.transform.position_ = vec3(0, 0, -1);
-    m_MainCamera.transform.Rotate(0, 180, 0);
-    m_MainCamera.UpdateView();
-    m_MainCamera.UpdateProjection();
+    mainCamera.transform.position_ = vec3(0, 0, -1);
+    mainCamera.transform.Rotate(0, 180, 0);
+    mainCamera.UpdateView();
+    mainCamera.UpdateProjection();
 
-    m_SphereTestTransform.position_ = vec3(1, 0, 0);
-    MXC_CHK(m_SphereTestTexture.InitFromFile("textures/test.jpg",
+    sphereTestTransform.position_ = vec3(1, 0, 0);
+    MXC_CHK(sphereTestTexture.InitFromFile("textures/test.jpg",
                                              Vulkan::Locality::Local));
-    MXC_CHK(m_SphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
-    MXC_CHK(m_SphereTestMesh.InitSphere(0.5f));
+    MXC_CHK(sphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
+    MXC_CHK(sphereTestMesh.InitSphere(0.5f));
 
-    MXC_CHK(m_StandardPipeline.Init());
-    MXC_CHK(m_MeshNodePipeline.Init());
+    MXC_CHK(standardPipeline.Init());
+    MXC_CHK(meshNodePipeline.Init());
 
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
-    MXC_CHK(m_StandardMaterialDescriptor.Init(m_SphereTestTexture));
-    MXC_CHK(m_ObjectDescriptor.Init(m_SphereTestTransform));
+    MXC_CHK(globalDescriptor.Init(mainCamera, Window::GetExtents()));
+    MXC_CHK(standardMaterialDescriptor.Init(sphereTestTexture));
+    MXC_CHK(objectDescriptor.Init(sphereTestTransform));
 
-    MXC_CHK(m_NodeReference.Init(Vulkan::PipelineType::Graphics));
+    MXC_CHK(nodeReference.Init(Vulkan::PipelineType::Graphics));
 
-    for (int i = 0; i < m_MeshNodeDescriptor.size(); ++i) {
-        MXC_CHK(m_MeshNodeDescriptor[i].Init(m_GlobalDescriptor.GetLocalBuffer(),
-                                             m_NodeReference.GetExportedFramebuffers(i)));
+    for (int i = 0; i < meshNodeDescriptor.size(); ++i) {
+        MXC_CHK(meshNodeDescriptor[i].Init(globalDescriptor.GetLocalBuffer(),
+                                             nodeReference.GetExportedFramebuffers(i)));
     }
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    MXC_CHK(m_NodeReference.ExportOverIPC(m_Semaphore));
+    MXC_CHK(nodeReference.ExportOverIPC(semaphore));
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    m_NodeReference.pExportedGlobalDescriptor()->localBuffer_ = m_GlobalDescriptor.GetLocalBuffer();
-    m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+    nodeReference.pExportedGlobalDescriptor()->localBuffer_ = globalDescriptor.GetLocalBuffer();
+    nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;
 }
 
 MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 {
-    if (m_MainCamera.UserCommandUpdate(deltaTime)) {
+    if (mainCamera.UserCommandUpdate(deltaTime)) {
         // should camera auto update descriptor somehow?
-        m_GlobalDescriptor.SetLocalBufferView(m_MainCamera);
-        m_GlobalDescriptor.WriteLocalBuffer();
+        globalDescriptor.SetLocalBufferView(mainCamera);
+        globalDescriptor.WriteLocalBuffer();
     }
 
-    const auto commandBuffer = device->BeginGraphicsCommandBuffer();
+    const auto commandBuffer = Device->BeginGraphicsCommandBuffer();
 
-    device->ResetTimestamps();
-    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+    Device->ResetTimestamps();
+    Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
-    auto* const nodeSemaphore = m_NodeReference.pExportedSemaphore();
+    auto* const nodeSemaphore = nodeReference.pExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
-    if (nodeSemaphore->GetLocalWaitValue() != m_PriorNodeSemaphoreWaitValue) {
-        m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetLocalWaitValue();
-        m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
+    if (nodeSemaphore->localWaitValue_ != priorNodeSemaphoreWaitValue) {
+        priorNodeSemaphoreWaitValue = nodeSemaphore->localWaitValue_;
+        nodeFramebufferIndex = !nodeFramebufferIndex;
 
-        const auto& nodeFramebuffer = m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex);
+        const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffers(nodeFramebufferIndex);
         nodeFramebuffer.Transition(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
-        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->localBuffer_;
-        m_MeshNodeDescriptor[m_NodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
-        m_MeshNodeDescriptor[m_NodeFramebufferIndex].WriteLocalBuffer();
+        auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer_;
+        meshNodeDescriptor[nodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
+        meshNodeDescriptor[nodeFramebufferIndex].WriteLocalBuffer();
 
-        m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
-        m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+        nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
+        nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
     }
 
-    const auto& framebuffer = m_Framebuffers[m_FramebufferIndex];
-    device->BeginRenderPass(framebuffer,
-                               (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
+    const auto& framebuffer = framebuffers[framebufferIndex];
+    Device->BeginRenderPass(framebuffer,
+                            (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}});
 
     // m_StandardPipeline.BindGraphicsPipeline(commandBuffer);
     // m_StandardPipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
@@ -98,9 +98,9 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     // m_StandardPipeline.BindDescriptor(commandBuffer, m_ObjectDescriptor);
     // m_SphereTestMesh.RecordRender(commandBuffer);
 
-    m_MeshNodePipeline.BindPipeline(commandBuffer);
-    m_MeshNodePipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
-    m_MeshNodePipeline.BindDescriptor(commandBuffer, m_MeshNodeDescriptor[m_NodeFramebufferIndex]);
+    meshNodePipeline.BindPipeline(commandBuffer);
+    meshNodePipeline.BindDescriptor(commandBuffer, globalDescriptor);
+    meshNodePipeline.BindDescriptor(commandBuffer, meshNodeDescriptor[nodeFramebufferIndex]);
 
 
     Vulkan::VkFunc.CmdDrawMeshTasksEXT(commandBuffer, 1, 1, 1);
@@ -108,23 +108,23 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     vkCmdEndRenderPass(commandBuffer);
 
     uint32_t swapIndex;
-    m_Swap.Acquire(&swapIndex);
-    m_Swap.BlitToSwap(commandBuffer,
-                      swapIndex,
-                      framebuffer.GetColorTexture());
+    swap.Acquire(&swapIndex);
+    swap.BlitToSwap(commandBuffer,
+                     swapIndex,
+                     framebuffer.GetColorTexture());
 
-    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+    Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
     vkEndCommandBuffer(commandBuffer);
-    device->SubmitGraphicsQueueAndPresent(m_Swap,
-                                             swapIndex,
-                                             &m_Semaphore);
+    Device->SubmitGraphicsQueueAndPresent(swap,
+                                          swapIndex,
+                                          &semaphore);
 
-    m_Semaphore.Wait();
+    semaphore.Wait();
 
-    m_FramebufferIndex = !m_FramebufferIndex;
+    framebufferIndex = !framebufferIndex;
 
-    const auto timestamps = device->GetTimestamps();
+    const auto timestamps = Device->GetTimestamps();
     const float taskMeshMs = timestamps[1] - timestamps[0];
     MXC_LOG_NAMED(taskMeshMs);
 
@@ -134,115 +134,115 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 MXC_RESULT ComputeCompositorScene::Init()
 {
     const auto pipelineType = Vulkan::PipelineType::Compute;
-    MXC_CHK(m_Swap.Init(pipelineType,
-                        Window::extents()));
-    MXC_CHK(m_Semaphore.Init(true, Vulkan::Locality::External));
+    MXC_CHK(swap.Init(pipelineType,
+                       Window::GetExtents()));
+    MXC_CHK(semaphore.Init(true, Vulkan::Locality::External));
 
-    m_MainCamera.transform.position_ = vec3(0, 0, -2);
-    m_MainCamera.transform.Rotate(0, 180, 0);
-    m_MainCamera.UpdateProjection();
-    m_MainCamera.UpdateView();
+    mainCamera.transform.position_ = vec3(0, 0, -2);
+    mainCamera.transform.Rotate(0, 180, 0);
+    mainCamera.UpdateProjection();
+    mainCamera.UpdateView();
 
-    MXC_CHK(m_ComputeNodeProjectPipeline.Init("./shaders/compute_node.comp.spv"));
-    MXC_CHK(m_ComputeNodePostPipeline.Init("./shaders/compute_node_post.comp.spv"));
+    MXC_CHK(computeNodeProjectPipeline.Init("./shaders/compute_node.comp.spv"));
+    MXC_CHK(computeNodePostPipeline.Init("./shaders/compute_node_post.comp.spv"));
 
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera,
-                                    Window::extents()));
+    MXC_CHK(globalDescriptor.Init(mainCamera,
+                                    Window::GetExtents()));
 
-    MXC_CHK(m_NodeReference.Init(pipelineType));
+    MXC_CHK(nodeReference.Init(pipelineType));
 
-    MXC_CHK(m_OutputAtomicTexture.Init(VK_FORMAT_R32_UINT,
-                                       Window::extents(),
+    MXC_CHK(outputAtomicTexture.Init(VK_FORMAT_R32_UINT,
+                                       Window::GetExtents(),
                                        VK_IMAGE_USAGE_STORAGE_BIT,
                                        VK_IMAGE_ASPECT_COLOR_BIT,
                                        Vulkan::Locality::Local));
-    MXC_CHK(m_OutputAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
+    MXC_CHK(outputAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
 
-    MXC_CHK(m_ComputeNodeDescriptor.Init(m_GlobalDescriptor.GetLocalBuffer(),
-                                     m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex),
-                                     m_OutputAtomicTexture,
-                                     m_Swap.GetVkSwapImageViews(m_NodeFramebufferIndex)));
+    MXC_CHK(computeNodeDescriptor.Init(globalDescriptor.GetLocalBuffer(),
+                                         nodeReference.GetExportedFramebuffers(nodeFramebufferIndex),
+                                         outputAtomicTexture,
+                                         swap.GetVkSwapImageViews(nodeFramebufferIndex)));
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    MXC_CHK(m_NodeReference.ExportOverIPC(m_Semaphore));
+    MXC_CHK(nodeReference.ExportOverIPC(semaphore));
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
-    m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+    nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
+    nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;
 }
 
 MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 {
-    if (m_MainCamera.UserCommandUpdate(deltaTime)) {
+    if (mainCamera.UserCommandUpdate(deltaTime)) {
         // should camera auto update descriptor somehow?
-        m_GlobalDescriptor.SetLocalBufferView(m_MainCamera);
-        m_GlobalDescriptor.WriteLocalBuffer();
+        globalDescriptor.SetLocalBufferView(mainCamera);
+        globalDescriptor.WriteLocalBuffer();
     }
 
-    const auto commandBuffer = device->BeginComputeCommandBuffer();
+    const auto commandBuffer = Device->BeginComputeCommandBuffer();
 
-    device->ResetTimestamps();
-    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+    Device->ResetTimestamps();
+    Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
-    auto* const nodeSemaphore = m_NodeReference.pExportedSemaphore();
+    auto* const nodeSemaphore = nodeReference.pExportedSemaphore();
     nodeSemaphore->SyncLocalWaitValue();
-    if (nodeSemaphore->GetLocalWaitValue() != m_PriorNodeSemaphoreWaitValue) {
-        m_PriorNodeSemaphoreWaitValue = nodeSemaphore->GetLocalWaitValue();
-        m_NodeFramebufferIndex = !m_NodeFramebufferIndex;
+    if (nodeSemaphore->localWaitValue_ != priorNodeSemaphoreWaitValue) {
+        priorNodeSemaphoreWaitValue = nodeSemaphore->localWaitValue_;
+        nodeFramebufferIndex = !nodeFramebufferIndex;
 
-        const auto& nodeFramebuffer = m_NodeReference.GetExportedFramebuffers(m_NodeFramebufferIndex);
+        const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffers(nodeFramebufferIndex);
         nodeFramebuffer.Transition(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToComputeRead);
-        m_ComputeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
+        computeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
-        auto& lastUsedNodeDescriptorBuffer = m_NodeReference.pExportedGlobalDescriptor()->localBuffer_;
-        m_ComputeNodeDescriptor.SetLocalBuffer(lastUsedNodeDescriptorBuffer);
-        m_ComputeNodeDescriptor.WriteLocalBuffer();
+        const auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer_;
+        computeNodeDescriptor.SetLocalBuffer(lastUsedNodeDescriptorBuffer);
+        computeNodeDescriptor.WriteLocalBuffer();
 
-        m_NodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(m_MainCamera);
-        m_NodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+        nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
+        nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
         MXC_LOG("CHILD UPDATE");
     }
 
     uint32_t swapIndex;
-    m_Swap.Acquire(&swapIndex);
-    m_Swap.Transition(commandBuffer,
-                      swapIndex,
-                      Vulkan::FromComputeSwapPresent,
-                      Vulkan::ToComputeWrite);
+    swap.Acquire(&swapIndex);
+    swap.Transition(commandBuffer,
+                     swapIndex,
+                     Vulkan::FromComputeSwapPresent,
+                     Vulkan::ToComputeWrite);
 
-    const auto& swap = m_Swap.GetVkSwapImages(swapIndex);
-    const auto& swapView = m_Swap.GetVkSwapImageViews(swapIndex);
-    m_ComputeNodeDescriptor.WriteOutputColorImage(swapView);
-    m_ComputeNodeDescriptor.WriteOutputAtomicTexture(m_OutputAtomicTexture);
+    const auto& swapImage = swap.GetVkSwapImages(swapIndex);
+    const auto& swapImageView = swap.GetVkSwapImageViews(swapIndex);
+    computeNodeDescriptor.WriteOutputColorImage(swapImageView);
+    computeNodeDescriptor.WriteOutputAtomicTexture(outputAtomicTexture);
 
-    Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, m_GlobalDescriptor);
-    Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, m_ComputeNodeDescriptor);
+    Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, globalDescriptor);
+    Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, computeNodeDescriptor);
 
-    const auto groupCount = VkExtent2D(Window::extents().width / Vulkan::ComputeNodePipeline::LocalSize,
-                                       Window::extents().height / Vulkan::ComputeNodePipeline::LocalSize);
+    const auto groupCount = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeNodePipeline::LocalSize,
+                                       Window::GetExtents().height / Vulkan::ComputeNodePipeline::LocalSize);
 
-    m_ComputeNodeProjectPipeline.BindPipeline(commandBuffer);
+    computeNodeProjectPipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
     const VkImageMemoryBarrier atomicImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext = nullptr,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = m_OutputAtomicTexture.GetVkImage(),
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
-      };
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+      .pNext = nullptr,
+      .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .image = outputAtomicTexture.GetVkImage(),
+      .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+    };
     vkCmdPipelineBarrier(commandBuffer,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -254,25 +254,25 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                          1,
                          &atomicImageMemoryBarrier);
 
-    m_ComputeNodePostPipeline.BindPipeline(commandBuffer);
+    computeNodePostPipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
-    m_Swap.Transition(commandBuffer,
-                      swapIndex,
-                      Vulkan::FromComputeWrite,
-                      Vulkan::ToComputeSwapPresent);
+    swap.Transition(commandBuffer,
+                     swapIndex,
+                     Vulkan::FromComputeWrite,
+                     Vulkan::ToComputeSwapPresent);
 
-    device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+    Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
     vkEndCommandBuffer(commandBuffer);
-    device->SubmitComputeQueueAndPresent(commandBuffer,
-                                            m_Swap,
-                                            swapIndex,
-                                            &m_Semaphore);
+    Device->SubmitComputeQueueAndPresent(commandBuffer,
+                                         swap,
+                                         swapIndex,
+                                         &semaphore);
 
-    m_Semaphore.Wait();
+    semaphore.Wait();
 
-    const auto timestamps = device->GetTimestamps();
+    const auto timestamps = Device->GetTimestamps();
     const float computeMs = timestamps[1] - timestamps[0];
     MXC_LOG_NAMED(computeMs);
 
@@ -281,30 +281,30 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
 MXC_RESULT NodeScene::Init()
 {
-    MXC_CHK(m_Node.Init());
+    MXC_CHK(node.Init());
 
     // MXC_CHK(m_Swap.Init(Window::extents(), Vulkan::CompositorPipelineType));
 
-    MXC_CHK(m_StandardPipeline.Init());
-    MXC_CHK(m_GlobalDescriptor.Init(m_MainCamera, Window::extents()));
+    MXC_CHK(standardPipeline.Init());
+    MXC_CHK(globalDescriptor.Init(mainCamera, Window::GetExtents()));
 
-    m_SpherTestTransform.position_ = vec3(0, 0, 0);
-    MXC_CHK(m_SphereTestMesh.InitSphere(0.5f));
-    MXC_CHK(m_SphereTestTexture.InitFromFile("textures/uvgrid.jpg",
+    spherTestTransform.position_ = vec3(0, 0, 0);
+    MXC_CHK(sphereTestMesh.InitSphere(0.5f));
+    MXC_CHK(sphereTestTexture.InitFromFile("textures/uvgrid.jpg",
                                              Vulkan::Locality::Local));
-    MXC_CHK(m_SphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
+    MXC_CHK(sphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
 
-    MXC_CHK(m_MaterialDescriptor.Init(m_SphereTestTexture));
-    MXC_CHK(m_ObjectDescriptor.Init(m_SpherTestTransform));
+    MXC_CHK(materialDescriptor.Init(sphereTestTexture));
+    MXC_CHK(objectDescriptor.Init(spherTestTransform));
 
     // spin lock for now until initial ipc message is received
-    while (m_Node.ipcFromCompositor().Deque() == 0) {
+    while (node.ipcFromCompositor().Deque() == 0) {
         MXC_LOG("Node Waiting for IPC");
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    MXC_CHK(m_Node.pImportedCompositorSemaphore()->SyncLocalWaitValue());
-    MXC_CHK(m_Node.pImportedNodeSemaphore()->SyncLocalWaitValue());
+    MXC_CHK(node.pImportedCompositorSemaphore()->SyncLocalWaitValue());
+    MXC_CHK(node.pImportedNodeSemaphore()->SyncLocalWaitValue());
 
     return MXC_SUCCESS;
 }
@@ -313,24 +313,24 @@ int temp = 0;
 
 MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 {
-    m_GlobalDescriptor.WriteBuffer(m_Node.pImportedGlobalDescriptor()->GetSharedBuffer());
+    globalDescriptor.WriteBuffer(node.pImportedGlobalDescriptor()->GetSharedBuffer());
 
-    const auto commandBuffer = device->BeginGraphicsCommandBuffer();
+    const auto commandBuffer = Device->BeginGraphicsCommandBuffer();
 
-    const auto& framebuffer = m_Node.framebuffer(m_FramebufferIndex);
+    const auto& framebuffer = node.framebuffer(framebufferIndex);
     framebuffer.Transition(commandBuffer,
                            Vulkan::AcquireFromExternal,
                            Vulkan::ToGraphicsAttach);
 
-    device->BeginRenderPass(framebuffer,
-                               (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}});
+    constexpr auto clearColor = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
+    Device->BeginRenderPass(framebuffer, clearColor);
 
-    m_StandardPipeline.BindPipeline(commandBuffer);
-    m_StandardPipeline.BindDescriptor(commandBuffer, m_GlobalDescriptor);
-    m_StandardPipeline.BindDescriptor(commandBuffer, m_MaterialDescriptor);
-    m_StandardPipeline.BindDescriptor(commandBuffer, m_ObjectDescriptor);
+    standardPipeline.BindPipeline(commandBuffer);
+    standardPipeline.BindDescriptor(commandBuffer, globalDescriptor);
+    standardPipeline.BindDescriptor(commandBuffer, materialDescriptor);
+    standardPipeline.BindDescriptor(commandBuffer, objectDescriptor);
 
-    m_SphereTestMesh.RecordRender(commandBuffer);
+    sphereTestMesh.RecordRender(commandBuffer);
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -349,16 +349,16 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     //                   m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
     vkEndCommandBuffer(commandBuffer);
-    device->SubmitGraphicsQueue(m_Node.pImportedNodeSemaphore());
+    Device->SubmitGraphicsQueue(node.pImportedNodeSemaphore());
     // k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
     //                                          swapIndex,
     //                                          m_Node.ImportedNodeSemaphore());
 
-    m_Node.pImportedNodeSemaphore()->Wait();
-    m_Node.pImportedCompositorSemaphore()->IncrementLocalWaitValue(m_CompositorSempahoreStep);
-    m_Node.pImportedCompositorSemaphore()->Wait();
+    node.pImportedNodeSemaphore()->Wait();
+    node.pImportedCompositorSemaphore()->localWaitValue_ += compositorSempahoreStep;
+    node.pImportedCompositorSemaphore()->Wait();
 
-    m_FramebufferIndex = !m_FramebufferIndex;
+    framebufferIndex = !framebufferIndex;
 
     temp++;
     if (temp == 3) {

@@ -48,7 +48,7 @@ namespace Moxaic::Vulkan
               .pName = "main",
             };
             MXC_CHK(CreateComputePipe(compStage));
-            vkDestroyShaderModule(k_pDevice->vkDevice, shader, VK_ALLOC);
+            vkDestroyShaderModule(k_pDevice->  GetVkDevice(), shader, VK_ALLOC);
 
             return MXC_SUCCESS;
         }

@@ -7,14 +7,14 @@ using namespace Moxaic;
 using namespace glm;
 
 Camera::Camera()
-    : aspectRatio_(float(Window::extents().width) / float(Window::extents().height))
+    : aspectRatio_(float(Window::GetExtents().width) / float(Window::GetExtents().height))
 {}
 
 bool Camera::UserCommandUpdate(const uint32_t deltaTime)
 {
     bool updated = false;
 
-    const auto& userCommand = Window::userCommand();
+    const auto& userCommand = Window::GetUserCommand();
     if (!cameraLocked_ && userCommand.leftMouseButtonPressed) {
         SDL_SetRelativeMouseMode(SDL_TRUE);
         cameraLocked_ = true;

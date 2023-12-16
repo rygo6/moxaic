@@ -128,7 +128,7 @@ float calculateWForMidpoint(float near, float far) {
     return w;
 }
 
-bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
+bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 nodeNormal, out vec3 depthProjectedNDC)
 {
     // for whatever reason sending uv through the whole projection math and back
     // ends you up with the uv inverted so do 1 - uv here so outuv lines up with start uv
@@ -144,15 +144,16 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
     const vec2 nodeIntersectUV = UVFromNDC(nodeIntersectNDC);
     nodeUV = nodeIntersectUV;
 
-    vec4 normal = texture(nodeNormal, nodeUV);
-    normal.y *= -1;
-    const float depth = texture(nodeDepth, nodeIntersectUV).r;
+    nodeNormal = texture(nodeNormalTexture, nodeUV).xyz;
+    nodeNormal.y *= -1;
+    const float depth = texture(nodeDepthTexture, nodeIntersectUV).r;
 
     if (nodeIntersectUV.x < 0
     || nodeIntersectUV.x > 1
     || nodeIntersectUV.y < 0
     || nodeIntersectUV.y > 1
     || depth > .99
+    || dot(nodeNormal.xyz, globalWorldRay) < 0
     ) {
         return false;
     }
@@ -164,7 +165,6 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
     //    surfaceNDC = nodeQuadSurfaceProjectedNDC;
 
     const vec4 nodeQuadDepthClipPos = vec4(nodeIntersectNDC.xy, depth, 1);
-//    const vec3 nodeQuadDepthWorldPos = WorldPosFromNodeClipPos(nodeQuadDepthClipPos) + normal.xyz * .1;
     const vec3 nodeQuadDepthWorldPos = WorldPosFromNodeClipPos(nodeQuadDepthClipPos);
     const vec4 nodeQuadDepthProjectedClipPos = GlobalClipPosFromWorldPos(nodeQuadDepthWorldPos);
     const vec3 nodeQuadDepthProjectedNDC = NDCFromClipPos(nodeQuadDepthProjectedClipPos);
@@ -279,8 +279,9 @@ void main()
 
     vec2 nodeUV;
     //    vec3 surfaceNDC;
+    vec3 nodeNormal;
     vec3 depthProjectedNDC;
-    if (!NodeIntersectUV(uv, nodeUV, depthProjectedNDC)) {
+    if (!NodeIntersectUV(uv, nodeUV, nodeNormal, depthProjectedNDC)) {
         return;
     }
     //    const vec2 surfaceUV = UVFromNDC(surfaceNDC);
@@ -301,13 +302,14 @@ void main()
     const vec2 stepbackUV = uvFromCoord(stepbackCoord, screenSize);
     vec2 stepbackNodeUV;
     //    vec3 stepbackSurfaceNDC;
+    vec3 stepbackNodeNormal;
     vec3 stepbackProjectedNDC;
-    if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackProjectedNDC)) {
+    if (!NodeIntersectUV(stepbackUV, stepbackNodeUV, stepbackNodeNormal, stepbackProjectedNDC)) {
         return;
     }
 
     // source
-    const vec4 color = texture(nodeColor, nodeUV);
+    const vec4 color = texture(nodeColorTexture, nodeUV);
     const uint packedData = packFloatAndColor(depthProjectedNDC.z, color.xyz);
     writeAtomicData(depthProjectedCoord, packedData);
 

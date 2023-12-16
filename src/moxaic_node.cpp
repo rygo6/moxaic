@@ -69,7 +69,7 @@ MXC_RESULT NodeReference::Init(const Vulkan::PipelineType pipelineType)
 
     for (int i = 0; i < m_ExportedFramebuffers.size(); ++i) {
         m_ExportedFramebuffers[i].Init(pipelineType,
-                                       Window::extents(),
+                                       Window::GetExtents(),
                                        Vulkan::Locality::External);
     }
 

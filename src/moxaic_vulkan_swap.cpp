@@ -100,11 +100,11 @@ Swap::Swap(const Vulkan::Device* const pDevice)
 
 Swap::~Swap()
 {
-    vkDestroySemaphore(k_pDevice->vkDevice, m_VkAcquireCompleteSemaphore, VK_ALLOC);
-    vkDestroySemaphore(k_pDevice->vkDevice, m_VkRenderCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_pDevice-> GetVkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(k_pDevice-> GetVkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
     for (int i = 0; i < SwapCount; ++i) {
-        vkDestroyImageView(k_pDevice->vkDevice, m_VkSwapImageViews[i], VK_ALLOC);
-        vkDestroyImage(k_pDevice->vkDevice, m_VkSwapImages[i], VK_ALLOC);
+        vkDestroyImageView(k_pDevice-> GetVkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
+        vkDestroyImage(k_pDevice-> GetVkDevice(), m_VkSwapImages[i], VK_ALLOC);
     }
 }
 
@@ -183,13 +183,13 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
         return MXC_FAIL;
     }
 
-    VK_CHK(vkCreateSwapchainKHR(k_pDevice->vkDevice,
+    VK_CHK(vkCreateSwapchainKHR(k_pDevice->  GetVkDevice(),
                                 &createInfo,
                                 VK_ALLOC,
                                 &m_VkSwapchain));
 
     uint32_t swapCount;
-    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->vkDevice,
+    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->  GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    nullptr));
@@ -197,7 +197,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
         MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_VkSwapImages.size());
         return MXC_FAIL;
     }
-    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->vkDevice,
+    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->  GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    m_VkSwapImages.data()));
@@ -229,7 +229,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
             .baseArrayLayer = 0,
             .layerCount = 1,
           }};
-        VK_CHK(vkCreateImageView(k_pDevice->vkDevice,
+        VK_CHK(vkCreateImageView(k_pDevice->  GetVkDevice(),
                                  &viewInfo,
                                  VK_ALLOC,
                                  &m_VkSwapImageViews[i]));
@@ -240,11 +240,11 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_pDevice->vkDevice,
+    VK_CHK(vkCreateSemaphore(k_pDevice->  GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkAcquireCompleteSemaphore));
-    VK_CHK(vkCreateSemaphore(k_pDevice->vkDevice,
+    VK_CHK(vkCreateSemaphore(k_pDevice->  GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkRenderCompleteSemaphore));
@@ -260,7 +260,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
 
 MXC_RESULT Swap::Acquire(uint32_t* pSwapIndex)
 {
-    VK_CHK(vkAcquireNextImageKHR(k_pDevice->vkDevice,
+    VK_CHK(vkAcquireNextImageKHR(k_pDevice->  GetVkDevice(),
                                  m_VkSwapchain,
                                  UINT64_MAX,
                                  m_VkAcquireCompleteSemaphore,

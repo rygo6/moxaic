@@ -105,9 +105,9 @@ namespace Moxaic::Vulkan
                 case Queue::None:
                     return 0;
                 case Queue::Graphics:
-                    return m_GraphicsQueueFamilyIndex;
+                    return graphicsQueueFamilyIndex;
                 case Queue::Compute:
-                    return m_ComputeQueueFamilyIndex;
+                    return computeQueueFamilyIndex;
                 case Queue::FamilyExternal:
                     return VK_QUEUE_FAMILY_EXTERNAL;
                 case Queue::Ignore:
@@ -128,55 +128,43 @@ namespace Moxaic::Vulkan
             return GetSrcQueue(dst);
         }
 
+        // vkHandles return be ref so they dan be used in designated initializers
+        const auto& GetVkDevice() const { return vkDevice; }
+        const auto& GetVkPhysicalDevice() const { return vkPhysicalDevice; }
+        const auto& GetVkRenderPass() const { return vkRenderPass; }
+        const auto& GetVkDescriptorPool() const { return vkDescriptorPool; }
+        const auto& GetVkLinearSampler() const { return vkLinearSampler; }
 
-        VkDevice vkDevice{VK_NULL_HANDLE};
-
-        MXC_GET(VkPhysicalDevice);
-        MXC_GET(VkGraphicsQueue);
-        MXC_GET(VkComputeQueue);
-        MXC_GET(VkRenderPass);
-        MXC_GET(VkDescriptorPool);
-        MXC_GET(VkQueryPool);
-        // MXC_GET(VkGraphicsCommandBuffer);
-        // MXC_GET(VkComputeCommandBuffer);
-        MXC_GET(VkLinearSampler);
-        MXC_GET(VkNearestSampler);
-
-        MXC_GET(GraphicsQueueFamilyIndex);
-        MXC_GET(ComputeQueueFamilyIndex);
-
-        MXC_GET(PhysicalDeviceMeshShaderProperties);
-        MXC_GET(PhysicalDeviceProperties);
-        MXC_GET(PhysicalDeviceMemoryProperties);
+        const auto GetGraphicsQueueFamilyIndex() const { return graphicsQueueFamilyIndex; }
 
     private:
+        VkDevice vkDevice{VK_NULL_HANDLE};
 
-        VkPhysicalDevice m_VkPhysicalDevice{VK_NULL_HANDLE};
+        VkPhysicalDevice vkPhysicalDevice{VK_NULL_HANDLE};
 
-        VkQueue m_VkGraphicsQueue{VK_NULL_HANDLE};
-        VkQueue m_VkComputeQueue{VK_NULL_HANDLE};
+        VkQueue vkGraphicsQueue{VK_NULL_HANDLE};
+        VkQueue vkComputeQueue{VK_NULL_HANDLE};
 
-        VkRenderPass m_VkRenderPass{VK_NULL_HANDLE};
+        VkRenderPass vkRenderPass{VK_NULL_HANDLE};
 
-        VkDescriptorPool m_VkDescriptorPool{VK_NULL_HANDLE};
-        VkQueryPool m_VkQueryPool{VK_NULL_HANDLE};
-        VkCommandPool m_VkGraphicsCommandPool{VK_NULL_HANDLE};
-        VkCommandPool m_VkComputeCommandPool{VK_NULL_HANDLE};
+        VkDescriptorPool vkDescriptorPool{VK_NULL_HANDLE};
+        VkQueryPool vkQueryPool{VK_NULL_HANDLE};
+        VkCommandPool vkGraphicsCommandPool{VK_NULL_HANDLE};
+        VkCommandPool vkComputeCommandPool{VK_NULL_HANDLE};
 
-        VkCommandBuffer m_VkGraphicsCommandBuffer{VK_NULL_HANDLE};
-        VkCommandBuffer m_VkComputeCommandBuffer{VK_NULL_HANDLE};
+        VkCommandBuffer vkGraphicsCommandBuffer{VK_NULL_HANDLE};
+        VkCommandBuffer vkComputeCommandBuffer{VK_NULL_HANDLE};
 
-        VkSampler m_VkLinearSampler{VK_NULL_HANDLE};
-        VkSampler m_VkNearestSampler{VK_NULL_HANDLE};
+        VkSampler vkLinearSampler{VK_NULL_HANDLE};
+        VkSampler vkNearestSampler{VK_NULL_HANDLE};
 
-        uint32_t m_GraphicsQueueFamilyIndex{};
-        uint32_t m_ComputeQueueFamilyIndex{};
+        uint32_t graphicsQueueFamilyIndex{};
+        uint32_t computeQueueFamilyIndex{};
 
-        VkPhysicalDeviceProperties2 m_PhysicalDeviceProperties{};
-        VkPhysicalDeviceMeshShaderPropertiesEXT m_PhysicalDeviceMeshShaderProperties{};
-        // VkExternalImageFormatProperties
+        VkPhysicalDeviceProperties2 physicalDeviceProperties{};
+        VkPhysicalDeviceMeshShaderPropertiesEXT pysicalDeviceMeshShaderProperties{};
 
-        VkPhysicalDeviceMemoryProperties m_PhysicalDeviceMemoryProperties{};
+        VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties{};
 
         bool PickPhysicalDevice();
         bool FindQueues();

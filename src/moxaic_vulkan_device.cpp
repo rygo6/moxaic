@@ -57,35 +57,35 @@ MXC_RESULT Device::PickPhysicalDevice()
     std::vector<VkPhysicalDevice> devices(deviceCount);
     VK_CHK(vkEnumeratePhysicalDevices(Vulkan::vkInstance(), &deviceCount, devices.data()));
 
-    // Todo Implement Query OpenVR for the physical.vkDevice to use
-    m_VkPhysicalDevice = devices.front();
+    // Todo Implement Query OpenVR for the physical. GetVkDevice to use
+    vkPhysicalDevice = devices.front();
 
 
-    m_PhysicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
-    m_PhysicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-    m_PhysicalDeviceProperties.pNext = &m_PhysicalDeviceMeshShaderProperties;
-    vkGetPhysicalDeviceProperties2(m_VkPhysicalDevice, &m_PhysicalDeviceProperties);
+    pysicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+    physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    physicalDeviceProperties.pNext = &pysicalDeviceMeshShaderProperties;
+    vkGetPhysicalDeviceProperties2(vkPhysicalDevice, &physicalDeviceProperties);
 
-    vkGetPhysicalDeviceMemoryProperties(m_VkPhysicalDevice, &m_PhysicalDeviceMemoryProperties);
+    vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &physicalDeviceMemoryProperties);
 
-    MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.timestampPeriod);
-    MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[0]);
-    MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[1]);
-    MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[2]);
-    MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.maxComputeWorkGroupInvocations);
-    MXC_LOG_NAMED(m_PhysicalDeviceProperties.properties.limits.maxTessellationGenerationLevel);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxTaskPayloadSize);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxTaskPayloadAndSharedMemorySize);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxMeshOutputPrimitives);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxMeshOutputVertices);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxMeshWorkGroupInvocations);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxTaskWorkGroupInvocations);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxPreferredMeshWorkGroupInvocations);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.maxPreferredTaskWorkGroupInvocations);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.prefersLocalInvocationPrimitiveOutput);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.prefersLocalInvocationVertexOutput);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.prefersCompactPrimitiveOutput);
-    MXC_LOG_NAMED(m_PhysicalDeviceMeshShaderProperties.prefersCompactVertexOutput);
+    MXC_LOG_NAMED(physicalDeviceProperties.properties.limits.timestampPeriod);
+    MXC_LOG_NAMED(physicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[0]);
+    MXC_LOG_NAMED(physicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[1]);
+    MXC_LOG_NAMED(physicalDeviceProperties.properties.limits.maxComputeWorkGroupSize[2]);
+    MXC_LOG_NAMED(physicalDeviceProperties.properties.limits.maxComputeWorkGroupInvocations);
+    MXC_LOG_NAMED(physicalDeviceProperties.properties.limits.maxTessellationGenerationLevel);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxTaskPayloadSize);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxTaskPayloadAndSharedMemorySize);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxMeshOutputPrimitives);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxMeshOutputVertices);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxMeshWorkGroupInvocations);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxTaskWorkGroupInvocations);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxPreferredMeshWorkGroupInvocations);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.maxPreferredTaskWorkGroupInvocations);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.prefersLocalInvocationPrimitiveOutput);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.prefersLocalInvocationVertexOutput);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.prefersCompactPrimitiveOutput);
+    MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.prefersCompactVertexOutput);
 
     return MXC_SUCCESS;
 }
@@ -95,7 +95,7 @@ MXC_RESULT Device::FindQueues()
     MXC_LOG("Vulkan::Device::FindQueues");
 
     uint32_t queueFamilyCount = 0;
-    vkGetPhysicalDeviceQueueFamilyProperties2(m_VkPhysicalDevice, &queueFamilyCount, nullptr);
+    vkGetPhysicalDeviceQueueFamilyProperties2(vkPhysicalDevice, &queueFamilyCount, nullptr);
     if (queueFamilyCount == 0) {
         MXC_LOG_ERROR("Failed to get graphicsQueue properties.");
         return MXC_FAIL;
@@ -110,7 +110,7 @@ MXC_RESULT Device::FindQueues()
           .pNext = &queueFamilyGlobalPriorityProperties[i],
         };
     }
-    vkGetPhysicalDeviceQueueFamilyProperties2(m_VkPhysicalDevice, &queueFamilyCount, queueFamilies.data());
+    vkGetPhysicalDeviceQueueFamilyProperties2(vkPhysicalDevice, &queueFamilyCount, queueFamilies.data());
 
     bool foundGraphics = false;
     bool foundCompute = false;
@@ -121,7 +121,7 @@ MXC_RESULT Device::FindQueues()
         const bool computeSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
 
         VkBool32 presentSupport = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(m_VkPhysicalDevice,
+        vkGetPhysicalDeviceSurfaceSupportKHR(vkPhysicalDevice,
                                              i,
                                              Vulkan::vkSurface(),
                                              &presentSupport);
@@ -130,18 +130,18 @@ MXC_RESULT Device::FindQueues()
             if (!globalQueueSupport) {
                 MXC_LOG_ERROR("No Global Priority On Graphics!");
             }
-            m_GraphicsQueueFamilyIndex = i;
+            graphicsQueueFamilyIndex = i;
             foundGraphics = true;
-            MXC_LOG_NAMED(m_GraphicsQueueFamilyIndex);
+            MXC_LOG_NAMED(graphicsQueueFamilyIndex);
         }
 
         if (!foundCompute && computeSupport && presentSupport && !graphicsSupport) {
             if (!globalQueueSupport) {
                 MXC_LOG_ERROR("No Global Priority On Compute!");
             }
-            m_ComputeQueueFamilyIndex = i;
+            computeQueueFamilyIndex = i;
             foundCompute = true;
-            MXC_LOG_NAMED(m_ComputeQueueFamilyIndex);
+            MXC_LOG_NAMED(computeQueueFamilyIndex);
         }
     }
 
@@ -170,13 +170,13 @@ MXC_RESULT Device::CreateDevice()
       (VkDeviceQueueCreateInfo){
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext = &queueGlobalPriorityCreateInfo,
-        .queueFamilyIndex = m_GraphicsQueueFamilyIndex,
+        .queueFamilyIndex = graphicsQueueFamilyIndex,
         .queueCount = 1,
         .pQueuePriorities = &queuePriority},
       (VkDeviceQueueCreateInfo){
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         .pNext = &queueGlobalPriorityCreateInfo,
-        .queueFamilyIndex = m_ComputeQueueFamilyIndex,
+        .queueFamilyIndex = computeQueueFamilyIndex,
         .queueCount = 1,
         .pQueuePriorities = &queuePriority}};
 
@@ -203,7 +203,7 @@ MXC_RESULT Device::CreateDevice()
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
       .pNext = &supportedPhysicalDeviceVulkan11Features,
     };
-    vkGetPhysicalDeviceFeatures2(m_VkPhysicalDevice, &supportedPhysicalDeviceFeatures2);
+    vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, &supportedPhysicalDeviceFeatures2);
     if (!supportedPhysicalDeviceFeatures2.features.robustBufferAccess)
         MXC_LOG_ERROR("robustBufferAccess no support!");
     if (!supportedPhysicalDeviceFeatures2.features.samplerAnisotropy)
@@ -304,7 +304,7 @@ MXC_RESULT Device::CreateDevice()
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.enabledExtensionCount = requiredDeviceExtensions.size();
     createInfo.ppEnabledExtensionNames = requiredDeviceExtensions.data();
-    VK_CHK(vkCreateDevice(m_VkPhysicalDevice, &createInfo, VK_ALLOC, &vkDevice));
+    VK_CHK(vkCreateDevice(vkPhysicalDevice, &createInfo, VK_ALLOC, &vkDevice));
 
     return MXC_SUCCESS;
 }
@@ -414,7 +414,7 @@ MXC_RESULT Device::CreateRenderPass()
       .dependencyCount = dependencies.size(),
       .pDependencies = dependencies.data(),
     };
-    VK_CHK(vkCreateRenderPass(vkDevice, &renderPassInfo, VK_ALLOC, &m_VkRenderPass));
+    VK_CHK(vkCreateRenderPass(vkDevice, &renderPassInfo, VK_ALLOC, &vkRenderPass));
     return MXC_SUCCESS;
 }
 
@@ -425,41 +425,41 @@ MXC_RESULT Device::CreateCommandBuffers()
     const VkCommandPoolCreateInfo graphicsPoolInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-      .queueFamilyIndex = m_GraphicsQueueFamilyIndex,
+      .queueFamilyIndex = graphicsQueueFamilyIndex,
     };
     VK_CHK(vkCreateCommandPool(vkDevice,
                                &graphicsPoolInfo,
                                VK_ALLOC,
-                               &m_VkGraphicsCommandPool));
+                               &vkGraphicsCommandPool));
     const VkCommandBufferAllocateInfo graphicsAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = m_VkGraphicsCommandPool,
+      .commandPool = vkGraphicsCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = 1,
     };
     VK_CHK(vkAllocateCommandBuffers(vkDevice,
                                     &graphicsAllocateInfo,
-                                    &m_VkGraphicsCommandBuffer));
+                                    &vkGraphicsCommandBuffer));
 
     // Compute
     const VkCommandPoolCreateInfo computePoolInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-      .queueFamilyIndex = m_ComputeQueueFamilyIndex,
+      .queueFamilyIndex = computeQueueFamilyIndex,
     };
     VK_CHK(vkCreateCommandPool(vkDevice,
                                &computePoolInfo,
                                VK_ALLOC,
-                               &m_VkComputeCommandPool));
+                               &vkComputeCommandPool));
     const VkCommandBufferAllocateInfo computeAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = m_VkComputeCommandPool,
+      .commandPool = vkComputeCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = 1,
     };
     VK_CHK(vkAllocateCommandBuffers(vkDevice,
                                     &computeAllocInfo,
-                                    &m_VkComputeCommandBuffer));
+                                    &vkComputeCommandBuffer));
 
     return MXC_SUCCESS;
 }
@@ -475,7 +475,7 @@ MXC_RESULT Device::CreatePools()
       .queryCount = Device::QueryPoolCount,
       .pipelineStatistics = 0,
     };
-    vkCreateQueryPool(vkDevice, &queryPoolCreateInfo, VK_ALLOC, &m_VkQueryPool);
+    vkCreateQueryPool(vkDevice, &queryPoolCreateInfo, VK_ALLOC, &vkQueryPool);
 
     constexpr StaticArray poolSizes{
       (VkDescriptorPoolSize){
@@ -502,7 +502,7 @@ MXC_RESULT Device::CreatePools()
     VK_CHK(vkCreateDescriptorPool(vkDevice,
                                   &poolInfo,
                                   VK_ALLOC,
-                                  &m_VkDescriptorPool));
+                                  &vkDescriptorPool));
     return MXC_SUCCESS;
 }
 
@@ -519,7 +519,7 @@ MXC_RESULT Device::CreateSamplers()
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
       .anisotropyEnable = VK_TRUE,
-      .maxAnisotropy = m_PhysicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
+      .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
@@ -527,7 +527,7 @@ MXC_RESULT Device::CreateSamplers()
       .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
       .unnormalizedCoordinates = VK_FALSE,
     };
-    VK_CHK(vkCreateSampler(vkDevice, &linearSamplerInfo, VK_ALLOC, &m_VkLinearSampler));
+    VK_CHK(vkCreateSampler(vkDevice, &linearSamplerInfo, VK_ALLOC, &vkLinearSampler));
 
     const VkSamplerCreateInfo nearestSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -539,7 +539,7 @@ MXC_RESULT Device::CreateSamplers()
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
       .anisotropyEnable = VK_TRUE,
-      .maxAnisotropy = m_PhysicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
+      .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
@@ -547,7 +547,7 @@ MXC_RESULT Device::CreateSamplers()
       .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
       .unnormalizedCoordinates = VK_FALSE,
     };
-    VK_CHK(vkCreateSampler(vkDevice, &nearestSamplerInfo, VK_ALLOC, &m_VkNearestSampler));
+    VK_CHK(vkCreateSampler(vkDevice, &nearestSamplerInfo, VK_ALLOC, &vkNearestSampler));
 
     return MXC_SUCCESS;
 }
@@ -563,8 +563,8 @@ MXC_RESULT Device::Init()
     MXC_CHK(FindQueues());
     MXC_CHK(CreateDevice());
 
-    vkGetDeviceQueue(vkDevice, m_GraphicsQueueFamilyIndex, 0, &m_VkGraphicsQueue);
-    vkGetDeviceQueue(vkDevice, m_ComputeQueueFamilyIndex, 0, &m_VkComputeQueue);
+    vkGetDeviceQueue(vkDevice, graphicsQueueFamilyIndex, 0, &vkGraphicsQueue);
+    vkGetDeviceQueue(vkDevice, computeQueueFamilyIndex, 0, &vkComputeQueue);
 
     MXC_CHK(CreateRenderPass());
     MXC_CHK(CreateCommandBuffers());
@@ -584,7 +584,7 @@ MXC_RESULT Device::AllocateBindImageExport(const VkMemoryPropertyFlags propertie
     vkGetImageMemoryRequirements(vkDevice,
                                  image,
                                  &memRequirements);
-    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+    MXC_CHK(MemoryTypeFromProperties(physicalDeviceMemoryProperties,
                                      properties,
                                      memRequirements.memoryTypeBits,
                                      &memTypeIndex));
@@ -626,7 +626,7 @@ MXC_RESULT Device::AllocateBindImageImport(const VkMemoryPropertyFlags propertie
     vkGetImageMemoryRequirements(vkDevice,
                                  image,
                                  &memRequirements);
-    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+    MXC_CHK(MemoryTypeFromProperties(physicalDeviceMemoryProperties,
                                      properties,
                                      memRequirements.memoryTypeBits,
                                      &memTypeIndex));
@@ -670,7 +670,7 @@ MXC_RESULT Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
     vkGetImageMemoryRequirements(vkDevice,
                                  image,
                                  &memRequirements);
-    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+    MXC_CHK(MemoryTypeFromProperties(physicalDeviceMemoryProperties,
                                      properties,
                                      memRequirements.memoryTypeBits,
                                      &memTypeIndex));
@@ -740,7 +740,7 @@ MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags& usage,
     vkGetBufferMemoryRequirements(vkDevice,
                                   *pBuffer,
                                   &memRequirements);
-    MXC_CHK(MemoryTypeFromProperties(m_PhysicalDeviceMemoryProperties,
+    MXC_CHK(MemoryTypeFromProperties(physicalDeviceMemoryProperties,
                                      properties,
                                      memRequirements.memoryTypeBits,
                                      &memTypeIndex));
@@ -978,7 +978,7 @@ MXC_RESULT Device::BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) 
     const VkCommandBufferAllocateInfo allocInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .pNext = nullptr,
-      .commandPool = m_VkGraphicsCommandPool,
+      .commandPool = vkGraphicsCommandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = 1,
     };
@@ -1010,13 +1010,13 @@ MXC_RESULT Device::EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffe
       .pCommandBuffers = &commandBuffer,
       .signalSemaphoreCount = 0,
       .pSignalSemaphores = nullptr};
-    VK_CHK(vkQueueSubmit(m_VkGraphicsQueue,
+    VK_CHK(vkQueueSubmit(vkGraphicsQueue,
                          1,
                          &submitInfo,
                          VK_NULL_HANDLE));
-    VK_CHK(vkQueueWaitIdle(m_VkGraphicsQueue));
+    VK_CHK(vkQueueWaitIdle(vkGraphicsQueue));
     vkFreeCommandBuffers(vkDevice,
-                         m_VkGraphicsCommandPool,
+                         vkGraphicsCommandPool,
                          1,
                          &commandBuffer);
     return MXC_SUCCESS;
@@ -1025,32 +1025,32 @@ MXC_RESULT Device::EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffe
 // todo pull from a pool of command buffers
 VkCommandBuffer Device::BeginGraphicsCommandBuffer() const
 {
-    vkResetCommandBuffer(m_VkGraphicsCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    vkResetCommandBuffer(vkGraphicsCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     constexpr VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
     };
-    vkBeginCommandBuffer(m_VkGraphicsCommandBuffer, &beginInfo);
+    vkBeginCommandBuffer(vkGraphicsCommandBuffer, &beginInfo);
     const VkViewport viewport{
       .x = 0.0f,
       .y = 0.0f,
-      .width = static_cast<float>(Window::extents().width),
-      .height = static_cast<float>(Window::extents().height),
+      .width = static_cast<float>(Window::GetExtents().width),
+      .height = static_cast<float>(Window::GetExtents().height),
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
     };
-    vkCmdSetViewport(m_VkGraphicsCommandBuffer,
+    vkCmdSetViewport(vkGraphicsCommandBuffer,
                      0,
                      1,
                      &viewport);
     const VkRect2D scissor{
       .offset = {0, 0},
-      .extent = Window::extents(),
+      .extent = Window::GetExtents(),
     };
-    vkCmdSetScissor(m_VkGraphicsCommandBuffer,
+    vkCmdSetScissor(vkGraphicsCommandBuffer,
                     0,
                     1,
                     &scissor);
-    return m_VkGraphicsCommandBuffer;
+    return vkGraphicsCommandBuffer;
 }
 
 void Device::BeginRenderPass(const Framebuffer& framebuffer,
@@ -1064,7 +1064,7 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer,
     const VkRenderPassBeginInfo renderPassBeginInfo{
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = nullptr,
-      .renderPass = m_VkRenderPass,
+      .renderPass = vkRenderPass,
       .framebuffer = framebuffer.GetVkFramebuffer(),
       .renderArea = {
         .offset = {0, 0},
@@ -1073,15 +1073,15 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer,
       .clearValueCount = clearValues.size(),
       .pClearValues = clearValues.data(),
     };
-    VK_CHK_VOID(vkCmdBeginRenderPass(m_VkGraphicsCommandBuffer,
+    VK_CHK_VOID(vkCmdBeginRenderPass(vkGraphicsCommandBuffer,
                                      &renderPassBeginInfo,
                                      VK_SUBPASS_CONTENTS_INLINE));
 }
 
 MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* const pTimelineSemaphore) const
 {
-    return SubmitQueue(m_VkGraphicsCommandBuffer,
-                       m_VkGraphicsQueue,
+    return SubmitQueue(vkGraphicsCommandBuffer,
+                       vkGraphicsQueue,
                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                        pTimelineSemaphore);
 }
@@ -1090,8 +1090,8 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(const Swap& swap,
                                                  const uint32_t swapIndex,
                                                  Semaphore* const pTimelineSemaphore) const
 {
-    return SubmitQueueAndPresent(m_VkGraphicsCommandBuffer,
-                                 m_VkGraphicsQueue,
+    return SubmitQueueAndPresent(vkGraphicsCommandBuffer,
+                                 vkGraphicsQueue,
                                  swap,
                                  swapIndex,
                                  VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, pTimelineSemaphore);
@@ -1099,21 +1099,21 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(const Swap& swap,
 
 VkCommandBuffer Device::BeginComputeCommandBuffer() const
 {
-    vkResetCommandBuffer(m_VkComputeCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    vkResetCommandBuffer(vkComputeCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     constexpr VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .pNext = nullptr,
       .flags = 0,
       .pInheritanceInfo = nullptr,
     };
-    vkBeginCommandBuffer(m_VkComputeCommandBuffer, &beginInfo);
-    return m_VkComputeCommandBuffer;
+    vkBeginCommandBuffer(vkComputeCommandBuffer, &beginInfo);
+    return vkComputeCommandBuffer;
 }
 
 MXC_RESULT Device::SubmitComputeQueue(Semaphore* pTimelineSemaphore) const
 {
-    return SubmitQueue(m_VkComputeCommandBuffer,
-                       m_VkComputeQueue,
+    return SubmitQueue(vkComputeCommandBuffer,
+                       vkComputeQueue,
                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                        pTimelineSemaphore);
 }
@@ -1124,7 +1124,7 @@ MXC_RESULT Device::SubmitComputeQueueAndPresent(const VkCommandBuffer commandBuf
                                                 Semaphore* const pTimelineSemaphore) const
 {
     return SubmitQueueAndPresent(commandBuffer,
-                                 m_VkComputeQueue,
+                                 vkComputeQueue,
                                  swap,
                                  swapIndex,
                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -1133,21 +1133,21 @@ MXC_RESULT Device::SubmitComputeQueueAndPresent(const VkCommandBuffer commandBuf
 
 void Device::ResetTimestamps() const
 {
-    vkResetQueryPool(vkDevice, m_VkQueryPool, 0, QueryPoolCount);
+    vkResetQueryPool(vkDevice, vkQueryPool, 0, QueryPoolCount);
 }
 
 void Device::WriteTimestamp(const VkCommandBuffer commandbuffer,
                             const VkPipelineStageFlagBits pipelineStage,
                             const uint32_t query) const
 {
-    vkCmdWriteTimestamp(commandbuffer, pipelineStage, m_VkQueryPool, query);
+    vkCmdWriteTimestamp(commandbuffer, pipelineStage, vkQueryPool, query);
 }
 
 StaticArray<double, Device::QueryPoolCount> Device::GetTimestamps() const
 {
     uint64_t timestampsNS[QueryPoolCount];
     vkGetQueryPoolResults(vkDevice,
-                          m_VkQueryPool,
+                          vkQueryPool,
                           0,
                           QueryPoolCount,
                           sizeof(uint64_t) * QueryPoolCount,
@@ -1169,9 +1169,9 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
                                          Semaphore* const pTimelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    const uint64_t waitValue = pTimelineSemaphore->GetLocalWaitValue();
-    pTimelineSemaphore->IncrementLocalWaitValue();
-    const uint64_t signalValue = pTimelineSemaphore->GetLocalWaitValue();
+    const uint64_t waitValue = pTimelineSemaphore->localWaitValue_;
+    pTimelineSemaphore->localWaitValue_++;
+    const uint64_t signalValue = pTimelineSemaphore->localWaitValue_;
     const StaticArray waitSemaphoreValues{
       (uint64_t) waitValue,
       (uint64_t) 0,
@@ -1189,7 +1189,7 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
       .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
     const StaticArray waitSemaphores{
-      pTimelineSemaphore->GetVkSemaphore(),
+      pTimelineSemaphore->vkSemaphore(),
       swap.GetVkAcquireCompleteSemaphore(),
     };
     const StaticArray waitDstStageMasks{
@@ -1197,7 +1197,7 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
       waitDstStageMask,
     };
     const StaticArray signalSemaphores{
-      pTimelineSemaphore->GetVkSemaphore(),
+      pTimelineSemaphore->vkSemaphore(),
       swap.GetVkRenderCompleteSemaphore(),
     };
     const VkSubmitInfo submitInfo = {
@@ -1225,9 +1225,9 @@ MXC_RESULT Device::SubmitQueue(const VkCommandBuffer& commandBuffer,
                                Semaphore* const pTimelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    const uint64_t waitValue = pTimelineSemaphore->GetLocalWaitValue();
-    pTimelineSemaphore->IncrementLocalWaitValue();
-    const uint64_t signalValue = pTimelineSemaphore->GetLocalWaitValue();
+    const uint64_t waitValue = pTimelineSemaphore->localWaitValue_;
+    pTimelineSemaphore->localWaitValue_++;
+    const uint64_t signalValue = pTimelineSemaphore->localWaitValue_;
     const StaticArray waitSemaphoreValues{
       waitValue,
     };
@@ -1243,13 +1243,13 @@ MXC_RESULT Device::SubmitQueue(const VkCommandBuffer& commandBuffer,
       .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
     const StaticArray waitSemaphores{
-      pTimelineSemaphore->GetVkSemaphore(),
+      pTimelineSemaphore->vkSemaphore(),
     };
     const StaticArray waitDstStageMasks{
       waitDstStageMask,
     };
     const StaticArray signalSemaphores{
-      pTimelineSemaphore->GetVkSemaphore(),
+      pTimelineSemaphore->vkSemaphore(),
     };
     const VkSubmitInfo submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,

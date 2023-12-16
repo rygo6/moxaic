@@ -33,21 +33,17 @@ namespace Moxaic::Vulkan
 
         HANDLE ClonedExternalHandle(HANDLE const& hTargetProcessHandle) const;
 
-        void IncrementLocalWaitValue() { m_LocalWaitValue++; }
-        void IncrementLocalWaitValue(const uint64_t step) { m_LocalWaitValue += step; }
+        uint64_t localWaitValue_{0};
 
-        MXC_GET(VkSemaphore);
-        MXC_GET(LocalWaitValue)
+        MXC_GET2(vkSemaphore);
 
     private:
-        const Device* const k_pDevice;
-        ;
+        const Device* const device_;
 
-        uint64_t m_LocalWaitValue{0};
-        VkSemaphore m_VkSemaphore{VK_NULL_HANDLE};
+        VkSemaphore vkSemaphore_{VK_NULL_HANDLE};
 
 #ifdef WIN32
-        HANDLE m_ExternalHandle{nullptr};
+        HANDLE externalHandle_{nullptr};
 #endif
     };
-}// namespace Moxaic::Vulkan
+}

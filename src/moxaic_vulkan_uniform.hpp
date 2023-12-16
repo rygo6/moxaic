@@ -21,12 +21,12 @@ namespace Moxaic::Vulkan
 
         virtual ~Uniform()
         {
-            vkDestroyBuffer(k_pDevice->vkDevice, m_VkBuffer, VK_ALLOC);
+            vkDestroyBuffer(k_pDevice->  GetVkDevice(), m_VkBuffer, VK_ALLOC);
 
             if (m_pMappedBuffer != nullptr)
-                vkUnmapMemory(k_pDevice->vkDevice, m_VkDeviceMemory);
+                vkUnmapMemory(k_pDevice->  GetVkDevice(), m_VkDeviceMemory);
 
-            vkFreeMemory(k_pDevice->vkDevice, m_VkDeviceMemory, VK_ALLOC);
+            vkFreeMemory(k_pDevice->  GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
 
             if (m_ExternalMemory != nullptr)
                 CloseHandle(m_ExternalMemory);
@@ -52,7 +52,7 @@ namespace Moxaic::Vulkan
                                                         &m_VkBuffer,
                                                         &m_VkDeviceMemory,
                                                         &m_ExternalMemory));
-            VK_CHK(vkMapMemory(k_pDevice->vkDevice,
+            VK_CHK(vkMapMemory(k_pDevice->  GetVkDevice(),
                                m_VkDeviceMemory,
                                0,
                                Size(),
