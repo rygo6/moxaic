@@ -50,7 +50,7 @@ MXC_RESULT CompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    nodeReference.pExportedGlobalDescriptor()->localBuffer_ = globalDescriptor.GetLocalBuffer();
+    nodeReference.pExportedGlobalDescriptor()->localBuffer = globalDescriptor.GetLocalBuffer();
     nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;
@@ -80,7 +80,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
-        auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer_;
+        auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer;
         meshNodeDescriptor[nodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         meshNodeDescriptor[nodeFramebufferIndex].WriteLocalBuffer();
 
@@ -200,7 +200,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                                    Vulkan::ToComputeRead);
         computeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
-        const auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer_;
+        const auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer;
         computeNodeDescriptor.SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         computeNodeDescriptor.WriteLocalBuffer();
 

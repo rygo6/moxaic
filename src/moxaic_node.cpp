@@ -111,7 +111,7 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camer
     if (nearZ < MXC_CAMERA_MIN_Z) {
         nearZ = MXC_CAMERA_MIN_Z;
     }
-    auto& localBuffer = m_ExportedGlobalDescriptor.localBuffer_;
+    auto& localBuffer = m_ExportedGlobalDescriptor.localBuffer;
     localBuffer.view = camera.view();
     localBuffer.proj = glm::perspective(camera.fieldOfView(),
                                         camera.aspectRatio(),

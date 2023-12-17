@@ -22,15 +22,15 @@ namespace Moxaic
 
         virtual ~InterProcessBuffer()
         {
-            if (m_pSharedBuffer != nullptr)
-                UnmapViewOfFile(m_pSharedBuffer);
-            if (m_hMapFile != nullptr)
-                CloseHandle(m_hMapFile);
+            if (sharedBuffer != nullptr)
+                UnmapViewOfFile(sharedBuffer);
+            if (mapFile != nullptr)
+                CloseHandle(mapFile);
         };
 
-        MXC_RESULT Init(std::string const& sharedMemoryName)
+        MXC_RESULT Init(const std::string& sharedMemoryName)
         {
-            m_hMapFile = CreateFileMapping(
+            mapFile = CreateFileMapping(
               INVALID_HANDLE_VALUE,
               // use paging file
               nullptr,
@@ -42,27 +42,27 @@ namespace Moxaic
               Size(),
               // maximum object size (low-order DWORD)
               sharedMemoryName.c_str());// name of mapping object
-            if (m_hMapFile == nullptr) {
+            if (mapFile == nullptr) {
                 MXC_LOG_ERROR("Could not create file mapping object.", GetLastError());
                 return MXC_FAIL;
             }
 
-            m_pSharedBuffer = MapViewOfFile(m_hMapFile,
-                                            FILE_MAP_ALL_ACCESS,
-                                            0,
-                                            0,
-                                            Size());
-            memset(m_pSharedBuffer, 0, Size());
-            if (m_pSharedBuffer == nullptr) {
+            sharedBuffer = MapViewOfFile(mapFile,
+                                         FILE_MAP_ALL_ACCESS,
+                                         0,
+                                         0,
+                                         Size());
+            memset(sharedBuffer, 0, Size());
+            if (sharedBuffer == nullptr) {
                 MXC_LOG_ERROR("Could not map view of file.", GetLastError());
-                CloseHandle(m_pSharedBuffer);
+                CloseHandle(sharedBuffer);
                 return MXC_FAIL;
             }
 
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT InitFromImport(std::string const& sharedMemoryName)
+        MXC_RESULT InitFromImport(const std::string& sharedMemoryName)
         {
             // todo properly receive handle
             return Init(sharedMemoryName);
@@ -70,24 +70,24 @@ namespace Moxaic
 
         void SyncLocalBuffer()
         {
-            memcpy(&localBuffer_, m_pSharedBuffer, Size());
+            memcpy(&localBuffer, sharedBuffer, Size());
         }
 
         void WriteLocalBuffer()
         {
-            memcpy(m_pSharedBuffer, &localBuffer_, Size());
+            memcpy(sharedBuffer, &localBuffer, Size());
         }
 
-        T localBuffer_;
+        T localBuffer;
 
-        T const& GetSharedBuffer() const { return *static_cast<T*>(m_pSharedBuffer); }
+        const T& GetSharedBuffer() const { return *static_cast<T*>(sharedBuffer); }
 
         static constexpr int Size() { return sizeof(T); }
 
     protected:
 #ifdef WIN32
-        LPVOID m_pSharedBuffer{nullptr};
-        HANDLE m_hMapFile{nullptr};
+        volatile LPVOID sharedBuffer{nullptr};
+        HANDLE mapFile{nullptr};
 #endif
     };
 
@@ -97,9 +97,9 @@ namespace Moxaic
         static constexpr int RingBufferSize = RingBufferCount * sizeof(uint8_t);
         static constexpr int HeaderSize = 1;
 
-        uint8_t head;
-        uint8_t tail;
-        uint8_t pRingBuffer[RingBufferSize];
+        volatile uint8_t head;
+        volatile uint8_t tail;
+        volatile uint8_t ringBuffer[RingBufferSize];
     };
 
     using InterProcessFunc = std::function<void(void*)>;
@@ -114,7 +114,7 @@ namespace Moxaic
     class InterProcessProducer : public InterProcessBuffer<RingBuffer>
     {
     public:
-        void Enque(InterProcessTargetFunc, void const* param) const;
+        void Enque(InterProcessTargetFunc, const void* param) const;
     };
 
     class InterProcessReceiver : public InterProcessBuffer<RingBuffer>
@@ -123,11 +123,11 @@ namespace Moxaic
 
     public:
         InterProcessReceiver() = default;
-        MXC_RESULT Init(std::string const& sharedMemoryName,
-                        StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> const&& targetFuncs);
+        MXC_RESULT Init(const std::string& sharedMemoryName,
+                        const StaticArray<InterProcessFunc, InterProcessTargetFunc::Count>&& targetFuncs);
         int Deque() const;
 
     private:
-        StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> m_TargetFuncs{};
+        StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> targetFuncs{};
     };
 }// namespace Moxaic

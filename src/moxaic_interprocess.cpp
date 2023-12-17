@@ -10,16 +10,16 @@ constexpr StaticArray k_InterProcessTargetParamSize{
 void InterProcessProducer::Enque(InterProcessTargetFunc const target,
                                  void const* param) const
 {
-    auto const pBuffer = static_cast<RingBuffer*>(m_pSharedBuffer);
-    pBuffer->pRingBuffer[pBuffer->head] = target;
-    memcpy(pBuffer->pRingBuffer + pBuffer->head + RingBuffer::HeaderSize, param, k_InterProcessTargetParamSize[target]);
+    auto const pBuffer = static_cast<RingBuffer*>(sharedBuffer);
+    pBuffer->ringBuffer[pBuffer->head] = target;
+    memcpy((void*)(pBuffer->ringBuffer + pBuffer->head + RingBuffer::HeaderSize), param, k_InterProcessTargetParamSize[target]);
     pBuffer->head = pBuffer->head + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
 }
 
 MXC_RESULT InterProcessReceiver::Init(std::string const& sharedMemoryName,
                                       StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> const&& targetFuncs)
 {
-    m_TargetFuncs = targetFuncs;
+    this->targetFuncs = targetFuncs;
     return InterProcessBuffer::Init(sharedMemoryName);
 }
 
@@ -27,21 +27,21 @@ int InterProcessReceiver::Deque() const
 {
     // TODO this needs to actually cycle around the ring buffer, this is only half done
 
-    auto const pBuffer = static_cast<RingBuffer*>(m_pSharedBuffer);
+    auto const pBuffer = static_cast<RingBuffer*>(sharedBuffer);
 
     if (pBuffer->head == pBuffer->tail)
         return 0;
 
     MXC_LOG("IPC Polling.", pBuffer->head, pBuffer->tail);
 
-    InterProcessTargetFunc const target = static_cast<InterProcessTargetFunc>(pBuffer->pRingBuffer[pBuffer->tail]);
+    InterProcessTargetFunc const target = static_cast<InterProcessTargetFunc>(pBuffer->ringBuffer[pBuffer->tail]);
 
     // TODO do you copy it out of the IPC or just send that chunk of shared memory on through?
     // If consumer consumes too slow then producer might run out of data in a stream?
     // From trusted parent app sending shared memory through is probably fine
     //    void *param = malloc(fbrIPCTargetParamSize(target));
     //    memcpy(param, pRingBuffer->pRingBuffer + pRingBuffer->tail + FBR_IPC_RING_HEADER_SIZE, fbrIPCTargetParamSize(target));
-    void* param = pBuffer->pRingBuffer + pBuffer->tail + RingBuffer::HeaderSize;
+    const auto param = (void*)(pBuffer->ringBuffer + pBuffer->tail + RingBuffer::HeaderSize);
 
     if (pBuffer->tail + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target] > RingBuffer::RingBufferSize) {
         // TODO this needs to actually cycle around the ring buffer, this is only half done
@@ -49,7 +49,7 @@ int InterProcessReceiver::Deque() const
     }
 
     MXC_LOG("Calling IPC Target", target);
-    m_TargetFuncs[target](param);
+    targetFuncs[target](param);
 
     pBuffer->tail = pBuffer->tail + RingBuffer::HeaderSize + k_InterProcessTargetParamSize[target];
 
