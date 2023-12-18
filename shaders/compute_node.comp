@@ -7,9 +7,9 @@
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
-layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAtomic;
+layout (set = 1, binding = 6, r32ui) uniform uimage2D outputAtomic;
 
-vec3 nodeOriginWorldPos = vec3(0, 0, 0);
+vec3 nodeOriginWorldPos = vec3(0, 0, -0.5);
 const vec3 nodeOriginWorldDirection = vec3(0, 0, 1);
 
 vec3 intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal) {
@@ -142,7 +142,7 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 stepNormalNDC, out
     const vec2 nodeIntersectUV = UVFromNDC(nodeIntersectNDC);
     nodeUV = nodeIntersectUV;
 
-    const vec3 nodeNormal = texture(nodeNormalTexture, nodeUV).xyz * vec3(0.0, 1.0, 0.0);
+    const vec3 nodeWorldNormal = texture(nodeNormalTexture, nodeIntersectUV).xyz * vec3(1.0, -1.0, 1.0);
     const float depth = texture(nodeDepthTexture, nodeIntersectUV).r;
 
     if (nodeIntersectUV.x < 0
@@ -150,7 +150,7 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 stepNormalNDC, out
     || nodeIntersectUV.y < 0
     || nodeIntersectUV.y > 1
     || depth > .99
-    || dot(nodeNormal.xyz, globalWorldRay) < 0
+    || dot(nodeWorldNormal.xyz, globalWorldRay) < 0
     ) {
         return false;
     }
@@ -161,7 +161,7 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 stepNormalNDC, out
     const vec3 nodeQuadDepthProjectedNDC = NDCFromClipPos(nodeQuadDepthProjectedClipPos);
     depthProjectedNDC = nodeQuadDepthProjectedNDC;
 
-    const vec3 stepNormalWorldPos = nodeQuadDepthWorldPos + nodeNormal;
+    const vec3 stepNormalWorldPos = nodeQuadDepthWorldPos + (nodeWorldNormal * 0.1);
     const vec4 stepNormalClipPos = GlobalClipPosFromWorldPos(stepNormalWorldPos);
     stepNormalNDC = NDCFromClipPos(stepNormalClipPos);
 
@@ -246,8 +246,8 @@ float CalcNodeZPlane(){
     const float backMag = SqrMag(uvs);
 
     float nodeZPlane = frontMag < backMag ? 1 : -1;
-    if (frontMag == backMag) {
-        nodeZPlane = 0;
+    if (abs(frontMag - backMag) < .1) {
+        nodeZPlane = -1;
     }
 
     return nodeZPlane;
@@ -263,7 +263,8 @@ void XYCoordNormalizedDir(const vec2 dir, out bool isXDir, out vec2 normalizedDi
 
 void main()
 {
-    nodeOriginWorldPos.z = CalcNodeZPlane() * 0.5;
+//    nodeOriginWorldPos.z = CalcNodeZPlane() * 0.5;
+    nodeOriginWorldPos.z = nodeUBO.planeZDepth;
 
 //    WriteDebugUV(vec2(0.5, nodeOriginWorldPos.z + .5));
 
@@ -289,38 +290,41 @@ void main()
 
 
     // calc and write step normal pixel
-    const vec2 stepNormalUV = UVFromNDC(stepNormalNDC);
-    const vec2 stepNormalDir = stepNormalUV - uv;
-    vec2 normalizedStepNormalDir;
-    bool stepNormalDirIsX;
-    XYCoordNormalizedDir(stepNormalDir, stepNormalDirIsX, normalizedStepNormalDir);
-    const ivec2 stepNormalCoord = iRound(normalizedStepNormalDir + vec2(coord));
-    writeAtomicData(stepNormalCoord, packedData);
+//    const vec2 stepNormalUV = UVFromNDC(stepNormalNDC);
+//    const vec2 stepNormalDir = stepNormalUV - uv;
+////    const ivec2 stepNormalCoord = CoordFromUV(stepNormalUV, screenSize);
+//    vec2 normalizedStepNormalDir;
+//    bool stepNormalDirIsX;
+//    XYCoordNormalizedDir(stepNormalDir, stepNormalDirIsX, normalizedStepNormalDir);
+//    const ivec2 stepNormalCoord = iRound(normalizedStepNormalDir + vec2(depthProjectedCoord));
+//    writeAtomicData(stepNormalCoord, packedData);
+//    const ivec2 stepNormalCoord2 = iRound(2.0 * normalizedStepNormalDir + vec2(depthProjectedCoord));
+//    writeAtomicData(stepNormalCoord2, packedData);
 
     // calc stepback
-    const vec2 stepBackDir = depthProjectUV - uv;
-    vec2 normalizedStepBackDir;
-    bool stepBackDirIsX;
-    XYCoordNormalizedDir(stepBackDir, stepBackDirIsX, normalizedStepBackDir);
-    const ivec2 stepBackCoord = iRound(normalizedStepBackDir + vec2(coord));
-    const vec2 stepBackUV = uvFromCoord(stepBackCoord, screenSize);
-    vec2 stepBackNodeUV;
-    vec3 stepBackStepNormalNDC;
-    vec3 stepBackProjectedNDC;
-    if (!NodeIntersectUV(stepBackUV, stepBackNodeUV, stepBackStepNormalNDC, stepBackProjectedNDC)) {
-        return;
-    }
+//    const vec2 stepBackDir = depthProjectUV - uv;
+//    vec2 normalizedStepBackDir;
+//    bool stepBackDirIsX;
+//    XYCoordNormalizedDir(stepBackDir, stepBackDirIsX, normalizedStepBackDir);
+//    const ivec2 stepBackCoord = iRound(normalizedStepBackDir + vec2(coord));
+//    const vec2 stepBackUV = uvFromCoord(stepBackCoord, screenSize);
+//    vec2 stepBackNodeUV;
+//    vec3 stepBackStepNormalNDC;
+//    vec3 stepBackProjectedNDC;
+//    if (!NodeIntersectUV(stepBackUV, stepBackNodeUV, stepBackStepNormalNDC, stepBackProjectedNDC)) {
+//        return;
+//    }
 
     // write stepback pixels
-    const vec2 stepbackProjectedUV = UVFromNDC(stepBackProjectedNDC);
-    const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
-    const ivec2 stepBackCoordDiff = abs(stepbackOutputUVCoord - depthProjectedCoord);
-    const int stepbackCount = clamp((stepBackDirIsX ? stepBackCoordDiff.x : stepBackCoordDiff.y) - 1, 0, 4);// -1 so it doesn't overlap end pixel in stepback
-    vec2 currentCoord = depthProjectedCoord;
-    ivec2 roundedCoord = depthProjectedCoord;
-    for (int step = 0; step < stepbackCount; ++step){
-        currentCoord += normalizedStepBackDir;
-        roundedCoord = iRound(currentCoord);
-        writeAtomicData(roundedCoord, packedData);
-    }
+//    const vec2 stepbackProjectedUV = UVFromNDC(stepBackProjectedNDC);
+//    const ivec2 stepbackOutputUVCoord = CoordFromUV(stepbackProjectedUV, screenSize);
+//    const ivec2 stepBackCoordDiff = abs(stepbackOutputUVCoord - depthProjectedCoord);
+//    const int stepbackCount = clamp((stepBackDirIsX ? stepBackCoordDiff.x : stepBackCoordDiff.y) - 1, 0, 4);// -1 so it doesn't overlap end pixel in stepback
+//    vec2 currentCoord = depthProjectedCoord;
+//    ivec2 roundedCoord = depthProjectedCoord;
+//    for (int step = 0; step < stepbackCount; ++step){
+//        currentCoord += normalizedStepBackDir;
+//        roundedCoord = iRound(currentCoord);
+//        writeAtomicData(roundedCoord, packedData);
+//    }
 }

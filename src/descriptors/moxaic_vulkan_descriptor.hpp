@@ -21,12 +21,12 @@ namespace Moxaic::Vulkan
         MXC_NO_VALUE_PASS(VulkanDescriptorBase)
 
         explicit VulkanDescriptorBase(const Vulkan::Device* const pDevice)
-            : k_pDevice(pDevice) {}
+            : Device(pDevice) {}
 
         virtual ~VulkanDescriptorBase()
         {
-            vkFreeDescriptorSets(k_pDevice->  GetVkDevice(),
-                                 k_pDevice->GetVkDescriptorPool(),
+            vkFreeDescriptorSets(Device->  GetVkDevice(),
+                                 Device->GetVkDescriptorPool(),
                                  1,
                                  &m_VkDescriptorSet);
         }
@@ -40,7 +40,7 @@ namespace Moxaic::Vulkan
         }
 
     protected:
-        const Device* const k_pDevice;
+        const Device* const Device;
         // at some point layout will need to be a map on the device to support multiple devices
         inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
@@ -77,15 +77,15 @@ namespace Moxaic::Vulkan
         MXC_RESULT AllocateDescriptorSet()
         {
             SDL_assert(m_VkDescriptorSet == nullptr);
-            CheckLayoutInitialized(*k_pDevice);
+            CheckLayoutInitialized(*Device);
             const VkDescriptorSetAllocateInfo allocInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
               .pNext = nullptr,
-              .descriptorPool = k_pDevice->GetVkDescriptorPool(),
+              .descriptorPool = Device->GetVkDescriptorPool(),
               .descriptorSetCount = 1,
               .pSetLayouts = &s_VkDescriptorSetLayout,
             };
-            VK_CHK(vkAllocateDescriptorSets(k_pDevice->  GetVkDevice(),
+            VK_CHK(vkAllocateDescriptorSets(Device->  GetVkDevice(),
                                             &allocInfo,
                                             &m_VkDescriptorSet));
             return MXC_SUCCESS;
@@ -102,7 +102,7 @@ namespace Moxaic::Vulkan
                 writes[i].dstBinding = writes[i].dstBinding == 0 ? i : writes[i].dstBinding;
                 writes[i].descriptorCount = writes[i].descriptorCount == 0 ? 1 : writes[i].descriptorCount;
             }
-            VK_CHK_VOID(vkUpdateDescriptorSets(k_pDevice->  GetVkDevice(),
+            VK_CHK_VOID(vkUpdateDescriptorSets(Device->  GetVkDevice(),
                                                writes.size(),
                                                writes.data(),
                                                0,

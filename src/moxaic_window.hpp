@@ -23,6 +23,7 @@ namespace Moxaic::Window
         glm::vec2 mouseDelta;
         bool leftMouseButtonPressed;
         BitFlags<UserMove> userMove;
+        int debugIncrement;
     };
 
     MXC_RESULT Init();

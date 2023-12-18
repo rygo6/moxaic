@@ -7,6 +7,7 @@ layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 invViewProj;
     int width;
     int height;
+    float planeZDepth;
 } nodeUBO;
 
 layout (set = 1, binding = 1) uniform sampler2D nodeColorTexture;

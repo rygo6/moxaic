@@ -128,7 +128,7 @@ namespace Moxaic::Vulkan
             return GetSrcQueue(dst);
         }
 
-        // vkHandles return be ref so they dan be used in designated initializers
+        // vkHandles return by ref so they dan be used in designated initializers
         const auto& GetVkDevice() const { return vkDevice; }
         const auto& GetVkPhysicalDevice() const { return vkPhysicalDevice; }
         const auto& GetVkRenderPass() const { return vkRenderPass; }
@@ -163,7 +163,6 @@ namespace Moxaic::Vulkan
 
         VkPhysicalDeviceProperties2 physicalDeviceProperties{};
         VkPhysicalDeviceMeshShaderPropertiesEXT pysicalDeviceMeshShaderProperties{};
-
         VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties{};
 
         bool PickPhysicalDevice();
@@ -178,10 +177,11 @@ namespace Moxaic::Vulkan
                                          const VkQueue& queue,
                                          const Swap& swap,
                                          const uint32_t swapIndex,
-                                         const VkPipelineStageFlags& waitDstStageMask, Semaphore* const pTimelineSemaphore) const;
+                                         const VkPipelineStageFlags& waitDstStageMask,
+                                         Semaphore* const pTimelineSemaphore) const;
         MXC_RESULT SubmitQueue(const VkCommandBuffer& commandBuffer,
                                const VkQueue& queue,
                                const VkPipelineStageFlags& waitDstStageMask,
                                Semaphore* const pTimelineSemaphore) const;
     };
-}// namespace Moxaic::Vulkan
+}

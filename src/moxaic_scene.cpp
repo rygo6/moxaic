@@ -11,12 +11,12 @@ MXC_RESULT CompositorScene::Init()
     const auto pipelineType = Vulkan::PipelineType::Graphics;
     for (int i = 0; i < framebuffers.size(); ++i) {
         MXC_CHK(framebuffers[i].Init(pipelineType,
-                                      Window::GetExtents(),
-                                      Vulkan::Locality::Local));
+                                     Window::GetExtents(),
+                                     Vulkan::Locality::Local));
     }
 
     MXC_CHK(swap.Init(pipelineType,
-                       Window::GetExtents()));
+                      Window::GetExtents()));
     MXC_CHK(semaphore.Init(true, Vulkan::Locality::External));
 
     mainCamera.transform.position_ = vec3(0, 0, -1);
@@ -26,7 +26,7 @@ MXC_RESULT CompositorScene::Init()
 
     sphereTestTransform.position_ = vec3(1, 0, 0);
     MXC_CHK(sphereTestTexture.InitFromFile("textures/test.jpg",
-                                             Vulkan::Locality::Local));
+                                           Vulkan::Locality::Local));
     MXC_CHK(sphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
     MXC_CHK(sphereTestMesh.InitSphere(0.5f));
 
@@ -40,8 +40,8 @@ MXC_RESULT CompositorScene::Init()
     MXC_CHK(nodeReference.Init(Vulkan::PipelineType::Graphics));
 
     for (int i = 0; i < meshNodeDescriptor.size(); ++i) {
-        MXC_CHK(meshNodeDescriptor[i].Init(globalDescriptor.GetLocalBuffer(),
-                                             nodeReference.GetExportedFramebuffers(i)));
+        MXC_CHK(meshNodeDescriptor[i].Init(globalDescriptor.localBuffer,
+                                           nodeReference.GetExportedFramebuffers(i)));
     }
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
@@ -50,7 +50,7 @@ MXC_RESULT CompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    nodeReference.pExportedGlobalDescriptor()->localBuffer = globalDescriptor.GetLocalBuffer();
+    nodeReference.pExportedGlobalDescriptor()->localBuffer = globalDescriptor.localBuffer;
     nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
     return MXC_SUCCESS;
@@ -110,8 +110,8 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     uint32_t swapIndex;
     swap.Acquire(&swapIndex);
     swap.BlitToSwap(commandBuffer,
-                     swapIndex,
-                     framebuffer.GetColorTexture());
+                    swapIndex,
+                    framebuffer.GetColorTexture());
 
     Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
@@ -135,7 +135,7 @@ MXC_RESULT ComputeCompositorScene::Init()
 {
     const auto pipelineType = Vulkan::PipelineType::Compute;
     MXC_CHK(swap.Init(pipelineType,
-                       Window::GetExtents()));
+                      Window::GetExtents()));
     MXC_CHK(semaphore.Init(true, Vulkan::Locality::External));
 
     mainCamera.transform.position_ = vec3(0, 0, -2);
@@ -147,21 +147,41 @@ MXC_RESULT ComputeCompositorScene::Init()
     MXC_CHK(computeNodePostPipeline.Init("./shaders/compute_node_post.comp.spv"));
 
     MXC_CHK(globalDescriptor.Init(mainCamera,
-                                    Window::GetExtents()));
+                                  Window::GetExtents()));
 
     MXC_CHK(nodeReference.Init(pipelineType));
 
     MXC_CHK(outputAtomicTexture.Init(VK_FORMAT_R32_UINT,
-                                       Window::GetExtents(),
-                                       VK_IMAGE_USAGE_STORAGE_BIT,
-                                       VK_IMAGE_ASPECT_COLOR_BIT,
-                                       Vulkan::Locality::Local));
+                                     Window::GetExtents(),
+                                     VK_IMAGE_USAGE_STORAGE_BIT,
+                                     VK_IMAGE_ASPECT_COLOR_BIT,
+                                     Vulkan::Locality::Local));
     MXC_CHK(outputAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
+    const auto averagedExtents = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeNodePipeline::LocalSize,
+                                            Window::GetExtents().height / Vulkan::ComputeNodePipeline::LocalSize);
+    MXC_CHK(outputAveragedAtomicTexture.Init(VK_FORMAT_R32_UINT,
+                                             averagedExtents,
+                                             VK_IMAGE_USAGE_STORAGE_BIT,
+                                             VK_IMAGE_ASPECT_COLOR_BIT,
+                                             Vulkan::Locality::Local));
+    MXC_CHK(outputAveragedAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
 
-    MXC_CHK(computeNodeDescriptor.Init(globalDescriptor.GetLocalBuffer(),
-                                         nodeReference.GetExportedFramebuffers(nodeFramebufferIndex),
-                                         outputAtomicTexture,
-                                         swap.GetVkSwapImageViews(nodeFramebufferIndex)));
+    const Vulkan::ComputeNodeDescriptor::Buffer computeNodeBuffer{
+      .view = globalDescriptor.localBuffer.view,
+      .proj = globalDescriptor.localBuffer.proj,
+      .viewProj = globalDescriptor.localBuffer.viewProj,
+      .invView = globalDescriptor.localBuffer.invView,
+      .invProj = globalDescriptor.localBuffer.invProj,
+      .invViewProj = globalDescriptor.localBuffer.invViewProj,
+      .width = globalDescriptor.localBuffer.width,
+      .height = globalDescriptor.localBuffer.height,
+      .planeZDepth = -.5,
+    };
+    MXC_CHK(computeNodeDescriptor.Init(computeNodeBuffer,
+                                       nodeReference.GetExportedFramebuffers(nodeFramebufferIndex),
+                                       outputAveragedAtomicTexture,
+                                       outputAtomicTexture,
+                                       swap.GetVkSwapImageViews(nodeFramebufferIndex)));
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -201,8 +221,11 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         computeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
         const auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer;
-        computeNodeDescriptor.SetLocalBuffer(lastUsedNodeDescriptorBuffer);
-        computeNodeDescriptor.WriteLocalBuffer();
+        computeNodeDescriptor.localBuffer.view = lastUsedNodeDescriptorBuffer.view;
+        computeNodeDescriptor.localBuffer.invView = lastUsedNodeDescriptorBuffer.invView;
+        computeNodeDescriptor.localBuffer.viewProj = lastUsedNodeDescriptorBuffer.viewProj;
+        computeNodeDescriptor.localBuffer.invViewProj = lastUsedNodeDescriptorBuffer.invViewProj;
+        computeNodeDescriptor.WriteLocalBuffer();// does doing a single memcpy to unfiorm actually make it faster?
 
         nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
         nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
@@ -210,12 +233,17 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         MXC_LOG("CHILD UPDATE");
     }
 
+    if (Window::GetUserCommand().debugIncrement != 0) {
+        computeNodeDescriptor.localBuffer.planeZDepth += Window::GetUserCommand().debugIncrement * 0.1f;
+        computeNodeDescriptor.WriteLocalBuffer();
+    }
+
     uint32_t swapIndex;
     swap.Acquire(&swapIndex);
     swap.Transition(commandBuffer,
-                     swapIndex,
-                     Vulkan::FromComputeSwapPresent,
-                     Vulkan::ToComputeWrite);
+                    swapIndex,
+                    Vulkan::FromComputeSwapPresent,
+                    Vulkan::ToComputeWrite);
 
     const auto& swapImage = swap.GetVkSwapImages(swapIndex);
     const auto& swapImageView = swap.GetVkSwapImageViews(swapIndex);
@@ -258,9 +286,9 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
     swap.Transition(commandBuffer,
-                     swapIndex,
-                     Vulkan::FromComputeWrite,
-                     Vulkan::ToComputeSwapPresent);
+                    swapIndex,
+                    Vulkan::FromComputeWrite,
+                    Vulkan::ToComputeSwapPresent);
 
     Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
@@ -291,7 +319,7 @@ MXC_RESULT NodeScene::Init()
     spherTestTransform.position_ = vec3(0, 0, 0);
     MXC_CHK(sphereTestMesh.InitSphere(0.5f));
     MXC_CHK(sphereTestTexture.InitFromFile("textures/uvgrid.jpg",
-                                             Vulkan::Locality::Local));
+                                           Vulkan::Locality::Local));
     MXC_CHK(sphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
 
     MXC_CHK(materialDescriptor.Init(sphereTestTexture));

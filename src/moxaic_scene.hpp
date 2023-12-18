@@ -96,6 +96,7 @@ namespace Moxaic
         Vulkan::ComputeNodeDescriptor computeNodeDescriptor{Device};
 
         Vulkan::Texture outputAtomicTexture{Device};
+        Vulkan::Texture outputAveragedAtomicTexture{Device};
 
         Camera mainCamera{};
 

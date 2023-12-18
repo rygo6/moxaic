@@ -49,17 +49,17 @@ namespace Moxaic::Vulkan
         {
             MXC_LOG("Init GlobalDescriptor");
 
-            MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_LocalBuffer.width = dimensions.width;
-            m_LocalBuffer.height = dimensions.height;
-            m_LocalBuffer.proj = camera.projection();
-            m_LocalBuffer.view = camera.view();
-            m_LocalBuffer.viewProj = camera.viewProjection();
-            m_LocalBuffer.invView = camera.inverseView();
-            m_LocalBuffer.invProj = camera.inverseProjection();
-            m_LocalBuffer.invViewProj = camera.inverseViewProjection();
+            localBuffer.width = dimensions.width;
+            localBuffer.height = dimensions.height;
+            localBuffer.proj = camera.projection();
+            localBuffer.view = camera.view();
+            localBuffer.viewProj = camera.viewProjection();
+            localBuffer.invView = camera.inverseView();
+            localBuffer.invProj = camera.inverseProjection();
+            localBuffer.invViewProj = camera.inverseViewProjection();
             WriteLocalBuffer();
 
             MXC_CHK(AllocateDescriptorSet());
@@ -67,8 +67,8 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
-                  .buffer = m_Uniform.vkBuffer(),
-                  .range = m_Uniform.Size()})},
+                  .buffer = uniform.vkBuffer(),
+                  .range = uniform.Size()})},
             };
             WriteDescriptors(writes);
 
@@ -78,27 +78,25 @@ namespace Moxaic::Vulkan
         /// Bypass local buffer copy
         void WriteBuffer(const Buffer& buffer)
         {
-            m_Uniform.CopyBuffer(buffer);
+            uniform.CopyBuffer(buffer);
         }
 
         void WriteLocalBuffer()
         {
-            m_Uniform.CopyBuffer(m_LocalBuffer);
+            uniform.CopyBuffer(localBuffer);
         }
 
         void SetLocalBufferView(const Camera& camera)
         {
-            m_LocalBuffer.view = camera.view();
-            m_LocalBuffer.invView = camera.inverseView();
-            m_LocalBuffer.viewProj = camera.viewProjection();
-            m_LocalBuffer.invViewProj = camera.inverseViewProjection();
+            localBuffer.view = camera.view();
+            localBuffer.invView = camera.inverseView();
+            localBuffer.viewProj = camera.viewProjection();
+            localBuffer.invViewProj = camera.inverseViewProjection();
         }
 
-        MXC_PTR_ACCESS(LocalBuffer);
-        MXC_GETSET(LocalBuffer);
+        Buffer localBuffer{};
 
     private:
-        Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
-        Uniform<Buffer> m_Uniform{k_pDevice};
+        Uniform<Buffer> uniform{Device};
     };
 }// namespace Moxaic::Vulkan

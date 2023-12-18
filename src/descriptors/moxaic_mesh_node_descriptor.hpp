@@ -65,19 +65,19 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .sampler = Device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetColorTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .sampler = Device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = k_pDevice->GetVkLinearSampler(),
+                  .sampler = Device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
             };
@@ -98,6 +98,6 @@ namespace Moxaic::Vulkan
 
     private:
         GlobalDescriptor::Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
-        Uniform<GlobalDescriptor::Buffer> m_Uniform{k_pDevice};
+        Uniform<GlobalDescriptor::Buffer> m_Uniform{Device};
     };
 }// namespace Moxaic::Vulkan

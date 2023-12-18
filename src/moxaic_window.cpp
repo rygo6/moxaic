@@ -25,6 +25,12 @@ static void SetMouseButton(const int index, const bool pressed)
 static void SetKey(const SDL_Keycode keycode, const bool pressed)
 {
     switch (keycode) {
+        case SDLK_RIGHTBRACKET:
+            userCommand.debugIncrement = pressed ? 1 : 0;
+            break;
+        case SDLK_LEFTBRACKET:
+            userCommand.debugIncrement = pressed ? -1 : 0;
+            break;
         case SDLK_w:
             userCommand.userMove.ToggleFlag(UserMove::Forward, pressed);
             break;
@@ -60,11 +66,11 @@ MXC_RESULT Window::Init()
 {
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS);
     window = SDL_CreateWindow(ApplicationName,
-                                    SDL_WINDOWPOS_CENTERED,
-                                    SDL_WINDOWPOS_CENTERED,
-                                    DefaultWidth,
-                                    DefaultHeight,
-                                    SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
+                              SDL_WINDOWPOS_CENTERED,
+                              SDL_WINDOWPOS_CENTERED,
+                              DefaultWidth,
+                              DefaultHeight,
+                              SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN);
     int x, y;
     SDL_GetWindowPosition(window, &x, &y);
     SDL_SetWindowPosition(window,
@@ -98,11 +104,14 @@ std::vector<const char*> Window::GetVulkanInstanceExtentions()
 
 void Window::Poll()
 {
+    // Reset commands
     if (userCommand.mouseMoved) {
         userCommand.mouseDelta = glm::zero<glm::vec2>();
         userCommand.mouseMoved = false;
     }
+    userCommand.debugIncrement = 0;
 
+    // Gather commands
     static SDL_Event pollEvent;
     while (SDL_PollEvent(&pollEvent)) {
         switch (pollEvent.type) {
