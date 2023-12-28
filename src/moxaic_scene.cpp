@@ -143,7 +143,8 @@ MXC_RESULT ComputeCompositorScene::Init()
     mainCamera.UpdateProjection();
     mainCamera.UpdateView();
 
-    MXC_CHK(computeNodeProjectPipeline.Init("./shaders/compute_node.comp.spv"));
+    MXC_CHK(computeNodePrePipeline.Init("./shaders/compute_node_pre.comp.spv"));
+    MXC_CHK(computeNodePipeline.Init("./shaders/compute_node.comp.spv"));
     MXC_CHK(computeNodePostPipeline.Init("./shaders/compute_node_post.comp.spv"));
 
     MXC_CHK(globalDescriptor.Init(mainCamera,
@@ -175,7 +176,7 @@ MXC_RESULT ComputeCompositorScene::Init()
       .invViewProj = globalDescriptor.localBuffer.invViewProj,
       .width = globalDescriptor.localBuffer.width,
       .height = globalDescriptor.localBuffer.height,
-      .planeZDepth = -.5,
+      .planeZDepth = 0,
     };
     MXC_CHK(computeNodeDescriptor.Init(computeNodeBuffer,
                                        nodeReference.GetExportedFramebuffers(nodeFramebufferIndex),
@@ -184,11 +185,11 @@ MXC_RESULT ComputeCompositorScene::Init()
                                        swap.GetVkSwapImageViews(nodeFramebufferIndex)));
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
     MXC_CHK(nodeReference.ExportOverIPC(semaphore));
 
     // and must wait again after node is inited on other side... wHyy!?!
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
     nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
     nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
 
@@ -233,6 +234,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         MXC_LOG("CHILD UPDATE");
     }
 
+
     if (Window::GetUserCommand().debugIncrement != 0) {
         computeNodeDescriptor.localBuffer.planeZDepth += Window::GetUserCommand().debugIncrement * 0.1f;
         computeNodeDescriptor.WriteLocalBuffer();
@@ -248,15 +250,42 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     const auto& swapImage = swap.GetVkSwapImages(swapIndex);
     const auto& swapImageView = swap.GetVkSwapImageViews(swapIndex);
     computeNodeDescriptor.WriteOutputColorImage(swapImageView);
-    computeNodeDescriptor.WriteOutputAtomicTexture(outputAtomicTexture);
 
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, globalDescriptor);
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, computeNodeDescriptor);
 
+    const auto averagedExtents = outputAveragedAtomicTexture.GetExtents();
+    const auto averagedGroupCount = VkExtent2D(averagedExtents.width / Vulkan::ComputeNodePipeline::LocalSize,
+                                               averagedExtents.height / Vulkan::ComputeNodePipeline::LocalSize);
+    computeNodePrePipeline.BindPipeline(commandBuffer);
+    vkCmdDispatch(commandBuffer, averagedGroupCount.width, averagedGroupCount.height, 1);
+
+    const VkImageMemoryBarrier averagedAtomicImageMemoryBarrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext = nullptr,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = outputAveragedAtomicTexture.GetVkImage(),
+        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+      };
+    vkCmdPipelineBarrier(commandBuffer,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         1,
+                         &averagedAtomicImageMemoryBarrier);
+
     const auto groupCount = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeNodePipeline::LocalSize,
                                        Window::GetExtents().height / Vulkan::ComputeNodePipeline::LocalSize);
-
-    computeNodeProjectPipeline.BindPipeline(commandBuffer);
+    computeNodePipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
     const VkImageMemoryBarrier atomicImageMemoryBarrier{
@@ -300,9 +329,9 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     semaphore.Wait();
 
-    const auto timestamps = Device->GetTimestamps();
-    const float computeMs = timestamps[1] - timestamps[0];
-    MXC_LOG_NAMED(computeMs);
+    // const auto timestamps = Device->GetTimestamps();
+    // const float computeMs = timestamps[1] - timestamps[0];
+    // MXC_LOG_NAMED(computeMs);
 
     return MXC_SUCCESS;
 }

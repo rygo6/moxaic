@@ -17,16 +17,16 @@
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-Texture::Texture(const Vulkan::Device* const pDevice)
-    : k_pDevice(pDevice) {}
+Texture::Texture(const Vulkan::Device* const device)
+    : Device(device) {}
 
 Texture::~Texture()
 {
-    vkDestroyImageView(k_pDevice->  GetVkDevice(), m_VkImageView, VK_ALLOC);
-    vkFreeMemory(k_pDevice->  GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
-    vkDestroyImage(k_pDevice->  GetVkDevice(), m_VkImage, VK_ALLOC);
-    if (m_ExternalHandle != nullptr)
-        CloseHandle(m_ExternalHandle);
+    vkDestroyImageView(Device->  GetVkDevice(), vkImageView, VK_ALLOC);
+    vkFreeMemory(Device->  GetVkDevice(), vkDeviceMemory, VK_ALLOC);
+    vkDestroyImage(Device->  GetVkDevice(), vkImage, VK_ALLOC);
+    if (externalHandle != nullptr)
+        CloseHandle(externalHandle);
 }
 
 MXC_RESULT Texture::InitFromFile(const std::string& file,
@@ -58,7 +58,7 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    k_pDevice->CreateStagingBuffer(pixels,
+    Device->CreateStagingBuffer(pixels,
                                    imageBufferSize,
                                    &stagingBuffer,
                                    &stagingBufferMemory);
@@ -72,15 +72,15 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
          locality);
 
     MXC_CHK(TransitionImmediateInitialToTransferDst());
-    k_pDevice->CopyBufferToImage(extents,
+    Device->CopyBufferToImage(extents,
                                  stagingBuffer,
-                                 m_VkImage);
+                                 vkImage);
     MXC_CHK(TransitionImmediateTransferDstToGraphicsRead());
 
-    vkDestroyBuffer(k_pDevice->  GetVkDevice(),
+    vkDestroyBuffer(Device->  GetVkDevice(),
                     stagingBuffer,
                     VK_ALLOC);
-    vkFreeMemory(k_pDevice->  GetVkDevice(),
+    vkFreeMemory(Device->  GetVkDevice(),
                  stagingBufferMemory,
                  VK_ALLOC);
 
@@ -102,15 +102,15 @@ MXC_RESULT Texture::InitFromImport(const VkFormat format,
                       extents,
                       usage,
                       Locality::External));
-    MXC_CHK(k_pDevice->AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                               m_VkImage,
+    MXC_CHK(Device->AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                               vkImage,
                                                MXC_EXTERNAL_HANDLE_TYPE,
                                                externalMemory,
-                                               &m_VkDeviceMemory));
+                                               &vkDeviceMemory));
     MXC_CHK(InitImageView(format, aspectMask));
-    m_Extents = extents;
-    m_AspectMask = aspectMask;
-    m_Format = format;
+    this->extents = extents;
+    this->aspectMask = aspectMask;
+    this->format = format;
     return MXC_SUCCESS;
 }
 
@@ -131,15 +131,15 @@ MXC_RESULT Texture::Init(const VkFormat format,
                       locality));
     switch (locality) {
         case Locality::Local:
-            MXC_CHK(k_pDevice->AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                                 m_VkImage,
-                                                 &m_VkDeviceMemory));
+            MXC_CHK(Device->AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                 vkImage,
+                                                 &vkDeviceMemory));
             break;
         case Locality::External:
-            MXC_CHK(k_pDevice->AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                                       m_VkImage,
+            MXC_CHK(Device->AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                       vkImage,
                                                        MXC_EXTERNAL_HANDLE_TYPE,
-                                                       &m_VkDeviceMemory));
+                                                       &vkDeviceMemory));
             break;
     }
     MXC_CHK(InitImageView(format, aspectMask));
@@ -148,16 +148,16 @@ MXC_RESULT Texture::Init(const VkFormat format,
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .pNext = nullptr,
-          .memory = m_VkDeviceMemory,
+          .memory = vkDeviceMemory,
           .handleType = MXC_EXTERNAL_HANDLE_TYPE};
-        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(k_pDevice->  GetVkDevice(),
+        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(Device->  GetVkDevice(),
                                               &getWin32HandleInfo,
-                                              &m_ExternalHandle));
+                                              &externalHandle));
 #endif
     }
-    m_Extents = extents;
-    m_AspectMask = aspectMask;
-    m_Format = format;
+    this->extents = extents;
+    this->aspectMask = aspectMask;
+    this->format = format;
     return MXC_SUCCESS;
 }
 
@@ -165,15 +165,15 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
 {
     switch (pipelineType) {
         case PipelineType::Graphics:
-            return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
+            return Device->TransitionImageLayoutImmediate(vkImage,
                                                              Vulkan::FromInitial,
                                                              Vulkan::ToGraphicsRead,
-                                                             m_AspectMask);
+                                                             aspectMask);
         case PipelineType::Compute:
-            return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
+            return Device->TransitionImageLayoutImmediate(vkImage,
                                                              Vulkan::FromInitial,
                                                              Vulkan::ToComputeRead,
-                                                             m_AspectMask);
+                                                             aspectMask);
         default:
             SDL_assert(false);
             return MXC_FAIL;
@@ -182,33 +182,33 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
 
 MXC_RESULT Texture::TransitionImmediateInitialToTransferDst() const
 {
-    return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
+    return Device->TransitionImageLayoutImmediate(vkImage,
                                                      VK_IMAGE_LAYOUT_UNDEFINED,
                                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                      VK_ACCESS_NONE,
                                                      VK_ACCESS_MEMORY_WRITE_BIT,
                                                      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                                      VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                                     m_AspectMask);
+                                                     aspectMask);
 }
 
 MXC_RESULT Texture::TransitionImmediateTransferDstToGraphicsRead() const
 {
-    return k_pDevice->TransitionImageLayoutImmediate(m_VkImage,
+    return Device->TransitionImageLayoutImmediate(vkImage,
                                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                      VK_ACCESS_MEMORY_WRITE_BIT,
                                                      VK_ACCESS_SHADER_READ_BIT,
                                                      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                                     m_AspectMask);
+                                                     aspectMask);
 }
 
 HANDLE Texture::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
 {
     HANDLE duplicateHandle;
     DuplicateHandle(GetCurrentProcess(),
-                    m_ExternalHandle,
+                    externalHandle,
                     hTargetProcessHandle,
                     &duplicateHandle,
                     0,
@@ -224,7 +224,7 @@ MXC_RESULT Texture::InitImageView(const VkFormat& format,
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .image = m_VkImage,
+      .image = vkImage,
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
       .format = format,
       .components{
@@ -241,10 +241,10 @@ MXC_RESULT Texture::InitImageView(const VkFormat& format,
         .layerCount = 1,
       },
     };
-    VK_CHK(vkCreateImageView(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkCreateImageView(Device->  GetVkDevice(),
                              &imageViewCreateInfo,
                              VK_ALLOC,
-                             &m_VkImageView));
+                             &vkImageView));
     return MXC_SUCCESS;
 }
 
@@ -274,10 +274,10 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
       .pQueueFamilyIndices = nullptr,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VK_CHK(vkCreateImage(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkCreateImage(Device->  GetVkDevice(),
                          &imageCreateInfo,
                          VK_ALLOC,
-                         &m_VkImage));
+                         &vkImage));
     return MXC_SUCCESS;
 }
 
@@ -294,9 +294,9 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .oldLayout = IsDepth() ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .image = m_VkImage,
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .image = vkImage,
         .subresourceRange = IsDepth() ? Vulkan::DefaultDepthSubresourceRange :
                                         Vulkan::DefaultColorSubresourceRange,
       },
@@ -306,8 +306,8 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
         .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = dstTexture.GetVkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -336,8 +336,8 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .z = 0,
       },
       (VkOffset3D){
-        .x = int32_t(m_Extents.width),
-        .y = int32_t(m_Extents.height),
+        .x = int32_t(extents.width),
+        .y = int32_t(extents.height),
         .z = 1,
       },
     };
@@ -353,7 +353,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
-                               m_VkImage,
+                               vkImage,
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                dstTexture.GetVkImage(),
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -368,9 +368,9 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .newLayout = IsDepth() ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .image = m_VkImage,
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .image = vkImage,
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
       (VkImageMemoryBarrier){
@@ -379,8 +379,8 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .dstAccessMask = VK_ACCESS_NONE,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = dstTexture.GetVkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },

@@ -18,7 +18,7 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Texture);
 
-        explicit Texture(const Vulkan::Device* const pDevice);
+        explicit Texture(const Vulkan::Device* const device);
         virtual ~Texture();
 
         MXC_RESULT InitFromFile(const std::string& file,
@@ -44,25 +44,27 @@ namespace Moxaic::Vulkan
 
         bool IsDepth() const
         {
-            return m_Format == kDepthBufferFormat;
+            return format == kDepthBufferFormat;
         }
 
-        MXC_GET(VkImage);
-        MXC_GET(VkImageView);
+        const auto& GetVkImage() const { return vkImage; }
+        const auto& GetVkImageView() const { return vkImageView; }
+
+        const auto GetExtents() const { return extents; }
 
     private:
-        const Vulkan::Device* const k_pDevice;
+        const Vulkan::Device* const Device;
 
-        VkImage m_VkImage{VK_NULL_HANDLE};
-        VkImageView m_VkImageView{VK_NULL_HANDLE};
+        VkImage vkImage{VK_NULL_HANDLE};
+        VkImageView vkImageView{VK_NULL_HANDLE};
 
-        VkDeviceMemory m_VkDeviceMemory{VK_NULL_HANDLE};
-        VkExtent2D m_Extents{};
-        VkImageAspectFlags m_AspectMask{};
-        VkFormat m_Format{};
+        VkDeviceMemory vkDeviceMemory{VK_NULL_HANDLE};
+        VkExtent2D extents{};
+        VkImageAspectFlags aspectMask{};
+        VkFormat format{};
 
 #ifdef WIN32
-        HANDLE m_ExternalHandle{};
+        HANDLE externalHandle{};
 #endif
 
         MXC_RESULT TransitionImmediateInitialToTransferDst() const;

@@ -257,7 +257,8 @@ MXC_RESULT Device::CreateDevice()
     VkPhysicalDeviceVulkan12Features enabledFeatures12 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &enabledFeatures13,
-      .imagelessFramebuffer = true,
+      // .imagelessFramebuffer = true,
+      .samplerFilterMinmax = true,
       .hostQueryReset = true,
       .timelineSemaphore = true,
     };
@@ -287,7 +288,8 @@ MXC_RESULT Device::CreateDevice()
       VK_EXT_MESH_SHADER_EXTENSION_NAME,
       VK_KHR_SPIRV_1_4_EXTENSION_NAME,
       // Required by VK_KHR_spirv_1_4 - https://github.com/SaschaWillems/Vulkan/blob/master/examples/meshshader/meshshader.cpp
-      VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+      // VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+      VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
       VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
       VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
       VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
@@ -518,7 +520,7 @@ MXC_RESULT Device::CreateSamplers()
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
-      .anisotropyEnable = VK_TRUE,
+      .anisotropyEnable = VK_FALSE,
       .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
@@ -538,7 +540,7 @@ MXC_RESULT Device::CreateSamplers()
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
-      .anisotropyEnable = VK_TRUE,
+      .anisotropyEnable = VK_FALSE,
       .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
@@ -548,6 +550,33 @@ MXC_RESULT Device::CreateSamplers()
       .unnormalizedCoordinates = VK_FALSE,
     };
     VK_CHK(vkCreateSampler(vkDevice, &nearestSamplerInfo, VK_ALLOC, &vkNearestSampler));
+
+    const VkSamplerReductionModeCreateInfoEXT samplerReductionModeCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO_EXT,
+      .pNext = nullptr,
+      .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
+    };
+    const VkSamplerCreateInfo minSamplerInfo{
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+      .pNext = &samplerReductionModeCreateInfo,
+      .flags = 0,
+      .magFilter = VK_FILTER_LINEAR,
+      .minFilter = VK_FILTER_LINEAR,
+      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .mipLodBias = 0.0f,
+      .anisotropyEnable = VK_TRUE,
+      .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
+      .compareEnable = VK_FALSE,
+      .compareOp = VK_COMPARE_OP_ALWAYS,
+      .minLod = 0.0f,
+      .maxLod = 0.0f,
+      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+      .unnormalizedCoordinates = VK_FALSE,
+    };
+    VK_CHK(vkCreateSampler(vkDevice, &minSamplerInfo, VK_ALLOC, &vkMinSampler));
 
     return MXC_SUCCESS;
 }

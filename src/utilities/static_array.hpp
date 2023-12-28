@@ -2,18 +2,16 @@
 
 namespace Moxaic
 {
-    // Primarily for vulkan parameter arrays
     template<typename T, uint32_t N>
     struct StaticArray
     {
-        // https://twitter.com/SebAaltonen/status/1719973253412761606
         T m_Data[N];
 
         T& operator[](size_t i) { return m_Data[i]; }
         T const& operator[](size_t i) const { return m_Data[i]; }
 
-        // operator T*() { return m_Data; }
-        // operator const T*() const { return m_Data; }
+        operator T*() { return m_Data; }
+        operator const T*() const { return m_Data; }
 
         T const* begin() const { return m_Data; }
         T const* end() const { return m_Data + N; }
@@ -36,4 +34,4 @@ namespace Moxaic
         operator T*() { return &m_Data; }
         operator T const*() const { return &m_Data; }
     };
-}// namespace Moxaic
+}

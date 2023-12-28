@@ -157,6 +157,7 @@ namespace Moxaic::Vulkan
 
         VkSampler vkLinearSampler{VK_NULL_HANDLE};
         VkSampler vkNearestSampler{VK_NULL_HANDLE};
+        VkSampler vkMinSampler{VK_NULL_HANDLE};
 
         uint32_t graphicsQueueFamilyIndex{};
         uint32_t computeQueueFamilyIndex{};

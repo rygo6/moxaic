@@ -39,4 +39,4 @@ namespace Moxaic
     private:
         int m_Flags{0};
     };
-}// namespace Moxaic
+}
