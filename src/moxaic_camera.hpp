@@ -4,7 +4,7 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
-#define MXC_CAMERA_MIN_Z 0.1f
+#define MXC_CAMERA_MIN_Z 0.05f
 
 using namespace glm;
 

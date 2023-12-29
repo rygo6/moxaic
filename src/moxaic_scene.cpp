@@ -255,8 +255,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, computeNodeDescriptor);
 
     const auto averagedExtents = outputAveragedAtomicTexture.GetExtents();
-    const auto averagedGroupCount = VkExtent2D(averagedExtents.width / Vulkan::ComputeNodePipeline::LocalSize,
-                                               averagedExtents.height / Vulkan::ComputeNodePipeline::LocalSize);
+    const auto averagedGroupCount = VkExtent2D( averagedExtents.width < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.width / Vulkan::ComputeNodePipeline::LocalSize,
+                                               averagedExtents.height < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.height / Vulkan::ComputeNodePipeline::LocalSize);
     computeNodePrePipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, averagedGroupCount.width, averagedGroupCount.height, 1);
 

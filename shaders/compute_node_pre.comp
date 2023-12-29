@@ -9,38 +9,38 @@ layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) 
 layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAveragedAtomic;
 
 vec3 nodeOriginWorldPos = vec3(0, 0, 0);
-const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
+vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 const uint maxUint = 0xFFFFFFFFu;
 
-bool NodeIntersectUV(const vec2 uv, out vec2 nodeIntersectUV, out vec3 nodeDepthWorldPos, out vec3 nodeWorldNormalSample, out vec3 nodeDepthProjectedGlobalNDC)
+bool NodeIntersectUV(const vec2 uv, out vec3 intersectGlobalNDC, out vec3 intersectNodeNDC, out vec3 depthProjectedNodeNDC)
 {
-    const vec2 ndc = NDCFromUV(uv);
+    const vec2 ndc = NDCFromUV(1 - uv);// why do I 1 - uv here?! It does flip it to proper layout
     const vec4 clipPos = vec4(ndc, 0, 1);
     const vec3 globalWorldPos = WorldPosFromGlobalClipPos(clipPos);
     const vec3 globalWorldRay = GlobalNDCRay(ndc);
     const vec3 intersectWorldPos = intersectRayPlane(globalWorldPos, globalWorldRay, nodeOriginWorldPos, nodeOriginWorldDirection);
 
-    const vec4 nodeIntersectClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
-    const vec3 nodeIntersectNDC = NDCFromClipPos(nodeIntersectClipPos);
-    nodeIntersectUV = UVFromNDC(nodeIntersectNDC);
+    const vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
+    intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
+    const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
 
-    nodeWorldNormalSample = texture(nodeNormalTexture, nodeIntersectUV).xyz * vec3(1, -1, 1); // I encoded y = up on sphere normals
-    const float nodeDepthSample = texture(nodeDepthTexture, nodeIntersectUV).r;
+    const vec3 nodeWorldNormalSample = texture(nodeNormalTexture, intersectNodeUV).xyz * vec3(1, -1, 1);// I encoded y = up on sphere normals
+    const float nodeDepthSample = texture(nodeDepthTexture, intersectNodeUV).r;
 
-    if (nodeIntersectUV.x < 0
-    || nodeIntersectUV.x > 1
-    || nodeIntersectUV.y < 0
-    || nodeIntersectUV.y > 1
+    if (intersectNodeUV.x < 0
+    || intersectNodeUV.x > 1
+    || intersectNodeUV.y < 0
+    || intersectNodeUV.y > 1
     || nodeDepthSample > .99
-    || dot(nodeWorldNormalSample.xyz, globalWorldRay) < 0
+//    || dot(nodeWorldNormalSample.xyz, globalWorldRay) < 0
     ) {
         return false;
     }
 
-    const vec4 nodeDepthClipPos = vec4(nodeIntersectNDC.xy, nodeDepthSample, 1);
-    nodeDepthWorldPos = WorldPosFromNodeClipPos(nodeDepthClipPos);
-    const vec4 nodeDepthProjectedGlobalClipPos = GlobalClipPosFromWorldPos(nodeDepthWorldPos);
-    nodeDepthProjectedGlobalNDC = NDCFromClipPos(nodeDepthProjectedGlobalClipPos);
+    depthProjectedNodeNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
+
+    const vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
+    intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
 
     return true;
 }
@@ -60,9 +60,9 @@ uint PackUintFromVec3(vec3 v) {
 }
 
 uint PackUintFrom16F8F8F(float float1, float float2, float float3) {
-    uint int1 = uint(float1 * 65535.0);  // 16 bits
-    uint int2 = uint(float2 * 255.0);    // 8 bits
-    uint int3 = uint(float3 * 255.0);    // 8 bits
+    uint int1 = uint(float1 * 65535.0);// 16 bits
+    uint int2 = uint(float2 * 255.0);// 8 bits
+    uint int3 = uint(float3 * 255.0);// 8 bits
     uint packed = (int1 << 16) | (int2 << 8) | int3;
     return packed;
 }
@@ -79,39 +79,61 @@ float unpackUint32ToFloat(uint packed) {
     return value / 4294967295.0;
 }
 
-const int sampleCount = 4;
-const ivec2 samplesOffsets[] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, };
+const vec2 samplesOffsets[] = {
+{ 0.5, 0.5 },
+{ 0.0, 0.0 },
+{ 1.0, 0.0 },
+{ 1.0, 1.0 },
+{ 0.0, 1.0 },
+};
 
 void main()
 {
-    const ivec2 iAveragedScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
-    const vec2 averagedScreenSize = vec2(iAveragedScreenSize);
-    const ivec2 averagedCoord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 iScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
+    const vec2 screenSize = vec2(iScreenSize);
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const vec2 uv = UVFromCoord(coord, screenSize);
+    const vec2 ndc = NDCFromUV(uv);
+    const ivec2 offsetCoord = coord + ivec2(1, 1);
+    const vec2 offsetUV = UVFromCoord(offsetCoord, screenSize);
 
-    vec3 depthProjectedGlobalNDCs[sampleCount];
-    vec3 depthProjectedWorldPos[sampleCount];
-    vec2 nodeIntersectUVs[sampleCount];
-    vec3 minDepthProjectedGlobalNDC = vec3(0, 0, 1);
-    vec3 nodeWorldNormalSample;
+    vec3 depthProjectedNodeNDCs[samplesOffsets.length()];
+    vec3 minDepthProjectedNodeNDC = vec3(0,0,1);
+    vec3 farthestIntersectNodeNDC = vec3(0,0,0);
+    vec3 maxIntersectGlobalNDC = vec3(0,0,0);
     int validSampleCount = 0;
-    for (int i = 0; i < sampleCount; ++i){
-        const vec2 uv = UVFromCoord(averagedCoord + samplesOffsets[i], averagedScreenSize);
-        if (!NodeIntersectUV(uv, nodeIntersectUVs[i], depthProjectedWorldPos[i], nodeWorldNormalSample, depthProjectedGlobalNDCs[i])) {
+    for (int i = 0; i < samplesOffsets.length(); ++i){
+        const vec2 sampleUV = mix(uv, offsetUV, samplesOffsets[i]);
+        vec3 depthProjectedGlobalNDC;
+        vec3 intersectGlobalNDC;
+        vec3 intersectNodeNDC;
+        if (!NodeIntersectUV(sampleUV, intersectGlobalNDC, intersectNodeNDC, depthProjectedNodeNDCs[i])) {
             continue;
         }
-        minDepthProjectedGlobalNDC = depthProjectedGlobalNDCs[i].z < minDepthProjectedGlobalNDC.z ? depthProjectedGlobalNDCs[i] : minDepthProjectedGlobalNDC;
+        if (depthProjectedNodeNDCs[i].z < minDepthProjectedNodeNDC.z) {
+            minDepthProjectedNodeNDC = depthProjectedNodeNDCs[i];
+        }
+        if (depthProjectedNodeNDCs[i].z > maxIntersectGlobalNDC.z) {
+            maxIntersectGlobalNDC = depthProjectedNodeNDCs[i];
+            farthestIntersectNodeNDC = intersectNodeNDC;
+        }
         validSampleCount++;
     }
     if (validSampleCount == 0){
         return;
     }
 
-    const vec2 depthProjectGlobalUV = UVFromNDC(vec3(depthProjectedGlobalNDCs[0].xy, minDepthProjectedGlobalNDC.z));
-    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, averagedScreenSize);
-    const uint data = packFloatToUint32(minDepthProjectedGlobalNDC.z);
+    const vec4 depthProjectedNodeClipPos = ClipPosFromNDC(vec3(depthProjectedNodeNDCs[0].xy, minDepthProjectedNodeNDC.z));
+    const vec3 depthProjectedWorldPos = WorldPosFromNodeClipPos(depthProjectedNodeClipPos);
+    const vec4 depthProjectedGlobalClipPos = GlobalClipPosFromWorldPos(depthProjectedWorldPos);
+    const vec3 depthProjectedGlobalNDC = NDCFromClipPos(depthProjectedGlobalClipPos);
+    const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
+    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
+    const uint data = packFloatToUint32(depthProjectedGlobalNDC.z);
     imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, data);
 
 //    if (gl_GlobalInvocationID.x == 16 && gl_GlobalInvocationID.y == 16) {
-//        debugPrintfEXT("pre %f - %f", nodeIntersectUVs[0].x, nodeIntersectUVs[0].y);
+//        debugPrintfEXT("%f | %f | %F", depthProjectedNodeClipPos.x, depthProjectedNodeClipPos.y, depthProjectedNodeClipPos.z);
+//        imageAtomicMin(outputAveragedAtomic, coord, 0);
 //    }
 }

@@ -15,8 +15,7 @@ layout (set = 1, binding = 2) uniform sampler2D nodeNormalTexture;
 layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
 
-#define RESOLUTION_SCALE 1
-#define LOCAL_SIZE 32 * RESOLUTION_SCALE
+#define LOCAL_SIZE 32
 
 vec3 intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal) {
     const float facingRatio = dot(planeNormal, rayDir);
@@ -63,6 +62,16 @@ vec3 WorldPosFromNodeClipPos(vec4 clipPos)
 vec4 NodeClipPosFromWorldPos(vec3 worldPos)
 {
     return nodeUBO.viewProj * vec4(worldPos, 1);
+}
+
+vec4 ClipPosFromNDC(vec2 ndc)
+{
+    return vec4(ndc, 0, 1);
+}
+
+vec4 ClipPosFromNDC(vec3 ndc)
+{
+    return vec4(ndc, 1);
 }
 
 vec3 NDCFromClipPos(vec4 clipPos)
