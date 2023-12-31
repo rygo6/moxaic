@@ -11,22 +11,22 @@ namespace Moxaic::Vulkan
     class Device;
 
     template<typename T>
-    class Uniform
+    class Buffer
     {
     public:
-        MXC_NO_VALUE_PASS(Uniform);
+        MXC_NO_VALUE_PASS(Buffer);
 
-        explicit Uniform(const Vulkan::Device* const pDevice)
+        explicit Buffer(const Vulkan::Device* const pDevice)
             : k_pDevice(pDevice) {}
 
-        virtual ~Uniform()
+        virtual ~Buffer()
         {
-            vkDestroyBuffer(k_pDevice->  GetVkDevice(), m_VkBuffer, VK_ALLOC);
+            vkDestroyBuffer(k_pDevice->GetVkDevice(), m_VkBuffer, VK_ALLOC);
 
             if (m_pMappedBuffer != nullptr)
-                vkUnmapMemory(k_pDevice->  GetVkDevice(), m_VkDeviceMemory);
+                vkUnmapMemory(k_pDevice->GetVkDevice(), m_VkDeviceMemory);
 
-            vkFreeMemory(k_pDevice->  GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
+            vkFreeMemory(k_pDevice->GetVkDevice(), m_VkDeviceMemory, VK_ALLOC);
 
             if (m_ExternalMemory != nullptr)
                 CloseHandle(m_ExternalMemory);
@@ -41,10 +41,8 @@ namespace Moxaic::Vulkan
                               string_VkBufferUsageFlags(usage),
                               Size(),
                               string_Locality(locality));
-            constexpr VkMemoryPropertyFlags supportedProperties =
-              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-            SDL_assert(((supportedProperties & properties) == supportedProperties) &&
-                       "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
+            constexpr VkMemoryPropertyFlags supportedProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            assert(((supportedProperties & properties) == supportedProperties) && "Uniform needs to be VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT!");
             MXC_CHK(k_pDevice->CreateAllocateBindBuffer(usage,
                                                         properties,
                                                         Size(),
@@ -52,7 +50,7 @@ namespace Moxaic::Vulkan
                                                         &m_VkBuffer,
                                                         &m_VkDeviceMemory,
                                                         &m_ExternalMemory));
-            VK_CHK(vkMapMemory(k_pDevice->  GetVkDevice(),
+            VK_CHK(vkMapMemory(k_pDevice->GetVkDevice(),
                                m_VkDeviceMemory,
                                0,
                                Size(),

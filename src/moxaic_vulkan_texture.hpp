@@ -23,18 +23,22 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT InitFromFile(const std::string& file,
                                 const Locality locality);
-
         MXC_RESULT InitFromImport(const VkFormat format,
                                   const VkExtent2D extents,
                                   const VkImageUsageFlags usage,
                                   const VkImageAspectFlags aspectMask,
                                   const HANDLE externalMemory);
-
         MXC_RESULT Init(const VkFormat format,
                         const VkExtent2D extents,
                         const VkImageUsageFlags usage,
                         const VkImageAspectFlags aspectMask,
-                        const Locality locality);
+                        const Locality locality,
+                        const VkSampleCountFlagBits sampleCount);
+        MXC_RESULT Init(const VkFormat format,
+                         const VkExtent2D extents,
+                         const VkImageUsageFlags usage,
+                         const VkImageAspectFlags aspectMask,
+                         const Locality locality);
 
         MXC_RESULT TransitionInitialImmediate(const PipelineType pipelineType) const;
 
@@ -49,7 +53,6 @@ namespace Moxaic::Vulkan
 
         const auto& GetVkImage() const { return vkImage; }
         const auto& GetVkImageView() const { return vkImageView; }
-
         const auto GetExtents() const { return extents; }
 
     private:
@@ -70,10 +73,16 @@ namespace Moxaic::Vulkan
         MXC_RESULT TransitionImmediateInitialToTransferDst() const;
         MXC_RESULT TransitionImmediateTransferDstToGraphicsRead() const;
 
+
         MXC_RESULT InitImage(const VkFormat format,
                              const VkExtent2D extents,
                              const VkImageUsageFlags usage,
                              const Locality locality);
+        MXC_RESULT InitImage(const VkFormat format,
+                             const VkExtent2D extents,
+                             const VkImageUsageFlags usage,
+                             const Locality locality,
+                             const VkSampleCountFlagBits sampleCount);
         MXC_RESULT InitImageView(const VkFormat& format,
                                  const VkImageAspectFlags& aspectMask);
     };

@@ -6,6 +6,7 @@
 #include "moxaic_vulkan_texture.hpp"
 #include "static_array.hpp"
 
+#include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
@@ -28,7 +29,7 @@ namespace Moxaic::Vulkan
             OutputFinalTexture,
         };
 
-        struct Buffer
+        struct UniformBuffer
         {
             glm::mat4 view;
             glm::mat4 proj;
@@ -36,9 +37,23 @@ namespace Moxaic::Vulkan
             glm::mat4 invView;
             glm::mat4 invProj;
             glm::mat4 invViewProj;
-            uint32_t width;
-            uint32_t height;
-            float planeZDepth;
+            glm::uint32_t width;
+            glm::uint32_t height;
+            glm::float32_t planeZDepth;
+        };
+
+        struct Tile
+        {
+            glm::uint16_t x;// how to make float16!?
+            glm::uint16_t y;
+            glm::uint8_t size;
+            glm::uint8_t id;
+        };
+
+        struct StorageBuffer
+        {
+            Tile tiles[32 * 32];
+            uint32_t atomicTileCount;
         };
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
@@ -90,7 +105,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init(const Buffer& buffer,
+        MXC_RESULT Init(const UniformBuffer& buffer,
                         const Framebuffer& framebuffer,
                         const Texture& outputAveragedAtomicTexture,
                         const Texture& outputAtomicTexture,
@@ -101,8 +116,12 @@ namespace Moxaic::Vulkan
             MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                  Vulkan::Locality::Local));
-            localBuffer = buffer;
+            localUniformBuffer = buffer;
             WriteLocalBuffer();
+
+            MXC_CHK(storage.Init(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                 Vulkan::Locality::Local));
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
@@ -244,12 +263,13 @@ namespace Moxaic::Vulkan
 
         void WriteLocalBuffer()
         {
-            uniform.CopyBuffer(localBuffer);
+            uniform.CopyBuffer(localUniformBuffer);
         }
 
-        Buffer localBuffer{};
+        UniformBuffer localUniformBuffer{};
 
     private:
-        Uniform<Buffer> uniform{Device};
+        Buffer<UniformBuffer> uniform{Device};
+        Buffer<StorageBuffer> storage{Device};
     };
 }// namespace Moxaic::Vulkan

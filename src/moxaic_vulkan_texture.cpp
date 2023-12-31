@@ -22,9 +22,9 @@ Texture::Texture(const Vulkan::Device* const device)
 
 Texture::~Texture()
 {
-    vkDestroyImageView(Device->  GetVkDevice(), vkImageView, VK_ALLOC);
-    vkFreeMemory(Device->  GetVkDevice(), vkDeviceMemory, VK_ALLOC);
-    vkDestroyImage(Device->  GetVkDevice(), vkImage, VK_ALLOC);
+    vkDestroyImageView(Device->GetVkDevice(), vkImageView, VK_ALLOC);
+    vkFreeMemory(Device->GetVkDevice(), vkDeviceMemory, VK_ALLOC);
+    vkDestroyImage(Device->GetVkDevice(), vkImage, VK_ALLOC);
     if (externalHandle != nullptr)
         CloseHandle(externalHandle);
 }
@@ -59,9 +59,9 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     Device->CreateStagingBuffer(pixels,
-                                   imageBufferSize,
-                                   &stagingBuffer,
-                                   &stagingBufferMemory);
+                                imageBufferSize,
+                                &stagingBuffer,
+                                &stagingBufferMemory);
 
     stbi_image_free(pixels);
 
@@ -73,14 +73,14 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
 
     MXC_CHK(TransitionImmediateInitialToTransferDst());
     Device->CopyBufferToImage(extents,
-                                 stagingBuffer,
-                                 vkImage);
+                              stagingBuffer,
+                              vkImage);
     MXC_CHK(TransitionImmediateTransferDstToGraphicsRead());
 
-    vkDestroyBuffer(Device->  GetVkDevice(),
+    vkDestroyBuffer(Device->GetVkDevice(),
                     stagingBuffer,
                     VK_ALLOC);
-    vkFreeMemory(Device->  GetVkDevice(),
+    vkFreeMemory(Device->GetVkDevice(),
                  stagingBufferMemory,
                  VK_ALLOC);
 
@@ -103,11 +103,60 @@ MXC_RESULT Texture::InitFromImport(const VkFormat format,
                       usage,
                       Locality::External));
     MXC_CHK(Device->AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                               vkImage,
-                                               MXC_EXTERNAL_HANDLE_TYPE,
-                                               externalMemory,
-                                               &vkDeviceMemory));
+                                            vkImage,
+                                            MXC_EXTERNAL_HANDLE_TYPE,
+                                            externalMemory,
+                                            &vkDeviceMemory));
     MXC_CHK(InitImageView(format, aspectMask));
+    this->extents = extents;
+    this->aspectMask = aspectMask;
+    this->format = format;
+    return MXC_SUCCESS;
+}
+
+MXC_RESULT Texture::Init(const VkFormat format,
+                         const VkExtent2D extents,
+                         const VkImageUsageFlags usage,
+                         const VkImageAspectFlags aspectMask,
+                         const Locality locality,
+                         const VkSampleCountFlagBits sampleCount)
+{
+    MXC_LOG_MULTILINE("Texture::Init",
+                      string_VkFormat(format),
+                      string_VkImageUsageFlags(usage),
+                      string_VkImageAspectFlags(aspectMask),
+                      string_Locality(locality));
+    MXC_CHK(InitImage(format,
+                      extents,
+                      usage,
+                      locality,
+                      sampleCount));
+    switch (locality) {
+        case Locality::Local:
+            MXC_CHK(Device->AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                              vkImage,
+                                              &vkDeviceMemory));
+            break;
+        case Locality::External:
+            MXC_CHK(Device->AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                    vkImage,
+                                                    MXC_EXTERNAL_HANDLE_TYPE,
+                                                    &vkDeviceMemory));
+            break;
+    }
+    MXC_CHK(InitImageView(format, aspectMask));
+    if (locality == Locality::External) {
+#if WIN32
+        const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+          .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+          .pNext = nullptr,
+          .memory = vkDeviceMemory,
+          .handleType = MXC_EXTERNAL_HANDLE_TYPE};
+        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(Device->GetVkDevice(),
+                                              &getWin32HandleInfo,
+                                              &externalHandle));
+#endif
+    }
     this->extents = extents;
     this->aspectMask = aspectMask;
     this->format = format;
@@ -120,45 +169,7 @@ MXC_RESULT Texture::Init(const VkFormat format,
                          const VkImageAspectFlags aspectMask,
                          const Locality locality)
 {
-    MXC_LOG_MULTILINE("Texture::Init",
-                      string_VkFormat(format),
-                      string_VkImageUsageFlags(usage),
-                      string_VkImageAspectFlags(aspectMask),
-                      string_Locality(locality));
-    MXC_CHK(InitImage(format,
-                      extents,
-                      usage,
-                      locality));
-    switch (locality) {
-        case Locality::Local:
-            MXC_CHK(Device->AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                                 vkImage,
-                                                 &vkDeviceMemory));
-            break;
-        case Locality::External:
-            MXC_CHK(Device->AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                                       vkImage,
-                                                       MXC_EXTERNAL_HANDLE_TYPE,
-                                                       &vkDeviceMemory));
-            break;
-    }
-    MXC_CHK(InitImageView(format, aspectMask));
-    if (locality == Locality::External) {
-#if WIN32
-        const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
-          .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
-          .pNext = nullptr,
-          .memory = vkDeviceMemory,
-          .handleType = MXC_EXTERNAL_HANDLE_TYPE};
-        VK_CHK(VkFunc.GetMemoryWin32HandleKHR(Device->  GetVkDevice(),
-                                              &getWin32HandleInfo,
-                                              &externalHandle));
-#endif
-    }
-    this->extents = extents;
-    this->aspectMask = aspectMask;
-    this->format = format;
-    return MXC_SUCCESS;
+    return Init(format, extents, usage, aspectMask, locality, VK_SAMPLE_COUNT_1_BIT);
 }
 
 MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) const
@@ -166,14 +177,14 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
     switch (pipelineType) {
         case PipelineType::Graphics:
             return Device->TransitionImageLayoutImmediate(vkImage,
-                                                             Vulkan::FromInitial,
-                                                             Vulkan::ToGraphicsRead,
-                                                             aspectMask);
+                                                          Vulkan::FromInitial,
+                                                          Vulkan::ToGraphicsRead,
+                                                          aspectMask);
         case PipelineType::Compute:
             return Device->TransitionImageLayoutImmediate(vkImage,
-                                                             Vulkan::FromInitial,
-                                                             Vulkan::ToComputeRead,
-                                                             aspectMask);
+                                                          Vulkan::FromInitial,
+                                                          Vulkan::ToComputeRead,
+                                                          aspectMask);
         default:
             SDL_assert(false);
             return MXC_FAIL;
@@ -183,25 +194,25 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
 MXC_RESULT Texture::TransitionImmediateInitialToTransferDst() const
 {
     return Device->TransitionImageLayoutImmediate(vkImage,
-                                                     VK_IMAGE_LAYOUT_UNDEFINED,
-                                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                                     VK_ACCESS_NONE,
-                                                     VK_ACCESS_MEMORY_WRITE_BIT,
-                                                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                                     aspectMask);
+                                                  VK_IMAGE_LAYOUT_UNDEFINED,
+                                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                  VK_ACCESS_NONE,
+                                                  VK_ACCESS_MEMORY_WRITE_BIT,
+                                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                  VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                                  aspectMask);
 }
 
 MXC_RESULT Texture::TransitionImmediateTransferDstToGraphicsRead() const
 {
     return Device->TransitionImageLayoutImmediate(vkImage,
-                                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                                     VK_ACCESS_MEMORY_WRITE_BIT,
-                                                     VK_ACCESS_SHADER_READ_BIT,
-                                                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                                     aspectMask);
+                                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                                  VK_ACCESS_MEMORY_WRITE_BIT,
+                                                  VK_ACCESS_SHADER_READ_BIT,
+                                                  VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                                  VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                                  aspectMask);
 }
 
 HANDLE Texture::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
@@ -241,7 +252,7 @@ MXC_RESULT Texture::InitImageView(const VkFormat& format,
         .layerCount = 1,
       },
     };
-    VK_CHK(vkCreateImageView(Device->  GetVkDevice(),
+    VK_CHK(vkCreateImageView(Device->GetVkDevice(),
                              &imageViewCreateInfo,
                              VK_ALLOC,
                              &vkImageView));
@@ -251,7 +262,8 @@ MXC_RESULT Texture::InitImageView(const VkFormat& format,
 MXC_RESULT Texture::InitImage(const VkFormat format,
                               const VkExtent2D extents,
                               const VkImageUsageFlags usage,
-                              const Locality locality)
+                              const Locality locality,
+                              const VkSampleCountFlagBits sampleCount)
 {
     constexpr VkExternalMemoryImageCreateInfo externalImageInfo{
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -266,7 +278,7 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
       .extent = {extents.width, extents.height, 1},
       .mipLevels = 1,
       .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .samples = sampleCount,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
       .usage = usage,
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -274,11 +286,19 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
       .pQueueFamilyIndices = nullptr,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
-    VK_CHK(vkCreateImage(Device->  GetVkDevice(),
+    VK_CHK(vkCreateImage(Device->GetVkDevice(),
                          &imageCreateInfo,
                          VK_ALLOC,
                          &vkImage));
     return MXC_SUCCESS;
+}
+
+MXC_RESULT Texture::InitImage(const VkFormat format,
+                              const VkExtent2D extents,
+                              const VkImageUsageFlags usage,
+                              const Locality locality)
+{
+    return InitImage(format, extents, usage, locality, VK_SAMPLE_COUNT_1_BIT);
 }
 
 

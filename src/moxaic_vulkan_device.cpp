@@ -276,6 +276,7 @@ MXC_RESULT Device::CreateDevice()
         .samplerAnisotropy = true,
         .vertexPipelineStoresAndAtomics = true,
         .fragmentStoresAndAtomics = true,
+        .shaderStorageImageMultisample = true,
       }};
 
     constexpr StaticArray requiredDeviceExtensions{

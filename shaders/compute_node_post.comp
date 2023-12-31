@@ -5,7 +5,7 @@
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
-layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAveragedAtomic;
+layout (set = 1, binding = 5, r32ui) uniform uimage2DMS outputAveragedAtomic;
 layout (set = 1, binding = 6, r32ui) uniform uimage2D outputAtomic;
 layout (set = 1, binding = 7) uniform writeonly image2D outputColor;
 
@@ -75,5 +75,5 @@ void main()
 
     // reset atomic buffer for next frame
     imageStore(outputAtomic, coord, uvec4(maxUint, 0, 0, 0));
-    imageStore(outputAveragedAtomic, averagedCoord, uvec4(maxUint, 0, 0, 0));
+    imageStore(outputAveragedAtomic, averagedCoord, 0, uvec4(maxUint, 0, 0, 0));
 }

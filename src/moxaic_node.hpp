@@ -49,7 +49,7 @@ namespace Moxaic
 
         Camera m_CompositingCamera{};// Camera which compositor is using to reproject.
 
-        InterProcessBuffer<Vulkan::GlobalDescriptor::Buffer> m_ExportedGlobalDescriptor{};
+        InterProcessBuffer<Vulkan::GlobalDescriptor::UniformBuffer> m_ExportedGlobalDescriptor{};
         // Buffer which the node is currently using to render
 
         InterProcessProducer m_IPCToNode{};
@@ -129,7 +129,7 @@ namespace Moxaic
         std::string m_Name{"default"};
         float m_DrawRadius{1.0f};
 
-        InterProcessBuffer<Vulkan::GlobalDescriptor::Buffer> m_ImportedGlobalDescriptor{};
+        InterProcessBuffer<Vulkan::GlobalDescriptor::UniformBuffer> m_ImportedGlobalDescriptor{};
 
         InterProcessReceiver m_IPCFromCompositor{};
         InterProcessProducer m_IPCToCompositor{};

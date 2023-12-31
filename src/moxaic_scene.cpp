@@ -164,10 +164,11 @@ MXC_RESULT ComputeCompositorScene::Init()
                                              averagedExtents,
                                              VK_IMAGE_USAGE_STORAGE_BIT,
                                              VK_IMAGE_ASPECT_COLOR_BIT,
-                                             Vulkan::Locality::Local));
+                                             Vulkan::Locality::Local,
+                                             VK_SAMPLE_COUNT_4_BIT));
     MXC_CHK(outputAveragedAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
 
-    const Vulkan::ComputeNodeDescriptor::Buffer computeNodeBuffer{
+    const Vulkan::ComputeNodeDescriptor::UniformBuffer computeNodeBuffer{
       .view = globalDescriptor.localBuffer.view,
       .proj = globalDescriptor.localBuffer.proj,
       .viewProj = globalDescriptor.localBuffer.viewProj,
@@ -222,10 +223,10 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         computeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
         const auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer;
-        computeNodeDescriptor.localBuffer.view = lastUsedNodeDescriptorBuffer.view;
-        computeNodeDescriptor.localBuffer.invView = lastUsedNodeDescriptorBuffer.invView;
-        computeNodeDescriptor.localBuffer.viewProj = lastUsedNodeDescriptorBuffer.viewProj;
-        computeNodeDescriptor.localBuffer.invViewProj = lastUsedNodeDescriptorBuffer.invViewProj;
+        computeNodeDescriptor.localUniformBuffer.view = lastUsedNodeDescriptorBuffer.view;
+        computeNodeDescriptor.localUniformBuffer.invView = lastUsedNodeDescriptorBuffer.invView;
+        computeNodeDescriptor.localUniformBuffer.viewProj = lastUsedNodeDescriptorBuffer.viewProj;
+        computeNodeDescriptor.localUniformBuffer.invViewProj = lastUsedNodeDescriptorBuffer.invViewProj;
         computeNodeDescriptor.WriteLocalBuffer();// does doing a single memcpy to unfiorm actually make it faster?
 
         nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
@@ -236,7 +237,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
 
     if (Window::GetUserCommand().debugIncrement != 0) {
-        computeNodeDescriptor.localBuffer.planeZDepth += Window::GetUserCommand().debugIncrement * 0.1f;
+        computeNodeDescriptor.localUniformBuffer.planeZDepth += Window::GetUserCommand().debugIncrement * 0.1f;
         computeNodeDescriptor.WriteLocalBuffer();
     }
 

@@ -43,7 +43,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT Init(const GlobalDescriptor::Buffer& buffer, const Framebuffer& framebuffer)
+        MXC_RESULT Init(const GlobalDescriptor::UniformBuffer& buffer, const Framebuffer& framebuffer)
         {
             MXC_LOG("Init MaterialDescriptor");
             SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
@@ -91,13 +91,13 @@ namespace Moxaic::Vulkan
             m_Uniform.CopyBuffer(m_LocalBuffer);
         }
 
-        void SetLocalBuffer(const GlobalDescriptor::Buffer& buffer)
+        void SetLocalBuffer(const GlobalDescriptor::UniformBuffer& buffer)
         {
             m_LocalBuffer = buffer;
         }
 
     private:
-        GlobalDescriptor::Buffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
-        Uniform<GlobalDescriptor::Buffer> m_Uniform{Device};
+        GlobalDescriptor::UniformBuffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
+        Buffer<GlobalDescriptor::UniformBuffer> m_Uniform{Device};
     };
 }// namespace Moxaic::Vulkan

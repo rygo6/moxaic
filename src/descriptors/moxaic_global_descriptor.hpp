@@ -16,7 +16,7 @@ namespace Moxaic::Vulkan
 
         constexpr static int SetIndex = 0;
 
-        struct Buffer
+        struct UniformBuffer
         {
             glm::mat4 view;
             glm::mat4 proj;
@@ -76,7 +76,7 @@ namespace Moxaic::Vulkan
         }
 
         /// Bypass local buffer copy
-        void WriteBuffer(const Buffer& buffer)
+        void WriteBuffer(const UniformBuffer& buffer)
         {
             uniform.CopyBuffer(buffer);
         }
@@ -94,9 +94,9 @@ namespace Moxaic::Vulkan
             localBuffer.invViewProj = camera.inverseViewProjection();
         }
 
-        Buffer localBuffer{};
+        UniformBuffer localBuffer{};
 
     private:
-        Uniform<Buffer> uniform{Device};
+        Buffer<UniformBuffer> uniform{Device};
     };
 }// namespace Moxaic::Vulkan

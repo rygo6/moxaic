@@ -17,7 +17,7 @@ namespace Moxaic::Vulkan
 
         constexpr static int SetIndex = 2;
 
-        struct Buffer
+        struct UniformBuffer
         {
             glm::mat4 model;
         };
@@ -57,8 +57,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-    private
-        :
-        Uniform<Buffer> m_Uniform{Device};
+    private:
+        Buffer<UniformBuffer> m_Uniform{Device};
     };
 }// namespace Moxaic::Vulkan

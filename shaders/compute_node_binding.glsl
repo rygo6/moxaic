@@ -1,3 +1,11 @@
+//struct Tile
+//{
+//    float16_t  x;
+//    float16_t  y;
+//    float8_t size;
+//    uint8_t id;
+//};
+
 layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 view;
     mat4 proj;
@@ -14,6 +22,10 @@ layout (set = 1, binding = 1) uniform sampler2D nodeColorTexture;
 layout (set = 1, binding = 2) uniform sampler2D nodeNormalTexture;
 layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
+
+layout(binding = 0, buffer) buffer AtomicBuffer {
+    atomic_uint myAtomicCounter; // Define atomic_uint
+};
 
 #define LOCAL_SIZE 32
 
@@ -93,13 +105,13 @@ ivec2 iRound(vec2 coord)
 {
     // Round/RoundEven returns noisy results
     // but is round even needed!?
-//    ivec2 iCoord = ivec2(coord);
-//    vec2 coordDecimal = coord - vec2(coord);
-//    iCoord.x += coordDecimal.x > 0.5 ? 1 : 0;
-//    iCoord.y += coordDecimal.y > 0.5 ? 1 : 0;
-//    return iCoord;
+    //    ivec2 iCoord = ivec2(coord);
+    //    vec2 coordDecimal = coord - vec2(coord);
+    //    iCoord.x += coordDecimal.x > 0.5 ? 1 : 0;
+    //    iCoord.y += coordDecimal.y > 0.5 ? 1 : 0;
+    //    return iCoord;
 
-//    return ivec2(roundEven(coord));
+    //    return ivec2(roundEven(coord));
 
     return ivec2(coord);
 }
