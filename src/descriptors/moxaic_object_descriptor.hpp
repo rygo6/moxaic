@@ -39,18 +39,18 @@ namespace Moxaic::Vulkan
         {
             MXC_LOG("Init ObjectDescriptor");
 
-            MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            m_Uniform.mapped().model = transform.ModelMatrix();
+            uniform.mappedBuffer->model = transform.ModelMatrix();
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
-                  .buffer = m_Uniform.vkBuffer(),
-                  .range = m_Uniform.Size()})},
+                  .buffer = uniform.GetVkBuffer(),
+                  .range = uniform.Size()})},
             };
             WriteDescriptors(writes);
 
@@ -58,6 +58,6 @@ namespace Moxaic::Vulkan
         }
 
     private:
-        Buffer<UniformBuffer> m_Uniform{Device};
+        Buffer<UniformBuffer> uniform{Device};
     };
 }// namespace Moxaic::Vulkan

@@ -1,5 +1,6 @@
 #version 450
 #extension GL_EXT_debug_printf : enable
+#extension GL_EXT_shader_16bit_storage : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"

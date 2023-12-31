@@ -1,11 +1,3 @@
-//struct Tile
-//{
-//    float16_t  x;
-//    float16_t  y;
-//    float8_t size;
-//    uint8_t id;
-//};
-
 layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 view;
     mat4 proj;
@@ -23,8 +15,16 @@ layout (set = 1, binding = 2) uniform sampler2D nodeNormalTexture;
 layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
 
-layout(binding = 0, buffer) buffer AtomicBuffer {
-    atomic_uint myAtomicCounter; // Define atomic_uint
+struct Tile {
+    float x;
+    float y;
+    int size;
+    int id;
+};
+
+layout(set = 1, binding = 8) buffer AtomicBuffer {
+    uint atomicTileCount;
+    Tile tiles[];
 };
 
 #define LOCAL_SIZE 32

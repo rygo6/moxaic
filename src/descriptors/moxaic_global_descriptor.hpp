@@ -67,7 +67,7 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
-                  .buffer = uniform.vkBuffer(),
+                  .buffer = uniform.GetVkBuffer(),
                   .range = uniform.Size()})},
             };
             WriteDescriptors(writes);

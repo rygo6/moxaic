@@ -60,7 +60,7 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
-                  .buffer = m_Uniform.vkBuffer(),
+                  .buffer = m_Uniform.GetVkBuffer(),
                   .range = m_Uniform.Size()})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,

@@ -27,6 +27,7 @@ namespace Moxaic::Vulkan
             OutputAveragedAtomicTexture,
             OutputAtomicTexture,
             OutputFinalTexture,
+            OutputAtomictiles,
         };
 
         struct UniformBuffer
@@ -52,8 +53,8 @@ namespace Moxaic::Vulkan
 
         struct StorageBuffer
         {
-            Tile tiles[32 * 32];
             uint32_t atomicTileCount;
+            Tile tiles[32 * 32];
         };
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
@@ -100,6 +101,11 @@ namespace Moxaic::Vulkan
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
               },
+              (VkDescriptorSetLayoutBinding){
+                .binding = Indices::OutputAtomictiles,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+              },
             };
             MXC_CHK(CreateDescriptorSetLayout(device, bindings));
             return MXC_SUCCESS;
@@ -129,7 +135,7 @@ namespace Moxaic::Vulkan
                 .dstBinding = Indices::NodeUB0,
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
-                  .buffer = uniform.vkBuffer(),
+                  .buffer = uniform.GetVkBuffer(),
                   .range = uniform.Size()})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::ColorTexture,
@@ -177,6 +183,12 @@ namespace Moxaic::Vulkan
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .imageView = outputColorImage,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              (VkWriteDescriptorSet){
+                .dstBinding = Indices::OutputAtomictiles,
+                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
+                  .buffer = storage.GetVkBuffer(),
+                  .range = storage.Size()})},
             };
             WriteDescriptors(writes);
             return MXC_SUCCESS;
@@ -231,7 +243,6 @@ namespace Moxaic::Vulkan
             WriteDescriptors(writes);
             return MXC_SUCCESS;
         }
-
 
         MXC_RESULT WriteOutputAtomicTexture(const Texture& outputAtomicTexture)
         {
