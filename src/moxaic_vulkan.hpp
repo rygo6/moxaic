@@ -50,10 +50,10 @@ namespace Moxaic::Vulkan
 {
     bool Init(bool enableValidationLayers);
 
-    VkInstance vkInstance();
+    VkInstance GetVkInstance();
 
     // should surface move into swap class?! or device class?
-    VkSurfaceKHR vkSurface();
+    VkSurfaceKHR GetVkSurface();
 
     enum class PipelineType {
         Graphics,
@@ -89,6 +89,7 @@ namespace Moxaic::Vulkan
                     return depthAccessMask;
                 default:
                     SDL_assert(false);
+                    return VK_ACCESS_NONE;
             }
         }
 
@@ -101,6 +102,7 @@ namespace Moxaic::Vulkan
                     return depthLayout;
                 default:
                     SDL_assert(false);
+                    return VK_IMAGE_LAYOUT_UNDEFINED;
             }
         }
 
@@ -113,22 +115,23 @@ namespace Moxaic::Vulkan
                     return depthStageMask;
                 default:
                     SDL_assert(false);
+                    return VK_PIPELINE_STAGE_NONE;
             }
         }
     };
 
-    inline constinit Barrier FromInitial{
-        .colorAccessMask = VK_ACCESS_NONE,
-        .depthAccessMask = VK_ACCESS_NONE,
-        .colorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .depthLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .queueFamilyIndex = Queue::Ignore,
-        .colorStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-        .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      };
+    inline constexpr Barrier FromInitial{
+      .colorAccessMask = VK_ACCESS_NONE,
+      .depthAccessMask = VK_ACCESS_NONE,
+      .colorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .depthLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .queueFamilyIndex = Queue::Ignore,
+      .colorStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    };
 
     /// Omits any of the incoming external data
-    inline constinit Barrier AcquireFromExternal{
+    inline constexpr Barrier AcquireFromExternal{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -139,7 +142,7 @@ namespace Moxaic::Vulkan
     };
 
     /// Retains data from prior external graphics attach
-    inline constinit Barrier AcquireFromExternalGraphicsAttach{
+    inline constexpr Barrier AcquireFromExternalGraphicsAttach{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -149,7 +152,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     };
 
-    inline constinit Barrier FromComputeSwapPresent{
+    inline constexpr Barrier FromComputeSwapPresent{
       .colorAccessMask = 0,
       .depthAccessMask = 0,
       .colorLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -159,7 +162,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     };
 
-    inline constinit Barrier FromComputeWrite{
+    inline constexpr Barrier FromComputeWrite{
       .colorAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -169,7 +172,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     };
 
-    inline constinit Barrier FromComputeRead{
+    inline constexpr Barrier FromComputeRead{
       .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
       .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -179,7 +182,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     };
 
-    inline constinit Barrier AcquireFromComputeRead{
+    inline constexpr Barrier AcquireFromComputeRead{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -192,7 +195,7 @@ namespace Moxaic::Vulkan
     // Seems acquireFromExternal can be used in place of this
     // if this is used it wants queueFamilyIndex to be ignore
     // for both src/dst which would need to implement some logic to do that
-    inline constinit Barrier AcquireFromAnywhere{
+    inline constexpr Barrier AcquireFromAnywhere{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -202,7 +205,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     };
 
-    inline constinit Barrier FromGraphicsAttach{
+    inline constexpr Barrier FromGraphicsAttach{
       .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -212,7 +215,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
     };
 
-    inline constinit Barrier AcquireFromGraphicsAttach{
+    inline constexpr Barrier AcquireFromGraphicsAttach{
       .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -222,7 +225,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
     };
 
-    inline constinit Barrier ToGraphicsAttach{
+    inline constexpr Barrier ToGraphicsAttach{
       .colorAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -232,7 +235,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
     };
 
-    inline constinit Barrier ToGraphicsRead{
+    inline constexpr Barrier ToGraphicsRead{
       .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
       .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -242,7 +245,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
     };
 
-    inline constinit Barrier ReleaseToComputeRead{
+    inline constexpr Barrier ReleaseToComputeRead{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -252,7 +255,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
     };
 
-    inline constinit Barrier ToComputeRead{
+    inline constexpr Barrier ToComputeRead{
       .colorAccessMask = VK_ACCESS_SHADER_READ_BIT,
       .depthAccessMask = VK_ACCESS_SHADER_READ_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -262,7 +265,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
     };
 
-    inline constinit Barrier ToComputeWrite{
+    inline constexpr Barrier ToComputeWrite{
       .colorAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
       .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
@@ -273,7 +276,7 @@ namespace Moxaic::Vulkan
     };
 
     /// Release to retain data
-    inline constinit Barrier ReleaseToExternalGraphicsRead{
+    inline constexpr Barrier ReleaseToExternalGraphicsRead{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -284,17 +287,17 @@ namespace Moxaic::Vulkan
     };
 
     /// Release to retain data
-    inline constinit Barrier ReleaseToExternalComputesRead{
-        .colorAccessMask = VK_ACCESS_NONE,
-        .depthAccessMask = VK_ACCESS_NONE,
-        .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .queueFamilyIndex = Queue::FamilyExternal,
-        .colorStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-      };
+    inline constexpr Barrier ReleaseToExternalComputesRead{
+      .colorAccessMask = VK_ACCESS_NONE,
+      .depthAccessMask = VK_ACCESS_NONE,
+      .colorLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .depthLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamilyIndex = Queue::FamilyExternal,
+      .colorStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+    };
 
-    inline constinit Barrier ToComputeSwapPresent{
+    inline constexpr Barrier ToComputeSwapPresent{
       .colorAccessMask = VK_ACCESS_NONE,
       .depthAccessMask = VK_ACCESS_NONE,
       .colorLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -304,7 +307,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
     };
 
-    inline constinit VkImageSubresourceRange DefaultColorSubresourceRange{
+    inline constexpr VkImageSubresourceRange DefaultColorSubresourceRange{
       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
       .baseMipLevel = 0,
       .levelCount = 1,
@@ -312,7 +315,7 @@ namespace Moxaic::Vulkan
       .layerCount = 1,
     };
 
-    inline constinit VkImageSubresourceRange DefaultDepthSubresourceRange{
+    inline constexpr VkImageSubresourceRange DefaultDepthSubresourceRange{
       .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
       .baseMipLevel = 0,
       .levelCount = 1,

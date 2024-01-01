@@ -216,13 +216,13 @@ MXC_RESULT Vulkan::Init(const bool enableValidationLayers)
     return MXC_SUCCESS;
 }
 
-VkInstance Vulkan::vkInstance()
+VkInstance Vulkan::GetVkInstance()
 {
     SDL_assert((g_VulkanInstance != nullptr) && "Vulkan not initialized!");
     return g_VulkanInstance;
 }
 
-VkSurfaceKHR Vulkan::vkSurface()
+VkSurfaceKHR Vulkan::GetVkSurface()
 {
     SDL_assert((g_VulkanSurface != nullptr) && "Vulkan not initialized!");
     return g_VulkanSurface;

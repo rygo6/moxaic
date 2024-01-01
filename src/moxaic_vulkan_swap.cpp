@@ -14,12 +14,12 @@ static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice,
 {
     uint32_t presentModeCount;
     VK_CHK(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice,
-                                                     Vulkan::vkSurface(),
+                                                     Vulkan::GetVkSurface(),
                                                      &presentModeCount,
                                                      nullptr));
     VkPresentModeKHR presentModes[presentModeCount];
     VK_CHK(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice,
-                                                     Vulkan::vkSurface(),
+                                                     Vulkan::GetVkSurface(),
                                                      &presentModeCount,
                                                      (VkPresentModeKHR*) &presentModes));
 
@@ -66,12 +66,12 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
 {
     uint32_t formatCount;
     VK_CHK(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice,
-                                                Vulkan::vkSurface(),
+                                                Vulkan::GetVkSurface(),
                                                 &formatCount,
                                                 nullptr));
     VkSurfaceFormatKHR formats[formatCount];
     VK_CHK(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice,
-                                                Vulkan::vkSurface(),
+                                                Vulkan::GetVkSurface(),
                                                 &formatCount,
                                                 (VkSurfaceFormatKHR*) &formats));
 
@@ -114,7 +114,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
     VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(k_pDevice->GetVkPhysicalDevice(),
-                                                     Vulkan::vkSurface(),
+                                                     Vulkan::GetVkSurface(),
                                                      &capabilities));
 
     // I am setting this to 2 on the premise you get the least latency in VR.
@@ -134,7 +134,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
     VkSwapchainCreateInfoKHR createInfo = {
       .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
       .pNext = VK_NULL_HANDLE,
-      .surface = Vulkan::vkSurface(),
+      .surface = Vulkan::GetVkSurface(),
       .minImageCount = SwapCount,
       .imageFormat = surfaceFormat.format,
       .imageColorSpace = surfaceFormat.colorSpace,

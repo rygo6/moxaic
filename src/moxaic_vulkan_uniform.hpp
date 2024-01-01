@@ -41,12 +41,12 @@ namespace Moxaic::Vulkan
                               Size(),
                               string_Locality(locality));
             MXC_CHK(Device->CreateAllocateBindBuffer(usage,
-                                                        properties,
-                                                        Size(),
-                                                        locality,
-                                                        &vkBuffer,
-                                                        &vkDeviceMemory,
-                                                        &externalMemory));
+                                                     properties,
+                                                     Size(),
+                                                     locality,
+                                                     &vkBuffer,
+                                                     &vkDeviceMemory,
+                                                     &externalMemory));
             if ((VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT & properties) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
                 VK_CHK(vkMapMemory(Device->GetVkDevice(),
                                    vkDeviceMemory,

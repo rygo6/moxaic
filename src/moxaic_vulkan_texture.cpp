@@ -35,6 +35,7 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
     MXC_LOG("Texture::InitFromFile",
             file,
             string_Locality(locality));
+
     int texChannels;
     int width;
     int height;
@@ -43,34 +44,30 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
                                 &height,
                                 &texChannels,
                                 STBI_rgb_alpha);
-    const VkDeviceSize imageBufferSize = width * height * 4;
 
     MXC_LOG("Loading texture from file.", file, width, height, texChannels);
-
     if (!pixels) {
         MXC_LOG_ERROR("Failed to load image!");
         return MXC_FAIL;
     }
 
-    const VkExtent2D extents = {
-      static_cast<uint32_t>(width),
-      static_cast<uint32_t>(height)};
-
+    const VkDeviceSize imageBufferSize = width * height * 4;
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
-    Device->CreateStagingBuffer(pixels,
-                                imageBufferSize,
-                                &stagingBuffer,
-                                &stagingBufferMemory);
-
+    Device->CreateAndPopulateStagingBuffer(pixels,
+                                           imageBufferSize,
+                                           &stagingBuffer,
+                                           &stagingBufferMemory);
     stbi_image_free(pixels);
 
+    // todo InitImage maybe go in VKDevice as CreateAllocateImage to reflect CreateAllocateBuffer
+
+    const VkExtent2D extents = {(uint32_t) width, (uint32_t) height};
     Init(VK_FORMAT_R8G8B8A8_SRGB,
          extents,
          VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
          VK_IMAGE_ASPECT_COLOR_BIT,
          locality);
-
     MXC_CHK(TransitionImmediateInitialToTransferDst());
     Device->CopyBufferToImage(extents,
                               stagingBuffer,

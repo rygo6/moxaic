@@ -36,8 +36,8 @@ MXC_RESULT Core::Run()
     }
     scene->Init();
 
-    Uint32 time = 0;
-    Uint32 priorTime = 0;
+    uint32_t time = 0;
+    uint32_t priorTime = 0;
 
     while (Running == MXC_SUCCESS) {
         time = SDL_GetTicks();

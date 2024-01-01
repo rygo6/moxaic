@@ -26,77 +26,77 @@ namespace Moxaic::Vulkan
         virtual ~Device();
 
         MXC_RESULT Init();
-        MXC_RESULT AllocateBindImageImport(const VkMemoryPropertyFlags properties,
-                                           const VkImage image,
-                                           const VkExternalMemoryHandleTypeFlagBits externalHandleType,
-                                           HANDLE const externalHandle,
+        MXC_RESULT AllocateBindImageImport(VkMemoryPropertyFlags properties,
+                                           VkImage image,
+                                           VkExternalMemoryHandleTypeFlagBits externalHandleType,
+                                           HANDLE externalHandle,
                                            VkDeviceMemory* pDeviceMemory) const;
-        MXC_RESULT AllocateBindImageExport(const VkMemoryPropertyFlags properties,
-                                           const VkImage image,
-                                           const VkExternalMemoryHandleTypeFlags externalHandleType,
+        MXC_RESULT AllocateBindImageExport(VkMemoryPropertyFlags properties,
+                                           VkImage image,
+                                           VkExternalMemoryHandleTypeFlags externalHandleType,
                                            VkDeviceMemory* pDeviceMemory) const;
-        MXC_RESULT AllocateBindImage(const VkMemoryPropertyFlags properties,
-                                     const VkImage image,
+        MXC_RESULT AllocateBindImage(VkMemoryPropertyFlags properties,
+                                     VkImage image,
                                      VkDeviceMemory* pDeviceMemory) const;
-        MXC_RESULT CreateStagingBuffer(const void* srcData,
-                                       const VkDeviceSize& bufferSize,
+        MXC_RESULT CreateAndPopulateStagingBuffer(const void* srcData,
+                                       VkDeviceSize bufferSize,
                                        VkBuffer* pStagingBuffer,
                                        VkDeviceMemory* pStagingBufferMemory) const;
-        MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags& usage,
-                                            const VkMemoryPropertyFlags& properties,
-                                            const VkDeviceSize& bufferSize,
+        MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
+                                            VkMemoryPropertyFlags properties,
+                                            VkDeviceSize bufferSize,
                                             VkBuffer* pBuffer,
                                             VkDeviceMemory* pDeviceMemory) const;
-        MXC_RESULT CreateAllocateBindBuffer(const VkBufferUsageFlags& usage,
-                                            const VkMemoryPropertyFlags& properties,
-                                            const VkDeviceSize& bufferSize,
-                                            const Vulkan::Locality& locality,
+        MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
+                                            VkMemoryPropertyFlags properties,
+                                            VkDeviceSize bufferSize,
+                                            Vulkan::Locality locality,
                                             VkBuffer* pBuffer,
                                             VkDeviceMemory* pDeviceMemory,
                                             HANDLE* pExternalMemory) const;
         MXC_RESULT CreateAllocateBindPopulateBufferViaStaging(const void* srcData,
-                                                              const VkBufferUsageFlagBits& usage,
-                                                              const VkDeviceSize& bufferSize,
+                                                              VkBufferUsageFlagBits usage,
+                                                              VkDeviceSize bufferSize,
                                                               VkBuffer* pBuffer,
                                                               VkDeviceMemory* pBufferMemory) const;
-        MXC_RESULT CopyBufferToBuffer(const VkDeviceSize& bufferSize,
-                                      const VkBuffer& srcBuffer,
-                                      const VkBuffer& dstBuffer) const;
-        MXC_RESULT CopyBufferToImage(const VkExtent2D& imageExtent,
-                                     const VkBuffer& srcBuffer,
-                                     const VkImage& dstImage) const;
-        MXC_RESULT TransitionImageLayoutImmediate(const VkImage& image,
-                                                  const VkImageLayout& oldLayout,
-                                                  const VkImageLayout& newLayout,
-                                                  const VkAccessFlags& srcAccessMask,
-                                                  const VkAccessFlags& dstAccessMask,
-                                                  const VkPipelineStageFlags& srcStageMask,
-                                                  const VkPipelineStageFlags& dstStageMask,
-                                                  const VkImageAspectFlags& aspectMask) const;
-        MXC_RESULT TransitionImageLayoutImmediate(const VkImage& image,
+        MXC_RESULT CopyBufferToBuffer(VkDeviceSize bufferSize,
+                                      VkBuffer srcBuffer,
+                                      VkBuffer dstBuffer) const;
+        MXC_RESULT CopyBufferToImage(VkExtent2D imageExtent,
+                                     VkBuffer srcBuffer,
+                                     VkImage dstImage) const;
+        MXC_RESULT TransitionImageLayoutImmediate(VkImage image,
+                                                  VkImageLayout oldLayout,
+                                                  VkImageLayout newLayout,
+                                                  VkAccessFlags srcAccessMask,
+                                                  VkAccessFlags dstAccessMask,
+                                                  VkPipelineStageFlags srcStageMask,
+                                                  VkPipelineStageFlags dstStageMask,
+                                                  VkImageAspectFlags aspectMask) const;
+        MXC_RESULT TransitionImageLayoutImmediate(VkImage image,
                                                   const Barrier& src,
                                                   const Barrier& dst,
-                                                  const VkImageAspectFlags aspectMask) const;
-        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const;
-        MXC_RESULT EndImmediateCommandBuffer(const VkCommandBuffer& commandBuffer) const;
+                                                  VkImageAspectFlags aspectMask) const;
+        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const; // todo change to return commandbuffer
+        MXC_RESULT EndImmediateCommandBuffer(VkCommandBuffer commandBuffer) const;
         VkCommandBuffer BeginGraphicsCommandBuffer() const;
         void BeginRenderPass(const Framebuffer& framebuffer,
                              const VkClearColorValue& backgroundColor) const;
         MXC_RESULT SubmitGraphicsQueueAndPresent(const Swap& swap,
-                                                 const uint32_t swapIndex,
-                                                 Semaphore* const pTimelineSemaphore) const;
+                                                 uint32_t swapIndex,
+                                                 Semaphore* pTimelineSemaphore) const;
         MXC_RESULT SubmitGraphicsQueue(Semaphore* pTimelineSemaphore) const;
         VkCommandBuffer BeginComputeCommandBuffer() const;
         bool SubmitComputeQueue(Semaphore* pTimelineSemaphore) const;
-        MXC_RESULT SubmitComputeQueueAndPresent(const VkCommandBuffer commandBuffer,
+        MXC_RESULT SubmitComputeQueueAndPresent(VkCommandBuffer commandBuffer,
                                                 const Swap& swap,
-                                                const uint32_t swapIndex,
+                                                uint32_t swapIndex,
                                                 Semaphore* pTimelineSemaphore) const;
 
         void ResetTimestamps() const;
-        void WriteTimestamp(const VkCommandBuffer commandbuffer,
-                            const VkPipelineStageFlagBits pipelineStage,
-                            const uint32_t query) const;
+        void WriteTimestamp(VkCommandBuffer commandbuffer,
+                            VkPipelineStageFlagBits pipelineStage,
+                            uint32_t query) const;
         StaticArray<double, QueryPoolCount> GetTimestamps() const;
 
         uint32_t GetSrcQueue(const Barrier src) const
@@ -177,12 +177,12 @@ namespace Moxaic::Vulkan
         MXC_RESULT SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
                                          const VkQueue& queue,
                                          const Swap& swap,
-                                         const uint32_t swapIndex,
+                                         uint32_t swapIndex,
                                          const VkPipelineStageFlags& waitDstStageMask,
-                                         Semaphore* const pTimelineSemaphore) const;
+                                         Semaphore* pTimelineSemaphore) const;
         MXC_RESULT SubmitQueue(const VkCommandBuffer& commandBuffer,
                                const VkQueue& queue,
                                const VkPipelineStageFlags& waitDstStageMask,
-                               Semaphore* const pTimelineSemaphore) const;
+                               Semaphore* pTimelineSemaphore) const;
     };
 }
