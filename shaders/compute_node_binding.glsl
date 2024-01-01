@@ -1,5 +1,7 @@
-#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_16bit_storage : require // todo pack in 32bit uint
 #extension GL_EXT_shader_8bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 view;

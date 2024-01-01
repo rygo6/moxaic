@@ -1,7 +1,9 @@
 #version 450
-#extension GL_EXT_debug_printf : require
-#extension GL_EXT_shader_16bit_storage : require
+//#extension GL_EXT_debug_printf : require
+#extension GL_EXT_shader_16bit_storage : require // todo pack in 32bit uint
 #extension GL_EXT_shader_8bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -74,7 +76,7 @@ uint packFloatAnd565Color(float normalizedDepth, vec3 color) {
 void WriteDebugCoord(ivec2 debugCoord){
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
-    const ivec2 diff = coord - debugCoord;
+    const vec2 diff = coord - debugCoord;
     if (dot(diff, diff) < 100){
         const uint packedData = packFloatAnd565Color(0, vec3(0, 1, 1));
         writeAtomicData(coord, packedData);
@@ -216,11 +218,17 @@ void main()
 {
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 screenSize = vec2(iScreenSize);
-    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    const uint tileIndex = gl_WorkGroupID.x;
+    const Tile tile = atomicTileBuffer.tiles[tileIndex];
+    const vec2 ulTileUV = vec2(tile.x, tile.y);
+    const ivec2 ulTileCoord = CoordFromUV(ulTileUV, screenSize);
+    const vec2 tileSize = vec2(tile.size * 256, tile.size * 256);
+
+    const ivec2 coord = ivec2(ulTileCoord + gl_LocalInvocationID.xy);
+    //    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 uv = UVFromCoord(coord, screenSize);
     const vec2 ndc = NDCFromUV(uv);
-
-    const vec2 uvStepSize = UVFromCoord(coord + 1, screenSize) - uv;
 
     const ivec2 iAveragedScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
     const vec2 averagedScreenSize = vec2(iAveragedScreenSize);
@@ -235,7 +243,7 @@ void main()
     vec3 stepNormalNDC;
     vec3 depthProjectedNDC;
     if (!NodeIntersectUV(uv, nodeUV, worldNormal, stepNormalNDC, depthProjectedNDC)) {
-        //        return;
+        return;
     }
 
     // write source pixel
@@ -243,63 +251,27 @@ void main()
     const uint packedData = packFloatAnd565Color(depthProjectedNDC.z, color.xyz);
     const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
-    //    writeAtomicData(depthProjectedCoord, packedData);
-//        writeAtomicData(coord, packedData);
-
-
-    vec3 averagedNodeWorldPos;
-    if (!NodeWorldPosFromCoord(averagedCoord, averagedScreenSize, averagedNodeWorldPos)){
-        return;
-    }
-
-    bool crossFail = false;
-    vec3 rAveragedNodeWorldPos;
-    if (!NodeWorldPosFromCoord(averagedCoord + ivec2(1, 0), averagedScreenSize, rAveragedNodeWorldPos)){
-        rAveragedNodeWorldPos = averagedNodeWorldPos + vec3(1, 0, 0);
-        crossFail = true;
-    }
-    vec3 lAveragedNodeWorldPos;
-    if (!NodeWorldPosFromCoord(averagedCoord + ivec2(0, 1), averagedScreenSize, lAveragedNodeWorldPos)){
-        lAveragedNodeWorldPos = averagedNodeWorldPos + vec3(0, 1, 0);
-        crossFail = true;
-    }
-
-    if (averagedCoord.x == 16 && averagedCoord.y == 16){
-        WriteDebugWorldPos(averagedNodeWorldPos);
-        WriteDebugWorldPos(rAveragedNodeWorldPos);
-        WriteDebugWorldPos(lAveragedNodeWorldPos);
-    }
-
-    const vec3 averagedNodeWorldDirRight = normalize(averagedNodeWorldPos - rAveragedNodeWorldPos);
-//    const vec3 averagedNodeWorldDirUp = normalize(averagedNodeWorldPos - lAveragedNodeWorldPos);
-    const vec3 averagedNodeWorldDirUp = vec3(0,-1,0);
-    const vec3 averagedNodeWorldDirForward = cross(averagedNodeWorldDirRight, averagedNodeWorldDirUp);
-
-    nodeOriginWorldPos = averagedNodeWorldPos;
-//    nodeOriginWorldDirection = averagedNodeWorldDirForward;
-    if (crossFail){
-        nodeOriginWorldDirection = vec3(0, 0, -1);;
-    }
+    writeAtomicData(depthProjectedCoord, packedData);
 
     //    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
     //        vec3 log = rAveragedNodeWorldPos;
     //        debugPrintfEXT("%f | %f | %f", log.x, log.y, log.z);
     //    }
 
-    vec2 nodeUV2;
-    vec3 worldNormal2;
-    vec3 stepNormalNDC2;
-    vec3 depthProjectedNDC2;
-    if (!NodeIntersectUV(uv, nodeUV2, worldNormal2, stepNormalNDC2, depthProjectedNDC2)) {
-        return;
-    }
-    const vec4 color2 = texture(nodeColorTexture, nodeUV2);
-    const vec2 depthProjectUV2 = UVFromNDC(depthProjectedNDC2);
-    const ivec2 depthProjectedCoord2 = CoordFromUV(depthProjectUV2, screenSize);
-    const uint debugPackedData = packFloatAnd565Color(0, vec3(color2.x, 0, 0));
-    writeAtomicData(depthProjectedCoord2, debugPackedData);
-    const uint debugPackedData2 = packFloatAnd565Color(1, vec3(0, color2.y, 0));
-    writeAtomicData(coord, debugPackedData2);
+    //    vec2 nodeUV2;
+    //    vec3 worldNormal2;
+    //    vec3 stepNormalNDC2;
+    //    vec3 depthProjectedNDC2;
+    //    if (!NodeIntersectUV(uv, nodeUV2, worldNormal2, stepNormalNDC2, depthProjectedNDC2)) {
+    //        return;
+    //    }
+    //    const vec4 color2 = texture(nodeColorTexture, nodeUV2);
+    //    const vec2 depthProjectUV2 = UVFromNDC(depthProjectedNDC2);
+    //    const ivec2 depthProjectedCoord2 = CoordFromUV(depthProjectUV2, screenSize);
+    //    const uint debugPackedData = packFloatAnd565Color(0, vec3(color2.x, 0, 0));
+    //    writeAtomicData(depthProjectedCoord2, debugPackedData);
+    //    const uint debugPackedData2 = packFloatAnd565Color(1, vec3(0, color2.y, 0));
+    //    writeAtomicData(coord, debugPackedData2);
 
 
     // calc and write step normal pixel

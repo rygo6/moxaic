@@ -256,23 +256,23 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, computeNodeDescriptor);
 
     const auto averagedExtents = outputAveragedAtomicTexture.GetExtents();
-    const auto averagedGroupCount = VkExtent2D( averagedExtents.width < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.width / Vulkan::ComputeNodePipeline::LocalSize,
+    const auto averagedGroupCount = VkExtent2D(averagedExtents.width < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.width / Vulkan::ComputeNodePipeline::LocalSize,
                                                averagedExtents.height < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.height / Vulkan::ComputeNodePipeline::LocalSize);
     computeNodePrePipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, averagedGroupCount.width, averagedGroupCount.height, 1);
 
     const VkImageMemoryBarrier averagedAtomicImageMemoryBarrier{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext = nullptr,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = outputAveragedAtomicTexture.GetVkImage(),
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
-      };
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+      .pNext = nullptr,
+      .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .image = outputAveragedAtomicTexture.GetVkImage(),
+      .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+    };
     vkCmdPipelineBarrier(commandBuffer,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -287,7 +287,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     const auto groupCount = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeNodePipeline::LocalSize,
                                        Window::GetExtents().height / Vulkan::ComputeNodePipeline::LocalSize);
     computeNodePipeline.BindPipeline(commandBuffer);
-    vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
+    vkCmdDispatch(commandBuffer, groupCount.width * groupCount.height, 1, 1);
 
     const VkImageMemoryBarrier atomicImageMemoryBarrier{
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -330,9 +330,9 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     semaphore.Wait();
 
-    // const auto timestamps = Device->GetTimestamps();
-    // const float computeMs = timestamps[1] - timestamps[0];
-    // MXC_LOG_NAMED(computeMs);
+    const auto timestamps = Device->GetTimestamps();
+    const float computeMs = timestamps[1] - timestamps[0];
+    MXC_LOG_NAMED(computeMs);
 
     return MXC_SUCCESS;
 }

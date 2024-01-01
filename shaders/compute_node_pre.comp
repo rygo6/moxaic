@@ -1,5 +1,5 @@
 #version 450
-#extension GL_EXT_debug_printf : require
+//#extension GL_EXT_debug_printf : require
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_8bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
@@ -148,7 +148,7 @@ void main()
     uint tileIndex = atomicAdd(atomicTileBuffer.atomicTileCount, 1);
     atomicTileBuffer.tiles[tileIndex] = tile;
 
-    debugPrintfEXT("%d | %f | %f | %f | %d | %d", tileIndex, tile.x, tile.y, tile.size, tile.id);
+//    debugPrintfEXT("%d | %f | %f | %f | %d | %d", tileIndex, tile.x, tile.y, tile.size, tile.id);
 
     //    if (gl_GlobalInvocationID.x == 16 && gl_GlobalInvocationID.y == 16) {
     //        debugPrintfEXT("%f | %f | %F", depthProjectedNodeClipPos.x, depthProjectedNodeClipPos.y, depthProjectedNodeClipPos.z);
