@@ -36,8 +36,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const char* shaderPath)
         {
-            MXC_LOG("Init ComputeNodePipeline", shaderPath);
-
+            // MXC_LOG("Init ComputeNodePipeline", shaderPath);
             VkShaderModule shader;
             MXC_CHK(CreateShaderModule(shaderPath,
                                        &shader));

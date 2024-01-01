@@ -35,11 +35,6 @@ namespace Moxaic::Vulkan
                   const VkBufferUsageFlags usage,
                   const Locality locality)
         {
-            MXC_LOG_MULTILINE("Init Buffer:",
-                              string_VkMemoryPropertyFlags(properties),
-                              string_VkBufferUsageFlags(usage),
-                              Size(),
-                              string_Locality(locality));
             MXC_CHK(Device->CreateAllocateBindBuffer(usage,
                                                      properties,
                                                      Size(),

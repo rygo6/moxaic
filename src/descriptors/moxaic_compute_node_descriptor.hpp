@@ -59,7 +59,7 @@ namespace Moxaic::Vulkan
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
-            MXC_LOG("Init ComputeNodeDescriptor Layout");
+            // MXC_LOG("Init ComputeNodeDescriptor Layout");
             StaticArray bindings{
               (VkDescriptorSetLayoutBinding){
                 .binding = Indices::NodeUB0,
@@ -117,8 +117,7 @@ namespace Moxaic::Vulkan
                         const Texture& outputAtomicTexture,
                         const VkImageView outputColorImage)
         {
-            MXC_LOG("Init ComputeNodeDescriptor");
-
+            // MXC_LOG("Init ComputeNodeDescriptor");
             MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                  Vulkan::Locality::Local));

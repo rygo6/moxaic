@@ -35,8 +35,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init()
         {
-            MXC_LOG("Init StandardPipeline");
-
+            // MXC_LOG("Init StandardPipeline");
             VkShaderModule vertShader;
             MXC_CHK(CreateShaderModule("./shaders/basic_material.vert.spv",
                                        &vertShader));

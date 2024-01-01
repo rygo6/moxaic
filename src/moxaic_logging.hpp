@@ -64,11 +64,20 @@ namespace Moxaic
 }// namespace Moxaic
 
 #define MXC_FILE_NO_PATH (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
+#ifdef MXC_DISABLE_LOG
+#define MXC_LOG(...)
+#define MXC_LOG_MULTILINE(...)
+#define MXC_LOG_FUNCTION()
+#define MXC_LOG_ERROR(...)
+#define MXC_LOG_NAMED(var)
+#else
 #define MXC_LOG(...) Moxaic::LogParams(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
 #define MXC_LOG_MULTILINE(...) Moxaic::LogParamsMultiline(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
 #define MXC_LOG_FUNCTION() Moxaic::LogParams(MXC_FILE_NO_PATH, __LINE__, __FUNCTION__)
 #define MXC_LOG_ERROR(...) Moxaic::LogError(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
 #define MXC_LOG_NAMED(var) std::cerr << string_Role(Moxaic::Role) << " " << MXC_FILE_NO_PATH << ':' << __LINE__ << " " << #var << " = " << var << '\n';
+#endif
 
 #define MXC_CHK(command)                                                                                          \
     ({                                                                                                            \

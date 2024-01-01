@@ -1,3 +1,5 @@
+#define MXC_DISABLE_LOG
+
 #include "moxaic_vulkan_semaphore.hpp"
 #include "moxaic_vulkan_device.hpp"
 

@@ -1,3 +1,5 @@
+#define MXC_DISABLE_LOG
+
 #include "moxaic_vulkan_swap.hpp"
 
 #include "moxaic_vulkan.hpp"

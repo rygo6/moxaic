@@ -1,3 +1,6 @@
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_8bit_storage : require
+
 layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 view;
     mat4 proj;
@@ -16,18 +19,20 @@ layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
 
 struct Tile {
-    float x;
-    float y;
-    int size;
-    int id;
+    float16_t  x;
+    float16_t  y;
+    // might want an array of float16_tvec2 and an array of uint_16t with size/id packed
+    uint8_t size;
+    uint8_t id;
 };
 
-layout(set = 1, binding = 8) buffer AtomicBuffer {
+layout(set = 1, binding = 8) buffer AtomicTileBuffer {
     uint atomicTileCount;
     Tile tiles[];
-};
+} atomicTileBuffer;
 
 #define LOCAL_SIZE 32
+#define TILE_COUNT 32*32
 
 vec3 intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal) {
     const float facingRatio = dot(planeNormal, rayDir);

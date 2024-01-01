@@ -15,7 +15,7 @@ namespace Moxaic::Vulkan
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
-            MXC_LOG("Init StandardMaterialDescriptor Layout");
+            // MXC_LOG("Init StandardMaterialDescriptor Layout");
             StaticArray bindings{
               (VkDescriptorSetLayoutBinding){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -27,8 +27,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const Texture& texture)
         {
-            MXC_LOG("Init MaterialDescriptor");
-
+            // MXC_LOG("Init MaterialDescriptor");
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
               (VkWriteDescriptorSet){

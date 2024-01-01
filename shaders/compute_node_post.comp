@@ -1,6 +1,6 @@
 #version 450
 #extension GL_EXT_shader_16bit_storage : require
-
+#extension GL_EXT_shader_8bit_storage : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -78,4 +78,7 @@ void main()
     // reset atomic buffer for next frame
     imageStore(outputAtomic, coord, uvec4(maxUint, 0, 0, 0));
     imageStore(outputAveragedAtomic, averagedCoord, 0, uvec4(maxUint, 0, 0, 0));
+
+    // better way to flush?
+    atomicTileBuffer.atomicTileCount = 0;
 }

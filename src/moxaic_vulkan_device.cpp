@@ -1,3 +1,5 @@
+#define MXC_DISABLE_LOG
+
 #include "moxaic_vulkan_device.hpp"
 #include "main.hpp"
 #include "moxaic_logging.hpp"
@@ -231,52 +233,55 @@ MXC_RESULT Device::CreateDevice()
 
     VkPhysicalDeviceMeshShaderFeaturesEXT physicalDeviceMeshShaderFeatures = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
-      .taskShader = true,
-      .meshShader = true,
+      .taskShader = VK_TRUE,
+      .meshShader = VK_TRUE,
     };
     VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT,
       .pNext = &physicalDeviceMeshShaderFeatures,
-      .globalPriorityQuery = true,
+      .globalPriorityQuery = VK_TRUE,
     };
     VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
       .pNext = &physicalDeviceGlobalPriorityQueryFeatures,
-      .robustBufferAccess2 = true,
-      .robustImageAccess2 = true,
-      .nullDescriptor = true,
+      .robustBufferAccess2 = VK_TRUE,
+      .robustImageAccess2 = VK_TRUE,
+      .nullDescriptor = VK_TRUE,
     };
     VkPhysicalDeviceVulkan13Features enabledFeatures13 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
       .pNext = &physicalDeviceRobustness2Features,
       //            .synchronization2 = true,
-      .robustImageAccess = true,
-      .shaderDemoteToHelperInvocation = true,
-      .shaderTerminateInvocation = true,
+      .robustImageAccess = VK_TRUE,
+      .shaderDemoteToHelperInvocation = VK_TRUE,
+      .shaderTerminateInvocation = VK_TRUE,
     };
     VkPhysicalDeviceVulkan12Features enabledFeatures12 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &enabledFeatures13,
-      // .imagelessFramebuffer = true,
-      .samplerFilterMinmax = true,
-      .hostQueryReset = true,
-      .timelineSemaphore = true,
+      .storageBuffer8BitAccess = VK_TRUE, // TODO get rid and pack into uint32
+      .shaderFloat16 = VK_TRUE,
+      .shaderInt8 = VK_TRUE,
+      .samplerFilterMinmax = VK_TRUE,
+      .hostQueryReset = VK_TRUE,
+      .timelineSemaphore = VK_TRUE,
     };
     VkPhysicalDeviceVulkan11Features enabledFeatures11 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
       .pNext = &enabledFeatures12,
+      .storageBuffer16BitAccess = VK_TRUE, // TODO get rid and pack into uint32
     };
     VkPhysicalDeviceFeatures2 enabledFeatures = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR,
       .pNext = &enabledFeatures11,
       .features = {
-        .robustBufferAccess = true,
-        .tessellationShader = true,
-        .fillModeNonSolid = true,
-        .samplerAnisotropy = true,
-        .vertexPipelineStoresAndAtomics = true,
-        .fragmentStoresAndAtomics = true,
-        .shaderStorageImageMultisample = true,
+        .robustBufferAccess = VK_TRUE,
+        .tessellationShader = VK_TRUE,
+        .fillModeNonSolid = VK_TRUE,
+        .samplerAnisotropy = VK_TRUE,
+        .vertexPipelineStoresAndAtomics = VK_TRUE,
+        .fragmentStoresAndAtomics = VK_TRUE,
+        .shaderStorageImageMultisample = VK_TRUE,
       }};
 
     constexpr StaticArray requiredDeviceExtensions{

@@ -1,6 +1,9 @@
 #version 450
-#extension GL_EXT_debug_printf : enable
+#extension GL_EXT_debug_printf : require
 #extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_8bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -78,6 +81,14 @@ float unpackUint32ToFloat(uint packed) {
     return value / 4294967295.0;
 }
 
+vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
+    const vec4 nodeClipPos = ClipPosFromNDC(nodeNDC);
+    const vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
+    const vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
+    const vec3 globalNDC = NDCFromClipPos(globalClipPos);
+    return globalNDC;
+}
+
 const vec2 samplesOffsets[] = {
 { 0.5, 0.5 },
 { 0.0, 0.0 },
@@ -85,18 +96,6 @@ const vec2 samplesOffsets[] = {
 { 1.0, 1.0 },
 { 0.0, 1.0 },
 };
-
-//const ivec2 writeOffsets[] = {
-//{ 0, 0 },
-//{ -1, 1 },
-//{ 0, 1 },
-//{ 1, 1 },
-//{ 1, 0 },
-//{ 1, -1 },
-//{ 0, -1 },
-//{ -1, -1 },
-//{ -1, 0 },
-//};
 
 void main()
 {
@@ -133,20 +132,23 @@ void main()
         return;
     }
 
-    //    vec3 finalNDC = validSampleCount <= 2 ? vec3(farthestIntersectNodeNDC.xy, minDepthSample) : vec3(intersectNodeNDCs[0].xy, minDepthSample);
+    const vec3 depthProjectedGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
+    const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
+    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
+    const uint data = packFloatToUint32(depthProjectedGlobalNDC.z);
+    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, 0, data);
 
-    // writing all of these might be overkill, but it does produce the right result, so lets just do it for now
-    for (int i = 0; i < sampleCount; ++i) {
-        vec3 finalNDC = vec3(intersectNodeNDCs[i].xy, minDepthSample);
-        const vec4 depthProjectedNodeClipPos = ClipPosFromNDC(finalNDC);
-        const vec3 depthProjectedWorldPos = WorldPosFromNodeClipPos(depthProjectedNodeClipPos);
-        const vec4 depthProjectedGlobalClipPos = GlobalClipPosFromWorldPos(depthProjectedWorldPos);
-        const vec3 depthProjectedGlobalNDC = NDCFromClipPos(depthProjectedGlobalClipPos);
-        const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
-        const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
-        const uint data = packFloatToUint32(depthProjectedGlobalNDC.z);
-        imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, 0, data);
-    }
+    const vec3 ulDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[1].xy, minDepthSample));
+    const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
+    const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
+    const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
+    const vec2 uvDiff = lrDepthProjectGlobalUV - ulDepthProjectGlobalUV;
+    Tile tile = Tile(float16_t(ulDepthProjectGlobalUV.x), float16_t(ulDepthProjectGlobalUV.y), uint8_t(uvDiff.x * 256), uint8_t(0));
+
+    uint tileIndex = atomicAdd(atomicTileBuffer.atomicTileCount, 1);
+    atomicTileBuffer.tiles[tileIndex] = tile;
+
+    debugPrintfEXT("%d | %f | %f | %f | %d | %d", tileIndex, tile.x, tile.y, tile.size, tile.id);
 
     //    if (gl_GlobalInvocationID.x == 16 && gl_GlobalInvocationID.y == 16) {
     //        debugPrintfEXT("%f | %f | %F", depthProjectedNodeClipPos.x, depthProjectedNodeClipPos.y, depthProjectedNodeClipPos.z);
