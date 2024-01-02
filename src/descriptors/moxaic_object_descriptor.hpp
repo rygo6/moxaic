@@ -1,7 +1,5 @@
 #pragma once
 
-#define MXC_DISABLE_LOG
-
 #include "moxaic_vulkan_descriptor.hpp"
 
 #include "moxaic_transform.hpp"

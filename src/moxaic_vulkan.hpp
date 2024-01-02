@@ -353,9 +353,10 @@ namespace Moxaic::Vulkan
 #define VK_FUNCS                          \
     VK_FUNC(GetMemoryWin32HandleKHR)      \
     VK_FUNC(CmdDrawMeshTasksEXT)          \
-    VK_FUNC(CreateDebugUtilsMessengerEXT) \
     VK_FUNC(GetSemaphoreWin32HandleKHR)   \
-    VK_FUNC(ImportSemaphoreWin32HandleKHR)
+    VK_FUNC(ImportSemaphoreWin32HandleKHR) \
+    VK_FUNC(CreateDebugUtilsMessengerEXT) \
+
 #define VK_FUNC(func) PFN_vk##func func;
         VK_FUNCS
 #undef VK_FUNC

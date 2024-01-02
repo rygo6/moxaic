@@ -1,4 +1,4 @@
-#define MXC_DISABLE_LOG
+// #define MXC_DISABLE_LOG
 
 #include "moxaic_vulkan.hpp"
 
@@ -181,18 +181,22 @@ static MXC_RESULT LoadVulkanFunctionPointers()
 static MXC_RESULT CreateVulkanDebugOutput()
 {
     MXC_LOG_FUNCTION();
-    constexpr VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo{
+    VkDebugUtilsMessageSeverityFlagsEXT messageSeverity{};
+    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+
+    VkDebugUtilsMessageTypeFlagsEXT messageType{};
+    // messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
+    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    // messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+
+    const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo{
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
       .flags = 0,
-      .messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-      .messageType =
-        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+      .messageSeverity = messageSeverity,
+      .messageType = messageType,
       .pfnUserCallback = DebugCallback,
       .pUserData = nullptr,
     };
@@ -211,7 +215,9 @@ MXC_RESULT Vulkan::Init(const bool enableValidationLayers)
 
     MXC_CHK(CreateVulkanInstance());
     MXC_CHK(LoadVulkanFunctionPointers());
-    MXC_CHK(CreateVulkanDebugOutput());
+    if (g_VulkanValidationLayers) {
+        MXC_CHK(CreateVulkanDebugOutput());
+    }
 
     SDL_assert((Window::GetWindow() != nullptr) && "Window not initialized!");
     MXC_CHK(Window::InitSurface(g_VulkanInstance,

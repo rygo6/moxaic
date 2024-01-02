@@ -1,5 +1,5 @@
 #version 450
-#extension GL_EXT_debug_printf : require
+//#extension GL_EXT_debug_printf : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -161,9 +161,9 @@ void main()
     uint tileId;
     UnpackF24UI8FromUint32(tileBuffer.tiles[tileIndex].depth_id, tileGlobalNDCZ, tileId);
 
-//    if (tileGlobalNDCZ > .99) {
-        //        return;
-//    }
+    if (tileGlobalNDCZ > .99) {
+        return;
+    }
 
     const ivec2 ulTileCoord = CoordFromUV(ulTileUV, screenSize);
     const vec2 ulTileNDC = NDCFromUV(ulTileUV);
@@ -174,14 +174,12 @@ void main()
     const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
     const vec2 screenNDC = NDCFromUV(screenUV);
 
-//    WriteDebugWorldPos(tileWorldPos, screenCoord);
-
     nodeOriginWorldPos = vec3(0, 0, tileWorldPos.z);
     nodeOriginWorldDirection = vec3(0, 0, -1);
 
-    if (gl_GlobalInvocationID.x == 0){
-        debugPrintfEXT("%f | %f | %f", ulTileUV.x, ulTileUV.y, tileGlobalNDCZ);
-    }
+//    if (gl_GlobalInvocationID.x == 0){
+//        debugPrintfEXT("%f | %f | %f", ulTileUV.x, ulTileUV.y, tileGlobalNDCZ);
+//    }
 
     // calc source pixel
     vec2 nodeUV;
@@ -198,7 +196,7 @@ void main()
     const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
     writeAtomicData(depthProjectedCoord, packedData);
-//    writeAtomicData(screenCoord, packedData);
+    //    writeAtomicData(screenCoord, packedData);
 
     //    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
     //        vec3 log = rAveragedNodeWorldPos;

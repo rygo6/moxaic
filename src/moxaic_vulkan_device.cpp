@@ -1,4 +1,4 @@
-#define MXC_DISABLE_LOG
+// #define MXC_DISABLE_LOG
 
 #include "moxaic_vulkan_device.hpp"
 #include "main.hpp"
@@ -259,17 +259,17 @@ MXC_RESULT Device::CreateDevice()
     VkPhysicalDeviceVulkan12Features enabledFeatures12 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &enabledFeatures13,
-      .storageBuffer8BitAccess = VK_TRUE, // TODO get rid and pack into uint32
       .shaderFloat16 = VK_TRUE,
       .shaderInt8 = VK_TRUE,
       .samplerFilterMinmax = VK_TRUE,
       .hostQueryReset = VK_TRUE,
       .timelineSemaphore = VK_TRUE,
+      .bufferDeviceAddress = VK_TRUE,
+      .bufferDeviceAddressCaptureReplay = VK_TRUE,
     };
     VkPhysicalDeviceVulkan11Features enabledFeatures11 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
       .pNext = &enabledFeatures12,
-      .storageBuffer16BitAccess = VK_TRUE, // TODO get rid and pack into uint32
     };
     VkPhysicalDeviceFeatures2 enabledFeatures = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR,
