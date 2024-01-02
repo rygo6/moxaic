@@ -11,29 +11,29 @@ namespace Moxaic::Vulkan
     class Device;
     class Texture;
 
-    inline constexpr uint32_t SwapCount = 2;
+    inline constexpr uint32_t SwapCount = 3;
 
     class Swap
     {
     public:
         MXC_NO_VALUE_PASS(Swap);
 
-        explicit Swap(const Vulkan::Device* const pDevice);
+        explicit Swap(const Vulkan::Device* pDevice);
         virtual ~Swap();
 
-        MXC_RESULT Init(const PipelineType pipelineType,
-                        const VkExtent2D dimensions);
+        MXC_RESULT Init(PipelineType pipelineType,
+                        VkExtent2D dimensions);
 
         MXC_RESULT Acquire(uint32_t* pSwapIndex);
-        void Transition(const VkCommandBuffer commandBuffer,
-                        const uint32_t swapIndex,
+        void Transition(VkCommandBuffer commandBuffer,
+                        uint32_t swapIndex,
                         const Barrier& src,
                         const Barrier& dst) const;
-        void BlitToSwap(const VkCommandBuffer commandBuffer,
-                        const uint32_t swapIndex,
+        void BlitToSwap(VkCommandBuffer commandBuffer,
+                        uint32_t swapIndex,
                         const Texture& srcTexture) const;
         MXC_RESULT QueuePresent(const VkQueue& queue,
-                                const uint32_t swapIndex) const;
+                                uint32_t swapIndex) const;
 
         MXC_GET(VkAcquireCompleteSemaphore);
         MXC_GET(VkRenderCompleteSemaphore);
@@ -43,7 +43,7 @@ namespace Moxaic::Vulkan
         MXC_GETARR(VkSwapImages);
 
     private:
-        const Vulkan::Device* const k_pDevice;
+        const Vulkan::Device* const Device;
 
         VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};

@@ -98,15 +98,15 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
 }
 
 Swap::Swap(const Vulkan::Device* const pDevice)
-    : k_pDevice(pDevice) {}
+    : Device(pDevice) {}
 
 Swap::~Swap()
 {
-    vkDestroySemaphore(k_pDevice-> GetVkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
-    vkDestroySemaphore(k_pDevice-> GetVkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(Device-> GetVkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(Device-> GetVkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
     for (int i = 0; i < SwapCount; ++i) {
-        vkDestroyImageView(k_pDevice-> GetVkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
-        vkDestroyImage(k_pDevice-> GetVkDevice(), m_VkSwapImages[i], VK_ALLOC);
+        vkDestroyImageView(Device-> GetVkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
+        vkDestroyImage(Device-> GetVkDevice(), m_VkSwapImages[i], VK_ALLOC);
     }
 }
 
@@ -115,7 +115,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
 {
     // Logic from OVR Vulkan example
     VkSurfaceCapabilitiesKHR capabilities;
-    VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(k_pDevice->GetVkPhysicalDevice(),
+    VK_CHK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Device->GetVkPhysicalDevice(),
                                                      Vulkan::GetVkSurface(),
                                                      &capabilities));
 
@@ -126,10 +126,10 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
     }
 
     VkPresentModeKHR presentMode;
-    MXC_CHK(ChooseSwapPresentMode(k_pDevice->GetVkPhysicalDevice(),
+    MXC_CHK(ChooseSwapPresentMode(Device->GetVkPhysicalDevice(),
                                   &presentMode));
     VkSurfaceFormatKHR surfaceFormat;
-    MXC_CHK(ChooseSwapSurfaceFormat(k_pDevice->GetVkPhysicalDevice(),
+    MXC_CHK(ChooseSwapSurfaceFormat(Device->GetVkPhysicalDevice(),
                                     pipelineType,
                                     &surfaceFormat));
 
@@ -185,13 +185,13 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
         return MXC_FAIL;
     }
 
-    VK_CHK(vkCreateSwapchainKHR(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkCreateSwapchainKHR(Device->  GetVkDevice(),
                                 &createInfo,
                                 VK_ALLOC,
                                 &m_VkSwapchain));
 
     uint32_t swapCount;
-    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkGetSwapchainImagesKHR(Device->  GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    nullptr));
@@ -199,13 +199,13 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
         MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_VkSwapImages.size());
         return MXC_FAIL;
     }
-    VK_CHK(vkGetSwapchainImagesKHR(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkGetSwapchainImagesKHR(Device->  GetVkDevice(),
                                    m_VkSwapchain,
                                    &swapCount,
                                    m_VkSwapImages.data()));
 
     for (int i = 0; i < m_VkSwapImages.size(); ++i) {
-        k_pDevice->TransitionImageLayoutImmediate(m_VkSwapImages[i],
+        Device->TransitionImageLayoutImmediate(m_VkSwapImages[i],
                                                   VK_IMAGE_LAYOUT_UNDEFINED,
                                                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                                   VK_ACCESS_NONE,
@@ -231,7 +231,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
             .baseArrayLayer = 0,
             .layerCount = 1,
           }};
-        VK_CHK(vkCreateImageView(k_pDevice->  GetVkDevice(),
+        VK_CHK(vkCreateImageView(Device->  GetVkDevice(),
                                  &viewInfo,
                                  VK_ALLOC,
                                  &m_VkSwapImageViews[i]));
@@ -242,11 +242,11 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(Device->  GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkAcquireCompleteSemaphore));
-    VK_CHK(vkCreateSemaphore(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(Device->  GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
                              &m_VkRenderCompleteSemaphore));
@@ -262,7 +262,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
 
 MXC_RESULT Swap::Acquire(uint32_t* pSwapIndex)
 {
-    VK_CHK(vkAcquireNextImageKHR(k_pDevice->  GetVkDevice(),
+    VK_CHK(vkAcquireNextImageKHR(Device->  GetVkDevice(),
                                  m_VkSwapchain,
                                  UINT64_MAX,
                                  m_VkAcquireCompleteSemaphore,
@@ -283,8 +283,8 @@ void Swap::Transition(const VkCommandBuffer commandBuffer,
         .dstAccessMask = dst.colorAccessMask,
         .oldLayout = src.colorLayout,
         .newLayout = dst.colorLayout,
-        .srcQueueFamilyIndex = k_pDevice->GetSrcQueue(src),
-        .dstQueueFamilyIndex = k_pDevice->GetDstQueue(src, dst),
+        .srcQueueFamilyIndex = Device->GetSrcQueue(src),
+        .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
         .image = m_VkSwapImages[swapIndex],
         .subresourceRange = DefaultColorSubresourceRange,
       },
@@ -312,8 +312,8 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.GetVkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -323,8 +323,8 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
         .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[swapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -379,8 +379,8 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .dstAccessMask = VK_ACCESS_NONE,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.GetVkImage(),
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },
@@ -390,8 +390,8 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .dstAccessMask = VK_ACCESS_NONE,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = k_pDevice->GetGraphicsQueueFamilyIndex(),
+        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
+        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[swapIndex],
         .subresourceRange = Vulkan::DefaultColorSubresourceRange,
       },

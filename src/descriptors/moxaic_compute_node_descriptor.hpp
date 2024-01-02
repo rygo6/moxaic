@@ -40,7 +40,6 @@ namespace Moxaic::Vulkan
             glm::mat4 invViewProj;
             glm::uint32_t width;
             glm::uint32_t height;
-            glm::float32_t planeZDepth;
         };
 
         struct Tile
@@ -123,7 +122,7 @@ namespace Moxaic::Vulkan
             WriteLocalBuffer();
 
             MXC_CHK(storage.Init(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
                                  Vulkan::Locality::Local));
 
             MXC_CHK(AllocateDescriptorSet());
@@ -273,6 +272,8 @@ namespace Moxaic::Vulkan
         {
             uniform.CopyBuffer(localUniformBuffer);
         }
+
+        const auto& GetStorageBuffer() const { return storage; }
 
         UniformBuffer localUniformBuffer{};
 

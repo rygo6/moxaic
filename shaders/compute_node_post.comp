@@ -5,7 +5,7 @@
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
-layout (set = 1, binding = 5, r32ui) uniform uimage2DMS outputAveragedAtomic;
+layout (set = 1, binding = 5, r32ui) uniform writeonly uimage2D outputAveragedAtomic;
 layout (set = 1, binding = 6, r32ui) uniform uimage2D outputAtomic;
 layout (set = 1, binding = 7) uniform writeonly image2D outputColor;
 
@@ -49,6 +49,7 @@ float UnpackFloatFromUint(uint packed) {
 
 void main()
 {
+
 //    const uint maxValue = -1;
     const uint maxUint = 0xFFFFFFFFu;
 
@@ -73,11 +74,11 @@ void main()
     const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
     imageStore(outputColor, coord, vec4(colorSRGB, 1));
 
-    // reset atomic buffer for next frame
+    // reset for next frame, is there a better way to do this?
     imageStore(outputAtomic, coord, uvec4(maxUint, 0, 0, 0));
-    imageStore(outputAveragedAtomic, averagedCoord, 0, uvec4(maxUint, 0, 0, 0));
-
-    // better way to flush?
+    if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0) {
+        imageStore(outputAveragedAtomic, averagedCoord, uvec4(maxUint, 0, 0, 0));
+    }
     if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
         tileBuffer.command.x = 0;
     }

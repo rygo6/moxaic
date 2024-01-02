@@ -165,7 +165,7 @@ MXC_RESULT ComputeCompositorScene::Init()
                                              VK_IMAGE_USAGE_STORAGE_BIT,
                                              VK_IMAGE_ASPECT_COLOR_BIT,
                                              Vulkan::Locality::Local,
-                                             VK_SAMPLE_COUNT_4_BIT));
+                                             VK_SAMPLE_COUNT_1_BIT));
     MXC_CHK(outputAveragedAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
 
     const Vulkan::ComputeNodeDescriptor::UniformBuffer computeNodeBuffer{
@@ -177,7 +177,6 @@ MXC_RESULT ComputeCompositorScene::Init()
       .invViewProj = globalDescriptor.localBuffer.invViewProj,
       .width = globalDescriptor.localBuffer.width,
       .height = globalDescriptor.localBuffer.height,
-      .planeZDepth = 0,
     };
     MXC_CHK(computeNodeDescriptor.Init(computeNodeBuffer,
                                        nodeReference.GetExportedFramebuffers(nodeFramebufferIndex),
@@ -235,11 +234,10 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         MXC_LOG("CHILD UPDATE");
     }
 
-
-    if (Window::GetUserCommand().debugIncrement != 0) {
-        computeNodeDescriptor.localUniformBuffer.planeZDepth += Window::GetUserCommand().debugIncrement * 0.1f;
-        computeNodeDescriptor.WriteLocalBuffer();
-    }
+    // if (Window::GetUserCommand().debugIncrement != 0) {
+    //     computeNodeDescriptor.localUniformBuffer.planeZDepth += Window::GetUserCommand().debugIncrement * 0.1f;
+    //     computeNodeDescriptor.WriteLocalBuffer();
+    // }
 
     uint32_t swapIndex;
     swap.Acquire(&swapIndex);
@@ -288,6 +286,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                                        Window::GetExtents().height / Vulkan::ComputeNodePipeline::LocalSize);
     computeNodePipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width * groupCount.height, 1, 1);
+    // vkCmdDispatchIndirect(commandBuffer, computeNodeDescriptor.GetStorageBuffer().GetVkBuffer(),0);
 
     const VkImageMemoryBarrier atomicImageMemoryBarrier{
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,

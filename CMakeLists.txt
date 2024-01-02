@@ -57,7 +57,8 @@ target_link_libraries(${TARGET_NAME}
 target_compile_definitions(${TARGET_NAME} PRIVATE
         -DSDL_ASSERT_LEVEL=3
         -DGLM_FORCE_DEPTH_ZERO_TO_ONE
-        -DVKB_VALIDATION_LAYERS=ON)
+        -DVKB_VALIDATION_LAYERS=ON
+)
 
 target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)
 
