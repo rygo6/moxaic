@@ -330,9 +330,9 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     semaphore.Wait();
 
-    const auto timestamps = Device->GetTimestamps();
-    const float computeMs = timestamps[1] - timestamps[0];
-    MXC_LOG_NAMED(computeMs);
+    // const auto timestamps = Device->GetTimestamps();
+    // const float computeMs = timestamps[1] - timestamps[0];
+    // MXC_LOG_NAMED(computeMs);
 
     return MXC_SUCCESS;
 }

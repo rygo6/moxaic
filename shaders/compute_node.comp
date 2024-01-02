@@ -1,9 +1,5 @@
 #version 450
-//#extension GL_EXT_debug_printf : require
-#extension GL_EXT_shader_16bit_storage : require // todo pack in 32bit uint
-#extension GL_EXT_shader_8bit_storage : require
-#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_debug_printf : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -73,32 +69,30 @@ uint packFloatAnd565Color(float normalizedDepth, vec3 color) {
     return (packedValue << 16) | packedColor;
 }
 
-void WriteDebugCoord(ivec2 debugCoord){
-    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
-    const vec2 diff = coord - debugCoord;
+void WriteDebugCoord(ivec2 debugCoord, ivec2 screenCoord){
+    const vec2 diff = screenCoord - debugCoord;
     if (dot(diff, diff) < 100){
         const uint packedData = packFloatAnd565Color(0, vec3(0, 1, 1));
-        writeAtomicData(coord, packedData);
+        writeAtomicData(screenCoord, packedData);
     }
 }
 
-void WriteDebugUV(vec2 debugUV){
+void WriteDebugUV(vec2 debugUV, ivec2 screenCoord){
     const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
     const ivec2 debugCoord = CoordFromUV(debugUV, screenSize);
-    WriteDebugCoord(debugCoord);
+    WriteDebugCoord(debugCoord, screenCoord);
 }
 
-void WriteDebugNDC(vec3 ndc){
+void WriteDebugNDC(vec3 ndc, ivec2 screenCoord){
     const vec2 uv = UVFromNDC(ndc);
-    WriteDebugUV(uv);
+    WriteDebugUV(uv, screenCoord);
 }
 
-void WriteDebugWorldPos(vec3 debugWorldPos){
+void WriteDebugWorldPos(vec3 debugWorldPos, ivec2 screenCoord){
     const vec4 clipPos = GlobalClipPosFromWorldPos(debugWorldPos);
     const vec3 ndc = NDCFromClipPos(clipPos);
     const vec2 uv = UVFromNDC(ndc);
-    WriteDebugUV(uv);
+    WriteDebugUV(uv, screenCoord);
 }
 
 float inverseLerp(float value, float a, float b) {
@@ -110,17 +104,6 @@ vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
     const vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos.xyz);
     const vec3 globalNDC = NDCFromClipPos(globalClipPos);
     return globalNDC;
-}
-
-float areaOfQuadrilateral(vec2 a, vec2 b, vec2 c, vec2 d) {
-    return 0.5 * abs(
-    a.x * b.y + b.x * c.y + c.x * d.y + d.x * a.y -
-    (b.x * a.y + c.x * b.y + d.x * c.y + a.x * d.y)
-    );
-}
-
-float areaOfQuadrilateral(vec2 verts[4]) {
-    return areaOfQuadrilateral(verts[0], verts[1], verts[2], verts[3]);
 }
 
 float SqrMag(vec2 values[2]) {
@@ -160,89 +143,52 @@ float CalcNodeZPlane(){
     return nodeZPlane;
 }
 
-void XYCoordNormalizedDir(const vec2 dir, out bool isXDir, out vec2 normalizedDir){
-    const vec2 absDir = abs(dir);
-    isXDir = absDir.x > absDir.y;
-    const vec2 xNormalizedDir = dir * (1.0f / absDir.x);
-    const vec2 yNormalizedDir = dir * (1.0f / absDir.y);
-    normalizedDir = (isXDir ? xNormalizedDir : yNormalizedDir);
-}
-
-void Unpack16F8F8FFromUint(uint packed, out float float1, out float float2, out float float3) {
-    uint int1 = (packed >> 16) & 0xFFFFu;// Extract first 16 bits
-    uint int2 = (packed >> 8) & 0xFFu;// Extract next 8 bits
-    uint int3 = packed & 0xFFu;// Extract last 8 bits
-
-    // Normalize each component back to [0, 1] range
-    float1 = float(int1) / 65535.0;
-    float2 = float(int2) / 255.0;
-    float3 = float(int3) / 255.0;
-}
-
-uint PackUintFromVec3(vec3 v) {
-    uint r = uint(v.r * 255.0);
-    uint g = uint(v.g * 255.0);
-    uint b = uint(v.b * 255.0);
-    return (r << 16) | (g << 8) | b;
-}
-
-vec3 UnpackVec3FromUint(uint packed) {
-    uint r = (packed >> 16) & 0xFFu;
-    uint g = (packed >> 8) & 0xFFu;
-    uint b = packed & 0xFFu;
-    return vec3(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0);
-}
-
-float UnpackFloatFromUint(uint packed) {
-    float value = float(packed);
-    return value / 4294967295.0;
-}
-
-bool NodeWorldPosFromCoord(const ivec2 coord, vec2 screenSize, out vec3 worldPos) {
-    const vec2 uv = UVFromCoord(coord, screenSize);
-    const vec2 ndc = NDCFromUV(uv);
-    const uint nodeData = imageLoad(outputAveragedAtomic, coord, 0).r;
-    const float nodeZ = UnpackFloatFromUint(nodeData);
-    if (nodeZ > .99) {
-        return false;
-    }
-    const vec4 globalClipPos = vec4(ndc, nodeZ, 1);
-    worldPos = WorldPosFromGlobalClipPos(globalClipPos);
-    return true;
-}
-
-const int sampleCount = 4;
-const ivec2 samplesOffsets[] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, };
-
 void main()
 {
+    const uint tileIndex = gl_WorkGroupID.x;
+    if (tileIndex > tileBuffer.command.x) {
+        return;
+    }
+
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 screenSize = vec2(iScreenSize);
 
-    const uint tileIndex = gl_WorkGroupID.x;
-    const Tile tile = atomicTileBuffer.tiles[tileIndex];
-    const vec2 ulTileUV = vec2(tile.x, tile.y);
+    vec2 ulTileUV;
+    float tileUVSize;
+    UnpackF12F12F8FromUint32(tileBuffer.tiles[tileIndex].x_y_size, ulTileUV.x, ulTileUV.y, tileUVSize);
+
+    float tileGlobalNDCZ;
+    uint tileId;
+    UnpackF24UI8FromUint32(tileBuffer.tiles[tileIndex].depth_id, tileGlobalNDCZ, tileId);
+
+//    if (tileGlobalNDCZ > .99) {
+        //        return;
+//    }
+
     const ivec2 ulTileCoord = CoordFromUV(ulTileUV, screenSize);
-    const vec2 tileSize = vec2(tile.size * 256, tile.size * 256);
+    const vec2 ulTileNDC = NDCFromUV(ulTileUV);
+    const vec4 ulClipPos = ClipPosFromNDC(ulTileNDC, tileGlobalNDCZ);
+    const vec3 tileWorldPos = WorldPosFromGlobalClipPos(ulClipPos);
 
-    const ivec2 coord = ivec2(ulTileCoord + gl_LocalInvocationID.xy);
-    //    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    const vec2 uv = UVFromCoord(coord, screenSize);
-    const vec2 ndc = NDCFromUV(uv);
+    const ivec2 screenCoord = ivec2(ulTileCoord + gl_LocalInvocationID.xy);
+    const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
+    const vec2 screenNDC = NDCFromUV(screenUV);
 
-    const ivec2 iAveragedScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
-    const vec2 averagedScreenSize = vec2(iAveragedScreenSize);
-    const ivec2 averagedCoord = CoordFromUV(uv, averagedScreenSize);
+//    WriteDebugWorldPos(tileWorldPos, screenCoord);
 
-    nodeOriginWorldPos = vec3(0, 0, 0);
+    nodeOriginWorldPos = vec3(0, 0, tileWorldPos.z);
     nodeOriginWorldDirection = vec3(0, 0, -1);
+
+    if (gl_GlobalInvocationID.x == 0){
+        debugPrintfEXT("%f | %f | %f", ulTileUV.x, ulTileUV.y, tileGlobalNDCZ);
+    }
 
     // calc source pixel
     vec2 nodeUV;
     vec3 worldNormal;
     vec3 stepNormalNDC;
     vec3 depthProjectedNDC;
-    if (!NodeIntersectUV(uv, nodeUV, worldNormal, stepNormalNDC, depthProjectedNDC)) {
+    if (!NodeIntersectUV(screenUV, nodeUV, worldNormal, stepNormalNDC, depthProjectedNDC)) {
         return;
     }
 
@@ -252,6 +198,7 @@ void main()
     const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
     writeAtomicData(depthProjectedCoord, packedData);
+//    writeAtomicData(screenCoord, packedData);
 
     //    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
     //        vec3 log = rAveragedNodeWorldPos;

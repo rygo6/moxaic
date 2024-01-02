@@ -1,9 +1,9 @@
 #version 450
-//#extension GL_EXT_debug_printf : require
-#extension GL_EXT_shader_16bit_storage : require
-#extension GL_EXT_shader_8bit_storage : require
-#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_debug_printf : require
+//#extension GL_EXT_shader_16bit_storage : require
+//#extension GL_EXT_shader_8bit_storage : require
+//#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+//#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -45,40 +45,6 @@ bool NodeIntersectUV(const vec2 uv, out vec3 intersectGlobalNDC, out vec3 inters
     }
 
     return true;
-}
-
-vec3 CalcNormal(vec3 P1, vec3 P2, vec3 P3) {
-    vec3 edge1 = P2 - P1;
-    vec3 edge2 = P3 - P1;
-    vec3 normal = cross(edge1, edge2);
-    return normalize(normal);
-}
-
-uint PackUintFromVec3(vec3 v) {
-    uint r = uint(v.r * 255.0);
-    uint g = uint(v.g * 255.0);
-    uint b = uint(v.b * 255.0);
-    return (r << 16) | (g << 8) | b;
-}
-
-uint PackUintFrom16F8F8F(float float1, float float2, float float3) {
-    uint int1 = uint(float1 * 65535.0);// 16 bits
-    uint int2 = uint(float2 * 255.0);// 8 bits
-    uint int3 = uint(float3 * 255.0);// 8 bits
-    uint packed = (int1 << 16) | (int2 << 8) | int3;
-    return packed;
-}
-
-uint packFloatToUint32(float value) {
-    value = clamp(value, 0.0, 1.0);
-    float scaled = value * 4294967295.0;
-    uint packed = uint(scaled);
-    return packed;
-}
-
-float unpackUint32ToFloat(uint packed) {
-    float value = float(packed);
-    return value / 4294967295.0;
 }
 
 vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
@@ -133,20 +99,22 @@ void main()
     }
 
     const vec3 depthProjectedGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
-    const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
-    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
-    const uint data = packFloatToUint32(depthProjectedGlobalNDC.z);
-    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, 0, data);
+//    const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
+//    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
+//    const uint data = packFloatToUint32(depthProjectedGlobalNDC.z);
+//    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, 0, data);
 
     const vec3 ulDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[1].xy, minDepthSample));
     const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
     const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
     const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
     const vec2 uvDiff = lrDepthProjectGlobalUV - ulDepthProjectGlobalUV;
-    Tile tile = Tile(float16_t(ulDepthProjectGlobalUV.x), float16_t(ulDepthProjectGlobalUV.y), uint8_t(uvDiff.x * 256), uint8_t(0));
 
-    uint tileIndex = atomicAdd(atomicTileBuffer.atomicTileCount, 1);
-    atomicTileBuffer.tiles[tileIndex] = tile;
+    const uint packed_x_y_size = PackUint32FromF12F12F8(ulDepthProjectGlobalUV.x, ulDepthProjectGlobalUV.y, uvDiff.x);
+    const uint packed_depth_id = PackUint32FromF24UI8(depthProjectedGlobalNDC.z, 0);
+
+    const uint tileIndex = atomicAdd(tileBuffer.command.x, 1);
+    tileBuffer.tiles[tileIndex] =  Tile(packed_x_y_size, packed_depth_id);
 
 //    debugPrintfEXT("%d | %f | %f | %f | %d | %d", tileIndex, tile.x, tile.y, tile.size, tile.id);
 

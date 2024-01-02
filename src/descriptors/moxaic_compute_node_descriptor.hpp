@@ -45,15 +45,13 @@ namespace Moxaic::Vulkan
 
         struct Tile
         {
-            glm::uint16_t x;// how to make float16!?
-            glm::uint16_t y;
-            glm::uint8_t size;
-            glm::uint8_t id;
+            glm::uint32_t x_y_size;
+            glm::uint32_t depth_id;
         };
 
         struct StorageBuffer
         {
-            uint32_t atomicTileCount;
+            VkDispatchIndirectCommand atomicTileCount;
             Tile tiles[32 * 32];
         };
 

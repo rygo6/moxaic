@@ -1,8 +1,3 @@
-#extension GL_EXT_shader_16bit_storage : require // todo pack in 32bit uint
-#extension GL_EXT_shader_8bit_storage : require
-#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
-
 layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 view;
     mat4 proj;
@@ -20,18 +15,21 @@ layout (set = 1, binding = 2) uniform sampler2D nodeNormalTexture;
 layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
 
-struct Tile {
-    float16_t  x;
-    float16_t  y;
-    // might want an array of float16_tvec2 and an array of uint_16t with size/id packed
-    uint8_t size;
-    uint8_t id;
+struct VkDispatchIndirectCommand {
+    uint    x;
+    uint    y;
+    uint    z;
 };
 
-layout(set = 1, binding = 8) buffer AtomicTileBuffer {
-    uint atomicTileCount;
+struct Tile {
+    uint x_y_size;
+    uint depth_id;
+};
+
+layout(set = 1, binding = 8) buffer TileBuffer {
+    VkDispatchIndirectCommand command;
     Tile tiles[];
-} atomicTileBuffer;
+} tileBuffer;
 
 #define LOCAL_SIZE 32
 #define TILE_COUNT 32*32
@@ -93,6 +91,11 @@ vec4 ClipPosFromNDC(vec3 ndc)
     return vec4(ndc, 1);
 }
 
+vec4 ClipPosFromNDC(vec2 ndc, float depth)
+{
+    return vec4(ndc, depth, 1);
+}
+
 vec3 NDCFromClipPos(vec4 clipPos)
 {
     return clipPos.xyz / clipPos.w;
@@ -131,4 +134,48 @@ ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
 vec2 UVFromCoord(ivec2 coord, vec2 screenSize)
 {
     return vec2(coord) / screenSize;
+}
+
+uint PackUint32FromF12F12F8(float f12a, float f12b, float f8c) {
+    uint aInt = uint(f12a * 4095.0);
+    uint bInt = uint(f12b * 4095.0);
+    uint cInt = uint(f8c * 255.0);
+    uint result = (aInt << 20) | (bInt << 8) | cInt;
+    return result;
+}
+
+void UnpackF12F12F8FromUint32(uint packed, out float f12a, out float f12b, out float f8c) {
+    uint maskA = 0xFFF00000;
+    uint maskB = 0x000FFF00;
+    uint maskC = 0x000000FF;
+    uint aInt = (packed & maskA) >> 20;
+    uint bInt = (packed & maskB) >> 8;
+    uint cInt = (packed & maskC);
+    f12a = float(aInt) / 4095.0;
+    f12b = float(bInt) / 4095.0;
+    f8c = float(cInt) / 255.0;
+}
+
+uint PackUint32FromF24UI8(float f, uint u) {
+    uint fInt = uint(f * float(0xFFFFFF));
+    fInt = fInt << 8;
+    return fInt | (u & 0xFFu);
+}
+
+void UnpackF24UI8FromUint32(uint packed, out float f, out uint u) {
+    u = packed & 0xFFu;
+    uint fInt = packed >> 8;
+    f = float(fInt) / float(0xFFFFFF);
+}
+
+uint PackFloatToUint32(float value) {
+    value = clamp(value, 0.0, 1.0);
+    float scaled = value * 4294967295.0;
+    uint packed = uint(scaled);
+    return packed;
+}
+
+float UnpackFloatFromUint32(uint packed) {
+    float value = float(packed);
+    return value / 4294967295.0;
 }
