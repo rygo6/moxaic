@@ -15,14 +15,19 @@ layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
 
 struct VkDispatchIndirectCommand {
-    uint    x;
-    uint    y;
-    uint    z;
+    uint x;
+    uint y;
+    uint z;
 };
 
 struct Tile {
-    uint x_y_size;
-    uint depth_id;
+    float ulX;
+    float ulY;
+    float lrX;
+    float lrY;
+    float depth;
+//    uint x_y_size;
+//    uint depth_id;
 };
 
 layout(set = 1, binding = 8) buffer TileBuffer {
@@ -133,6 +138,19 @@ ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
 vec2 UVFromCoord(ivec2 coord, vec2 screenSize)
 {
     return vec2(coord) / screenSize;
+}
+
+vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
+    const vec4 nodeClipPos = ClipPosFromNDC(nodeNDC);
+    const vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
+    const vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
+    const vec3 globalNDC = NDCFromClipPos(globalClipPos);
+    return globalNDC;
+}
+
+float SqrMag(vec2 values[2]) {
+    const  vec2 diff = values[0] - values[1];
+    return dot(diff, diff);
 }
 
 uint PackUint32FromF12F12F8(float f12a, float f12b, float f8c) {

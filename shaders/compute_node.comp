@@ -14,7 +14,7 @@ layout (set = 1, binding = 6, r32ui) uniform uimage2D outputAtomic;
 vec3 nodeOriginWorldPos = vec3(0, 0, 0);
 vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 
-bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 nodeWorldNormal, out vec3 stepNormalNDC, out vec3 depthProjectedNDC)
+bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 depthProjectedNDC)
 {
     const vec2 ndc = NDCFromUV(1 - uv);// why do I 1 - uv here?! It does flip it to proper layout
     const vec4 clipPos = vec4(ndc, 0, 1);
@@ -27,15 +27,16 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 nodeWorldNormal, o
     const vec2 nodeIntersectUV = UVFromNDC(nodeIntersectNDC);
     nodeUV = nodeIntersectUV;
 
-    nodeWorldNormal = texture(nodeNormalTexture, nodeIntersectUV).xyz * vec3(1, -1, 1);// I encoded y = up on sphere normals
+    const vec3 nodeWorldNormal = texture(nodeNormalTexture, nodeIntersectUV).xyz * vec3(1, -1, 1);// I encoded y = up on sphere normals
     const float nodeDepthSample = texture(nodeDepthTexture, nodeIntersectUV).r;
 
-    if (nodeIntersectUV.x < 0
+    if (
+    nodeIntersectUV.x < 0
     || nodeIntersectUV.x > 1
     || nodeIntersectUV.y < 0
     || nodeIntersectUV.y > 1
     || nodeDepthSample > .99
-    //    || dot(nodeWorldNormal.xyz, globalWorldRay) < 0
+    || dot(nodeWorldNormal.xyz, globalWorldRay) < 0
     ) {
         return false;
     }
@@ -45,10 +46,6 @@ bool NodeIntersectUV(const vec2 uv, out vec2 nodeUV, out vec3 nodeWorldNormal, o
     const vec4 nodeQuadDepthProjectedClipPos = GlobalClipPosFromWorldPos(nodeQuadDepthWorldPos);
     const vec3 nodeQuadDepthProjectedNDC = NDCFromClipPos(nodeQuadDepthProjectedClipPos);
     depthProjectedNDC = nodeQuadDepthProjectedNDC;
-
-    const vec3 stepNormalWorldPos = nodeQuadDepthWorldPos + (nodeWorldNormal * 0.1);
-    const vec4 stepNormalClipPos = GlobalClipPosFromWorldPos(stepNormalWorldPos);
-    stepNormalNDC = NDCFromClipPos(stepNormalClipPos);
 
     return true;
 }
@@ -98,50 +95,6 @@ float inverseLerp(float value, float a, float b) {
     return a == b ? 0 : (value - a) / (b - a);
 }
 
-vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
-    const vec3 worldPos = WorldPosFromNodeClipPos(vec4(nodeNDC, 1));
-    const vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos.xyz);
-    const vec3 globalNDC = NDCFromClipPos(globalClipPos);
-    return globalNDC;
-}
-
-float SqrMag(vec2 values[2]) {
-    const  vec2 diff = values[0] - values[1];
-    return dot(diff, diff);
-}
-
-const int ndcCornerCount = 2;
-const vec2 ndcCorners[] = {
-{ -1, 1 },
-{ 1, -1 },
-};
-
-float CalcNodeZPlane(){
-
-    vec2 uvs[ndcCornerCount];
-    for (int i = 0; i < ndcCornerCount; ++i){
-        const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 0));
-        if (ndc.z < 0) {
-            return 1;// maybe -z?
-        }
-        uvs[i] = UVFromNDC(ndc);
-    }
-    const float frontMag = SqrMag(uvs);
-
-    for (int i = 0; i < ndcCornerCount; ++i){
-        const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 1));
-        uvs[i] = UVFromNDC(ndc);
-    }
-    const float backMag = SqrMag(uvs);
-
-    float nodeZPlane = frontMag < backMag ? 1 : -1;
-    if (abs(frontMag - backMag) < .1) {
-        nodeZPlane = -1;
-    }
-
-    return nodeZPlane;
-}
-
 void main()
 {
     const uint tileIndex = gl_WorkGroupID.x;
@@ -149,38 +102,41 @@ void main()
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 screenSize = vec2(iScreenSize);
 
-    vec2 ulTileUV;
-    float tileUVSize;
-    UnpackF12F12F8FromUint32(tileBuffer.tiles[tileIndex].x_y_size, ulTileUV.x, ulTileUV.y, tileUVSize);
+//    vec2 ulTileUV;
+//    float tileUVSize;
+//    UnpackF12F12F8FromUint32(tileBuffer.tiles[tileIndex].x_y_size, ulTileUV.x, ulTileUV.y, tileUVSize);
+//    const vec2 lrTileUV = ulTileUV + tileUVSize;
+//    float tileGlobalNDCZ;
+//    uint tileId;
+//    UnpackF24UI8FromUint32(tileBuffer.tiles[tileIndex].depth_id, tileGlobalNDCZ, tileId);
 
-    float tileGlobalNDCZ;
-    uint tileId;
-    UnpackF24UI8FromUint32(tileBuffer.tiles[tileIndex].depth_id, tileGlobalNDCZ, tileId);
+    const vec2 ulTileUV = vec2(tileBuffer.tiles[tileIndex].ulX, tileBuffer.tiles[tileIndex].ulY);
+    const vec2 lrTileUV = vec2(tileBuffer.tiles[tileIndex].lrX, tileBuffer.tiles[tileIndex].lrY);
+    const float tileGlobalNDCZ = tileBuffer.tiles[tileIndex].depth;
 
     const ivec2 ulTileCoord = CoordFromUV(ulTileUV, screenSize);
+    const ivec2 lrTileCoord = CoordFromUV(lrTileUV, screenSize);
     const vec2 ulTileNDC = NDCFromUV(ulTileUV);
     const vec4 ulClipPos = ClipPosFromNDC(ulTileNDC, tileGlobalNDCZ);
     const vec3 tileWorldPos = WorldPosFromGlobalClipPos(ulClipPos);
 
     const ivec2 screenCoord = ivec2(ulTileCoord + gl_LocalInvocationID.xy);
     const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
+    if (screenUV.x > lrTileUV.x || screenUV.y > lrTileUV.y) {
+        return;
+    }
     const vec2 screenNDC = NDCFromUV(screenUV);
 
     nodeOriginWorldPos = vec3(0, 0, tileWorldPos.z);
     nodeOriginWorldDirection = vec3(0, 0, -1);
-
-//    if (gl_GlobalInvocationID.x == 0){
-//        debugPrintfEXT("%f | %f | %f", ulTileUV.x, ulTileUV.y, tileGlobalNDCZ);
-//    }
-
 
     // calc source pixel
     vec2 nodeUV;
     vec3 worldNormal;
     vec3 stepNormalNDC;
     vec3 depthProjectedNDC;
-    if (!NodeIntersectUV(screenUV, nodeUV, worldNormal, stepNormalNDC, depthProjectedNDC)) {
-        return;
+    if (!NodeIntersectUV(screenUV, nodeUV, depthProjectedNDC)) {
+//        return;
     }
 
     // write source pixel
@@ -189,7 +145,7 @@ void main()
     const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
     writeAtomicData(depthProjectedCoord, packedData);
-    //    writeAtomicData(screenCoord, packedData);
+//    writeAtomicData(screenCoord, packedData);
 
     //    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
     //        vec3 log = rAveragedNodeWorldPos;

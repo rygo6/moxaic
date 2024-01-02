@@ -44,8 +44,13 @@ namespace Moxaic::Vulkan
 
         struct Tile
         {
-            glm::uint32_t x_y_size;
-            glm::uint32_t depth_id;
+            glm::float32_t ulX;
+            glm::float32_t ulY;
+            glm::float32_t lrX;
+            glm::float32_t lrY;
+            glm::float32_t depth;
+            // glm::uint32_t x_y_size;
+            // glm::uint32_t depth_id;
         };
 
         struct StorageBuffer
