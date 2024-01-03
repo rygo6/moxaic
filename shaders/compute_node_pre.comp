@@ -7,7 +7,7 @@ layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) 
 
 layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAveragedAtomic;
 
-vec3 nodeOriginWorldPos = vec3(0, 0, .5);
+vec3 nodeOriginWorldPos = vec3(0, 0, -.5);
 vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 const uint maxUint = 0xFFFFFFFFu;
 
@@ -65,7 +65,7 @@ const vec2 samplesOffsets[] = {
 
 void main()
 {
-    nodeOriginWorldPos.z = CalcNodeZPlane() * 0.5;
+//    nodeOriginWorldPos.z = CalcNodeZPlane() * 0.5;
 
     const ivec2 iScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
     const vec2 screenSize = vec2(iScreenSize);

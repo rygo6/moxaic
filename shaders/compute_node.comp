@@ -114,17 +114,25 @@ void main()
     const vec2 lrTileUV = vec2(tileBuffer.tiles[tileIndex].lrX, tileBuffer.tiles[tileIndex].lrY);
     const float tileGlobalNDCZ = tileBuffer.tiles[tileIndex].depth;
 
-    const ivec2 ulTileCoord = CoordFromUV(ulTileUV, screenSize);
-    const ivec2 lrTileCoord = CoordFromUV(lrTileUV, screenSize);
+    const ivec2 ulTileCoord = CoordFromUVRound(ulTileUV, screenSize);
+//    const ivec2 lrTileCoord = CoordFromUVRound(lrTileUV, screenSize);
     const vec2 ulTileNDC = NDCFromUV(ulTileUV);
     const vec4 ulClipPos = ClipPosFromNDC(ulTileNDC, tileGlobalNDCZ);
     const vec3 tileWorldPos = WorldPosFromGlobalClipPos(ulClipPos);
-
     const ivec2 screenCoord = ivec2(ulTileCoord + gl_LocalInvocationID.xy);
     const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
-    if (screenUV.x > lrTileUV.x || screenUV.y > lrTileUV.y) {
-        return;
+
+    {
+        // expand ul and lr by half UV, then round to ceil and floor to get rid of tiny seams
+        const vec2 halfUV = 0.5 / screenSize;
+        const vec2 lrCeilTileCoord = ceil((lrTileUV + halfUV) * screenSize);
+        const vec2 ulFloorTileCoord = floor((ulTileUV - halfUV) * screenSize);
+        const vec2 floorScreenCoord = ivec2(ulFloorTileCoord + gl_LocalInvocationID.xy);
+        if (floorScreenCoord.x > lrCeilTileCoord.x || floorScreenCoord.y > lrCeilTileCoord.y) {
+            return;
+        }
     }
+
     const vec2 screenNDC = NDCFromUV(screenUV);
 
     nodeOriginWorldPos = vec3(0, 0, tileWorldPos.z);
@@ -136,7 +144,7 @@ void main()
     vec3 stepNormalNDC;
     vec3 depthProjectedNDC;
     if (!NodeIntersectUV(screenUV, nodeUV, depthProjectedNDC)) {
-//        return;
+        return;
     }
 
     // write source pixel
@@ -145,7 +153,6 @@ void main()
     const vec2 depthProjectUV = UVFromNDC(depthProjectedNDC);
     const ivec2 depthProjectedCoord = CoordFromUV(depthProjectUV, screenSize);
     writeAtomicData(depthProjectedCoord, packedData);
-//    writeAtomicData(screenCoord, packedData);
 
     //    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
     //        vec3 log = rAveragedNodeWorldPos;

@@ -125,14 +125,19 @@ ivec2 iRound(vec2 coord)
     //    iCoord.y += coordDecimal.y > 0.5 ? 1 : 0;
     //    return iCoord;
 
-    //    return ivec2(roundEven(coord));
+//        return ivec2(roundEven(coord));
 
     return ivec2(coord);
 }
 
 ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
 {
-    return iRound(uv * screenSize);
+    return ivec2(uv * screenSize);
+}
+
+ivec2 CoordFromUVRound(vec2 uv, vec2 screenSize)
+{
+    return ivec2(round(uv * screenSize));
 }
 
 vec2 UVFromCoord(ivec2 coord, vec2 screenSize)
