@@ -92,31 +92,15 @@ void main()
 
     const vec3 depthProjectedGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
     const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
-    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
-    const uint data = PackFloatToUint32(depthProjectedGlobalNDC.z);
-    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, data);
-
     const vec3 ulDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[1].xy, minDepthSample));
     const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
     const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
     const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
 
-//    if (lrDepthProjectGlobalUV.x < 0 || lrDepthProjectGlobalUV.y < 0 || ulDepthProjectGlobalUV.x > 1 || ulDepthProjectGlobalUV.y > 1) {
-//        return;
-//    }
-
-//    const vec2 uvDiff = lrDepthProjectGlobalUV - ulDepthProjectGlobalUV;
-//    const uint packed_x_y_size = PackUint32FromF12F12F8(ulDepthProjectGlobalUV.x, ulDepthProjectGlobalUV.y, uvDiff.y);
-//    const uint packed_depth_id = PackUint32FromF24UI8(depthProjectedGlobalNDC.z, 0);
+    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
+    const uint data = PackFloatToUint32(depthProjectedGlobalNDC.z);
+    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, data);
 
     const uint tileIndex = atomicAdd(tileBuffer.command.x, 1);
-//    tileBuffer.tiles[tileIndex] =  Tile(packed_x_y_size, packed_depth_id);
     tileBuffer.tiles[tileIndex] =  Tile(ulDepthProjectGlobalUV.x, ulDepthProjectGlobalUV.y, lrDepthProjectGlobalUV.x, lrDepthProjectGlobalUV.y, depthProjectedGlobalNDC.z);
-
-//    debugPrintfEXT("%d | %f | %f | %f | %d | %d", tileIndex, tile.x, tile.y, tile.size, tile.id);
-
-    //    if (gl_GlobalInvocationID.x == 16 && gl_GlobalInvocationID.y == 16) {
-    //        debugPrintfEXT("%f | %f | %F", depthProjectedNodeClipPos.x, depthProjectedNodeClipPos.y, depthProjectedNodeClipPos.z);
-    //        imageAtomicMin(outputAveragedAtomic, coord, 0);
-    //    }
 }

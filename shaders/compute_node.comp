@@ -110,32 +110,21 @@ void main()
 //    uint tileId;
 //    UnpackF24UI8FromUint32(tileBuffer.tiles[tileIndex].depth_id, tileGlobalNDCZ, tileId);
 
-    const vec2 ulTileUV = vec2(tileBuffer.tiles[tileIndex].ulX, tileBuffer.tiles[tileIndex].ulY);
-    const vec2 lrTileUV = vec2(tileBuffer.tiles[tileIndex].lrX, tileBuffer.tiles[tileIndex].lrY);
+    const vec2 halfUV = 1.0 / screenSize;
+
+    const vec2 ulTileUV = vec2(tileBuffer.tiles[tileIndex].ulX, tileBuffer.tiles[tileIndex].ulY) - halfUV;
+    const vec2 lrTileUV = vec2(tileBuffer.tiles[tileIndex].lrX, tileBuffer.tiles[tileIndex].lrY) + halfUV;
     const float tileGlobalNDCZ = tileBuffer.tiles[tileIndex].depth;
 
-    const ivec2 ulTileCoord = CoordFromUVRound(ulTileUV, screenSize);
-//    const ivec2 lrTileCoord = CoordFromUVRound(lrTileUV, screenSize);
     const vec2 ulTileNDC = NDCFromUV(ulTileUV);
     const vec4 ulClipPos = ClipPosFromNDC(ulTileNDC, tileGlobalNDCZ);
-    const vec3 tileWorldPos = WorldPosFromGlobalClipPos(ulClipPos);
-    const ivec2 screenCoord = ivec2(ulTileCoord + gl_LocalInvocationID.xy);
-    const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
+    const vec3 ulTileWorldPos = WorldPosFromGlobalClipPos(ulClipPos);
 
-    {
-        // expand ul and lr by half UV, then round to ceil and floor to get rid of tiny seams
-        const vec2 halfUV = 0.5 / screenSize;
-        const vec2 lrCeilTileCoord = ceil((lrTileUV + halfUV) * screenSize);
-        const vec2 ulFloorTileCoord = floor((ulTileUV - halfUV) * screenSize);
-        const vec2 floorScreenCoord = ivec2(ulFloorTileCoord + gl_LocalInvocationID.xy);
-        if (floorScreenCoord.x > lrCeilTileCoord.x || floorScreenCoord.y > lrCeilTileCoord.y) {
-            return;
-        }
-    }
-
+    const vec2 localUV = vec2(gl_LocalInvocationID.xy) / vec2(gl_WorkGroupSize.xy);
+    const vec2 screenUV = mix(ulTileUV, lrTileUV, localUV);
     const vec2 screenNDC = NDCFromUV(screenUV);
 
-    nodeOriginWorldPos = vec3(0, 0, tileWorldPos.z);
+    nodeOriginWorldPos = vec3(0, 0, ulTileWorldPos.z);
     nodeOriginWorldDirection = vec3(0, 0, -1);
 
     // calc source pixel
