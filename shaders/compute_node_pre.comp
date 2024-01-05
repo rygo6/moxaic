@@ -96,11 +96,16 @@ void main()
     const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
     const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
     const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
+    const vec2 uvDiff = lrDepthProjectGlobalUV - ulDepthProjectGlobalUV;
 
     const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
-    const uint data = PackFloatToUint32(depthProjectedGlobalNDC.z);
+    const uint data = PackFloat32ToUint32(depthProjectedGlobalNDC.z);
     imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, data);
 
+    const uint upperLeftData = PackUint32FromFloat16Float16(ulDepthProjectGlobalUV.x, ulDepthProjectGlobalUV.y);
+    const uint sizeData = PackUint32FromFloat16Float16(uvDiff.x, 0);
+    const uint depthData = PackUint32FromFloat24Uint8(depthProjectedGlobalNDC.z, 0);
+
     const uint tileIndex = atomicAdd(tileBuffer.command.x, 1);
-    tileBuffer.tiles[tileIndex] =  Tile(ulDepthProjectGlobalUV.x, ulDepthProjectGlobalUV.y, lrDepthProjectGlobalUV.x, lrDepthProjectGlobalUV.y, depthProjectedGlobalNDC.z);
+    tileBuffer.tiles[tileIndex] =  Tile(upperLeftData, sizeData, depthData);
 }

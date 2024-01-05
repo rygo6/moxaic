@@ -102,19 +102,20 @@ void main()
     const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 screenSize = vec2(iScreenSize);
 
-//    vec2 ulTileUV;
-//    float tileUVSize;
-//    UnpackF12F12F8FromUint32(tileBuffer.tiles[tileIndex].x_y_size, ulTileUV.x, ulTileUV.y, tileUVSize);
-//    const vec2 lrTileUV = ulTileUV + tileUVSize;
-//    float tileGlobalNDCZ;
-//    uint tileId;
-//    UnpackF24UI8FromUint32(tileBuffer.tiles[tileIndex].depth_id, tileGlobalNDCZ, tileId);
+    const vec2 uvSize = 1.0 / screenSize;
+    const vec2 uvHalfSize = 0.5 / screenSize;
 
-    const vec2 halfUV = 1.0 / screenSize;
+    vec2 ulTileUV;
+    UnpackFloat16Float16FromUint32(tileBuffer.tiles[tileIndex].upperLeftX16Y16, ulTileUV.x, ulTileUV.y);
+    float tileUVSize;
+    float unused; // will use for something at some point
+    UnpackFloat16Float16FromUint32(tileBuffer.tiles[tileIndex].sizeX16, tileUVSize, unused);
+    float tileGlobalNDCZ;
+    uint tileId;
+    UnpackFloat24Uint8FromUint32(tileBuffer.tiles[tileIndex].depth24ID8, tileGlobalNDCZ, tileId);
 
-    const vec2 ulTileUV = vec2(tileBuffer.tiles[tileIndex].ulX, tileBuffer.tiles[tileIndex].ulY) - halfUV;
-    const vec2 lrTileUV = vec2(tileBuffer.tiles[tileIndex].lrX, tileBuffer.tiles[tileIndex].lrY) + halfUV;
-    const float tileGlobalNDCZ = tileBuffer.tiles[tileIndex].depth;
+    const vec2 lrTileUV = ulTileUV + tileUVSize + uvHalfSize;
+    ulTileUV -= uvHalfSize;
 
     const vec2 ulTileNDC = NDCFromUV(ulTileUV);
     const vec4 ulClipPos = ClipPosFromNDC(ulTileNDC, tileGlobalNDCZ);

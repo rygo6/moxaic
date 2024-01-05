@@ -21,13 +21,9 @@ struct VkDispatchIndirectCommand {
 };
 
 struct Tile {
-    float ulX;
-    float ulY;
-    float lrX;
-    float lrY;
-    float depth;
-//    uint x_y_size;
-//    uint depth_id;
+    uint upperLeftX16Y16;
+    uint sizeX16;// last 16 bits not used
+    uint depth24ID8;
 };
 
 layout(set = 1, binding = 8) buffer TileBuffer {
@@ -125,7 +121,7 @@ ivec2 iRound(vec2 coord)
     //    iCoord.y += coordDecimal.y > 0.5 ? 1 : 0;
     //    return iCoord;
 
-//        return ivec2(roundEven(coord));
+    //        return ivec2(roundEven(coord));
 
     return ivec2(coord);
 }
@@ -158,7 +154,7 @@ float SqrMag(vec2 values[2]) {
     return dot(diff, diff);
 }
 
-uint PackUint32FromF12F12F8(float f12a, float f12b, float f8c) {
+uint PackUint32FromFloat12Float12Float8(float f12a, float f12b, float f8c) {
     uint aInt = uint(f12a * 4095.0);
     uint bInt = uint(f12b * 4095.0);
     uint cInt = uint(f8c * 255.0);
@@ -166,7 +162,7 @@ uint PackUint32FromF12F12F8(float f12a, float f12b, float f8c) {
     return result;
 }
 
-void UnpackF12F12F8FromUint32(uint packed, out float f12a, out float f12b, out float f8c) {
+void UnpackFloat12Float12Float8FromUint32(uint packed, out float f12a, out float f12b, out float f8c) {
     uint maskA = 0xFFF00000;
     uint maskB = 0x000FFF00;
     uint maskC = 0x000000FF;
@@ -178,26 +174,38 @@ void UnpackF12F12F8FromUint32(uint packed, out float f12a, out float f12b, out f
     f8c = float(cInt) / 255.0;
 }
 
-uint PackUint32FromF24UI8(float f, uint u) {
-    uint fInt = uint(f * float(0xFFFFFF));
-    fInt = fInt << 8;
-    return fInt | (u & 0xFFu);
-}
-
-void UnpackF24UI8FromUint32(uint packed, out float f, out uint u) {
-    u = packed & 0xFFu;
-    uint fInt = packed >> 8;
-    f = float(fInt) / float(0xFFFFFF);
-}
-
-uint PackFloatToUint32(float value) {
-    value = clamp(value, 0.0, 1.0);
-    float scaled = value * 4294967295.0;
+uint PackFloat32ToUint32(float f32) {
+    f32 = clamp(f32, 0.0, 1.0);
+    float scaled = f32 * 4294967295.0;
     uint packed = uint(scaled);
     return packed;
 }
 
-float UnpackFloatFromUint32(uint packed) {
+float UnpackFloat32FromUint32(uint packed) {
     float value = float(packed);
     return value / 4294967295.0;
+}
+
+uint PackUint32FromFloat16Float16(float f16a, float f16b) {
+    const uint i1 = uint(f16a * 65535.0);
+    const uint i2 = uint(f16b * 65535.0);
+    return (i1 << 16) | i2;
+}
+
+void UnpackFloat16Float16FromUint32(uint packed, out float f16a, out float f16b) {
+    const uint i1 = (packed >> 16) & 0xFFFFu;
+    const uint i2 = packed & 0xFFFFu;
+    f16a = float(i1) / 65535.0;
+    f16b = float(i2) / 65535.0;
+}
+
+uint PackUint32FromFloat24Uint8(float f24, uint u8) {
+    const uint uf = uint(f24 * 16777215.0);
+    return (uf << 8) | (u8 & 0xFFu);
+}
+
+void UnpackFloat24Uint8FromUint32(uint packed, out float f24, out uint u8) {
+    u8 = packed & 0xFFu;
+    const uint uf = packed >> 8;
+    f24 = float(uf) / 16777215.0;
 }
