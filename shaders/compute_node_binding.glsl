@@ -32,7 +32,6 @@ layout(set = 1, binding = 8) buffer TileBuffer {
 } tileBuffer;
 
 #define LOCAL_SIZE 32
-#define TILE_COUNT 32*32
 
 vec3 intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal) {
     const float facingRatio = dot(planeNormal, rayDir);

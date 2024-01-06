@@ -517,6 +517,9 @@ MXC_RESULT Device::CreatePools()
 MXC_RESULT Device::CreateSamplers()
 {
     MXC_LOG("Vulkan::Device::CreateSamplers");
+
+    constexpr auto anisotropyEnabled = Anisotropy > 1.0 ? VK_TRUE : VK_FALSE;
+
     const VkSamplerCreateInfo linearSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .magFilter = VK_FILTER_LINEAR,
@@ -526,8 +529,8 @@ MXC_RESULT Device::CreateSamplers()
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
-      .anisotropyEnable = VK_FALSE,
-      .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
+      .anisotropyEnable = anisotropyEnabled,
+      .maxAnisotropy = Anisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
@@ -546,8 +549,8 @@ MXC_RESULT Device::CreateSamplers()
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
-      .anisotropyEnable = VK_FALSE,
-      .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
+      .anisotropyEnable = anisotropyEnabled,
+      .maxAnisotropy = Anisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
@@ -557,7 +560,7 @@ MXC_RESULT Device::CreateSamplers()
     };
     VK_CHK(vkCreateSampler(vkDevice, &nearestSamplerInfo, VK_ALLOC, &vkNearestSampler));
 
-    const VkSamplerReductionModeCreateInfoEXT samplerReductionModeCreateInfo{
+    constexpr VkSamplerReductionModeCreateInfoEXT samplerReductionModeCreateInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO_EXT,
       .pNext = nullptr,
       .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
@@ -566,15 +569,15 @@ MXC_RESULT Device::CreateSamplers()
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .pNext = &samplerReductionModeCreateInfo,
       .flags = 0,
-      .magFilter = VK_FILTER_LINEAR,
-      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_NEAREST,
+      .minFilter = VK_FILTER_NEAREST,
       .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
-      .anisotropyEnable = VK_TRUE,
-      .maxAnisotropy = physicalDeviceProperties.properties.limits.maxSamplerAnisotropy,
+      .anisotropyEnable = anisotropyEnabled,
+      .maxAnisotropy = Anisotropy,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,

@@ -134,10 +134,14 @@ namespace Moxaic::Vulkan
         const auto& GetVkRenderPass() const { return vkRenderPass; }
         const auto& GetVkDescriptorPool() const { return vkDescriptorPool; }
         const auto& GetVkLinearSampler() const { return vkLinearSampler; }
+        const auto& GetVkNearestSampler() const { return vkNearestSampler; }
+        const auto& GetVkMinSampler() const { return vkMinSampler; }
 
         const auto GetGraphicsQueueFamilyIndex() const { return graphicsQueueFamilyIndex; }
 
     private:
+        constexpr static float Anisotropy{1.0};
+
         VkDevice vkDevice{VK_NULL_HANDLE};
 
         VkPhysicalDevice vkPhysicalDevice{VK_NULL_HANDLE};

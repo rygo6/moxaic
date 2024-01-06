@@ -7,13 +7,13 @@ layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) 
 
 layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAveragedAtomic;
 
-vec3 nodeOriginWorldPos = vec3(0, 0, -.5);
+vec3 nodeOriginWorldPos = vec3(0, 0, 0);
 vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 const uint maxUint = 0xFFFFFFFFu;
 
 const vec2 ndcCorners[] = {
-{ -1, 1 },
-{ 1, -1 },
+{ -1, -1 },
+{ 1, 1 },
 };
 
 
@@ -22,25 +22,22 @@ float CalcNodeZPlane(){
     vec2 uvs[ndcCorners.length()];
     for (int i = 0; i < ndcCorners.length(); ++i){
         const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 0));
-//        if (ndc.z < 0) {
-//            return 1;// maybe -z?
-//        }
         uvs[i] = UVFromNDC(ndc);
     }
-    const float frontMag = SqrMag(uvs);
+    const float frontMax = min(abs(uvs[1].x - uvs[0].x), abs(uvs[1].y - uvs[0].y));
 
     for (int i = 0; i < ndcCorners.length(); ++i){
         const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 1));
         uvs[i] = UVFromNDC(ndc);
     }
-    const float backMag = SqrMag(uvs);
+    const float backMax = min(abs(uvs[1].x - uvs[0].x), abs(uvs[1].y - uvs[0].y));
 
-    const float nodeZPlane = frontMag < backMag ? 1 : -1;
+    const float nodeZPlane = frontMax > backMax ? -1 : 1;
 
     return nodeZPlane;
 }
 
-void NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDepthSample)
+bool NodeIntersectUV(const vec2 uv, const vec2 screenSize, out vec3 intersectNodeNDC, out float nodeDepthSample)
 {
     const vec2 ndc = NDCFromUV(1 - uv);// why do I 1 - uv here?! It does flip it to proper layout
     const vec4 clipPos = vec4(ndc, 0, 1);
@@ -52,20 +49,36 @@ void NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDep
     const vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+//    const ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, screenSize);
+    const vec3 nodeWorldNormal = texture(nodeNormalTexture, intersectNodeUV).xyz * vec3(1, -1, 1);
     nodeDepthSample = texture(nodeDepthTexture, intersectNodeUV).r;
+
+    return !(nodeDepthSample > .99 || dot(nodeWorldNormal.xyz, globalWorldRay) < 0);
 }
 
-const vec2 samplesOffsets[] = {
+const vec2 innerSampleOffsets[] = {
 { 0.5, 0.5 },
+
 { 0.0, 0.0 },
-{ 1.0, 0.0 },
 { 1.0, 1.0 },
+{ 1.0, 0.0 },
 { 0.0, 1.0 },
+
+};
+
+const vec2 outerSampleOffsets[] = {
+
+{ -1.0, -1.0 },
+{ 2.0, 2.0 },
+{ 2.0, -1.0 },
+{ -1.0, 2.0 },
+
 };
 
 void main()
 {
 //    nodeOriginWorldPos.z = CalcNodeZPlane() * 0.5;
+    nodeOriginWorldPos.z = -0.5;
 
     const ivec2 iScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
     const vec2 screenSize = vec2(iScreenSize);
@@ -75,16 +88,16 @@ void main()
     const ivec2 offsetCoord = coord + ivec2(1, 1);
     const vec2 offsetUV = UVFromCoord(offsetCoord, screenSize);
 
-    const int sampleCount = samplesOffsets.length();
-    vec3 intersectNodeNDCs[samplesOffsets.length()];
+    const int innerSampleCount = innerSampleOffsets.length();
+    vec3 intersectNodeNDCs[innerSampleCount];
     float minDepthSample = 1;
     int validSampleCount = 0;
-    for (int i = 0; i < sampleCount; ++i){
-        const vec2 sampleUV = mix(uv, offsetUV, samplesOffsets[i]);
+    for (int i = 0; i < innerSampleCount; ++i){
+        const vec2 sampleUV = mix(uv, offsetUV, innerSampleOffsets[i]);
         float depthSample;
-        NodeIntersectUV(sampleUV, intersectNodeNDCs[i], depthSample);
+        bool valid = NodeIntersectUV(sampleUV, screenSize, intersectNodeNDCs[i], depthSample);
         minDepthSample = min(depthSample, minDepthSample);
-        validSampleCount += depthSample > .99 ? 0 : 1;
+        validSampleCount += valid ? 1 : 0;
     }
     if (validSampleCount == 0){
         return;
@@ -94,13 +107,18 @@ void main()
     const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
     const vec3 ulDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[1].xy, minDepthSample));
     const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
-    const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
+    const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[2].xy, minDepthSample));
     const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
-    const vec2 uvDiff = lrDepthProjectGlobalUV - ulDepthProjectGlobalUV;
+    vec2 uvDiff = lrDepthProjectGlobalUV - ulDepthProjectGlobalUV;
 
-    const ivec2 depthProjectGlobalCoord = CoordFromUV(depthProjectGlobalUV, screenSize);
-    const uint data = PackFloat32ToUint32(depthProjectedGlobalNDC.z);
-    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, data);
+//    const ivec2 depthProjectGlobalCoord = CoordFromUVRound(depthProjectGlobalUV, screenSize);
+//    const uint data = PackFloat32ToUint32(depthProjectedGlobalNDC.z);
+//    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, data);
+
+//    vec2 uvSize = vec2(1.0, 1.0) / LOCAL_SIZE;
+//    if (uvDiff.x > uvSize.x) {
+//        uvDiff.x = uvSize.x;
+//    }
 
     const uint upperLeftData = PackUint32FromFloat16Float16(ulDepthProjectGlobalUV.x, ulDepthProjectGlobalUV.y);
     const uint sizeData = PackUint32FromFloat16Float16(uvDiff.x, 0);
