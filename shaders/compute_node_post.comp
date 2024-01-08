@@ -3,6 +3,7 @@
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
 
+
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
 layout (set = 1, binding = 5, r32ui) uniform writeonly uimage2D outputAveragedAtomic;

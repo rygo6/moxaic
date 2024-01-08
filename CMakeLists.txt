@@ -71,6 +71,9 @@ file(GLOB SHADER_SOURCE_FILES
         shaders/*.task
         shaders/*.comp
 )
+file(GLOB SHADER_INCLUDE_FILES
+        shaders/*.glsl
+)
 foreach (SHADER IN LISTS SHADER_SOURCE_FILES)
     get_filename_component(SHADER_NAME ${SHADER} NAME)
     set(SHADER_OUTPUT "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.o")
@@ -81,7 +84,7 @@ foreach (SHADER IN LISTS SHADER_SOURCE_FILES)
             COMMAND ${SHADER_COMPILER} ${SHADER} --target-spv=spv1.4 -o ${SHADER_OUTPUT}
             COMMENT "Optimizing ${SHADER_NAME}"
             COMMAND ${SHADER_OPTIMIZER} -O ${SHADER_OUTPUT} -o ${SHADER_OUTPUT_OPT}
-            DEPENDS ${SHADER}
+            DEPENDS ${SHADER} ${SHADER_INCLUDE_FILES}
     )
     list(APPEND SHADER_OUTPUT_FILES ${SHADER_OUTPUT})
 endforeach ()

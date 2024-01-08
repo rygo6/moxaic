@@ -33,10 +33,16 @@ layout(set = 1, binding = 8) buffer TileBuffer {
 
 #define LOCAL_SIZE 32
 
-vec3 intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal) {
+float SampleNodeDepth(vec2 uv){
+//    return 0;
+    return texture(nodeDepthTexture, uv).r;
+}
+
+bool intersectRayPlane(const vec3 rayOrigin, const vec3 rayDir, const vec3 planePoint, const vec3 planeNormal, out vec3 intersectWorldPos) {
     const float facingRatio = dot(planeNormal, rayDir);
     const float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
-    return (facingRatio > 0) ? (rayOrigin + t * rayDir) : vec3(0, 0, 0);
+    intersectWorldPos = rayOrigin + t * rayDir;
+    return facingRatio < 0 && t < 0;
 }
 
 vec3 WorldPosFromGlobalClipPos(vec4 clipPos)
@@ -54,7 +60,7 @@ vec3 NDCRay(vec2 ndc, mat4 invProj, mat4 invView)
     return globalWorldRayDir;
 }
 
-vec3 GlobalNDCRay(vec2 ndc)
+vec3 WorldRayFroNDC(vec2 ndc)
 {
     return NDCRay(ndc, globalUBO.invProj, globalUBO.invView);
 }
