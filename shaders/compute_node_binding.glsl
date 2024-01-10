@@ -21,9 +21,9 @@ struct VkDispatchIndirectCommand {
 };
 
 struct Tile {
-    uint upperLeftX16Y16;
-    uint sizeX16;// last 16 bits not used
-    uint depth24ID8;
+    uint upperLeftXU16YU16;
+    uint lowerRightXU16YU16;
+    uint depthF24IDU8;
 };
 
 layout(set = 1, binding = 8) buffer TileBuffer {
@@ -136,14 +136,34 @@ ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
     return ivec2(uv * screenSize);
 }
 
+uvec2 CoordFromUVFloor(vec2 uv, vec2 screenSize)
+{
+    return uvec2(floor(uv * screenSize));
+}
+
+uvec2 CoordFromUVCeil(vec2 uv, vec2 screenSize)
+{
+    return uvec2(ceil(uv * screenSize));
+}
+
 ivec2 CoordFromUVRound(vec2 uv, vec2 screenSize)
 {
     return ivec2(round(uv * screenSize));
 }
 
+vec2 UVFromCoord(uvec2 coord, vec2 screenSize)
+{
+    return vec2(coord) / screenSize;
+}
+
 vec2 UVFromCoord(ivec2 coord, vec2 screenSize)
 {
     return vec2(coord) / screenSize;
+}
+
+vec2 UVFromCoordCenter(ivec2 coord, vec2 screenSize)
+{
+    return (vec2(coord) + 0.5) / screenSize;
 }
 
 vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
@@ -213,4 +233,15 @@ void UnpackFloat24Uint8FromUint32(uint packed, out float f24, out uint u8) {
     u8 = packed & 0xFFu;
     const uint uf = packed >> 8;
     f24 = float(uf) / 16777215.0;
+}
+
+uint PackU32FromU16U16(uint u16a, uint u16b) {
+    u16a = u16a & 0xFFFFu;
+    u16b = u16b & 0xFFFFu;
+    return (u16a << 16) | u16b;
+}
+
+void UnpackU16U16FromU32(uint packed, out uint u16a, out uint u16b) {
+    u16a = packed >> 16;
+    u16b = packed & 0xFFFFu;
 }

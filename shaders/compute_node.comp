@@ -102,25 +102,23 @@ void main()
     const vec2 uvHalfSize = 0.5 / screenSize;
     //    const float uvHalfSize = 0.0;
 
-    vec2 ulTileUV;
-    UnpackFloat16Float16FromUint32(tileBuffer.tiles[tileIndex].upperLeftX16Y16, ulTileUV.x, ulTileUV.y);
-    //    vec2 tileUVSize;
-    //    UnpackFloat16Float16FromUint32(tileBuffer.tiles[tileIndex].sizeX16, tileUVSize.x, tileUVSize.y);
-    vec2 lrTileUV;
-    UnpackFloat16Float16FromUint32(tileBuffer.tiles[tileIndex].sizeX16, lrTileUV.x, lrTileUV.y);
+    uvec2 ulTileCoord;
+    UnpackU16U16FromU32(tileBuffer.tiles[tileIndex].upperLeftXU16YU16, ulTileCoord.x, ulTileCoord.y);
+    uvec2 lrTileCoord;
+    UnpackU16U16FromU32(tileBuffer.tiles[tileIndex].lowerRightXU16YU16, lrTileCoord.x, lrTileCoord.y);
     float tileGlobalNDCZ;
     uint tileId;
-    UnpackFloat24Uint8FromUint32(tileBuffer.tiles[tileIndex].depth24ID8, tileGlobalNDCZ, tileId);
+    UnpackFloat24Uint8FromUint32(tileBuffer.tiles[tileIndex].depthF24IDU8, tileGlobalNDCZ, tileId);
 
-    const ivec2 lrTileCoord = CoordFromUV(lrTileUV, screenSize);
-    const ivec2 ulTileCoord = CoordFromUV(ulTileUV, screenSize);
+    const vec2 lrTileUV = UVFromCoord(ulTileCoord, iScreenSize);
+    const vec2 ulTileUV = UVFromCoord(lrTileCoord, iScreenSize);
     const vec2 ulTileNDC = NDCFromUV(ulTileUV);
     const vec4 ulClipPos = ClipPosFromNDC(ulTileNDC, tileGlobalNDCZ);
     const vec3 ulTileWorldPos = WorldPosFromGlobalClipPos(ulClipPos);
 
     nodeOriginWorldPos = ulTileWorldPos;
 
-    const ivec2 screenCoord = ulTileCoord + ivec2(gl_LocalInvocationID.xy);
+    const uvec2 screenCoord = ulTileCoord + ivec2(gl_LocalInvocationID.xy);
     if (screenCoord.x >= lrTileCoord.x || screenCoord.y >= lrTileCoord.y) {
         return;
     }

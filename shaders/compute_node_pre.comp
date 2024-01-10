@@ -65,6 +65,7 @@ bool NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDep
     intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
     const vec3 nodeWorldNormal = texture(nodeNormalTexture, intersectNodeUV).xyz * vec3(1, -1, 1);
+    // use this https://docs.gl/sl4/textureGatherOffsets
     nodeDepthSample = SampleNodeDepth(intersectNodeUV);
 //    return intersected && nodeDepthSample < 1 && dot(nodeWorldNormal.xyz, worldRay) > 0;
     return intersected && nodeDepthSample < 1;
@@ -72,9 +73,9 @@ bool NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDep
 
 const ivec2 innerSampleOffsets[] = {
 { 0, 0 },
-{ 1, 1 },
 { 1, 0 },
 { 0, 1 },
+{ 1, 1 },
 };
 
 const ivec2 outerSampleOffsets[] = {
@@ -87,6 +88,7 @@ const ivec2 outerSampleOffsets[] = {
 void main()
 {
     const vec2 uvSize = vec2(1.0, 1.0) / vec2(globalUBO.width, globalUBO.height);
+    const vec2 halfUVSize = vec2(0.5, 0.5) / vec2(globalUBO.width, globalUBO.height);
     const ivec2 iFullScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 fullScreenSize = vec2(iFullScreenSize);
     const ivec2 iScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
@@ -99,7 +101,7 @@ void main()
     float maxDepthSample = 0;
     int validSampleCount = 0;
     for (int i = 0; i < innerSampleOffsets.length(); ++i){
-        const vec2 sampleUV = UVFromCoord((coord * LOCAL_SIZE) + (innerSampleOffsets[i] * (LOCAL_SIZE - 1)), fullScreenSize);
+        const vec2 sampleUV = UVFromCoordCenter((coord * LOCAL_SIZE) + (innerSampleOffsets[i] * (LOCAL_SIZE - 1)), fullScreenSize);
         float depthSample;
         if (NodeIntersectUV(sampleUV, intersectNodeNDCs[i], depthSamples[i])) {
             minDepthSample = min(depthSamples[i], minDepthSample);
@@ -129,12 +131,17 @@ void main()
     //    const vec3 depthProjectedGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
     //    vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
 
+
+
     const vec3 ulDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
     const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
-    const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[1].xy, minDepthSample));
+    const uvec2 ulDepthProjectGlobalCoord = CoordFromUVFloor(ulDepthProjectGlobalUV, fullScreenSize);
+    const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
     const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
-    const vec3 urDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[2].xy, minDepthSample));
-    const vec2 urDepthProjectGlobalUV = UVFromNDC(urDepthProjectGlobalNDC);
+    const uvec2 lrDepthProjectGlobalCoord = CoordFromUVCeil(lrDepthProjectGlobalUV, fullScreenSize);
+//    const vec3 urDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[2].xy, minDepthSample));
+//    const vec2 urDepthProjectGlobalUV = UVFromNDC(urDepthProjectGlobalNDC);
+//    const uvec2 urDepthProjectGlobalCoord = uCoordFromUV(urDepthProjectGlobalUV, fullScreenSize);
 
 
     //    const ivec2 depthProjectGlobalCoord = CoordFromUVRound(depthProjectGlobalUV, screenSize);
@@ -147,12 +154,12 @@ void main()
     //    const bool squashed = uvDiff.x > uvSize.x;
     //    vec2 squashedUVDiff = vec2(uvDiff.x > uvSize.x ? uvSize.x * 0.5 : uvSize.x, uvSize.y);
 
-    uint upperLeftData = PackUint32FromFloat16Float16(ulDepthProjectGlobalUV.x, ulDepthProjectGlobalUV.y);
-    uint sizeData = PackUint32FromFloat16Float16(urDepthProjectGlobalUV.x, lrDepthProjectGlobalUV.y);
+    uint upperLeftData = PackU32FromU16U16(ulDepthProjectGlobalCoord.x, ulDepthProjectGlobalCoord.y);
+    uint lowerLeftData = PackU32FromU16U16(lrDepthProjectGlobalCoord.x, lrDepthProjectGlobalCoord.y);
     const uint depthData = PackUint32FromFloat24Uint8(ulDepthProjectGlobalNDC.z, 0);
 
     const uint tileIndex = atomicAdd(tileBuffer.command.x, 1);
-    tileBuffer.tiles[tileIndex] =  Tile(upperLeftData, sizeData, depthData);
+    tileBuffer.tiles[tileIndex] =  Tile(upperLeftData, lowerLeftData, depthData);
 
     //    if (squashed) {
     //        depthProjectGlobalUV.x += uvSize.x * 0.5;
