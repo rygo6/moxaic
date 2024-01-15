@@ -34,7 +34,7 @@ bool NodeIntersect(const vec2 uv, out vec3 intersectNodeNDC, out vec3 depthProje
 
     const vec3 nodeWorldNormal = texture(nodeNormalTexture, nodeIntersectUV).xyz * vec3(1, -1, 1);// I encoded y = up on sphere normals
     const float nodeDepthSample = SampleNodeDepth(nodeIntersectUV);
-//    const float nodeDepthSample = 0;
+    //    const float nodeDepthSample = 0;
 
     const vec3 depthProjectNodeNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
     depthProjectGlobalNDC = GlobalNDCFromNodeNDC(depthProjectNodeNDC);
@@ -95,7 +95,7 @@ void WriteDebugLine(vec2 P1, vec2 P2, ivec2 screenCoord) {
     WriteDebugCoord(ivec2(P1), screenCoord);
 
     if (abs(crossProductZ) < 100 && isWithinSegment){
-        const uint packedData = packFloatAnd565Color(0,  vec3(0, 1, 1));
+        const uint packedData = packFloatAnd565Color(0, vec3(0, 1, 1));
         writeAtomicData(screenCoord, packedData);
     }
 }
@@ -156,8 +156,11 @@ void main()
         const ivec2 averagedScreenCoord = ivec2(gl_WorkGroupID.xy) + averagedOffsets[i];
         const uint averagedAtomicData = imageLoad(outputAveragedAtomic, averagedScreenCoord).r;
         const float averagedGlobalNDCZ = UnpackFloat32FromUint32(averagedAtomicData);
+        if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0 && gl_WorkGroupID.x == 22 && gl_WorkGroupID.y == 16) {
+            debugPrintfEXT("%f", averagedGlobalNDCZ);
+        }
         if (!(averagedGlobalNDCZ < 1)) {
-            return;
+            //            return;
         }
         const vec2 averagedScreenUV = UVFromCoord(averagedScreenCoord, averagedScreenSize);
         const vec2 averagedScreenNDC = NDCFromUV(averagedScreenUV);
@@ -169,19 +172,19 @@ void main()
     vec3 yDiff = topTriangle ? averagedWorldPos[0] - averagedWorldPos[2] : averagedWorldPos[2] - averagedWorldPos[0];
     vec3 normal = normalize(cross(xDiff, yDiff));
 
-//    const ivec2 averagedScreenCoord = ivec2(gl_GlobalInvocationID.xy / LOCAL_SIZE);
-//    const vec2 averagedScreenUV = UVFromCoord(averagedScreenCoord, iAveragedScreenSize);
-//    const vec2 averagedScreenNDC = NDCFromUV(averagedScreenUV);
-//    const uint averagedAtomicData = imageLoad(outputAveragedAtomic, averagedScreenCoord).r;
-//    const float averagedGlobalNDCZ = UnpackFloat32FromUint32(averagedAtomicData);
-//    const vec4 averagedGlobalClipPos = ClipPosFromNDC(averagedScreenNDC, averagedGlobalNDCZ);
-//    const vec3 averagedWorldPos = WorldPosFromGlobalClipPos(averagedGlobalClipPos);
-//    if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0 && gl_WorkGroupID.x == 22 && gl_WorkGroupID.y == 16) {
-////        debugPrintfEXT("mai %d %d %d %f %f %f",gl_WorkGroupID.x, averagedScreenCoord.x, averagedScreenCoord.y, averagedWorldPos.x, averagedWorldPos.y, averagedWorldPos.z);
-//    }
-//    if (gl_WorkGroupID.x == 22 && gl_WorkGroupID.y == 16) {
-//        WriteDebugWorldPos(averagedWorldPos, screenCoord);
-//    }
+    //    const ivec2 averagedScreenCoord = ivec2(gl_GlobalInvocationID.xy / LOCAL_SIZE);
+    //    const vec2 averagedScreenUV = UVFromCoord(averagedScreenCoord, iAveragedScreenSize);
+    //    const vec2 averagedScreenNDC = NDCFromUV(averagedScreenUV);
+    //    const uint averagedAtomicData = imageLoad(outputAveragedAtomic, averagedScreenCoord).r;
+    //    const float averagedGlobalNDCZ = UnpackFloat32FromUint32(averagedAtomicData);
+    //    const vec4 averagedGlobalClipPos = ClipPosFromNDC(averagedScreenNDC, averagedGlobalNDCZ);
+    //    const vec3 averagedWorldPos = WorldPosFromGlobalClipPos(averagedGlobalClipPos);
+    if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0 && gl_WorkGroupID.x == 22 && gl_WorkGroupID.y == 16) {
+        //        debugPrintfEXT("%d %f %f %f",gl_WorkGroupID.x, normal.x, normal.y, normal.x);
+    }
+    //    if (gl_WorkGroupID.x == 22 && gl_WorkGroupID.y == 16) {
+    //        WriteDebugWorldPos(averagedWorldPos, normal.x);
+    //    }
 
     nodeOriginWorldPos = averagedWorldPos[0];
     nodeOriginWorldDirection = normal;
@@ -202,35 +205,35 @@ void main()
     writeAtomicData(depthProjectedGlobalCoord, packedData);
     //        writeAtomicData(screenCoord, packedData);
 
-//    if (topTriangle){
-//        for (int i = 0; i < 3; ++i) {
-//            const ivec2 averagedScreenCoord = ivec2(19, 13) + averagedOffsets[i];
-//            const vec2 averagedScreenUV = UVFromCoord(averagedScreenCoord, averagedScreenSize);
-//            vec3 intersectNodeNDC2;
-//            vec3 depthProjectedGlobalNDC2;
-//            if (!NodeIntersect(averagedScreenUV, intersectNodeNDC2, depthProjectedGlobalNDC2)) {
-//            }
-//            vec4 clip2 = ClipPosFromNDC(depthProjectedGlobalNDC2);
-//            WriteDebugWorldPos(WorldPosFromGlobalClipPos(clip2), screenCoord);
-//        }
-//    }
+    //    if (topTriangle){
+    //        for (int i = 0; i < 3; ++i) {
+    //            const ivec2 averagedScreenCoord = ivec2(19, 13) + averagedOffsets[i];
+    //            const vec2 averagedScreenUV = UVFromCoord(averagedScreenCoord, averagedScreenSize);
+    //            vec3 intersectNodeNDC2;
+    //            vec3 depthProjectedGlobalNDC2;
+    //            if (!NodeIntersect(averagedScreenUV, intersectNodeNDC2, depthProjectedGlobalNDC2)) {
+    //            }
+    //            vec4 clip2 = ClipPosFromNDC(depthProjectedGlobalNDC2);
+    //            WriteDebugWorldPos(WorldPosFromGlobalClipPos(clip2), screenCoord);
+    //        }
+    //    }
 
 
-//    if (gl_WorkGroupID.x == 19 && gl_WorkGroupID.y == 13 && topTriangle) {
-//        if (gl_LocalInvocationID.x == 16 && gl_LocalInvocationID.y == 16) {
-//            //            debugPrintfEXT("0 %f %f %f", xDiff.x, xDiff.y, xDiff.z);
-//            //            debugPrintfEXT("1 %f %f %f", yDiff.x, yDiff.y, yDiff.z);
-//            //            debugPrintfEXT("2 %f %f %f", normal.x, normal.y, normal.z);
-//        }
-//
-//
-//        WriteDebugWorldPos(averagedProjectedWorldPosDebug[0], screenCoord);
-//        WriteDebugWorldPos(averagedProjectedWorldPosDebug[1], screenCoord);
-//        WriteDebugWorldPos(averagedProjectedWorldPosDebug[2], screenCoord);
-//
-//        //        vec3 mid = mix(averagedWorldPos[0], averagedWorldPos[1], .5);
-//        //        WriteDebugLine(mid, mid + normal * 0.25, screenCoord);
-//    }
+    //    if (gl_WorkGroupID.x == 19 && gl_WorkGroupID.y == 13 && topTriangle) {
+    //        if (gl_LocalInvocationID.x == 16 && gl_LocalInvocationID.y == 16) {
+    //            //            debugPrintfEXT("0 %f %f %f", xDiff.x, xDiff.y, xDiff.z);
+    //            //            debugPrintfEXT("1 %f %f %f", yDiff.x, yDiff.y, yDiff.z);
+    //            //            debugPrintfEXT("2 %f %f %f", normal.x, normal.y, normal.z);
+    //        }
+    //
+    //
+    //        WriteDebugWorldPos(averagedProjectedWorldPosDebug[0], screenCoord);
+    //        WriteDebugWorldPos(averagedProjectedWorldPosDebug[1], screenCoord);
+    //        WriteDebugWorldPos(averagedProjectedWorldPosDebug[2], screenCoord);
+    //
+    //        //        vec3 mid = mix(averagedWorldPos[0], averagedWorldPos[1], .5);
+    //        //        WriteDebugLine(mid, mid + normal * 0.25, screenCoord);
+    //    }
 
     // Stepback
     //    const vec3 intersectGlobalNDC = GlobalNDCFromNodeNDC(intersectNodeNDC);
