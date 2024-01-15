@@ -42,32 +42,13 @@ bool intersectRayPlane(const vec3 rayOrigin, const vec3 rayDir, const vec3 plane
     const float facingRatio = dot(planeNormal, rayDir);
     const float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
     intersectWorldPos = rayOrigin + t * rayDir;
-    return facingRatio < 0 && t < 0;
+    return facingRatio < 0 && t > 0;
 }
 
 vec3 WorldPosFromGlobalClipPos(vec4 clipPos)
 {
     const vec4 worldPos = globalUBO.invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
-}
-
-vec3 NDCRay(vec2 ndc, mat4 invProj, mat4 invView)
-{
-    const vec4 clipRayDir = vec4(ndc, 0, 1);
-    const vec4 viewSpace = invProj * clipRayDir;
-    const vec4 viewDir = vec4(viewSpace.xy, 1, 0);
-    const vec3 globalWorldRayDir = normalize((invView * viewDir).xyz);
-    return globalWorldRayDir;
-}
-
-vec3 WorldRayFroNDC(vec2 ndc)
-{
-    return NDCRay(ndc, globalUBO.invProj, globalUBO.invView);
-}
-
-vec3 NodeNDCRay(vec2 ndc)
-{
-    return NDCRay(ndc, nodeUBO.invProj, nodeUBO.invView);
 }
 
 vec4 GlobalClipPosFromWorldPos(vec3 worldPos)
@@ -136,19 +117,19 @@ ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
     return ivec2(uv * screenSize);
 }
 
-uvec2 CoordFromUVFloor(vec2 uv, vec2 screenSize)
+ivec2 CoordFromUVFloor(vec2 uv, vec2 screenSize)
 {
-    return uvec2(floor(uv * screenSize));
+    return ivec2(floor(uv * screenSize));
 }
 
-uvec2 CoordFromUVCeil(vec2 uv, vec2 screenSize)
+ivec2 CoordFromUVCeil(vec2 uv, vec2 screenSize)
 {
-    return uvec2(ceil(uv * screenSize));
+    return ivec2(ceil(uv * screenSize));
 }
 
 ivec2 CoordFromUVRound(vec2 uv, vec2 screenSize)
 {
-    return ivec2(round(uv * screenSize));
+    return ivec2(roundEven(uv * screenSize));
 }
 
 vec2 UVFromCoord(uvec2 coord, vec2 screenSize)
@@ -172,6 +153,43 @@ vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
     const vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
     const vec3 globalNDC = NDCFromClipPos(globalClipPos);
     return globalNDC;
+}
+
+vec3 NodeNDCFromGlobalNDC(vec3 globalNDC){
+    const vec4 globalClipPos = ClipPosFromNDC(globalNDC);
+    const vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
+    const vec4 nodeClipPos = NodeClipPosFromWorldPos(worldPos);
+    const vec3 nodeNDC = NDCFromClipPos(nodeClipPos);
+    return nodeNDC;
+}
+
+vec3 WorldRayDirFromNDC(vec2 ndc, mat4 invProj, mat4 invView)
+{
+    const vec4 clipRayDir = vec4(ndc, 0, 1);
+    const vec4 viewSpace = invProj * clipRayDir;
+    const vec4 viewDir = vec4(viewSpace.xy, -1, 0); // we look down -1 z in view space for vulkan?
+    const vec3 worldRayDir = normalize((invView * viewDir).xyz);
+    return worldRayDir;
+}
+
+vec3 WorldRayDirFromGlobalNDC2(vec2 ndc)
+{
+    const vec4 clip1 = vec4(ndc, 0, 1);
+    const vec4 clip2 = vec4(ndc, 1, 1);
+    const vec3 worldPos1 = WorldPosFromGlobalClipPos(clip1);
+    const vec3 worldPos2 = WorldPosFromGlobalClipPos(clip2);
+    const vec3 ray = worldPos2 - worldPos1;
+    return normalize(ray);
+}
+
+vec3 WorldRayDirFromGlobalNDC(vec2 ndc)
+{
+    return WorldRayDirFromNDC(ndc, globalUBO.invProj, globalUBO.invView);
+}
+
+vec3 WorldRayDirFromNodeNDC(vec2 ndc)
+{
+    return WorldRayDirFromNDC(ndc, nodeUBO.invProj, nodeUBO.invView);
 }
 
 float SqrMag(vec2 values[2]) {

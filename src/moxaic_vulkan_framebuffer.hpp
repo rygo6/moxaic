@@ -34,26 +34,26 @@ namespace Moxaic::Vulkan
                         const Barrier& src,
                         const Barrier& dst) const;
 
-        MXC_GET(VkFramebuffer);
-        MXC_GET(VkRenderCompleteSemaphore);
-        MXC_GET(ColorTexture);
-        MXC_GET(NormalTexture);
-        MXC_GET(GBufferTexture);
-        MXC_GET(DepthTexture);
-        MXC_GET(Extents);
+        const auto& GetVkFramebuffer() const { return vkFramebuffer; }
+        const auto& GetVkRenderCompleteSemaphore() const { return vkRenderCompleteSemaphore; }
+        const auto& GetColorTexture() const { return colorTexture; }
+        const auto& GetNormalTexture() const { return normalTexture; }
+        const auto& GetGBufferTexture() const { return gbufferTexture; }
+        const auto& GetDepthTexture() const { return depthTexture; }
+        const auto& GetExtents() const { return extents; }
 
     private:
-        const Vulkan::Device* const k_pDevice;
+        const Vulkan::Device* const Device;
 
-        VkFramebuffer m_VkFramebuffer{VK_NULL_HANDLE};
-        VkSemaphore m_VkRenderCompleteSemaphore{VK_NULL_HANDLE};
+        VkFramebuffer vkFramebuffer{VK_NULL_HANDLE};
+        VkSemaphore vkRenderCompleteSemaphore{VK_NULL_HANDLE};
 
-        Texture m_ColorTexture{k_pDevice};
-        Texture m_NormalTexture{k_pDevice};
-        Texture m_GBufferTexture{k_pDevice};
-        Texture m_DepthTexture{k_pDevice};
+        Texture colorTexture{Device};
+        Texture normalTexture{Device};
+        Texture gbufferTexture{Device};
+        Texture depthTexture{Device};
 
-        VkExtent2D m_Extents{};
+        VkExtent2D extents{};
 
         MXC_RESULT InitFramebuffer();
         MXC_RESULT InitSemaphore();

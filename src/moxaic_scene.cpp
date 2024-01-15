@@ -259,56 +259,56 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     computeNodePrePipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, averagedGroupCount.width, averagedGroupCount.height, 1);
 
-    // const VkImageMemoryBarrier averagedAtomicImageMemoryBarrier{
-    //   .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-    //   .pNext = nullptr,
-    //   .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-    //   .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-    //   .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-    //   .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-    //   .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    //   .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-    //   .image = outputAveragedAtomicTexture.GetVkImage(),
-    //   .subresourceRange = Vulkan::DefaultColorSubresourceRange,
-    // };
-    // vkCmdPipelineBarrier(commandBuffer,
-    //                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-    //                      0,
-    //                      0,
-    //                      nullptr,
-    //                      0,
-    //                      nullptr,
-    //                      1,
-    //                      &averagedAtomicImageMemoryBarrier);
-    const VkBufferMemoryBarrier atomicBufferBarrier{
-      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+    const VkImageMemoryBarrier averagedAtomicImageMemoryBarrier{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
       .pNext = nullptr,
       .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+      .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+      .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+      .newLayout = VK_IMAGE_LAYOUT_GENERAL,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .buffer = computeNodeDescriptor.GetStorageBuffer().GetVkBuffer(),
-      .offset = 0,
-      .size = sizeof(VkDispatchIndirectCommand),
+      .image = outputAveragedAtomicTexture.GetVkImage(),
+      .subresourceRange = Vulkan::DefaultColorSubresourceRange,
     };
     vkCmdPipelineBarrier(commandBuffer,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                         VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                          0,
                          0,
                          nullptr,
-                         1,
-                         &atomicBufferBarrier,
                          0,
-                         nullptr);
+                         nullptr,
+                         1,
+                         &averagedAtomicImageMemoryBarrier);
+    // const VkBufferMemoryBarrier atomicBufferBarrier{
+    //   .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER,
+    //   .pNext = nullptr,
+    //   .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+    //   .dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT,
+    //   .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    //   .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    //   .buffer = computeNodeDescriptor.GetStorageBuffer().GetVkBuffer(),
+    //   .offset = 0,
+    //   .size = sizeof(VkDispatchIndirectCommand),
+    // };
+    // vkCmdPipelineBarrier(commandBuffer,
+    //                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    //                      VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+    //                      0,
+    //                      0,
+    //                      nullptr,
+    //                      1,
+    //                      &atomicBufferBarrier,
+    //                      0,
+    //                      nullptr);
 
     const auto groupCount = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeNodePipeline::LocalSize,
                                        Window::GetExtents().height / Vulkan::ComputeNodePipeline::LocalSize);
     computeNodePipeline.BindPipeline(commandBuffer);
-    // vkCmdDispatch(commandBuffer, groupCount.width * groupCount.height, 1, 1);
+    vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     // TODO why is indirect slower!?
-    vkCmdDispatchIndirect(commandBuffer, computeNodeDescriptor.GetStorageBuffer().GetVkBuffer(), 0);
+    // vkCmdDispatchIndirect(commandBuffer, computeNodeDescriptor.GetStorageBuffer().GetVkBuffer(), 0);
 
     const VkImageMemoryBarrier atomicImageMemoryBarrier{
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -353,7 +353,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     const auto timestamps = Device->GetTimestamps();
     const float computeMs = timestamps[1] - timestamps[0];
-    MXC_LOG_NAMED(computeMs);
+    // MXC_LOG_NAMED(computeMs);
 
     return MXC_SUCCESS;
 }

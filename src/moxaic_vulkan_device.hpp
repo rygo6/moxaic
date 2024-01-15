@@ -128,7 +128,7 @@ namespace Moxaic::Vulkan
             return GetSrcQueue(dst);
         }
 
-        // vkHandles return by ref so they dan be used in designated initializers
+        // vkHandles return by ref so they can be used in designated initializers
         const auto& GetVkDevice() const { return vkDevice; }
         const auto& GetVkPhysicalDevice() const { return vkPhysicalDevice; }
         const auto& GetVkRenderPass() const { return vkRenderPass; }
