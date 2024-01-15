@@ -111,14 +111,14 @@ void main()
         validSampleCount++;
     }
 
+    vec3 intersectNodeNDCs[innerSampleOffsets.length()];
+    float depthSamples[innerSampleOffsets.length()];
     for (int i = 0; i < innerSampleOffsets.length(); ++i){
         const vec2 sampleUV = UVFromCoord(coord + innerSampleOffsets[i], screenSize);
-        vec3 intersectNodeNDC;
-        float depthSample;
-        if (NodeIntersectUV(sampleUV, intersectNodeNDC, depthSample)){
+        if (NodeIntersectUV(sampleUV, intersectNodeNDCs[i], depthSamples[i])){
             validSampleCount++;
         }
-        minDepthSample = min(depthSample, minDepthSample);
+        minDepthSample = min(depthSamples[i], minDepthSample);
     }
 
     for (int i = 0; i < outerSampleOffsets.length(); ++i){
@@ -142,9 +142,20 @@ void main()
     const vec3 centerDepthProjectGlobalNDC = NDCFromClipPos(centerDepthProjectGlobalClipPos);
     const vec2 centerDepthProjectGlobalUV = UVFromNDC(centerDepthProjectGlobalNDC);
     const ivec2 centerDepthProjectGlobalCoord = CoordFromUVRound(centerDepthProjectGlobalUV, screenSize);
+    const uint centerDepthProjectGlobalData = PackFloat32ToUint32(centerDepthProjectGlobalNDC.z);
+    imageAtomicMin(outputAveragedAtomic, centerDepthProjectGlobalCoord, centerDepthProjectGlobalData);
 
-    const uint data = PackFloat32ToUint32(centerDepthProjectGlobalNDC.z);
-    imageAtomicMin(outputAveragedAtomic, centerDepthProjectGlobalCoord, data);
+//    for (int i = 0; i < innerSampleOffsets.length(); ++i){
+//        const vec3 innerDepthNodeProjectNodeNDC = vec3(intersectNodeNDCs[i].xy, minDepthSample);
+//        const vec4 innerDepthProjectNodeClipPos = ClipPosFromNDC(innerDepthNodeProjectNodeNDC);
+//        const vec3 innerDepthProjectWorldPos = WorldPosFromNodeClipPos(innerDepthProjectNodeClipPos);
+//        const vec4 innerDepthProjectGlobalClipPos = GlobalClipPosFromWorldPos(innerDepthProjectWorldPos);
+//        const vec3 innerDepthProjectGlobalNDC = NDCFromClipPos(innerDepthProjectGlobalClipPos);
+//        const vec2 innerDepthProjectGlobalUV = UVFromNDC(innerDepthProjectGlobalNDC);
+//        const ivec2 innerDepthProjectGlobalCoord = CoordFromUVRound(innerDepthProjectGlobalUV, screenSize);
+//        const uint innerDepthProjectGlobalData = PackFloat32ToUint32(innerDepthProjectGlobalNDC.z);
+//        imageAtomicMin(outputAveragedAtomic, innerDepthProjectGlobalCoord, innerDepthProjectGlobalData);
+//    }
 
     // more precisely set NDC Z to upper left corner?
 //    const vec2 centerDepthProjectGlobalRoundedUV = UVFromCoord(centerDepthProjectGlobalCoord, iScreenSize);
