@@ -65,7 +65,7 @@ void main()
 //        const uint atomicSample = imageLoad(outputAveragedAtomic, averagedCoord).r;
 //        const float averageDepth = UnpackFloatFromUint(atomicSample);
 //        imageStore(outputColor, coord, vec4(averageDepth, 0, 0, 1));
-//        imageStore(outputAveragedAtomic, averagedCoord, uvec4(maxUint, 0, 0, 0));
+//        imageStore(outputAveragedAtomic, averagedCoord, uvec4(0, 0, 0, 0));
 //        return;
 
     const uint data = imageLoad(outputAtomic, coord).r;
@@ -74,13 +74,13 @@ void main()
     imageStore(outputColor, coord, vec4(colorSRGB, 1));
 
     // reset for next frame, is there a better way to do this?
-    imageStore(outputAtomic, coord, uvec4(maxUint, 0, 0, 0));
+    imageStore(outputAtomic, coord, uvec4(0, 0, 0, 0));
     if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0) {
-        imageStore(outputAveragedAtomic, averagedCoord, uvec4(maxUint, 0, 0, 0));
+        imageStore(outputAveragedAtomic, averagedCoord, uvec4(0, 0, 0, 0));
     }
-    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
-        tileBuffer.command.x = 0;
-        tileBuffer.command.y = 1;
-        tileBuffer.command.z = 1;
-    }
+//    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+//        tileBuffer.command.x = 0;
+//        tileBuffer.command.y = 1;
+//        tileBuffer.command.z = 1;
+//    }
 }

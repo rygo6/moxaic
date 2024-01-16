@@ -53,12 +53,12 @@ namespace Moxaic::Vulkan
                                    Vulkan::Locality::Local));
             localBuffer.width = dimensions.width;
             localBuffer.height = dimensions.height;
-            localBuffer.proj = camera.projection();
-            localBuffer.view = camera.view();
-            localBuffer.viewProj = camera.viewProjection();
-            localBuffer.invView = camera.inverseView();
-            localBuffer.invProj = camera.inverseProjection();
-            localBuffer.invViewProj = camera.inverseViewProjection();
+            localBuffer.proj = camera.GetProjection();
+            localBuffer.view = camera.GetView();
+            localBuffer.viewProj = camera.GetViewProjection();
+            localBuffer.invView = camera.GetInverseView();
+            localBuffer.invProj = camera.GetInverseProjection();
+            localBuffer.invViewProj = camera.GetInverseViewProjection();
             WriteLocalBuffer();
 
             MXC_CHK(AllocateDescriptorSet());
@@ -87,10 +87,10 @@ namespace Moxaic::Vulkan
 
         void SetLocalBufferView(const Camera& camera)
         {
-            localBuffer.view = camera.view();
-            localBuffer.invView = camera.inverseView();
-            localBuffer.viewProj = camera.viewProjection();
-            localBuffer.invViewProj = camera.inverseViewProjection();
+            localBuffer.view = camera.GetView();
+            localBuffer.invView = camera.GetInverseView();
+            localBuffer.viewProj = camera.GetViewProjection();
+            localBuffer.invViewProj = camera.GetInverseViewProjection();
         }
 
         UniformBuffer localBuffer{};

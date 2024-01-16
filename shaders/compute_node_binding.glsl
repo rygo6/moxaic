@@ -42,13 +42,23 @@ bool intersectRayPlane(const vec3 rayOrigin, const vec3 rayDir, const vec3 plane
     const float facingRatio = dot(planeNormal, rayDir);
     const float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
     intersectWorldPos = rayOrigin + t * rayDir;
-    return facingRatio < 0 && t > 0;
+    return facingRatio < 0;
 }
 
 vec3 WorldPosFromGlobalClipPos(vec4 clipPos)
 {
     const vec4 worldPos = globalUBO.invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
+}
+
+vec4 GlobalClipPosFromViewPos(vec4 view)
+{
+    return globalUBO.proj * view;
+}
+
+vec4 GlobalViewPosFromWorldPos(vec3 worldPos)
+{
+    return globalUBO.view * vec4(worldPos, 1);
 }
 
 vec4 GlobalClipPosFromWorldPos(vec3 worldPos)
@@ -117,15 +127,15 @@ ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
     return ivec2(uv * screenSize);
 }
 
-ivec2 CoordFromUVFloor(vec2 uv, vec2 screenSize)
-{
-    return ivec2(floor(uv * screenSize));
-}
-
-ivec2 CoordFromUVCeil(vec2 uv, vec2 screenSize)
-{
-    return ivec2(ceil(uv * screenSize));
-}
+//ivec2 CoordFromUVFloor(vec2 uv, vec2 screenSize)
+//{
+//    return ivec2(floor(uv * screenSize));
+//}
+//
+//ivec2 CoordFromUVCeil(vec2 uv, vec2 screenSize)
+//{
+//    return ivec2(ceil(uv * screenSize));
+//}
 
 ivec2 CoordFromUVRound(vec2 uv, vec2 screenSize)
 {

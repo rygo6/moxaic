@@ -38,18 +38,9 @@ float CalcNodeZPlane(){
     return nodeZPlane;
 }
 
-//bool NodeIntersetWorldPosFromGlobalUV(const vec2 globalUV, out vec3 intersectWorldPos)
-//{
-//    const vec2 globalNDC = NDCFromUV(globalUV);
-//    const vec4 globalClipPos = ClipPosFromNDC(globalNDC);
-//    const vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
-//    const vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
-//    return intersectRayPlane(worldPos, worldRay, nodeOriginWorldPos, nodeOriginWorldDirection, intersectWorldPos);
-//}
-
-void NodeIntersectUV(const vec2 uv, out float nodeDepthSample)
+bool NodeIntersectUV(const vec2 uv, out float nodeDepthSample)
 {
-    const vec2 ndc = NDCFromUV(1 - uv);// why do I 1 - uv here?! It does flip it to proper layout
+    const vec2 ndc = NDCFromUV(uv);
     const vec4 clipPos = ClipPosFromNDC(ndc);
     const vec3 worldPos = WorldPosFromGlobalClipPos(clipPos);
     const vec3 worldRay = WorldRayDirFromGlobalNDC(ndc);
@@ -60,7 +51,8 @@ void NodeIntersectUV(const vec2 uv, out float nodeDepthSample)
     const vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     const vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-    nodeDepthSample = intersected ? SampleNodeDepth(intersectNodeUV) : 1.0;
+    nodeDepthSample = SampleNodeDepth(intersectNodeUV);
+    return intersected && nodeDepthSample > 0;
 }
 
 bool NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDepthSample)
@@ -77,7 +69,7 @@ bool NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDep
     const vec3 nodeWorldNormal = texture(nodeNormalTexture, intersectNodeUV).xyz * vec3(1, -1, 1);
     // use this https://docs.gl/sl4/textureGatherOffsets
     nodeDepthSample = SampleNodeDepth(intersectNodeUV);
-    return intersected && nodeDepthSample < 1 && dot(nodeWorldNormal.xyz, worldRay) < 0;
+    return intersected && nodeDepthSample > 0 && dot(nodeWorldNormal.xyz, worldRay) < 0;
 }
 
 const ivec2 innerSampleOffsets[] = {
@@ -103,14 +95,7 @@ void main()
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
     int validSampleCount = 0;
-
-    const vec2 centerUV = UVFromCoordCenter(coord, screenSize);
-    vec3 centerIntersectNodeNDC;
-    float minDepthSample;
-    if (NodeIntersectUV(centerUV, centerIntersectNodeNDC, minDepthSample)) {
-        validSampleCount++;
-    }
-
+    float maxDepthSample = 0;
     vec3 intersectNodeNDCs[innerSampleOffsets.length()];
     float depthSamples[innerSampleOffsets.length()];
     for (int i = 0; i < innerSampleOffsets.length(); ++i){
@@ -118,60 +103,31 @@ void main()
         if (NodeIntersectUV(sampleUV, intersectNodeNDCs[i], depthSamples[i])){
             validSampleCount++;
         }
-        minDepthSample = min(depthSamples[i], minDepthSample);
+        maxDepthSample = max(depthSamples[i], maxDepthSample);
     }
 
     for (int i = 0; i < outerSampleOffsets.length(); ++i){
         const vec2 sampleUV = UVFromCoord(coord + outerSampleOffsets[i], screenSize);
-        vec3 intersectNodeNDC;
         float depthSample;
-        if (NodeIntersectUV(sampleUV, intersectNodeNDC, depthSample)){
+        if (NodeIntersectUV(sampleUV, depthSample)){
             validSampleCount++;
         }
-        minDepthSample = min(depthSample, minDepthSample);
+        maxDepthSample = max(depthSample, maxDepthSample);
     }
 
     if (validSampleCount == 0){
         return;
     }
 
-    const vec3 centerDepthNodeProjectNodeNDC = vec3(centerIntersectNodeNDC.xy, minDepthSample);
-    const vec4 centerDepthProjectNodeClipPos = ClipPosFromNDC(centerDepthNodeProjectNodeNDC);
-    const vec3 centerDepthProjectWorldPos = WorldPosFromNodeClipPos(centerDepthProjectNodeClipPos);
-    const vec4 centerDepthProjectGlobalClipPos = GlobalClipPosFromWorldPos(centerDepthProjectWorldPos);
-    const vec3 centerDepthProjectGlobalNDC = NDCFromClipPos(centerDepthProjectGlobalClipPos);
-    const vec2 centerDepthProjectGlobalUV = UVFromNDC(centerDepthProjectGlobalNDC);
-    const ivec2 centerDepthProjectGlobalCoord = CoordFromUVRound(centerDepthProjectGlobalUV, screenSize);
-    const uint centerDepthProjectGlobalData = PackFloat32ToUint32(centerDepthProjectGlobalNDC.z);
-    imageAtomicMin(outputAveragedAtomic, centerDepthProjectGlobalCoord, centerDepthProjectGlobalData);
-
-//    for (int i = 0; i < innerSampleOffsets.length(); ++i){
-//        const vec3 innerDepthNodeProjectNodeNDC = vec3(intersectNodeNDCs[i].xy, minDepthSample);
-//        const vec4 innerDepthProjectNodeClipPos = ClipPosFromNDC(innerDepthNodeProjectNodeNDC);
-//        const vec3 innerDepthProjectWorldPos = WorldPosFromNodeClipPos(innerDepthProjectNodeClipPos);
-//        const vec4 innerDepthProjectGlobalClipPos = GlobalClipPosFromWorldPos(innerDepthProjectWorldPos);
-//        const vec3 innerDepthProjectGlobalNDC = NDCFromClipPos(innerDepthProjectGlobalClipPos);
-//        const vec2 innerDepthProjectGlobalUV = UVFromNDC(innerDepthProjectGlobalNDC);
-//        const ivec2 innerDepthProjectGlobalCoord = CoordFromUVRound(innerDepthProjectGlobalUV, screenSize);
-//        const uint innerDepthProjectGlobalData = PackFloat32ToUint32(innerDepthProjectGlobalNDC.z);
-//        imageAtomicMin(outputAveragedAtomic, innerDepthProjectGlobalCoord, innerDepthProjectGlobalData);
-//    }
-
-    // more precisely set NDC Z to upper left corner?
-//    const vec2 centerDepthProjectGlobalRoundedUV = UVFromCoord(centerDepthProjectGlobalCoord, iScreenSize);
-//    const vec2 averagedGlobalNDC = NDCFromUV(centerDepthProjectGlobalRoundedUV);
-//    const vec4 averagedGlobalClipPos = ClipPosFromNDC(averagedGlobalNDC);
-//    const vec3 averagedWorldPos = WorldPosFromGlobalClipPos(averagedGlobalClipPos);
-//    const vec3 averagedWorldRay = WorldRayDirFromGlobalNDC(averagedGlobalNDC);
-//    // this can be simplified, I only need NDC Z
-//    vec3 averagedIntersectedWorldPos;
-//    bool intersect = intersectRayPlane(averagedWorldPos, averagedWorldRay, centerDepthProjectWorldPos, nodeOriginWorldDirection, averagedIntersectedWorldPos);
-//    const vec4 averagedIntersectGlobalClipPos = GlobalClipPosFromWorldPos(averagedIntersectedWorldPos);
-//    const vec3 averagedIntersectedScreenGlobalNDC = NDCFromClipPos(averagedIntersectGlobalClipPos);
-//    const vec2 averagedIntersectedScreenGlobalUV = UVFromNDC(averagedIntersectedScreenGlobalNDC);
-//    const ivec2 averagedIntersectedScreenGlobalCoord = CoordFromUV(averagedIntersectedScreenGlobalUV, screenSize);
-//    const uint data = PackFloat32ToUint32(averagedIntersectedScreenGlobalNDC.z);
-//    imageAtomicMin(outputAveragedAtomic, averagedIntersectedScreenGlobalCoord, data);
+    const vec3 depthNodeProjectNodeNDC = vec3(intersectNodeNDCs[0].xy, maxDepthSample);
+    const vec4 depthProjectNodeClipPos = ClipPosFromNDC(depthNodeProjectNodeNDC);
+    const vec3 depthProjectWorldPos = WorldPosFromNodeClipPos(depthProjectNodeClipPos);
+    const vec4 depthProjectGlobalClipPos = GlobalClipPosFromWorldPos(depthProjectWorldPos);
+    const vec3 depthProjectGlobalNDC = NDCFromClipPos(depthProjectGlobalClipPos);
+    const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectGlobalNDC);
+    const ivec2 depthProjectGlobalCoord = CoordFromUVRound(depthProjectGlobalUV, screenSize);
+    const uint depthProjectGlobalData = PackFloat32ToUint32(depthProjectGlobalNDC.z);
+    imageAtomicMax(outputAveragedAtomic, depthProjectGlobalCoord, depthProjectGlobalData);
 }
 
 void mainTiled()
@@ -223,10 +179,10 @@ void mainTiled()
 
     const vec3 ulDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
     const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
-    const ivec2 ulDepthProjectGlobalCoord = CoordFromUVFloor(ulDepthProjectGlobalUV, fullScreenSize);
+    const ivec2 ulDepthProjectGlobalCoord = CoordFromUV(ulDepthProjectGlobalUV, fullScreenSize);
     const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
     const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
-    const ivec2 lrDepthProjectGlobalCoord = CoordFromUVCeil(lrDepthProjectGlobalUV, fullScreenSize);
+    const ivec2 lrDepthProjectGlobalCoord = CoordFromUV(lrDepthProjectGlobalUV, fullScreenSize);
     //    const vec3 urDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[2].xy, minDepthSample));
     //    const vec2 urDepthProjectGlobalUV = UVFromNDC(urDepthProjectGlobalNDC);
     //    const uvec2 urDepthProjectGlobalCoord = uCoordFromUV(urDepthProjectGlobalUV, fullScreenSize);

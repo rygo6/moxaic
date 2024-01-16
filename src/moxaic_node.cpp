@@ -105,7 +105,7 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemap
 void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camera& camera)
 {
     // Condense nearz/farz to draw radius of node
-    const auto viewPosition = camera.view() * glm::vec4(m_Transform.position_, 1);
+    const auto viewPosition = camera.GetView() * glm::vec4(m_Transform.position_, 1);
     const float viewDistanceToCenter = -viewPosition.z;
     const float offset = m_DrawRadius * 0.5f;
     const float farZ = viewDistanceToCenter + offset;
@@ -114,13 +114,13 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camer
         nearZ = MXC_CAMERA_MIN_Z;
     }
     auto& localBuffer = m_ExportedGlobalDescriptor.localBuffer;
-    localBuffer.view = camera.view();
-    localBuffer.proj = glm::perspective(camera.fieldOfView(),
-                                        camera.aspectRatio(),
+    localBuffer.view = camera.GetView();
+    localBuffer.proj = Camera::ReversePerspective(camera.fieldOfView,
+                                        camera.aspectRatio,
                                         nearZ,
                                         farZ);
     localBuffer.viewProj = localBuffer.proj * localBuffer.view;
-    localBuffer.invView = camera.inverseView();
+    localBuffer.invView = camera.GetInverseView();
     localBuffer.invProj = glm::inverse(localBuffer.proj);
     localBuffer.invViewProj = localBuffer.invView * localBuffer.invProj;
 }

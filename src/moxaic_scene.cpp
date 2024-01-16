@@ -21,8 +21,7 @@ MXC_RESULT CompositorScene::Init()
 
     mainCamera.transform.position_ = vec3(0, 0, -1);
     mainCamera.transform.Rotate(0, 180, 0);
-    mainCamera.UpdateView();
-    mainCamera.UpdateProjection();
+    mainCamera.UpdateViewProjection();
 
     sphereTestTransform.position_ = vec3(1, 0, 0);
     MXC_CHK(sphereTestTexture.InitFromFile("textures/test.jpg",
@@ -140,8 +139,7 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     mainCamera.transform.position_ = vec3(0, 0, -2);
     mainCamera.transform.Rotate(0, 180, 0);
-    mainCamera.UpdateProjection();
-    mainCamera.UpdateView();
+    mainCamera.UpdateViewProjection();
 
     MXC_CHK(computeNodePrePipeline.Init("./shaders/compute_node_pre.comp.spv"));
     MXC_CHK(computeNodePipeline.Init("./shaders/compute_node.comp.spv"));

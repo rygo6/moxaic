@@ -22,34 +22,32 @@ namespace Moxaic
 
         void UpdateView();
         void UpdateProjection();
+        void UpdateViewProjection();
+
+        static mat4 ReversePerspective(float fov, float aspectRatio, float zNear, float zFar);
 
         Moxaic::Transform transform{};
 
-        MXC_GET2(view);
-        MXC_GET2(projection);
-        MXC_GET2(viewProjection);
-        MXC_GET2(inverseView);
-        MXC_GET2(inverseProjection);
-        MXC_GET2(inverseViewProjection);
+        float fieldOfView{45.0f};
+        float nearZPlane{MXC_CAMERA_MIN_Z};
+        float farZPlane{100.0f};
+        float aspectRatio{800.0/600.0};
 
-        MXC_GET2(fieldOfView);
-        MXC_GET2(nearZPlane);
-        MXC_GET2(farZPlane);
-        MXC_GET2(aspectRatio);
+        const auto& GetView() const { return view; }
+        const auto& GetProjection() const { return projection; }
+        const auto& GetViewProjection() const { return viewProjection; }
+        const auto& GetInverseView() const { return inverseView; }
+        const auto& GetInverseProjection() const { return inverseProjection; }
+        const auto& GetInverseViewProjection() const { return inverseViewProjection; }
 
     private:
 
-        float fieldOfView_{45.0f};
-        float nearZPlane_{MXC_CAMERA_MIN_Z};
-        float farZPlane_{1000.0f};
-        float aspectRatio_{800.0/600.0};
-
-        mat4x4 view_{identity<mat4x4>()};
-        mat4x4 projection_{identity<mat4x4>()};
-        mat4x4 viewProjection_{identity<mat4x4>()};
-        mat4x4 inverseView_{identity<mat4x4>()};
-        mat4x4 inverseProjection_{identity<mat4x4>()};
-        mat4x4 inverseViewProjection_{identity<mat4x4>()};
+        mat4x4 view{identity<mat4x4>()};
+        mat4x4 projection{identity<mat4x4>()};
+        mat4x4 viewProjection{identity<mat4x4>()};
+        mat4x4 inverseView{identity<mat4x4>()};
+        mat4x4 inverseProjection{identity<mat4x4>()};
+        mat4x4 inverseViewProjection{identity<mat4x4>()};
 
         bool cameraLocked_{false};
     };

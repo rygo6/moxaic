@@ -1098,7 +1098,7 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer,
     clearValues[0].color = backgroundColor;
     clearValues[1].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
     clearValues[2].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
-    clearValues[3].depthStencil = (VkClearDepthStencilValue){1.0f, 0};
+    clearValues[3].depthStencil = (VkClearDepthStencilValue){0.0f, 0};
     const VkRenderPassBeginInfo renderPassBeginInfo{
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = nullptr,
