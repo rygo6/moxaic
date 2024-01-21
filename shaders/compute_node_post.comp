@@ -1,8 +1,9 @@
 #version 450
+//#extension GL_EXT_debug_printf : require
+//#extension GL_KHR_shader_subgroup_basic : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
-
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
@@ -78,6 +79,7 @@ void main()
     if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0) {
         imageStore(outputAveragedAtomic, averagedCoord, uvec4(0, 0, 0, 0));
     }
+
 //    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
 //        tileBuffer.command.x = 0;
 //        tileBuffer.command.y = 1;

@@ -32,11 +32,7 @@ layout(set = 1, binding = 8) buffer TileBuffer {
 } tileBuffer;
 
 #define LOCAL_SIZE 32
-
-float SampleNodeDepth(vec2 uv){
-//    return 0;
-    return texture(nodeDepthTexture, uv).r;
-}
+#define SUPERSAMPLE 2
 
 bool intersectRayPlane(const vec3 rayOrigin, const vec3 rayDir, const vec3 planePoint, const vec3 planeNormal, out vec3 intersectWorldPos) {
     const float facingRatio = dot(planeNormal, rayDir);

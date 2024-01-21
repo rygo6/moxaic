@@ -251,11 +251,12 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, globalDescriptor);
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, computeNodeDescriptor);
 
+    const auto superSample = 2;
     const auto averagedExtents = outputAveragedAtomicTexture.GetExtents();
     const auto averagedGroupCount = VkExtent2D(averagedExtents.width < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.width / Vulkan::ComputeNodePipeline::LocalSize,
                                                averagedExtents.height < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.height / Vulkan::ComputeNodePipeline::LocalSize);
     computeNodePrePipeline.BindPipeline(commandBuffer);
-    vkCmdDispatch(commandBuffer, averagedGroupCount.width, averagedGroupCount.height, 1);
+    vkCmdDispatch(commandBuffer, averagedGroupCount.width * superSample, averagedGroupCount.height * superSample, 1);
 
     const VkImageMemoryBarrier averagedAtomicImageMemoryBarrier{
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,

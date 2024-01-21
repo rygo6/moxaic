@@ -62,8 +62,10 @@ MXC_RESULT Device::PickPhysicalDevice()
     // Todo Implement Query OpenVR for the physical. GetVkDevice to use
     vkPhysicalDevice = devices.front();
 
-
+    physicalDeviceSubgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+    physicalDeviceSubgroupProperties.pNext = nullptr;
     pysicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+    pysicalDeviceMeshShaderProperties.pNext = &physicalDeviceSubgroupProperties;
     physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
     physicalDeviceProperties.pNext = &pysicalDeviceMeshShaderProperties;
     vkGetPhysicalDeviceProperties2(vkPhysicalDevice, &physicalDeviceProperties);
@@ -88,6 +90,7 @@ MXC_RESULT Device::PickPhysicalDevice()
     MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.prefersLocalInvocationVertexOutput);
     MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.prefersCompactPrimitiveOutput);
     MXC_LOG_NAMED(pysicalDeviceMeshShaderProperties.prefersCompactVertexOutput);
+    MXC_LOG_NAMED(physicalDeviceSubgroupProperties.subgroupSize);
 
     return MXC_SUCCESS;
 }

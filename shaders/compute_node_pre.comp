@@ -1,5 +1,5 @@
 #version 450
-#extension GL_EXT_debug_printf : require
+//#extension GL_EXT_debug_printf : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -7,7 +7,6 @@
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
 layout (set = 1, binding = 5, r32ui) uniform uimage2D outputAveragedAtomic;
-
 
 vec3 nodeOriginWorldPos = vec3(0, 0, -0.5);
 vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
@@ -51,7 +50,7 @@ bool NodeIntersectUV(const vec2 uv, out float nodeDepthSample)
     const vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     const vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-    nodeDepthSample = SampleNodeDepth(intersectNodeUV);
+    nodeDepthSample = textureLod(nodeDepthTexture, intersectNodeUV, 0).r;
     return intersected && nodeDepthSample > 0;
 }
 
@@ -66,10 +65,11 @@ bool NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDep
     const vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-    const vec3 nodeWorldNormal = texture(nodeNormalTexture, intersectNodeUV).xyz * vec3(1, -1, 1);
-    // use this https://docs.gl/sl4/textureGatherOffsets
-    nodeDepthSample = SampleNodeDepth(intersectNodeUV);
-    return intersected && nodeDepthSample > 0 && dot(nodeWorldNormal.xyz, worldRay) < 0;
+//    const vec3 nodeWorldNormal = texture(nodeNormalTexture, intersectNodeUV).xyz * vec3(1, -1, 1);
+    nodeDepthSample = textureLod(nodeDepthTexture, intersectNodeUV, 0).r;
+    // Do I want to include normal in this test!?
+//    return intersected && nodeDepthSample > 0 && dot(nodeWorldNormal.xyz, worldRay) < 0;
+    return intersected && nodeDepthSample > 0;
 }
 
 const ivec2 innerSampleOffsets[] = {
@@ -86,32 +86,43 @@ const ivec2 outerSampleOffsets[] = {
 { 2, 2 },
 };
 
+//const ivec2 outerSampleOffsets[] = {
+//{ -2, -2 },
+//{ 3, -2 },
+//{ -2, 3 },
+//{ 3, 3 },
+//};
+
 void main()
 {
     const ivec2 iFullScreenSize = ivec2(globalUBO.width, globalUBO.height);
     const vec2 fullScreenSize = vec2(iFullScreenSize);
+
     const ivec2 iScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
     const vec2 screenSize = vec2(iScreenSize);
+
+    const ivec2 iSuperSampleScreenSize = iScreenSize * SUPERSAMPLE;
+    const vec2 superSampleScreenSize = vec2(iSuperSampleScreenSize);
+
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
     int validSampleCount = 0;
     float maxDepthSample = 0;
-    vec3 intersectNodeNDCs[innerSampleOffsets.length()];
-    float depthSamples[innerSampleOffsets.length()];
+    vec3 centerIntersectNodeNDC;
+    const vec2 centerSampleUV = UVFromCoordCenter(coord, superSampleScreenSize);
+    validSampleCount += int(NodeIntersectUV(centerSampleUV, centerIntersectNodeNDC, maxDepthSample));
+
     for (int i = 0; i < innerSampleOffsets.length(); ++i){
-        const vec2 sampleUV = UVFromCoord(coord + innerSampleOffsets[i], screenSize);
-        if (NodeIntersectUV(sampleUV, intersectNodeNDCs[i], depthSamples[i])){
-            validSampleCount++;
-        }
-        maxDepthSample = max(depthSamples[i], maxDepthSample);
+        const vec2 sampleUV = UVFromCoord(coord + innerSampleOffsets[i], superSampleScreenSize);
+        float depthSample;
+        validSampleCount += int(NodeIntersectUV(sampleUV, depthSample));
+        maxDepthSample = max(depthSample, maxDepthSample);
     }
 
     for (int i = 0; i < outerSampleOffsets.length(); ++i){
-        const vec2 sampleUV = UVFromCoord(coord + outerSampleOffsets[i], screenSize);
+        const vec2 sampleUV = UVFromCoord(coord + outerSampleOffsets[i], superSampleScreenSize);
         float depthSample;
-        if (NodeIntersectUV(sampleUV, depthSample)){
-            validSampleCount++;
-        }
+        validSampleCount += int(NodeIntersectUV(sampleUV, depthSample));
         maxDepthSample = max(depthSample, maxDepthSample);
     }
 
@@ -119,7 +130,7 @@ void main()
         return;
     }
 
-    const vec3 depthNodeProjectNodeNDC = vec3(intersectNodeNDCs[0].xy, maxDepthSample);
+    const vec3 depthNodeProjectNodeNDC = vec3(centerIntersectNodeNDC.xy, maxDepthSample);
     const vec4 depthProjectNodeClipPos = ClipPosFromNDC(depthNodeProjectNodeNDC);
     const vec3 depthProjectWorldPos = WorldPosFromNodeClipPos(depthProjectNodeClipPos);
     const vec4 depthProjectGlobalClipPos = GlobalClipPosFromWorldPos(depthProjectWorldPos);

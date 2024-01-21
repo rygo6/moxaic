@@ -163,7 +163,7 @@ namespace Moxaic::Vulkan
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkNearestSampler(),
+                  .sampler = Device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetDepthTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){

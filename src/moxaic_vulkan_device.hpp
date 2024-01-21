@@ -168,6 +168,7 @@ namespace Moxaic::Vulkan
 
         VkPhysicalDeviceProperties2 physicalDeviceProperties{};
         VkPhysicalDeviceMeshShaderPropertiesEXT pysicalDeviceMeshShaderProperties{};
+        VkPhysicalDeviceSubgroupProperties physicalDeviceSubgroupProperties{};
         VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties{};
 
         bool PickPhysicalDevice();
