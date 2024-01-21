@@ -76,7 +76,7 @@ void main()
 
     // reset for next frame, is there a better way to do this?
     imageStore(outputAtomic, coord, uvec4(0, 0, 0, 0));
-    if (gl_LocalInvocationID.x == 0 && gl_LocalInvocationID.y == 0) {
+    if (gl_LocalInvocationIndex == 0) {
         imageStore(outputAveragedAtomic, averagedCoord, uvec4(0, 0, 0, 0));
     }
 

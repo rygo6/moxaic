@@ -119,12 +119,12 @@ void main()
         maxDepthSample = max(depthSample, maxDepthSample);
     }
 
-    for (int i = 0; i < outerSampleOffsets.length(); ++i){
-        const vec2 sampleUV = UVFromCoord(coord + outerSampleOffsets[i], superSampleScreenSize);
-        float depthSample;
-        validSampleCount += int(NodeIntersectUV(sampleUV, depthSample));
-        maxDepthSample = max(depthSample, maxDepthSample);
-    }
+//    for (int i = 0; i < outerSampleOffsets.length(); ++i){
+//        const vec2 sampleUV = UVFromCoord(coord + outerSampleOffsets[i], superSampleScreenSize);
+//        float depthSample;
+//        validSampleCount += int(NodeIntersectUV(sampleUV, depthSample));
+//        maxDepthSample = max(depthSample, maxDepthSample);
+//    }
 
     if (validSampleCount == 0){
         return;
@@ -139,6 +139,10 @@ void main()
     const ivec2 depthProjectGlobalCoord = CoordFromUVRound(depthProjectGlobalUV, screenSize);
     const uint depthProjectGlobalData = PackFloat32ToUint32(depthProjectGlobalNDC.z);
     imageAtomicMax(outputAveragedAtomic, depthProjectGlobalCoord, depthProjectGlobalData);
+
+//    if (gl_GlobalInvocationID.x == 16 && gl_GlobalInvocationID.y == 16) {
+//        debugPrintfEXT("%d %d", depthProjectGlobalCoord.x, depthProjectGlobalCoord.y);
+//    }
 }
 
 void mainTiled()

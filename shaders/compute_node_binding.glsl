@@ -34,6 +34,8 @@ layout(set = 1, binding = 8) buffer TileBuffer {
 #define LOCAL_SIZE 32
 #define SUPERSAMPLE 2
 
+const float FLOAT_EPSILON = 1e-6;
+
 bool intersectRayPlane(const vec3 rayOrigin, const vec3 rayDir, const vec3 planePoint, const vec3 planeNormal, out vec3 intersectWorldPos) {
     const float facingRatio = dot(planeNormal, rayDir);
     const float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
@@ -101,21 +103,6 @@ vec2 NDCFromUV(vec2 uv)
 vec2 UVFromNDC(vec3 ndc)
 {
     return (ndc.xy + 1.0) * 0.5;
-}
-
-ivec2 iRound(vec2 coord)
-{
-    // Round/RoundEven returns noisy results
-    // but is round even needed!?
-    //    ivec2 iCoord = ivec2(coord);
-    //    vec2 coordDecimal = coord - vec2(coord);
-    //    iCoord.x += coordDecimal.x > 0.5 ? 1 : 0;
-    //    iCoord.y += coordDecimal.y > 0.5 ? 1 : 0;
-    //    return iCoord;
-
-    //        return ivec2(roundEven(coord));
-
-    return ivec2(coord);
 }
 
 ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
