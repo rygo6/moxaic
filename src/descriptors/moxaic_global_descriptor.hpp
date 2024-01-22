@@ -24,8 +24,7 @@ namespace Moxaic::Vulkan
             glm::mat4 invView;
             glm::mat4 invProj;
             glm::mat4 invViewProj;
-            uint32_t width;
-            uint32_t height;
+            glm::ivec2 screenSize;
         };
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
@@ -51,8 +50,8 @@ namespace Moxaic::Vulkan
             MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                    Vulkan::Locality::Local));
-            localBuffer.width = dimensions.width;
-            localBuffer.height = dimensions.height;
+            localBuffer.screenSize.x = dimensions.width;
+            localBuffer.screenSize.y = dimensions.height;
             localBuffer.proj = camera.GetProjection();
             localBuffer.view = camera.GetView();
             localBuffer.viewProj = camera.GetViewProjection();

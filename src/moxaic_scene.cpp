@@ -173,8 +173,7 @@ MXC_RESULT ComputeCompositorScene::Init()
       .invView = globalDescriptor.localBuffer.invView,
       .invProj = globalDescriptor.localBuffer.invProj,
       .invViewProj = globalDescriptor.localBuffer.invViewProj,
-      .width = globalDescriptor.localBuffer.width,
-      .height = globalDescriptor.localBuffer.height,
+      .screenSize = globalDescriptor.localBuffer.screenSize,
     };
     MXC_CHK(computeNodeDescriptor.Init(computeNodeBuffer,
                                        nodeReference.GetExportedFramebuffers(nodeFramebufferIndex),

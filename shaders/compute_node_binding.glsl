@@ -5,8 +5,7 @@ layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 invView;
     mat4 invProj;
     mat4 invViewProj;
-    int width;
-    int height;
+    ivec2 screenSize;
 } nodeUBO;
 
 layout (set = 1, binding = 1) uniform sampler2D nodeColorTexture;
@@ -133,6 +132,11 @@ vec2 UVFromCoord(uvec2 coord, vec2 screenSize)
 vec2 UVFromCoord(ivec2 coord, vec2 screenSize)
 {
     return vec2(coord) / screenSize;
+}
+
+vec2 UVFromCoord(vec2 coord, vec2 screenSize)
+{
+    return coord / screenSize;
 }
 
 vec2 UVFromCoordCenter(ivec2 coord, vec2 screenSize)

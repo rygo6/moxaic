@@ -78,8 +78,7 @@ void WriteDebugCoord(ivec2 debugCoord, ivec2 screenCoord){
 }
 
 void WriteDebugUV(vec2 debugUV, ivec2 screenCoord){
-    const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
-    const ivec2 debugCoord = CoordFromUV(debugUV, screenSize);
+    const ivec2 debugCoord = CoordFromUV(debugUV, globalUBO.screenSize);
     WriteDebugCoord(debugCoord, screenCoord);
 }
 
@@ -113,17 +112,15 @@ void WriteDebugLine(vec2 P1, vec2 P2, ivec2 screenCoord) {
 }
 
 void WriteDebugLine(vec3 P1, vec3 P2, ivec2 screenCoord) {
-    const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
-
     const vec4 p1ClipPos = GlobalClipPosFromWorldPos(P1);
     const vec3 p1NDC = NDCFromClipPos(p1ClipPos);
     const vec2 p1UV = UVFromNDC(p1NDC);
-    const vec2 p1Coord = vec2(CoordFromUV(p1UV, screenSize));
+    const vec2 p1Coord = vec2(CoordFromUV(p1UV, globalUBO.screenSize));
 
     const vec4 p2ClipPos = GlobalClipPosFromWorldPos(P2);
     const vec3 p2NDC = NDCFromClipPos(p2ClipPos);
     const vec2 p2UV = UVFromNDC(p2NDC);
-    const vec2 p2Coord = vec2(CoordFromUV(p2UV, screenSize));
+    const vec2 p2Coord = vec2(CoordFromUV(p2UV, globalUBO.screenSize));
 
     if (p1NDC.z > p2NDC.z){
         WriteDebugLine(p2Coord, p1Coord, screenCoord);
@@ -132,18 +129,24 @@ void WriteDebugLine(vec3 P1, vec3 P2, ivec2 screenCoord) {
     }
 }
 
-void XYCoordNormalizedDir(const vec2 dir, out bool isXDir, out vec2 normalizedDir){
+vec2 XYCoordNormalizedDir(const vec2 dir) {
     const vec2 absDir = abs(dir);
-    isXDir = absDir.x > absDir.y;
     const vec2 xNormalizedDir = dir * (1.0f / absDir.x);
     const vec2 yNormalizedDir = dir * (1.0f / absDir.y);
-    normalizedDir = (isXDir ? xNormalizedDir : yNormalizedDir);
+    return (absDir.x > absDir.y ? xNormalizedDir : yNormalizedDir);
 }
 
 void main()
 {
+    const ivec2 iScreenSize = globalUBO.screenSize;
+    const vec2 screenSize = vec2(iScreenSize);
+    const ivec2 iScreenCoord = ivec2(gl_GlobalInvocationID.xy);
+    const vec2 screenCoord = vec2(iScreenCoord);
+    const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
+    const bool topTriangle =  gl_LocalInvocationID.y < gl_LocalInvocationID.x;
+
     if (gl_LocalInvocationIndex == 0) {
-        const ivec2 iAveragedScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
+        const ivec2 iAveragedScreenSize = iScreenSize / LOCAL_SIZE;
         const vec2 averagedScreenSize = vec2(iAveragedScreenSize);
 
         const int averagedOffsetCount = 4;
@@ -171,11 +174,6 @@ void main()
         sharedNodeOrigin.bottomTriWorldDir = normalize(cross(xDiff, yDiffBottomTri));
     }
 
-    const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
-    const vec2 screenSize = vec2(iScreenSize);
-    const ivec2 screenCoord = ivec2(gl_GlobalInvocationID.xy);
-    const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
-    const bool topTriangle =  gl_LocalInvocationID.y < gl_LocalInvocationID.x;
 
     barrier();
 
@@ -209,44 +207,26 @@ void main()
     }
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
     const vec2 depthProjectedGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
-    const ivec2 depthProjectedGlobalCoord = CoordFromUVRound(depthProjectedGlobalUV, screenSize);
+    const vec2 depthProjectedGlobalCoord = round(depthProjectedGlobalUV * screenSize);
     const vec4 color = texture(nodeColorTexture, intersectNodeUV);
     const uint packedData = packFloatAnd565Color(depthProjectedGlobalNDC.z, color.xyz);
-    imageAtomicMax(outputAtomic, depthProjectedGlobalCoord, packedData);
+    writeAtomicData(ivec2(depthProjectedGlobalCoord), packedData);
 
-    // Stepback
-//        const vec3 intersectGlobalNDC = GlobalNDCFromNodeNDC(intersectNodeNDC);
-//        const vec2 intersectGlobalUV = UVFromNDC(intersectGlobalNDC);
-//        const vec2 stepBackDir = depthProjectedGlobalUV - intersectGlobalUV;
-//        vec2 normalizedStepBackDir;
-//        bool stepBackDirIsX;
-//        XYCoordNormalizedDir(stepBackDir, stepBackDirIsX, normalizedStepBackDir);
-//        const ivec2 stepBackCoord = iRound(normalizedStepBackDir + vec2(screenCoord));
-//        const vec2 stepBackUV = UVFromCoord(stepBackCoord, screenSize);
-//        vec3 stepbackIntersectNodeNDC;
-//        vec3 stepbackDepthProjectedGlobalNDC;
-//        if (!NodeIntersect(stepBackUV, stepbackIntersectNodeNDC, stepbackDepthProjectedGlobalNDC)) {
-//            return;
-//        }
-//
-//        const vec2 stepbackDepthProjectedGlobalUV = UVFromNDC(stepbackDepthProjectedGlobalNDC);
-//        const ivec2 stepbackDepthProjectedGlobalCoord = CoordFromUV(stepbackDepthProjectedGlobalUV, screenSize);
-//        const ivec2 stepBackCoordDiff = abs(stepbackDepthProjectedGlobalCoord - depthProjectedGlobalCoord);
-//        const int stepbackCount = (stepBackDirIsX ? stepBackCoordDiff.x : stepBackCoordDiff.y);
-//        vec2 currentCoord = depthProjectedGlobalCoord;
-//        ivec2 roundedCoord = depthProjectedGlobalCoord;
-//        for (int step = 0; step < stepbackCount && step < 4; ++step){
-//            currentCoord += normalizedStepBackDir;
-//            roundedCoord = iRound(currentCoord);
-//            writeAtomicData(roundedCoord, packedData);
-//        }
+    // Stepback -- TODO may be better to just double sample
+    const vec3 intersectGlobalNDC = GlobalNDCFromNodeNDC(intersectNodeNDC);
+    const vec2 intersectGlobalUV = UVFromNDC(intersectGlobalNDC);
+    // do the stepback in NDC to get a new Z value too
+    const vec2 stepBackDir = depthProjectedGlobalUV - intersectGlobalUV;
+    const vec2 normalizedStepBackDir = XYCoordNormalizedDir(stepBackDir);
+    const ivec2 stepBackCoord = ivec2(round(depthProjectedGlobalCoord + normalizedStepBackDir));
+    writeAtomicData(stepBackCoord, packedData);
 }
 
 void mainTiled()
 {
     const uint tileIndex = gl_WorkGroupID.x;
 
-    const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
+    const ivec2 iScreenSize = globalUBO.screenSize;
     const vec2 screenSize = vec2(iScreenSize);
 
     const vec2 uvSize = 1.0 / screenSize;

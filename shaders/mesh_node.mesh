@@ -51,7 +51,7 @@ void main()
 {
 	SetMeshOutputsEXT(VERTEX_COUNT, PRIMITIVE_COUNT);
 
-	const vec2 screenSize = vec2(globalUBO.width, globalUBO.height);
+	const vec2 screenSize = globalUBO.screenSize;
 	const vec2 uv = ((gl_GlobalInvocationID.xy - gl_WorkGroupID.xy) * SCALE) / screenSize;
 	const vec2 invUv = vec2(uv.x, 1 - uv.y);
 	const vec2 ndc = vec2((1, -1) * (uv * 2 - 1));

@@ -38,8 +38,7 @@ namespace Moxaic::Vulkan
             glm::mat4 invView;
             glm::mat4 invProj;
             glm::mat4 invViewProj;
-            glm::uint32_t width;
-            glm::uint32_t height;
+            glm::ivec2 screenSize;
         };
 
         struct Tile

@@ -1,6 +1,7 @@
 #version 450
 //#extension GL_EXT_debug_printf : require
 //#extension GL_KHR_shader_subgroup_basic : require
+//#extension GL_KHR_shader_subgroup_ballot : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -53,12 +54,12 @@ void main()
 {
     const uint maxUint = 0xFFFFFFFFu;
 
-    const ivec2 iScreenSize = ivec2(globalUBO.width, globalUBO.height);
+    const ivec2 iScreenSize = globalUBO.screenSize;
     const vec2 screenSize = vec2(iScreenSize);
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 uv = UVFromCoord(coord, screenSize);
 
-    const ivec2 iAveragedScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
+    const ivec2 iAveragedScreenSize = globalUBO.screenSize / LOCAL_SIZE;
     const vec2 averagedScreenSize = vec2(iAveragedScreenSize);
     const ivec2 averagedCoord = CoordFromUV(uv, averagedScreenSize);
 

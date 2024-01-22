@@ -18,7 +18,7 @@ layout(location = 2) out vec4 outGBuffer;
 void main()
 {
     float depth = gl_FragCoord.z;
-    vec2 normalizedFragCoord = vec2(gl_FragCoord.x / globalUBO.width, gl_FragCoord.y / globalUBO.height);
+    vec2 normalizedFragCoord = gl_FragCoord.xy / globalUBO.screenSize;
     vec4 clipPos = vec4(normalizedFragCoord * 2.0 - 1.0, depth, 1.0);
     vec4 eyePos = globalUBO.invProj * clipPos;
     vec3 ndcPos = eyePos.xyz / eyePos.w;

@@ -1,5 +1,6 @@
 #version 450
 //#extension GL_EXT_debug_printf : require
+//#extension GL_KHR_shader_subgroup_ballot : require
 
 #include "global_binding.glsl"
 #include "compute_node_binding.glsl"
@@ -95,25 +96,25 @@ const ivec2 outerSampleOffsets[] = {
 
 void main()
 {
-    const ivec2 iFullScreenSize = ivec2(globalUBO.width, globalUBO.height);
-    const vec2 fullScreenSize = vec2(iFullScreenSize);
-
-    const ivec2 iScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
+    const ivec2 iScreenSize = globalUBO.screenSize;
     const vec2 screenSize = vec2(iScreenSize);
 
-    const ivec2 iSuperSampleScreenSize = iScreenSize * SUPERSAMPLE;
-    const vec2 superSampleScreenSize = vec2(iSuperSampleScreenSize);
+    const ivec2 iAveragedScreenSize = iScreenSize / LOCAL_SIZE;
+    const vec2 averagedScreenSize = vec2(iAveragedScreenSize);
+
+    const ivec2 iaveragedScreenSizeSS = iAveragedScreenSize * SUPERSAMPLE;
+    const vec2 averagedScreenSizeSS = vec2(iaveragedScreenSizeSS);
 
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
     int validSampleCount = 0;
     float maxDepthSample = 0;
     vec3 centerIntersectNodeNDC;
-    const vec2 centerSampleUV = UVFromCoordCenter(coord, superSampleScreenSize);
+    const vec2 centerSampleUV = UVFromCoordCenter(coord, averagedScreenSizeSS);
     validSampleCount += int(NodeIntersectUV(centerSampleUV, centerIntersectNodeNDC, maxDepthSample));
 
     for (int i = 0; i < innerSampleOffsets.length(); ++i){
-        const vec2 sampleUV = UVFromCoord(coord + innerSampleOffsets[i], superSampleScreenSize);
+        const vec2 sampleUV = UVFromCoord(coord + innerSampleOffsets[i], averagedScreenSizeSS);
         float depthSample;
         validSampleCount += int(NodeIntersectUV(sampleUV, depthSample));
         maxDepthSample = max(depthSample, maxDepthSample);
@@ -136,7 +137,7 @@ void main()
     const vec4 depthProjectGlobalClipPos = GlobalClipPosFromWorldPos(depthProjectWorldPos);
     const vec3 depthProjectGlobalNDC = NDCFromClipPos(depthProjectGlobalClipPos);
     const vec2 depthProjectGlobalUV = UVFromNDC(depthProjectGlobalNDC);
-    const ivec2 depthProjectGlobalCoord = CoordFromUVRound(depthProjectGlobalUV, screenSize);
+    const ivec2 depthProjectGlobalCoord = CoordFromUVRound(depthProjectGlobalUV, averagedScreenSize);
     const uint depthProjectGlobalData = PackFloat32ToUint32(depthProjectGlobalNDC.z);
     imageAtomicMax(outputAveragedAtomic, depthProjectGlobalCoord, depthProjectGlobalData);
 
@@ -147,11 +148,11 @@ void main()
 
 void mainTiled()
 {
-    const vec2 uvSize = vec2(1.0, 1.0) / vec2(globalUBO.width, globalUBO.height);
-    const vec2 halfUVSize = vec2(0.5, 0.5) / vec2(globalUBO.width, globalUBO.height);
-    const ivec2 iFullScreenSize = ivec2(globalUBO.width, globalUBO.height);
+    const vec2 uvSize = vec2(1.0, 1.0) / globalUBO.screenSize;
+    const vec2 halfUVSize = vec2(0.5, 0.5) / globalUBO.screenSize;
+    const ivec2 iFullScreenSize = globalUBO.screenSize;
     const vec2 fullScreenSize = vec2(iFullScreenSize);
-    const ivec2 iScreenSize = ivec2(globalUBO.width / LOCAL_SIZE, globalUBO.height / LOCAL_SIZE);
+    const ivec2 iScreenSize = globalUBO.screenSize / LOCAL_SIZE;
     const vec2 screenSize = vec2(iScreenSize);
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
 
