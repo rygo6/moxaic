@@ -29,9 +29,9 @@ namespace Moxaic
     template<typename T>
     struct StaticRef
     {
-        StaticRef(T data) { m_Data = data; }
-        T m_Data;
-        operator T*() { return &m_Data; }
-        operator T const*() const { return &m_Data; }
+        constexpr StaticRef(T data) { Data = data; }
+        T Data;
+        constexpr operator T*() { return &Data; }
+        constexpr operator T const*() const { return &Data; }
     };
 }

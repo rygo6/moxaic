@@ -60,7 +60,7 @@ namespace Moxaic::Vulkan
         Compute,
     };
 
-    inline PipelineType CompositorPipelineType = PipelineType::Graphics;
+    inline PipelineType CompositorPipelineType = PipelineType::Compute;
 
     enum class Queue {
         None,

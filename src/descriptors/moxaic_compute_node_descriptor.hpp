@@ -137,34 +137,34 @@ namespace Moxaic::Vulkan
                 .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
                   .buffer = uniform.GetVkBuffer(),
                   .range = uniform.Size()})},
-              (VkWriteDescriptorSet){
-                .dstBinding = Indices::ColorTexture,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
-                  .imageView = framebuffer.GetColorTexture().GetVkImageView(),
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
-                .dstBinding = Indices::NormalTexture,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
-                  .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
-                .dstBinding = Indices::GBufferTexture,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkNearestSampler(),
-                  .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
-                .dstBinding = Indices::DepthTexture,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
-                  .imageView = framebuffer.GetDepthTexture().GetVkImageView(),
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              // (VkWriteDescriptorSet){
+              //   .dstBinding = Indices::ColorTexture,
+              //   .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              //   .pImageInfo = StaticRef((VkDescriptorImageInfo){
+              //     .sampler = Device->GetVkLinearSampler(),
+              //     .imageView = framebuffer.GetColorTexture().GetVkImageView(),
+              //     .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              // (VkWriteDescriptorSet){
+              //   .dstBinding = Indices::NormalTexture,
+              //   .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              //   .pImageInfo = StaticRef((VkDescriptorImageInfo){
+              //     .sampler = Device->GetVkNearestSampler(),
+              //     .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
+              //     .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              // (VkWriteDescriptorSet){
+              //   .dstBinding = Indices::GBufferTexture,
+              //   .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              //   .pImageInfo = StaticRef((VkDescriptorImageInfo){
+              //     .sampler = Device->GetVkNearestSampler(),
+              //     .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
+              //     .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+              // (VkWriteDescriptorSet){
+              //   .dstBinding = Indices::DepthTexture,
+              //   .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              //   .pImageInfo = StaticRef((VkDescriptorImageInfo){
+              //     .sampler = Device->GetVkNearestSampler(),
+              //     .imageView = framebuffer.GetDepthTexture().GetVkImageView(),
+              //     .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::OutputAveragedAtomicTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -208,21 +208,21 @@ namespace Moxaic::Vulkan
                 .dstBinding = Indices::NormalTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = Device->GetVkNearestSampler(),
                   .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::GBufferTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = Device->GetVkNearestSampler(),
                   .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = Device->GetVkMaxSampler(),
                   .imageView = framebuffer.GetDepthTexture().GetVkImageView(),
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };

@@ -523,7 +523,7 @@ MXC_RESULT Device::CreateSamplers()
 
     constexpr auto anisotropyEnabled = Anisotropy > 1.0 ? VK_TRUE : VK_FALSE;
 
-    const VkSamplerCreateInfo linearSamplerInfo{
+    constexpr VkSamplerCreateInfo linearSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .magFilter = VK_FILTER_LINEAR,
       .minFilter = VK_FILTER_LINEAR,
@@ -532,8 +532,8 @@ MXC_RESULT Device::CreateSamplers()
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
-      .anisotropyEnable = anisotropyEnabled,
-      .maxAnisotropy = Anisotropy,
+      .anisotropyEnable = VK_FALSE,
+      .maxAnisotropy = 0.0,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
@@ -543,17 +543,17 @@ MXC_RESULT Device::CreateSamplers()
     };
     VK_CHK(vkCreateSampler(vkDevice, &linearSamplerInfo, VK_ALLOC, &vkLinearSampler));
 
-    const VkSamplerCreateInfo nearestSamplerInfo{
+    constexpr VkSamplerCreateInfo nearestSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
       .magFilter = VK_FILTER_NEAREST,
       .minFilter = VK_FILTER_NEAREST,
-      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
       .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
       .anisotropyEnable = VK_FALSE,
-      .maxAnisotropy = 1.0f,
+      .maxAnisotropy = 0.0f,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
@@ -563,24 +563,24 @@ MXC_RESULT Device::CreateSamplers()
     };
     VK_CHK(vkCreateSampler(vkDevice, &nearestSamplerInfo, VK_ALLOC, &vkNearestSampler));
 
-    constexpr VkSamplerReductionModeCreateInfoEXT samplerReductionModeCreateInfo{
+    constexpr VkSamplerReductionModeCreateInfoEXT minSamplerReductionModeCreateInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO_EXT,
       .pNext = nullptr,
       .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
     };
     const VkSamplerCreateInfo minSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-      .pNext = &samplerReductionModeCreateInfo,
+      .pNext = &minSamplerReductionModeCreateInfo,
       .flags = 0,
-      .magFilter = VK_FILTER_NEAREST,
-      .minFilter = VK_FILTER_NEAREST,
-      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .magFilter = VK_FILTER_LINEAR,
+      .minFilter = VK_FILTER_LINEAR,
+      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
       .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
       .mipLodBias = 0.0f,
-      .anisotropyEnable = anisotropyEnabled,
-      .maxAnisotropy = Anisotropy,
+      .anisotropyEnable = VK_FALSE,
+      .maxAnisotropy = 0.0,
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
@@ -589,6 +589,33 @@ MXC_RESULT Device::CreateSamplers()
       .unnormalizedCoordinates = VK_FALSE,
     };
     VK_CHK(vkCreateSampler(vkDevice, &minSamplerInfo, VK_ALLOC, &vkMinSampler));
+
+    constexpr VkSamplerReductionModeCreateInfoEXT maxSamplerReductionModeCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO_EXT,
+      .pNext = nullptr,
+      .reductionMode = VK_SAMPLER_REDUCTION_MODE_MAX,
+    };
+    const VkSamplerCreateInfo maxSamplerInfo{
+      .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+      .pNext = &maxSamplerReductionModeCreateInfo,
+      .flags = 0,
+      .magFilter = VK_FILTER_LINEAR,
+      .minFilter = VK_FILTER_LINEAR,
+      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+      .mipLodBias = 0.0f,
+      .anisotropyEnable = VK_FALSE,
+      .maxAnisotropy = 0.0,
+      .compareEnable = VK_FALSE,
+      .compareOp = VK_COMPARE_OP_ALWAYS,
+      .minLod = 0.0f,
+      .maxLod = 0.0f,
+      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+      .unnormalizedCoordinates = VK_FALSE,
+    };
+    VK_CHK(vkCreateSampler(vkDevice, &maxSamplerInfo, VK_ALLOC, &vkMaxSampler));
 
     return MXC_SUCCESS;
 }

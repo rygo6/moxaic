@@ -18,26 +18,23 @@ struct LocalNodeOrigin {
     vec3 worldDir;
 } nodeOrigin;
 
-struct SharedNodeOrigin {
+shared struct SharedNodeOrigin {
     bool inValid;
     vec3 worldPos;
     vec3 topTriWorldDir;
     vec3 bottomTriWorldDir;
-};
-
-shared SharedNodeOrigin sharedNodeOrigin;
-SharedNodeOrigin localNodeOrigin;
+} sharedNodeOrigin;
 
 float inverseLerp(float value, float a, float b) {
     return (value - a) / (b - a);
 }
 
-bool NodeIntersect(const vec2 uv, out vec3 intersectNodeNDC, out vec3 depthProjectGlobalNDC)
+bool NodeIntersect(const vec2 globalUV, out vec3 intersectNodeNDC, out vec3 depthProjectGlobalNDC)
 {
-    const vec2 ndc = NDCFromUV(uv);
-    const vec4 clipPos = vec4(ndc, 0, 1);
-    const vec3 worldPos = WorldPosFromGlobalClipPos(clipPos);
-    const vec3 worldRay = WorldRayDirFromGlobalNDC(ndc);
+    const vec2 globalNDC = NDCFromUV(globalUV);
+    const vec4 globalClipPos = vec4(globalNDC, 0, 1);
+    const vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
+    const vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
     vec3 intersectWorldPos;
     bool intersected = intersectRayPlane(worldPos, worldRay, nodeOrigin.worldPos, nodeOrigin.worldDir, intersectWorldPos);
 
@@ -45,13 +42,16 @@ bool NodeIntersect(const vec2 uv, out vec3 intersectNodeNDC, out vec3 depthProje
     intersectNodeNDC = NDCFromClipPos(nodeIntersectClipPos);
     const vec2 nodeIntersectUV = UVFromNDC(intersectNodeNDC);
 
-    const vec3 nodeWorldNormal = textureLod(nodeNormalTexture, nodeIntersectUV, 0).xyz * vec3(1, -1, 1);// I encoded y = up on sphere normals
+    const vec3 nodeNormalSample = textureLod(nodeNormalTexture, nodeIntersectUV, 0).xyz;
+    const vec4 worldNormal = nodeUBO.invView * vec4(nodeNormalSample, 1);
+    const float worldFacingRatio = dot(worldNormal.xyz, worldRay);
+
     const float nodeDepthSample = textureLod(nodeDepthTexture, nodeIntersectUV, 0).r;
 
     const vec3 depthProjectNodeNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
     depthProjectGlobalNDC = GlobalNDCFromNodeNDC(depthProjectNodeNDC);
 
-    return intersected && nodeDepthSample > 0 && dot(nodeWorldNormal.xyz, worldRay) < 0;
+    return intersected && nodeDepthSample > 0 && worldFacingRatio < 0;
 }
 
 void writeAtomicData(ivec2 coord, uint data){
@@ -174,7 +174,6 @@ void main()
         sharedNodeOrigin.bottomTriWorldDir = normalize(cross(xDiff, yDiffBottomTri));
     }
 
-
     barrier();
 
     // can't discern if this subgroupBroadcastFirst actually speeds things up vs reading shared mem directly
@@ -187,17 +186,17 @@ void main()
     const vec3 bottomWorldDir = subgroupBroadcastFirst(sharedNodeOrigin.bottomTriWorldDir);
     nodeOrigin.worldDir = topTriangle ? topWorldDir : bottomWorldDir;
 
-//    if (sharedNodeOrigin.inValid) {
-//        return;
-//    }
-//    nodeOrigin.worldPos = sharedNodeOrigin.worldPos;
-//    const vec3 topWorldDir = sharedNodeOrigin.topTriWorldDir;
-//    const vec3 bottomWorldDir = sharedNodeOrigin.bottomTriWorldDir;
-//    nodeOrigin.worldDir = topTriangle ? topWorldDir : bottomWorldDir;
+    //    if (sharedNodeOrigin.inValid) {
+    //        return;
+    //    }
+    //    nodeOrigin.worldPos = sharedNodeOrigin.worldPos;
+    //    const vec3 topWorldDir = sharedNodeOrigin.topTriWorldDir;
+    //    const vec3 bottomWorldDir = sharedNodeOrigin.bottomTriWorldDir;
+    //    nodeOrigin.worldDir = topTriangle ? topWorldDir : bottomWorldDir;
 
-//    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
-//        debugPrintfEXT("%.4f %.4f %.4f", nodeOriginWorldPos.x, nodeOriginWorldPos.y, nodeOriginWorldPos.z);
-//    }
+    //    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
+    //        debugPrintfEXT("%.4f %.4f %.4f", nodeOriginWorldPos.x, nodeOriginWorldPos.y, nodeOriginWorldPos.z);
+    //    }
 
     // source pixel
     vec3 intersectNodeNDC;
@@ -206,10 +205,26 @@ void main()
         return;
     }
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+
+//    vec3 nodeWorldDir = vec3(0, 0, 1);
+//    vec3 normal = texture(nodeNormalTexture, intersectNodeUV).xyz;
+//    //    vec3 worldNormal = normalize((nodeUBO.invView * vec4(normal, 1)).xyz);
+//    vec2 globalNDC = NDCFromUV(screenUV);
+//    vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
+//    //    vec4 worldDir = globalUBO.invView * vec4(0,0,1,0);
+//    float dotProd = -dot(normal, worldRay);
+//    float edgeFade = smoothstep(.2, 1, dotProd);
+//
+//    vec2 absNorm = abs(normal.xy);
+//    float mag = dot(absNorm, absNorm);
+//    float magMapped = smoothstep(0.06, 0, mag);
+//    //    vec3 color = vec3(magMapped);
+
+
     const vec2 depthProjectedGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
     const vec2 depthProjectedGlobalCoord = round(depthProjectedGlobalUV * screenSize);
-    const vec4 color = texture(nodeColorTexture, intersectNodeUV);
-    const uint packedData = packFloatAnd565Color(depthProjectedGlobalNDC.z, color.xyz);
+    const vec3 color = texture(nodeColorTexture, intersectNodeUV).xyz;
+    const uint packedData = packFloatAnd565Color(depthProjectedGlobalNDC.z, color);
     writeAtomicData(ivec2(depthProjectedGlobalCoord), packedData);
 
     // Stepback -- TODO may be better to just double sample
@@ -219,7 +234,7 @@ void main()
     const vec2 stepBackDir = depthProjectedGlobalUV - intersectGlobalUV;
     const vec2 normalizedStepBackDir = XYCoordNormalizedDir(stepBackDir);
     const ivec2 stepBackCoord = ivec2(round(depthProjectedGlobalCoord + normalizedStepBackDir));
-    writeAtomicData(stepBackCoord, packedData);
+//    writeAtomicData(stepBackCoord, packedData);
 }
 
 void mainTiled()

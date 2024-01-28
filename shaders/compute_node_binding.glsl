@@ -11,6 +11,7 @@ layout (set = 1, binding = 0) uniform NodeUBO {
 layout (set = 1, binding = 1) uniform sampler2D nodeColorTexture;
 layout (set = 1, binding = 2) uniform sampler2D nodeNormalTexture;
 layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
+//layout (set = 1, binding = 3, rgba16f) uniform image2D nodeGBufferTexture;
 layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
 
 struct VkDispatchIndirectCommand {
@@ -171,12 +172,12 @@ vec3 WorldRayDirFromNDC(vec2 ndc, mat4 invProj, mat4 invView)
 
 vec3 WorldRayDirFromGlobalNDC2(vec2 ndc)
 {
-    const vec4 clip1 = vec4(ndc, 0, 1);
-    const vec4 clip2 = vec4(ndc, 1, 1);
-    const vec3 worldPos1 = WorldPosFromGlobalClipPos(clip1);
-    const vec3 worldPos2 = WorldPosFromGlobalClipPos(clip2);
-    const vec3 ray = worldPos2 - worldPos1;
-    return normalize(ray);
+    const vec4 clipNear = vec4(ndc, 1, 1);
+    const vec4 clipFar = vec4(ndc, 0, 1);
+    const vec3 worldPosNear = WorldPosFromGlobalClipPos(clipNear);
+    const vec3 worldPosFar = WorldPosFromGlobalClipPos(clipFar);
+    const vec3 nearToFarRay = worldPosFar - worldPosNear;
+    return normalize(nearToFarRay);
 }
 
 vec3 WorldRayDirFromGlobalNDC(vec2 ndc)

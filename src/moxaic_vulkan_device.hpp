@@ -136,6 +136,7 @@ namespace Moxaic::Vulkan
         const auto& GetVkLinearSampler() const { return vkLinearSampler; }
         const auto& GetVkNearestSampler() const { return vkNearestSampler; }
         const auto& GetVkMinSampler() const { return vkMinSampler; }
+        const auto& GetVkMaxSampler() const { return vkMaxSampler; }
 
         const auto GetGraphicsQueueFamilyIndex() const { return graphicsQueueFamilyIndex; }
 
@@ -162,6 +163,7 @@ namespace Moxaic::Vulkan
         VkSampler vkLinearSampler{VK_NULL_HANDLE};
         VkSampler vkNearestSampler{VK_NULL_HANDLE};
         VkSampler vkMinSampler{VK_NULL_HANDLE};
+        VkSampler vkMaxSampler{VK_NULL_HANDLE};
 
         uint32_t graphicsQueueFamilyIndex{};
         uint32_t computeQueueFamilyIndex{};

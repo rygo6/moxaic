@@ -16,8 +16,6 @@ MXC_RESULT Core::Run()
     const auto device = std::make_unique<Vulkan::Device>();
     MXC_CHK(device->Init());
 
-    Vulkan::CompositorPipelineType = Vulkan::PipelineType::Compute;
-
     std::unique_ptr<SceneBase> scene;
     switch (Role) {
         case Role::Compositor:

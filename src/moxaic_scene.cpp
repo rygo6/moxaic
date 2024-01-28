@@ -227,8 +227,6 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
         nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
         nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
-
-        MXC_LOG("CHILD UPDATE");
     }
 
     // if (Window::GetUserCommand().debugIncrement != 0) {
@@ -351,7 +349,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     const auto timestamps = Device->GetTimestamps();
     const float computeMs = timestamps[1] - timestamps[0];
-    MXC_LOG_NAMED(computeMs);
+    // MXC_LOG_NAMED(computeMs);
 
     return MXC_SUCCESS;
 }
