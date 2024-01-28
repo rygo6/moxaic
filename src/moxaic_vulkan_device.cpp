@@ -1257,7 +1257,7 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
       .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
     const StaticArray waitSemaphores{
-      pTimelineSemaphore->vkSemaphore(),
+      pTimelineSemaphore->GetVkSemaphore(),
       swap.GetVkAcquireCompleteSemaphore(),
     };
     const StaticArray waitDstStageMasks{
@@ -1265,7 +1265,7 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
       waitDstStageMask,
     };
     const StaticArray signalSemaphores{
-      pTimelineSemaphore->vkSemaphore(),
+      pTimelineSemaphore->GetVkSemaphore(),
       swap.GetVkRenderCompleteSemaphore(),
     };
     const VkSubmitInfo submitInfo = {
@@ -1311,13 +1311,13 @@ MXC_RESULT Device::SubmitQueue(const VkCommandBuffer& commandBuffer,
       .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
     const StaticArray waitSemaphores{
-      pTimelineSemaphore->vkSemaphore(),
+      pTimelineSemaphore->GetVkSemaphore(),
     };
     const StaticArray waitDstStageMasks{
       waitDstStageMask,
     };
     const StaticArray signalSemaphores{
-      pTimelineSemaphore->vkSemaphore(),
+      pTimelineSemaphore->GetVkSemaphore(),
     };
     const VkSubmitInfo submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,

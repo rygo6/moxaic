@@ -35,15 +35,15 @@ namespace Moxaic::Vulkan
 
         uint64_t localWaitValue_{0};
 
-        MXC_GET2(vkSemaphore);
+        const auto& GetVkSemaphore() const { return vkSemaphore; }
 
     private:
-        const Device* const device_;
+        const Device* const Device;
 
-        VkSemaphore vkSemaphore_{VK_NULL_HANDLE};
+        VkSemaphore vkSemaphore{VK_NULL_HANDLE};
 
 #ifdef WIN32
-        HANDLE externalHandle_{nullptr};
+        HANDLE externalHandle{nullptr};
 #endif
     };
 }

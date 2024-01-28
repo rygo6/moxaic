@@ -13,16 +13,6 @@
 #define MXC_GET(field) \
     auto const& Get##field() const { return m_##field; }
 
-#define MXC_GET2(field) \
-    auto const& field() const { return field##_; }
-
-#define MXC_SET(field) \
-    void Set##field(auto const& field) { m_##field = field; }
-
-#define MXC_GETSET(field) \
-    MXC_GET(field)        \
-    MXC_SET(field)
-
 #define MXC_GETARR(field) \
     auto const& Get##field(int const i) const { return m_##field[i]; }
 
