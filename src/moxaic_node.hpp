@@ -19,57 +19,48 @@ namespace Moxaic
 {
     class NodeReference
     {
+        const Vulkan::Device* const Device;
+
     public:
         MXC_NO_VALUE_PASS(NodeReference);
 
-        explicit NodeReference(const Vulkan::Device* const pDevice);
+        explicit NodeReference(const Vulkan::Device* pDevice);
         virtual ~NodeReference();
 
-        MXC_RESULT Init(const Vulkan::PipelineType pipelineType);
-
+        MXC_RESULT Init(Vulkan::PipelineType pipelineType);
         MXC_RESULT ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore);
-
         void SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camera& camera);
 
-        MXC_PTR_ACCESS(Transform);
-        MXC_PTR_ACCESS(ExportedGlobalDescriptor);
-        MXC_PTR_ACCESS(ExportedSemaphore);
+        Moxaic::Transform transform{};
+        // Buffer which the node is currently using to render
+        InterProcessBuffer<Vulkan::GlobalDescriptor::UniformBuffer> exportedGlobalDescriptor{};
+        Vulkan::Semaphore exportedSemaphore{Device};
+        float drawRadius{1.0f};
 
-        MXC_GET(DrawRadius);
-
-        MXC_GETARR(ExportedFramebuffers);
+        const auto& GetExportedFramebuffer(const int i) const { return exportedFramebuffers[i]; }
 
     private:
-        const Vulkan::Device* const k_pDevice;
 
-        Moxaic::Transform m_Transform{};
+        std::string name{"default"};
 
-        std::string m_Name{"default"};
-        float m_DrawRadius{1.0f};
+        Camera compositingCamera{};// Camera which compositor is using to reproject.
 
-        Camera m_CompositingCamera{};// Camera which compositor is using to reproject.
+        InterProcessProducer ipcToNode{};
+        InterProcessReceiver ipcFromNode{};
 
-        InterProcessBuffer<Vulkan::GlobalDescriptor::UniformBuffer> m_ExportedGlobalDescriptor{};
-        // Buffer which the node is currently using to render
+        StaticArray<Vulkan::Framebuffer, FramebufferCount> exportedFramebuffers{
+          Vulkan::Framebuffer(Device),
+          Vulkan::Framebuffer(Device)};
 
-        InterProcessProducer m_IPCToNode{};
-        InterProcessReceiver m_IPCFromNode{};
-
-        Vulkan::Semaphore m_ExportedSemaphore{k_pDevice};
-
-        StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ExportedFramebuffers{
-          Vulkan::Framebuffer(k_pDevice),
-          Vulkan::Framebuffer(k_pDevice)};
-
-        STARTUPINFO m_Startupinfo{};
-        PROCESS_INFORMATION m_ProcessInformation{};
+        STARTUPINFO startupInfo{};
+        PROCESS_INFORMATION processInformation{};
     };
 
     class Node
     {
+    public:
         MXC_NO_VALUE_PASS(Node);
 
-    public:
         struct ImportParam
         {
             uint32_t framebufferWidth;
@@ -113,7 +104,6 @@ namespace Moxaic
 
     private:
         const Vulkan::Device* const k_pDevice;
-        ;
 
         StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
         {

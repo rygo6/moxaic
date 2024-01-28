@@ -40,7 +40,7 @@ MXC_RESULT CompositorScene::Init()
 
     for (int i = 0; i < meshNodeDescriptor.size(); ++i) {
         MXC_CHK(meshNodeDescriptor[i].Init(globalDescriptor.localBuffer,
-                                           nodeReference.GetExportedFramebuffers(i)));
+                                           nodeReference.GetExportedFramebuffer(i)));
     }
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
@@ -49,8 +49,8 @@ MXC_RESULT CompositorScene::Init()
 
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    nodeReference.pExportedGlobalDescriptor()->localBuffer = globalDescriptor.localBuffer;
-    nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+    nodeReference.exportedGlobalDescriptor.localBuffer = globalDescriptor.localBuffer;
+    nodeReference.exportedGlobalDescriptor.WriteLocalBuffer();
 
     return MXC_SUCCESS;
 }
@@ -68,23 +68,23 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
     Device->ResetTimestamps();
     Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
-    auto* const nodeSemaphore = nodeReference.pExportedSemaphore();
-    nodeSemaphore->SyncLocalWaitValue();
-    if (nodeSemaphore->localWaitValue_ != priorNodeSemaphoreWaitValue) {
-        priorNodeSemaphoreWaitValue = nodeSemaphore->localWaitValue_;
+    auto& nodeSemaphore = nodeReference.exportedSemaphore;
+    nodeSemaphore.SyncLocalWaitValue();
+    if (nodeSemaphore.localWaitValue != priorNodeSemaphoreWaitValue) {
+        priorNodeSemaphoreWaitValue = nodeSemaphore.localWaitValue;
         nodeFramebufferIndex = !nodeFramebufferIndex;
 
-        const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffers(nodeFramebufferIndex);
+        const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffer(nodeFramebufferIndex);
         nodeFramebuffer.Transition(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
-        auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer;
+        auto& lastUsedNodeDescriptorBuffer = nodeReference.exportedGlobalDescriptor.localBuffer;
         meshNodeDescriptor[nodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         meshNodeDescriptor[nodeFramebufferIndex].WriteLocalBuffer();
 
         nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
-        nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+        nodeReference.exportedGlobalDescriptor.WriteLocalBuffer();
     }
 
     const auto& framebuffer = framebuffers[framebufferIndex];
@@ -176,7 +176,7 @@ MXC_RESULT ComputeCompositorScene::Init()
       .screenSize = globalDescriptor.localBuffer.screenSize,
     };
     MXC_CHK(computeNodeDescriptor.Init(computeNodeBuffer,
-                                       nodeReference.GetExportedFramebuffers(nodeFramebufferIndex),
+                                       nodeReference.GetExportedFramebuffer(nodeFramebufferIndex),
                                        outputAveragedAtomicTexture,
                                        outputAtomicTexture,
                                        swap.GetVkSwapImageViews(nodeFramebufferIndex)));
@@ -188,7 +188,7 @@ MXC_RESULT ComputeCompositorScene::Init()
     // and must wait again after node is inited on other side... wHyy!?!
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
     nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
-    nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+    nodeReference.exportedGlobalDescriptor.WriteLocalBuffer();
 
     return MXC_SUCCESS;
 }
@@ -206,19 +206,19 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     Device->ResetTimestamps();
     Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
 
-    auto* const nodeSemaphore = nodeReference.pExportedSemaphore();
-    nodeSemaphore->SyncLocalWaitValue();
-    if (nodeSemaphore->localWaitValue_ != priorNodeSemaphoreWaitValue) {
-        priorNodeSemaphoreWaitValue = nodeSemaphore->localWaitValue_;
+    auto& nodeSemaphore = nodeReference.exportedSemaphore;
+    nodeSemaphore.SyncLocalWaitValue();
+    if (nodeSemaphore.localWaitValue != priorNodeSemaphoreWaitValue) {
+        priorNodeSemaphoreWaitValue = nodeSemaphore.localWaitValue;
         nodeFramebufferIndex = !nodeFramebufferIndex;
 
-        const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffers(nodeFramebufferIndex);
+        const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffer(nodeFramebufferIndex);
         nodeFramebuffer.Transition(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToComputeRead);
         computeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
-        const auto& lastUsedNodeDescriptorBuffer = nodeReference.pExportedGlobalDescriptor()->localBuffer;
+        const auto& lastUsedNodeDescriptorBuffer = nodeReference.exportedGlobalDescriptor.localBuffer;
         computeNodeDescriptor.localUniformBuffer.view = lastUsedNodeDescriptorBuffer.view;
         computeNodeDescriptor.localUniformBuffer.invView = lastUsedNodeDescriptorBuffer.invView;
         computeNodeDescriptor.localUniformBuffer.viewProj = lastUsedNodeDescriptorBuffer.viewProj;
@@ -226,7 +226,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         computeNodeDescriptor.WriteLocalBuffer();// does doing a single memcpy to unfiorm actually make it faster?
 
         nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
-        nodeReference.pExportedGlobalDescriptor()->WriteLocalBuffer();
+        nodeReference.exportedGlobalDescriptor.WriteLocalBuffer();
     }
 
     // if (Window::GetUserCommand().debugIncrement != 0) {
@@ -430,7 +430,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     //                                          m_Node.ImportedNodeSemaphore());
 
     node.pImportedNodeSemaphore()->Wait();
-    node.pImportedCompositorSemaphore()->localWaitValue_ += compositorSempahoreStep;
+    node.pImportedCompositorSemaphore()->localWaitValue += compositorSempahoreStep;
     node.pImportedCompositorSemaphore()->Wait();
 
     framebufferIndex = !framebufferIndex;

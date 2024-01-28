@@ -51,53 +51,53 @@ static MXC_RESULT StartProcess(STARTUPINFO& si, PROCESS_INFORMATION& pi)
 }
 
 NodeReference::NodeReference(const Vulkan::Device* const pDevice)
-    : k_pDevice(pDevice) {}
+    : Device(pDevice) {}
 
 NodeReference::~NodeReference()
 {
-    WaitForSingleObject(m_ProcessInformation.hProcess, INFINITE);
-    CloseHandle(m_ProcessInformation.hProcess);
-    CloseHandle(m_ProcessInformation.hThread);
+    WaitForSingleObject(processInformation.hProcess, INFINITE);
+    CloseHandle(processInformation.hProcess);
+    CloseHandle(processInformation.hThread);
 }
 
 MXC_RESULT NodeReference::Init(const Vulkan::PipelineType pipelineType)
 {
     MXC_LOG("Init NodeReference");
-    MXC_CHK(m_ExportedSemaphore.Init(false,
-                                     Vulkan::Locality::External));
+    MXC_CHK(exportedSemaphore.Init(false,
+                                   Vulkan::Locality::External));
 
-    m_IPCToNode.Init(k_TempSharedProducerName);
-    m_ExportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
+    ipcToNode.Init(k_TempSharedProducerName);
+    exportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
 
-    for (int i = 0; i < m_ExportedFramebuffers.size(); ++i) {
-        m_ExportedFramebuffers[i].Init(pipelineType,
+    for (int i = 0; i < exportedFramebuffers.size(); ++i) {
+        exportedFramebuffers[i].Init(pipelineType,
                                        Window::GetExtents(),
                                        Vulkan::Locality::External);
     }
 
-    StartProcess(m_Startupinfo, m_ProcessInformation);
+    StartProcess(startupInfo, processInformation);
 
     return MXC_SUCCESS;
 }
 
 MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemaphore)
 {
-    const auto hProcess = m_ProcessInformation.hProcess;
+    const auto hProcess = processInformation.hProcess;
     const Node::ImportParam importParam{
-      .framebufferWidth = m_ExportedFramebuffers[0].GetExtents().width,
-      .framebufferHeight = m_ExportedFramebuffers[0].GetExtents().height,
-      .colorFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetColorTexture().ClonedExternalHandle(hProcess),
-      .colorFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetColorTexture().ClonedExternalHandle(hProcess),
-      .normalFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetNormalTexture().ClonedExternalHandle(hProcess),
-      .normalFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetNormalTexture().ClonedExternalHandle(hProcess),
-      .gBufferFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetGBufferTexture().ClonedExternalHandle(hProcess),
-      .gBufferFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetGBufferTexture().ClonedExternalHandle(hProcess),
-      .depthFramebuffer0ExternalHandle = m_ExportedFramebuffers[0].GetDepthTexture().ClonedExternalHandle(hProcess),
-      .depthFramebuffer1ExternalHandle = m_ExportedFramebuffers[1].GetDepthTexture().ClonedExternalHandle(hProcess),
+      .framebufferWidth = exportedFramebuffers[0].GetExtents().width,
+      .framebufferHeight = exportedFramebuffers[0].GetExtents().height,
+      .colorFramebuffer0ExternalHandle = exportedFramebuffers[0].GetColorTexture().ClonedExternalHandle(hProcess),
+      .colorFramebuffer1ExternalHandle = exportedFramebuffers[1].GetColorTexture().ClonedExternalHandle(hProcess),
+      .normalFramebuffer0ExternalHandle = exportedFramebuffers[0].GetNormalTexture().ClonedExternalHandle(hProcess),
+      .normalFramebuffer1ExternalHandle = exportedFramebuffers[1].GetNormalTexture().ClonedExternalHandle(hProcess),
+      .gBufferFramebuffer0ExternalHandle = exportedFramebuffers[0].GetGBufferTexture().ClonedExternalHandle(hProcess),
+      .gBufferFramebuffer1ExternalHandle = exportedFramebuffers[1].GetGBufferTexture().ClonedExternalHandle(hProcess),
+      .depthFramebuffer0ExternalHandle = exportedFramebuffers[0].GetDepthTexture().ClonedExternalHandle(hProcess),
+      .depthFramebuffer1ExternalHandle = exportedFramebuffers[1].GetDepthTexture().ClonedExternalHandle(hProcess),
       .compositorSemaphoreExternalHandle = compositorSemaphore.ClonedExternalHandle(hProcess),
-      .nodeSemaphoreExternalHandle = m_ExportedSemaphore.ClonedExternalHandle(hProcess),
+      .nodeSemaphoreExternalHandle = exportedSemaphore.ClonedExternalHandle(hProcess),
     };
-    m_IPCToNode.Enque(InterProcessTargetFunc::ImportCompositor, &importParam);
+    ipcToNode.Enque(InterProcessTargetFunc::ImportCompositor, &importParam);
 
     return MXC_SUCCESS;
 }
@@ -105,20 +105,20 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemap
 void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camera& camera)
 {
     // Condense nearz/farz to draw radius of node
-    const auto viewPosition = camera.GetView() * glm::vec4(m_Transform.position_, 1);
+    const auto viewPosition = camera.GetView() * glm::vec4(transform.position_, 1);
     const float viewDistanceToCenter = -viewPosition.z;
-    const float offset = m_DrawRadius * 0.5f;
+    const float offset = drawRadius * 0.5f;
     const float farZ = viewDistanceToCenter + offset;
     float nearZ = viewDistanceToCenter - offset;
     if (nearZ < MXC_CAMERA_MIN_Z) {
         nearZ = MXC_CAMERA_MIN_Z;
     }
-    auto& localBuffer = m_ExportedGlobalDescriptor.localBuffer;
+    auto& localBuffer = exportedGlobalDescriptor.localBuffer;
     localBuffer.view = camera.GetView();
     localBuffer.proj = Camera::ReversePerspective(camera.fieldOfView,
-                                        camera.aspectRatio,
-                                        nearZ,
-                                        farZ);
+                                                  camera.aspectRatio,
+                                                  nearZ,
+                                                  farZ);
     localBuffer.viewProj = localBuffer.proj * localBuffer.view;
     localBuffer.invView = camera.GetInverseView();
     localBuffer.invProj = glm::inverse(localBuffer.proj);

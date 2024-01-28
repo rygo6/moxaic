@@ -1237,9 +1237,9 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
                                          Semaphore* const pTimelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    const uint64_t waitValue = pTimelineSemaphore->localWaitValue_;
-    pTimelineSemaphore->localWaitValue_++;
-    const uint64_t signalValue = pTimelineSemaphore->localWaitValue_;
+    const uint64_t waitValue = pTimelineSemaphore->localWaitValue;
+    pTimelineSemaphore->localWaitValue++;
+    const uint64_t signalValue = pTimelineSemaphore->localWaitValue;
     const StaticArray waitSemaphoreValues{
       (uint64_t) waitValue,
       (uint64_t) 0,
@@ -1293,9 +1293,9 @@ MXC_RESULT Device::SubmitQueue(const VkCommandBuffer& commandBuffer,
                                Semaphore* const pTimelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    const uint64_t waitValue = pTimelineSemaphore->localWaitValue_;
-    pTimelineSemaphore->localWaitValue_++;
-    const uint64_t signalValue = pTimelineSemaphore->localWaitValue_;
+    const uint64_t waitValue = pTimelineSemaphore->localWaitValue;
+    pTimelineSemaphore->localWaitValue++;
+    const uint64_t signalValue = pTimelineSemaphore->localWaitValue;
     const StaticArray waitSemaphoreValues{
       waitValue,
     };
