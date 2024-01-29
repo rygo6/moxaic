@@ -1,4 +1,4 @@
-// #define MXC_DISABLE_LOG
+#define MXC_DISABLE_LOG
 
 #include "moxaic_node.hpp"
 

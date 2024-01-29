@@ -13,50 +13,65 @@ namespace Moxaic::Vulkan
 {
     class Device;
 
-    class Texture
+    class Texture final
     {
     public:
         MXC_NO_VALUE_PASS(Texture);
 
-        explicit Texture(const Vulkan::Device* const device);
-        virtual ~Texture();
+        explicit Texture(const Device* device);
+        ~Texture();
 
-        MXC_RESULT InitFromFile(const std::string& file,
-                                const Locality locality);
-        MXC_RESULT InitFromImport(const VkFormat format,
-                                  const VkExtent2D extents,
-                                  const VkImageUsageFlags usage,
-                                  const VkImageAspectFlags aspectMask,
-                                  const HANDLE externalMemory);
-        MXC_RESULT Init(const VkFormat format,
-                        const VkExtent2D extents,
-                        const VkImageUsageFlags usage,
-                        const VkImageAspectFlags aspectMask,
-                        const Locality locality,
-                        const VkSampleCountFlagBits sampleCount);
-        MXC_RESULT Init(const VkFormat format,
-                         const VkExtent2D extents,
-                         const VkImageUsageFlags usage,
-                         const VkImageAspectFlags aspectMask,
-                         const Locality locality);
+        MXC_RESULT InitFromFile(const char* file,
+                                Locality locality);
+        MXC_RESULT InitFromImport(VkFormat format,
+                                  VkExtent2D extents,
+                                  VkImageUsageFlags usage,
+                                  VkImageAspectFlags aspectMask,
+                                  HANDLE externalMemory);
+        MXC_RESULT Init(VkFormat format,
+                        VkExtent2D extents,
+                        VkImageUsageFlags usage,
+                        VkImageAspectFlags aspectMask,
+                        Locality locality,
+                        VkSampleCountFlagBits sampleCount);
+        MXC_RESULT Init(VkFormat format,
+                        VkExtent2D extents,
+                        VkImageUsageFlags usage,
+                        VkImageAspectFlags aspectMask,
+                        Locality locality);
 
-        MXC_RESULT TransitionInitialImmediate(const PipelineType pipelineType) const;
+        MXC_RESULT TransitionInitialImmediate(PipelineType pipelineType) const;
 
         void BlitTo(VkCommandBuffer commandBuffer, const Texture& dstTexture) const;
 
         HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
 
+        constexpr VkImageSubresourceRange GetSubresourceRange() const
+        {
+            return {
+                .aspectMask = aspectMask,
+                .baseMipLevel = 0,
+                .levelCount = mipLevels,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+              };
+        }
+
         bool IsDepth() const
         {
-            return format == kDepthBufferFormat;
+            return aspectMask == VK_IMAGE_ASPECT_DEPTH_BIT;
         }
 
         const auto& GetVkImage() const { return vkImage; }
         const auto& GetVkImageView() const { return vkImageView; }
+
         const auto GetExtents() const { return extents; }
+        const auto GetMipLevels() const { return mipLevels; }
 
     private:
-        const Vulkan::Device* const Device;
+        const Device* const Device;
+
+        uint32_t mipLevels{1};
 
         VkImage vkImage{VK_NULL_HANDLE};
         VkImageView vkImageView{VK_NULL_HANDLE};
@@ -73,17 +88,16 @@ namespace Moxaic::Vulkan
         MXC_RESULT TransitionImmediateInitialToTransferDst() const;
         MXC_RESULT TransitionImmediateTransferDstToGraphicsRead() const;
 
-
-        MXC_RESULT InitImage(const VkFormat format,
-                             const VkExtent2D extents,
-                             const VkImageUsageFlags usage,
-                             const Locality locality);
-        MXC_RESULT InitImage(const VkFormat format,
-                             const VkExtent2D extents,
-                             const VkImageUsageFlags usage,
-                             const Locality locality,
-                             const VkSampleCountFlagBits sampleCount);
-        MXC_RESULT InitImageView(const VkFormat& format,
-                                 const VkImageAspectFlags& aspectMask);
+        MXC_RESULT InitImage(VkFormat format,
+                             VkExtent2D extents,
+                             VkImageUsageFlags usage,
+                             Locality locality);
+        MXC_RESULT InitImage(VkFormat format,
+                             VkExtent2D extents,
+                             VkImageUsageFlags usage,
+                             Locality locality,
+                             VkSampleCountFlagBits sampleCount);
+        MXC_RESULT InitImageView(VkFormat format,
+                                 VkImageAspectFlags aspectMask);
     };
-}// namespace Moxaic::Vulkan
+}

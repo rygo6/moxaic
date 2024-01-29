@@ -16,21 +16,19 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(Framebuffer);
 
-        explicit Framebuffer(const Vulkan::Device* const pDevice);
+        explicit Framebuffer(const Vulkan::Device* pDevice);
         virtual ~Framebuffer();
 
-        MXC_RESULT Init(const PipelineType pipelineType,
-                        const VkExtent2D extents, const Locality locality);
-
-        MXC_RESULT InitFromImport(const PipelineType pipelineType,
-                                  const VkExtent2D extents,
-                                  const HANDLE colorExternalHandle,
-                                  const HANDLE normalExternalHandle,
-                                  const HANDLE gBufferExternalHandle,
-                                  const HANDLE depthExternalHandle);
-
+        MXC_RESULT Init(PipelineType pipelineType,
+                        VkExtent2D extents, Locality locality);
+        MXC_RESULT InitFromImport(PipelineType pipelineType,
+                                  VkExtent2D extents,
+                                  HANDLE colorExternalHandle,
+                                  HANDLE normalExternalHandle,
+                                  HANDLE gBufferExternalHandle,
+                                  HANDLE depthExternalHandle);
         void AcquireFramebufferFromExternalToGraphicsAttach();
-        void Transition(const VkCommandBuffer commandbuffer,
+        void Transition(VkCommandBuffer commandbuffer,
                         const Barrier& src,
                         const Barrier& dst) const;
 

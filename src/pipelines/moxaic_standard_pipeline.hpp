@@ -59,8 +59,8 @@ namespace Moxaic::Vulkan
             MXC_CHK(CreateVertexInputOpaquePipe(stages.size(),
                                                 stages.data(),
                                                 nullptr));
-            vkDestroyShaderModule(k_pDevice->  GetVkDevice(), vertShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->  GetVkDevice(), fragShader, VK_ALLOC);
+            vkDestroyShaderModule(k_pDevice->GetVkDevice(), vertShader, VK_ALLOC);
+            vkDestroyShaderModule(k_pDevice->GetVkDevice(), fragShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
 
@@ -68,24 +68,24 @@ namespace Moxaic::Vulkan
                             const GlobalDescriptor& descriptor) const
         {
             GraphicsPipeline::BindDescriptor(commandBuffer,
-                                       descriptor.GetVkDescriptorSet(),
-                                       GlobalDescriptor::SetIndex);
+                                             descriptor.GetVkDescriptorSet(),
+                                             GlobalDescriptor::SetIndex);
         }
 
         void BindDescriptor(const VkCommandBuffer commandBuffer,
                             const StandardMaterialDescriptor& descriptor) const
         {
             GraphicsPipeline::BindDescriptor(commandBuffer,
-                                       descriptor.GetVkDescriptorSet(),
-                                       StandardMaterialDescriptor::SetIndex);
+                                             descriptor.GetVkDescriptorSet(),
+                                             StandardMaterialDescriptor::SetIndex);
         }
 
         void BindDescriptor(const VkCommandBuffer commandBuffer,
                             const ObjectDescriptor& descriptor) const
         {
             GraphicsPipeline::BindDescriptor(commandBuffer,
-                                       descriptor.GetVkDescriptorSet(),
-                                       ObjectDescriptor::SetIndex);
+                                             descriptor.GetVkDescriptorSet(),
+                                             ObjectDescriptor::SetIndex);
         }
     };
 }// namespace Moxaic::Vulkan

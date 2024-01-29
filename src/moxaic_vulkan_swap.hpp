@@ -11,15 +11,13 @@ namespace Moxaic::Vulkan
     class Device;
     class Texture;
 
-    inline constexpr uint32_t SwapCount = 3;
-
-    class Swap
+    class Swap final
     {
     public:
         MXC_NO_VALUE_PASS(Swap);
 
-        explicit Swap(const Vulkan::Device* pDevice);
-        virtual ~Swap();
+        explicit Swap(const Device* pDevice);
+        ~Swap();
 
         MXC_RESULT Init(PipelineType pipelineType,
                         VkExtent2D dimensions);
@@ -35,6 +33,19 @@ namespace Moxaic::Vulkan
         MXC_RESULT QueuePresent(const VkQueue& queue,
                                 uint32_t swapIndex) const;
 
+        constexpr VkImageSubresourceRange GetSubresourceRange() const
+        {
+            return {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .baseMipLevel = 0,
+              .levelCount = 1,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
+            };
+        }
+
+        constexpr static uint32_t SwapCount = 3;
+
         MXC_GET(VkAcquireCompleteSemaphore);
         MXC_GET(VkRenderCompleteSemaphore);
         MXC_GET(Format);
@@ -43,7 +54,7 @@ namespace Moxaic::Vulkan
         MXC_GETARR(VkSwapImages);
 
     private:
-        const Vulkan::Device* const Device;
+        const Device* const Device;
 
         VkSwapchainKHR m_VkSwapchain{VK_NULL_HANDLE};
         VkSemaphore m_VkAcquireCompleteSemaphore{VK_NULL_HANDLE};

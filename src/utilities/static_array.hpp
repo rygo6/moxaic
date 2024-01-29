@@ -5,19 +5,19 @@ namespace Moxaic
     template<typename T, uint32_t N>
     struct StaticArray
     {
-        T m_Data[N];
+        T internalData[N];
 
-        T& operator[](size_t i) { return m_Data[i]; }
-        T const& operator[](size_t i) const { return m_Data[i]; }
+        T& operator[](size_t i) { return internalData[i]; }
+        T const& operator[](size_t i) const { return internalData[i]; }
 
-        operator T*() { return m_Data; }
-        operator const T*() const { return m_Data; }
+        operator T*() { return internalData; }
+        operator const T*() const { return internalData; }
 
-        T const* begin() const { return m_Data; }
-        T const* end() const { return m_Data + N; }
+        T const* begin() const { return internalData; }
+        T const* end() const { return internalData + N; }
 
-        T* data() { return m_Data; }
-        T const* data() const { return m_Data; }
+        T* data() { return internalData; }
+        T const* data() const { return internalData; }
         static uint32_t size() { return N; }
     };
 
@@ -29,9 +29,9 @@ namespace Moxaic
     template<typename T>
     struct StaticRef
     {
-        constexpr StaticRef(T data) { Data = data; }
-        T Data;
-        constexpr operator T*() { return &Data; }
-        constexpr operator T const*() const { return &Data; }
+        StaticRef(T data) { internalData = data; }
+        T internalData;
+        operator T*() { return &internalData; }
+        operator T const*() const { return &internalData; }
     };
 }

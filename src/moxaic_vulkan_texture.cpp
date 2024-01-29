@@ -1,4 +1,4 @@
-// #define MXC_DISABLE_LOG
+#define MXC_DISABLE_LOG
 
 #include "moxaic_vulkan_texture.hpp"
 #include "moxaic_logging.hpp"
@@ -31,7 +31,7 @@ Texture::~Texture()
         CloseHandle(externalHandle);
 }
 
-MXC_RESULT Texture::InitFromFile(const std::string& file,
+MXC_RESULT Texture::InitFromFile(const char* file,
                                  const Locality locality)
 {
     MXC_LOG("Texture::InitFromFile",
@@ -41,7 +41,7 @@ MXC_RESULT Texture::InitFromFile(const std::string& file,
     int texChannels;
     int width;
     int height;
-    stbi_uc* pixels = stbi_load(file.c_str(),
+    stbi_uc* pixels = stbi_load(file,
                                 &width,
                                 &height,
                                 &texChannels,
@@ -227,8 +227,8 @@ HANDLE Texture::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
     return duplicateHandle;
 }
 
-MXC_RESULT Texture::InitImageView(const VkFormat& format,
-                                  const VkImageAspectFlags& aspectMask)
+MXC_RESULT Texture::InitImageView(VkFormat format,
+                                  VkImageAspectFlags aspectMask)
 {
     const VkImageViewCreateInfo imageViewCreateInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -246,7 +246,7 @@ MXC_RESULT Texture::InitImageView(const VkFormat& format,
       .subresourceRange{
         .aspectMask = aspectMask,
         .baseMipLevel = 0,
-        .levelCount = 1,
+        .levelCount = mipLevels,
         .baseArrayLayer = 0,
         .layerCount = 1,
       },
@@ -275,7 +275,7 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
       .imageType = VK_IMAGE_TYPE_2D,
       .format = format,
       .extent = {extents.width, extents.height, 1},
-      .mipLevels = 1,
+      .mipLevels = mipLevels,
       .arrayLayers = 1,
       .samples = sampleCount,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
@@ -304,7 +304,6 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
 void Texture::BlitTo(const VkCommandBuffer commandBuffer,
                      const Texture& dstTexture) const
 {
-    MXC_LOG_NAMED(IsDepth());
     const StaticArray transitionBlitBarrier{
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -316,19 +315,18 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = vkImage,
-        .subresourceRange = IsDepth() ? Vulkan::DefaultDepthSubresourceRange :
-                                        Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_NONE,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = dstTexture.GetVkImage(),
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = dstTexture.GetSubresourceRange(),
       },
     };
     VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
@@ -390,7 +388,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = vkImage,
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -401,7 +399,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = dstTexture.GetVkImage(),
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = dstTexture.GetSubresourceRange(),
       },
     };
     VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,

@@ -1,4 +1,4 @@
-// #define MXC_DISABLE_LOG
+#define MXC_DISABLE_LOG
 
 #include "moxaic_vulkan_device.hpp"
 #include "main.hpp"
@@ -326,20 +326,24 @@ MXC_RESULT Device::CreateRenderPass()
     MXC_LOG("Vulkan::Device::CreateRenderPass");
     // supposedly most correct https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#swapchain-image-acquire-and-present
     constexpr StaticArray colorAttachments{
+      // color
       (VkAttachmentReference){
         .attachment = 0,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       },
+      // normal
       (VkAttachmentReference){
         .attachment = 1,
         .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       },
-      (VkAttachmentReference){
-        .attachment = 2,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      }};
+      // gbuffer
+      // (VkAttachmentReference){
+      //   .attachment = 2,
+      //   .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      // }
+    };
     constexpr VkAttachmentReference depthAttachmentReference = {
-      .attachment = 3,
+      .attachment = 2,
       .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
     };
     const StaticArray subpass{
@@ -370,6 +374,7 @@ MXC_RESULT Device::CreateRenderPass()
       },
     };
     constexpr StaticArray attachments{
+      // Color
       (VkAttachmentDescription){
         .flags = 0,
         .format = kColorBufferFormat,
@@ -383,6 +388,7 @@ MXC_RESULT Device::CreateRenderPass()
         //                    .finalLayout = pVulkan->isChild ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       },
+      // Normal
       (VkAttachmentDescription){
         .flags = 0,
         .format = kNormalBufferFormat,
@@ -394,17 +400,19 @@ MXC_RESULT Device::CreateRenderPass()
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
         .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       },
-      (VkAttachmentDescription){
-        .flags = 0,
-        .format = kGBufferFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      },
+      // GBuffer
+      // (VkAttachmentDescription){
+      //   .flags = 0,
+      //   .format = kGBufferFormat,
+      //   .samples = VK_SAMPLE_COUNT_1_BIT,
+      //   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      //   .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      //   .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+      //   .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      //   .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      //   .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      // },
+      // Depth
       (VkAttachmentDescription){
         .flags = 0,
         .format = kDepthBufferFormat,

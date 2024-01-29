@@ -307,22 +307,6 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
     };
 
-    inline constexpr VkImageSubresourceRange DefaultColorSubresourceRange{
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-      .baseMipLevel = 0,
-      .levelCount = 1,
-      .baseArrayLayer = 0,
-      .layerCount = 1,
-    };
-
-    inline constexpr VkImageSubresourceRange DefaultDepthSubresourceRange{
-      .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-      .baseMipLevel = 0,
-      .levelCount = 1,
-      .baseArrayLayer = 0,
-      .layerCount = 1,
-    };
-
     enum class Locality : char {
         Local,
         External,

@@ -185,6 +185,7 @@ namespace Moxaic::Vulkan
             CheckLayoutInitialized(*k_pDevice);
             // Fragment
             constexpr StaticArray pipelineColorBlendAttachmentStates{
+                // Color
               (VkPipelineColorBlendAttachmentState){
                 .blendEnable = VK_FALSE,
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
@@ -193,6 +194,7 @@ namespace Moxaic::Vulkan
                                   VK_COLOR_COMPONENT_A_BIT,
 
               },
+                // normal
               (VkPipelineColorBlendAttachmentState){
                 .blendEnable = VK_FALSE,
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
@@ -201,14 +203,16 @@ namespace Moxaic::Vulkan
                                   VK_COLOR_COMPONENT_A_BIT,
 
               },
-              (VkPipelineColorBlendAttachmentState){
-                .blendEnable = VK_FALSE,
-                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
-                                  VK_COLOR_COMPONENT_G_BIT |
-                                  VK_COLOR_COMPONENT_B_BIT |
-                                  VK_COLOR_COMPONENT_A_BIT,
-
-              }};
+                // gbuffer
+              // (VkPipelineColorBlendAttachmentState){
+              //   .blendEnable = VK_FALSE,
+              //   .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+              //                     VK_COLOR_COMPONENT_G_BIT |
+              //                     VK_COLOR_COMPONENT_B_BIT |
+              //                     VK_COLOR_COMPONENT_A_BIT,
+              //
+              // },
+            };
             const VkPipelineColorBlendStateCreateInfo colorBlendState{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
               .pNext = nullptr,

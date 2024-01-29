@@ -1,4 +1,4 @@
-// #define MXC_DISABLE_LOG
+#define MXC_DISABLE_LOG
 
 #include "moxaic_vulkan_swap.hpp"
 
@@ -136,7 +136,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
     VkSwapchainCreateInfoKHR createInfo = {
       .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
       .pNext = VK_NULL_HANDLE,
-      .surface = Vulkan::GetVkSurface(),
+      .surface = GetVkSurface(),
       .minImageCount = SwapCount,
       .imageFormat = surfaceFormat.format,
       .imageColorSpace = surfaceFormat.colorSpace,
@@ -286,7 +286,7 @@ void Swap::Transition(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetSrcQueue(src),
         .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
         .image = m_VkSwapImages[swapIndex],
-        .subresourceRange = DefaultColorSubresourceRange,
+        .subresourceRange = GetSubresourceRange(),
       },
     };
     vkCmdPipelineBarrier(commandBuffer,
@@ -315,7 +315,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.GetVkImage(),
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = srcTexture.GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -326,7 +326,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[swapIndex],
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = GetSubresourceRange(),
       },
     };
     VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
@@ -382,7 +382,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = srcTexture.GetVkImage(),
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = srcTexture.GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -393,7 +393,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .image = m_VkSwapImages[swapIndex],
-        .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+        .subresourceRange = GetSubresourceRange(),
       },
     };
     VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,

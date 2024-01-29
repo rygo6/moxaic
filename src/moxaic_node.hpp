@@ -9,8 +9,6 @@
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_semaphore.hpp"
 
-#include <string>
-
 #if WIN32
 #include <windows.h>
 #endif
@@ -41,7 +39,7 @@ namespace Moxaic
 
     private:
 
-        std::string name{"default"};
+        const char* name{"default"};
 
         Camera compositingCamera{};// Camera which compositor is using to reproject.
 

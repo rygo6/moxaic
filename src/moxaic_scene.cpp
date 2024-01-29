@@ -265,7 +265,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .image = outputAveragedAtomicTexture.GetVkImage(),
-      .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+      .subresourceRange = outputAveragedAtomicTexture.GetSubresourceRange(),
     };
     vkCmdPipelineBarrier(commandBuffer,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -316,7 +316,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .image = outputAtomicTexture.GetVkImage(),
-      .subresourceRange = Vulkan::DefaultColorSubresourceRange,
+      .subresourceRange = outputAtomicTexture.GetSubresourceRange(),
     };
     vkCmdPipelineBarrier(commandBuffer,
                          VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -361,7 +361,8 @@ MXC_RESULT NodeScene::Init()
     // MXC_CHK(m_Swap.Init(Window::extents(), Vulkan::CompositorPipelineType));
 
     MXC_CHK(standardPipeline.Init());
-    MXC_CHK(globalDescriptor.Init(mainCamera, Window::GetExtents()));
+    MXC_CHK(globalDescriptor.Init(mainCamera,
+                                  Window::GetExtents()));
 
     spherTestTransform.position_ = vec3(0, 0, 0);
     MXC_CHK(sphereTestMesh.InitSphere(0.5f));
