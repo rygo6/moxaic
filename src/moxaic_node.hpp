@@ -114,7 +114,7 @@ namespace Moxaic
 
         Transform m_Transform{};
 
-        std::string m_Name{"default"};
+        const char* m_Name{"default"};
         float m_DrawRadius{1.0f};
 
         InterProcessBuffer<Vulkan::GlobalDescriptor::UniformBuffer> m_ImportedGlobalDescriptor{};

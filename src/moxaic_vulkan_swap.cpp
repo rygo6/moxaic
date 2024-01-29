@@ -102,11 +102,11 @@ Swap::Swap(const Vulkan::Device* const pDevice)
 
 Swap::~Swap()
 {
-    vkDestroySemaphore(Device-> GetVkDevice(), m_VkAcquireCompleteSemaphore, VK_ALLOC);
-    vkDestroySemaphore(Device-> GetVkDevice(), m_VkRenderCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(Device-> GetVkDevice(), vkAcquireCompleteSemaphore, VK_ALLOC);
+    vkDestroySemaphore(Device-> GetVkDevice(), vkRenderCompleteSemaphore, VK_ALLOC);
     for (int i = 0; i < SwapCount; ++i) {
-        vkDestroyImageView(Device-> GetVkDevice(), m_VkSwapImageViews[i], VK_ALLOC);
-        vkDestroyImage(Device-> GetVkDevice(), m_VkSwapImages[i], VK_ALLOC);
+        vkDestroyImageView(Device-> GetVkDevice(), vkSwapImageViews[i], VK_ALLOC);
+        vkDestroyImage(Device-> GetVkDevice(), vkSwapImages[i], VK_ALLOC);
     }
 }
 
@@ -188,24 +188,24 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
     VK_CHK(vkCreateSwapchainKHR(Device->  GetVkDevice(),
                                 &createInfo,
                                 VK_ALLOC,
-                                &m_VkSwapchain));
+                                &vkSwapchain));
 
     uint32_t swapCount;
     VK_CHK(vkGetSwapchainImagesKHR(Device->  GetVkDevice(),
-                                   m_VkSwapchain,
+                                   vkSwapchain,
                                    &swapCount,
                                    nullptr));
-    if (swapCount != m_VkSwapImages.size()) {
+    if (swapCount != vkSwapImages.size()) {
         MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_VkSwapImages.size());
         return MXC_FAIL;
     }
     VK_CHK(vkGetSwapchainImagesKHR(Device->  GetVkDevice(),
-                                   m_VkSwapchain,
+                                   vkSwapchain,
                                    &swapCount,
-                                   m_VkSwapImages.data()));
+                                   vkSwapImages.data()));
 
-    for (int i = 0; i < m_VkSwapImages.size(); ++i) {
-        Device->TransitionImageLayoutImmediate(m_VkSwapImages[i],
+    for (int i = 0; i < vkSwapImages.size(); ++i) {
+        Device->TransitionImageLayoutImmediate(vkSwapImages[i],
                                                   VK_IMAGE_LAYOUT_UNDEFINED,
                                                   VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                                   VK_ACCESS_NONE,
@@ -215,7 +215,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
                                                   VK_IMAGE_ASPECT_COLOR_BIT);
         const VkImageViewCreateInfo viewInfo{
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-          .image = m_VkSwapImages[i],
+          .image = vkSwapImages[i],
           .viewType = VK_IMAGE_VIEW_TYPE_2D,
           .format = surfaceFormat.format,
           .components{
@@ -234,7 +234,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
         VK_CHK(vkCreateImageView(Device->  GetVkDevice(),
                                  &viewInfo,
                                  VK_ALLOC,
-                                 &m_VkSwapImageViews[i]));
+                                 &vkSwapImageViews[i]));
     }
 
     constexpr VkSemaphoreCreateInfo swapchainSemaphoreCreateInfo = {
@@ -245,17 +245,17 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
     VK_CHK(vkCreateSemaphore(Device->  GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
-                             &m_VkAcquireCompleteSemaphore));
+                             &vkAcquireCompleteSemaphore));
     VK_CHK(vkCreateSemaphore(Device->  GetVkDevice(),
                              &swapchainSemaphoreCreateInfo,
                              VK_ALLOC,
-                             &m_VkRenderCompleteSemaphore));
+                             &vkRenderCompleteSemaphore));
 
     MXC_LOG_NAMED(string_VkImageUsageFlags(createInfo.imageUsage));
     MXC_LOG_NAMED(string_VkFormat(createInfo.imageFormat));
 
-    m_Dimensions = dimensions;
-    m_Format = surfaceFormat.format;
+    this->dimensions = dimensions;
+    this->format = surfaceFormat.format;
 
     return MXC_SUCCESS;
 }
@@ -263,9 +263,9 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
 MXC_RESULT Swap::Acquire(uint32_t* pSwapIndex)
 {
     VK_CHK(vkAcquireNextImageKHR(Device->  GetVkDevice(),
-                                 m_VkSwapchain,
+                                 vkSwapchain,
                                  UINT64_MAX,
-                                 m_VkAcquireCompleteSemaphore,
+                                 vkAcquireCompleteSemaphore,
                                  VK_NULL_HANDLE,
                                  pSwapIndex));
     return MXC_SUCCESS;
@@ -285,7 +285,7 @@ void Swap::Transition(const VkCommandBuffer commandBuffer,
         .newLayout = dst.colorLayout,
         .srcQueueFamilyIndex = Device->GetSrcQueue(src),
         .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
-        .image = m_VkSwapImages[swapIndex],
+        .image = vkSwapImages[swapIndex],
         .subresourceRange = GetSubresourceRange(),
       },
     };
@@ -325,7 +325,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = m_VkSwapImages[swapIndex],
+        .image = vkSwapImages[swapIndex],
         .subresourceRange = GetSubresourceRange(),
       },
     };
@@ -352,8 +352,8 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .z = 0,
       },
       (VkOffset3D){
-        .x = static_cast<int32_t>(m_Dimensions.width),
-        .y = static_cast<int32_t>(m_Dimensions.height),
+        .x = static_cast<int32_t>(dimensions.width),
+        .y = static_cast<int32_t>(dimensions.height),
         .z = 1,
       },
     };
@@ -367,7 +367,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
     VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
                                srcTexture.GetVkImage(),
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               m_VkSwapImages[swapIndex],
+                               vkSwapImages[swapIndex],
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                1,
                                &imageBlit,
@@ -392,7 +392,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = m_VkSwapImages[swapIndex],
+        .image = vkSwapImages[swapIndex],
         .subresourceRange = GetSubresourceRange(),
       },
     };
@@ -415,9 +415,9 @@ MXC_RESULT Swap::QueuePresent(const VkQueue& queue,
     const VkPresentInfoKHR presentInfo{
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &m_VkRenderCompleteSemaphore,
+      .pWaitSemaphores = &vkRenderCompleteSemaphore,
       .swapchainCount = 1,
-      .pSwapchains = &m_VkSwapchain,
+      .pSwapchains = &vkSwapchain,
       .pImageIndices = &swapIndex,
     };
     VK_CHK(vkQueuePresentKHR(queue,

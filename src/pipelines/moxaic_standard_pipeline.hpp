@@ -12,7 +12,6 @@
 
 #include "static_array.hpp"
 
-#include <string>
 #include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan

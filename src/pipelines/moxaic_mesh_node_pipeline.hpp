@@ -11,7 +11,6 @@
 
 #include "static_array.hpp"
 
-#include <string>
 #include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
@@ -21,7 +20,7 @@ namespace Moxaic::Vulkan
     public:
         using GraphicsPipeline::GraphicsPipeline;
 
-        static MXC_RESULT InitLayout(const Vulkan::Device& device)
+        static MXC_RESULT InitLayout(const Device& device)
         {
             SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
             const StaticArray setLayouts{

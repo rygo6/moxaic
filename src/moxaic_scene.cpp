@@ -79,7 +79,7 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
 
-        auto& lastUsedNodeDescriptorBuffer = nodeReference.exportedGlobalDescriptor.localBuffer;
+        const auto& lastUsedNodeDescriptorBuffer = nodeReference.exportedGlobalDescriptor.localBuffer;
         meshNodeDescriptor[nodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
         meshNodeDescriptor[nodeFramebufferIndex].WriteLocalBuffer();
 
@@ -179,7 +179,7 @@ MXC_RESULT ComputeCompositorScene::Init()
                                        nodeReference.GetExportedFramebuffer(nodeFramebufferIndex),
                                        outputAveragedAtomicTexture,
                                        outputAtomicTexture,
-                                       swap.GetVkSwapImageViews(nodeFramebufferIndex)));
+                                       swap.GetVkSwapImageView(nodeFramebufferIndex)));
 
     // why must I wait before exporting over IPC? Should it just fill in the memory and the other grab it when it can?
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
@@ -241,8 +241,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                     Vulkan::FromComputeSwapPresent,
                     Vulkan::ToComputeWrite);
 
-    const auto& swapImage = swap.GetVkSwapImages(swapIndex);
-    const auto& swapImageView = swap.GetVkSwapImageViews(swapIndex);
+    const auto& swapImage = swap.GetVkSwapImage(swapIndex);
+    const auto& swapImageView = swap.GetVkSwapImageView(swapIndex);
     computeNodeDescriptor.WriteOutputColorImage(swapImageView);
 
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, globalDescriptor);

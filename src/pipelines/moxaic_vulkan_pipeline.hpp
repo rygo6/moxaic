@@ -10,7 +10,6 @@
 
 #include "moxaic_vulkan_pipeline.hpp"
 
-#include <string>
 #include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan

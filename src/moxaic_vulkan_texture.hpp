@@ -2,7 +2,6 @@
 
 #include "moxaic_vulkan.hpp"
 
-#include <string>
 #include <vulkan/vulkan.h>
 
 #ifdef WIN32

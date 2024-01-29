@@ -25,6 +25,8 @@ namespace Moxaic
         std::cerr << '\n';
     }
 
+    // I really don't know if I like all this std::cerr stuff and recursive templates... has got to be slow
+
     template<typename T, typename... Types>
     void LogParams(T param, Types... params)
     {
