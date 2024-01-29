@@ -10,12 +10,6 @@
     name(const name&) = delete; \
     name& operator=(const name&) = delete;
 
-#define MXC_GET(field) \
-    auto const& Get##field() const { return m_##field; }
-
-#define MXC_GETARR(field) \
-    auto const& Get##field(int const i) const { return m_##field[i]; }
-
 /// Exposes a field as a pointer to do occaional some unsafe lower level
 /// editing and have the -> syntax signify you are doing so.
 #define MXC_PTR_ACCESS(field) \
@@ -42,7 +36,7 @@ namespace Moxaic
         return Role == Role::Compositor;
     }
 
-    inline char const* string_Role(const enum Role role)
+    inline const char* string_Role(const enum Role role)
     {
         switch (role) {
             case Role::Compositor:

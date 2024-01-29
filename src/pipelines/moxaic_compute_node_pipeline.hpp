@@ -24,10 +24,10 @@ namespace Moxaic::Vulkan
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
-            SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
+            SDL_assert(sharedVkPipelineLayout == VK_NULL_HANDLE);
             const StaticArray setLayouts{
-              GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              ComputeNodeDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              GlobalDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
+              ComputeNodeDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
             };
             MXC_CHK(CreateLayout(device, setLayouts));
             return MXC_SUCCESS;
@@ -46,7 +46,7 @@ namespace Moxaic::Vulkan
               .pName = "main",
             };
             MXC_CHK(CreateComputePipe(compStage));
-            vkDestroyShaderModule(k_pDevice->  GetVkDevice(), shader, VK_ALLOC);
+            vkDestroyShaderModule(Device->  GetVkDevice(), shader, VK_ALLOC);
 
             return MXC_SUCCESS;
         }

@@ -24,9 +24,9 @@ namespace Moxaic::Vulkan
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
             const StaticArray setLayouts{
-              GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              StandardMaterialDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              ObjectDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              GlobalDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
+              StandardMaterialDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
+              ObjectDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
             };
             MXC_CHK(CreateLayout(device, setLayouts));
             return MXC_SUCCESS;
@@ -58,8 +58,8 @@ namespace Moxaic::Vulkan
             MXC_CHK(CreateVertexInputOpaquePipe(stages.size(),
                                                 stages.data(),
                                                 nullptr));
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), vertShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->GetVkDevice(), fragShader, VK_ALLOC);
+            vkDestroyShaderModule(Device->GetVkDevice(), vertShader, VK_ALLOC);
+            vkDestroyShaderModule(Device->GetVkDevice(), fragShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
 

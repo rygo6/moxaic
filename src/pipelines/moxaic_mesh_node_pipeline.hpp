@@ -20,12 +20,12 @@ namespace Moxaic::Vulkan
     public:
         using GraphicsPipeline::GraphicsPipeline;
 
-        static MXC_RESULT InitLayout(const Device& device)
+        static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
-            SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
+            SDL_assert(sharedVkPipelineLayout == VK_NULL_HANDLE);
             const StaticArray setLayouts{
-              GlobalDescriptor::GetOrInitVkDescriptorSetLayout(device),
-              MeshNodeDescriptor::GetOrInitVkDescriptorSetLayout(device),
+              GlobalDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
+              MeshNodeDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
             };
             MXC_CHK(CreateLayout(device, setLayouts));
             return MXC_SUCCESS;
@@ -69,9 +69,9 @@ namespace Moxaic::Vulkan
                                      nullptr,
                                      nullptr,
                                      nullptr));
-            vkDestroyShaderModule(k_pDevice->  GetVkDevice(), taskShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->  GetVkDevice(), meshShader, VK_ALLOC);
-            vkDestroyShaderModule(k_pDevice->  GetVkDevice(), fragShader, VK_ALLOC);
+            vkDestroyShaderModule(Device->  GetVkDevice(), taskShader, VK_ALLOC);
+            vkDestroyShaderModule(Device->  GetVkDevice(), meshShader, VK_ALLOC);
+            vkDestroyShaderModule(Device->  GetVkDevice(), fragShader, VK_ALLOC);
             return MXC_SUCCESS;
         }
 

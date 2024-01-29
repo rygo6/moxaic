@@ -39,16 +39,19 @@ namespace Moxaic::Vulkan
     template<typename Derived>
     class Pipeline
     {
+    protected:
+        const Device* const Device;
+
     public:
         MXC_NO_VALUE_PASS(Pipeline)
 
         explicit Pipeline(const Vulkan::Device* const pDevice)
-            : k_pDevice(pDevice) {}
+            : Device(pDevice) {}
 
         virtual ~Pipeline()
         {
-            vkDestroyPipeline(k_pDevice->  GetVkDevice(),
-                              m_vkPipeline,
+            vkDestroyPipeline(Device->GetVkDevice(),
+                              vkPipeline,
                               VK_ALLOC);
         }
 
@@ -59,23 +62,22 @@ namespace Moxaic::Vulkan
         //                       m_vkPipeline);
         // }
 
-        MXC_GET(vkPipeline);
+        const auto& GetVkPipeline() const { return vkPipeline; }
 
         static const VkPipelineLayout& GetVkPipelineLayout(const Vulkan::Device& device)
         {
             CheckLayoutInitialized(device);
-            return s_vkPipelineLayout;
+            return sharedVkPipelineLayout;
         }
 
     protected:
-        const Vulkan::Device* const k_pDevice;
         // at some point layout will need to be a map on the device to support multiple devices
-        inline static VkPipelineLayout s_vkPipelineLayout = VK_NULL_HANDLE;
-        VkPipeline m_vkPipeline{VK_NULL_HANDLE};
+        inline static VkPipelineLayout sharedVkPipelineLayout = VK_NULL_HANDLE;
+        VkPipeline vkPipeline{VK_NULL_HANDLE};
 
         static void CheckLayoutInitialized(const Vulkan::Device& device)
         {
-            if (s_vkPipelineLayout == VK_NULL_HANDLE)
+            if (sharedVkPipelineLayout == VK_NULL_HANDLE)
                 Derived::InitLayout(device);
         }
 
@@ -83,7 +85,7 @@ namespace Moxaic::Vulkan
         static MXC_RESULT CreateLayout(const Vulkan::Device& device,
                                        const StaticArray<VkDescriptorSetLayout, N>& setLayouts)
         {
-            SDL_assert(s_vkPipelineLayout == VK_NULL_HANDLE);
+            SDL_assert(sharedVkPipelineLayout == VK_NULL_HANDLE);
             const VkPipelineLayoutCreateInfo createInfo{
               .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
               .pNext = nullptr,
@@ -93,10 +95,10 @@ namespace Moxaic::Vulkan
               .pushConstantRangeCount = 0,
               .pPushConstantRanges = nullptr,
             };
-            VK_CHK(vkCreatePipelineLayout(device.  GetVkDevice(),
+            VK_CHK(vkCreatePipelineLayout(device.GetVkDevice(),
                                           &createInfo,
                                           VK_ALLOC,
-                                          &s_vkPipelineLayout));
+                                          &sharedVkPipelineLayout));
             return MXC_SUCCESS;
         }
 
@@ -115,7 +117,7 @@ namespace Moxaic::Vulkan
               .codeSize = codeLength,
               .pCode = reinterpret_cast<const uint32_t*>(pShaderCode),
             };
-            VK_CHK(vkCreateShaderModule(k_pDevice->  GetVkDevice(),
+            VK_CHK(vkCreateShaderModule(Device->GetVkDevice(),
                                         &createInfo,
                                         VK_ALLOC,
                                         pShaderModule));
@@ -180,11 +182,11 @@ namespace Moxaic::Vulkan
                                     const VkPipelineInputAssemblyStateCreateInfo* pInputAssemblyState,
                                     const VkPipelineTessellationStateCreateInfo* pTessellationState)
         {
-            SDL_assert(m_vkPipeline == nullptr);
-            CheckLayoutInitialized(*k_pDevice);
+            SDL_assert(vkPipeline == nullptr);
+            CheckLayoutInitialized(*Device);
             // Fragment
             constexpr StaticArray pipelineColorBlendAttachmentStates{
-                // Color
+              // Color
               (VkPipelineColorBlendAttachmentState){
                 .blendEnable = VK_FALSE,
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
@@ -193,7 +195,7 @@ namespace Moxaic::Vulkan
                                   VK_COLOR_COMPONENT_A_BIT,
 
               },
-                // normal
+              // normal
               (VkPipelineColorBlendAttachmentState){
                 .blendEnable = VK_FALSE,
                 .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
@@ -202,7 +204,7 @@ namespace Moxaic::Vulkan
                                   VK_COLOR_COMPONENT_A_BIT,
 
               },
-                // gbuffer
+              // gbuffer
               // (VkPipelineColorBlendAttachmentState){
               //   .blendEnable = VK_FALSE,
               //   .colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
@@ -302,18 +304,18 @@ namespace Moxaic::Vulkan
               .pDepthStencilState = &depthStencilState,
               .pColorBlendState = &colorBlendState,
               .pDynamicState = &dynamicState,
-              .layout = s_vkPipelineLayout,
-              .renderPass = k_pDevice->GetVkRenderPass(),
+              .layout = sharedVkPipelineLayout,
+              .renderPass = Device->GetVkRenderPass(),
               .subpass = 0,
               .basePipelineHandle = VK_NULL_HANDLE,
               .basePipelineIndex = 0,
             };
-            VK_CHK(vkCreateGraphicsPipelines(k_pDevice->  GetVkDevice(),
+            VK_CHK(vkCreateGraphicsPipelines(Device->GetVkDevice(),
                                              VK_NULL_HANDLE,
                                              1,
                                              &pipelineInfo,
                                              VK_ALLOC,
-                                             &m_vkPipeline));
+                                             &vkPipeline));
 
             return MXC_SUCCESS;
         }
@@ -321,17 +323,17 @@ namespace Moxaic::Vulkan
         MXC_RESULT CreateComputePipe(const VkPipelineShaderStageCreateInfo& stage,
                                      VkPipeline* pVkPipeline)
         {
-            CheckLayoutInitialized(*k_pDevice);
+            CheckLayoutInitialized(*Device);
             const VkComputePipelineCreateInfo pipelineInfo{
               .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
               .pNext = nullptr,
               .flags = 0,
               .stage = stage,
-              .layout = s_vkPipelineLayout,
+              .layout = sharedVkPipelineLayout,
               .basePipelineHandle = nullptr,
               .basePipelineIndex = 0,
             };
-            VK_CHK(vkCreateComputePipelines(k_pDevice->  GetVkDevice(),
+            VK_CHK(vkCreateComputePipelines(Device->GetVkDevice(),
                                             VK_NULL_HANDLE,
                                             1,
                                             &pipelineInfo,
@@ -342,7 +344,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT CreateComputePipe(const VkPipelineShaderStageCreateInfo& stage)
         {
-            return CreateComputePipe(stage, &m_vkPipeline);
+            return CreateComputePipe(stage, &vkPipeline);
         }
     };
 
@@ -355,7 +357,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindPipeline(commandBuffer,
                               VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              this->m_vkPipeline);
+                              this->vkPipeline);
         }
 
     protected:
@@ -365,7 +367,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindDescriptorSets(commandBuffer,
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    this->s_vkPipelineLayout,
+                                    this->sharedVkPipelineLayout,
                                     setIndex,
                                     1,
                                     &descriptorSet,
@@ -383,7 +385,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindPipeline(commandBuffer,
                               VK_PIPELINE_BIND_POINT_COMPUTE,
-                              this->m_vkPipeline);
+                              this->vkPipeline);
         }
 
     protected:
@@ -393,7 +395,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindDescriptorSets(commandBuffer,
                                     VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    this->s_vkPipelineLayout,
+                                    this->sharedVkPipelineLayout,
                                     setIndex,
                                     1,
                                     &descriptorSet,
@@ -407,7 +409,7 @@ namespace Moxaic::Vulkan
         {
             vkCmdBindDescriptorSets(commandBuffer,
                                     VK_PIPELINE_BIND_POINT_COMPUTE,
-                                    Pipeline<Derived>::s_vkPipelineLayout,
+                                    Pipeline<Derived>::sharedVkPipelineLayout,
                                     setIndex,
                                     1,
                                     &descriptorSet,

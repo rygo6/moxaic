@@ -20,34 +20,34 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(VulkanDescriptorBase)
 
-        explicit VulkanDescriptorBase(const Vulkan::Device* const pDevice)
+        explicit VulkanDescriptorBase(const Device* const pDevice)
             : Device(pDevice) {}
 
-        virtual ~VulkanDescriptorBase()
+        ~VulkanDescriptorBase()
         {
             vkFreeDescriptorSets(Device->  GetVkDevice(),
                                  Device->GetVkDescriptorPool(),
                                  1,
-                                 &m_VkDescriptorSet);
+                                 &vkDescriptorSet);
         }
 
-        MXC_GET(VkDescriptorSet);
+        const auto& GetVkDescriptorSet() const { return vkDescriptorSet; }
 
-        static const VkDescriptorSetLayout& GetOrInitVkDescriptorSetLayout(const Vulkan::Device& device)
+        static const VkDescriptorSetLayout& GetOrInitSharedVkDescriptorSetLayout(const Device& device)
         {
             CheckLayoutInitialized(device);
-            return s_VkDescriptorSetLayout;
+            return sharedVkDescriptorSetLayout;
         }
 
     protected:
         const Device* const Device;
         // at some point layout will need to be a map on the device to support multiple devices
-        inline static VkDescriptorSetLayout s_VkDescriptorSetLayout = VK_NULL_HANDLE;
-        VkDescriptorSet m_VkDescriptorSet{VK_NULL_HANDLE};
+        inline static VkDescriptorSetLayout sharedVkDescriptorSetLayout = VK_NULL_HANDLE;
+        VkDescriptorSet vkDescriptorSet{VK_NULL_HANDLE};
 
         static void CheckLayoutInitialized(const Vulkan::Device& device)
         {
-            if (s_VkDescriptorSetLayout == VK_NULL_HANDLE)
+            if (sharedVkDescriptorSetLayout == VK_NULL_HANDLE)
                 Derived::InitLayout(device);
         }
 
@@ -55,7 +55,7 @@ namespace Moxaic::Vulkan
         static MXC_RESULT CreateDescriptorSetLayout(const Vulkan::Device& device,
                                                     StaticArray<VkDescriptorSetLayoutBinding, N>& bindings)
         {
-            SDL_assert(s_VkDescriptorSetLayout == VK_NULL_HANDLE);
+            SDL_assert(sharedVkDescriptorSetLayout == VK_NULL_HANDLE);
             for (int i = 0; i < bindings.size(); ++i) {
                 bindings[i].binding = i;
                 bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
@@ -70,35 +70,35 @@ namespace Moxaic::Vulkan
             VK_CHK(vkCreateDescriptorSetLayout(device.  GetVkDevice(),
                                                &layoutInfo,
                                                VK_ALLOC,
-                                               &s_VkDescriptorSetLayout));
+                                               &sharedVkDescriptorSetLayout));
             return MXC_SUCCESS;
         }
 
         MXC_RESULT AllocateDescriptorSet()
         {
-            SDL_assert(m_VkDescriptorSet == nullptr);
+            SDL_assert(vkDescriptorSet == nullptr);
             CheckLayoutInitialized(*Device);
             const VkDescriptorSetAllocateInfo allocInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
               .pNext = nullptr,
               .descriptorPool = Device->GetVkDescriptorPool(),
               .descriptorSetCount = 1,
-              .pSetLayouts = &s_VkDescriptorSetLayout,
+              .pSetLayouts = &sharedVkDescriptorSetLayout,
             };
             VK_CHK(vkAllocateDescriptorSets(Device->  GetVkDevice(),
                                             &allocInfo,
-                                            &m_VkDescriptorSet));
+                                            &vkDescriptorSet));
             return MXC_SUCCESS;
         }
 
         template<uint32_t N>
         void WriteDescriptors(StaticArray<VkWriteDescriptorSet, N>& writes) const
         {
-            SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
-            SDL_assert(m_VkDescriptorSet != nullptr);
+            SDL_assert(sharedVkDescriptorSetLayout != VK_NULL_HANDLE);
+            SDL_assert(vkDescriptorSet != nullptr);
             for (int i = 0; i < writes.size(); ++i) {
                 writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writes[i].dstSet = m_VkDescriptorSet;
+                writes[i].dstSet = vkDescriptorSet;
                 writes[i].dstBinding = writes[i].dstBinding == 0 ? i : writes[i].dstBinding;
                 writes[i].descriptorCount = writes[i].descriptorCount == 0 ? 1 : writes[i].descriptorCount;
             }

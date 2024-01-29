@@ -46,8 +46,8 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init(const GlobalDescriptor::UniformBuffer& buffer, const Framebuffer& framebuffer)
         {
             MXC_LOG("Init MaterialDescriptor");
-            SDL_assert(s_VkDescriptorSetLayout != VK_NULL_HANDLE);
-            SDL_assert(m_VkDescriptorSet == nullptr);
+            SDL_assert(sharedVkDescriptorSetLayout != VK_NULL_HANDLE);
+            SDL_assert(vkDescriptorSet == nullptr);
 
             MXC_CHK(m_Uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
