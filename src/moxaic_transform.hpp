@@ -31,22 +31,20 @@ namespace Moxaic
             position_ += delta;
         }
 
-        void LocalTranslate(vec3 delta, BitFlags<Axis> zeroOrientationAxis)
+        void LocalTranslate(const vec3 delta, const BitFlags<Axis> zeroOrientationAxis)
         {
             vec3 euler = eulerAngles(orientation_);
             euler.x = zeroOrientationAxis.ContainsFlag(X) ? 0 : euler.x;
             euler.y = zeroOrientationAxis.ContainsFlag(Y) ? 0 : euler.y;
             euler.z = zeroOrientationAxis.ContainsFlag(Z) ? 0 : euler.z;
             const auto lockedOrientation = quat(euler);
-            delta = rotate(lockedOrientation, delta);
-            position_ += delta;
+            position_ += rotate(lockedOrientation, delta);
         }
 
         void LocalTranslate(const float x, const float y, const float z)
         {
-            auto delta = vec3(x, y, z);
-            delta = rotate(orientation_, delta);
-            position_ += delta;
+            const auto delta = vec3(x, y, z);
+            position_ += rotate(orientation_, delta);
         }
 
         void Rotate(const float x, const float y, const float z)

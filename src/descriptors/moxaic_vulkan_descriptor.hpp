@@ -5,7 +5,6 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 
-#include <vector>
 #include <vulkan/vulkan.h>
 
 #include "static_array.hpp"

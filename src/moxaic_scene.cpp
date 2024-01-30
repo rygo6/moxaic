@@ -1,3 +1,5 @@
+#define MXC_DISABLE_LOG
+
 #include "moxaic_scene.hpp"
 #include "moxaic_window.hpp"
 

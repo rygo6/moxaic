@@ -47,4 +47,4 @@ namespace Moxaic
                 return "Unknown Role";
         }
     }
-}// namespace Moxaic
+}

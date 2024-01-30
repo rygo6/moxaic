@@ -3,8 +3,9 @@
 namespace Moxaic
 {
     template<typename T>
-    struct BitFlags
+    class BitFlags
     {
+    public:
         template<typename... Args>
         constexpr BitFlags(Args... flags)
         {
@@ -13,12 +14,12 @@ namespace Moxaic
 
         bool None() const
         {
-            return m_Flags == 0;
+            return flags == 0;
         }
 
         bool ContainsFlag(T flag) const
         {
-            return (m_Flags & flag) == flag;
+            return (flags & flag) == flag;
         }
 
         void ToggleFlag(T flag, bool state)
@@ -28,15 +29,15 @@ namespace Moxaic
 
         constexpr void SetFlag(T flag)
         {
-            m_Flags = m_Flags | flag;
+            flags = flags | flag;
         }
 
         void ClearFlag(T flag)
         {
-            m_Flags = m_Flags & ~flag;
+            flags = flags & ~flag;
         }
 
     private:
-        int m_Flags{0};
+        int flags{0};
     };
 }
