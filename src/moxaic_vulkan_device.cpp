@@ -185,6 +185,8 @@ MXC_RESULT Device::CreateDevice()
         .queueCount = 1,
         .pQueuePriorities = &queuePriority}};
 
+    auto test = queueCreateInfos[3];
+
     VkPhysicalDeviceMeshShaderFeaturesEXT supportedPhysicalDeviceMeshShaderFeatures = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
     };

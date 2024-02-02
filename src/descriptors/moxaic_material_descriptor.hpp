@@ -34,7 +34,7 @@ namespace Moxaic::Vulkan
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = Device->GetVkLinearSampler(),
-                  .imageView = texture.GetVkImageView(),
+                  .imageView = texture.VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 })},
             };

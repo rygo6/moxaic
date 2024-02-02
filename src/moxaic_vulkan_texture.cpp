@@ -20,19 +20,29 @@ using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
 Texture::Texture(const Vulkan::Device* const device)
-    : Device(device) {}
+    : Device(device)
+{}
+Texture::Texture(const Vulkan::Device* device, const Texture::Info& info)
+    : Device(device),
+      format(info.format),
+      usage(info.usage),
+      aspectMask(info.aspectMask),
+      sampleCount(info.sampleCount),
+      extents(info.extents),
+      mipLevels(info.mipLevels),
+      locality(info.locality)
+{}
 
 Texture::~Texture()
 {
-    vkDestroyImageView(Device->GetVkDevice(), vkImageView, VK_ALLOC);
+    vkDestroyImageView(Device->GetVkDevice(), vkImageViewHandle, VK_ALLOC);
     vkFreeMemory(Device->GetVkDevice(), vkDeviceMemory, VK_ALLOC);
-    vkDestroyImage(Device->GetVkDevice(), vkImage, VK_ALLOC);
+    vkDestroyImage(Device->GetVkDevice(), vkImageHandle, VK_ALLOC);
     if (externalHandle != nullptr)
         CloseHandle(externalHandle);
 }
 
-MXC_RESULT Texture::InitFromFile(const char* file,
-                                 const Locality locality)
+MXC_RESULT Texture::InitFromFile(const char* file)
 {
     MXC_LOG("Texture::InitFromFile",
             file,
@@ -62,18 +72,21 @@ MXC_RESULT Texture::InitFromFile(const char* file,
                                            &stagingBufferMemory);
     stbi_image_free(pixels);
 
-    // todo InitImage maybe go in VKDevice as CreateAllocateImage to reflect CreateAllocateBuffer
+    this->format = VK_FORMAT_R8G8B8A8_SRGB;
+    this->usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    this->aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    this->sampleCount = VK_SAMPLE_COUNT_1_BIT;
+    this->extents = {(uint32_t) width, (uint32_t) height};
+    this->mipLevels = 1;
+    this->externalHandle = externalHandle;
+    this->locality = Locality::Local;
 
-    const VkExtent2D extents = {(uint32_t) width, (uint32_t) height};
-    Init(VK_FORMAT_R8G8B8A8_SRGB,
-         extents,
-         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-         VK_IMAGE_ASPECT_COLOR_BIT,
-         locality);
+    MXC_CHK(InternalInit());
+
     MXC_CHK(TransitionImmediateInitialToTransferDst());
-    Device->CopyBufferToImage(extents,
-                              stagingBuffer,
-                              vkImage);
+    MXC_CHK(Device->CopyBufferToImage(extents,
+                                      stagingBuffer,
+                                      vkImageHandle));
     MXC_CHK(TransitionImmediateTransferDstToGraphicsRead());
 
     vkDestroyBuffer(Device->GetVkDevice(),
@@ -86,64 +99,96 @@ MXC_RESULT Texture::InitFromFile(const char* file,
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::InitFromImport(const VkFormat format,
-                                   const VkExtent2D extents,
-                                   const VkImageUsageFlags usage,
-                                   const VkImageAspectFlags aspectMask,
-                                   const HANDLE externalMemory)
+MXC_RESULT Texture::InitFromImport(const HANDLE externalHandle,
+                                   const VkExtent2D& extents)
 {
+    this->externalHandle = externalHandle;
+    this->locality = Locality::Imported;
+    this->extents = extents;
+
     MXC_LOG_MULTILINE("Texture::InitFromImport",
+                      externalHandle,
                       string_VkFormat(format),
                       string_VkImageUsageFlags(usage),
-                      string_VkImageAspectFlags(aspectMask),
-                      externalMemory);
-    MXC_CHK(InitImage(format,
-                      extents,
-                      usage,
-                      Locality::External));
-    MXC_CHK(Device->AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                            vkImage,
-                                            MXC_EXTERNAL_HANDLE_TYPE,
-                                            externalMemory,
-                                            &vkDeviceMemory));
-    MXC_CHK(InitImageView(format, aspectMask));
-    this->extents = extents;
-    this->aspectMask = aspectMask;
-    this->format = format;
-    return MXC_SUCCESS;
+                      string_VkImageAspectFlags(aspectMask));
+
+    return InternalInit();
 }
 
-MXC_RESULT Texture::Init(const VkFormat format,
-                         const VkExtent2D extents,
-                         const VkImageUsageFlags usage,
-                         const VkImageAspectFlags aspectMask,
-                         const Locality locality,
-                         const VkSampleCountFlagBits sampleCount)
+bool Texture::Init(const VkExtent2D& extents)
+{
+    this->extents = extents;
+
+    MXC_LOG_MULTILINE("Texture::InitFromImport",
+                  externalHandle,
+                  string_VkFormat(format),
+                  string_VkImageUsageFlags(usage),
+                  string_VkImageAspectFlags(aspectMask));
+
+    return InternalInit();
+}
+
+bool Texture::Init(const Info& info)
+{
+    this->format = info.format;
+    this->usage = info.usage;
+    this->aspectMask = info.aspectMask;
+    this->sampleCount = info.sampleCount;
+    this->extents = info.extents;
+    this->mipLevels = info.mipLevels;
+    this->locality = info.locality;
+
+    MXC_LOG_MULTILINE("Texture::InitFromImport",
+                  externalHandle,
+                  string_VkFormat(format),
+                  string_VkImageUsageFlags(usage),
+                  string_VkImageAspectFlags(aspectMask));
+
+    return InternalInit();
+}
+
+MXC_RESULT Texture::InternalInit()
 {
     MXC_LOG_MULTILINE("Texture::Init",
                       string_VkFormat(format),
                       string_VkImageUsageFlags(usage),
                       string_VkImageAspectFlags(aspectMask),
                       string_Locality(locality));
-    MXC_CHK(InitImage(format,
-                      extents,
-                      usage,
-                      locality,
-                      sampleCount));
+
+    assert(format != VK_FORMAT_UNDEFINED);
+    assert(extents.width != 0 && extents.height != 0);
+    assert(usage != 0);
+    assert(aspectMask != VK_IMAGE_ASPECT_NONE);
+    assert(sampleCount > 0);
+
+    MXC_CHK(InitImage());
+
     switch (locality) {
         case Locality::Local:
             MXC_CHK(Device->AllocateBindImage(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                              vkImage,
+                                              vkImageHandle,
                                               &vkDeviceMemory));
             break;
         case Locality::External:
             MXC_CHK(Device->AllocateBindImageExport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                                    vkImage,
+                                                    vkImageHandle,
                                                     MXC_EXTERNAL_HANDLE_TYPE,
                                                     &vkDeviceMemory));
             break;
+        case Locality::Imported:
+            assert(externalHandle != nullptr);
+            MXC_CHK(Device->AllocateBindImageImport(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                    vkImageHandle,
+                                                    MXC_EXTERNAL_HANDLE_TYPE,
+                                                    externalHandle,
+                                                    &vkDeviceMemory));
+            break;
+        case Locality::Undefined:
+            assert(false);
     }
-    MXC_CHK(InitImageView(format, aspectMask));
+
+    MXC_CHK(InitImageView());
+
     if (locality == Locality::External) {
 #if WIN32
         const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
@@ -156,31 +201,20 @@ MXC_RESULT Texture::Init(const VkFormat format,
                                               &externalHandle));
 #endif
     }
-    this->extents = extents;
-    this->aspectMask = aspectMask;
-    this->format = format;
-    return MXC_SUCCESS;
-}
 
-MXC_RESULT Texture::Init(const VkFormat format,
-                         const VkExtent2D extents,
-                         const VkImageUsageFlags usage,
-                         const VkImageAspectFlags aspectMask,
-                         const Locality locality)
-{
-    return Init(format, extents, usage, aspectMask, locality, VK_SAMPLE_COUNT_1_BIT);
+    return MXC_SUCCESS;
 }
 
 MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) const
 {
     switch (pipelineType) {
         case PipelineType::Graphics:
-            return Device->TransitionImageLayoutImmediate(vkImage,
+            return Device->TransitionImageLayoutImmediate(vkImageHandle,
                                                           Vulkan::FromInitial,
                                                           Vulkan::ToGraphicsRead,
                                                           aspectMask);
         case PipelineType::Compute:
-            return Device->TransitionImageLayoutImmediate(vkImage,
+            return Device->TransitionImageLayoutImmediate(vkImageHandle,
                                                           Vulkan::FromInitial,
                                                           Vulkan::ToComputeRead,
                                                           aspectMask);
@@ -192,7 +226,7 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
 
 MXC_RESULT Texture::TransitionImmediateInitialToTransferDst() const
 {
-    return Device->TransitionImageLayoutImmediate(vkImage,
+    return Device->TransitionImageLayoutImmediate(vkImageHandle,
                                                   VK_IMAGE_LAYOUT_UNDEFINED,
                                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                   VK_ACCESS_NONE,
@@ -204,7 +238,7 @@ MXC_RESULT Texture::TransitionImmediateInitialToTransferDst() const
 
 MXC_RESULT Texture::TransitionImmediateTransferDstToGraphicsRead() const
 {
-    return Device->TransitionImageLayoutImmediate(vkImage,
+    return Device->TransitionImageLayoutImmediate(vkImageHandle,
                                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                                   VK_ACCESS_MEMORY_WRITE_BIT,
@@ -227,14 +261,13 @@ HANDLE Texture::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
     return duplicateHandle;
 }
 
-MXC_RESULT Texture::InitImageView(VkFormat format,
-                                  VkImageAspectFlags aspectMask)
+MXC_RESULT Texture::InitImageView()
 {
     const VkImageViewCreateInfo imageViewCreateInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .image = vkImage,
+      .image = vkImageHandle,
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
       .format = format,
       .components{
@@ -254,15 +287,11 @@ MXC_RESULT Texture::InitImageView(VkFormat format,
     VK_CHK(vkCreateImageView(Device->GetVkDevice(),
                              &imageViewCreateInfo,
                              VK_ALLOC,
-                             &vkImageView));
+                             &vkImageViewHandle));
     return MXC_SUCCESS;
 }
 
-MXC_RESULT Texture::InitImage(const VkFormat format,
-                              const VkExtent2D extents,
-                              const VkImageUsageFlags usage,
-                              const Locality locality,
-                              const VkSampleCountFlagBits sampleCount)
+MXC_RESULT Texture::InitImage()
 {
     constexpr VkExternalMemoryImageCreateInfo externalImageInfo{
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -271,7 +300,9 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
     };
     const VkImageCreateInfo imageCreateInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .pNext = locality == Locality::External ? &externalImageInfo : nullptr,
+      .pNext = locality == Locality::External || locality == Locality::Imported ?
+                 &externalImageInfo :
+                 nullptr,
       .imageType = VK_IMAGE_TYPE_2D,
       .format = format,
       .extent = {extents.width, extents.height, 1},
@@ -288,18 +319,9 @@ MXC_RESULT Texture::InitImage(const VkFormat format,
     VK_CHK(vkCreateImage(Device->GetVkDevice(),
                          &imageCreateInfo,
                          VK_ALLOC,
-                         &vkImage));
+                         &vkImageHandle));
     return MXC_SUCCESS;
 }
-
-MXC_RESULT Texture::InitImage(const VkFormat format,
-                              const VkExtent2D extents,
-                              const VkImageUsageFlags usage,
-                              const Locality locality)
-{
-    return InitImage(format, extents, usage, locality, VK_SAMPLE_COUNT_1_BIT);
-}
-
 
 void Texture::BlitTo(const VkCommandBuffer commandBuffer,
                      const Texture& dstTexture) const
@@ -314,7 +336,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = vkImage,
+        .image = vkImageHandle,
         .subresourceRange = GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
@@ -325,7 +347,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = dstTexture.GetVkImage(),
+        .image = dstTexture.VkImageHandle,
         .subresourceRange = dstTexture.GetSubresourceRange(),
       },
     };
@@ -370,9 +392,9 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
-                               vkImage,
+                               vkImageHandle,
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               dstTexture.GetVkImage(),
+                               dstTexture.VkImageHandle,
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                1,
                                &imageBlit,
@@ -387,7 +409,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
                                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = vkImage,
+        .image = vkImageHandle,
         .subresourceRange = GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
@@ -398,7 +420,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = dstTexture.GetVkImage(),
+        .image = dstTexture.VkImageHandle,
         .subresourceRange = dstTexture.GetSubresourceRange(),
       },
     };

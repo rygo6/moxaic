@@ -3,95 +3,41 @@
 #include "moxaic_vulkan_texture.hpp"
 #include "static_array.hpp"
 
-#include <glm/ext/scalar_constants.hpp>
 #include <vulkan/vulkan.h>
 
 using namespace Moxaic;
 using namespace Moxaic::Vulkan;
 
-static VkImageUsageFlags ColorBufferUsage(PipelineType pipeline)
+Framebuffer::Framebuffer(const Vulkan::Device* const device,
+                         const Vulkan::Locality locality)
+    : Device(device),
+      Locality(locality)
 {
-    switch (pipeline) {
-        default:
-        case PipelineType::Graphics:
-            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT |
-                   VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        case PipelineType::Compute:
-            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT;
-    }
 }
-
-static VkImageUsageFlags NormalBufferUsage(PipelineType pipeline)
-{
-    switch (pipeline) {
-        default:
-        case PipelineType::Graphics:
-            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT;
-        case PipelineType::Compute:
-            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT;
-    }
-}
-
-static VkImageUsageFlags GBufferBufferUsage(PipelineType pipeline)
-{
-    switch (pipeline) {
-        default:
-        case PipelineType::Graphics:
-            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT;
-        case PipelineType::Compute:
-            return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                   VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                   VK_IMAGE_USAGE_SAMPLED_BIT;
-    }
-}
-
-constexpr VkImageUsageFlags DepthBufferUsage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                                VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                                                VK_IMAGE_USAGE_SAMPLED_BIT;
-
-Framebuffer::Framebuffer(const Vulkan::Device* const pDevice)
-    : Device(pDevice) {}
 
 Framebuffer::~Framebuffer() = default;
 
-bool Framebuffer::Init(const PipelineType pipelineType,
-                       const VkExtent2D extents,
-                       const Locality locality)
+MXC_RESULT Framebuffer::Init(const PipelineType pipelineType,
+                             const VkExtent2D extents)
 {
     this->extents = extents;
-    MXC_CHK(colorTexture.Init(kColorBufferFormat,
-                                extents,
-                                ColorBufferUsage(pipelineType),
-                                VK_IMAGE_ASPECT_COLOR_BIT,
-                                locality));
+
+    MXC_CHK(colorTexture.Init(extents));
     MXC_CHK(colorTexture.TransitionInitialImmediate(pipelineType));
-    MXC_CHK(normalTexture.Init(kNormalBufferFormat,
-                                 extents,
-                                 NormalBufferUsage(pipelineType),
-                                 VK_IMAGE_ASPECT_COLOR_BIT,
-                                 locality));
+
+    MXC_CHK(normalTexture.Init(extents));
     MXC_CHK(normalTexture.TransitionInitialImmediate(pipelineType));
-    MXC_CHK(gbufferTexture.Init(kGBufferFormat,
-                                  extents,
-                                  GBufferBufferUsage(pipelineType),
-                                  VK_IMAGE_ASPECT_COLOR_BIT,
-                                  locality));
+
+    MXC_CHK(gbufferTexture.Init(extents));
     MXC_CHK(gbufferTexture.TransitionInitialImmediate(pipelineType));
-    MXC_CHK(depthTexture.Init(kDepthBufferFormat,
-                                extents,
-                                DepthBufferUsage,
-                                VK_IMAGE_ASPECT_DEPTH_BIT,
-                                locality));
+
+    MXC_CHK(depthTexture.Init(extents));
     MXC_CHK(depthTexture.TransitionInitialImmediate(pipelineType));
+
     MXC_CHK(InitFramebuffer());
     MXC_CHK(InitSemaphore());
-    return true;
+
+    return MXC_SUCCESS;
 }
 
 MXC_RESULT Framebuffer::InitFromImport(const PipelineType pipelineType,
@@ -102,42 +48,32 @@ MXC_RESULT Framebuffer::InitFromImport(const PipelineType pipelineType,
                                        const HANDLE depthExternalHandle)
 {
     this->extents = extents;
-    MXC_CHK(colorTexture.InitFromImport(kColorBufferFormat,
-                                          extents,
-                                          ColorBufferUsage(pipelineType),
-                                          VK_IMAGE_ASPECT_COLOR_BIT,
-                                          colorExternalHandle));
+
+    MXC_CHK(colorTexture.InitFromImport(colorExternalHandle, extents));
     MXC_CHK(colorTexture.TransitionInitialImmediate(pipelineType));
-    MXC_CHK(normalTexture.InitFromImport(kNormalBufferFormat,
-                                           extents,
-                                           NormalBufferUsage(pipelineType),
-                                           VK_IMAGE_ASPECT_COLOR_BIT,
-                                           normalExternalHandle));
+
+    MXC_CHK(normalTexture.InitFromImport(normalExternalHandle, extents));
     MXC_CHK(normalTexture.TransitionInitialImmediate(pipelineType));
-    MXC_CHK(gbufferTexture.InitFromImport(kGBufferFormat,
-                                            extents,
-                                            GBufferBufferUsage(pipelineType),
-                                            VK_IMAGE_ASPECT_COLOR_BIT,
-                                            gBufferExternalHandle));
+
+    MXC_CHK(gbufferTexture.InitFromImport(gBufferExternalHandle, extents));
     MXC_CHK(gbufferTexture.TransitionInitialImmediate(pipelineType));
-    MXC_CHK(depthTexture.InitFromImport(kDepthBufferFormat,
-                                extents,
-                                DepthBufferUsage,
-                                VK_IMAGE_ASPECT_DEPTH_BIT,
-                                depthExternalHandle));
+
+    MXC_CHK(depthTexture.InitFromImport(depthExternalHandle, extents));
     MXC_CHK(depthTexture.TransitionInitialImmediate(pipelineType));
+
     MXC_CHK(InitFramebuffer());
     MXC_CHK(InitSemaphore());
+
     return MXC_SUCCESS;
 }
 
 MXC_RESULT Framebuffer::InitFramebuffer()
 {
     const StaticArray attachments{
-      colorTexture.GetVkImageView(),
-      normalTexture.GetVkImageView(),
-      // gbufferTexture.GetVkImageView(),
-      depthTexture.GetVkImageView(),
+      colorTexture.VkImageViewHandle,
+      normalTexture.VkImageViewHandle,
+      // gbufferTexture.VKImageView,
+      depthTexture.VkImageViewHandle,
     };
     const VkFramebufferCreateInfo framebufferCreateInfo{
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -150,7 +86,7 @@ MXC_RESULT Framebuffer::InitFramebuffer()
       .height = extents.height,
       .layers = 1,
     };
-    VK_CHK(vkCreateFramebuffer(Device->  GetVkDevice(),
+    VK_CHK(vkCreateFramebuffer(Device->GetVkDevice(),
                                &framebufferCreateInfo,
                                VK_ALLOC,
                                &vkFramebuffer));
@@ -164,7 +100,7 @@ MXC_RESULT Framebuffer::InitSemaphore()
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(Device->  GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(Device->GetVkDevice(),
                              &renderCompleteCreateInfo,
                              VK_ALLOC,
                              &vkRenderCompleteSemaphore));
@@ -184,7 +120,7 @@ void Framebuffer::Transition(const VkCommandBuffer commandbuffer,
         .newLayout = dst.colorLayout,
         .srcQueueFamilyIndex = Device->GetSrcQueue(src),
         .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
-        .image = colorTexture.GetVkImage(),
+        .image = colorTexture.VkImageHandle,
         .subresourceRange = colorTexture.GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
@@ -195,7 +131,7 @@ void Framebuffer::Transition(const VkCommandBuffer commandbuffer,
         .newLayout = dst.colorLayout,
         .srcQueueFamilyIndex = Device->GetSrcQueue(src),
         .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
-        .image = normalTexture.GetVkImage(),
+        .image = normalTexture.VkImageHandle,
         .subresourceRange = normalTexture.GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
@@ -206,7 +142,7 @@ void Framebuffer::Transition(const VkCommandBuffer commandbuffer,
         .newLayout = dst.colorLayout,
         .srcQueueFamilyIndex = Device->GetSrcQueue(src),
         .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
-        .image = gbufferTexture.GetVkImage(),
+        .image = gbufferTexture.VkImageHandle,
         .subresourceRange = gbufferTexture.GetSubresourceRange(),
       }};
     VK_CHK_VOID(vkCmdPipelineBarrier(commandbuffer,
@@ -228,7 +164,7 @@ void Framebuffer::Transition(const VkCommandBuffer commandbuffer,
         .newLayout = dst.depthLayout,
         .srcQueueFamilyIndex = Device->GetSrcQueue(src),
         .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
-        .image = depthTexture.GetVkImage(),
+        .image = depthTexture.VkImageHandle,
         .subresourceRange = depthTexture.GetSubresourceRange(),
       }};
     VK_CHK_VOID(vkCmdPipelineBarrier(commandbuffer,

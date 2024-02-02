@@ -387,8 +387,10 @@ namespace Moxaic::Vulkan
     };
 
     enum class Locality : char {
+        Undefined,
         Local,
         External,
+        Imported,
     };
 
     inline const char* string_Locality(const Locality input_value)
@@ -398,6 +400,8 @@ namespace Moxaic::Vulkan
                 return "Local";
             case Locality::External:
                 return "External";
+            case Locality::Imported:
+                return "Imported";
             default:
                 return "Unknown Locality";
         }

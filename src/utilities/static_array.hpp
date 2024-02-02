@@ -8,17 +8,17 @@ namespace Moxaic
         T internalData[N];
 
         T& operator[](size_t i) { return internalData[i]; }
-        T const& operator[](size_t i) const { return internalData[i]; }
+        const T& operator[](size_t i) const { return internalData[i]; }
 
         operator T*() { return internalData; }
         operator const T*() const { return internalData; }
 
-        T const* begin() const { return internalData; }
-        T const* end() const { return internalData + N; }
+        const T* begin() const { return internalData; }
+        const T* end() const { return internalData + N; }
 
         T* data() { return internalData; }
-        T const* data() const { return internalData; }
-        static uint32_t size() { return N; }
+        const T* data() const { return internalData; }
+        constexpr uint32_t size() const { return N; }
     };
 
     template<typename _Tp, typename... _Up>
@@ -32,6 +32,6 @@ namespace Moxaic
         StaticRef(T data) { internalData = data; }
         T internalData;
         operator T*() { return &internalData; }
-        operator T const*() const { return &internalData; }
+        operator const T*() const { return &internalData; }
     };
-}
+}// namespace Moxaic

@@ -71,8 +71,7 @@ MXC_RESULT NodeReference::Init(const Vulkan::PipelineType pipelineType)
 
     for (int i = 0; i < exportedFramebuffers.size(); ++i) {
         exportedFramebuffers[i].Init(pipelineType,
-                                       Window::GetExtents(),
-                                       Vulkan::Locality::External);
+                                     Window::GetExtents());
     }
 
     StartProcess(startupInfo, processInformation);
@@ -105,7 +104,7 @@ MXC_RESULT NodeReference::ExportOverIPC(const Vulkan::Semaphore& compositorSemap
 void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camera& camera)
 {
     // Condense nearz/farz to draw radius of node
-    const auto viewPosition = camera.GetView() * glm::vec4(transform.position_, 1);
+    const auto viewPosition = camera.GetView() * glm::vec4(transform.position, 1);
     const float viewDistanceToCenter = -viewPosition.z;
     const float offset = drawRadius * 0.5f;
     const float farZ = viewDistanceToCenter + offset;
@@ -126,7 +125,7 @@ void NodeReference::SetZCondensedExportedGlobalDescriptorLocalBuffer(const Camer
 }
 
 Node::Node(const Vulkan::Device* const pDevice)
-    : k_pDevice(pDevice) {}
+    : Device(pDevice) {}
 
 Node::~Node() = default;
 

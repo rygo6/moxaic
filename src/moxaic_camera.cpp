@@ -48,7 +48,7 @@ bool Camera::UserCommandUpdate(const uint32_t deltaTime)
             delta.x += 1;
         }
         if (length(delta) > 0.0f) {
-            constexpr auto zeroAxis = BitFlags<Transform::Axis>(Transform::X);
+            constexpr auto zeroAxis = BitFlags<Transform::AxisFlags>(Transform::X);
             transform.LocalTranslate(normalize(delta) * float(deltaTime) * 0.002f, zeroAxis);
             updated = true;
         }

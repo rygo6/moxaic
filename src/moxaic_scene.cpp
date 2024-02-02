@@ -10,29 +10,27 @@ using namespace glm;
 
 MXC_RESULT CompositorScene::Init()
 {
-    const auto pipelineType = Vulkan::PipelineType::Graphics;
+    MXC_CHK(meshNodePipeline.Init());
     for (int i = 0; i < framebuffers.size(); ++i) {
-        MXC_CHK(framebuffers[i].Init(pipelineType,
-                                     Window::GetExtents(),
-                                     Vulkan::Locality::Local));
+        MXC_CHK(framebuffers[i].Init(meshNodePipeline.PipelineType,
+                                     Window::GetExtents()));
     }
 
-    MXC_CHK(swap.Init(pipelineType,
+    MXC_CHK(swap.Init(Vulkan::CompositorPipelineType,
                       Window::GetExtents()));
-    MXC_CHK(semaphore.Init(true, Vulkan::Locality::External));
+    MXC_CHK(semaphore.Init(true,
+                           Vulkan::Locality::External));
 
-    mainCamera.transform.position_ = vec3(0, 0, -1);
+    mainCamera.transform.position = vec3(0, 0, -1);
     mainCamera.transform.Rotate(0, 180, 0);
     mainCamera.UpdateViewProjection();
 
-    sphereTestTransform.position_ = vec3(1, 0, 0);
-    MXC_CHK(sphereTestTexture.InitFromFile("textures/test.jpg",
-                                           Vulkan::Locality::Local));
-    MXC_CHK(sphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
-    MXC_CHK(sphereTestMesh.InitSphere(0.5f));
-
     MXC_CHK(standardPipeline.Init());
-    MXC_CHK(meshNodePipeline.Init());
+
+    sphereTestTransform.position = vec3(1, 0, 0);
+    MXC_CHK(sphereTestTexture.InitFromFile("textures/test.jpg"));
+    MXC_CHK(sphereTestTexture.TransitionInitialImmediate(standardPipeline.PipelineType));
+    MXC_CHK(sphereTestMesh.InitSphere(0.5f));
 
     MXC_CHK(globalDescriptor.Init(mainCamera, Window::GetExtents()));
     MXC_CHK(standardMaterialDescriptor.Init(sphereTestTexture));
@@ -134,12 +132,12 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 
 MXC_RESULT ComputeCompositorScene::Init()
 {
-    const auto pipelineType = Vulkan::PipelineType::Compute;
+    constexpr auto pipelineType = Vulkan::PipelineType::Compute;
     MXC_CHK(swap.Init(pipelineType,
                       Window::GetExtents()));
     MXC_CHK(semaphore.Init(true, Vulkan::Locality::External));
 
-    mainCamera.transform.position_ = vec3(0, 0, -2);
+    mainCamera.transform.position = vec3(0, 0, -2);
     mainCamera.transform.Rotate(0, 180, 0);
     mainCamera.UpdateViewProjection();
 
@@ -152,21 +150,18 @@ MXC_RESULT ComputeCompositorScene::Init()
 
     MXC_CHK(nodeReference.Init(pipelineType));
 
-    MXC_CHK(outputAtomicTexture.Init(VK_FORMAT_R32_UINT,
-                                     Window::GetExtents(),
-                                     VK_IMAGE_USAGE_STORAGE_BIT,
-                                     VK_IMAGE_ASPECT_COLOR_BIT,
-                                     Vulkan::Locality::Local));
-    MXC_CHK(outputAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
+    MXC_CHK(outputAtomicTexture.Init({.format = VK_FORMAT_R32_UINT,
+                                      .usage = VK_IMAGE_USAGE_STORAGE_BIT,
+                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                      .extents = Window::GetExtents()}));
+    MXC_CHK(outputAtomicTexture.TransitionInitialImmediate(Vulkan::ComputeNodePipeline::PipelineType));
     const auto averagedExtents = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeNodePipeline::LocalSize,
                                             Window::GetExtents().height / Vulkan::ComputeNodePipeline::LocalSize);
-    MXC_CHK(outputAveragedAtomicTexture.Init(VK_FORMAT_R32_UINT,
-                                             averagedExtents,
-                                             VK_IMAGE_USAGE_STORAGE_BIT,
-                                             VK_IMAGE_ASPECT_COLOR_BIT,
-                                             Vulkan::Locality::Local,
-                                             VK_SAMPLE_COUNT_1_BIT));
-    MXC_CHK(outputAveragedAtomicTexture.TransitionInitialImmediate(Vulkan::PipelineType::Compute));
+    MXC_CHK(outputAveragedAtomicTexture.Init({.format = VK_FORMAT_R32_UINT,
+                                              .usage = VK_IMAGE_USAGE_STORAGE_BIT,
+                                              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                              .extents = averagedExtents}));
+    MXC_CHK(outputAveragedAtomicTexture.TransitionInitialImmediate(Vulkan::ComputeNodePipeline::PipelineType));
 
     const Vulkan::ComputeNodeDescriptor::UniformBuffer computeNodeBuffer{
       .view = globalDescriptor.localBuffer.view,
@@ -251,7 +246,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     Vulkan::ComputeNodePipeline::BindDescriptor(commandBuffer, computeNodeDescriptor);
 
     const auto superSample = 2;
-    const auto averagedExtents = outputAveragedAtomicTexture.GetExtents();
+    const auto averagedExtents = outputAveragedAtomicTexture.Extents;
     const auto averagedGroupCount = VkExtent2D(averagedExtents.width < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.width / Vulkan::ComputeNodePipeline::LocalSize,
                                                averagedExtents.height < Vulkan::ComputeNodePipeline::LocalSize ? 1 : averagedExtents.height / Vulkan::ComputeNodePipeline::LocalSize);
     computeNodePrePipeline.BindPipeline(commandBuffer);
@@ -266,7 +261,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
       .newLayout = VK_IMAGE_LAYOUT_GENERAL,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = outputAveragedAtomicTexture.GetVkImage(),
+      .image = outputAveragedAtomicTexture.VkImageHandle,
       .subresourceRange = outputAveragedAtomicTexture.GetSubresourceRange(),
     };
     vkCmdPipelineBarrier(commandBuffer,
@@ -317,7 +312,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
       .newLayout = VK_IMAGE_LAYOUT_GENERAL,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = outputAtomicTexture.GetVkImage(),
+      .image = outputAtomicTexture.VkImageHandle,
       .subresourceRange = outputAtomicTexture.GetSubresourceRange(),
     };
     vkCmdPipelineBarrier(commandBuffer,
@@ -366,11 +361,10 @@ MXC_RESULT NodeScene::Init()
     MXC_CHK(globalDescriptor.Init(mainCamera,
                                   Window::GetExtents()));
 
-    spherTestTransform.position_ = vec3(0, 0, 0);
+    spherTestTransform.position = vec3(0, 0, 0);
     MXC_CHK(sphereTestMesh.InitSphere(0.5f));
-    MXC_CHK(sphereTestTexture.InitFromFile("textures/uvgrid.jpg",
-                                           Vulkan::Locality::Local));
-    MXC_CHK(sphereTestTexture.TransitionInitialImmediate(Vulkan::PipelineType::Graphics));
+    MXC_CHK(sphereTestTexture.InitFromFile("textures/uvgrid.jpg"));
+    MXC_CHK(sphereTestTexture.TransitionInitialImmediate(Vulkan::StandardPipeline::PipelineType));
 
     MXC_CHK(materialDescriptor.Init(sphereTestTexture));
     MXC_CHK(objectDescriptor.Init(spherTestTransform));

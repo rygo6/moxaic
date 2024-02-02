@@ -20,6 +20,8 @@ namespace Moxaic::Vulkan
     public:
         using ComputePipeline::ComputePipeline;
 
+        constexpr static auto PipelineType{PipelineType::Compute};
+
         constexpr static uint32_t LocalSize = 32;
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)

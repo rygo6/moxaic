@@ -7,7 +7,7 @@ AlignOperands: Align
 AllowAllArgumentsOnNextLine: false
 AllowAllConstructorInitializersOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortBlocksOnASingleLine: Always
+AllowShortBlocksOnASingleLine: Empty
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: All
 AllowShortIfStatementsOnASingleLine: Always
@@ -28,8 +28,9 @@ BraceWrapping:
   BeforeCatch: false
   BeforeElse: false
   IndentBraces: false
-  SplitEmptyFunction: false
+  SplitEmptyFunction: true
   SplitEmptyRecord: true
+  SplitEmptyNamespace: true
 BreakBeforeBinaryOperators: None
 BreakBeforeTernaryOperators: false
 BreakConstructorInitializers: BeforeColon

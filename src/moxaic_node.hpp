@@ -38,7 +38,6 @@ namespace Moxaic
         const auto& GetExportedFramebuffer(const int i) const { return exportedFramebuffers[i]; }
 
     private:
-
         const char* name{"default"};
 
         Camera compositingCamera{};// Camera which compositor is using to reproject.
@@ -47,8 +46,9 @@ namespace Moxaic
         InterProcessReceiver ipcFromNode{};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> exportedFramebuffers{
-          Vulkan::Framebuffer(Device),
-          Vulkan::Framebuffer(Device)};
+          Vulkan::Framebuffer(Device, Vulkan::Locality::External),
+          Vulkan::Framebuffer(Device, Vulkan::Locality::External),
+        };
 
         STARTUPINFO startupInfo{};
         PROCESS_INFORMATION processInformation{};
@@ -101,7 +101,7 @@ namespace Moxaic
         }
 
     private:
-        const Vulkan::Device* const k_pDevice;
+        const Vulkan::Device* const Device;
 
         StaticArray<InterProcessFunc, InterProcessTargetFunc::Count> TargetFuncs()
         {
@@ -122,11 +122,12 @@ namespace Moxaic
         InterProcessReceiver m_IPCFromCompositor{};
         InterProcessProducer m_IPCToCompositor{};
 
-        Vulkan::Semaphore m_ImportedCompositorSemaphore{k_pDevice};
-        Vulkan::Semaphore m_ImportedNodeSemaphore{k_pDevice};
+        Vulkan::Semaphore m_ImportedCompositorSemaphore{Device};
+        Vulkan::Semaphore m_ImportedNodeSemaphore{Device};
 
         StaticArray<Vulkan::Framebuffer, FramebufferCount> m_ImportedFramebuffers{
-          Vulkan::Framebuffer(k_pDevice),
-          Vulkan::Framebuffer(k_pDevice)};
+          Vulkan::Framebuffer(Device),
+          Vulkan::Framebuffer(Device),
+        };
     };
 }// namespace Moxaic

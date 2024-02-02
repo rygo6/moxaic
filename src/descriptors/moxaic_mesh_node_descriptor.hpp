@@ -66,19 +66,19 @@ namespace Moxaic::Vulkan
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = Device->GetVkLinearSampler(),
-                  .imageView = framebuffer.GetColorTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetColorTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = Device->GetVkLinearSampler(),
-                  .imageView = framebuffer.GetNormalTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetNormalTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .sampler = Device->GetVkLinearSampler(),
-                  .imageView = framebuffer.GetGBufferTexture().GetVkImageView(),
+                  .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
             };
             WriteDescriptors(writes);

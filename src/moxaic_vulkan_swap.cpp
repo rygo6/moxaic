@@ -196,7 +196,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
                                    &swapCount,
                                    nullptr));
     if (swapCount != vkSwapImages.size()) {
-        MXC_LOG_ERROR("Unexpected swap count!", swapCount, m_VkSwapImages.size());
+        MXC_LOG_ERROR("Unexpected swap count!", swapCount, vkSwapImages.size());
         return MXC_FAIL;
     }
     VK_CHK(vkGetSwapchainImagesKHR(Device->  GetVkDevice(),
@@ -314,7 +314,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = srcTexture.GetVkImage(),
+        .image = srcTexture.VkImageHandle,
         .subresourceRange = srcTexture.GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
@@ -365,7 +365,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
-                               srcTexture.GetVkImage(),
+                               srcTexture.VkImageHandle,
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                vkSwapImages[swapIndex],
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -381,7 +381,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
         .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = srcTexture.GetVkImage(),
+        .image = srcTexture.VkImageHandle,
         .subresourceRange = srcTexture.GetSubresourceRange(),
       },
       (VkImageMemoryBarrier){
