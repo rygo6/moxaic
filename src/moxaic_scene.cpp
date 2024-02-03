@@ -75,9 +75,12 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
         nodeFramebufferIndex = !nodeFramebufferIndex;
 
         const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffer(nodeFramebufferIndex);
-        nodeFramebuffer.Transition(commandBuffer,
+        nodeFramebuffer.TransitionAttachmentBuffers(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToGraphicsRead);
+        nodeFramebuffer.TransitionGBuffers(commandBuffer,
+                           Vulkan::AcquireFromComputeRead,
+                           Vulkan::ToComputeRead);
 
         const auto& lastUsedNodeDescriptorBuffer = nodeReference.exportedGlobalDescriptor.localBuffer;
         meshNodeDescriptor[nodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
@@ -210,7 +213,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
         nodeFramebufferIndex = !nodeFramebufferIndex;
 
         const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffer(nodeFramebufferIndex);
-        nodeFramebuffer.Transition(commandBuffer,
+        nodeFramebuffer.TransitionAttachmentBuffers(commandBuffer,
                                    Vulkan::AcquireFromExternalGraphicsAttach,
                                    Vulkan::ToComputeRead);
         computeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
@@ -390,7 +393,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     const auto commandBuffer = Device->BeginGraphicsCommandBuffer();
 
     const auto& framebuffer = node.framebuffer(framebufferIndex);
-    framebuffer.Transition(commandBuffer,
+    framebuffer.TransitionAttachmentBuffers(commandBuffer,
                            Vulkan::AcquireFromExternal,
                            Vulkan::ToGraphicsAttach);
 
@@ -408,11 +411,12 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 
     // framebuffer.GetDepthTexture().BlitTo(commandBuffer,
     //                                      framebuffer.GetGBufferTexture());
-    framebuffer.Transition(commandBuffer,
+    framebuffer.TransitionAttachmentBuffers(commandBuffer,
                            Vulkan::FromGraphicsAttach,
-                           Vulkan::CompositorPipelineType == Vulkan::PipelineType::Graphics ?
-                             Vulkan::ReleaseToExternalGraphicsRead :
-                             Vulkan::ReleaseToExternalComputesRead);
+                           Vulkan::ReleaseToExternal(Vulkan::CompositorPipelineType));
+
+    // framebuffer.DepthTexture.BlitTo(commandBuffer,
+    //                                 framebuffer.GbufferTexture);
 
     // uint32_t swapIndex;
     // m_Swap.Acquire(&swapIndex);

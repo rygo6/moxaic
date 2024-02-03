@@ -1,6 +1,7 @@
 #pragma once
 
 #include "moxaic_vulkan.hpp"
+#include "moxaic_vulkan_device.hpp"
 
 #include <cassert>
 #include <vulkan/vulkan.h>
@@ -31,6 +32,10 @@ namespace Moxaic::Vulkan
         VkImage vkImageHandle{VK_NULL_HANDLE};
         VkImageView vkImageViewHandle{VK_NULL_HANDLE};
 
+        VkAccessFlags accessMask;
+        VkImageLayout layout;
+        Queue queueFamily;
+
 #ifdef WIN32
         HANDLE externalHandle{nullptr};
 #endif
@@ -54,7 +59,7 @@ namespace Moxaic::Vulkan
         };
 
         explicit Texture(const Vulkan::Device* device);
-        explicit Texture(const Vulkan::Device* device, const Info& args);
+        explicit Texture(const Vulkan::Device* device, const Info& info);
         ~Texture();
 
         MXC_RESULT InitFromFile(const char* file);
@@ -63,9 +68,29 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init(const VkExtent2D& extents);
         MXC_RESULT Init(const Info& args);
 
-        MXC_RESULT TransitionInitialImmediate(const PipelineType pipelineType) const;
+        MXC_RESULT TransitionInitialImmediate(PipelineType pipelineType) const;
 
-        void BlitTo(VkCommandBuffer commandBuffer, const Texture& dstTexture) const;
+        void BlitTo(VkCommandBuffer commandBuffer,
+                    const Texture& dstTexture) const;
+
+        VkImageMemoryBarrier PrepareImageMemoryBarrier(const Barrier& dst)
+        {
+            const VkImageMemoryBarrier barrier{
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+              .srcAccessMask = accessMask,
+              .dstAccessMask = dst.GetAccessMask(aspectMask),
+              .oldLayout = layout,
+              .newLayout = dst.GetLayout(aspectMask),
+              .srcQueueFamilyIndex = Device->GetSrcQueue(queueFamily),
+              .dstQueueFamilyIndex = Device->GetDstQueue(queueFamily, dst.queueFamily),
+              .image = vkImageHandle,
+              .subresourceRange = GetSubresourceRange(),
+            };
+            accessMask = barrier.dstAccessMask;
+            layout = barrier.newLayout;
+            queueFamily = dst.queueFamily;
+            return barrier;
+        }
 
         HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
 

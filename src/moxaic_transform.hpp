@@ -66,7 +66,7 @@ namespace Moxaic
 
         void LocalRotate(const float x, const float y, const float z)
         {
-            auto rotation = quat(vec3(
+            const auto rotation = quat(vec3(
               radians(x),
               radians(y),
               radians(z)));

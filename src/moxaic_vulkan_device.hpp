@@ -15,15 +15,39 @@ namespace Moxaic::Vulkan
     class Swap;
     class Semaphore;
 
-    class Device
+    class Device final
     {
-    public:
         MXC_NO_VALUE_PASS(Device);
 
         constexpr static uint32_t QueryPoolCount = 2;
 
+        VkDevice vkDevice{VK_NULL_HANDLE};
+
+        VkPhysicalDevice vkPhysicalDevice{VK_NULL_HANDLE};
+
+        VkQueue vkGraphicsQueue{VK_NULL_HANDLE};
+        VkQueue vkComputeQueue{VK_NULL_HANDLE};
+
+        VkRenderPass vkRenderPass{VK_NULL_HANDLE};
+
+        VkDescriptorPool vkDescriptorPool{VK_NULL_HANDLE};
+        VkQueryPool vkQueryPool{VK_NULL_HANDLE};
+        VkCommandPool vkGraphicsCommandPool{VK_NULL_HANDLE};
+        VkCommandPool vkComputeCommandPool{VK_NULL_HANDLE};
+
+        VkCommandBuffer vkGraphicsCommandBuffer{VK_NULL_HANDLE};
+        VkCommandBuffer vkComputeCommandBuffer{VK_NULL_HANDLE};
+
+        VkSampler vkLinearSampler{VK_NULL_HANDLE};
+        VkSampler vkNearestSampler{VK_NULL_HANDLE};
+        VkSampler vkMinSampler{VK_NULL_HANDLE};
+        VkSampler vkMaxSampler{VK_NULL_HANDLE};
+
+    public:
+        const VkDevice& VkDeviceHandle{vkDevice};
+
         Device() = default;
-        virtual ~Device();
+        ~Device();
 
         MXC_RESULT Init();
         MXC_RESULT AllocateBindImageImport(VkMemoryPropertyFlags properties,
@@ -39,9 +63,9 @@ namespace Moxaic::Vulkan
                                      VkImage image,
                                      VkDeviceMemory* pDeviceMemory) const;
         MXC_RESULT CreateAndPopulateStagingBuffer(const void* srcData,
-                                       VkDeviceSize bufferSize,
-                                       VkBuffer* pStagingBuffer,
-                                       VkDeviceMemory* pStagingBufferMemory) const;
+                                                  VkDeviceSize bufferSize,
+                                                  VkBuffer* pStagingBuffer,
+                                                  VkDeviceMemory* pStagingBufferMemory) const;
         MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
                                             VkMemoryPropertyFlags properties,
                                             VkDeviceSize bufferSize,
@@ -77,7 +101,7 @@ namespace Moxaic::Vulkan
                                                   const Barrier& src,
                                                   const Barrier& dst,
                                                   VkImageAspectFlags aspectMask) const;
-        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const; // todo change to return commandbuffer
+        MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const;// todo change to return commandbuffer
         MXC_RESULT EndImmediateCommandBuffer(VkCommandBuffer commandBuffer) const;
         VkCommandBuffer BeginGraphicsCommandBuffer() const;
         void BeginRenderPass(const Framebuffer& framebuffer,
@@ -99,9 +123,9 @@ namespace Moxaic::Vulkan
                             uint32_t query) const;
         StaticArray<double, QueryPoolCount> GetTimestamps() const;
 
-        uint32_t GetSrcQueue(const Barrier src) const
+        uint32_t GetSrcQueue(const Queue src) const
         {
-            switch (src.queueFamilyIndex) {
+            switch (src) {
                 case Queue::None:
                     return 0;
                 case Queue::Graphics:
@@ -113,19 +137,28 @@ namespace Moxaic::Vulkan
                 case Queue::Ignore:
                     return VK_QUEUE_FAMILY_IGNORED;
                 default:
-                    SDL_assert(false && "Unknown Queue Type");
-                    return -1;
+                    assert(false);
             }
         }
 
-        uint32_t GetDstQueue(const Barrier src, const Barrier dst) const
+        uint32_t GetSrcQueue(const Barrier src) const
+        {
+            return GetSrcQueue(src.queueFamily);
+        }
+
+        uint32_t GetDstQueue(const Queue src, const Queue dst) const
         {
             // This logic is needed because if src queue is ignored, then both must be ignored
-            if (src.queueFamilyIndex == Queue::Ignore) {
+            if (src == Queue::Ignore) {
                 return VK_QUEUE_FAMILY_IGNORED;
             }
 
             return GetSrcQueue(dst);
+        }
+
+        uint32_t GetDstQueue(const Barrier src, const Barrier dst) const
+        {
+            return GetDstQueue(src.queueFamily, dst.queueFamily);
         }
 
         // vkHandles return by ref so they can be used in designated initializers
@@ -142,28 +175,6 @@ namespace Moxaic::Vulkan
 
     private:
         constexpr static float Anisotropy{1.0};
-
-        VkDevice vkDevice{VK_NULL_HANDLE};
-
-        VkPhysicalDevice vkPhysicalDevice{VK_NULL_HANDLE};
-
-        VkQueue vkGraphicsQueue{VK_NULL_HANDLE};
-        VkQueue vkComputeQueue{VK_NULL_HANDLE};
-
-        VkRenderPass vkRenderPass{VK_NULL_HANDLE};
-
-        VkDescriptorPool vkDescriptorPool{VK_NULL_HANDLE};
-        VkQueryPool vkQueryPool{VK_NULL_HANDLE};
-        VkCommandPool vkGraphicsCommandPool{VK_NULL_HANDLE};
-        VkCommandPool vkComputeCommandPool{VK_NULL_HANDLE};
-
-        VkCommandBuffer vkGraphicsCommandBuffer{VK_NULL_HANDLE};
-        VkCommandBuffer vkComputeCommandBuffer{VK_NULL_HANDLE};
-
-        VkSampler vkLinearSampler{VK_NULL_HANDLE};
-        VkSampler vkNearestSampler{VK_NULL_HANDLE};
-        VkSampler vkMinSampler{VK_NULL_HANDLE};
-        VkSampler vkMaxSampler{VK_NULL_HANDLE};
 
         uint32_t graphicsQueueFamilyIndex{};
         uint32_t computeQueueFamilyIndex{};
@@ -192,4 +203,4 @@ namespace Moxaic::Vulkan
                                const VkPipelineStageFlags& waitDstStageMask,
                                Semaphore* pTimelineSemaphore) const;
     };
-}
+}// namespace Moxaic::Vulkan

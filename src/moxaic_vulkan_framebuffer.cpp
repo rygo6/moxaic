@@ -15,7 +15,13 @@ Framebuffer::Framebuffer(const Vulkan::Device* const device,
 {
 }
 
-Framebuffer::~Framebuffer() = default;
+Framebuffer::~Framebuffer()
+{
+    assert(vkFramebuffer != nullptr);
+    assert(vkRenderCompleteSemaphore != nullptr);
+    vkDestroyFramebuffer(Device->VkDeviceHandle, vkFramebuffer, VK_ALLOC);
+    vkDestroySemaphore(Device->VkDeviceHandle, vkRenderCompleteSemaphore, VK_ALLOC);
+}
 
 MXC_RESULT Framebuffer::Init(const PipelineType pipelineType,
                              const VkExtent2D extents)
@@ -28,11 +34,12 @@ MXC_RESULT Framebuffer::Init(const PipelineType pipelineType,
     MXC_CHK(normalTexture.Init(extents));
     MXC_CHK(normalTexture.TransitionInitialImmediate(pipelineType));
 
+    MXC_CHK(depthTexture.Init(extents));
+    MXC_CHK(depthTexture.TransitionInitialImmediate(pipelineType));
+
     MXC_CHK(gbufferTexture.Init(extents));
     MXC_CHK(gbufferTexture.TransitionInitialImmediate(pipelineType));
 
-    MXC_CHK(depthTexture.Init(extents));
-    MXC_CHK(depthTexture.TransitionInitialImmediate(pipelineType));
 
     MXC_CHK(InitFramebuffer());
     MXC_CHK(InitSemaphore());
@@ -86,7 +93,7 @@ MXC_RESULT Framebuffer::InitFramebuffer()
       .height = extents.height,
       .layers = 1,
     };
-    VK_CHK(vkCreateFramebuffer(Device->GetVkDevice(),
+    VK_CHK(vkCreateFramebuffer(Device->VkDeviceHandle,
                                &framebufferCreateInfo,
                                VK_ALLOC,
                                &vkFramebuffer));
@@ -100,16 +107,16 @@ MXC_RESULT Framebuffer::InitSemaphore()
       .pNext = nullptr,
       .flags = 0,
     };
-    VK_CHK(vkCreateSemaphore(Device->GetVkDevice(),
+    VK_CHK(vkCreateSemaphore(Device->VkDeviceHandle,
                              &renderCompleteCreateInfo,
                              VK_ALLOC,
                              &vkRenderCompleteSemaphore));
     return MXC_SUCCESS;
 }
 
-void Framebuffer::Transition(const VkCommandBuffer commandbuffer,
-                             const Barrier& src,
-                             const Barrier& dst) const
+void Framebuffer::TransitionAttachmentBuffers(const VkCommandBuffer commandbuffer,
+                                              const Barrier& src,
+                                              const Barrier& dst) const
 {
     const StaticArray acquireColorImageMemoryBarriers{
       (VkImageMemoryBarrier){
@@ -177,4 +184,33 @@ void Framebuffer::Transition(const VkCommandBuffer commandbuffer,
                                      nullptr,
                                      acquireDepthImageMemoryBarriers.size(),
                                      acquireDepthImageMemoryBarriers.data()));
+}
+
+
+void Framebuffer::TransitionGBuffers(const VkCommandBuffer commandbuffer,
+                                     const Barrier& src,
+                                     const Barrier& dst) const
+{
+    const StaticArray acquireColorImageMemoryBarriers{
+      (VkImageMemoryBarrier){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = src.colorAccessMask,
+        .dstAccessMask = dst.colorAccessMask,
+        .oldLayout = src.colorLayout,
+        .newLayout = dst.colorLayout,
+        .srcQueueFamilyIndex = Device->GetSrcQueue(src),
+        .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
+        .image = gbufferTexture.VkImageHandle,
+        .subresourceRange = gbufferTexture.GetSubresourceRange(),
+      }};
+    VK_CHK_VOID(vkCmdPipelineBarrier(commandbuffer,
+                                     src.colorStageMask,
+                                     dst.colorStageMask,
+                                     0,
+                                     0,
+                                     nullptr,
+                                     0,
+                                     nullptr,
+                                     acquireColorImageMemoryBarriers.size(),
+                                     acquireColorImageMemoryBarriers.data()));
 }

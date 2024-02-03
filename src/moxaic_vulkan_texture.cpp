@@ -21,7 +21,8 @@ using namespace Moxaic::Vulkan;
 
 Texture::Texture(const Vulkan::Device* const device)
     : Device(device)
-{}
+{
+}
 Texture::Texture(const Vulkan::Device* device, const Texture::Info& info)
     : Device(device),
       format(info.format),
@@ -31,7 +32,8 @@ Texture::Texture(const Vulkan::Device* device, const Texture::Info& info)
       extents(info.extents),
       mipLevels(info.mipLevels),
       locality(info.locality)
-{}
+{
+}
 
 Texture::~Texture()
 {
@@ -120,10 +122,10 @@ bool Texture::Init(const VkExtent2D& extents)
     this->extents = extents;
 
     MXC_LOG_MULTILINE("Texture::InitFromImport",
-                  externalHandle,
-                  string_VkFormat(format),
-                  string_VkImageUsageFlags(usage),
-                  string_VkImageAspectFlags(aspectMask));
+                      externalHandle,
+                      string_VkFormat(format),
+                      string_VkImageUsageFlags(usage),
+                      string_VkImageAspectFlags(aspectMask));
 
     return InternalInit();
 }
@@ -139,10 +141,10 @@ bool Texture::Init(const Info& info)
     this->locality = info.locality;
 
     MXC_LOG_MULTILINE("Texture::InitFromImport",
-                  externalHandle,
-                  string_VkFormat(format),
-                  string_VkImageUsageFlags(usage),
-                  string_VkImageAspectFlags(aspectMask));
+                      externalHandle,
+                      string_VkFormat(format),
+                      string_VkImageUsageFlags(usage),
+                      string_VkImageAspectFlags(aspectMask));
 
     return InternalInit();
 }
@@ -183,7 +185,7 @@ MXC_RESULT Texture::InternalInit()
                                                     externalHandle,
                                                     &vkDeviceMemory));
             break;
-        case Locality::Undefined:
+        default:
             assert(false);
     }
 
@@ -276,14 +278,7 @@ MXC_RESULT Texture::InitImageView()
         .b = VK_COMPONENT_SWIZZLE_IDENTITY,
         .a = VK_COMPONENT_SWIZZLE_IDENTITY,
       },
-      .subresourceRange{
-        .aspectMask = aspectMask,
-        .baseMipLevel = 0,
-        .levelCount = mipLevels,
-        .baseArrayLayer = 0,
-        .layerCount = 1,
-      },
-    };
+      .subresourceRange{GetSubresourceRange()}};
     VK_CHK(vkCreateImageView(Device->GetVkDevice(),
                              &imageViewCreateInfo,
                              VK_ALLOC,
