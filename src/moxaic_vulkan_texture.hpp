@@ -32,9 +32,9 @@ namespace Moxaic::Vulkan
         VkImage vkImageHandle{VK_NULL_HANDLE};
         VkImageView vkImageViewHandle{VK_NULL_HANDLE};
 
-        VkAccessFlags accessMask;
-        VkImageLayout layout;
-        Queue queueFamily;
+        // VkAccessFlags accessMask;
+        // VkImageLayout layout;
+        // Queue queueFamily;
 
 #ifdef WIN32
         HANDLE externalHandle{nullptr};
@@ -73,23 +73,41 @@ namespace Moxaic::Vulkan
         void BlitTo(VkCommandBuffer commandBuffer,
                     const Texture& dstTexture) const;
 
-        VkImageMemoryBarrier PrepareImageMemoryBarrier(const Barrier& dst)
+        // VkImageMemoryBarrier PrepareImageMemoryBarrier(const Barrier2& dst)
+        // {
+        //     const VkImageMemoryBarrier barrier{
+        //       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        //       .srcAccessMask = accessMask,
+        //       .dstAccessMask = dst.GetAccessMask(aspectMask),
+        //       .oldLayout = layout,
+        //       .newLayout = dst.layout,
+        //       .srcQueueFamilyIndex = Device->GetSrcQueue(queueFamily),
+        //       .dstQueueFamilyIndex = Device->GetDstQueue(queueFamily, dst.queueFamily),
+        //       .image = vkImageHandle,
+        //       .subresourceRange = GetSubresourceRange(),
+        //     };
+        //     accessMask = barrier.dstAccessMask;
+        //     layout = barrier.newLayout;
+        //     queueFamily = dst.queueFamily;
+        //     return barrier;
+        // }
+
+        VkImageMemoryBarrier2 GetImageBarrier(const Barrier2& src, const Barrier2& dst) const
         {
-            const VkImageMemoryBarrier barrier{
-              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-              .srcAccessMask = accessMask,
-              .dstAccessMask = dst.GetAccessMask(aspectMask),
-              .oldLayout = layout,
-              .newLayout = dst.GetLayout(aspectMask),
-              .srcQueueFamilyIndex = Device->GetSrcQueue(queueFamily),
-              .dstQueueFamilyIndex = Device->GetDstQueue(queueFamily, dst.queueFamily),
-              .image = vkImageHandle,
-              .subresourceRange = GetSubresourceRange(),
+            return (VkImageMemoryBarrier2)
+            {
+                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                .srcStageMask = src.GetStageMask(aspectMask),
+                .srcAccessMask = src.GetAccessMask(aspectMask),
+                .dstStageMask = dst.GetStageMask(aspectMask),
+                .dstAccessMask = dst.GetAccessMask(aspectMask),
+                .oldLayout = src.layout,
+                .newLayout = dst.layout,
+                .srcQueueFamilyIndex = Device->GetSrcQueue(src),
+                .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
+                .image = vkImageHandle,
+                .subresourceRange = GetSubresourceRange(),
             };
-            accessMask = barrier.dstAccessMask;
-            layout = barrier.newLayout;
-            queueFamily = dst.queueFamily;
-            return barrier;
         }
 
         HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;

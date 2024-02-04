@@ -212,13 +212,13 @@ MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) 
     switch (pipelineType) {
         case PipelineType::Graphics:
             return Device->TransitionImageLayoutImmediate(vkImageHandle,
-                                                          Vulkan::FromInitial,
-                                                          Vulkan::ToGraphicsRead,
+                                                          Vulkan::FromUndefined2,
+                                                          Vulkan::ToGraphicsRead2,
                                                           aspectMask);
         case PipelineType::Compute:
             return Device->TransitionImageLayoutImmediate(vkImageHandle,
-                                                          Vulkan::FromInitial,
-                                                          Vulkan::ToComputeRead,
+                                                          Vulkan::FromUndefined2,
+                                                          Vulkan::ToComputeRead2,
                                                           aspectMask);
         default:
             SDL_assert(false);

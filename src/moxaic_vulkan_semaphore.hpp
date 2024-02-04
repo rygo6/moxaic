@@ -13,13 +13,23 @@ namespace Moxaic::Vulkan
 {
     class Device;
 
-    class Semaphore
+    class Semaphore final
     {
-    public:
         MXC_NO_VALUE_PASS(Semaphore);
 
+        const Device* const Device;
+
+        VkSemaphore vkSemaphore{VK_NULL_HANDLE};
+
+#ifdef WIN32
+        HANDLE externalHandle{nullptr};
+#endif
+
+    public:
+        const VkSemaphore& VkSemaphoreHandle{vkSemaphore};
+
         explicit Semaphore(const Vulkan::Device* device);
-        virtual ~Semaphore();
+        ~Semaphore();
 
         MXC_RESULT Init(bool readOnly,
                         Locality locality);
@@ -36,14 +46,5 @@ namespace Moxaic::Vulkan
         uint64_t localWaitValue{0};
 
         const auto& GetVkSemaphore() const { return vkSemaphore; }
-
-    private:
-        const Device* const Device;
-
-        VkSemaphore vkSemaphore{VK_NULL_HANDLE};
-
-#ifdef WIN32
-        HANDLE externalHandle{nullptr};
-#endif
     };
-}
+}// namespace Moxaic::Vulkan

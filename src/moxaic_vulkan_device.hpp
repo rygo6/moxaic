@@ -98,8 +98,8 @@ namespace Moxaic::Vulkan
                                                   VkPipelineStageFlags dstStageMask,
                                                   VkImageAspectFlags aspectMask) const;
         MXC_RESULT TransitionImageLayoutImmediate(VkImage image,
-                                                  const Barrier& src,
-                                                  const Barrier& dst,
+                                                  const Barrier2& src,
+                                                  const Barrier2& dst,
                                                   VkImageAspectFlags aspectMask) const;
         MXC_RESULT BeginImmediateCommandBuffer(VkCommandBuffer* pCommandBuffer) const;// todo change to return commandbuffer
         MXC_RESULT EndImmediateCommandBuffer(VkCommandBuffer commandBuffer) const;
@@ -126,22 +126,20 @@ namespace Moxaic::Vulkan
         uint32_t GetSrcQueue(const Queue src) const
         {
             switch (src) {
-                case Queue::None:
-                    return 0;
+                case Queue::Ignore:
+                    return VK_QUEUE_FAMILY_IGNORED;
                 case Queue::Graphics:
                     return graphicsQueueFamilyIndex;
                 case Queue::Compute:
                     return computeQueueFamilyIndex;
                 case Queue::FamilyExternal:
                     return VK_QUEUE_FAMILY_EXTERNAL;
-                case Queue::Ignore:
-                    return VK_QUEUE_FAMILY_IGNORED;
                 default:
                     assert(false);
             }
         }
 
-        uint32_t GetSrcQueue(const Barrier src) const
+        uint32_t GetSrcQueue(const Barrier2 src) const
         {
             return GetSrcQueue(src.queueFamily);
         }
@@ -156,7 +154,7 @@ namespace Moxaic::Vulkan
             return GetSrcQueue(dst);
         }
 
-        uint32_t GetDstQueue(const Barrier src, const Barrier dst) const
+        uint32_t GetDstQueue(const Barrier2 src, const Barrier2 dst) const
         {
             return GetDstQueue(src.queueFamily, dst.queueFamily);
         }
@@ -201,6 +199,6 @@ namespace Moxaic::Vulkan
         MXC_RESULT SubmitQueue(const VkCommandBuffer& commandBuffer,
                                const VkQueue& queue,
                                const VkPipelineStageFlags& waitDstStageMask,
-                               Semaphore* pTimelineSemaphore) const;
+                               Semaphore* timelineSemaphore) const;
     };
 }// namespace Moxaic::Vulkan

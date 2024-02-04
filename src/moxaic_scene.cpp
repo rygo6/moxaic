@@ -76,11 +76,8 @@ MXC_RESULT CompositorScene::Loop(const uint32_t& deltaTime)
 
         const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffer(nodeFramebufferIndex);
         nodeFramebuffer.TransitionAttachmentBuffers(commandBuffer,
-                                   Vulkan::AcquireFromExternalGraphicsAttach,
-                                   Vulkan::ToGraphicsRead);
-        nodeFramebuffer.TransitionGBuffers(commandBuffer,
-                           Vulkan::AcquireFromComputeRead,
-                           Vulkan::ToComputeRead);
+                                   Vulkan::AcquireFromExternalAttach2,
+                                   Vulkan::ToGraphicsRead2);
 
         const auto& lastUsedNodeDescriptorBuffer = nodeReference.exportedGlobalDescriptor.localBuffer;
         meshNodeDescriptor[nodeFramebufferIndex].SetLocalBuffer(lastUsedNodeDescriptorBuffer);
@@ -214,8 +211,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
         const auto& nodeFramebuffer = nodeReference.GetExportedFramebuffer(nodeFramebufferIndex);
         nodeFramebuffer.TransitionAttachmentBuffers(commandBuffer,
-                                   Vulkan::AcquireFromExternalGraphicsAttach,
-                                   Vulkan::ToComputeRead);
+                                   Vulkan::AcquireFromExternalAttach2,
+                                   Vulkan::ToComputeRead2);
         computeNodeDescriptor.WriteFramebuffer(nodeFramebuffer);
 
         const auto& lastUsedNodeDescriptorBuffer = nodeReference.exportedGlobalDescriptor.localBuffer;
@@ -238,8 +235,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     swap.Acquire(&swapIndex);
     swap.Transition(commandBuffer,
                     swapIndex,
-                    Vulkan::FromComputeSwapPresent,
-                    Vulkan::ToComputeWrite);
+                    Vulkan::FromUndefined2,
+                    Vulkan::ToComputeWrite2);
 
     const auto& swapImage = swap.GetVkSwapImage(swapIndex);
     const auto& swapImageView = swap.GetVkSwapImageView(swapIndex);
@@ -334,8 +331,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     swap.Transition(commandBuffer,
                     swapIndex,
-                    Vulkan::FromComputeWrite,
-                    Vulkan::ToComputeSwapPresent);
+                    Vulkan::FromComputeWrite2,
+                    Vulkan::ToComputeSwapPresent2);
 
     Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
@@ -394,8 +391,8 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 
     const auto& framebuffer = node.framebuffer(framebufferIndex);
     framebuffer.TransitionAttachmentBuffers(commandBuffer,
-                           Vulkan::AcquireFromExternal,
-                           Vulkan::ToGraphicsAttach);
+                           Vulkan::FromUndefined2,
+                           Vulkan::ToGraphicsAttach2);
 
     constexpr auto clearColor = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
     Device->BeginRenderPass(framebuffer, clearColor);
@@ -412,8 +409,8 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     // framebuffer.GetDepthTexture().BlitTo(commandBuffer,
     //                                      framebuffer.GetGBufferTexture());
     framebuffer.TransitionAttachmentBuffers(commandBuffer,
-                           Vulkan::FromGraphicsAttach,
-                           Vulkan::ReleaseToExternal(Vulkan::CompositorPipelineType));
+                           Vulkan::FromGraphicsAttach2,
+                           Vulkan::ReleaseToExternalRead(Vulkan::CompositorPipelineType));
 
     // framebuffer.DepthTexture.BlitTo(commandBuffer,
     //                                 framebuffer.GbufferTexture);

@@ -256,10 +256,10 @@ MXC_RESULT Device::CreateDevice()
     VkPhysicalDeviceVulkan13Features enabledFeatures13 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
       .pNext = &physicalDeviceRobustness2Features,
-      //            .synchronization2 = true,
       .robustImageAccess = VK_TRUE,
       .shaderDemoteToHelperInvocation = VK_TRUE,
       .shaderTerminateInvocation = VK_TRUE,
+      .synchronization2 = VK_TRUE,
     };
     VkPhysicalDeviceVulkan12Features enabledFeatures12 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
@@ -331,22 +331,17 @@ MXC_RESULT Device::CreateRenderPass()
       // color
       (VkAttachmentReference){
         .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
       },
       // normal
       (VkAttachmentReference){
         .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
       },
-      // gbuffer
-      // (VkAttachmentReference){
-      //   .attachment = 2,
-      //   .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      // }
     };
     constexpr VkAttachmentReference depthAttachmentReference = {
       .attachment = 2,
-      .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
     };
     const StaticArray subpass{
       (VkSubpassDescription){
@@ -355,26 +350,6 @@ MXC_RESULT Device::CreateRenderPass()
         .pColorAttachments = colorAttachments.data(),
         .pDepthStencilAttachment = &depthAttachmentReference,
       }};
-    constexpr StaticArray dependencies{
-      (VkSubpassDependency){
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = VK_ACCESS_NONE_KHR,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dependencyFlags = 0,
-      },
-      (VkSubpassDependency){
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .srcAccessMask = VK_ACCESS_NONE_KHR,
-        .dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-        .dependencyFlags = 0,
-      },
-    };
     constexpr StaticArray attachments{
       // Color
       (VkAttachmentDescription){
@@ -432,8 +407,6 @@ MXC_RESULT Device::CreateRenderPass()
       .pAttachments = attachments.data(),
       .subpassCount = subpass.size(),
       .pSubpasses = subpass.data(),
-      .dependencyCount = dependencies.size(),
-      .pDependencies = dependencies.data(),
     };
     VK_CHK(vkCreateRenderPass(vkDevice, &renderPassInfo, VK_ALLOC, &vkRenderPass));
     return MXC_SUCCESS;
@@ -1013,18 +986,21 @@ MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage image,
 }
 
 MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage image,
-                                                  const Barrier& src,
-                                                  const Barrier& dst,
+                                                  const Barrier2& src,
+                                                  const Barrier2& dst,
                                                   const VkImageAspectFlags aspectMask) const
 {
     VkCommandBuffer commandBuffer;
     MXC_CHK(BeginImmediateCommandBuffer(&commandBuffer));
-    const VkImageMemoryBarrier imageMemoryBarrier{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+
+    const VkImageMemoryBarrier2 barrier{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+      .srcStageMask = src.GetStageMask(aspectMask),
       .srcAccessMask = src.GetAccessMask(aspectMask),
+      .dstStageMask = dst.GetStageMask(aspectMask),
       .dstAccessMask = dst.GetAccessMask(aspectMask),
-      .oldLayout = src.GetLayout(aspectMask),
-      .newLayout = dst.GetLayout(aspectMask),
+      .oldLayout = src.layout,
+      .newLayout = dst.layout,
       .srcQueueFamilyIndex = GetSrcQueue(src),
       .dstQueueFamilyIndex = GetDstQueue(src, dst),
       .image = image,
@@ -1036,16 +1012,13 @@ MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage image,
         .layerCount = 1,
       },
     };
-    vkCmdPipelineBarrier(commandBuffer,
-                         src.GetStageMask(aspectMask),
-                         dst.GetStageMask(aspectMask),
-                         0,
-                         0,
-                         nullptr,
-                         0,
-                         nullptr,
-                         1,
-                         &imageMemoryBarrier);
+    const VkDependencyInfo dependencyInfo{
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .imageMemoryBarrierCount = 1,
+      .pImageMemoryBarriers = &barrier,
+    };
+    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo));
+
     MXC_CHK(EndImmediateCommandBuffer(commandBuffer));
     return MXC_SUCCESS;
 }
@@ -1160,7 +1133,7 @@ MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* const pTimelineSemaphore) cons
 {
     return SubmitQueue(vkGraphicsCommandBuffer,
                        vkGraphicsQueue,
-                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                       VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                        pTimelineSemaphore);
 }
 
@@ -1172,7 +1145,8 @@ MXC_RESULT Device::SubmitGraphicsQueueAndPresent(const Swap& swap,
                                  vkGraphicsQueue,
                                  swap,
                                  swapIndex,
-                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, pTimelineSemaphore);
+                                 VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 pTimelineSemaphore);
 }
 
 VkCommandBuffer Device::BeginComputeCommandBuffer() const
@@ -1300,12 +1274,12 @@ MXC_RESULT Device::SubmitQueueAndPresent(const VkCommandBuffer& commandBuffer,
 MXC_RESULT Device::SubmitQueue(const VkCommandBuffer& commandBuffer,
                                const VkQueue& queue,
                                const VkPipelineStageFlags& waitDstStageMask,
-                               Semaphore* const pTimelineSemaphore) const
+                               Semaphore* const timelineSemaphore) const
 {
     // https://www.khronos.org/blog/vulkan-timeline-semaphores
-    const uint64_t waitValue = pTimelineSemaphore->localWaitValue;
-    pTimelineSemaphore->localWaitValue++;
-    const uint64_t signalValue = pTimelineSemaphore->localWaitValue;
+    const uint64_t waitValue = timelineSemaphore->localWaitValue;
+    timelineSemaphore->localWaitValue++;
+    const uint64_t signalValue = timelineSemaphore->localWaitValue;
     const StaticArray waitSemaphoreValues{
       waitValue,
     };
@@ -1321,13 +1295,13 @@ MXC_RESULT Device::SubmitQueue(const VkCommandBuffer& commandBuffer,
       .pSignalSemaphoreValues = signalSemaphoreValues.data(),
     };
     const StaticArray waitSemaphores{
-      pTimelineSemaphore->GetVkSemaphore(),
+      timelineSemaphore->GetVkSemaphore(),
     };
     const StaticArray waitDstStageMasks{
       waitDstStageMask,
     };
     const StaticArray signalSemaphores{
-      pTimelineSemaphore->GetVkSemaphore(),
+      timelineSemaphore->GetVkSemaphore(),
     };
     const VkSubmitInfo submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1343,5 +1317,33 @@ MXC_RESULT Device::SubmitQueue(const VkCommandBuffer& commandBuffer,
                          1,
                          &submitInfo,
                          VK_NULL_HANDLE));
+
+    // VkSemaphoreSubmitInfoKHR waitSemaphore {
+    //     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    //     .semaphore = timelineSemaphore->VkSemaphoreHandle,
+    //     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR};
+    //
+    // VkSemaphoreSubmitInfoKHR renderingCompleteInfo {
+    //     ...
+    //     .semaphore = renderingCompleteSemaphore,
+    //     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR};
+    //
+    // VkCommandBufferSubmitInfoKHR renderingCommandBufferInfo = {
+    //     ...
+    //     .commandBuffer = renderingCommandBuffer;
+    // };
+    //
+    //
+    // const VkSubmitInfo2 prePresentSubmitInfo{
+    //   .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+    //   .waitSemaphoreInfoCount = waitSemaphores.size(),
+    //   .pWaitSemaphoreInfos = waitSemaphores.data(),
+    //   .commandBufferInfoCount = 1,
+    //   .pCommandBufferInfos = &prePresentCommandBufferInfo,
+    //   .signalSemaphoreInfoCount = 1,
+    //   .pSignalSemaphoreInfos = &prePresentCompleteInfo};
+    //
+    // vkQueueSubmit2KHR(presentQueue, &prePresentSubmitInfo, ...);
+
     return MXC_SUCCESS;
 }

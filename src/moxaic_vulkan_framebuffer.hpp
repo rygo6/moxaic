@@ -93,10 +93,12 @@ namespace Moxaic::Vulkan
                                   HANDLE normalExternalHandle,
                                   HANDLE gBufferExternalHandle,
                                   HANDLE depthExternalHandle);
-        void TransitionAttachmentBuffers(VkCommandBuffer commandbuffer,
-                                         const Barrier& src,
-                                         const Barrier& dst) const;
-        void TransitionGBuffers(VkCommandBuffer commandbuffer, const Barrier& src, const Barrier& dst) const;
+        void TransitionAttachmentBuffers(VkCommandBuffer commandBuffer,
+                                         const Barrier2& src,
+                                         const Barrier2& dst) const;
+        // void TransitionGBuffers(VkCommandBuffer commandbuffer,
+        //                         const Barrier& src,
+        //                         const Barrier& dst) const;
 
     private:
         MXC_RESULT InitFramebuffer();
