@@ -114,7 +114,16 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_2_NONE,
     };
 
-    inline constexpr Barrier2 FromComputeWrite2{
+    inline constexpr Barrier2 GraphicsComputeWrite2{
+        .colorAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+        .depthAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+        .layout = VK_IMAGE_LAYOUT_GENERAL,
+        .queueFamily = Queue::Graphics,
+        .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      };
+
+    inline constexpr Barrier2 ComputeWrite2{
       .colorAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
       .layout = VK_IMAGE_LAYOUT_GENERAL,
@@ -122,43 +131,6 @@ namespace Moxaic::Vulkan
       .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
       .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     };
-
-    inline constexpr Barrier2 FromGraphicsAttach2{
-      .colorAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-      .depthAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-      .queueFamily = Queue::Graphics,
-      .colorStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
-      .depthStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-    };
-
-    inline constexpr Barrier2 ToGraphicsAttach2{
-      .colorAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
-      .depthAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-      .queueFamily = Queue::Graphics,
-      .colorStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-      .depthStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-    };
-
-    inline constexpr Barrier2 ToGraphicsRead2{
-      .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-      .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-      .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
-      .queueFamily = Queue::Graphics,
-      .colorStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-      .depthStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-    };
-
-    inline constexpr Barrier2 ToComputeRead2{
-      .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-      .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-      .layout = VK_IMAGE_LAYOUT_GENERAL,
-      .queueFamily = Queue::Compute,
-      .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-      .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-    };
-
     inline constexpr Barrier2 ToComputeWrite2{
       .colorAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
       .depthAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
@@ -168,8 +140,61 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     };
 
+    inline constexpr Barrier2 ComputeReadWrite2{
+        .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+        .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+        .layout = VK_IMAGE_LAYOUT_GENERAL,
+        .queueFamily = Queue::Compute,
+        .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      };
+
+    inline constexpr Barrier2 GraphicsComputeRead2{
+        .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+        .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+        .layout = VK_IMAGE_LAYOUT_GENERAL,
+        .queueFamily = Queue::Graphics,
+        .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      };
+
+    inline constexpr Barrier2 ComputeRead2{
+      .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+      .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+      .layout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamily = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    };
+
+    inline constexpr Barrier2 GraphicsRead2{
+      .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+      .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+      .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+      .queueFamily = Queue::Graphics,
+      .colorStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+    };
+
+    inline constexpr Barrier2 GraphicsAttach2{
+      .colorAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+      .depthAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+      .queueFamily = Queue::Graphics,
+      .colorStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+      .depthStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+    };
+    // inline constexpr Barrier2 ToGraphicsAttach2{
+    //   .colorAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
+    //   .depthAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+    //   .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+    //   .queueFamily = Queue::Graphics,
+    //   .colorStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    //   .depthStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+    // };
+
     /// Retains data from prior external graphics attach
-    inline constexpr Barrier2 AcquireFromExternalAttach2{
+    inline constexpr Barrier2 AcquireExternalGraphicsAttach2{
       .colorAccessMask = VK_ACCESS_2_NONE,
       .depthAccessMask = VK_ACCESS_2_NONE,
       .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
@@ -178,7 +203,7 @@ namespace Moxaic::Vulkan
       .depthStageMask = VK_PIPELINE_STAGE_2_NONE,
     };
 
-    inline constexpr Barrier2 ReleaseToExternalGraphicsRead2{
+    inline constexpr Barrier2 ReleaseExternalGraphicsRead2{
       .colorAccessMask = VK_ACCESS_2_NONE,
       .depthAccessMask = VK_ACCESS_2_NONE,
       .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
@@ -186,8 +211,7 @@ namespace Moxaic::Vulkan
       .colorStageMask = VK_PIPELINE_STAGE_2_NONE,
       .depthStageMask = VK_PIPELINE_STAGE_2_NONE,
     };
-
-    inline constexpr Barrier2 ReleaseToExternalComputesRead2{
+    inline constexpr Barrier2 ReleaseExternalComputesRead2{
       .colorAccessMask = VK_ACCESS_2_NONE,
       .depthAccessMask = VK_ACCESS_2_NONE,
       .layout = VK_IMAGE_LAYOUT_GENERAL,
@@ -200,9 +224,9 @@ namespace Moxaic::Vulkan
     {
         switch (pipelineType) {
             case PipelineType::Graphics:
-                return ReleaseToExternalGraphicsRead2;
+                return ReleaseExternalGraphicsRead2;
             case PipelineType::Compute:
-                return ReleaseToExternalComputesRead2;
+                return ReleaseExternalComputesRead2;
             default:
                 assert(false);
         }
@@ -215,6 +239,24 @@ namespace Moxaic::Vulkan
       .queueFamily = Queue::Compute,
       .colorStageMask = VK_PIPELINE_STAGE_2_NONE,
       .depthStageMask = VK_PIPELINE_STAGE_2_NONE,
+    };
+
+    inline constexpr Barrier2 BlitTransferSrc2{
+      .colorAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+      .depthAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+      .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      .queueFamily = Queue::Graphics,
+      .colorStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+    };
+
+    inline constexpr Barrier2 BlitTransferDst2{
+      .colorAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      .depthAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      .queueFamily = Queue::Graphics,
+      .colorStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
     };
 
     enum class Locality : char {

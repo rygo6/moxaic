@@ -30,7 +30,7 @@ namespace Moxaic::Vulkan
         void RecordRender(const VkCommandBuffer commandBuffer) const;
 
     private:
-        const Vulkan::Device* const k_pDevice;
+        const Vulkan::Device* const Device;
 
         uint32_t m_IndexCount{};
         uint32_t m_VertexCount{};

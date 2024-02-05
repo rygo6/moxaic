@@ -40,7 +40,6 @@ MXC_RESULT Framebuffer::Init(const PipelineType pipelineType,
     MXC_CHK(gbufferTexture.Init(extents));
     MXC_CHK(gbufferTexture.TransitionInitialImmediate(pipelineType));
 
-
     MXC_CHK(InitFramebuffer());
     MXC_CHK(InitSemaphore());
 
@@ -57,16 +56,9 @@ MXC_RESULT Framebuffer::InitFromImport(const PipelineType pipelineType,
     this->extents = extents;
 
     MXC_CHK(colorTexture.InitFromImport(colorExternalHandle, extents));
-    // MXC_CHK(colorTexture.TransitionInitialImmediate(pipelineType));
-
     MXC_CHK(normalTexture.InitFromImport(normalExternalHandle, extents));
-    // MXC_CHK(normalTexture.TransitionInitialImmediate(pipelineType));
-
-    MXC_CHK(gbufferTexture.InitFromImport(gBufferExternalHandle, extents));
-    // MXC_CHK(gbufferTexture.TransitionInitialImmediate(pipelineType));
-
     MXC_CHK(depthTexture.InitFromImport(depthExternalHandle, extents));
-    // MXC_CHK(depthTexture.TransitionInitialImmediate(pipelineType));
+    MXC_CHK(gbufferTexture.InitFromImport(gBufferExternalHandle, extents));
 
     MXC_CHK(InitFramebuffer());
     MXC_CHK(InitSemaphore());
@@ -118,16 +110,12 @@ void Framebuffer::TransitionAttachmentBuffers(const VkCommandBuffer commandBuffe
                                               const Barrier2& src,
                                               const Barrier2& dst) const
 {
-    MXC_LOG( string_VkAccessFlags2(src.GetAccessMask(VK_IMAGE_ASPECT_COLOR_BIT)) );
-
     const StaticArray barriers{
       colorTexture.GetImageBarrier(src, dst),
       normalTexture.GetImageBarrier(src, dst),
       depthTexture.GetImageBarrier(src, dst),
       gbufferTexture.GetImageBarrier(src, dst),
     };
-    MXC_LOG( string_VkAccessFlags2(barriers[0].srcAccessMask) );
-
     const VkDependencyInfo dependencyInfo{
       .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
       .imageMemoryBarrierCount = barriers.size(),

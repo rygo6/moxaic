@@ -18,10 +18,9 @@ namespace Moxaic::Vulkan
         constexpr static VkImageUsageFlags NormalBufferUsage{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                                              VK_IMAGE_USAGE_SAMPLED_BIT};
         constexpr static VkImageUsageFlags GBufferUsage{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                                                        VK_IMAGE_USAGE_SAMPLED_BIT};
+                                                        VK_IMAGE_USAGE_SAMPLED_BIT |
+                                                        VK_IMAGE_USAGE_STORAGE_BIT};
         constexpr static VkImageUsageFlags DepthBufferUsage{VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                                                            VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                                             VK_IMAGE_USAGE_SAMPLED_BIT};
 
         const Vulkan::Device* const Device;
@@ -31,7 +30,6 @@ namespace Moxaic::Vulkan
 
         VkFramebuffer vkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore vkRenderCompleteSemaphore{VK_NULL_HANDLE};
-
 
         Texture colorTexture{
           Device,

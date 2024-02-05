@@ -67,7 +67,7 @@ namespace Moxaic
 
 #define MXC_FILE_NO_PATH (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 
-#ifdef MXC_DISABLE_LOG2
+#ifdef MXC_DISABLE_LOG
 #define MXC_LOG(...)
 #define MXC_LOG_MULTILINE(...)
 #define MXC_LOG_FUNCTION()

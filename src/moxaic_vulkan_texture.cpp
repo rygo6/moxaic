@@ -107,26 +107,12 @@ MXC_RESULT Texture::InitFromImport(const HANDLE externalHandle,
     this->externalHandle = externalHandle;
     this->locality = Locality::Imported;
     this->extents = extents;
-
-    MXC_LOG_MULTILINE("Texture::InitFromImport",
-                      externalHandle,
-                      string_VkFormat(format),
-                      string_VkImageUsageFlags(usage),
-                      string_VkImageAspectFlags(aspectMask));
-
     return InternalInit();
 }
 
 bool Texture::Init(const VkExtent2D& extents)
 {
     this->extents = extents;
-
-    MXC_LOG_MULTILINE("Texture::InitFromImport",
-                      externalHandle,
-                      string_VkFormat(format),
-                      string_VkImageUsageFlags(usage),
-                      string_VkImageAspectFlags(aspectMask));
-
     return InternalInit();
 }
 
@@ -207,18 +193,24 @@ MXC_RESULT Texture::InternalInit()
     return MXC_SUCCESS;
 }
 
+MXC_RESULT Texture::TransitionImmediate(const Barrier2& src,
+                                        const Barrier2& dst) const
+{
+    return Device->TransitionImageLayoutImmediate(vkImageHandle, src, dst, aspectMask);
+}
+
 MXC_RESULT Texture::TransitionInitialImmediate(const PipelineType pipelineType) const
 {
     switch (pipelineType) {
         case PipelineType::Graphics:
             return Device->TransitionImageLayoutImmediate(vkImageHandle,
                                                           Vulkan::FromUndefined2,
-                                                          Vulkan::ToGraphicsRead2,
+                                                          Vulkan::GraphicsRead2,
                                                           aspectMask);
         case PipelineType::Compute:
             return Device->TransitionImageLayoutImmediate(vkImageHandle,
                                                           Vulkan::FromUndefined2,
-                                                          Vulkan::ToComputeRead2,
+                                                          Vulkan::ComputeRead2,
                                                           aspectMask);
         default:
             SDL_assert(false);
@@ -318,46 +310,26 @@ MXC_RESULT Texture::InitImage()
     return MXC_SUCCESS;
 }
 
+void Texture::CopyViaBufferTo(const VkCommandBuffer commandBuffer,
+                              const Texture& dstTexture) const
+{
+    // vkCmdCopyImageToBuffer(commandBuffer, vkImageHandle, VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,  )
+}
+
 void Texture::BlitTo(const VkCommandBuffer commandBuffer,
                      const Texture& dstTexture) const
 {
-    const StaticArray transitionBlitBarrier{
-      (VkImageMemoryBarrier){
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_NONE,
-        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-        .oldLayout = IsDepth() ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
-                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = vkImageHandle,
-        .subresourceRange = GetSubresourceRange(),
-      },
-      (VkImageMemoryBarrier){
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_NONE,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = dstTexture.VkImageHandle,
-        .subresourceRange = dstTexture.GetSubresourceRange(),
-      },
+    const StaticArray toBarrier{
+      GetImageBarrier(GraphicsAttach2, BlitTransferSrc2),
+      dstTexture.GetImageBarrier(GraphicsAttach2, BlitTransferDst2),
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
-                                     IsDepth() ?
-                                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT :
-                                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                     0,
-                                     0,
-                                     nullptr,
-                                     0,
-                                     nullptr,
-                                     transitionBlitBarrier.size(),
-                                     transitionBlitBarrier.data()));
+    const VkDependencyInfo toDependencyInfo{
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .imageMemoryBarrierCount = toBarrier.size(),
+      .pImageMemoryBarriers = toBarrier.data(),
+    };
+    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &toDependencyInfo));
+
     constexpr VkImageSubresourceLayers imageSubresourceLayers{
       .mipLevel = 0,
       .baseArrayLayer = 0,
@@ -377,13 +349,11 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
     };
     VkImageBlit imageBlit{};
     imageBlit.srcSubresource = imageSubresourceLayers;
-    imageBlit.srcSubresource.aspectMask = IsDepth() ?
-                                            VK_IMAGE_ASPECT_DEPTH_BIT :
-                                            VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBlit.srcSubresource.aspectMask = aspectMask;
     imageBlit.srcOffsets[0] = offsets[0];
     imageBlit.srcOffsets[1] = offsets[1];
     imageBlit.dstSubresource = imageSubresourceLayers;
-    imageBlit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imageBlit.dstSubresource.aspectMask = dstTexture.aspectMask;
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
@@ -394,39 +364,15 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
                                1,
                                &imageBlit,
                                VK_FILTER_NEAREST));
-    const StaticArray transitionPresentBarrier{
-      (VkImageMemoryBarrier){
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-        .dstAccessMask = VK_ACCESS_NONE,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout = IsDepth() ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
-                                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = vkImageHandle,
-        .subresourceRange = GetSubresourceRange(),
-      },
-      (VkImageMemoryBarrier){
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_NONE,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .dstQueueFamilyIndex = Device->GetGraphicsQueueFamilyIndex(),
-        .image = dstTexture.VkImageHandle,
-        .subresourceRange = dstTexture.GetSubresourceRange(),
-      },
+
+    const StaticArray fromBarrier{
+      GetImageBarrier(BlitTransferSrc2, GraphicsAttach2),
+      dstTexture.GetImageBarrier(BlitTransferDst2, GraphicsAttach2),
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
-                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                     VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                     0,
-                                     0,
-                                     nullptr,
-                                     0,
-                                     nullptr,
-                                     transitionPresentBarrier.size(),
-                                     transitionPresentBarrier.data()));
+    const VkDependencyInfo fromDependencyInfo{
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .imageMemoryBarrierCount = fromBarrier.size(),
+      .pImageMemoryBarriers = fromBarrier.data(),
+    };
+    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &fromDependencyInfo));
 }

@@ -74,14 +74,14 @@ static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t
 }
 
 Mesh::Mesh(const Vulkan::Device* const pDevice)
-    : k_pDevice(pDevice) {}
+    : Device(pDevice) {}
 
 Mesh::~Mesh()
 {
-    vkDestroyBuffer(k_pDevice->  GetVkDevice(), m_VkIndexBuffer, VK_ALLOC);
-    vkFreeMemory(k_pDevice->  GetVkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
-    vkDestroyBuffer(k_pDevice->  GetVkDevice(), m_VkVertexBuffer, VK_ALLOC);
-    vkFreeMemory(k_pDevice->  GetVkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(Device->  GetVkDevice(), m_VkIndexBuffer, VK_ALLOC);
+    vkFreeMemory(Device->  GetVkDevice(), m_VkIndexBufferMemory, VK_ALLOC);
+    vkDestroyBuffer(Device->  GetVkDevice(), m_VkVertexBuffer, VK_ALLOC);
+    vkFreeMemory(Device->  GetVkDevice(), m_VkVertexBufferMemory, VK_ALLOC);
 }
 
 MXC_RESULT Mesh::InitSphere(float radius)
@@ -104,7 +104,7 @@ MXC_RESULT Mesh::CreateVertexBuffer(const Vertex* pVertices,
 {
     m_VertexCount = vertexCount;
     const VkDeviceSize bufferSize = (sizeof(Vertex) * vertexCount);
-    MXC_CHK(k_pDevice->CreateAllocateBindPopulateBufferViaStaging(pVertices,
+    MXC_CHK(Device->CreateAllocateBindPopulateBufferViaStaging(pVertices,
                                                                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                                                                   bufferSize,
                                                                   &m_VkVertexBuffer,
@@ -117,7 +117,7 @@ MXC_RESULT Mesh::CreateIndexBuffer(const uint16_t* pIndices,
 {
     m_IndexCount = indexCount;
     const VkDeviceSize bufferSize = (sizeof(uint16_t) * indexCount);
-    MXC_CHK(k_pDevice->CreateAllocateBindPopulateBufferViaStaging(pIndices,
+    MXC_CHK(Device->CreateAllocateBindPopulateBufferViaStaging(pIndices,
                                                                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                                                                   bufferSize,
                                                                   &m_VkIndexBuffer,

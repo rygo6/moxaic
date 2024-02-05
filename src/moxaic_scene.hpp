@@ -13,10 +13,9 @@
 #include "moxaic_object_descriptor.hpp"
 #include "moxaic_standard_pipeline.hpp"
 
-#include "moxaic_compute_node_descriptor.hpp"
-#include "moxaic_compute_node_pipeline.hpp"
-#include "moxaic_mesh_node_descriptor.hpp"
+#include "moxaic_compute_composite_pipeline.hpp"
 #include "moxaic_mesh_node_pipeline.hpp"
+#include "moxaic_node_process_pipeline.hpp"
 
 namespace Moxaic
 {
@@ -89,12 +88,12 @@ namespace Moxaic
         Vulkan::Swap swap{Device};
         Vulkan::Semaphore semaphore{Device};
 
-        Vulkan::ComputeNodePipeline computeNodePrePipeline{Device};
-        Vulkan::ComputeNodePipeline computeNodePipeline{Device};
-        Vulkan::ComputeNodePipeline computeNodePostPipeline{Device};
+        Vulkan::ComputeCompositePipeline computeNodePrePipeline{Device};
+        Vulkan::ComputeCompositePipeline computeNodePipeline{Device};
+        Vulkan::ComputeCompositePipeline computeNodePostPipeline{Device};
 
         Vulkan::GlobalDescriptor globalDescriptor{Device};
-        Vulkan::ComputeNodeDescriptor computeNodeDescriptor{Device};
+        Vulkan::ComputeCompositeDescriptor computeNodeDescriptor{Device};
 
         Vulkan::Texture outputAtomicTexture{Device};
         Vulkan::Texture outputAveragedAtomicTexture{Device};
@@ -128,10 +127,14 @@ namespace Moxaic
         Vulkan::StandardMaterialDescriptor materialDescriptor{Device};
         Vulkan::ObjectDescriptor objectDescriptor{Device};
 
+        Vulkan::NodeProcessPipeline nodeProcessPipeline{Device,
+                                                        "./shaders/node_process.comp.spv"};
+        Vulkan::NodeProcessDescriptor nodeProcessDescriptor{Device};
+
         Camera mainCamera{};
 
         Vulkan::Mesh sphereTestMesh{Device};
         Vulkan::Texture sphereTestTexture{Device};
         Transform spherTestTransform{};
     };
-}
+}// namespace Moxaic

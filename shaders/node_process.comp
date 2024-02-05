@@ -1,0 +1,16 @@
+#version 450
+
+#define LOCAL_SIZE 32
+layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
+
+layout (set = 0, binding = 0) uniform sampler2D depthTexture;
+layout (set = 0, binding = 1, r32f) uniform writeonly image2D gBufferTexture;
+
+void main()
+{
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const vec2 uv = vec2(coord) / vec2(1024, 1024);
+    const vec4 gatheredDepth = textureGather(depthTexture, uv, 0);
+    const float maxDepth = max(max(gatheredDepth.r, gatheredDepth.g), max(gatheredDepth.b, gatheredDepth.a));
+    imageStore(gBufferTexture, coord, vec4(maxDepth));
+}

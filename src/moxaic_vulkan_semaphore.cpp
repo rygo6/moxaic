@@ -26,7 +26,7 @@ Semaphore::~Semaphore()
 
 MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
 {
-    MXC_LOG("Vulkan::Semaphore::Init");
+    MXC_LOG("Vulkan::Semaphore::Init", string_Locality(locality));
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
       .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
       .pNext = nullptr,
@@ -103,7 +103,6 @@ HANDLE Semaphore::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
 
 MXC_RESULT Semaphore::InitFromImport(const bool readOnly, const HANDLE externalHandle)
 {
-    MXC_LOG("Importing Semaphore", externalHandle);
     MXC_CHK(Init(readOnly, Locality::External));
 #ifdef WIN32
     const VkImportSemaphoreWin32HandleInfoKHR importSemaphoreWin32HandleInfo{

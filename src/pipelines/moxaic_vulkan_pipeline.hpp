@@ -48,19 +48,12 @@ namespace Moxaic::Vulkan
         explicit Pipeline(const Vulkan::Device* const pDevice)
             : Device(pDevice) {}
 
-        virtual ~Pipeline()
+        ~Pipeline()
         {
             vkDestroyPipeline(Device->GetVkDevice(),
                               vkPipeline,
                               VK_ALLOC);
         }
-
-        // void BindPipeline(VkCommandBuffer const& commandBuffer) const
-        // {
-        //     vkCmdBindPipeline(commandBuffer,
-        //                       VK_PIPELINE_BIND_POINT_GRAPHICS,
-        //                       m_vkPipeline);
-        // }
 
         const auto& GetVkPipeline() const { return vkPipeline; }
 
@@ -403,7 +396,7 @@ namespace Moxaic::Vulkan
                                     nullptr);
         }
 
-        static void BindDescriptorS(const VkCommandBuffer commandBuffer,
+        static void BindDescriptors(const VkCommandBuffer commandBuffer,
                                     const VkDescriptorSet& descriptorSet,
                                     const int& setIndex)
         {

@@ -622,6 +622,20 @@ MXC_RESULT Device::Init()
     MXC_CHK(CreatePools());
     MXC_CHK(CreateSamplers());
 
+    // const VkBufferCreateInfo copyBufferCreateInfo{
+    //     .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    //     .flags = 0,
+    //     .size = bufferSize,
+    //     .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    //     .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    //     .queueFamilyIndexCount = 0,
+    //     .pQueueFamilyIndices = nullptr,
+    //   };
+    // VK_CHK(vkCreateBuffer(vkDevice,
+    //                       &copyBufferCreateInfo,
+    //                       nullptr,
+    //                       &vkFrambufferCopyBufferHandle));
+
     return MXC_SUCCESS;
 }
 
@@ -747,22 +761,7 @@ MXC_RESULT Device::AllocateBindImage(const VkMemoryPropertyFlags properties,
 MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
                                             const VkMemoryPropertyFlags properties,
                                             const VkDeviceSize bufferSize,
-                                            VkBuffer* pBuffer,
-                                            VkDeviceMemory* pDeviceMemory) const
-{
-    return CreateAllocateBindBuffer(usage,
-                                    properties,
-                                    bufferSize,
-                                    Vulkan::Locality::Local,
-                                    pBuffer,
-                                    pDeviceMemory,
-                                    nullptr);
-}
-
-MXC_RESULT Device::CreateAllocateBindBuffer(const VkBufferUsageFlags usage,
-                                            const VkMemoryPropertyFlags properties,
-                                            const VkDeviceSize bufferSize,
-                                            const Vulkan::Locality locality,
+                                            const Locality locality,
                                             VkBuffer* pBuffer,
                                             VkDeviceMemory* pDeviceMemory,
                                             HANDLE* pExternalMemory) const
@@ -852,8 +851,10 @@ MXC_RESULT Device::CreateAndPopulateStagingBuffer(const void* srcData,
     MXC_CHK(CreateAllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                      bufferSize,
+                                     Vulkan::Locality::Local,
                                      pStagingBuffer,
-                                     pStagingBufferMemory));
+                                     pStagingBufferMemory,
+                                     nullptr));
     void* dstData;
     vkMapMemory(vkDevice, *pStagingBufferMemory, 0, bufferSize, 0, &dstData);
     memcpy(dstData, srcData, bufferSize);
@@ -929,8 +930,10 @@ MXC_RESULT Device::CreateAllocateBindPopulateBufferViaStaging(const void* srcDat
     MXC_CHK(CreateAllocateBindBuffer(VK_BUFFER_USAGE_TRANSFER_DST_BIT | usage,
                                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      bufferSize,
+                                     Locality::Local,
                                      pBuffer,
-                                     pBufferMemory));
+                                     pBufferMemory,
+                                     nullptr));
     CopyBufferToBuffer(bufferSize,
                        stagingBuffer,
                        *pBuffer);

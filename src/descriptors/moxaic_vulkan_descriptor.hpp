@@ -54,7 +54,7 @@ namespace Moxaic::Vulkan
         static MXC_RESULT CreateDescriptorSetLayout(const Vulkan::Device& device,
                                                     StaticArray<VkDescriptorSetLayoutBinding, N>& bindings)
         {
-            SDL_assert(sharedVkDescriptorSetLayout == VK_NULL_HANDLE);
+            assert(sharedVkDescriptorSetLayout == VK_NULL_HANDLE);
             for (int i = 0; i < bindings.size(); ++i) {
                 bindings[i].binding = i;
                 bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
@@ -75,7 +75,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT AllocateDescriptorSet()
         {
-            SDL_assert(vkDescriptorSet == nullptr);
+            assert(vkDescriptorSet == nullptr);
             CheckLayoutInitialized(*Device);
             const VkDescriptorSetAllocateInfo allocInfo{
               .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -93,8 +93,8 @@ namespace Moxaic::Vulkan
         template<uint32_t N>
         void WriteDescriptors(StaticArray<VkWriteDescriptorSet, N>& writes) const
         {
-            SDL_assert(sharedVkDescriptorSetLayout != VK_NULL_HANDLE);
-            SDL_assert(vkDescriptorSet != nullptr);
+            assert(sharedVkDescriptorSetLayout != VK_NULL_HANDLE);
+            assert(vkDescriptorSet != nullptr);
             for (int i = 0; i < writes.size(); ++i) {
                 writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[i].dstSet = vkDescriptorSet;

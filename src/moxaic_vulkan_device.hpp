@@ -38,6 +38,8 @@ namespace Moxaic::Vulkan
         VkCommandBuffer vkGraphicsCommandBuffer{VK_NULL_HANDLE};
         VkCommandBuffer vkComputeCommandBuffer{VK_NULL_HANDLE};
 
+        // VkBuffer vkFrambufferCopyBufferHandle{VK_NULL_HANDLE};
+
         VkSampler vkLinearSampler{VK_NULL_HANDLE};
         VkSampler vkNearestSampler{VK_NULL_HANDLE};
         VkSampler vkMinSampler{VK_NULL_HANDLE};
@@ -45,6 +47,12 @@ namespace Moxaic::Vulkan
 
     public:
         const VkDevice& VkDeviceHandle{vkDevice};
+        // const VkBuffer& VkFrambufferCopyBufferHandle{vkFrambufferCopyBufferHandle};
+
+        const VkSampler& VkLinearSamplerHandle{vkLinearSampler};
+        const VkSampler& VkNearestSamplerHandle{vkNearestSampler};
+        const VkSampler& VkMinSamplerHandle{vkMinSampler};
+        const VkSampler& VkMaxSamplerHandle{vkMaxSampler};
 
         Device() = default;
         ~Device();
@@ -66,11 +74,6 @@ namespace Moxaic::Vulkan
                                                   VkDeviceSize bufferSize,
                                                   VkBuffer* pStagingBuffer,
                                                   VkDeviceMemory* pStagingBufferMemory) const;
-        MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
-                                            VkMemoryPropertyFlags properties,
-                                            VkDeviceSize bufferSize,
-                                            VkBuffer* pBuffer,
-                                            VkDeviceMemory* pDeviceMemory) const;
         MXC_RESULT CreateAllocateBindBuffer(VkBufferUsageFlags usage,
                                             VkMemoryPropertyFlags properties,
                                             VkDeviceSize bufferSize,

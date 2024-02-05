@@ -11,7 +11,7 @@
 
 namespace Moxaic::Vulkan
 {
-    class ComputeNodeDescriptor : public VulkanDescriptorBase<ComputeNodeDescriptor>
+    class ComputeCompositeDescriptor : public VulkanDescriptorBase<ComputeCompositeDescriptor>
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
@@ -216,14 +216,14 @@ namespace Moxaic::Vulkan
                 .dstBinding = Indices::GBufferTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkNearestSampler(),
+                  .sampler = Device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkMaxSampler(),
+                  .sampler = Device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetDepthTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };

@@ -69,44 +69,27 @@ namespace Moxaic::Vulkan
         MXC_RESULT Init(const Info& args);
 
         MXC_RESULT TransitionInitialImmediate(PipelineType pipelineType) const;
+        MXC_RESULT TransitionImmediate(const Barrier2& src, const Barrier2& dst) const;
 
         void BlitTo(VkCommandBuffer commandBuffer,
                     const Texture& dstTexture) const;
-
-        // VkImageMemoryBarrier PrepareImageMemoryBarrier(const Barrier2& dst)
-        // {
-        //     const VkImageMemoryBarrier barrier{
-        //       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        //       .srcAccessMask = accessMask,
-        //       .dstAccessMask = dst.GetAccessMask(aspectMask),
-        //       .oldLayout = layout,
-        //       .newLayout = dst.layout,
-        //       .srcQueueFamilyIndex = Device->GetSrcQueue(queueFamily),
-        //       .dstQueueFamilyIndex = Device->GetDstQueue(queueFamily, dst.queueFamily),
-        //       .image = vkImageHandle,
-        //       .subresourceRange = GetSubresourceRange(),
-        //     };
-        //     accessMask = barrier.dstAccessMask;
-        //     layout = barrier.newLayout;
-        //     queueFamily = dst.queueFamily;
-        //     return barrier;
-        // }
+        void CopyViaBufferTo(VkCommandBuffer commandBuffer,
+                             const Texture& dstTexture) const;
 
         VkImageMemoryBarrier2 GetImageBarrier(const Barrier2& src, const Barrier2& dst) const
         {
-            return (VkImageMemoryBarrier2)
-            {
-                .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                .srcStageMask = src.GetStageMask(aspectMask),
-                .srcAccessMask = src.GetAccessMask(aspectMask),
-                .dstStageMask = dst.GetStageMask(aspectMask),
-                .dstAccessMask = dst.GetAccessMask(aspectMask),
-                .oldLayout = src.layout,
-                .newLayout = dst.layout,
-                .srcQueueFamilyIndex = Device->GetSrcQueue(src),
-                .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
-                .image = vkImageHandle,
-                .subresourceRange = GetSubresourceRange(),
+            return (VkImageMemoryBarrier2){
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+              .srcStageMask = src.GetStageMask(aspectMask),
+              .srcAccessMask = src.GetAccessMask(aspectMask),
+              .dstStageMask = dst.GetStageMask(aspectMask),
+              .dstAccessMask = dst.GetAccessMask(aspectMask),
+              .oldLayout = src.layout,
+              .newLayout = dst.layout,
+              .srcQueueFamilyIndex = Device->GetSrcQueue(src),
+              .dstQueueFamilyIndex = Device->GetDstQueue(src, dst),
+              .image = vkImageHandle,
+              .subresourceRange = GetSubresourceRange(),
             };
         }
 

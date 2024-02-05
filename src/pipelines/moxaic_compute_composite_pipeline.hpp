@@ -1,35 +1,32 @@
 #pragma once
 
+#include "moxaic_compute_composite_descriptor.hpp"
+#include "moxaic_global_descriptor.hpp"
+#include "moxaic_logging.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_pipeline.hpp"
-
-#include "moxaic_compute_node_descriptor.hpp"
-#include "moxaic_global_descriptor.hpp"
-
-#include "moxaic_logging.hpp"
-
 #include "static_array.hpp"
-
 #include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
 {
-    class ComputeNodePipeline : public ComputePipeline<ComputeNodePipeline>
+    class ComputeCompositePipeline : public ComputePipeline<ComputeCompositePipeline>
     {
     public:
-        using ComputePipeline::ComputePipeline;
-
         constexpr static auto PipelineType{PipelineType::Compute};
-
         constexpr static uint32_t LocalSize = 32;
+
+        explicit ComputeCompositePipeline(const Vulkan::Device* const device)
+            : ComputePipeline(device) {}
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
-            SDL_assert(sharedVkPipelineLayout == VK_NULL_HANDLE);
+            MXC_LOG("InitLayout ComputeNodePipeline");
+            assert(sharedVkPipelineLayout == VK_NULL_HANDLE);
             const StaticArray setLayouts{
               GlobalDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
-              ComputeNodeDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
+              ComputeCompositeDescriptor::GetOrInitSharedVkDescriptorSetLayout(device),
             };
             MXC_CHK(CreateLayout(device, setLayouts));
             return MXC_SUCCESS;
@@ -37,7 +34,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const char* shaderPath)
         {
-            // MXC_LOG("Init ComputeNodePipeline", shaderPath);
+            MXC_LOG("Init ComputeNodePipeline", shaderPath);
             VkShaderModule shader;
             MXC_CHK(CreateShaderModule(shaderPath,
                                        &shader));
@@ -48,7 +45,7 @@ namespace Moxaic::Vulkan
               .pName = "main",
             };
             MXC_CHK(CreateComputePipe(compStage));
-            vkDestroyShaderModule(Device->  GetVkDevice(), shader, VK_ALLOC);
+            vkDestroyShaderModule(Device->GetVkDevice(), shader, VK_ALLOC);
 
             return MXC_SUCCESS;
         }
@@ -56,17 +53,17 @@ namespace Moxaic::Vulkan
         static void BindDescriptor(const VkCommandBuffer commandBuffer,
                                    const GlobalDescriptor& descriptor)
         {
-            BindDescriptorS(commandBuffer,
+            BindDescriptors(commandBuffer,
                             descriptor.GetVkDescriptorSet(),
                             GlobalDescriptor::SetIndex);
         }
 
         static void BindDescriptor(const VkCommandBuffer commandBuffer,
-                                   const ComputeNodeDescriptor& descriptor)
+                                   const ComputeCompositeDescriptor& descriptor)
         {
-            BindDescriptorS(commandBuffer,
+            BindDescriptors(commandBuffer,
                             descriptor.GetVkDescriptorSet(),
-                            ComputeNodeDescriptor::SetIndex);
+                            ComputeCompositeDescriptor::SetIndex);
         }
     };
 }// namespace Moxaic::Vulkan
