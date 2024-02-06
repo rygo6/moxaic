@@ -25,7 +25,7 @@ namespace Moxaic::Vulkan
         VkImageAspectFlags aspectMask;
         VkSampleCountFlagBits sampleCount;
         VkExtent2D extents;
-        uint32_t mipLevels;
+        uint32_t mipLevelCount;
         Locality locality;
 
         VkDeviceMemory vkDeviceMemory{VK_NULL_HANDLE};
@@ -41,7 +41,7 @@ namespace Moxaic::Vulkan
 #endif
 
     public:
-        const uint32_t& MipLevels{mipLevels};
+        const uint32_t& MipLevelCount{mipLevelCount};
         const VkExtent2D& Extents{extents};
 
         const VkImage& VkImageHandle{vkImageHandle};
@@ -75,6 +75,8 @@ namespace Moxaic::Vulkan
                     const Texture& dstTexture) const;
         void CopyViaBufferTo(VkCommandBuffer commandBuffer,
                              const Texture& dstTexture) const;
+        MXC_RESULT InitMipImageView(uint32_t baseMipLevel,
+                                    VkImageView* imageView);
 
         VkImageMemoryBarrier2 GetImageBarrier(const Barrier2& src, const Barrier2& dst) const
         {
@@ -95,12 +97,12 @@ namespace Moxaic::Vulkan
 
         HANDLE ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const;
 
-        constexpr VkImageSubresourceRange GetSubresourceRange() const
+        constexpr VkImageSubresourceRange GetSubresourceRange(const uint32_t baseMipLevel = 0) const
         {
             return {
               .aspectMask = aspectMask,
               .baseMipLevel = 0,
-              .levelCount = mipLevels,
+              .levelCount = mipLevelCount,
               .baseArrayLayer = 0,
               .layerCount = 1,
             };

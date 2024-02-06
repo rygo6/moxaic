@@ -2,6 +2,7 @@
 
 #include "moxaic_scene.hpp"
 #include "moxaic_window.hpp"
+#include "vulkan_medium.h"
 
 #include <thread>
 
@@ -386,18 +387,6 @@ MXC_RESULT NodeScene::Init()
     return MXC_SUCCESS;
 }
 
-static void vkCmdPipelineImageBarrier2(VkCommandBuffer commandBuffer,
-                                       uint32_t imageMemoryBarrierCount,
-                                       const VkImageMemoryBarrier2* pImageMemoryBarriers)
-{
-    const VkDependencyInfo toComputeDependencyInfo{
-      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-      .imageMemoryBarrierCount = imageMemoryBarrierCount,
-      .pImageMemoryBarriers = pImageMemoryBarriers,
-    };
-    vkCmdPipelineBarrier2(commandBuffer, &toComputeDependencyInfo);
-}
-
 int temp = 0;
 
 MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
@@ -431,11 +420,13 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                                toComputeBarriers.size(),
                                toComputeBarriers.data());
 
-    nodeProcessDescriptor.WriteFramebuffer(framebuffer);
     nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptor);
     nodeProcessPipeline.BindPipeline(commandBuffer);
+
     const auto groupCount = VkExtent2D(Window::GetExtents().width / nodeProcessPipeline.LocalSize,
                                        Window::GetExtents().height / nodeProcessPipeline.LocalSize);
+    nodeProcessDescriptor.WriteDepthTexture(framebuffer.DepthTexture.VkImageViewHandle);
+    nodeProcessDescriptor.WriteGbufferMip(framebuffer.GbufferTexture.VkImageViewHandle);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
 
     const auto& externalRead = ReleaseToExternalRead(Vulkan::CompositorPipelineType);

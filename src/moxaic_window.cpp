@@ -74,7 +74,7 @@ MXC_RESULT Window::Init()
     int x, y;
     SDL_GetWindowPosition(window, &x, &y);
     SDL_SetWindowPosition(window,
-                          x + (Role == Role::Compositor ?
+                          x + (role == Role::Compositor ?
                                  -(int) (DefaultWidth / 2) :
                                  (int) (DefaultWidth / 2)),
                           y);
@@ -116,7 +116,7 @@ void Window::Poll()
     while (SDL_PollEvent(&pollEvent)) {
         switch (pollEvent.type) {
             case SDL_QUIT: {
-                Running = false;
+                running = false;
                 break;
             }
             case SDL_KEYDOWN: {

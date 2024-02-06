@@ -1,6 +1,5 @@
 #pragma once
 
-#include "moxaic_global_descriptor.hpp"
 #include "moxaic_vulkan_descriptor.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_texture.hpp"
@@ -48,21 +47,29 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT WriteFramebuffer(const Framebuffer& framebuffer) const
+        MXC_RESULT WriteDepthTexture(const VkImageView& depthImageView) const
         {
             StaticArray writes{
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->VkNearestSamplerHandle,
-                  .imageView = framebuffer.GetDepthTexture().VkImageViewHandle,
+                  .sampler = Device->VkMaxSamplerHandle,
+                  .imageView = depthImageView,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+            };
+            WriteDescriptors(writes);
+            return MXC_SUCCESS;
+        }
+
+        MXC_RESULT WriteGbufferMip(const VkImageView gBufferMip) const
+        {
+            StaticArray writes{
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::GBufferTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
+                  .imageView = gBufferMip,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };
             WriteDescriptors(writes);

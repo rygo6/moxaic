@@ -17,7 +17,7 @@ MXC_RESULT Core::Run()
     MXC_CHK(device->Init());
 
     std::unique_ptr<SceneBase> scene;
-    switch (Role) {
+    switch (role) {
         case Role::Compositor:
             if (Vulkan::CompositorPipelineType == Vulkan::PipelineType::Graphics) {
                 scene = std::make_unique<CompositorScene>(device.get());
@@ -37,7 +37,7 @@ MXC_RESULT Core::Run()
     uint32_t time = 0;
     uint32_t priorTime = 0;
 
-    while (Running == MXC_SUCCESS) {
+    while (running == MXC_SUCCESS) {
         time = SDL_GetTicks();
         const Uint32 deltaTime = time - priorTime;
         priorTime = time;

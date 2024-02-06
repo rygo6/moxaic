@@ -22,6 +22,7 @@ namespace Moxaic::Vulkan
                                                         VK_IMAGE_USAGE_STORAGE_BIT};
         constexpr static VkImageUsageFlags DepthBufferUsage{VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
                                                             VK_IMAGE_USAGE_SAMPLED_BIT};
+        constexpr static uint32_t GBufferMipLevelCount{4};
 
         const Vulkan::Device* const Device;
         const Vulkan::Locality Locality;
@@ -30,6 +31,7 @@ namespace Moxaic::Vulkan
 
         VkFramebuffer vkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore vkRenderCompleteSemaphore{VK_NULL_HANDLE};
+        VkImageView vkGbufferImageViewMipHandles[GBufferMipLevelCount]{VK_NULL_HANDLE};
 
         Texture colorTexture{
           Device,
@@ -61,7 +63,7 @@ namespace Moxaic::Vulkan
             .format = kGBufferFormat,
             .usage = GBufferUsage,
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .mipLevels = 4,
+            .mipLevels = GBufferMipLevelCount,
             .locality = Locality,
           }};
 
@@ -70,6 +72,8 @@ namespace Moxaic::Vulkan
         const Texture& NormalTexture{normalTexture};
         const Texture& DepthTexture{depthTexture};
         const Texture& GbufferTexture{gbufferTexture};
+
+        const VkImageView (&VkGbufferImageViewMipHandles)[GBufferMipLevelCount]{vkGbufferImageViewMipHandles};
 
         const auto& GetVkFramebuffer() const { return vkFramebuffer; }
         const auto& GetVkRenderCompleteSemaphore() const { return vkRenderCompleteSemaphore; }

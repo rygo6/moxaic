@@ -44,7 +44,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSev
     } else {
         printf("%s %s (%s:%d) %s\n%s\n",
                SeverityToName(messageSeverity),
-               string_Role(Moxaic::Role),
+               string_Role(Moxaic::role),
                Vulkan::VkDebug.DebugFile,
                Vulkan::VkDebug.DebugLine,
                Vulkan::VkDebug.DebugCommand,

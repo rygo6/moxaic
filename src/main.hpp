@@ -1,6 +1,6 @@
 #pragma once
 
-#include <cstdint>
+#include <stdint.h>
 
 #define MXC_RESULT bool
 #define MXC_SUCCESS true
@@ -22,21 +22,21 @@ namespace Moxaic
     inline constexpr char ApplicationName[] = "moxaic";
     inline constexpr uint8_t FramebufferCount = 2;
 
-    inline MXC_RESULT Running = MXC_SUCCESS;
+    inline MXC_RESULT running = MXC_SUCCESS;
 
     enum class Role {
         Compositor,
         Node
     };
 
-    inline Role Role = Role::Compositor;
+    inline Role role = Role::Compositor;
 
     inline bool IsCompositor()
     {
-        return Role == Role::Compositor;
+        return role == Role::Compositor;
     }
 
-    inline const char* string_Role(const enum Role role)
+    inline const char* string_Role(const Role role)
     {
         switch (role) {
             case Role::Compositor:

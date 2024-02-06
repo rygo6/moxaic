@@ -11,6 +11,8 @@ namespace Moxaic
     // dude said std:cerr is what you use for logging messages https://twitter.com/christianhujer/status/1726228754081722729
     // and chatgpt4 agreed... so... cerr it is
 
+    // i hate this std stream stuff, replace with c stdio
+
     void SetConsoleTextDefault();
 
     void SetConsoleTextRed();
@@ -44,14 +46,14 @@ namespace Moxaic
     template<typename... Types>
     void LogParams(char const* file, int const line, Types... params)
     {
-        std::cerr << string_Role(Moxaic::Role) << " " << file << ':' << line;
+        std::cerr << string_Role(Moxaic::role) << " " << file << ':' << line;
         LogParams(params...);
     }
 
     template<typename... Types>
     void LogParamsMultiline(char const* file, int const line, Types... params)
     {
-        std::cerr << string_Role(Moxaic::Role) << " " << file << ':' << line;
+        std::cerr << string_Role(Moxaic::role) << " " << file << ':' << line;
         LogParamsMultiline(params...);
     }
 
@@ -59,7 +61,7 @@ namespace Moxaic
     void LogError(char const* file, int const line, Types... params)
     {
         SetConsoleTextRed();
-        std::cerr << "!!! " << string_Role(Moxaic::Role) << " " << file << ':' << line;
+        std::cerr << "!!! " << string_Role(Moxaic::role) << " " << file << ':' << line;
         LogParams(params...);
         SetConsoleTextDefault();
     }
@@ -78,13 +80,13 @@ namespace Moxaic
 #define MXC_LOG_MULTILINE(...) Moxaic::LogParamsMultiline(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
 #define MXC_LOG_FUNCTION() Moxaic::LogParams(MXC_FILE_NO_PATH, __LINE__, __FUNCTION__)
 #define MXC_LOG_ERROR(...) Moxaic::LogError(MXC_FILE_NO_PATH, __LINE__, ##__VA_ARGS__)
-#define MXC_LOG_NAMED(var) std::cerr << string_Role(Moxaic::Role) << " " << MXC_FILE_NO_PATH << ':' << __LINE__ << " " << #var << " = " << var << '\n';
+#define MXC_LOG_NAMED(var) std::cerr << string_Role(Moxaic::role) << " " << MXC_FILE_NO_PATH << ':' << __LINE__ << " " << #var << " = " << var << '\n';
 #endif
 
 #define MXC_CHK(command)                                                                                          \
     ({                                                                                                            \
         if (command != MXC_SUCCESS) [[unlikely]] {                                                                \
-            printf("%s %s:%d CHECK FAIL: %s\n", string_Role(Moxaic::Role), MXC_FILE_NO_PATH, __LINE__, #command); \
+            printf("%s %s:%d CHECK FAIL: %s\n", string_Role(Moxaic::role), MXC_FILE_NO_PATH, __LINE__, #command); \
             return false;                                                                                         \
         }                                                                                                         \
     })

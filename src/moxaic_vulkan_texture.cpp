@@ -5,7 +5,6 @@
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
 
-#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #include <vulkan/vk_enum_string_helper.h>
@@ -30,7 +29,7 @@ Texture::Texture(const Vulkan::Device* device, const Texture::Info& info)
       aspectMask(info.aspectMask),
       sampleCount(info.sampleCount),
       extents(info.extents),
-      mipLevels(info.mipLevels),
+      mipLevelCount(info.mipLevels),
       locality(info.locality)
 {
 }
@@ -79,7 +78,7 @@ MXC_RESULT Texture::InitFromFile(const char* file)
     this->aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     this->sampleCount = VK_SAMPLE_COUNT_1_BIT;
     this->extents = {(uint32_t) width, (uint32_t) height};
-    this->mipLevels = 1;
+    this->mipLevelCount = 1;
     this->externalHandle = externalHandle;
     this->locality = Locality::Local;
 
@@ -123,7 +122,7 @@ bool Texture::Init(const Info& info)
     this->aspectMask = info.aspectMask;
     this->sampleCount = info.sampleCount;
     this->extents = info.extents;
-    this->mipLevels = info.mipLevels;
+    this->mipLevelCount = info.mipLevels;
     this->locality = info.locality;
 
     MXC_LOG_MULTILINE("Texture::InitFromImport",
@@ -278,6 +277,27 @@ MXC_RESULT Texture::InitImageView()
     return MXC_SUCCESS;
 }
 
+MXC_RESULT Texture::InitMipImageView(const uint32_t baseMipLevel, VkImageView* const imageView)
+{
+    const VkImageViewCreateInfo imageViewCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .image = vkImageHandle,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = format,
+      .subresourceRange{
+        .aspectMask = aspectMask,
+        .baseMipLevel = baseMipLevel,
+        .levelCount = 1,
+        .layerCount = 1,
+      },
+    };
+    VK_CHK(vkCreateImageView(Device->GetVkDevice(),
+                             &imageViewCreateInfo,
+                             VK_ALLOC,
+                             imageView));
+    return MXC_SUCCESS;
+}
+
 MXC_RESULT Texture::InitImage()
 {
     constexpr VkExternalMemoryImageCreateInfo externalImageInfo{
@@ -293,7 +313,7 @@ MXC_RESULT Texture::InitImage()
       .imageType = VK_IMAGE_TYPE_2D,
       .format = format,
       .extent = {extents.width, extents.height, 1},
-      .mipLevels = mipLevels,
+      .mipLevels = mipLevelCount,
       .arrayLayers = 1,
       .samples = sampleCount,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
