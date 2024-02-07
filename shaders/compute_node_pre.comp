@@ -51,7 +51,7 @@ bool NodeIntersectUV(const vec2 uv, out float nodeDepthSample)
     const vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     const vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-    nodeDepthSample = textureLod(nodeGBufferTexture, intersectNodeUV, 0).r;
+    nodeDepthSample = textureLod(nodeGBufferTexture, intersectNodeUV, 3).r;
     return intersected && nodeDepthSample > 0;
 }
 
@@ -67,7 +67,7 @@ bool NodeIntersectUV(const vec2 uv, out vec3 intersectNodeNDC, out float nodeDep
     intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
 //    const vec3 nodeWorldNormal = texture(nodeNormalTexture, intersectNodeUV).xyz * vec3(1, -1, 1);
-    nodeDepthSample = textureLod(nodeGBufferTexture, intersectNodeUV, 0).r;
+    nodeDepthSample = textureLod(nodeGBufferTexture, intersectNodeUV, 3).r;
     // Do I want to include normal in this test!?
 //    return intersected && nodeDepthSample > 0 && dot(nodeWorldNormal.xyz, worldRay) < 0;
     return intersected && nodeDepthSample > 0;

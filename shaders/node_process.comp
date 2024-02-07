@@ -1,16 +1,32 @@
 #version 450
 
+#extension GL_EXT_debug_printf : require
+
 #define LOCAL_SIZE 32
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
-layout (set = 0, binding = 0) uniform sampler2D depthTexture;
-layout (set = 0, binding = 1, r32f) uniform writeonly image2D gBufferTexture;
+layout (set = 0, binding = 0) uniform sampler2D srcTexture;
+layout (set = 0, binding = 1, r32f) uniform writeonly image2D dstTexture;
 
 void main()
 {
-    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    const vec2 uv = vec2(coord) / vec2(1024, 1024);
-    const vec4 gatheredDepth = textureGather(depthTexture, uv, 0);
-    const float maxDepth = max(max(gatheredDepth.r, gatheredDepth.g), max(gatheredDepth.b, gatheredDepth.a));
-    imageStore(gBufferTexture, coord, vec4(maxDepth));
+    const ivec2 srcSize = textureSize(srcTexture, 0);
+    const ivec2 dstSize = imageSize(dstTexture);
+
+    const ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
+    const vec2 dstUV = vec2(dstCoord) / vec2(dstSize);
+    const ivec2 srcCoord = ivec2(dstUV * srcSize);
+    const vec2 srcHalfOffsetUV = vec2(srcCoord + 0.5) / srcSize;
+
+//    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+//        debugPrintfEXT("src %d %d", srcCoord.x, srcCoord.y);
+//        debugPrintfEXT("dst %d %d", dstSize.x, dstSize.y);
+//    }
+
+//    const vec4 gatheredDepth = textureGather(depthTexture, uv, 0);
+//    const float maxDepth = max(max(gatheredDepth.r, gatheredDepth.g), max(gatheredDepth.b, gatheredDepth.a));
+
+    const float maxDepth = texture(srcTexture, srcHalfOffsetUV).x;
+
+    imageStore(dstTexture, dstCoord, vec4(maxDepth));
 }

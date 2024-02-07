@@ -65,7 +65,7 @@ MXC_RESULT Framebuffer::InitFromImport(const PipelineType pipelineType,
     MXC_CHK(gbufferTexture.InitFromImport(gBufferExternalHandle, extents));
 
     for (int i = 0; i < GBufferMipLevelCount; ++i) {
-        // gbufferTexture.InitMipImageView(i, &vkGbufferImageViewMipHandles[i]);
+        gbufferTexture.InitMipImageView(i, &vkGbufferImageViewMipHandles[i]);
     }
 
     MXC_CHK(InitFramebuffer());

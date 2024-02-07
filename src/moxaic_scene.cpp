@@ -420,22 +420,43 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                                toComputeBarriers.size(),
                                toComputeBarriers.data());
 
-    nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptor);
-    nodeProcessPipeline.BindPipeline(commandBuffer);
 
+    // Blit depth mips
+    nodeProcessPipeline.BindPipeline(commandBuffer);
+    // nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptor);
+
+    const auto depthBlitBarrier = framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2,
+                                                                             Vulkan::GraphicsComputeWrite2);
     const auto groupCount = VkExtent2D(Window::GetExtents().width / nodeProcessPipeline.LocalSize,
                                        Window::GetExtents().height / nodeProcessPipeline.LocalSize);
-    nodeProcessDescriptor.WriteDepthTexture(framebuffer.DepthTexture.VkImageViewHandle);
-    nodeProcessDescriptor.WriteGbufferMip(framebuffer.GbufferTexture.VkImageViewHandle);
+    // god damn this is ugly ...
+    Vulkan::NodeProcessDescriptor nodeProcessDescriptors[framebuffer.GBufferMipLevelCount]{
+      Vulkan::NodeProcessDescriptor(Device),
+      Vulkan::NodeProcessDescriptor(Device),
+      Vulkan::NodeProcessDescriptor(Device),
+      Vulkan::NodeProcessDescriptor(Device)};
+    nodeProcessDescriptors[0].Init();
+    nodeProcessDescriptors[0].WriteDepthTexture(framebuffer.DepthTexture.VkImageViewHandle);
+    nodeProcessDescriptors[0].WriteGbufferMip(framebuffer.VkGbufferImageViewMipHandles[0]);
+    nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
+    for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
+        vkCmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
+        nodeProcessDescriptors[i].Init();
+        nodeProcessDescriptors[i].WriteDepthTexture(framebuffer.VkGbufferImageViewMipHandles[i - 1]);
+        nodeProcessDescriptors[i].WriteGbufferMip(framebuffer.VkGbufferImageViewMipHandles[i]);
+        const auto mipGroupCount = VkExtent2D(groupCount.width >> i, groupCount.height >> i);
+        nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
+        vkCmdDispatch(commandBuffer, mipGroupCount.width, mipGroupCount.height, 1);
+    }
 
     const auto& externalRead = ReleaseToExternalRead(Vulkan::CompositorPipelineType);
     const StaticArray toExternalBarriers{
-        framebuffer.ColorTexture.GetImageBarrier(Vulkan::GraphicsAttach2, externalRead),
-        framebuffer.NormalTexture.GetImageBarrier(Vulkan::GraphicsAttach2, externalRead),
-        framebuffer.DepthTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2, externalRead),
-        framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeWrite2, externalRead),
-      };
+      framebuffer.ColorTexture.GetImageBarrier(Vulkan::GraphicsAttach2, externalRead),
+      framebuffer.NormalTexture.GetImageBarrier(Vulkan::GraphicsAttach2, externalRead),
+      framebuffer.DepthTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2, externalRead),
+      framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeWrite2, externalRead),
+    };
     vkCmdPipelineImageBarrier2(commandBuffer,
                                toExternalBarriers.size(),
                                toExternalBarriers.data());
@@ -460,7 +481,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
 
     temp++;
     if (temp == 3) {
-        _exit(1);
+        Moxaic::running = false;
     }
 
     return MXC_SUCCESS;

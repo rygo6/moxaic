@@ -520,7 +520,7 @@ MXC_RESULT Device::CreateSamplers()
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
-      .maxLod = 0.0f,
+      .maxLod = 16.0f,
       .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
       .unnormalizedCoordinates = VK_FALSE,
     };
@@ -540,7 +540,7 @@ MXC_RESULT Device::CreateSamplers()
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
-      .maxLod = 0.0f,
+      .maxLod = 16.0f,
       .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
       .unnormalizedCoordinates = VK_FALSE,
     };
@@ -567,7 +567,7 @@ MXC_RESULT Device::CreateSamplers()
       .compareEnable = VK_FALSE,
       .compareOp = VK_COMPARE_OP_ALWAYS,
       .minLod = 0.0f,
-      .maxLod = 0.0f,
+      .maxLod = 16.0f,
       .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
       .unnormalizedCoordinates = VK_FALSE,
     };

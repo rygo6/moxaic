@@ -17,6 +17,9 @@ extern "C" {// Prevents name mangling of functions
 // Functions Declaration
 //------------------------------------------------------------------------------------
 
+
+// void glGenerateTextureMipmap(	GLuint texture);
+
 void vkCmdPipelineImageBarrier2(
   VkCommandBuffer commandBuffer,
   uint32_t imageMemoryBarrierCount,

@@ -20,7 +20,6 @@ namespace Moxaic::Vulkan
     {
     public:
         using GraphicsPipeline::GraphicsPipeline;
-
         constexpr static auto PipelineType{PipelineType::Graphics};
 
         static MXC_RESULT InitLayout(const Vulkan::Device& device)

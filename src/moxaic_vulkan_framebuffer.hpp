@@ -1,5 +1,6 @@
 #pragma once
 
+#include "moxaic_node_process_descriptor.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_texture.hpp"
 
@@ -13,6 +14,7 @@ namespace Moxaic::Vulkan
     class Framebuffer
     {
         MXC_NO_VALUE_PASS(Framebuffer);
+    public:
         constexpr static VkImageUsageFlags ColorBufferUsage{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                                                             VK_IMAGE_USAGE_SAMPLED_BIT};
         constexpr static VkImageUsageFlags NormalBufferUsage{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
@@ -24,6 +26,7 @@ namespace Moxaic::Vulkan
                                                             VK_IMAGE_USAGE_SAMPLED_BIT};
         constexpr static uint32_t GBufferMipLevelCount{4};
 
+    private:
         const Vulkan::Device* const Device;
         const Vulkan::Locality Locality;
 
@@ -32,6 +35,7 @@ namespace Moxaic::Vulkan
         VkFramebuffer vkFramebuffer{VK_NULL_HANDLE};
         VkSemaphore vkRenderCompleteSemaphore{VK_NULL_HANDLE};
         VkImageView vkGbufferImageViewMipHandles[GBufferMipLevelCount]{VK_NULL_HANDLE};
+        // NodeProcessDescriptor nodeProcessDescriptors[GBufferMipLevelCount]{NodeProcessDescriptor(Device)};
 
         Texture colorTexture{
           Device,
