@@ -16,10 +16,10 @@ void main()
     const ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
     const vec2 dstUV = vec2(dstCoord) / vec2(dstSize);
     const ivec2 srcCoord = ivec2(dstUV * srcSize);
-    const vec2 srcHalfOffsetUV = vec2(srcCoord + 0.5) / srcSize;
+    const vec2 srcHalfOffsetUV = vec2(srcCoord + 1.0) / srcSize;
 
 //    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
-//        debugPrintfEXT("src %d %d", srcCoord.x, srcCoord.y);
+//        debugPrintfEXT("src %d %d", srcSize.x, srcSize.y);
 //        debugPrintfEXT("dst %d %d", dstSize.x, dstSize.y);
 //    }
 

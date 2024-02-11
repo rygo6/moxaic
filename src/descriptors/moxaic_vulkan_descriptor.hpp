@@ -19,8 +19,8 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(VulkanDescriptorBase)
 
-        explicit VulkanDescriptorBase(const Device* const pDevice)
-            : Device(pDevice) {}
+        explicit VulkanDescriptorBase(const Device* const device)
+            : Device(device) {}
 
         ~VulkanDescriptorBase()
         {

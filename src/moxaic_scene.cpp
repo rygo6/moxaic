@@ -434,7 +434,12 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
       Vulkan::NodeProcessDescriptor(Device),
       Vulkan::NodeProcessDescriptor(Device),
       Vulkan::NodeProcessDescriptor(Device),
-      Vulkan::NodeProcessDescriptor(Device)};
+      Vulkan::NodeProcessDescriptor(Device),
+      Vulkan::NodeProcessDescriptor(Device),
+      Vulkan::NodeProcessDescriptor(Device),
+      Vulkan::NodeProcessDescriptor(Device),
+      Vulkan::NodeProcessDescriptor(Device),
+    };
     nodeProcessDescriptors[0].Init();
     nodeProcessDescriptors[0].WriteDepthTexture(framebuffer.DepthTexture.VkImageViewHandle);
     nodeProcessDescriptors[0].WriteGbufferMip(framebuffer.VkGbufferImageViewMipHandles[0]);
@@ -447,7 +452,10 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
         nodeProcessDescriptors[i].WriteGbufferMip(framebuffer.VkGbufferImageViewMipHandles[i]);
         const auto mipGroupCount = VkExtent2D(groupCount.width >> i, groupCount.height >> i);
         nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
-        vkCmdDispatch(commandBuffer, mipGroupCount.width, mipGroupCount.height, 1);
+        vkCmdDispatch(commandBuffer,
+                      mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
+                      mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
+                      1);
     }
 
     const auto& externalRead = ReleaseToExternalRead(Vulkan::CompositorPipelineType);

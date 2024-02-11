@@ -75,9 +75,9 @@ void main()
     const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
     imageStore(outputColor, coord, vec4(colorSRGB, 1));
 
-//    float nodeDepthSample = textureLod(nodeGBufferTexture, uv, 3).r;
+//    float nodeDepthSample = textureLod(nodeGBufferTexture, uv, 6).r;
 //    float nodeDepthSample2 = textureLod(nodeGBufferTexture, uv, 0).r;
-//    imageStore(outputColor, coord, vec4(nodeDepthSample, nodeDepthSample2, 0, 1));
+//    imageStore(outputColor, coord, vec4(nodeDepthSample2, nodeDepthSample, 0, 1));
 
     // reset for next frame, is there a better way to do this?
     imageStore(outputAtomic, coord, uvec4(0, 0, 0, 0));
