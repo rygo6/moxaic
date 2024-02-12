@@ -55,14 +55,6 @@ namespace Moxaic::Vulkan
                               VK_ALLOC);
         }
 
-        const auto& GetVkPipeline() const { return vkPipeline; }
-
-        static const VkPipelineLayout& GetVkPipelineLayout(const Vulkan::Device& device)
-        {
-            CheckLayoutInitialized(device);
-            return sharedVkPipelineLayout;
-        }
-
     protected:
         // at some point layout will need to be a map on the device to support multiple devices
         inline static VkPipelineLayout sharedVkPipelineLayout = VK_NULL_HANDLE;

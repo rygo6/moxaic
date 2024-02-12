@@ -57,6 +57,6 @@ namespace Moxaic::Vulkan
         }
 
     private:
-        Buffer<UniformBuffer> uniform{Device};
+        Buffer<UniformBuffer> uniform{device};
     };
 }// namespace Moxaic::Vulkan

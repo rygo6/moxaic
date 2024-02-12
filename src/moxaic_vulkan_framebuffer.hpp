@@ -24,7 +24,7 @@ namespace Moxaic::Vulkan
                                                         VK_IMAGE_USAGE_STORAGE_BIT};
         constexpr static VkImageUsageFlags DepthBufferUsage{VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
                                                             VK_IMAGE_USAGE_SAMPLED_BIT};
-        constexpr static uint32_t GBufferMipLevelCount{8};
+        constexpr static uint32_t GBufferMipLevelCount{10};
 
     private:
         const Vulkan::Device* const Device;

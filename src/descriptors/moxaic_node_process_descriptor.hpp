@@ -47,14 +47,14 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT WriteDepthTexture(const VkImageView& depthImageView) const
+        MXC_RESULT WriteSrcTexture(const VkImageView& depthImageView) const
         {
             StaticArray writes{
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->VkMaxSamplerHandle,
+                  .sampler = device->VkMaxSamplerHandle,
                   .imageView = depthImageView,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };
@@ -62,7 +62,7 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
-        MXC_RESULT WriteGbufferMip(const VkImageView gBufferMip) const
+        MXC_RESULT WriteDstTexture(const VkImageView gBufferMip) const
         {
             StaticArray writes{
               (VkWriteDescriptorSet){

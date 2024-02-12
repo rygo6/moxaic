@@ -202,28 +202,28 @@ namespace Moxaic::Vulkan
                 .dstBinding = Indices::ColorTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetColorTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::NormalTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkNearestSampler(),
+                  .sampler = device->GetVkNearestSampler(),
                   .imageView = framebuffer.GetNormalTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::GBufferTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
               (VkWriteDescriptorSet){
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetDepthTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
             };
@@ -283,7 +283,7 @@ namespace Moxaic::Vulkan
         UniformBuffer localUniformBuffer{};
 
     private:
-        Buffer<UniformBuffer> uniform{Device};
-        Buffer<StorageBuffer> storage{Device};
+        Buffer<UniformBuffer> uniform{device};
+        Buffer<StorageBuffer> storage{device};
     };
 }// namespace Moxaic::Vulkan

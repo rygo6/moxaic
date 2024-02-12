@@ -75,7 +75,8 @@ void main()
     const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
     imageStore(outputColor, coord, vec4(colorSRGB, 1));
 
-//    float nodeDepthSample = textureLod(nodeGBufferTexture, uv, 6).r;
+//    float nodeDepthSample = textureLod(nodeGBufferTexture, uv, 9).r;
+////    float nodeDepthSample = textureGrad(nodeGBufferTexture, uv, vec2(.01,.01), vec2(.00,.00)).r;
 //    float nodeDepthSample2 = textureLod(nodeGBufferTexture, uv, 0).r;
 //    imageStore(outputColor, coord, vec4(nodeDepthSample2, nodeDepthSample, 0, 1));
 

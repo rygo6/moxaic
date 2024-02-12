@@ -474,22 +474,22 @@ MXC_RESULT Device::CreatePools()
     constexpr StaticArray poolSizes{
       (VkDescriptorPoolSize){
         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 4,
+        .descriptorCount = 10,
       },
       (VkDescriptorPoolSize){
         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 4,
+        .descriptorCount = 10,
       },
       (VkDescriptorPoolSize){
         .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        .descriptorCount = 4,
+        .descriptorCount = 10,
       },
     };
     const VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
       .pNext = nullptr,
       .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-      .maxSets = 12,
+      .maxSets = 30,
       .poolSizeCount = poolSizes.size(),
       .pPoolSizes = poolSizes.data(),
     };

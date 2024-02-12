@@ -65,19 +65,19 @@ namespace Moxaic::Vulkan
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetColorTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetNormalTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
               (VkWriteDescriptorSet){
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
-                  .sampler = Device->GetVkLinearSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
             };
@@ -98,6 +98,6 @@ namespace Moxaic::Vulkan
 
     private:
         GlobalDescriptor::UniformBuffer m_LocalBuffer{};// is there a case where I wouldn't want a local copy!?
-        Buffer<GlobalDescriptor::UniformBuffer> m_Uniform{Device};
+        Buffer<GlobalDescriptor::UniformBuffer> m_Uniform{device};
     };
 }// namespace Moxaic::Vulkan
