@@ -347,8 +347,8 @@ namespace Moxaic::Vulkan
 
     protected:
         void BindDescriptor(const VkCommandBuffer commandBuffer,
-                            const VkDescriptorSet& descriptorSet,
-                            const int& setIndex) const
+                            const VkDescriptorSet descriptorSet,
+                            const uint32_t setIndex) const
         {
             vkCmdBindDescriptorSets(commandBuffer,
                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -375,8 +375,8 @@ namespace Moxaic::Vulkan
 
     protected:
         void BindDescriptor(const VkCommandBuffer commandBuffer,
-                            const VkDescriptorSet& descriptorSet,
-                            const int& setIndex) const
+                            const VkDescriptorSet descriptorSet,
+                            const uint32_t setIndex) const
         {
             vkCmdBindDescriptorSets(commandBuffer,
                                     VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -389,8 +389,8 @@ namespace Moxaic::Vulkan
         }
 
         static void BindDescriptors(const VkCommandBuffer commandBuffer,
-                                    const VkDescriptorSet& descriptorSet,
-                                    const int& setIndex)
+                                    const VkDescriptorSet descriptorSet,
+                                    const uint32_t setIndex)
         {
             vkCmdBindDescriptorSets(commandBuffer,
                                     VK_PIPELINE_BIND_POINT_COMPUTE,

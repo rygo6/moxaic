@@ -302,7 +302,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
                       const Texture& srcTexture) const
 {
     const StaticArray transitionBlitBarrier{
-      (VkImageMemoryBarrier){
+      VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
@@ -313,7 +313,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .image = srcTexture.VkImageHandle,
         .subresourceRange = srcTexture.GetSubresourceRange(),
       },
-      (VkImageMemoryBarrier){
+      VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -342,14 +342,14 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
       .layerCount = 1,
     };
     const VkOffset3D offsets[2]{
-      (VkOffset3D){
+      VkOffset3D{
         .x = 0,
         .y = 0,
         .z = 0,
       },
-      (VkOffset3D){
-        .x = static_cast<int32_t>(dimensions.width),
-        .y = static_cast<int32_t>(dimensions.height),
+      VkOffset3D{
+        .x = (int32_t)dimensions.width,
+        .y = (int32_t)dimensions.height,
         .z = 1,
       },
     };
@@ -369,7 +369,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
                                &imageBlit,
                                VK_FILTER_NEAREST));
     const StaticArray transitionPresentBarrier{
-      (VkImageMemoryBarrier){
+      VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
         .dstAccessMask = VK_ACCESS_NONE,
@@ -380,7 +380,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .image = srcTexture.VkImageHandle,
         .subresourceRange = srcTexture.GetSubresourceRange(),
       },
-      (VkImageMemoryBarrier){
+      VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
         .dstAccessMask = VK_ACCESS_NONE,

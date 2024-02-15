@@ -84,9 +84,9 @@ namespace Moxaic
 #endif
 
 #define MXC_CHK(command)                                                                                          \
-    ({                                                                                                            \
+    {                                                                                                            \
         if (command != MXC_SUCCESS) [[unlikely]] {                                                                \
             printf("%s %s:%d CHECK FAIL: %s\n", string_Role(Moxaic::role), MXC_FILE_NO_PATH, __LINE__, #command); \
             return false;                                                                                         \
         }                                                                                                         \
-    })
+    }

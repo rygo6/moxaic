@@ -31,7 +31,7 @@ namespace Moxaic::Vulkan
         {
             // MXC_LOG("Init GlobalDescriptor Layout");
             StaticArray bindings{
-              (VkDescriptorSetLayoutBinding){
+              VkDescriptorSetLayoutBinding{
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
                               VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
@@ -48,8 +48,8 @@ namespace Moxaic::Vulkan
         {
             // MXC_LOG("Init GlobalDescriptor");
             MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                   VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                   Vulkan::Locality::Local));
+                                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                 Vulkan::Locality::Local));
             localBuffer.screenSize.x = dimensions.width;
             localBuffer.screenSize.y = dimensions.height;
             localBuffer.proj = camera.GetProjection();
@@ -62,11 +62,11 @@ namespace Moxaic::Vulkan
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
-              (VkWriteDescriptorSet){
+              VkWriteDescriptorSet{
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
+                .pBufferInfo = StaticRef{VkDescriptorBufferInfo{
                   .buffer = uniform.GetVkBuffer(),
-                  .range = uniform.Size()})},
+                  .range = uniform.Size()}}},
             };
             WriteDescriptors(writes);
 

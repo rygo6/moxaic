@@ -79,7 +79,6 @@ MXC_RESULT Texture::InitFromFile(const char* file)
     this->sampleCount = VK_SAMPLE_COUNT_1_BIT;
     this->extents = {(uint32_t) width, (uint32_t) height};
     this->mipLevelCount = 1;
-    this->externalHandle = externalHandle;
     this->locality = Locality::Local;
 
     MXC_CHK(InternalInit());
@@ -356,12 +355,12 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
       .layerCount = 1,
     };
     const VkOffset3D offsets[2]{
-      (VkOffset3D){
+      VkOffset3D{
         .x = 0,
         .y = 0,
         .z = 0,
       },
-      (VkOffset3D){
+      VkOffset3D{
         .x = int32_t(extents.width),
         .y = int32_t(extents.height),
         .z = 1,

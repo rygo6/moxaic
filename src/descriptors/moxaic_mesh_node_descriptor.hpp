@@ -57,29 +57,29 @@ namespace Moxaic::Vulkan
 
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{
-              (VkWriteDescriptorSet){
+              VkWriteDescriptorSet{
                 .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .pBufferInfo = StaticRef((VkDescriptorBufferInfo){
+                .pBufferInfo = StaticRef{VkDescriptorBufferInfo{
                   .buffer = m_Uniform.GetVkBuffer(),
-                  .range = m_Uniform.Size()})},
-              (VkWriteDescriptorSet){
+                  .range = m_Uniform.Size()}}},
+              VkWriteDescriptorSet{
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                .pImageInfo = StaticRef{VkDescriptorImageInfo{
                   .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetColorTexture().VkImageViewHandle,
-                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
-              (VkWriteDescriptorSet){
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}}},
+              VkWriteDescriptorSet{
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                .pImageInfo = StaticRef{VkDescriptorImageInfo{
                   .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetNormalTexture().VkImageViewHandle,
-                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
-              (VkWriteDescriptorSet){
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}}},
+              VkWriteDescriptorSet{
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                .pImageInfo = StaticRef{VkDescriptorImageInfo{
                   .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
-                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})},
+                  .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}}},
             };
             WriteDescriptors(writes);
 

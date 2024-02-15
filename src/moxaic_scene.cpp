@@ -2,7 +2,7 @@
 
 #include "moxaic_scene.hpp"
 #include "moxaic_window.hpp"
-#include "vulkan_medium.h"
+#include "vulkan_mid.hpp"
 
 #include <thread>
 
@@ -156,8 +156,8 @@ MXC_RESULT ComputeCompositorScene::Init()
                                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                                       .extents = Window::GetExtents()}));
     MXC_CHK(outputAtomicTexture.TransitionInitialImmediate(Vulkan::ComputeCompositePipeline::PipelineType));
-    const auto averagedExtents = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeCompositePipeline::LocalSize,
-                                            Window::GetExtents().height / Vulkan::ComputeCompositePipeline::LocalSize);
+    const auto averagedExtents = VkExtent2D{Window::GetExtents().width / Vulkan::ComputeCompositePipeline::LocalSize,
+                                            Window::GetExtents().height / Vulkan::ComputeCompositePipeline::LocalSize};
     MXC_CHK(outputAveragedAtomicTexture.Init({.format = VK_FORMAT_R32_UINT,
                                               .usage = VK_IMAGE_USAGE_STORAGE_BIT,
                                               .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -248,8 +248,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     const auto superSample = 2;
     const auto averagedExtents = outputAveragedAtomicTexture.Extents;
-    const auto averagedGroupCount = VkExtent2D(averagedExtents.width < Vulkan::ComputeCompositePipeline::LocalSize ? 1 : averagedExtents.width / Vulkan::ComputeCompositePipeline::LocalSize,
-                                               averagedExtents.height < Vulkan::ComputeCompositePipeline::LocalSize ? 1 : averagedExtents.height / Vulkan::ComputeCompositePipeline::LocalSize);
+    const auto averagedGroupCount = VkExtent2D{averagedExtents.width < Vulkan::ComputeCompositePipeline::LocalSize ? 1 : averagedExtents.width / Vulkan::ComputeCompositePipeline::LocalSize,
+                                               averagedExtents.height < Vulkan::ComputeCompositePipeline::LocalSize ? 1 : averagedExtents.height / Vulkan::ComputeCompositePipeline::LocalSize};
     computeNodePrePipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, averagedGroupCount.width * superSample, averagedGroupCount.height * superSample, 1);
 
@@ -297,8 +297,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     //                      0,
     //                      nullptr);
 
-    const auto groupCount = VkExtent2D(Window::GetExtents().width / Vulkan::ComputeCompositePipeline::LocalSize,
-                                       Window::GetExtents().height / Vulkan::ComputeCompositePipeline::LocalSize);
+    const auto groupCount = VkExtent2D{Window::GetExtents().width / Vulkan::ComputeCompositePipeline::LocalSize,
+                                       Window::GetExtents().height / Vulkan::ComputeCompositePipeline::LocalSize};
     computeNodePipeline.BindPipeline(commandBuffer);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     // TODO why is indirect slower!?
@@ -360,7 +360,7 @@ MXC_RESULT NodeScene::Init()
 
     MXC_CHK(nodeProcessPipeline.Init());
     for (int i = 0; i < Vulkan::Framebuffer::GBufferMipLevelCount; ++i) {
-        MXC_CHK(nodeProcessDescriptors[i].Init());
+        MXC_CHK(nodeProcessDescriptors[i].Init(Device));
     }
 
     MXC_CHK(standardPipeline.Init());
@@ -418,7 +418,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
       framebuffer.DepthTexture.GetImageBarrier(Vulkan::GraphicsAttach2, Vulkan::GraphicsComputeRead2),
       framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsAttach2, Vulkan::GraphicsComputeWrite2),
     };
-    vkCmdPipelineImageBarrier2(commandBuffer,
+    Vkm::CmdPipelineImageBarrier2(commandBuffer,
                                toComputeBarriers.size(),
                                toComputeBarriers.data());
 
@@ -427,17 +427,17 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     nodeProcessPipeline.BindPipeline(commandBuffer);
     const auto depthBlitBarrier = framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2,
                                                                              Vulkan::GraphicsComputeWrite2);
-    const auto groupCount = VkExtent2D(Window::GetExtents().width / nodeProcessPipeline.LocalSize,
-                                       Window::GetExtents().height / nodeProcessPipeline.LocalSize);
+    const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize,
+                                       Window::GetExtents().height / nodeProcessPipeline.LocalSize};
     nodeProcessDescriptors[0].WriteSrcTexture(framebuffer.DepthTexture.VkImageViewHandle);
     nodeProcessDescriptors[0].WriteDstTexture(framebuffer.VkGbufferImageViewMipHandles[0]);
     nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-        vkCmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
+        Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
         nodeProcessDescriptors[i].WriteSrcTexture(framebuffer.VkGbufferImageViewMipHandles[i - 1]);
         nodeProcessDescriptors[i].WriteDstTexture(framebuffer.VkGbufferImageViewMipHandles[i]);
-        const auto mipGroupCount = VkExtent2D(groupCount.width >> i, groupCount.height >> i);
+        const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};
         nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
         vkCmdDispatch(commandBuffer,
                       mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
@@ -464,7 +464,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
       framebuffer.DepthTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2, externalRead),
       framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeWrite2, externalRead),
     };
-    vkCmdPipelineImageBarrier2(commandBuffer,
+    Vkm::CmdPipelineImageBarrier2(commandBuffer,
                                toExternalBarriers.size(),
                                toExternalBarriers.data());
 

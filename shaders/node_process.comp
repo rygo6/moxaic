@@ -19,10 +19,10 @@ void main()
     const vec2 srcHalfOffsetUV = vec2(srcCoord + 1.0) / vec2(srcSize);
     const vec2 srcUV = vec2(srcCoord) / vec2(srcSize);
 
-    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
-        debugPrintfEXT("src %d %d", srcSize.x, srcSize.y);
-        debugPrintfEXT("dst %d %d", dstSize.x, dstSize.y);
-    }
+//    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+//        debugPrintfEXT("src %d %d", srcSize.x, srcSize.y);
+//        debugPrintfEXT("dst %d %d", dstSize.x, dstSize.y);
+//    }
 
     const vec4 gatheredDepth = textureGather(srcTexture, srcHalfOffsetUV, 0);
 

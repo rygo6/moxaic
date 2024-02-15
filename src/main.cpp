@@ -6,7 +6,7 @@
 #include "stb_image.h"
 
 #define VULKAN_MEDIUM_IMPLEMENTATION
-#include "vulkan_medium.h"
+#include "vulkan_mid.hpp"
 
 #include <iostream>
 

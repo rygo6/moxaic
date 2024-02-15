@@ -198,34 +198,34 @@ namespace Moxaic::Vulkan
         MXC_RESULT WriteFramebuffer(const Framebuffer& framebuffer)
         {
             StaticArray writes{
-              (VkWriteDescriptorSet){
+              VkWriteDescriptorSet{
                 .dstBinding = Indices::ColorTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                .pImageInfo = StaticRef{VkDescriptorImageInfo{
                   .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetColorTexture().VkImageViewHandle,
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL}}},
+              VkWriteDescriptorSet{
                 .dstBinding = Indices::NormalTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                .pImageInfo = StaticRef{VkDescriptorImageInfo{
                   .sampler = device->GetVkNearestSampler(),
                   .imageView = framebuffer.GetNormalTexture().VkImageViewHandle,
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL}}},
+              VkWriteDescriptorSet{
                 .dstBinding = Indices::GBufferTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                .pImageInfo = StaticRef{VkDescriptorImageInfo{
                   .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
-              (VkWriteDescriptorSet){
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL}}},
+              VkWriteDescriptorSet{
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+                .pImageInfo = StaticRef{VkDescriptorImageInfo{
                   .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetDepthTexture().VkImageViewHandle,
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL}}},
             };
             WriteDescriptors(writes);
             return MXC_SUCCESS;

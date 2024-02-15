@@ -4,6 +4,7 @@
 #include "moxaic_vulkan_framebuffer.hpp"
 #include "moxaic_vulkan_texture.hpp"
 #include "static_array.hpp"
+#include "vulkan_mid.hpp"
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
@@ -14,29 +15,41 @@ namespace Moxaic::Vulkan
     {
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
-        constexpr static int SetIndex = 0;
+        constexpr static uint32_t SetIndex = 0;
 
         enum Indices : uint32_t {
             DepthTexture,
             GBufferTexture,
         };
 
+        constexpr static Vkm::Array SetLayoutBindings{
+          Vkm::DescriptorSetLayoutBinding{
+            .binding = DepthTexture,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+          },
+          Vkm::DescriptorSetLayoutBinding{
+            .binding = GBufferTexture,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+          },
+        };
+
         static MXC_RESULT InitLayout(const Vulkan::Device& device)
         {
             MXC_LOG("InitLayout NodeProcessDescriptor");
-            StaticArray bindings{
-              (VkDescriptorSetLayoutBinding){
-                .binding = Indices::DepthTexture,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-              },
-              (VkDescriptorSetLayoutBinding){
-                .binding = Indices::GBufferTexture,
-                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-              },
-            };
-            MXC_CHK(CreateDescriptorSetLayout(device, bindings));
+            VK_CHK(Vkm::CreateDescriptorSetLayout(device.GetVkDevice(),
+                                                  SetLayoutBindings.Size,
+                                                  SetLayoutBindings.Data,
+                                                  &sharedVkDescriptorSetLayout));
+            return MXC_SUCCESS;
+        }
+
+        MXC_RESULT Init(const Device* const device)
+        {
+            MXC_LOG("Init NodeProcessDescriptor");
+            this->device = device;
+            MXC_CHK(AllocateDescriptorSet());
             return MXC_SUCCESS;
         }
 
@@ -49,16 +62,17 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT WriteSrcTexture(const VkImageView& depthImageView) const
         {
-            StaticArray writes{
-              (VkWriteDescriptorSet){
-                .dstBinding = Indices::DepthTexture,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .pImageInfo = StaticRef((VkDescriptorImageInfo){
+            const Vkm::Array writes{
+              Vkm::WriteDescriptorSet(
+                vkDescriptorSet,
+                SetLayoutBindings[DepthTexture],
+                VkDescriptorImageInfo{
                   .sampler = device->VkMaxSamplerHandle,
                   .imageView = depthImageView,
-                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL})},
+                  .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                }),
             };
-            WriteDescriptors(writes);
+            Vkm::WriteDescriptors(device->GetVkDevice(), vkDescriptorSet, writes);
             return MXC_SUCCESS;
         }
 

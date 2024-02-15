@@ -80,7 +80,7 @@ namespace Moxaic::Vulkan
 
         VkImageMemoryBarrier2 GetImageBarrier(const Barrier2& src, const Barrier2& dst) const
         {
-            return (VkImageMemoryBarrier2){
+            return VkImageMemoryBarrier2{
               .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
               .srcStageMask = src.GetStageMask(aspectMask),
               .srcAccessMask = src.GetAccessMask(aspectMask),

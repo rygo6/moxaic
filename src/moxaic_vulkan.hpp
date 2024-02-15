@@ -24,7 +24,7 @@ inline constexpr VkFormat kDepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 #define VK_ALLOC nullptr
 
 #define VK_CHK(command)                                          \
-    ({                                                           \
+    {                                                           \
         Moxaic::Vulkan::VkDebug.DebugLine = __LINE__;            \
         Moxaic::Vulkan::VkDebug.DebugFile = MXC_FILE_NO_PATH;    \
         Moxaic::Vulkan::VkDebug.DebugCommand = #command;         \
@@ -37,15 +37,15 @@ inline constexpr VkFormat kDepthBufferFormat = VK_FORMAT_D32_SFLOAT;
                    string_VkResult(result));                     \
             return false;                                        \
         }                                                        \
-    })
+    }
 
 #define VK_CHK_VOID(command)                                  \
-    ({                                                        \
+    {                                                        \
         Moxaic::Vulkan::VkDebug.DebugLine = __LINE__;         \
         Moxaic::Vulkan::VkDebug.DebugFile = MXC_FILE_NO_PATH; \
         Moxaic::Vulkan::VkDebug.DebugCommand = #command;      \
         command;                                              \
-    })
+    }
 
 namespace Moxaic::Vulkan
 {

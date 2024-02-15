@@ -19,6 +19,7 @@ namespace Moxaic::Vulkan
     public:
         MXC_NO_VALUE_PASS(VulkanDescriptorBase)
 
+        explicit VulkanDescriptorBase() = default;
         explicit VulkanDescriptorBase(const Device* const device)
             : device(device) {}
 
@@ -39,7 +40,7 @@ namespace Moxaic::Vulkan
         }
 
     protected:
-        const Device* const device{VK_NULL_HANDLE};
+        const Device* device;
         // at some point layout will need to be a map on the device to support multiple devices
         inline static VkDescriptorSetLayout sharedVkDescriptorSetLayout{VK_NULL_HANDLE};
         VkDescriptorSet vkDescriptorSet{VK_NULL_HANDLE};

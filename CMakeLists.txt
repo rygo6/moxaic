@@ -60,7 +60,19 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
         -DVKB_VALIDATION_LAYERS=ON
 )
 
-target_compile_options(${TARGET_NAME} PUBLIC -fno-exceptions)
+target_compile_options(${TARGET_NAME} PRIVATE
+        -fno-exceptions
+#        -fpermissive
+)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+    if (MSVC)
+        message("ClangCL")
+        target_compile_options(${TARGET_NAME} PRIVATE -Wl,-pdb:out.pdb)
+    else ()
+        message("Clang")
+    endif ()
+endif()
 
 set(SHADER_COMPILER "${VULKAN_SDK_PATH}/Bin/glslc.exe")
 set(SHADER_OPTIMIZER "${VULKAN_SDK_PATH}/Bin/spirv-opt.exe")
