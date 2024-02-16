@@ -17,19 +17,19 @@ namespace Moxaic::Vulkan
         using VulkanDescriptorBase::VulkanDescriptorBase;
         constexpr static uint32_t SetIndex = 0;
 
-        enum Indices : uint32_t {
-            DepthTexture,
-            GBufferTexture,
+        enum BindingIndex : uint32_t {
+            SrcTexture,
+            DstTexture,
         };
 
-        constexpr static Vkm::Array SetLayoutBindings{
+        constexpr static Vkm::Array LayoutBindings{
           Vkm::DescriptorSetLayoutBinding{
-            .binding = DepthTexture,
+            .binding = SrcTexture,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
           },
           Vkm::DescriptorSetLayoutBinding{
-            .binding = GBufferTexture,
+            .binding = DstTexture,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
           },
@@ -39,8 +39,8 @@ namespace Moxaic::Vulkan
         {
             MXC_LOG("InitLayout NodeProcessDescriptor");
             VK_CHK(Vkm::CreateDescriptorSetLayout(device.GetVkDevice(),
-                                                  SetLayoutBindings.Size,
-                                                  SetLayoutBindings.Data,
+                                                  LayoutBindings.Size,
+                                                  LayoutBindings.Data,
                                                   &sharedVkDescriptorSetLayout));
             return MXC_SUCCESS;
         }
@@ -60,12 +60,47 @@ namespace Moxaic::Vulkan
             return MXC_SUCCESS;
         }
 
+        void SetDescriptorWrite(const BindingIndex binding,
+                        const VkDescriptorImageInfo* pImageInfo,
+                        VkWriteDescriptorSet* pWriteDescriptorSet) const
+        {
+            *pWriteDescriptorSet = VkWriteDescriptorSet{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = vkDescriptorSet,
+                .dstBinding = LayoutBindings[binding].binding,
+                .descriptorCount = LayoutBindings[binding].descriptorCount,
+                .descriptorType = LayoutBindings[binding].descriptorType,
+                .pImageInfo = pImageInfo,
+              };
+        }
+
+        void SetSrcTextureDescriptorWrite(const VkImageView srcImageView,
+                                          VkDescriptorImageInfo* pImageInfo,
+                                          VkWriteDescriptorSet* pWriteDescriptorSet) const
+        {
+            *pImageInfo = VkDescriptorImageInfo{
+                .sampler = device->VkMaxSamplerHandle,
+                .imageView = srcImageView,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+            SetDescriptorWrite(SrcTexture, pImageInfo, pWriteDescriptorSet);
+        }
+
+        void SetDstTextureDescriptorWrite(const VkImageView dstImageView,
+                                          VkDescriptorImageInfo* pImageInfo,
+                                          VkWriteDescriptorSet* pWriteDescriptorSet) const
+        {
+            *pImageInfo = VkDescriptorImageInfo{
+                .imageView = dstImageView,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+            SetDescriptorWrite(DstTexture, pImageInfo, pWriteDescriptorSet);
+        }
+
         MXC_RESULT WriteSrcTexture(const VkImageView& depthImageView) const
         {
             const Vkm::Array writes{
               Vkm::WriteDescriptorSet(
                 vkDescriptorSet,
-                SetLayoutBindings[DepthTexture],
+                LayoutBindings[SrcTexture],
                 VkDescriptorImageInfo{
                   .sampler = device->VkMaxSamplerHandle,
                   .imageView = depthImageView,
@@ -80,7 +115,7 @@ namespace Moxaic::Vulkan
         {
             StaticArray writes{
               (VkWriteDescriptorSet){
-                .dstBinding = Indices::GBufferTexture,
+                .dstBinding = BindingIndex::DstTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .pImageInfo = StaticRef((VkDescriptorImageInfo){
                   .imageView = gBufferMip,
