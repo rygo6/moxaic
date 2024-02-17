@@ -55,7 +55,7 @@ namespace Moxaic::Vulkan
                                    const NodeProcessDescriptor& descriptor)
         {
             BindDescriptors(commandBuffer,
-                            descriptor.GetVkDescriptorSet(),
+                            descriptor.VkDescriptorSetHandle,
                             NodeProcessDescriptor::SetIndex);
         }
     };

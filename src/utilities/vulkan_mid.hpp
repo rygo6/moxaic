@@ -8,6 +8,10 @@
 
 #include <vulkan/vulkan.h>
 
+#define VKM_DEFAULT_IMAGE_LAYOUT VK_IMAGE_LAYOUT_GENERAL
+#define VKM_DEFAULT_DESCRIPTOR_TYPE VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+#define VKM_DEFAULT_SHADER_STAGE VK_SHADER_STAGE_FRAGMENT_BIT
+
 namespace Vkm
 {
     struct VkFormatAspect
@@ -28,132 +32,60 @@ namespace Vkm
         VkImageView view;
     };
 
-    struct VkWriteImageDescriptorSet
-    {
-        uint32_t dstBinding;
-        uint32_t dstArrayElement;
-        uint32_t descriptorCount;
-        VkDescriptorType descriptorType;
-        VkSampler sampler;
-        VkImageView imageView;
-        VkImageLayout imageLayout;
+    constexpr VkDescriptorSetLayoutBinding defaultBinding{
+      .binding{},
+      .descriptorType{},
+      .descriptorCount{},
+      .stageFlags{},
+      .pImmutableSamplers{},
     };
 
     struct DescriptorSetLayoutBinding
     {
         const uint32_t binding{0};
-        const VkDescriptorType descriptorType{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
+        const VkDescriptorType descriptorType{VKM_DEFAULT_DESCRIPTOR_TYPE};
         const uint32_t descriptorCount{1};
-        const VkShaderStageFlags stageFlags{VK_SHADER_STAGE_FRAGMENT_BIT};
+        const VkShaderStageFlags stageFlags{VKM_DEFAULT_SHADER_STAGE};
         const VkSampler* pImmutableSamplers{VK_NULL_HANDLE};
 
-        // constexpr operator VkDescriptorSetLayoutBinding() const
-        // {
-        //     return (VkDescriptorSetLayoutBinding){
-        //       .binding = binding,
-        //       .descriptorType = descriptorType,
-        //       .descriptorCount = descriptorCount,
-        //       .stageFlags = stageFlags,
-        //       .pImmutableSamplers = pImmutableSamplers,
-        //     };
-        // }
+        constexpr operator VkDescriptorSetLayoutBinding() const { return *(VkDescriptorSetLayoutBinding*) this; }
     };
 
-    // struct WriteDescriptorSet
-    // {
-    //     constexpr WriteDescriptorSet(const VkDescriptorSet dstSet,
-    //                                  const DescriptorSetLayoutBinding& layoutBinding,
-    //                                  const VkDescriptorImageInfo& imageInfo)
-    //         : dstSet(dstSet),
-    //           dstBinding(layoutBinding.binding),
-    //           descriptorCount(layoutBinding.descriptorCount),
-    //           descriptorType(layoutBinding.descriptorType),
-    //           pImageInfo(&imageInfo)
-    //     {
-    //     }
-    //
-    //     constexpr WriteDescriptorSet(const VkDescriptorSet dstSet,
-    //                                  const DescriptorSetLayoutBinding& layoutBinding,
-    //                                  const VkDescriptorBufferInfo& bufferInfo)
-    //         : dstSet(dstSet),
-    //           dstBinding(layoutBinding.binding),
-    //           descriptorCount(layoutBinding.descriptorCount),
-    //           descriptorType(layoutBinding.descriptorType),
-    //           pBufferInfo(&bufferInfo)
-    //     {
-    //     }
-    //
-    //     const VkStructureType sType{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
-    //     const void* pNext{nullptr};
-    //     const VkDescriptorSet dstSet{VK_NULL_HANDLE};
-    //     const uint32_t dstBinding{0};
-    //     const uint32_t dstArrayElement{0};
-    //     const uint32_t descriptorCount{1};
-    //     const VkDescriptorType descriptorType{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER};
-    //     const VkDescriptorImageInfo* pImageInfo{nullptr};
-    //     const VkDescriptorBufferInfo* pBufferInfo{nullptr};
-    //     const VkBufferView* pTexelBufferView{nullptr};
-    //
-    //     // constexpr operator VkWriteDescriptorSet() const
-    //     // {
-    //     //     return (VkWriteDescriptorSet){
-    //     //       .sType = sType,
-    //     //       .pNext = pNext,
-    //     //       .dstBinding = dstBinding,
-    //     //       .dstArrayElement = dstArrayElement,
-    //     //       .descriptorCount = descriptorCount,
-    //     //       .descriptorType = descriptorType,
-    //     //       .pImageInfo = pImageInfo,
-    //     //       .pBufferInfo = pBufferInfo,
-    //     //       .pTexelBufferView = pTexelBufferView,
-    //     //     };
-    //     // }
-    // };
+    struct DescriptorImageInfo
+    {
+        const VkSampler sampler{VK_NULL_HANDLE};
+        const VkImageView imageView{VK_NULL_HANDLE};
+        const VkImageLayout imageLayout{VKM_DEFAULT_IMAGE_LAYOUT};
+
+        constexpr operator VkDescriptorImageInfo() const { return *(VkDescriptorImageInfo*) this; }
+    };
 
     struct WriteDescriptorSet
     {
-        const DescriptorSetLayoutBinding layoutBinding{};
+        const VkStructureType sType{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+        const void* pNext{nullptr};
         const VkDescriptorSet dstSet{VK_NULL_HANDLE};
+        const uint32_t dstBinding{0};
         const uint32_t dstArrayElement{0};
-        const VkDescriptorImageInfo imageInfo{nullptr};
-        const VkDescriptorBufferInfo bufferInfo{nullptr};
+        const uint32_t descriptorCount{1};
+        const VkDescriptorType descriptorType{VKM_DEFAULT_DESCRIPTOR_TYPE};
+        const DescriptorImageInfo* pImageInfo{nullptr};
+        const VkDescriptorBufferInfo* pBufferInfo{nullptr};
+        const VkBufferView* pTexelBufferView{nullptr};
 
-        WriteDescriptorSet WriteDescriptorSet::operator=(const WriteDescriptorSet&)
-        {
-            return WriteDescriptorSet{
-              .layoutBinding = layoutBinding,
-              .dstSet = dstSet,
-              .dstArrayElement = dstArrayElement,
-              .imageInfo = VkDescriptorImageInfo{
-                .sampler = imageInfo.sampler,
-                .imageLayout = imageInfo.imageLayout,
-                .imageView = imageInfo.imageView,
-              },
-              .bufferInfo = VkDescriptorBufferInfo{
-                .buffer = bufferInfo.buffer,
-                .offset = bufferInfo.offset,
-                .range = bufferInfo.range,
-              },
-            };
-        }
-
-        constexpr operator VkWriteDescriptorSet() const
-        {
-            return VkWriteDescriptorSet{
-              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-              .pNext = nullptr,
-              .dstSet = dstSet,
-              .dstBinding = layoutBinding.binding,
-              .dstArrayElement = dstArrayElement,
-              .descriptorCount = layoutBinding.descriptorCount,
-              .descriptorType = layoutBinding.descriptorType,
-              .pImageInfo = &imageInfo,
-              .pBufferInfo = &bufferInfo,
-              .pTexelBufferView = nullptr,
-            };
-        }
+        constexpr operator VkWriteDescriptorSet() const { return *(VkWriteDescriptorSet*) this; }
     };
 
+    struct DescriptorSetAllocateInfo
+    {
+        const VkStructureType sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        const void* pNext{nullptr};
+        const VkDescriptorPool descriptorPool{VK_NULL_HANDLE};
+        const uint32_t descriptorSetCount{1};
+        const VkDescriptorSetLayout* pSetLayouts{nullptr};
+
+        constexpr operator VkDescriptorSetAllocateInfo() const { return *(VkDescriptorSetAllocateInfo*) this; }
+    };
 
     //------------------------------------------------------------------------------------
     // Functions Declaration
@@ -173,16 +105,23 @@ namespace Vkm
       const DescriptorSetLayoutBinding* bindings,
       VkDescriptorSetLayout* pSetLayout);
 
-    void WriteDescriptors(
+    inline void UpdateDescriptorSets(
       VkDevice device,
-      size_t writeCount,
-      const WriteDescriptorSet* pWrites,
-      VkDescriptorSet dstSet);
+      uint32_t descriptorWriteCount,
+      const WriteDescriptorSet* pDescriptorWrites,
+      uint32_t descriptorCopyCount = 0,
+      const VkCopyDescriptorSet* pDescriptorCopies = nullptr)
+    {
+        vkUpdateDescriptorSets(device, descriptorWriteCount, (VkWriteDescriptorSet*) pDescriptorWrites, 0, nullptr);
+    }
 
-    void WriteDescriptors(
+    inline VkResult AllocateDescriptorSets(
       VkDevice device,
-      size_t writeCount,
-      const WriteDescriptorSet* pWrites);
+      const DescriptorSetAllocateInfo* pAllocateInfo,
+      VkDescriptorSet* pDescriptorSets)
+    {
+        return vkAllocateDescriptorSets(device, (VkDescriptorSetAllocateInfo*) pAllocateInfo, pDescriptorSets);
+    }
 
 }// namespace Vkm
 
@@ -205,50 +144,6 @@ void Vkm::CmdPipelineImageBarrier2(
       .pImageMemoryBarriers = pImageMemoryBarriers,
     };
     vkCmdPipelineBarrier2(commandBuffer, &toComputeDependencyInfo);
-}
-
-void Vkm::WriteDescriptors(
-  const VkDevice device,
-  const size_t writeCount,
-  const Vkm::WriteDescriptorSet* pWrites,
-  const VkDescriptorSet dstSet)
-{
-    VkWriteDescriptorSet descriptorWrites[writeCount];
-    for (int i = 0; i < writeCount; ++i) {
-        descriptorWrites[i] = VkWriteDescriptorSet{
-          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-          .pNext = nullptr,
-          .dstSet = dstSet,
-          .dstBinding = pWrites[i].layoutBinding.binding,
-          .dstArrayElement = pWrites[i].dstArrayElement,
-          .descriptorCount = pWrites[i].layoutBinding.descriptorCount,
-          .descriptorType = pWrites[i].layoutBinding.descriptorType,
-          .pImageInfo = &pWrites[i].imageInfo,
-          .pBufferInfo = &pWrites[i].bufferInfo,
-          .pTexelBufferView = nullptr,
-        };
-    }
-    vkUpdateDescriptorSets(device,
-                           writeCount,
-                           descriptorWrites,
-                           0,
-                           nullptr);
-}
-
-void Vkm::WriteDescriptors(
-  const VkDevice device,
-  const size_t writeCount,
-  const Vkm::WriteDescriptorSet* pWrites)
-{
-    VkWriteDescriptorSet descriptorWrites[writeCount];
-    for (int i = 0; i < writeCount; ++i) {
-        descriptorWrites[i] = pWrites[i];
-    }
-    vkUpdateDescriptorSets(device,
-                           writeCount,
-                           descriptorWrites,
-                           0,
-                           nullptr);
 }
 
 VkResult Vkm::CreateDescriptorSetLayout(

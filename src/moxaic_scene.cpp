@@ -360,7 +360,7 @@ MXC_RESULT NodeScene::Init()
 
     MXC_CHK(nodeProcessPipeline.Init());
     for (int i = 0; i < Vulkan::Framebuffer::GBufferMipLevelCount; ++i) {
-        MXC_CHK(nodeProcessDescriptors[i].Init(Device));
+        VK_CHK(nodeProcessDescriptors[i].Init());
     }
 
     MXC_CHK(standardPipeline.Init());
@@ -422,28 +422,22 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                                   toComputeBarriers.size(),
                                   toComputeBarriers.data());
 
-
     // Blit depth mips
     nodeProcessPipeline.BindPipeline(commandBuffer);
     const auto depthBlitBarrier = framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2,
                                                                              Vulkan::GraphicsComputeWrite2);
 
-
-    const int descriptorCount = framebuffer.GBufferMipLevelCount * 2;
-    VkWriteDescriptorSet writes[descriptorCount];
-    VkDescriptorImageInfo imageInfos[descriptorCount];
+    constexpr int descriptorCount = framebuffer.GBufferMipLevelCount * 2;
+    Vkm::WriteDescriptorSet writes[descriptorCount];
+    Vkm::DescriptorImageInfo imageInfos[descriptorCount];
     int index = 0;
-    nodeProcessDescriptors[0].SetSrcTextureDescriptorWrite(framebuffer.DepthTexture.VkImageViewHandle, &imageInfos[index], &writes[index]);
-    index++;
-    nodeProcessDescriptors[0].SetDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[0], &imageInfos[index], &writes[index]);
-    index++;
+    nodeProcessDescriptors[0].SetSrcTextureDescriptorWrite(framebuffer.DepthTexture.VkImageViewHandle, &imageInfos[index], &writes[index]); index++;
+    nodeProcessDescriptors[0].SetDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[0], &imageInfos[index], &writes[index]); index++;
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-        nodeProcessDescriptors[i].SetSrcTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i - 1], &imageInfos[index], &writes[index]);
-        index++;
-        nodeProcessDescriptors[i].SetDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i], &imageInfos[index], &writes[index]);
-        index++;
+        nodeProcessDescriptors[i].SetSrcTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i - 1], &imageInfos[index], &writes[index]); index++;
+        nodeProcessDescriptors[i].SetDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i], &imageInfos[index], &writes[index]); index++;
     }
-    vkUpdateDescriptorSets(Device->GetVkDevice(), descriptorCount, writes, 0, nullptr);
+    Vkm::UpdateDescriptorSets(Device->GetVkDevice(), descriptorCount, writes);
 
     nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
     const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize, Window::GetExtents().height / nodeProcessPipeline.LocalSize};
@@ -457,36 +451,6 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                       mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
                       1);
     }
-
-
-    // const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize, Window::GetExtents().height / nodeProcessPipeline.LocalSize};
-    // nodeProcessDescriptors[0].WriteSrcTexture(framebuffer.DepthTexture.VkImageViewHandle);
-    // nodeProcessDescriptors[0].WriteDstTexture(framebuffer.VkGbufferImageViewMipHandles[0]);
-    // nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
-    // vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
-    // for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-    //     Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
-    //     nodeProcessDescriptors[i].WriteSrcTexture(framebuffer.VkGbufferImageViewMipHandles[i - 1]);
-    //     nodeProcessDescriptors[i].WriteDstTexture(framebuffer.VkGbufferImageViewMipHandles[i]);
-    //     const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};
-    //     nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
-    //     vkCmdDispatch(commandBuffer,
-    //                   mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
-    //                   mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
-    //                   1);
-    // }
-
-    // for (int i = framebuffer.GBufferMipLevelCount - 2; i >= 0; --i) {
-    //     vkCmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
-    //     nodeProcessDescriptors[i].WriteSrcTexture(framebuffer.VkGbufferImageViewMipHandles[i + 1]);
-    //     nodeProcessDescriptors[i].WriteDstTexture(framebuffer.VkGbufferImageViewMipHandles[i]);
-    //     const auto mipGroupCount = VkExtent2D(groupCount.width >> i, groupCount.height >> i);
-    //     nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
-    //     vkCmdDispatch(commandBuffer,
-    //                   mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
-    //                   mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
-    //                   1);
-    // }
 
     const auto& externalRead = ReleaseToExternalRead(Vulkan::CompositorPipelineType);
     const StaticArray toExternalBarriers{

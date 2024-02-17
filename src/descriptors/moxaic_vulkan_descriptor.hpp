@@ -4,6 +4,7 @@
 #include "moxaic_logging.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
+#include "vulkan_mid.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -12,6 +13,59 @@
 namespace Moxaic::Vulkan
 {
     class Device;
+
+    template<typename Derived>
+    class VulkanDescriptorBase2
+    {
+    protected:
+        inline static const Device* device{VK_NULL_HANDLE};
+        inline static VkDescriptorSetLayout vkSharedDescriptorSetLayoutHandle{VK_NULL_HANDLE};
+        VkDescriptorSet vkDescriptorSetHandle{VK_NULL_HANDLE};
+
+    public:
+        const VkDescriptorSet& VkDescriptorSetHandle{vkDescriptorSetHandle};
+
+        static VkResult InitLayout(const Vulkan::Device& device)
+        {
+            VulkanDescriptorBase2::device = &device;
+            return Vkm::CreateDescriptorSetLayout(device.GetVkDevice(),
+                                                  Derived::LayoutBindings.size(),
+                                                  Derived::LayoutBindings.data(),
+                                                  &vkSharedDescriptorSetLayoutHandle);
+        }
+
+        static const VkDescriptorSetLayout& GetOrInitSharedVkDescriptorSetLayout(const Device& device)
+        {
+            if (vkSharedDescriptorSetLayoutHandle == VK_NULL_HANDLE)
+                InitLayout(device);
+            return vkSharedDescriptorSetLayoutHandle;
+        }
+
+        VkResult Init()
+        {
+            const Vkm::DescriptorSetAllocateInfo allocInfo{
+                .descriptorPool = device->GetVkDescriptorPool(),
+                .pSetLayouts = &vkSharedDescriptorSetLayoutHandle,
+              };
+            return Vkm::AllocateDescriptorSets(device->GetVkDevice(),
+                                                &allocInfo,
+                                                &vkDescriptorSetHandle);
+        }
+
+        void EmplaceDescriptorWrite(const uint32_t bindingIndex,
+                        const Vkm::DescriptorImageInfo* pImageInfo,
+                        Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
+        {
+            new (pWriteDescriptorSet) Vkm::WriteDescriptorSet{
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = vkDescriptorSetHandle,
+                .dstBinding = Derived::LayoutBindings[bindingIndex].binding,
+                .descriptorCount = Derived::LayoutBindings[bindingIndex].descriptorCount,
+                .descriptorType = Derived::LayoutBindings[bindingIndex].descriptorType,
+                .pImageInfo = pImageInfo,
+              };
+        }
+    };
 
     template<typename Derived>
     class VulkanDescriptorBase
