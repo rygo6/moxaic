@@ -338,10 +338,10 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
     Device->WriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
 
     vkEndCommandBuffer(commandBuffer);
-    Device->SubmitComputeQueueAndPresent(commandBuffer,
+    MXC_CHK(Device->SubmitComputeQueueAndPresent(commandBuffer,
                                          swap,
                                          swapIndex,
-                                         &semaphore);
+                                         &semaphore));
 
     semaphore.Wait();
 
@@ -431,20 +431,28 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     Vkm::WriteDescriptorSet writes[descriptorCount];
     Vkm::DescriptorImageInfo imageInfos[descriptorCount];
     int index = 0;
-    nodeProcessDescriptors[0].SetSrcTextureDescriptorWrite(framebuffer.DepthTexture.VkImageViewHandle, &imageInfos[index], &writes[index]); index++;
-    nodeProcessDescriptors[0].SetDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[0], &imageInfos[index], &writes[index]); index++;
+    nodeProcessDescriptors[0].EmplaceSrcTextureDescriptorWrite(framebuffer.DepthTexture.VkImageViewHandle, &imageInfos[index], &writes[index]); index++;
+    nodeProcessDescriptors[0].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[0], &imageInfos[index], &writes[index]); index++;
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-        nodeProcessDescriptors[i].SetSrcTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i - 1], &imageInfos[index], &writes[index]); index++;
-        nodeProcessDescriptors[i].SetDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i], &imageInfos[index], &writes[index]); index++;
+        nodeProcessDescriptors[i].EmplaceSrcTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i - 1], &imageInfos[index], &writes[index]); index++;
+        nodeProcessDescriptors[i].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i], &imageInfos[index], &writes[index]); index++;
     }
     Vkm::UpdateDescriptorSets(Device->GetVkDevice(), descriptorCount, writes);
 
     nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
+    // nodeProcessDescriptors->PushSrcDstTextureDescriptorWrite(commandBuffer,
+    //                                                          framebuffer.DepthTexture.VkImageViewHandle,
+    //                                                          framebuffer.VkGbufferImageViewMipHandles[0],
+    //                                                          nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
     const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize, Window::GetExtents().height / nodeProcessPipeline.LocalSize};
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
         Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
         nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
+        // nodeProcessDescriptors->PushSrcDstTextureDescriptorWrite(commandBuffer,
+        //                                                          framebuffer.VkGbufferImageViewMipHandles[i - 1],
+        //                                                          framebuffer.VkGbufferImageViewMipHandles[i],
+        //                                                          nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
         const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};
         vkCmdDispatch(commandBuffer,
                       mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
@@ -470,7 +478,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     //                   m_Node.framebuffer(m_FramebufferIndex).colorTexture());
 
     vkEndCommandBuffer(commandBuffer);
-    Device->SubmitGraphicsQueue(node.pImportedNodeSemaphore());
+    MXC_CHK(Device->SubmitGraphicsQueue(node.pImportedNodeSemaphore()));
     // k_pDevice->SubmitGraphicsQueueAndPresent(m_Swap,
     //                                          swapIndex,
     //                                          m_Node.ImportedNodeSemaphore());

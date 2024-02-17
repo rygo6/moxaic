@@ -1020,7 +1020,7 @@ MXC_RESULT Device::TransitionImageLayoutImmediate(const VkImage image,
       .imageMemoryBarrierCount = 1,
       .pImageMemoryBarriers = &barrier,
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo));
+    vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
 
     MXC_CHK(EndImmediateCommandBuffer(commandBuffer));
     return MXC_SUCCESS;
@@ -1127,9 +1127,9 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer,
       .clearValueCount = clearValues.size(),
       .pClearValues = clearValues.data(),
     };
-    VK_CHK_VOID(vkCmdBeginRenderPass(vkGraphicsCommandBuffer,
+    vkCmdBeginRenderPass(vkGraphicsCommandBuffer,
                                      &renderPassBeginInfo,
-                                     VK_SUBPASS_CONTENTS_INLINE));
+                                     VK_SUBPASS_CONTENTS_INLINE);
 }
 
 MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* const pTimelineSemaphore) const

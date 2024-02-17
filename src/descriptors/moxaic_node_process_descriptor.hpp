@@ -31,9 +31,26 @@ namespace Moxaic::Vulkan
           },
         };
 
-        void SetSrcTextureDescriptorWrite(const VkImageView srcImageView,
-                                          Vkm::DescriptorImageInfo* pImageInfo,
-                                          Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
+        void PushSrcDstTextureDescriptorWrite(VkCommandBuffer commandBuffer,
+                                              const VkImageView srcImageView,
+                                              const VkImageView dstImageView,
+                                              VkPipelineLayout layout)
+        {
+            Vkm::WriteDescriptorSet writes[2];
+            Vkm::DescriptorImageInfo imageInfos[2];
+            EmplaceSrcTextureDescriptorWrite(srcImageView, &imageInfos[0], &writes[0]);
+            EmplaceDstTextureDescriptorWrite(dstImageView, &imageInfos[1], &writes[1]);
+            VkFunc.CmdPushDescriptorSetKHR(commandBuffer,
+                                           VK_PIPELINE_BIND_POINT_COMPUTE,
+                                           layout,
+                                           SetIndex,
+                                           2,
+                                           (VkWriteDescriptorSet*) writes);
+        }
+
+        void EmplaceSrcTextureDescriptorWrite(const VkImageView srcImageView,
+                                              Vkm::DescriptorImageInfo* pImageInfo,
+                                              Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
         {
             new (pImageInfo) Vkm::DescriptorImageInfo{
               .sampler = device->VkMaxSamplerHandle,
@@ -42,9 +59,9 @@ namespace Moxaic::Vulkan
             EmplaceDescriptorWrite(SrcTexture, pImageInfo, pWriteDescriptorSet);
         }
 
-        void SetDstTextureDescriptorWrite(const VkImageView dstImageView,
-                                          Vkm::DescriptorImageInfo* pImageInfo,
-                                          Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
+        void EmplaceDstTextureDescriptorWrite(const VkImageView dstImageView,
+                                              Vkm::DescriptorImageInfo* pImageInfo,
+                                              Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
         {
             new (pImageInfo) VkDescriptorImageInfo{
               .imageView = dstImageView,

@@ -42,13 +42,13 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(const VkDebugUtilsMessageSev
     if (pCallbackData->messageIdNumber == -1841738615) {
         printf("%s\n", pCallbackData->pMessage + strlen("Validation Information: [ UNASSIGNED-DEBUG-PRINTF ] | MessageID = 0x92394c89 | "));
     } else {
-        printf("%s %s (%s:%d) %s\n%s\n",
+        printf("%s %s %s\n",
                SeverityToName(messageSeverity),
                string_Role(Moxaic::role),
-               Vulkan::VkDebug.DebugFile,
-               Vulkan::VkDebug.DebugLine,
-               Vulkan::VkDebug.DebugCommand,
                pCallbackData->pMessage);
+    }
+    if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+        Moxaic::running = false;
     }
     return VK_FALSE;
 }
@@ -184,7 +184,7 @@ static MXC_RESULT CreateVulkanDebugOutput()
     MXC_LOG_FUNCTION();
     VkDebugUtilsMessageSeverityFlagsEXT messageSeverity{};
     // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
     messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
     messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 

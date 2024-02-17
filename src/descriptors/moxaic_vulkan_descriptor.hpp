@@ -17,6 +17,7 @@ namespace Moxaic::Vulkan
     template<typename Derived>
     class VulkanDescriptorBase2
     {
+
     protected:
         inline static const Device* device{VK_NULL_HANDLE};
         inline static VkDescriptorSetLayout vkSharedDescriptorSetLayoutHandle{VK_NULL_HANDLE};
@@ -24,6 +25,17 @@ namespace Moxaic::Vulkan
 
     public:
         const VkDescriptorSet& VkDescriptorSetHandle{vkDescriptorSetHandle};
+
+        MXC_NO_VALUE_PASS(VulkanDescriptorBase2)
+        VulkanDescriptorBase2() = default;
+        ~VulkanDescriptorBase2()
+        {
+            if (vkDescriptorSetHandle != VK_NULL_HANDLE)
+                vkFreeDescriptorSets(device->GetVkDevice(),
+                                     device->GetVkDescriptorPool(),
+                                     1,
+                                     &vkDescriptorSetHandle);
+        }
 
         static VkResult InitLayout(const Vulkan::Device& device)
         {
@@ -44,26 +56,26 @@ namespace Moxaic::Vulkan
         VkResult Init()
         {
             const Vkm::DescriptorSetAllocateInfo allocInfo{
-                .descriptorPool = device->GetVkDescriptorPool(),
-                .pSetLayouts = &vkSharedDescriptorSetLayoutHandle,
-              };
+              .descriptorPool = device->GetVkDescriptorPool(),
+              .pSetLayouts = &vkSharedDescriptorSetLayoutHandle,
+            };
             return Vkm::AllocateDescriptorSets(device->GetVkDevice(),
-                                                &allocInfo,
-                                                &vkDescriptorSetHandle);
+                                               &allocInfo,
+                                               &vkDescriptorSetHandle);
         }
 
         void EmplaceDescriptorWrite(const uint32_t bindingIndex,
-                        const Vkm::DescriptorImageInfo* pImageInfo,
-                        Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
+                                    const Vkm::DescriptorImageInfo* pImageInfo,
+                                    Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
         {
             new (pWriteDescriptorSet) Vkm::WriteDescriptorSet{
-                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                .dstSet = vkDescriptorSetHandle,
-                .dstBinding = Derived::LayoutBindings[bindingIndex].binding,
-                .descriptorCount = Derived::LayoutBindings[bindingIndex].descriptorCount,
-                .descriptorType = Derived::LayoutBindings[bindingIndex].descriptorType,
-                .pImageInfo = pImageInfo,
-              };
+              .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+              .dstSet = vkDescriptorSetHandle,
+              .dstBinding = Derived::LayoutBindings[bindingIndex].binding,
+              .descriptorCount = Derived::LayoutBindings[bindingIndex].descriptorCount,
+              .descriptorType = Derived::LayoutBindings[bindingIndex].descriptorType,
+              .pImageInfo = pImageInfo,
+            };
         }
     };
 
@@ -156,11 +168,11 @@ namespace Moxaic::Vulkan
                 writes[i].dstBinding = writes[i].dstBinding == 0 ? i : writes[i].dstBinding;
                 writes[i].descriptorCount = writes[i].descriptorCount == 0 ? 1 : writes[i].descriptorCount;
             }
-            VK_CHK_VOID(vkUpdateDescriptorSets(device->GetVkDevice(),
-                                               writes.size(),
-                                               writes.data(),
-                                               0,
-                                               nullptr));
+            vkUpdateDescriptorSets(device->GetVkDevice(),
+                                   writes.size(),
+                                   writes.data(),
+                                   0,
+                                   nullptr);
         }
     };
 }// namespace Moxaic::Vulkan

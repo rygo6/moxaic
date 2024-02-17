@@ -262,12 +262,12 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
 
 MXC_RESULT Swap::Acquire(uint32_t* pSwapIndex)
 {
-    VK_CHK(vkAcquireNextImageKHR(Device->GetVkDevice(),
-                                 vkSwapchain,
-                                 UINT64_MAX,
-                                 vkAcquireCompleteSemaphore,
-                                 VK_NULL_HANDLE,
-                                 pSwapIndex));
+    vkAcquireNextImageKHR(Device->GetVkDevice(),
+                          vkSwapchain,
+                          UINT64_MAX,
+                          vkAcquireCompleteSemaphore,
+                          VK_NULL_HANDLE,
+                          pSwapIndex);
     return MXC_SUCCESS;
 }
 
@@ -294,7 +294,7 @@ void Swap::Transition(const VkCommandBuffer commandBuffer,
       .imageMemoryBarrierCount = 1,
       .pImageMemoryBarriers = &barrier,
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo));
+    vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
 }
 
 void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
@@ -325,16 +325,16 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .subresourceRange = GetSubresourceRange(),
       },
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
-                                     VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                     0,
-                                     0,
-                                     nullptr,
-                                     0,
-                                     nullptr,
-                                     transitionBlitBarrier.size(),
-                                     transitionBlitBarrier.data()));
+    vkCmdPipelineBarrier(commandBuffer,
+                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         transitionBlitBarrier.size(),
+                         transitionBlitBarrier.data());
     constexpr VkImageSubresourceLayers imageSubresourceLayers{
       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
       .mipLevel = 0,
@@ -348,8 +348,8 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .z = 0,
       },
       VkOffset3D{
-        .x = (int32_t)dimensions.width,
-        .y = (int32_t)dimensions.height,
+        .x = (int32_t) dimensions.width,
+        .y = (int32_t) dimensions.height,
         .z = 1,
       },
     };
@@ -360,14 +360,14 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
     imageBlit.dstSubresource = imageSubresourceLayers;
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
-    VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
+    vkCmdBlitImage(commandBuffer,
                                srcTexture.VkImageHandle,
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                vkSwapImages[swapIndex],
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                1,
                                &imageBlit,
-                               VK_FILTER_NEAREST));
+                               VK_FILTER_NEAREST);
     const StaticArray transitionPresentBarrier{
       VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -392,7 +392,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
         .subresourceRange = GetSubresourceRange(),
       },
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier(commandBuffer,
+    vkCmdPipelineBarrier(commandBuffer,
                                      VK_PIPELINE_STAGE_TRANSFER_BIT,
                                      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                      0,
@@ -401,7 +401,7 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
                                      0,
                                      nullptr,
                                      transitionPresentBarrier.size(),
-                                     transitionPresentBarrier.data()));
+                                     transitionPresentBarrier.data());
 }
 
 MXC_RESULT Swap::QueuePresent(const VkQueue& queue,

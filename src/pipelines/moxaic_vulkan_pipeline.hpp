@@ -40,10 +40,16 @@ namespace Moxaic::Vulkan
     class Pipeline
     {
     protected:
+        MXC_NO_VALUE_PASS(Pipeline)
+
         const Device* const Device;
 
+        // at some point layout will need to be a map on the device to support multiple devices
+        inline static VkPipelineLayout sharedVkPipelineLayout{VK_NULL_HANDLE};
+        VkPipeline vkPipeline{VK_NULL_HANDLE};
+
     public:
-        MXC_NO_VALUE_PASS(Pipeline)
+        inline static const VkPipelineLayout& VkSharedVkPipelineLayoutHandle{sharedVkPipelineLayout};
 
         explicit Pipeline(const Vulkan::Device* const pDevice)
             : Device(pDevice) {}
@@ -56,9 +62,6 @@ namespace Moxaic::Vulkan
         }
 
     protected:
-        // at some point layout will need to be a map on the device to support multiple devices
-        inline static VkPipelineLayout sharedVkPipelineLayout = VK_NULL_HANDLE;
-        VkPipeline vkPipeline{VK_NULL_HANDLE};
 
         static void CheckLayoutInitialized(const Vulkan::Device& device)
         {
@@ -306,13 +309,14 @@ namespace Moxaic::Vulkan
         }
 
         MXC_RESULT CreateComputePipe(const VkPipelineShaderStageCreateInfo& stage,
-                                     VkPipeline* pVkPipeline)
+                                     VkPipeline* pVkPipeline,
+                                     VkPipelineCreateFlags flags = 0)
         {
             CheckLayoutInitialized(*Device);
             const VkComputePipelineCreateInfo pipelineInfo{
               .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
               .pNext = nullptr,
-              .flags = 0,
+              .flags = flags,
               .stage = stage,
               .layout = sharedVkPipelineLayout,
               .basePipelineHandle = nullptr,

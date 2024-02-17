@@ -347,7 +347,7 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
       .imageMemoryBarrierCount = toBarrier.size(),
       .pImageMemoryBarriers = toBarrier.data(),
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &toDependencyInfo));
+    vkCmdPipelineBarrier2(commandBuffer, &toDependencyInfo);
 
     constexpr VkImageSubresourceLayers imageSubresourceLayers{
       .mipLevel = 0,
@@ -375,14 +375,14 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
     imageBlit.dstSubresource.aspectMask = dstTexture.aspectMask;
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
-    VK_CHK_VOID(vkCmdBlitImage(commandBuffer,
+    vkCmdBlitImage(commandBuffer,
                                vkImageHandle,
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                dstTexture.VkImageHandle,
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                1,
                                &imageBlit,
-                               VK_FILTER_NEAREST));
+                               VK_FILTER_NEAREST);
 
     const StaticArray fromBarrier{
       GetImageBarrier(BlitTransferSrc2, GraphicsAttach2),
@@ -393,5 +393,5 @@ void Texture::BlitTo(const VkCommandBuffer commandBuffer,
       .imageMemoryBarrierCount = fromBarrier.size(),
       .pImageMemoryBarriers = fromBarrier.data(),
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &fromDependencyInfo));
+    vkCmdPipelineBarrier2(commandBuffer, &fromDependencyInfo);
 }

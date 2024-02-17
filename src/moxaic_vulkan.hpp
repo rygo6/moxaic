@@ -2,10 +2,10 @@
 
 #include "moxaic_logging.hpp"
 
+#include <SDL2/SDL.h>
 #include <cassert>
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
-#include <SDL2/SDL.h>
 
 #ifdef WIN32
 #include <windows.h>
@@ -24,27 +24,16 @@ inline constexpr VkFormat kDepthBufferFormat = VK_FORMAT_D32_SFLOAT;
 #define VK_ALLOC nullptr
 
 #define VK_CHK(command)                                          \
-    {                                                           \
-        Moxaic::Vulkan::VkDebug.DebugLine = __LINE__;            \
-        Moxaic::Vulkan::VkDebug.DebugFile = MXC_FILE_NO_PATH;    \
-        Moxaic::Vulkan::VkDebug.DebugCommand = #command;         \
+    {                                                            \
         VkResult result = command;                               \
         if (result != VK_SUCCESS) [[unlikely]] {                 \
             printf("(%s:%d) VKCheck fail on command: %s - %s\n", \
-                   Moxaic::Vulkan::VkDebug.DebugFile,            \
-                   Moxaic::Vulkan::VkDebug.DebugLine,            \
-                   Moxaic::Vulkan::VkDebug.DebugCommand,         \
+                   __LINE__,                                     \
+                   MXC_FILE_NO_PATH,                             \
+                   #command,                                     \
                    string_VkResult(result));                     \
             return false;                                        \
         }                                                        \
-    }
-
-#define VK_CHK_VOID(command)                                  \
-    {                                                        \
-        Moxaic::Vulkan::VkDebug.DebugLine = __LINE__;         \
-        Moxaic::Vulkan::VkDebug.DebugFile = MXC_FILE_NO_PATH; \
-        Moxaic::Vulkan::VkDebug.DebugCommand = #command;      \
-        command;                                              \
     }
 
 namespace Moxaic::Vulkan
@@ -114,13 +103,13 @@ namespace Moxaic::Vulkan
     };
 
     inline constexpr Barrier2 GraphicsComputeWrite2{
-        .colorAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-        .depthAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-        .layout = VK_IMAGE_LAYOUT_GENERAL,
-        .queueFamily = Queue::Graphics,
-        .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-      };
+      .colorAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .depthAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+      .layout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamily = Queue::Graphics,
+      .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    };
 
     inline constexpr Barrier2 ComputeWrite2{
       .colorAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
@@ -140,22 +129,22 @@ namespace Moxaic::Vulkan
     };
 
     inline constexpr Barrier2 ComputeReadWrite2{
-        .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
-        .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
-        .layout = VK_IMAGE_LAYOUT_GENERAL,
-        .queueFamily = Queue::Compute,
-        .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-      };
+      .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+      .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+      .layout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamily = Queue::Compute,
+      .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    };
 
     inline constexpr Barrier2 GraphicsComputeRead2{
-        .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-        .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-        .layout = VK_IMAGE_LAYOUT_GENERAL,
-        .queueFamily = Queue::Graphics,
-        .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-      };
+      .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+      .depthAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+      .layout = VK_IMAGE_LAYOUT_GENERAL,
+      .queueFamily = Queue::Graphics,
+      .colorStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .depthStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    };
 
     inline constexpr Barrier2 ComputeRead2{
       .colorAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
@@ -293,7 +282,8 @@ namespace Moxaic::Vulkan
     VK_FUNC(CmdDrawMeshTasksEXT)           \
     VK_FUNC(GetSemaphoreWin32HandleKHR)    \
     VK_FUNC(ImportSemaphoreWin32HandleKHR) \
-    VK_FUNC(CreateDebugUtilsMessengerEXT)
+    VK_FUNC(CreateDebugUtilsMessengerEXT)  \
+    VK_FUNC(CmdPushDescriptorSetKHR)
 
 #define VK_FUNC(func) PFN_vk##func func;
         VK_FUNCS

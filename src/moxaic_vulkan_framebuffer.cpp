@@ -129,7 +129,7 @@ void Framebuffer::TransitionAttachmentBuffers(const VkCommandBuffer commandBuffe
       .imageMemoryBarrierCount = barriers.size(),
       .pImageMemoryBarriers = barriers.data(),
     };
-    VK_CHK_VOID(vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo));
+    vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
 }
 
 // void Framebuffer::TransitionGBuffers(const VkCommandBuffer commandbuffer,
