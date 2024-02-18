@@ -31,15 +31,38 @@ namespace Moxaic::Vulkan
           },
         };
 
-        void PushSrcDstTextureDescriptorWrite(VkCommandBuffer commandBuffer,
-                                              const VkImageView srcImageView,
-                                              const VkImageView dstImageView,
-                                              VkPipelineLayout layout)
+        static void EmplaceSrcTextureImageInfo(const VkImageView srcImageView,
+                                               const VkDescriptorSet dstSet,
+                                               Vkm::DescriptorImageInfo* pImageInfo,
+                                               Vkm::WriteDescriptorSet* pWriteDescriptorSet)
         {
-            Vkm::WriteDescriptorSet writes[2];
+            new (pImageInfo) Vkm::DescriptorImageInfo{
+              .sampler = device->VkMaxSamplerHandle,
+              .imageView = srcImageView,
+              .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+            EmplaceDescriptorWrite(SrcTexture, dstSet, pImageInfo, pWriteDescriptorSet);
+        }
+
+        static void EmplaceDstTextureImageInfo(const VkImageView dstImageView,
+                                               const VkDescriptorSet dstSet,
+                                               Vkm::DescriptorImageInfo* pImageInfo,
+                                               Vkm::WriteDescriptorSet* pWriteDescriptorSet)
+        {
+            new (pImageInfo) VkDescriptorImageInfo{
+              .imageView = dstImageView,
+              .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+            EmplaceDescriptorWrite(DstTexture, dstSet, pImageInfo, pWriteDescriptorSet);
+        }
+
+        static void PushSrcDstTextureDescriptorWrite(VkCommandBuffer commandBuffer,
+                                                     const VkImageView srcImageView,
+                                                     const VkImageView dstImageView,
+                                                     VkPipelineLayout layout)
+        {
             Vkm::DescriptorImageInfo imageInfos[2];
-            EmplaceSrcTextureDescriptorWrite(srcImageView, &imageInfos[0], &writes[0]);
-            EmplaceDstTextureDescriptorWrite(dstImageView, &imageInfos[1], &writes[1]);
+            Vkm::WriteDescriptorSet writes[2];
+            EmplaceSrcTextureImageInfo(srcImageView, VK_NULL_HANDLE, &imageInfos[0], &writes[0]);
+            EmplaceDstTextureImageInfo(dstImageView, VK_NULL_HANDLE, &imageInfos[1], &writes[1]);
             VkFunc.CmdPushDescriptorSetKHR(commandBuffer,
                                            VK_PIPELINE_BIND_POINT_COMPUTE,
                                            layout,
@@ -50,23 +73,16 @@ namespace Moxaic::Vulkan
 
         void EmplaceSrcTextureDescriptorWrite(const VkImageView srcImageView,
                                               Vkm::DescriptorImageInfo* pImageInfo,
-                                              Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
+                                              Vkm::WriteDescriptorSet* pWriteDescriptorSet)
         {
-            new (pImageInfo) Vkm::DescriptorImageInfo{
-              .sampler = device->VkMaxSamplerHandle,
-              .imageView = srcImageView,
-              .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
-            EmplaceDescriptorWrite(SrcTexture, pImageInfo, pWriteDescriptorSet);
+            EmplaceDescriptorWrite(SrcTexture, vkDescriptorSetHandle, pImageInfo, pWriteDescriptorSet);
         }
 
         void EmplaceDstTextureDescriptorWrite(const VkImageView dstImageView,
                                               Vkm::DescriptorImageInfo* pImageInfo,
-                                              Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
+                                              Vkm::WriteDescriptorSet* pWriteDescriptorSet)
         {
-            new (pImageInfo) VkDescriptorImageInfo{
-              .imageView = dstImageView,
-              .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
-            EmplaceDescriptorWrite(DstTexture, pImageInfo, pWriteDescriptorSet);
+            EmplaceDescriptorWrite(DstTexture, vkDescriptorSetHandle, pImageInfo, pWriteDescriptorSet);
         }
     };
 }// namespace Moxaic::Vulkan

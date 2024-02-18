@@ -53,24 +53,33 @@ namespace Moxaic::Vulkan
             return vkSharedDescriptorSetLayoutHandle;
         }
 
-        VkResult Init()
+        MXC_RESULT Init()
         {
             const Vkm::DescriptorSetAllocateInfo allocInfo{
               .descriptorPool = device->GetVkDescriptorPool(),
               .pSetLayouts = &vkSharedDescriptorSetLayoutHandle,
             };
-            return Vkm::AllocateDescriptorSets(device->GetVkDevice(),
+            VK_CHK(Vkm::AllocateDescriptorSets(device->GetVkDevice(),
                                                &allocInfo,
-                                               &vkDescriptorSetHandle);
+                                               &vkDescriptorSetHandle));
+            const VkDebugUtilsObjectNameInfoEXT debugInfo{
+              .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+              .objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
+              .objectHandle = (uint64_t) vkDescriptorSetHandle,
+              .pObjectName = name};
+            VK_CHK(VkFunc.SetDebugUtilsObjectNameEXT(device->VkDeviceHandle,
+                                                     &debugInfo));
+            return MXC_SUCCESS;
         }
 
-        void EmplaceDescriptorWrite(const uint32_t bindingIndex,
-                                    const Vkm::DescriptorImageInfo* pImageInfo,
-                                    Vkm::WriteDescriptorSet* pWriteDescriptorSet) const
+        static void EmplaceDescriptorWrite(const uint32_t bindingIndex,
+                                           const VkDescriptorSet dstSet,
+                                           const Vkm::DescriptorImageInfo* pImageInfo,
+                                           Vkm::WriteDescriptorSet* pWriteDescriptorSet)
         {
             new (pWriteDescriptorSet) Vkm::WriteDescriptorSet{
               .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-              .dstSet = vkDescriptorSetHandle,
+              .dstSet = dstSet,
               .dstBinding = Derived::LayoutBindings[bindingIndex].binding,
               .descriptorCount = Derived::LayoutBindings[bindingIndex].descriptorCount,
               .descriptorType = Derived::LayoutBindings[bindingIndex].descriptorType,
@@ -157,10 +166,10 @@ namespace Moxaic::Vulkan
                                             &vkDescriptorSet));
 
             const VkDebugUtilsObjectNameInfoEXT debugInfo{
-                .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-                .objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
-                .objectHandle = (uint64_t) vkDescriptorSet,
-                .pObjectName = name};
+              .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+              .objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
+              .objectHandle = (uint64_t) vkDescriptorSet,
+              .pObjectName = name};
             VkFunc.SetDebugUtilsObjectNameEXT(device->VkDeviceHandle, &debugInfo);
 
             return MXC_SUCCESS;

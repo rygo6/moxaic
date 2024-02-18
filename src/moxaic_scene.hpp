@@ -128,7 +128,6 @@ namespace Moxaic
         Vulkan::ObjectDescriptor objectDescriptor{Device};
 
         Vulkan::NodeProcessPipeline nodeProcessPipeline{Device, "./shaders/node_process.comp.spv"};
-        Vulkan::NodeProcessDescriptor nodeProcessDescriptors[Vulkan::Framebuffer::GBufferMipLevelCount]{};
 
         Camera mainCamera{};
 

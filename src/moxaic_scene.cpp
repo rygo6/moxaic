@@ -184,7 +184,7 @@ MXC_RESULT ComputeCompositorScene::Init()
     MXC_CHK(nodeReference.ExportOverIPC(semaphore));
 
     nodeReference.exportedSemaphore.SyncLocalWaitValue();
-    while ( nodeReference.exportedSemaphore.localWaitValue == 0) {
+    while (nodeReference.exportedSemaphore.localWaitValue == 0) {
         MXC_LOG("Compositor Waiting for Node");
         std::this_thread::sleep_for(std::chrono::milliseconds(400));
 
@@ -378,9 +378,6 @@ MXC_RESULT NodeScene::Init()
     // MXC_CHK(m_Swap.Init(Window::extents(), Vulkan::CompositorPipelineType));
 
     MXC_CHK(nodeProcessPipeline.Init());
-    for (int i = 0; i < Vulkan::Framebuffer::GBufferMipLevelCount; ++i) {
-        // VK_CHK(nodeProcessDescriptors[i].Init());
-    }
 
     MXC_CHK(standardPipeline.Init());
     MXC_CHK(globalDescriptor.Init(mainCamera,
@@ -447,36 +444,18 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     const auto depthBlitBarrier = framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2,
                                                                              Vulkan::GraphicsComputeWrite2);
 
-    // constexpr int descriptorCount = framebuffer.GBufferMipLevelCount * 2;
-    // Vkm::WriteDescriptorSet writes[descriptorCount];
-    // Vkm::DescriptorImageInfo imageInfos[descriptorCount];
-    // int index = 0;
-    // nodeProcessDescriptors[0].EmplaceSrcTextureDescriptorWrite(framebuffer.DepthTexture.VkImageViewHandle, &imageInfos[index], &writes[index]);
-    // index++;
-    // nodeProcessDescriptors[0].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[0], &imageInfos[index], &writes[index]);
-    // index++;
-    // for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-    //     nodeProcessDescriptors[i].EmplaceSrcTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i - 1], &imageInfos[index], &writes[index]);
-    //     index++;
-    //     nodeProcessDescriptors[i].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i], &imageInfos[index], &writes[index]);
-    //     index++;
-    // }
-    // Vkm::UpdateDescriptorSets(Device->GetVkDevice(), descriptorCount, writes);
-
-    // nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
-    nodeProcessDescriptors[0].PushSrcDstTextureDescriptorWrite(commandBuffer,
-                                                               framebuffer.DepthTexture.VkImageViewHandle,
-                                                               framebuffer.VkGbufferImageViewMipHandles[0],
-                                                               nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
+    Vulkan::NodeProcessDescriptor::PushSrcDstTextureDescriptorWrite(commandBuffer,
+                                                                    framebuffer.DepthTexture.VkImageViewHandle,
+                                                                    framebuffer.VkGbufferImageViewMipHandles[0],
+                                                                    nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
     const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize, Window::GetExtents().height / nodeProcessPipeline.LocalSize};
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
         Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
-        // nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
-        nodeProcessDescriptors[0].PushSrcDstTextureDescriptorWrite(commandBuffer,
-                                                                   framebuffer.VkGbufferImageViewMipHandles[i - 1],
-                                                                   framebuffer.VkGbufferImageViewMipHandles[i],
-                                                                   nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
+        Vulkan::NodeProcessDescriptor::PushSrcDstTextureDescriptorWrite(commandBuffer,
+                                                                        framebuffer.VkGbufferImageViewMipHandles[i - 1],
+                                                                        framebuffer.VkGbufferImageViewMipHandles[i],
+                                                                        nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
         const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};
         vkCmdDispatch(commandBuffer,
                       mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
