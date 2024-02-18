@@ -183,8 +183,27 @@ MXC_RESULT ComputeCompositorScene::Init()
     std::this_thread::sleep_for(std::chrono::milliseconds(400));
     MXC_CHK(nodeReference.ExportOverIPC(semaphore));
 
-    // and must wait again after node is inited on other side... wHyy!?!
-    std::this_thread::sleep_for(std::chrono::milliseconds(400));
+    nodeReference.exportedSemaphore.SyncLocalWaitValue();
+    while ( nodeReference.exportedSemaphore.localWaitValue == 0) {
+        MXC_LOG("Compositor Waiting for Node");
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+
+        if (!nodeReference.exportedSemaphore.IsExternalHandleValid()) {
+            MXC_LOG("Exported Semaphore Invalid!");
+            Moxaic::running = false;
+            return MXC_FAIL;
+        }
+
+        nodeReference.exportedSemaphore.SyncLocalWaitValue();
+    }
+
+    if (nodeReference.exportedSemaphore.localWaitValue == UINT64_MAX) {
+        MXC_LOG("Exported Semaphore Corrupted!");
+        Moxaic::running = false;
+        return MXC_FAIL;
+    }
+
+
     nodeReference.SetZCondensedExportedGlobalDescriptorLocalBuffer(mainCamera);
     nodeReference.exportedGlobalDescriptor.WriteLocalBuffer();
 
@@ -339,9 +358,9 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     vkEndCommandBuffer(commandBuffer);
     MXC_CHK(Device->SubmitComputeQueueAndPresent(commandBuffer,
-                                         swap,
-                                         swapIndex,
-                                         &semaphore));
+                                                 swap,
+                                                 swapIndex,
+                                                 &semaphore));
 
     semaphore.Wait();
 
@@ -386,6 +405,7 @@ MXC_RESULT NodeScene::Init()
     MXC_CHK(node.pImportedCompositorSemaphore()->SyncLocalWaitValue());
     MXC_CHK(node.pImportedNodeSemaphore()->SyncLocalWaitValue());
 
+    MXC_LOG("Node Starting");
     return MXC_SUCCESS;
 }
 
@@ -427,32 +447,36 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     const auto depthBlitBarrier = framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2,
                                                                              Vulkan::GraphicsComputeWrite2);
 
-    constexpr int descriptorCount = framebuffer.GBufferMipLevelCount * 2;
-    Vkm::WriteDescriptorSet writes[descriptorCount];
-    Vkm::DescriptorImageInfo imageInfos[descriptorCount];
-    int index = 0;
-    nodeProcessDescriptors[0].EmplaceSrcTextureDescriptorWrite(framebuffer.DepthTexture.VkImageViewHandle, &imageInfos[index], &writes[index]); index++;
-    nodeProcessDescriptors[0].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[0], &imageInfos[index], &writes[index]); index++;
-    for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-        nodeProcessDescriptors[i].EmplaceSrcTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i - 1], &imageInfos[index], &writes[index]); index++;
-        nodeProcessDescriptors[i].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i], &imageInfos[index], &writes[index]); index++;
-    }
-    Vkm::UpdateDescriptorSets(Device->GetVkDevice(), descriptorCount, writes);
+    // constexpr int descriptorCount = framebuffer.GBufferMipLevelCount * 2;
+    // Vkm::WriteDescriptorSet writes[descriptorCount];
+    // Vkm::DescriptorImageInfo imageInfos[descriptorCount];
+    // int index = 0;
+    // nodeProcessDescriptors[0].EmplaceSrcTextureDescriptorWrite(framebuffer.DepthTexture.VkImageViewHandle, &imageInfos[index], &writes[index]);
+    // index++;
+    // nodeProcessDescriptors[0].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[0], &imageInfos[index], &writes[index]);
+    // index++;
+    // for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
+    //     nodeProcessDescriptors[i].EmplaceSrcTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i - 1], &imageInfos[index], &writes[index]);
+    //     index++;
+    //     nodeProcessDescriptors[i].EmplaceDstTextureDescriptorWrite(framebuffer.VkGbufferImageViewMipHandles[i], &imageInfos[index], &writes[index]);
+    //     index++;
+    // }
+    // Vkm::UpdateDescriptorSets(Device->GetVkDevice(), descriptorCount, writes);
 
     nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
-    // nodeProcessDescriptors->PushSrcDstTextureDescriptorWrite(commandBuffer,
-    //                                                          framebuffer.DepthTexture.VkImageViewHandle,
-    //                                                          framebuffer.VkGbufferImageViewMipHandles[0],
-    //                                                          nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
+    nodeProcessDescriptors[0].PushSrcDstTextureDescriptorWrite(commandBuffer,
+                                                               framebuffer.DepthTexture.VkImageViewHandle,
+                                                               framebuffer.VkGbufferImageViewMipHandles[0],
+                                                               nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
     const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize, Window::GetExtents().height / nodeProcessPipeline.LocalSize};
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
         Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
-        nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
-        // nodeProcessDescriptors->PushSrcDstTextureDescriptorWrite(commandBuffer,
-        //                                                          framebuffer.VkGbufferImageViewMipHandles[i - 1],
-        //                                                          framebuffer.VkGbufferImageViewMipHandles[i],
-        //                                                          nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
+        // nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[i]);
+        nodeProcessDescriptors[0].PushSrcDstTextureDescriptorWrite(commandBuffer,
+                                                                   framebuffer.VkGbufferImageViewMipHandles[i - 1],
+                                                                   framebuffer.VkGbufferImageViewMipHandles[i],
+                                                                   nodeProcessPipeline.VkSharedVkPipelineLayoutHandle);
         const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};
         vkCmdDispatch(commandBuffer,
                       mipGroupCount.width < 1 ? 1 : mipGroupCount.width,

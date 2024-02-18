@@ -36,11 +36,17 @@ Texture::Texture(const Vulkan::Device* device, const Texture::Info& info)
 
 Texture::~Texture()
 {
-    vkDestroyImageView(Device->GetVkDevice(), vkImageViewHandle, VK_ALLOC);
-    vkFreeMemory(Device->GetVkDevice(), vkDeviceMemory, VK_ALLOC);
-    vkDestroyImage(Device->GetVkDevice(), vkImageHandle, VK_ALLOC);
-    if (externalHandle != nullptr)
-        CloseHandle(externalHandle);
+    if (locality == Locality::Imported) {
+        vkDestroyImageView(Device->GetVkDevice(), vkImageViewHandle, VK_ALLOC);
+        if (externalHandle != nullptr)
+            CloseHandle(externalHandle);
+    } else {
+        vkDestroyImageView(Device->GetVkDevice(), vkImageViewHandle, VK_ALLOC);
+        vkFreeMemory(Device->GetVkDevice(), vkDeviceMemory, VK_ALLOC);
+        vkDestroyImage(Device->GetVkDevice(), vkImageHandle, VK_ALLOC);
+        if (externalHandle != nullptr)
+            CloseHandle(externalHandle);
+    }
 }
 
 MXC_RESULT Texture::InitFromFile(const char* file)

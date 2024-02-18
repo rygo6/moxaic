@@ -104,9 +104,9 @@ Swap::~Swap()
 {
     vkDestroySemaphore(Device->GetVkDevice(), vkAcquireCompleteSemaphore, VK_ALLOC);
     vkDestroySemaphore(Device->GetVkDevice(), vkRenderCompleteSemaphore, VK_ALLOC);
+    vkDestroySwapchainKHR(Device->GetVkDevice(), vkSwapchain, VK_ALLOC);
     for (int i = 0; i < SwapCount; ++i) {
         vkDestroyImageView(Device->GetVkDevice(), vkSwapImageViews[i], VK_ALLOC);
-        vkDestroyImage(Device->GetVkDevice(), vkSwapImages[i], VK_ALLOC);
     }
 }
 
@@ -205,6 +205,13 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
                                    vkSwapImages.data()));
 
     for (int i = 0; i < vkSwapImages.size(); ++i) {
+        const VkDebugUtilsObjectNameInfoEXT swapImageDebugInfo{
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .objectType = VK_OBJECT_TYPE_IMAGE,
+            .objectHandle = (uint64_t) vkSwapImages[i],
+            .pObjectName = "vkSwapImages"};
+        VkFunc.SetDebugUtilsObjectNameEXT(Device->VkDeviceHandle, &swapImageDebugInfo);
+
         Device->TransitionImageLayoutImmediate(vkSwapImages[i],
                                                VK_IMAGE_LAYOUT_UNDEFINED,
                                                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -235,6 +242,13 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
                                  &viewInfo,
                                  VK_ALLOC,
                                  &vkSwapImageViews[i]));
+
+        const VkDebugUtilsObjectNameInfoEXT swapImageViewDebugInfo{
+            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+            .objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+            .objectHandle = (uint64_t) vkSwapImageViews[i],
+            .pObjectName = "vkSwapImageViews"};
+        VkFunc.SetDebugUtilsObjectNameEXT(Device->VkDeviceHandle, &swapImageViewDebugInfo);
     }
 
     constexpr VkSemaphoreCreateInfo swapchainSemaphoreCreateInfo = {
@@ -256,6 +270,26 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
 
     this->dimensions = dimensions;
     this->format = surfaceFormat.format;
+
+
+    const VkDebugUtilsObjectNameInfoEXT swapchainDebugInfo{
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+      .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+      .objectHandle = (uint64_t) vkSwapchain,
+      .pObjectName = "vkSwapchain"};
+    VkFunc.SetDebugUtilsObjectNameEXT(Device->VkDeviceHandle, &swapchainDebugInfo);
+    const VkDebugUtilsObjectNameInfoEXT acquireCompleteSemaphoreDebugInfo{
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+      .objectType = VK_OBJECT_TYPE_SEMAPHORE,
+      .objectHandle = (uint64_t) vkAcquireCompleteSemaphore,
+      .pObjectName = "vkAcquireCompleteSemaphore"};
+    VkFunc.SetDebugUtilsObjectNameEXT(Device->VkDeviceHandle, &acquireCompleteSemaphoreDebugInfo);
+    const VkDebugUtilsObjectNameInfoEXT renderCompleteSemaphoreDebugInfo{
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+      .objectType = VK_OBJECT_TYPE_SEMAPHORE,
+      .objectHandle = (uint64_t) vkRenderCompleteSemaphore,
+      .pObjectName = "vkRenderCompleteSemaphore"};
+    VkFunc.SetDebugUtilsObjectNameEXT(Device->VkDeviceHandle, &renderCompleteSemaphoreDebugInfo);
 
     return MXC_SUCCESS;
 }
@@ -361,13 +395,13 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
     imageBlit.dstOffsets[0] = offsets[0];
     imageBlit.dstOffsets[1] = offsets[1];
     vkCmdBlitImage(commandBuffer,
-                               srcTexture.VkImageHandle,
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               vkSwapImages[swapIndex],
-                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               1,
-                               &imageBlit,
-                               VK_FILTER_NEAREST);
+                   srcTexture.VkImageHandle,
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   vkSwapImages[swapIndex],
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1,
+                   &imageBlit,
+                   VK_FILTER_NEAREST);
     const StaticArray transitionPresentBarrier{
       VkImageMemoryBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -393,15 +427,15 @@ void Swap::BlitToSwap(const VkCommandBuffer commandBuffer,
       },
     };
     vkCmdPipelineBarrier(commandBuffer,
-                                     VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                     VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-                                     0,
-                                     0,
-                                     nullptr,
-                                     0,
-                                     nullptr,
-                                     transitionPresentBarrier.size(),
-                                     transitionPresentBarrier.data());
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                         0,
+                         0,
+                         nullptr,
+                         0,
+                         nullptr,
+                         transitionPresentBarrier.size(),
+                         transitionPresentBarrier.data());
 }
 
 MXC_RESULT Swap::QueuePresent(const VkQueue& queue,

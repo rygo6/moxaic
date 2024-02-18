@@ -87,6 +87,30 @@ namespace Vkm
         constexpr operator VkDescriptorSetAllocateInfo() const { return *(VkDescriptorSetAllocateInfo*) this; }
     };
 
+    struct SwapChain
+    {
+        VkSwapchainKHR handle;
+        VkDevice deviceHandle;
+
+        void SetDebugInfo()
+        {
+            const VkDebugUtilsObjectNameInfoEXT swapchainDebugInfo{
+              .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+              .pNext = nullptr,
+              .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+              .objectHandle = (uint64_t) handle,
+              .pObjectName = "SwapChain"};
+            // VkFunc.SetDebugUtilsObjectNameEXT(Device->VkDeviceHandle, &swapchainDebugInfo);
+        }
+
+        ~SwapChain()
+        {
+            vkDestroySwapchainKHR(deviceHandle, handle, VK_NULL_HANDLE);
+        }
+
+        constexpr operator VkSwapchainKHR() const { return handle; }
+    };
+
     //------------------------------------------------------------------------------------
     // Functions Declaration
     //------------------------------------------------------------------------------------

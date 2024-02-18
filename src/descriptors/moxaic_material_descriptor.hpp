@@ -27,6 +27,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const Texture& texture)
         {
+            name = "StandardMaterial";
             // MXC_LOG("Init MaterialDescriptor");
             MXC_CHK(AllocateDescriptorSet());
             StaticArray writes{

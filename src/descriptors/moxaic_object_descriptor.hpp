@@ -15,6 +15,7 @@ namespace Moxaic::Vulkan
     public:
         using VulkanDescriptorBase::VulkanDescriptorBase;
 
+
         constexpr static int SetIndex = 2;
 
         struct UniformBuffer
@@ -37,6 +38,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const Transform& transform)
         {
+            name = "Object";
             // MXC_LOG("Init ObjectDescriptor");
             MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,

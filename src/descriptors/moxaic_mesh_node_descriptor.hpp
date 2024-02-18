@@ -45,6 +45,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const GlobalDescriptor::UniformBuffer& buffer, const Framebuffer& framebuffer)
         {
+            name = "MeshNode";
             MXC_LOG("Init MaterialDescriptor");
             SDL_assert(sharedVkDescriptorSetLayout != VK_NULL_HANDLE);
             SDL_assert(vkDescriptorSet == nullptr);

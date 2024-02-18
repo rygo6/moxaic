@@ -161,6 +161,8 @@ MXC_RESULT Node::InitImport(const ImportParam& parameters)
                                              parameters.depthFramebuffer1ExternalHandle);
 
     m_ImportedCompositorSemaphore.InitFromImport(true, parameters.compositorSemaphoreExternalHandle);
+
+    // this not being readonly means the node can corrupt it on crash, should this work different!?
     m_ImportedNodeSemaphore.InitFromImport(false, parameters.nodeSemaphoreExternalHandle);
 
     m_ImportedGlobalDescriptor.InitFromImport(k_TempSharedCamMemoryName);

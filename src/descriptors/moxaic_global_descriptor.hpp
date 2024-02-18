@@ -46,6 +46,7 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init(const Camera& camera, const VkExtent2D& dimensions)
         {
+            name = "Global";
             // MXC_LOG("Init GlobalDescriptor");
             MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,

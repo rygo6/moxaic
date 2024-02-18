@@ -283,7 +283,8 @@ namespace Moxaic::Vulkan
     VK_FUNC(GetSemaphoreWin32HandleKHR)    \
     VK_FUNC(ImportSemaphoreWin32HandleKHR) \
     VK_FUNC(CreateDebugUtilsMessengerEXT)  \
-    VK_FUNC(CmdPushDescriptorSetKHR)
+    VK_FUNC(CmdPushDescriptorSetKHR)       \
+    VK_FUNC(SetDebugUtilsObjectNameEXT)
 
 #define VK_FUNC(func) PFN_vk##func func;
         VK_FUNCS

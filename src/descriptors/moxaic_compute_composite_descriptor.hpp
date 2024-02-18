@@ -118,6 +118,8 @@ namespace Moxaic::Vulkan
                         const Texture& outputAtomicTexture,
                         const VkImageView outputColorImage)
         {
+            name = "ComputeComposite";
+
             // MXC_LOG("Init ComputeNodeDescriptor");
             MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,

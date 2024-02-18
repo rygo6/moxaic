@@ -17,11 +17,11 @@ namespace Moxaic::Vulkan
     template<typename Derived>
     class VulkanDescriptorBase2
     {
-
     protected:
         inline static const Device* device{VK_NULL_HANDLE};
         inline static VkDescriptorSetLayout vkSharedDescriptorSetLayoutHandle{VK_NULL_HANDLE};
         VkDescriptorSet vkDescriptorSetHandle{VK_NULL_HANDLE};
+        const char* name;
 
     public:
         const VkDescriptorSet& VkDescriptorSetHandle{vkDescriptorSetHandle};
@@ -110,6 +110,7 @@ namespace Moxaic::Vulkan
         // at some point layout will need to be a map on the device to support multiple devices
         inline static VkDescriptorSetLayout sharedVkDescriptorSetLayout{VK_NULL_HANDLE};
         VkDescriptorSet vkDescriptorSet{VK_NULL_HANDLE};
+        const char* name;
 
         static void CheckLayoutInitialized(const Vulkan::Device& device)
         {
@@ -154,6 +155,14 @@ namespace Moxaic::Vulkan
             VK_CHK(vkAllocateDescriptorSets(device->GetVkDevice(),
                                             &allocInfo,
                                             &vkDescriptorSet));
+
+            const VkDebugUtilsObjectNameInfoEXT debugInfo{
+                .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                .objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
+                .objectHandle = (uint64_t) vkDescriptorSet,
+                .pObjectName = name};
+            VkFunc.SetDebugUtilsObjectNameEXT(device->VkDeviceHandle, &debugInfo);
+
             return MXC_SUCCESS;
         }
 

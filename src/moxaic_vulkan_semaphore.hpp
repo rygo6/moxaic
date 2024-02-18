@@ -21,9 +21,9 @@ namespace Moxaic::Vulkan
 
         VkSemaphore vkSemaphore{VK_NULL_HANDLE};
 
-#ifdef WIN32
+        Locality locality{Locality::Local};
+
         HANDLE externalHandle{nullptr};
-#endif
 
     public:
         const VkSemaphore& VkSemaphoreHandle{vkSemaphore};
@@ -42,6 +42,11 @@ namespace Moxaic::Vulkan
         MXC_RESULT Wait() const;
 
         HANDLE ClonedExternalHandle(HANDLE const& hTargetProcessHandle) const;
+
+        bool IsExternalHandleValid() {
+            DWORD dwFlags;
+            return GetHandleInformation(externalHandle, &dwFlags) != 0;
+        }
 
         uint64_t localWaitValue{0};
 

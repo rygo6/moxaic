@@ -1,4 +1,4 @@
-#define MXC_DISABLE_LOG
+// #define MXC_DISABLE_LOG
 
 #include "moxaic_vulkan_semaphore.hpp"
 #include "moxaic_vulkan_device.hpp"
@@ -18,15 +18,29 @@ Semaphore::Semaphore(const Vulkan::Device* const device)
 
 Semaphore::~Semaphore()
 {
-    if (externalHandle != nullptr)
-        CloseHandle(externalHandle);
-
-    vkDestroySemaphore(Device->GetVkDevice(), vkSemaphore, VK_ALLOC);
+    switch (locality) {
+        case Locality::Local:
+            MXC_LOG("Destroy Semaphore Local");
+            vkDestroySemaphore(Device->GetVkDevice(), vkSemaphore, VK_ALLOC);
+            break;
+        case Locality::External:
+            MXC_LOG("Destroy Semaphore External");
+            vkDestroySemaphore(Device->GetVkDevice(), vkSemaphore, VK_ALLOC);
+            if (externalHandle != nullptr)
+                CloseHandle(externalHandle);
+            break;
+        case Locality::Imported:
+            MXC_LOG("Destroy Semaphore Imported");
+            if (externalHandle != nullptr)
+                CloseHandle(externalHandle);
+            break;
+    }
 }
 
 MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
 {
     MXC_LOG("Vulkan::Semaphore::Init", string_Locality(locality));
+    this->locality = locality;
     const VkExportSemaphoreWin32HandleInfoKHR exportSemaphoreWin32HandleInfo{
       .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
       .pNext = nullptr,
@@ -38,7 +52,9 @@ MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
     };
     const VkExportSemaphoreCreateInfo exportSemaphoreCreateInfo{
       .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
-      .pNext = locality == Locality::External ? &exportSemaphoreWin32HandleInfo : nullptr,
+      .pNext = locality == Locality::External || locality == Locality::Imported ?
+                 &exportSemaphoreWin32HandleInfo :
+                 nullptr,
       .handleTypes = MXC_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
     };
     const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo{
@@ -56,7 +72,7 @@ MXC_RESULT Semaphore::Init(const bool readOnly, const Locality locality)
                              &timelineSemaphoreCreateInfo,
                              VK_ALLOC,
                              &vkSemaphore));
-    if (locality == Locality::External) {
+    if (locality == Locality::External || locality == Locality::Imported) {
 #ifdef WIN32
         const VkSemaphoreGetWin32HandleInfoKHR semaphoreGetWin32HandleInfo{
           .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
@@ -103,7 +119,7 @@ HANDLE Semaphore::ClonedExternalHandle(const HANDLE& hTargetProcessHandle) const
 
 MXC_RESULT Semaphore::InitFromImport(const bool readOnly, const HANDLE externalHandle)
 {
-    MXC_CHK(Init(readOnly, Locality::External));
+    MXC_CHK(Init(readOnly, Locality::Imported));
 #ifdef WIN32
     const VkImportSemaphoreWin32HandleInfoKHR importSemaphoreWin32HandleInfo{
       .sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
