@@ -379,7 +379,7 @@ MXC_RESULT NodeScene::Init()
 
     MXC_CHK(nodeProcessPipeline.Init());
     for (int i = 0; i < Vulkan::Framebuffer::GBufferMipLevelCount; ++i) {
-        VK_CHK(nodeProcessDescriptors[i].Init());
+        // VK_CHK(nodeProcessDescriptors[i].Init());
     }
 
     MXC_CHK(standardPipeline.Init());
@@ -463,7 +463,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     // }
     // Vkm::UpdateDescriptorSets(Device->GetVkDevice(), descriptorCount, writes);
 
-    nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
+    // nodeProcessPipeline.BindDescriptor(commandBuffer, nodeProcessDescriptors[0]);
     nodeProcessDescriptors[0].PushSrcDstTextureDescriptorWrite(commandBuffer,
                                                                framebuffer.DepthTexture.VkImageViewHandle,
                                                                framebuffer.VkGbufferImageViewMipHandles[0],

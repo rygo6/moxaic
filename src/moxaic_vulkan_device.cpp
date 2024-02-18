@@ -298,6 +298,7 @@ MXC_RESULT Device::CreateDevice()
       VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
       VK_EXT_MESH_SHADER_EXTENSION_NAME,
       VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+      VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
       // Required by VK_KHR_spirv_1_4 - https://github.com/SaschaWillems/Vulkan/blob/master/examples/meshshader/meshshader.cpp
       // VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
       VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
@@ -1128,8 +1129,8 @@ void Device::BeginRenderPass(const Framebuffer& framebuffer,
       .pClearValues = clearValues.data(),
     };
     vkCmdBeginRenderPass(vkGraphicsCommandBuffer,
-                                     &renderPassBeginInfo,
-                                     VK_SUBPASS_CONTENTS_INLINE);
+                         &renderPassBeginInfo,
+                         VK_SUBPASS_CONTENTS_INLINE);
 }
 
 MXC_RESULT Device::SubmitGraphicsQueue(Semaphore* const pTimelineSemaphore) const

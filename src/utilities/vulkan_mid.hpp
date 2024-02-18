@@ -179,7 +179,7 @@ VkResult Vkm::CreateDescriptorSetLayout(
     const VkDescriptorSetLayoutCreateInfo layoutInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .pNext = nullptr,
-      .flags = 0,
+      .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
       .bindingCount = bindingsCount,
       .pBindings = (VkDescriptorSetLayoutBinding*) pBindings,
     };
