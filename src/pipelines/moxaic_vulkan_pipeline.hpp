@@ -20,16 +20,16 @@ namespace Moxaic::Vulkan
     {
         FILE* file = fopen(filename, "rb");
         if (file == nullptr) {
-            MXC_LOG("File can't be opened!", filename);
+            printf("File can't be opened! %s\n", filename);
             return MXC_FAIL;
         }
         fseek(file, 0, SEEK_END);
         *length = ftell(file);
         rewind(file);
-        *ppContents = static_cast<char*>(calloc(1 + *length, sizeof(char)));
+        *ppContents = (char*)calloc(1 + *length, sizeof(char));
         const size_t readCount = fread(*ppContents, *length, 1, file);
         if (readCount == 0) {
-            MXC_LOG("Failed to read file!", filename);
+            printf("Failed to read file! %s\n", filename);
             return MXC_FAIL;
         }
         fclose(file);

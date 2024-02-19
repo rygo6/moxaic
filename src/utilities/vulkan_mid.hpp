@@ -7,13 +7,36 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include <vulkan/vk_enum_string_helper.h>
 
 #define VKM_DEFAULT_IMAGE_LAYOUT VK_IMAGE_LAYOUT_GENERAL
 #define VKM_DEFAULT_DESCRIPTOR_TYPE VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-#define VKM_DEFAULT_SHADER_STAGE VK_SHADER_STAGE_FRAGMENT_BIT
+#define VKM_DEFAULT_SHADER_STAGE VK_SHADER_STAGE_COMPUTE_BIT
+#define VKM_ALLOCATOR nullptr
+
+#define VKM_CHECK(command)                               \
+    {                                                    \
+        VkResult result = command;                       \
+        if (result != VK_SUCCESS) [[unlikely]] {         \
+            printf("VKCheck fail on command: %s - %s\n", \
+                   #command,                             \
+                   string_VkResult(result));             \
+            return result;                               \
+        }                                                \
+    }
 
 namespace Vkm
 {
+    struct
+    {
+#define VK_FUNCS                           \
+    VK_FUNC(SetDebugUtilsObjectNameEXT)
+
+#define VK_FUNC(func) PFN_vk##func func;
+        VK_FUNCS
+#undef VK_FUNC
+    } PFN;
+
     struct VkFormatAspect
     {
         VkFormat format;
@@ -30,14 +53,6 @@ namespace Vkm
         uint32_t layerCount;
         VkImage image;
         VkImageView view;
-    };
-
-    constexpr VkDescriptorSetLayoutBinding defaultBinding{
-      .binding{},
-      .descriptorType{},
-      .descriptorCount{},
-      .stageFlags{},
-      .pImmutableSamplers{},
     };
 
     struct DescriptorSetLayoutBinding
@@ -76,6 +91,17 @@ namespace Vkm
         constexpr operator VkWriteDescriptorSet() const { return *(VkWriteDescriptorSet*) this; }
     };
 
+    struct DescriptorSetLayoutCreateInfo
+    {
+        const VkStructureType sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+        const void* pNext{nullptr};
+        const VkDescriptorSetLayoutCreateFlags flags{0};
+        const uint32_t bindingCount{1};
+        const DescriptorSetLayoutBinding* pBindings{nullptr};
+
+        constexpr operator VkDescriptorSetLayoutCreateInfo() const { return *(VkDescriptorSetLayoutCreateInfo*) this; }
+    };
+
     struct DescriptorSetAllocateInfo
     {
         const VkStructureType sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
@@ -87,28 +113,271 @@ namespace Vkm
         constexpr operator VkDescriptorSetAllocateInfo() const { return *(VkDescriptorSetAllocateInfo*) this; }
     };
 
+    struct DebugUtilsObjectNameInfoEXT
+    {
+        const VkStructureType sType{VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
+        const void* pNext{nullptr};
+        const VkObjectType objectType{};
+        const uint64_t objectHandle{};
+        const char* pObjectName{"unnamed"};
+
+        constexpr operator VkDebugUtilsObjectNameInfoEXT() const { return *(VkDebugUtilsObjectNameInfoEXT*) this; }
+    };
+
+    struct PipelineLayoutCreateInfo
+    {
+        const VkStructureType sType{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+        const void* pNext{nullptr};
+        const VkPipelineLayoutCreateFlags flags{};
+        const uint32_t setLayoutCount{1};
+        const VkDescriptorSetLayout* pSetLayouts{nullptr};
+        const uint32_t pushConstantRangeCount{0};
+        const VkPushConstantRange* pPushConstantRanges{nullptr};
+
+        constexpr operator VkPipelineLayoutCreateInfo() const { return *(VkPipelineLayoutCreateInfo*) this; }
+    };
+
+    struct PipelineShaderStageCreateInfo
+    {
+        const VkStructureType sType{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        const void* const pNext{nullptr};
+        const VkPipelineShaderStageCreateFlags flags{};
+        const VkShaderStageFlagBits stage{VKM_DEFAULT_SHADER_STAGE};
+        const VkShaderModule module{VK_NULL_HANDLE};
+        const char* const pName{nullptr};
+        const VkSpecializationInfo* pSpecializationInfo{nullptr};
+
+        constexpr operator VkPipelineShaderStageCreateInfo() const { return *(VkPipelineShaderStageCreateInfo*) this; }
+    };
+
+    struct ComputePipelineCreateInfo
+    {
+        const VkStructureType sType{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        const void* const pNext{nullptr};
+        const VkPipelineCreateFlags flags{0};
+        const PipelineShaderStageCreateInfo stage{};
+        const VkPipelineLayout layout{VK_NULL_HANDLE};
+        const VkPipeline basePipelineHandle{VK_NULL_HANDLE};
+        const int32_t basePipelineIndex{0};
+
+        constexpr operator VkComputePipelineCreateInfo() const { return *(VkComputePipelineCreateInfo*) this; }
+    };
+
+    struct Error
+    {
+        const char* command;
+        const VkResult result;
+    };
+
+    // Handles
+
     struct SwapChain
     {
-        VkSwapchainKHR handle;
-        VkDevice deviceHandle;
+        const VkSwapchainKHR handle{VK_NULL_HANDLE};
+        const VkDevice deviceHandle{VK_NULL_HANDLE};
 
-        void SetDebugInfo()
+        void SetDebugInfo(VkDevice device)
         {
-            const VkDebugUtilsObjectNameInfoEXT swapchainDebugInfo{
-              .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-              .pNext = nullptr,
+            const DebugUtilsObjectNameInfoEXT debugInfo{
               .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
               .objectHandle = (uint64_t) handle,
-              .pObjectName = "SwapChain"};
-            // VkFunc.SetDebugUtilsObjectNameEXT(Device->VkDeviceHandle, &swapchainDebugInfo);
+              .pObjectName = "SwapChain",
+            };
+            PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
         }
 
         ~SwapChain()
         {
-            vkDestroySwapchainKHR(deviceHandle, handle, VK_NULL_HANDLE);
+            if (handle != VK_NULL_HANDLE)
+                vkDestroySwapchainKHR(deviceHandle, handle, VKM_ALLOCATOR);
         }
 
         constexpr operator VkSwapchainKHR() const { return handle; }
+    };
+
+    struct DescriptorSetLayout
+    {
+        VkDescriptorSetLayout handle{VK_NULL_HANDLE};
+        VkDevice deviceHandle{VK_NULL_HANDLE};
+
+        VkResult Create(const VkDevice device,
+                        const char* const name,
+                        const Vkm::DescriptorSetLayoutCreateInfo* const pCreateInfo)
+        {
+            deviceHandle = device;
+            VKM_CHECK(vkCreateDescriptorSetLayout(device, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
+            const DebugUtilsObjectNameInfoEXT debugInfo{
+              .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+              .objectHandle = (uint64_t) handle,
+              .pObjectName = name,
+            };
+            return PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
+        }
+
+        ~DescriptorSetLayout()
+        {
+            if (handle != VK_NULL_HANDLE)
+                vkDestroyDescriptorSetLayout(deviceHandle, handle, VKM_ALLOCATOR);
+        }
+
+        constexpr operator VkDescriptorSetLayout() const { return handle; }
+    };
+
+    struct DescriptorSet
+    {
+        const VkDescriptorSet handle{VK_NULL_HANDLE};
+        const VkDevice deviceHandle{VK_NULL_HANDLE};
+        const VkDescriptorPool descriptorPoolHandle{VK_NULL_HANDLE};
+
+        void SetDebugInfo(VkDevice device, const char* const name)
+        {
+            const DebugUtilsObjectNameInfoEXT debugInfo{
+              .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+              .objectHandle = (uint64_t) handle,
+              .pObjectName = name,
+            };
+            PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
+        }
+
+        ~DescriptorSet()
+        {
+            if (handle != VK_NULL_HANDLE)
+                vkFreeDescriptorSets(deviceHandle, descriptorPoolHandle, 1, &handle);
+        }
+
+        constexpr operator VkDescriptorSet() const { return handle; }
+    };
+
+    struct PipelineLayout
+    {
+        VkPipelineLayout handle{VK_NULL_HANDLE};
+        VkDevice deviceHandle{VK_NULL_HANDLE};
+
+        VkResult Create(const VkDevice device,
+                        const char* const name,
+                        const Vkm::PipelineLayoutCreateInfo* const pCreateInfo)
+        {
+            deviceHandle = device;
+            VKM_CHECK(vkCreatePipelineLayout(device,
+                                             (VkPipelineLayoutCreateInfo*) pCreateInfo,
+                                             VKM_ALLOCATOR,
+                                             &handle));
+            const DebugUtilsObjectNameInfoEXT debugInfo{
+              .objectType = VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+              .objectHandle = (uint64_t) handle,
+              .pObjectName = name,
+            };
+            return PFN.SetDebugUtilsObjectNameEXT(device,
+                                                  (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
+        }
+
+        ~PipelineLayout()
+        {
+            if (handle != VK_NULL_HANDLE)
+                vkDestroyPipelineLayout(deviceHandle, handle, VKM_ALLOCATOR);
+        }
+
+        constexpr operator VkPipelineLayout() const { return handle; }
+    };
+
+    inline VkResult ReadFile(const char* filename,
+                             uint32_t* length,
+                             char** ppContents)
+    {
+        FILE* file;
+        if (!fopen_s(&file, filename, "rb")) {
+            printf("File can't be opened! %s\n", filename);
+            return VK_ERROR_INVALID_SHADER_NV;
+        }
+        fseek(file, 0, SEEK_END);
+        *length = ftell(file);
+        rewind(file);
+        *ppContents = (char*) calloc(1 + *length, sizeof(char));
+        const size_t readCount = fread_s(*ppContents, *length, *length, 1, file);
+        if (readCount == 0) {
+            printf("Failed to read file! %s\n", filename);
+            return VK_ERROR_INVALID_SHADER_NV;
+        }
+        fclose(file);
+        return VK_SUCCESS;
+    }
+
+    struct ShaderModule
+    {
+        VkShaderModule handle{VK_NULL_HANDLE};
+        VkDevice deviceHandle{VK_NULL_HANDLE};
+
+        VkResult Create(const VkDevice device,
+                        const char* const pShaderPath)
+        {
+            deviceHandle = device;
+            uint32_t codeLength;
+            char* pShaderCode;
+            VKM_CHECK(ReadFile(pShaderPath,
+                               &codeLength,
+                               &pShaderCode));
+            const VkShaderModuleCreateInfo createInfo{
+              .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+              .pNext = nullptr,
+              .flags = 0,
+              .codeSize = codeLength,
+              .pCode = (const uint32_t*) pShaderCode,
+            };
+            VKM_CHECK(vkCreateShaderModule(device,
+                                           &createInfo,
+                                           VKM_ALLOCATOR,
+                                           &handle));
+            const DebugUtilsObjectNameInfoEXT debugInfo{
+              .objectType = VK_OBJECT_TYPE_SHADER_MODULE,
+              .objectHandle = (uint64_t) handle,
+              .pObjectName = pShaderPath,
+            };
+            VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
+            free(pShaderCode);
+            return VK_SUCCESS;
+        }
+
+        ~ShaderModule()
+        {
+            if (handle != VK_NULL_HANDLE)
+                vkDestroyShaderModule(deviceHandle, handle, VKM_ALLOCATOR);
+        }
+
+        constexpr operator VkShaderModule() const { return handle; }
+    };
+
+    struct ComputePipeline
+    {
+        VkPipeline handle{VK_NULL_HANDLE};
+        VkDevice deviceHandle{VK_NULL_HANDLE};
+
+        VkResult Create(const VkDevice device,
+                        const char* const name,
+                        const Vkm::ComputePipelineCreateInfo* const pCreateInfo)
+        {
+            deviceHandle = device;
+            VKM_CHECK(vkCreateComputePipelines(device,
+                                               VK_NULL_HANDLE,
+                                               1,
+                                               (VkComputePipelineCreateInfo*) pCreateInfo,
+                                               VKM_ALLOCATOR,
+                                               &handle));
+            const DebugUtilsObjectNameInfoEXT debugInfo{
+              .objectType = VK_OBJECT_TYPE_PIPELINE,
+              .objectHandle = (uint64_t) handle,
+              .pObjectName = name,
+            };
+            VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
+            return VK_SUCCESS;
+        }
+
+        ~ComputePipeline()
+        {
+            if (handle != VK_NULL_HANDLE)
+                vkDestroyPipeline(deviceHandle, handle, VKM_ALLOCATOR);
+        }
+
+        constexpr operator VkPipeline() const { return handle; }
     };
 
     //------------------------------------------------------------------------------------
@@ -123,11 +392,13 @@ namespace Vkm
       uint32_t imageMemoryBarrierCount,
       const VkImageMemoryBarrier2* pImageMemoryBarriers);
 
-    VkResult CreateDescriptorSetLayout(
-      VkDevice device,
-      uint32_t bindingsCount,
-      const DescriptorSetLayoutBinding* bindings,
-      VkDescriptorSetLayout* pSetLayout);
+    inline VkResult CreateDescriptorSetLayout(
+      const VkDevice device,
+      const Vkm::DescriptorSetLayoutCreateInfo* pCreateInfo,
+      VkDescriptorSetLayout* pSetLayout)
+    {
+        return vkCreateDescriptorSetLayout(device, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, pSetLayout);
+    }
 
     inline void UpdateDescriptorSets(
       VkDevice device,
@@ -168,25 +439,6 @@ void Vkm::CmdPipelineImageBarrier2(
       .pImageMemoryBarriers = pImageMemoryBarriers,
     };
     vkCmdPipelineBarrier2(commandBuffer, &toComputeDependencyInfo);
-}
-
-VkResult Vkm::CreateDescriptorSetLayout(
-  const VkDevice device,
-  const uint32_t bindingsCount,
-  const Vkm::DescriptorSetLayoutBinding* pBindings,
-  VkDescriptorSetLayout* const pSetLayout)
-{
-    const VkDescriptorSetLayoutCreateInfo layoutInfo{
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-      .bindingCount = bindingsCount,
-      .pBindings = (VkDescriptorSetLayoutBinding*) pBindings,
-    };
-    return vkCreateDescriptorSetLayout(device,
-                                       &layoutInfo,
-                                       nullptr,
-                                       pSetLayout);
 }
 
 VkResult vkCreateImageView2D(

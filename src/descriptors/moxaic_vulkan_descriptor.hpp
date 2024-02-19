@@ -40,9 +40,13 @@ namespace Moxaic::Vulkan
         static VkResult InitLayout(const Vulkan::Device& device)
         {
             VulkanDescriptorBase2::device = &device;
+            const Vkm::DescriptorSetLayoutCreateInfo createInfo{
+              .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+              .bindingCount = Derived::LayoutBindings.size(),
+              .pBindings = Derived::LayoutBindings.data(),
+            };
             return Vkm::CreateDescriptorSetLayout(device.GetVkDevice(),
-                                                  Derived::LayoutBindings.size(),
-                                                  Derived::LayoutBindings.data(),
+                                                  &createInfo,
                                                   &vkSharedDescriptorSetLayoutHandle);
         }
 
