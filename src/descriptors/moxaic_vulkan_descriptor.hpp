@@ -4,7 +4,7 @@
 #include "moxaic_logging.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
-#include "vulkan_mid.hpp"
+#include "vulkan_medium.hpp"
 
 #include <vulkan/vulkan.h>
 

@@ -3,7 +3,7 @@
 #include "moxaic_vulkan_descriptor.hpp"
 #include "moxaic_vulkan_texture.hpp"
 #include "static_array.hpp"
-#include "vulkan_mid.hpp"
+#include "vulkan_medium.hpp"
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>

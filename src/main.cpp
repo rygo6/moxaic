@@ -6,9 +6,7 @@
 #include "stb_image.h"
 
 #define VULKAN_MEDIUM_IMPLEMENTATION
-#include "vulkan_mid.hpp"
-
-#include <iostream>
+#include "vulkan_medium.hpp"
 
 using namespace Moxaic;
 

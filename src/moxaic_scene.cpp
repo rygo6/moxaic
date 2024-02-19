@@ -2,7 +2,7 @@
 
 #include "moxaic_scene.hpp"
 #include "moxaic_window.hpp"
-#include "vulkan_mid.hpp"
+#include "vulkan_medium.hpp"
 
 #include <thread>
 
