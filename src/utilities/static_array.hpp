@@ -17,7 +17,7 @@ namespace Moxaic
         const T* end() const { return internalData + N; }
 
         T* data() { return internalData; }
-        const T* data() const { return internalData; }
+        constexpr const T* data() const { return internalData; }
         constexpr uint32_t size() const { return N; }
     };
 

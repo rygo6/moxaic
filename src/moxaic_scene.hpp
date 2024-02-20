@@ -127,7 +127,10 @@ namespace Moxaic
         Vulkan::StandardMaterialDescriptor materialDescriptor{Device};
         Vulkan::ObjectDescriptor objectDescriptor{Device};
 
-        Vulkan::NodeProcessPipeline nodeProcessPipeline{Device, "./shaders/node_process.comp.spv"};
+        Vulkan::NodeProcessDescriptorLayout nodeProcessDescriptorLayout{Device->VkDeviceHandle};
+        Vulkan::NodeProcessPipelineLayout nodeProcessPipelineLayout{nodeProcessDescriptorLayout};
+        Vulkan::NodeProcessPipeline nodeProcessPipeline{"./shaders/node_process.comp.spv",
+                                                        nodeProcessPipelineLayout};
 
         Camera mainCamera{};
 

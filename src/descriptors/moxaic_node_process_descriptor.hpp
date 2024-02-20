@@ -10,14 +10,9 @@
 
 namespace Moxaic::Vulkan
 {
-    class NodeProcessDescriptorLayout
+    struct NodeProcessDescriptorLayout : Vkm::DescriptorSetLayout
     {
-        MXC_NO_VALUE_PASS(NodeProcessDescriptorLayout);
-        Vkm::DescriptorSetLayout descriptorSetLayout{};
-
-    public:
-        const VkDescriptorSetLayout& Handle{descriptorSetLayout};
-        const char* const Name{"NodeProcessDescriptorLayout"};
+        constexpr static const char* Name{"NodeProcessDescriptorLayout"};
         constexpr static uint32_t SetIndex = 0;
         enum BindingIndex : uint32_t {
             SrcTexture,
@@ -35,70 +30,22 @@ namespace Moxaic::Vulkan
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
           },
         };
+        constexpr static Vkm::DescriptorSetLayoutCreateInfo CreateInfo{
+          .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+          .bindingCount = LayoutBindings.size(),
+          .pBindings = LayoutBindings.data(),
+        };
 
-        VkResult Init(const Vulkan::Device& device)
+        NodeProcessDescriptorLayout(const VkDevice deviceHandle)
         {
-            const Vkm::DescriptorSetLayoutCreateInfo createInfo{
-              .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-              .bindingCount = LayoutBindings.size(),
-              .pBindings = LayoutBindings.data(),
-            };
-            return descriptorSetLayout.Create(device.VkDeviceHandle, Name, &createInfo);
+            VKM_ASSERT(Create(deviceHandle));
         }
-    };
 
-    class NodeProcessPipelineLayout
-    {
-        MXC_NO_VALUE_PASS(NodeProcessPipelineLayout);
-        Vkm::PipelineLayout pipelineLayout{};
-
-    public:
-        const VkPipelineLayout& Handle{pipelineLayout};
-        const char* const Name{"NodeProcessPipelinLayout"};
-
-        VkResult Init(const Vulkan::Device& device,
-                      const NodeProcessDescriptorLayout& nodeProcessDescriptorLayout)
+        VkResult Create(const VkDevice deviceHandle)
         {
-            const StaticArray setLayouts{
-              nodeProcessDescriptorLayout.Handle,
-            };
-            const Vkm::PipelineLayoutCreateInfo createInfo{
-              .setLayoutCount = setLayouts.size(),
-              .pSetLayouts = setLayouts.data(),
-            };
-            return pipelineLayout.Create(device.VkDeviceHandle, Name, &createInfo);
+            return Vkm::DescriptorSetLayout::Create(deviceHandle, Name, &CreateInfo);
         }
-    };
 
-    class NodeProcessPipeline2
-    {
-        MXC_NO_VALUE_PASS(NodeProcessPipeline2);
-        Vkm::ComputePipeline pipeline{};
-
-    public:
-        const VkPipeline& Handle{pipeline.handle};
-        const char* const Name{"NodeProcessPipeline"};
-
-        VkResult Init(const Vulkan::Device& device,
-                      const char* const shaderPath,
-                      const NodeProcessPipelineLayout& layout)
-        {
-            Vkm::ShaderModule shader;
-            shader.Create(device.VkDeviceHandle, shaderPath);
-            const Vkm::ComputePipelineCreateInfo createInfo{
-              .stage{
-                .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-                .module = shader,
-                .pName = "main",
-              },
-              .layout = layout.Handle,
-            };
-            return pipeline.Create(device.VkDeviceHandle, Name, &createInfo);
-        }
-    };
-
-    class NodeProcessPushDescriptor
-    {
         static void EmplaceDescriptorWrite(const uint32_t bindingIndex,
                                            const Vkm::DescriptorImageInfo* pImageInfo,
                                            Vkm::WriteDescriptorSet* pWriteDescriptorSet)
@@ -132,27 +79,75 @@ namespace Moxaic::Vulkan
               .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
             EmplaceDescriptorWrite(NodeProcessDescriptorLayout::BindingIndex::DstTexture, pImageInfo, pWriteDescriptorSet);
         }
+    };
 
-    public:
-        static void PushSrcDstTextureDescriptorWrite(VkCommandBuffer commandBuffer,
-                                                     const VkSampler srcSampler,
-                                                     const VkImageView srcImageView,
-                                                     const VkImageView dstImageView,
-                                                     const NodeProcessPipelineLayout& layout)
+    struct NodeProcessPipelineLayout : Vkm::PipelineLayout
+    {
+        constexpr static const char* Name{"NodeProcessPipelinLayout"};
+
+        NodeProcessPipelineLayout(const NodeProcessDescriptorLayout& nodeProcessDescriptorLayout)
+        {
+            VKM_ASSERT(Create(nodeProcessDescriptorLayout));
+        }
+
+        VkResult Create(const NodeProcessDescriptorLayout& nodeProcessDescriptorLayout)
+        {
+            const StaticArray setLayouts{
+              nodeProcessDescriptorLayout.handle,
+            };
+            const Vkm::PipelineLayoutCreateInfo createInfo{
+              .setLayoutCount = setLayouts.size(),
+              .pSetLayouts = setLayouts.data(),
+            };
+            return Vkm::PipelineLayout::Create(nodeProcessDescriptorLayout.deviceHandle, Name, &createInfo);
+        }
+
+        void PushSrcDstTextureDescriptorWrite(const VkCommandBuffer commandBuffer,
+                                              const VkSampler srcSampler,
+                                              const VkImageView srcImageView,
+                                              const VkImageView dstImageView)
         {
             Vkm::DescriptorImageInfo imageInfos[2];
             Vkm::WriteDescriptorSet writes[2];
-            EmplaceSrcTextureImageInfo(srcImageView, srcSampler, &imageInfos[0], &writes[0]);
-            EmplaceDstTextureImageInfo(dstImageView, &imageInfos[1], &writes[1]);
+            NodeProcessDescriptorLayout::EmplaceSrcTextureImageInfo(srcImageView, srcSampler, &imageInfos[0], &writes[0]);
+            NodeProcessDescriptorLayout::EmplaceDstTextureImageInfo(dstImageView, &imageInfos[1], &writes[1]);
             VkFunc.CmdPushDescriptorSetKHR(commandBuffer,
                                            VK_PIPELINE_BIND_POINT_COMPUTE,
-                                           layout.Handle,
+                                           handle,
                                            NodeProcessDescriptorLayout::SetIndex,
                                            2,
                                            (VkWriteDescriptorSet*) writes);
         }
     };
 
+    struct NodeProcessPipeline : Vkm::ComputePipeline
+    {
+        constexpr static const char* Name{"NodeProcessPipeline"};
+        constexpr static int LocalSize{32};
+
+        NodeProcessPipeline(const char* const shaderPath,
+                            const NodeProcessPipelineLayout& layout)
+        {
+            VKM_ASSERT(Create(shaderPath, layout));
+        }
+
+        VkResult Create(const char* const shaderPath,
+                        const NodeProcessPipelineLayout& layout)
+        {
+            Vkm::ShaderModule shader;
+            VKM_CHECK(shader.Create(layout.deviceHandle, shaderPath));
+            const Vkm::PipelineShaderStageCreateInfo stage{
+              .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+              .module = shader,
+              .pName = "main",
+            };
+            const Vkm::ComputePipelineCreateInfo createInfo{
+              .stage = stage,
+              .layout = layout,
+            };
+            return Vkm::ComputePipeline::Create(layout.deviceHandle, Name, &createInfo);
+        }
+    };
 
     class NodeProcessDescriptor : public VulkanDescriptorBase2<NodeProcessDescriptor>
     {

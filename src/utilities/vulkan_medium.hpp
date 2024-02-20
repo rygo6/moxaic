@@ -6,13 +6,15 @@
 
 #pragma once
 
-#include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
+#include <vulkan/vulkan.h>
 
 #define VKM_DEFAULT_IMAGE_LAYOUT VK_IMAGE_LAYOUT_GENERAL
 #define VKM_DEFAULT_DESCRIPTOR_TYPE VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
 #define VKM_DEFAULT_SHADER_STAGE VK_SHADER_STAGE_COMPUTE_BIT
 #define VKM_ALLOCATOR nullptr
+
+#define VKM_ASSERT(command) assert(command == VK_SUCCESS)
 
 #define VKM_CHECK(command)                               \
     {                                                    \
@@ -25,11 +27,12 @@
         }                                                \
     }
 
+
 namespace Vkm
 {
     struct
     {
-#define VK_FUNCS                           \
+#define VK_FUNCS \
     VK_FUNC(SetDebugUtilsObjectNameEXT)
 
 #define VK_FUNC(func) PFN_vk##func func;
@@ -163,6 +166,17 @@ namespace Vkm
         constexpr operator VkComputePipelineCreateInfo() const { return *(VkComputePipelineCreateInfo*) this; }
     };
 
+    struct ShaderModuleCreateInfo
+    {
+        const VkStructureType sType{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        const void* pNext{nullptr};
+        VkShaderModuleCreateFlags flags{0};
+        size_t codeSize{0};
+        const uint32_t* pCode{nullptr};
+
+        constexpr operator VkShaderModuleCreateInfo() const { return *(VkShaderModuleCreateInfo*) this; }
+    };
+
     struct Error
     {
         const char* command;
@@ -171,8 +185,17 @@ namespace Vkm
 
     // Handles
 
+    // No matter how you fiddle it, vulkan handles are not safe. Encapsulation just doesn't make much sense.
+
+#define VKM_HANDLE_CONSTRUCTOR(name) \
+    name() = default;                \
+    name(const name&) = delete;      \
+    name& operator=(const name&) = delete;
+
     struct SwapChain
     {
+        VKM_HANDLE_CONSTRUCTOR(SwapChain)
+
         const VkSwapchainKHR handle{VK_NULL_HANDLE};
         const VkDevice deviceHandle{VK_NULL_HANDLE};
 
@@ -197,21 +220,24 @@ namespace Vkm
 
     struct DescriptorSetLayout
     {
+        VKM_HANDLE_CONSTRUCTOR(DescriptorSetLayout)
+
         VkDescriptorSetLayout handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
-        VkResult Create(const VkDevice device,
+        VkResult Create(const VkDevice deviceHandle,
                         const char* const name,
                         const Vkm::DescriptorSetLayoutCreateInfo* const pCreateInfo)
         {
-            deviceHandle = device;
-            VKM_CHECK(vkCreateDescriptorSetLayout(device, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
-            const DebugUtilsObjectNameInfoEXT debugInfo{
-              .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
-              .objectHandle = (uint64_t) handle,
-              .pObjectName = name,
-            };
-            return PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
+            this->deviceHandle = deviceHandle;
+            VKM_CHECK(vkCreateDescriptorSetLayout(deviceHandle, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
+            // const DebugUtilsObjectNameInfoEXT debugInfo{
+            //   .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+            //   .objectHandle = (uint64_t) handle,
+            //   .pObjectName = name,
+            // };
+            // VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(deviceHandle, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
+            return VK_SUCCESS;
         }
 
         ~DescriptorSetLayout()
@@ -220,11 +246,13 @@ namespace Vkm
                 vkDestroyDescriptorSetLayout(deviceHandle, handle, VKM_ALLOCATOR);
         }
 
-        constexpr operator VkDescriptorSetLayout() const { return handle; }
+        constexpr operator const VkDescriptorSetLayout&() const { return handle; }
     };
 
     struct DescriptorSet
     {
+        VKM_HANDLE_CONSTRUCTOR(DescriptorSet)
+
         const VkDescriptorSet handle{VK_NULL_HANDLE};
         const VkDevice deviceHandle{VK_NULL_HANDLE};
         const VkDescriptorPool descriptorPoolHandle{VK_NULL_HANDLE};
@@ -245,11 +273,13 @@ namespace Vkm
                 vkFreeDescriptorSets(deviceHandle, descriptorPoolHandle, 1, &handle);
         }
 
-        constexpr operator VkDescriptorSet() const { return handle; }
+        constexpr operator const VkDescriptorSet&() const { return handle; }
     };
 
     struct PipelineLayout
     {
+        VKM_HANDLE_CONSTRUCTOR(PipelineLayout)
+
         VkPipelineLayout handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
@@ -258,17 +288,14 @@ namespace Vkm
                         const Vkm::PipelineLayoutCreateInfo* const pCreateInfo)
         {
             deviceHandle = device;
-            VKM_CHECK(vkCreatePipelineLayout(device,
-                                             (VkPipelineLayoutCreateInfo*) pCreateInfo,
-                                             VKM_ALLOCATOR,
-                                             &handle));
-            const DebugUtilsObjectNameInfoEXT debugInfo{
-              .objectType = VK_OBJECT_TYPE_PIPELINE_LAYOUT,
-              .objectHandle = (uint64_t) handle,
-              .pObjectName = name,
-            };
-            return PFN.SetDebugUtilsObjectNameEXT(device,
-                                                  (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
+            VKM_CHECK(vkCreatePipelineLayout(device, (VkPipelineLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
+            // const DebugUtilsObjectNameInfoEXT debugInfo{
+            //   .objectType = VK_OBJECT_TYPE_PIPELINE_LAYOUT,
+            //   .objectHandle = (uint64_t) handle,
+            //   .pObjectName = name,
+            // };
+            // VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
+            return VK_SUCCESS;
         }
 
         ~PipelineLayout()
@@ -277,15 +304,15 @@ namespace Vkm
                 vkDestroyPipelineLayout(deviceHandle, handle, VKM_ALLOCATOR);
         }
 
-        constexpr operator VkPipelineLayout() const { return handle; }
+        constexpr operator const VkPipelineLayout&() const { return handle; }
     };
 
     inline VkResult ReadFile(const char* filename,
                              uint32_t* length,
                              char** ppContents)
     {
-        FILE* file;
-        if (!fopen_s(&file, filename, "rb")) {
+        FILE* file = fopen(filename, "rb");
+        if (file == nullptr) {
             printf("File can't be opened! %s\n", filename);
             return VK_ERROR_INVALID_SHADER_NV;
         }
@@ -293,7 +320,7 @@ namespace Vkm
         *length = ftell(file);
         rewind(file);
         *ppContents = (char*) calloc(1 + *length, sizeof(char));
-        const size_t readCount = fread_s(*ppContents, *length, *length, 1, file);
+        const size_t readCount = fread(*ppContents, *length, 1, file);
         if (readCount == 0) {
             printf("Failed to read file! %s\n", filename);
             return VK_ERROR_INVALID_SHADER_NV;
@@ -304,35 +331,29 @@ namespace Vkm
 
     struct ShaderModule
     {
+        VKM_HANDLE_CONSTRUCTOR(ShaderModule)
+
         VkShaderModule handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
-        VkResult Create(const VkDevice device,
+        VkResult Create(const VkDevice deviceHandle,
                         const char* const pShaderPath)
         {
-            deviceHandle = device;
+            this->deviceHandle = deviceHandle;
             uint32_t codeLength;
             char* pShaderCode;
-            VKM_CHECK(ReadFile(pShaderPath,
-                               &codeLength,
-                               &pShaderCode));
-            const VkShaderModuleCreateInfo createInfo{
-              .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-              .pNext = nullptr,
-              .flags = 0,
+            VKM_CHECK(ReadFile(pShaderPath, &codeLength, &pShaderCode));
+            const ShaderModuleCreateInfo createInfo{
               .codeSize = codeLength,
-              .pCode = (const uint32_t*) pShaderCode,
+              .pCode = (uint32_t*) pShaderCode,
             };
-            VKM_CHECK(vkCreateShaderModule(device,
-                                           &createInfo,
-                                           VKM_ALLOCATOR,
-                                           &handle));
-            const DebugUtilsObjectNameInfoEXT debugInfo{
-              .objectType = VK_OBJECT_TYPE_SHADER_MODULE,
-              .objectHandle = (uint64_t) handle,
-              .pObjectName = pShaderPath,
-            };
-            VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
+            VKM_CHECK(vkCreateShaderModule(deviceHandle, (VkShaderModuleCreateInfo*) &createInfo, VKM_ALLOCATOR, &handle));
+            // const DebugUtilsObjectNameInfoEXT debugInfo{
+            //   .objectType = VK_OBJECT_TYPE_SHADER_MODULE,
+            //   .objectHandle = (uint64_t) handle,
+            //   .pObjectName = pShaderPath,
+            // };
+            // VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
             free(pShaderCode);
             return VK_SUCCESS;
         }
@@ -348,6 +369,8 @@ namespace Vkm
 
     struct ComputePipeline
     {
+        VKM_HANDLE_CONSTRUCTOR(ComputePipeline)
+
         VkPipeline handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
@@ -362,13 +385,20 @@ namespace Vkm
                                                (VkComputePipelineCreateInfo*) pCreateInfo,
                                                VKM_ALLOCATOR,
                                                &handle));
-            const DebugUtilsObjectNameInfoEXT debugInfo{
-              .objectType = VK_OBJECT_TYPE_PIPELINE,
-              .objectHandle = (uint64_t) handle,
-              .pObjectName = name,
-            };
-            VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
+            // const DebugUtilsObjectNameInfoEXT debugInfo{
+            //   .objectType = VK_OBJECT_TYPE_PIPELINE,
+            //   .objectHandle = (uint64_t) handle,
+            //   .pObjectName = name,
+            // };
+            // VKM_CHECK(PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo));
             return VK_SUCCESS;
+        }
+
+        void BindPipeline(const VkCommandBuffer commandBuffer) const
+        {
+            vkCmdBindPipeline(commandBuffer,
+                              VK_PIPELINE_BIND_POINT_COMPUTE,
+                              handle);
         }
 
         ~ComputePipeline()

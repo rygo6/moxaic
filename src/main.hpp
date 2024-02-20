@@ -10,6 +10,9 @@
     name(const name&) = delete; \
     name& operator=(const name&) = delete;
 
+#define MXC_DELETE_VALUE_NEW(name) name(const name&) = delete;
+#define MXC_DELETE_VALUE_EQUALS(name) name& operator=(const name&) = delete;
+
 /// Exposes a field as a pointer to do occaional some unsafe lower level
 /// editing and have the -> syntax signify you are doing so.
 #define MXC_PTR_ACCESS(field) \
