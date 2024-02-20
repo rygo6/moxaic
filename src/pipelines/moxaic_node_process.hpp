@@ -12,7 +12,7 @@ namespace Moxaic::Vulkan
     struct NodeProcessDescriptorLayout : Vkm::DescriptorSetLayout
     {
         constexpr static const char* Name{"NodeProcessDescriptorLayout"};
-        constexpr static uint32_t SetIndex = 0;
+        constexpr static uint32_t SetIndex{0};
         enum BindingIndex : uint32_t {
             SrcTexture,
             DstTexture,
@@ -30,11 +30,6 @@ namespace Moxaic::Vulkan
           },
         };
 
-        NodeProcessDescriptorLayout(const VkDevice deviceHandle, const VkSampler sampler)
-        {
-            VKM_ASSERT(Create(deviceHandle, sampler));
-        }
-
         VkResult Create(const VkDevice deviceHandle, const VkSampler srcSampler)
         {
             const StaticArray layoutBindings{
@@ -46,7 +41,8 @@ namespace Moxaic::Vulkan
               .bindingCount = layoutBindings.size(),
               .pBindings = layoutBindings.data(),
             };
-            return Vkm::DescriptorSetLayout::Create(deviceHandle, Name, &createInfo);
+            VKM_CHECK(Vkm::DescriptorSetLayout::Create(deviceHandle, Name, &createInfo));
+            return VK_SUCCESS;
         }
 
         static void EmplaceDescriptorWrite(const uint32_t bindingIndex,
@@ -86,11 +82,6 @@ namespace Moxaic::Vulkan
     {
         constexpr static const char* Name{"NodeProcessPipelinLayout"};
 
-        NodeProcessPipelineLayout(const NodeProcessDescriptorLayout& nodeProcessDescriptorLayout)
-        {
-            VKM_ASSERT(Create(nodeProcessDescriptorLayout));
-        }
-
         VkResult Create(const NodeProcessDescriptorLayout& nodeProcessDescriptorLayout)
         {
             const StaticArray setLayouts{
@@ -100,7 +91,8 @@ namespace Moxaic::Vulkan
               .setLayoutCount = setLayouts.size(),
               .pSetLayouts = setLayouts.data(),
             };
-            return Vkm::PipelineLayout::Create(nodeProcessDescriptorLayout.deviceHandle, Name, &createInfo);
+            VKM_CHECK(Vkm::PipelineLayout::Create(nodeProcessDescriptorLayout.deviceHandle, Name, &createInfo));
+            return VK_SUCCESS;
         }
 
         void PushSrcDstTextureDescriptorWrite(const VkCommandBuffer commandBuffer,
@@ -125,27 +117,21 @@ namespace Moxaic::Vulkan
         constexpr static const char* Name{"NodeProcessPipeline"};
         constexpr static int LocalSize{32};
 
-        NodeProcessPipeline(const NodeProcessPipelineLayout& layout,
-                            const char* const shaderPath)
-        {
-            VKM_ASSERT(Create(layout, shaderPath));
-        }
-
         VkResult Create(const NodeProcessPipelineLayout& layout,
-                        const char* const shaderPath)
+                        const char* const pShaderPath)
         {
             Vkm::ShaderModule shader;
-            VKM_CHECK(shader.Create(layout.deviceHandle, shaderPath));
+            VKM_CHECK(shader.Create(layout.deviceHandle, pShaderPath));
             const Vkm::PipelineShaderStageCreateInfo stage{
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = shader,
-              .pName = "main",
             };
             const Vkm::ComputePipelineCreateInfo createInfo{
               .stage = stage,
               .layout = layout,
             };
-            return Vkm::ComputePipeline::Create(layout.deviceHandle, Name, &createInfo);
+            VKM_CHECK(Vkm::ComputePipeline::Create(layout.deviceHandle, Name, &createInfo));
+            return VK_SUCCESS;
         }
     };
 }// namespace Moxaic::Vulkan

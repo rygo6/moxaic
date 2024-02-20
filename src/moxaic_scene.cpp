@@ -377,6 +377,14 @@ MXC_RESULT NodeScene::Init()
 
     // MXC_CHK(m_Swap.Init(Window::extents(), Vulkan::CompositorPipelineType));
 
+    nodeProcessDescriptorLayout.Create(Device->VkDeviceHandle,
+                                       Device->VkLinearSamplerHandle);
+    nodeProcessPipelineLayout.Create(nodeProcessDescriptorLayout);
+    nodeProcessBlitAverageUpPipeline.Create(nodeProcessPipelineLayout,
+                                            "./shaders/node_process.comp.spv");
+    nodeProcessBlitDownPipeline.Create(nodeProcessPipelineLayout,
+                                       "./shaders/node_process_blitdown.comp.spv");
+
     MXC_CHK(standardPipeline.Init());
     MXC_CHK(globalDescriptor.Init(mainCamera,
                                   Window::GetExtents()));
@@ -438,14 +446,14 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                                   toComputeBarriers.data());
 
     // Blit depth mips
-    nodeProcessPipeline.BindPipeline(commandBuffer);
+    nodeProcessBlitAverageUpPipeline.BindPipeline(commandBuffer);
     const auto depthBlitBarrier = framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2,
                                                                              Vulkan::GraphicsComputeWrite2);
 
     nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
                                                                framebuffer.DepthTexture.VkImageViewHandle,
                                                                framebuffer.VkGbufferImageViewMipHandles[0]);
-    const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize, Window::GetExtents().height / nodeProcessPipeline.LocalSize};
+    const auto groupCount = VkExtent2D{Window::GetExtents().width / Vulkan::NodeProcessPipeline::LocalSize, Window::GetExtents().height / Vulkan::NodeProcessPipeline::LocalSize};
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
         Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
@@ -458,6 +466,19 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                       mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
                       1);
     }
+
+    // nodeProcessBlitDownPipeline.BindPipeline(commandBuffer);
+    // for (int i = framebuffer.GBufferMipLevelCount - 1; i < framebuffer.GBufferMipLevelCount; ++i) {
+    //     Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
+    //     nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
+    //                                                                framebuffer.VkGbufferImageViewMipHandles[i - 1],
+    //                                                                framebuffer.VkGbufferImageViewMipHandles[i]);
+    //     const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};
+    //     vkCmdDispatch(commandBuffer,
+    //                   mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
+    //                   mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
+    //                   1);
+    // }
 
     const auto& externalRead = ReleaseToExternalRead(Vulkan::CompositorPipelineType);
     const StaticArray toExternalBarriers{

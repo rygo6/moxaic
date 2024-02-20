@@ -1,7 +1,5 @@
 #version 450
 
-#extension GL_EXT_debug_printf : require
-
 #define LOCAL_SIZE 32
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
@@ -17,30 +15,21 @@ void main()
     const vec2 dstUV = vec2(dstCoord) / vec2(dstSize);
     const ivec2 srcCoord = ivec2(dstUV * srcSize);
     const vec2 srcHalfOffsetUV = vec2(srcCoord + 1.0) / vec2(srcSize);
-    const vec2 srcUV = vec2(srcCoord) / vec2(srcSize);
-
-//    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
-//        debugPrintfEXT("src %d %d", srcSize.x, srcSize.y);
-//        debugPrintfEXT("dst %d %d", dstSize.x, dstSize.y);
-//    }
 
     const vec4 gatheredDepth = textureGather(srcTexture, srcHalfOffsetUV, 0);
-
     float sum = 0.0;
     sum += gatheredDepth.x > 0.0 ? gatheredDepth.x : 0.0;
     sum += gatheredDepth.y > 0.0 ? gatheredDepth.y : 0.0;
     sum += gatheredDepth.z > 0.0 ? gatheredDepth.z : 0.0;
     sum += gatheredDepth.w > 0.0 ? gatheredDepth.w : 0.0;
-
     float count = 0.0;
     count += gatheredDepth.x > 0.0 ? 1.0 : 0.0;
     count += gatheredDepth.y > 0.0 ? 1.0 : 0.0;
     count += gatheredDepth.z > 0.0 ? 1.0 : 0.0;
     count += gatheredDepth.w > 0.0 ? 1.0 : 0.0;
+    const float averageDepth = count > 0.0 ? sum / count : 0.0;
 
-    float average = count > 0.0 ? sum / count : 0.0;
+    //    const float maxDepth = texture(srcTexture, srcHalfOffsetUV).x;
 
-//    const float maxDepth = texture(srcTexture, srcHalfOffsetUV).x;
-
-    imageStore(dstTexture, dstCoord, vec4(average));
+    imageStore(dstTexture, dstCoord, vec4(averageDepth));
 }
