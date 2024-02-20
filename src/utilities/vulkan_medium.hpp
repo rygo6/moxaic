@@ -66,6 +66,15 @@ namespace Vkm
         const VkShaderStageFlags stageFlags{VKM_DEFAULT_SHADER_STAGE};
         const VkSampler* pImmutableSamplers{VK_NULL_HANDLE};
 
+        DescriptorSetLayoutBinding WithSamplers(const VkSampler* pImmutableSamplers) const
+        {
+            return {.binding = binding,
+                    .descriptorType = descriptorType,
+                    .descriptorCount = descriptorCount,
+                    .stageFlags = stageFlags,
+                    .pImmutableSamplers = pImmutableSamplers};
+        }
+
         constexpr operator VkDescriptorSetLayoutBinding() const { return *(VkDescriptorSetLayoutBinding*) this; }
     };
 
@@ -225,9 +234,18 @@ namespace Vkm
         VkDescriptorSetLayout handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
-        VkResult Create(const VkDevice deviceHandle,
-                        const char* const name,
-                        const Vkm::DescriptorSetLayoutCreateInfo* const pCreateInfo)
+        DescriptorSetLayout(
+          const VkDevice deviceHandle,
+          const char* const name,
+          const Vkm::DescriptorSetLayoutCreateInfo* const pCreateInfo)
+        {
+            VKM_ASSERT(Create(deviceHandle, nullptr, pCreateInfo));
+        }
+
+        VkResult Create(
+          const VkDevice deviceHandle,
+          const char* const name,
+          const Vkm::DescriptorSetLayoutCreateInfo* const pCreateInfo)
         {
             this->deviceHandle = deviceHandle;
             VKM_CHECK(vkCreateDescriptorSetLayout(deviceHandle, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
@@ -257,7 +275,9 @@ namespace Vkm
         const VkDevice deviceHandle{VK_NULL_HANDLE};
         const VkDescriptorPool descriptorPoolHandle{VK_NULL_HANDLE};
 
-        void SetDebugInfo(VkDevice device, const char* const name)
+        void SetDebugInfo(
+          VkDevice device,
+          const char* const name)
         {
             const DebugUtilsObjectNameInfoEXT debugInfo{
               .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
@@ -283,9 +303,10 @@ namespace Vkm
         VkPipelineLayout handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
-        VkResult Create(const VkDevice device,
-                        const char* const name,
-                        const Vkm::PipelineLayoutCreateInfo* const pCreateInfo)
+        VkResult Create(
+          const VkDevice device,
+          const char* const name,
+          const Vkm::PipelineLayoutCreateInfo* const pCreateInfo)
         {
             deviceHandle = device;
             VKM_CHECK(vkCreatePipelineLayout(device, (VkPipelineLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
@@ -336,8 +357,9 @@ namespace Vkm
         VkShaderModule handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
-        VkResult Create(const VkDevice deviceHandle,
-                        const char* const pShaderPath)
+        VkResult Create(
+          const VkDevice deviceHandle,
+          const char* const pShaderPath)
         {
             this->deviceHandle = deviceHandle;
             uint32_t codeLength;
@@ -374,9 +396,10 @@ namespace Vkm
         VkPipeline handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
 
-        VkResult Create(const VkDevice device,
-                        const char* const name,
-                        const Vkm::ComputePipelineCreateInfo* const pCreateInfo)
+        VkResult Create(
+          const VkDevice device,
+          const char* const name,
+          const Vkm::ComputePipelineCreateInfo* const pCreateInfo)
         {
             deviceHandle = device;
             VKM_CHECK(vkCreateComputePipelines(device,

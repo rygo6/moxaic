@@ -1,8 +1,8 @@
 #pragma once
 
-#include "moxaic_node_process_descriptor.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_texture.hpp"
+#include "pipelines/moxaic_node_process.hpp"
 
 #include <memory>
 #include <vulkan/vulkan.h>

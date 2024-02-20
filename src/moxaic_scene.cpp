@@ -377,11 +377,6 @@ MXC_RESULT NodeScene::Init()
 
     // MXC_CHK(m_Swap.Init(Window::extents(), Vulkan::CompositorPipelineType));
 
-    // nodeProcessDescriptorLayout.Create(Device->VkDeviceHandle);
-    // nodeProcessPipelineLayout.Create(nodeProcessDescriptorLayout);
-    // nodeProcessComputePipeline.Create("./shaders/node_process.comp.spv",
-    //                                   nodeProcessPipelineLayout);
-
     MXC_CHK(standardPipeline.Init());
     MXC_CHK(globalDescriptor.Init(mainCamera,
                                   Window::GetExtents()));
@@ -448,7 +443,6 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                                                                              Vulkan::GraphicsComputeWrite2);
 
     nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
-                                                               Device->VkMaxSamplerHandle,
                                                                framebuffer.DepthTexture.VkImageViewHandle,
                                                                framebuffer.VkGbufferImageViewMipHandles[0]);
     const auto groupCount = VkExtent2D{Window::GetExtents().width / nodeProcessPipeline.LocalSize, Window::GetExtents().height / nodeProcessPipeline.LocalSize};
@@ -456,7 +450,6 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
         Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
         nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
-                                                                   Device->VkMaxSamplerHandle,
                                                                    framebuffer.VkGbufferImageViewMipHandles[i - 1],
                                                                    framebuffer.VkGbufferImageViewMipHandles[i]);
         const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};

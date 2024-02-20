@@ -15,7 +15,7 @@
 
 #include "moxaic_compute_composite_pipeline.hpp"
 #include "moxaic_mesh_node_pipeline.hpp"
-#include "moxaic_node_process_pipeline.hpp"
+#include "moxaic_node_process.hpp"
 
 namespace Moxaic
 {
@@ -127,10 +127,14 @@ namespace Moxaic
         Vulkan::StandardMaterialDescriptor materialDescriptor{Device};
         Vulkan::ObjectDescriptor objectDescriptor{Device};
 
-        Vulkan::NodeProcessDescriptorLayout nodeProcessDescriptorLayout{Device->VkDeviceHandle};
-        Vulkan::NodeProcessPipelineLayout nodeProcessPipelineLayout{nodeProcessDescriptorLayout};
-        Vulkan::NodeProcessPipeline nodeProcessPipeline{"./shaders/node_process.comp.spv",
-                                                        nodeProcessPipelineLayout};
+        Vulkan::NodeProcessDescriptorLayout nodeProcessDescriptorLayout{
+          Device->VkDeviceHandle,
+          Device->VkMaxSamplerHandle};
+        Vulkan::NodeProcessPipelineLayout nodeProcessPipelineLayout{
+          nodeProcessDescriptorLayout};
+        Vulkan::NodeProcessPipeline nodeProcessPipeline{
+          nodeProcessPipelineLayout,
+          "./shaders/node_process.comp.spv"};
 
         Camera mainCamera{};
 
