@@ -1,18 +1,21 @@
 /**********************************************************************************************
 *
-*   Vulkan Mid v0.0 - Vulkan boilerplate API
+*   Mid Level Vulkan v0.0 - Vulkan boilerplate API
 *
 **********************************************************************************************/
 
 #pragma once
 
+#include "static_array.hpp"
+
+
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 
-#define VKM_DEFAULT_IMAGE_LAYOUT VK_IMAGE_LAYOUT_GENERAL
-#define VKM_DEFAULT_DESCRIPTOR_TYPE VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-#define VKM_DEFAULT_SHADER_STAGE VK_SHADER_STAGE_COMPUTE_BIT
-#define VKM_ALLOCATOR nullptr
+#define MVK_DEFAULT_IMAGE_LAYOUT VK_IMAGE_LAYOUT_GENERAL
+#define MVK_DEFAULT_DESCRIPTOR_TYPE VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+#define MVK_DEFAULT_SHADER_STAGE VK_SHADER_STAGE_COMPUTE_BIT
+#define MVK_DEFAULT_ALLOCATOR nullptr
 
 #define VKM_ASSERT(command) assert(command == VK_SUCCESS)
 
@@ -40,14 +43,14 @@
     }
 
 
-namespace Vkm
+namespace MVk
 {
     struct
     {
 #define VK_FUNCS \
     VK_FUNC(SetDebugUtilsObjectNameEXT)
 
-#define VK_FUNC(func) PFN_vk##func func;
+#define VK_FUNC(func) PFN_vk## func func;
         VK_FUNCS
 #undef VK_FUNC
     } PFN;
@@ -73,9 +76,9 @@ namespace Vkm
     struct DescriptorSetLayoutBinding
     {
         const uint32_t binding{0};
-        const VkDescriptorType descriptorType{VKM_DEFAULT_DESCRIPTOR_TYPE};
+        const VkDescriptorType descriptorType{MVK_DEFAULT_DESCRIPTOR_TYPE};
         const uint32_t descriptorCount{1};
-        const VkShaderStageFlags stageFlags{VKM_DEFAULT_SHADER_STAGE};
+        const VkShaderStageFlags stageFlags{MVK_DEFAULT_SHADER_STAGE};
         const VkSampler* pImmutableSamplers{VK_NULL_HANDLE};
 
         DescriptorSetLayoutBinding WithSamplers(const VkSampler* pImmutableSamplers) const
@@ -94,7 +97,7 @@ namespace Vkm
     {
         const VkSampler sampler{VK_NULL_HANDLE};
         const VkImageView imageView{VK_NULL_HANDLE};
-        const VkImageLayout imageLayout{VKM_DEFAULT_IMAGE_LAYOUT};
+        const VkImageLayout imageLayout{MVK_DEFAULT_IMAGE_LAYOUT};
 
         constexpr operator VkDescriptorImageInfo() const { return *(VkDescriptorImageInfo*) this; }
     };
@@ -107,7 +110,7 @@ namespace Vkm
         const uint32_t dstBinding{0};
         const uint32_t dstArrayElement{0};
         const uint32_t descriptorCount{1};
-        const VkDescriptorType descriptorType{VKM_DEFAULT_DESCRIPTOR_TYPE};
+        const VkDescriptorType descriptorType{MVK_DEFAULT_DESCRIPTOR_TYPE};
         const DescriptorImageInfo* pImageInfo{nullptr};
         const VkDescriptorBufferInfo* pBufferInfo{nullptr};
         const VkBufferView* pTexelBufferView{nullptr};
@@ -123,7 +126,8 @@ namespace Vkm
         const uint32_t bindingCount{1};
         const DescriptorSetLayoutBinding* pBindings{nullptr};
 
-        constexpr operator VkDescriptorSetLayoutCreateInfo() const { return *(VkDescriptorSetLayoutCreateInfo*) this; }
+        const VkDescriptorSetLayoutCreateInfo& vkHandle{*(VkDescriptorSetLayoutCreateInfo*) this};
+        constexpr operator VkDescriptorSetAllocateInfo() const { return *(VkDescriptorSetAllocateInfo*) this; }
     };
 
     struct DescriptorSetAllocateInfo
@@ -166,7 +170,7 @@ namespace Vkm
         const VkStructureType sType{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         const void* const pNext{nullptr};
         const VkPipelineShaderStageCreateFlags flags{};
-        const VkShaderStageFlagBits stage{VKM_DEFAULT_SHADER_STAGE};
+        const VkShaderStageFlagBits stage{MVK_DEFAULT_SHADER_STAGE};
         const VkShaderModule module{VK_NULL_HANDLE};
         const char* const pName{"main"};
         const VkSpecializationInfo* pSpecializationInfo{nullptr};
@@ -198,31 +202,16 @@ namespace Vkm
         constexpr operator VkShaderModuleCreateInfo() const { return *(VkShaderModuleCreateInfo*) this; }
     };
 
-    struct Error
-    {
-        const char* command;
-        const VkResult result;
-    };
-
     // Handles
 
-    // No matter how you fiddle it, vulkan handles are not safe. Encapsulation just doesn't make much sense.
-
-#define VKM_HANDLE_CONSTRUCTOR(name) \
+#define MVK_HANDLE_CONSTRUCTOR(name) \
     name() = default;                \
     name(const name&) = delete;      \
     name& operator=(const name&) = delete;
 
-
-    template<typename T>
-    struct Handle{
-
-
-    };
-
     struct SwapChain
     {
-        VKM_HANDLE_CONSTRUCTOR(SwapChain)
+        MVK_HANDLE_CONSTRUCTOR(SwapChain)
 
         const VkSwapchainKHR handle{VK_NULL_HANDLE};
         const VkDevice deviceHandle{VK_NULL_HANDLE};
@@ -240,26 +229,27 @@ namespace Vkm
         ~SwapChain()
         {
             if (handle != VK_NULL_HANDLE)
-                vkDestroySwapchainKHR(deviceHandle, handle, VKM_ALLOCATOR);
+                vkDestroySwapchainKHR(deviceHandle, handle, MVK_DEFAULT_ALLOCATOR);
         }
 
         constexpr operator VkSwapchainKHR() const { return handle; }
     };
 
+
     struct DescriptorSetLayout
     {
-        VKM_HANDLE_CONSTRUCTOR(DescriptorSetLayout)
+        MVK_HANDLE_CONSTRUCTOR(DescriptorSetLayout)
 
-        VkDescriptorSetLayout handle{VK_NULL_HANDLE};
-        VkDevice deviceHandle{VK_NULL_HANDLE};
+        VkDescriptorSetLayout vkHandle{VK_NULL_HANDLE};
+        VkDevice vkDeviceHandle{VK_NULL_HANDLE};
 
         VkResult Create(
-          const VkDevice deviceHandle,
+          const VkDevice vkDeviceHandle,
           const char* const name,
-          const Vkm::DescriptorSetLayoutCreateInfo* const pCreateInfo)
+          const MVk::DescriptorSetLayoutCreateInfo&& createInfo)
         {
-            this->deviceHandle = deviceHandle;
-            VKM_CHECK(vkCreateDescriptorSetLayout(deviceHandle, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
+            this->vkDeviceHandle = vkDeviceHandle;
+            VKM_CHECK(vkCreateDescriptorSetLayout(vkDeviceHandle, &createInfo.vkHandle, MVK_DEFAULT_ALLOCATOR, &vkHandle));
             // const DebugUtilsObjectNameInfoEXT debugInfo{
             //   .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
             //   .objectHandle = (uint64_t) handle,
@@ -271,16 +261,16 @@ namespace Vkm
 
         ~DescriptorSetLayout()
         {
-            if (handle != VK_NULL_HANDLE)
-                vkDestroyDescriptorSetLayout(deviceHandle, handle, VKM_ALLOCATOR);
+            if (vkHandle != VK_NULL_HANDLE)
+                vkDestroyDescriptorSetLayout(vkDeviceHandle, vkHandle, MVK_DEFAULT_ALLOCATOR);
         }
 
-        constexpr operator const VkDescriptorSetLayout&() const { return handle; }
+        constexpr operator const VkDescriptorSetLayout&() const { return vkHandle; }
     };
 
     struct DescriptorSet
     {
-        VKM_HANDLE_CONSTRUCTOR(DescriptorSet)
+        MVK_HANDLE_CONSTRUCTOR(DescriptorSet)
 
         VkDescriptorSet handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
@@ -310,7 +300,7 @@ namespace Vkm
 
     struct PipelineLayout
     {
-        VKM_HANDLE_CONSTRUCTOR(PipelineLayout)
+        MVK_HANDLE_CONSTRUCTOR(PipelineLayout)
 
         VkPipelineLayout handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
@@ -319,10 +309,10 @@ namespace Vkm
         VkResult Create(
           const VkDevice device,
           const char* const name,
-          const Vkm::PipelineLayoutCreateInfo* const pCreateInfo)
+          const MVk::PipelineLayoutCreateInfo* const pCreateInfo)
         {
             deviceHandle = device;
-            VKM_CHECK2(vkCreatePipelineLayout(device, (VkPipelineLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, &handle));
+            VKM_CHECK2(vkCreatePipelineLayout(device, (VkPipelineLayoutCreateInfo*) pCreateInfo, MVK_DEFAULT_ALLOCATOR, &handle));
             // const DebugUtilsObjectNameInfoEXT debugInfo{
             //   .objectType = VK_OBJECT_TYPE_PIPELINE_LAYOUT,
             //   .objectHandle = (uint64_t) handle,
@@ -335,7 +325,7 @@ namespace Vkm
         ~PipelineLayout()
         {
             if (handle != VK_NULL_HANDLE)
-                vkDestroyPipelineLayout(deviceHandle, handle, VKM_ALLOCATOR);
+                vkDestroyPipelineLayout(deviceHandle, handle, MVK_DEFAULT_ALLOCATOR);
         }
 
         constexpr operator const VkPipelineLayout&() const { return handle; }
@@ -365,7 +355,7 @@ namespace Vkm
 
     struct ShaderModule
     {
-        VKM_HANDLE_CONSTRUCTOR(ShaderModule)
+        MVK_HANDLE_CONSTRUCTOR(ShaderModule)
 
         VkShaderModule handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
@@ -382,7 +372,7 @@ namespace Vkm
               .codeSize = codeLength,
               .pCode = (uint32_t*) pShaderCode,
             };
-            VKM_CHECK(vkCreateShaderModule(deviceHandle, (VkShaderModuleCreateInfo*) &createInfo, VKM_ALLOCATOR, &handle));
+            VKM_CHECK(vkCreateShaderModule(deviceHandle, (VkShaderModuleCreateInfo*) &createInfo, MVK_DEFAULT_ALLOCATOR, &handle));
             // const DebugUtilsObjectNameInfoEXT debugInfo{
             //   .objectType = VK_OBJECT_TYPE_SHADER_MODULE,
             //   .objectHandle = (uint64_t) handle,
@@ -396,7 +386,7 @@ namespace Vkm
         ~ShaderModule()
         {
             if (handle != VK_NULL_HANDLE)
-                vkDestroyShaderModule(deviceHandle, handle, VKM_ALLOCATOR);
+                vkDestroyShaderModule(deviceHandle, handle, MVK_DEFAULT_ALLOCATOR);
         }
 
         constexpr operator VkShaderModule() const { return handle; }
@@ -404,7 +394,7 @@ namespace Vkm
 
     struct ComputePipeline
     {
-        VKM_HANDLE_CONSTRUCTOR(ComputePipeline)
+        MVK_HANDLE_CONSTRUCTOR(ComputePipeline)
 
         VkPipeline handle{VK_NULL_HANDLE};
         VkDevice deviceHandle{VK_NULL_HANDLE};
@@ -412,14 +402,14 @@ namespace Vkm
         VkResult Create(
           const VkDevice device,
           const char* const name,
-          const Vkm::ComputePipelineCreateInfo* const pCreateInfo)
+          const MVk::ComputePipelineCreateInfo* const pCreateInfo)
         {
             deviceHandle = device;
             VKM_CHECK(vkCreateComputePipelines(device,
                                                VK_NULL_HANDLE,
                                                1,
                                                (VkComputePipelineCreateInfo*) pCreateInfo,
-                                               VKM_ALLOCATOR,
+                                               MVK_DEFAULT_ALLOCATOR,
                                                &handle));
             // const DebugUtilsObjectNameInfoEXT debugInfo{
             //   .objectType = VK_OBJECT_TYPE_PIPELINE,
@@ -440,11 +430,201 @@ namespace Vkm
         ~ComputePipeline()
         {
             if (handle != VK_NULL_HANDLE)
-                vkDestroyPipeline(deviceHandle, handle, VKM_ALLOCATOR);
+                vkDestroyPipeline(deviceHandle, handle, MVK_DEFAULT_ALLOCATOR);
         }
 
         constexpr operator VkPipeline() const { return handle; }
     };
+
+#define MVK_HANDLE_POOL_INDEX_TYPE uint8_t
+#define MVK_HANDLE_POOL_COUNT 32
+    constexpr static MVK_HANDLE_POOL_INDEX_TYPE HandleIndexCapacity = (1 << 8 * sizeof(MVK_HANDLE_POOL_INDEX_TYPE)) - 1;
+    static_assert(MVK_HANDLE_POOL_COUNT <= 1 << (8 * sizeof(MVK_HANDLE_POOL_INDEX_TYPE)));
+
+#define MVK_HANDLE_GENERATION_TYPE uint8_t
+    constexpr static MVK_HANDLE_GENERATION_TYPE HandleGenerationCount = (1 << 8 * sizeof(MVK_HANDLE_GENERATION_TYPE)) - 1;
+
+    template<typename T, T N>
+    struct Stack
+    {
+        T current{N - 1};
+        T data[];
+
+        T Pop()
+        {
+            assert(current != 0 && "Trying to pop stack below 0.");
+            return data[current--];
+        }
+
+        void Push(T value)
+        {
+            assert(current != HandleIndexCapacity && "Tring to push stack above capacity.");
+            data[++current] = value;
+        }
+
+        constexpr Stack()
+        {
+            assert(current <= HandleIndexCapacity && "Tring to create stack with capacity greater than type supports.");
+            for (size_t i = 0; i < N; ++i) {
+                data[i] = (T) i;
+            }
+        }
+    };
+
+    template<typename THandle, typename TState>
+    struct HandlePool
+    {
+        static inline MVK_HANDLE_GENERATION_TYPE generations[MVK_HANDLE_POOL_COUNT];
+        static inline THandle handles[MVK_HANDLE_POOL_COUNT];
+        static inline TState states[MVK_HANDLE_POOL_COUNT];
+        static inline Stack<MVK_HANDLE_POOL_INDEX_TYPE, MVK_HANDLE_POOL_COUNT> freeIndexStack;
+    };
+
+    template<typename Derived, typename THandle, typename TState>
+    struct HandleBase
+    {
+        MVK_HANDLE_POOL_INDEX_TYPE handleIndex;
+        MVK_HANDLE_GENERATION_TYPE handleGeneration;
+
+        // THandle& GetHandle() { return IsValid() ? HandlePool<THandle, TState>::handles[handleIndex] : nullptr; }
+        // TState& GetState() { return IsValid() ? HandlePool<THandle, TState>::states[handleIndex] : nullptr; }
+
+        THandle& handle() const { return HandlePool<THandle, TState>::handles[handleIndex]; }
+        TState& state() { return HandlePool<THandle, TState>::states[handleIndex]; }
+
+        static Derived Acquire()
+        {
+            const auto index = HandlePool<THandle, TState>::freeIndexStack.Pop();
+            const auto generation = HandlePool<THandle, TState>::generations[index];
+            return Derived{index, generation};
+        }
+
+        void Release()
+        {
+            const auto generation = HandlePool<THandle, TState>::generations[handleIndex];
+            assert(generation != HandleGenerationCount && "Max handle generations reached.");
+            ++HandlePool<THandle, TState>::generations[handleIndex];
+            HandlePool<THandle, TState>::freeIndexStack.Push(handleIndex);
+        }
+
+        bool IsValid() const { return handleGeneration == HandlePool<THandle, TState>::generations[handleIndex]; }
+
+        operator THandle&() const { return handle(); }
+    };
+
+    template<typename T, uint32_t N>
+    struct Array
+    {
+        T data[N];
+    };
+    template<typename T, typename... Ts>
+    Array(T, Ts...) -> Array<T, 1 + sizeof...(Ts)>;
+
+    struct Value
+    {
+        int value{1};
+    };
+
+    template<uint32_t N>
+    struct Info
+    {
+        int value{1};
+        Array<Value, N> values{};
+    };
+
+    template<typename... Ts>
+    auto makeArray(Ts... ts)
+    {
+        return Array{ts...};
+    }
+
+    inline void TestConstruct()
+    {
+        Info info{
+          .value{10},
+          .values = makeArray(
+            Value{.value = 1},
+            Value{.value = 2}),
+        };
+    }
+
+    struct Image;
+
+    template<uint32_t N>
+    struct ComputePipelineCreateDesc
+    {
+        const char* name{"ComputePipeline"};
+        constexpr static uint32_t CreateInfoCount{N};
+        ComputePipelineCreateInfo createInfos[N]{};
+        const VkAllocationCallbacks* pAllocator{nullptr};
+    };
+    struct ComputePipeline2;
+
+    struct DeviceState
+    {
+        const VkAllocationCallbacks* pDefaultAllocator{nullptr};
+        VkResult result{VK_NOT_READY};
+    };
+    struct Device : HandleBase<Device, VkDevice, DeviceState>
+    {
+        const VkAllocationCallbacks* defaultAllocator(const VkAllocationCallbacks* pAllocator) {
+            return pAllocator == nullptr ? state().pDefaultAllocator : pAllocator;
+        }
+
+        template<uint32_t N>
+        ComputePipeline2 CreateComputePipeline(const ComputePipelineCreateDesc<N>&& createInfo);
+
+        void operator=(const Device& other)
+        {
+            handleIndex = other.handleIndex;
+            handleGeneration = other.handleGeneration;
+        }
+    };
+
+    struct HandleState
+    {
+        Device device;
+        const VkAllocationCallbacks* pAllocator{nullptr};
+        VkResult result{VK_NOT_READY};
+    };
+    struct Image : HandleBase<Image, VkImage, HandleState>
+    {
+        void Destroy()
+        {
+            assert(state().device.IsValid());
+            HandleBase::Release();
+            vkDestroyImage(state().device, handle(), state().pAllocator);
+        }
+    };
+
+    struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, HandleState>
+    {
+        // static ComputePipeline2 Acquire()
+        // {
+        //     const auto index = HandlePool<VkPipeline, HandleState>::freeIndexStack.Pop();
+        //     const auto generation = HandlePool<VkPipeline, HandleState>::generations[index];
+        //     return ComputePipeline2{index, generation};
+        // }
+
+        void BindPipeline(const VkCommandBuffer commandBuffer) const
+        {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, handle());
+        }
+
+        void Destroy()
+        {
+            assert(state().device.IsValid());
+            HandleBase::Release();
+            vkDestroyPipeline(state().device, handle(), state().pAllocator);
+        }
+    };
+
+    // template<typename T>
+    // struct DeferDestroy
+    // {
+    //     T create;
+    //     ~DeferDestroy() { create.Destroy(); }
+    // };
 
     //------------------------------------------------------------------------------------
     // Functions Declaration
@@ -460,10 +640,10 @@ namespace Vkm
 
     inline VkResult CreateDescriptorSetLayout(
       const VkDevice device,
-      const Vkm::DescriptorSetLayoutCreateInfo* pCreateInfo,
+      const MVk::DescriptorSetLayoutCreateInfo* pCreateInfo,
       VkDescriptorSetLayout* pSetLayout)
     {
-        return vkCreateDescriptorSetLayout(device, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, VKM_ALLOCATOR, pSetLayout);
+        return vkCreateDescriptorSetLayout(device, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, MVK_DEFAULT_ALLOCATOR, pSetLayout);
     }
 
     inline void UpdateDescriptorSets(
@@ -484,7 +664,7 @@ namespace Vkm
         return vkAllocateDescriptorSets(device, (VkDescriptorSetAllocateInfo*) pAllocateInfo, pDescriptorSets);
     }
 
-}// namespace Vkm
+}// namespace MVk
 
 /***********************************************************************************
 *
@@ -492,9 +672,30 @@ namespace Vkm
 *
 ************************************************************************************/
 
-#if defined(VULKAN_MEDIUM_IMPLEMENTATION)
+#if defined(MID_VULKAN_IMPLEMENTATION)
 
-void Vkm::CmdPipelineImageBarrier2(
+template<uint32_t N>
+MVk::ComputePipeline2 MVk::Device::CreateComputePipeline(const MVk::ComputePipelineCreateDesc<N>&& desc)
+{
+    auto pipeline = ComputePipeline2::Acquire();
+    auto& state = pipeline.state();
+    state.device = *this;
+    state.pAllocator = defaultAllocator(desc.pAllocator);
+    state.result = vkCreateComputePipelines(*this,
+                                            VK_NULL_HANDLE,
+                                            desc.CreateInfoCount,
+                                            (VkComputePipelineCreateInfo*) &desc.createInfos,
+                                            state.pAllocator,
+                                            &pipeline.handle());
+    // const DebugUtilsObjectNameInfoEXT debugInfo{
+    //   .objectType = VK_OBJECT_TYPE_PIPELINE,
+    //   .objectHandle = (uint64_t) pipeline.handle(),
+    //   .pObjectName = desc.name};
+    // PFN.SetDebugUtilsObjectNameEXT(*this, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
+    return pipeline;
+}
+
+void MVk::CmdPipelineImageBarrier2(
   VkCommandBuffer commandBuffer,
   uint32_t imageMemoryBarrierCount,
   const VkImageMemoryBarrier2* pImageMemoryBarriers)

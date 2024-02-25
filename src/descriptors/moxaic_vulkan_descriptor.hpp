@@ -40,12 +40,12 @@ namespace Moxaic::Vulkan
         static VkResult InitLayout(const Vulkan::Device& device)
         {
             VulkanDescriptorBase2::device = &device;
-            const Vkm::DescriptorSetLayoutCreateInfo createInfo{
+            const MVk::DescriptorSetLayoutCreateInfo createInfo{
               .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
               .bindingCount = Derived::LayoutBindings.size(),
               .pBindings = Derived::LayoutBindings.data(),
             };
-            return Vkm::CreateDescriptorSetLayout(device.GetVkDevice(),
+            return MVk::CreateDescriptorSetLayout(device.GetVkDevice(),
                                                   &createInfo,
                                                   &vkSharedDescriptorSetLayoutHandle);
         }
@@ -59,11 +59,11 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init()
         {
-            const Vkm::DescriptorSetAllocateInfo allocInfo{
+            const MVk::DescriptorSetAllocateInfo allocInfo{
               .descriptorPool = device->GetVkDescriptorPool(),
               .pSetLayouts = &vkSharedDescriptorSetLayoutHandle,
             };
-            VK_CHK(Vkm::AllocateDescriptorSets(device->GetVkDevice(),
+            VK_CHK(MVk::AllocateDescriptorSets(device->GetVkDevice(),
                                                &allocInfo,
                                                &vkDescriptorSetHandle));
             const VkDebugUtilsObjectNameInfoEXT debugInfo{
@@ -78,10 +78,10 @@ namespace Moxaic::Vulkan
 
         static void EmplaceDescriptorWrite(const uint32_t bindingIndex,
                                            const VkDescriptorSet dstSet,
-                                           const Vkm::DescriptorImageInfo* pImageInfo,
-                                           Vkm::WriteDescriptorSet* pWriteDescriptorSet)
+                                           const MVk::DescriptorImageInfo* pImageInfo,
+                                           MVk::WriteDescriptorSet* pWriteDescriptorSet)
         {
-            new (pWriteDescriptorSet) Vkm::WriteDescriptorSet{
+            new (pWriteDescriptorSet) MVk::WriteDescriptorSet{
               .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
               .dstSet = dstSet,
               .dstBinding = Derived::LayoutBindings[bindingIndex].binding,
