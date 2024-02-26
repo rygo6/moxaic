@@ -48,19 +48,19 @@ namespace Moxaic::Vulkan
             MXC_CHK(CreateComputePipe(compStage));
             vkDestroyShaderModule(Device->GetVkDevice(), shader, VK_ALLOC);
 
-            Mid::Vk::Device device;
-            auto pipeline = Mid::Vk::DeferDestroy(device.CreateComputePipeline(Mid::Vk::ComputePipeline2::Desc{
-              .name = "ComputeCompositePipeline",
-              .createInfos{
-                {
-                  .stage = {
-                    .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-                    .module = shader,
-                    .pName = "main"},
-                  .layout = sharedVkPipelineLayout,
-                },
-              },
-            }));
+            // Mid::Vk::Device device;
+            // auto pipeline = Mid::Vk::DeferDestroy(device.CreateComputePipeline(Mid::Vk::ComputePipeline2::Desc{
+            //   .name = "ComputeCompositePipeline",
+            //   .createInfos{
+            //     {
+            //       .stage = {
+            //         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+            //         .module = shader,
+            //         .pName = "main"},
+            //       .layout = sharedVkPipelineLayout,
+            //     },
+            //   },
+            // }));
 
             return MXC_SUCCESS;
         }

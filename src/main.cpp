@@ -5,9 +5,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#define MID_VULKAN_IMPLEMENTATION
-#include "mid_vulkan.hpp"
-
 using namespace Moxaic;
 
 int main(int argc, char* argv[])
