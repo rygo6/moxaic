@@ -6,9 +6,6 @@
 
 #pragma once
 
-#include "static_array.hpp"
-
-
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 
@@ -43,14 +40,14 @@
     }
 
 
-namespace MVk
+namespace Mid::Vk
 {
     struct
     {
 #define VK_FUNCS \
     VK_FUNC(SetDebugUtilsObjectNameEXT)
 
-#define VK_FUNC(func) PFN_vk## func func;
+#define VK_FUNC(func) PFN_vk##func func;
         VK_FUNCS
 #undef VK_FUNC
     } PFN;
@@ -246,7 +243,7 @@ namespace MVk
         VkResult Create(
           const VkDevice vkDeviceHandle,
           const char* const name,
-          const MVk::DescriptorSetLayoutCreateInfo&& createInfo)
+          const DescriptorSetLayoutCreateInfo&& createInfo)
         {
             this->vkDeviceHandle = vkDeviceHandle;
             VKM_CHECK(vkCreateDescriptorSetLayout(vkDeviceHandle, &createInfo.vkHandle, MVK_DEFAULT_ALLOCATOR, &vkHandle));
@@ -309,7 +306,7 @@ namespace MVk
         VkResult Create(
           const VkDevice device,
           const char* const name,
-          const MVk::PipelineLayoutCreateInfo* const pCreateInfo)
+          const PipelineLayoutCreateInfo* const pCreateInfo)
         {
             deviceHandle = device;
             VKM_CHECK2(vkCreatePipelineLayout(device, (VkPipelineLayoutCreateInfo*) pCreateInfo, MVK_DEFAULT_ALLOCATOR, &handle));
@@ -402,7 +399,7 @@ namespace MVk
         VkResult Create(
           const VkDevice device,
           const char* const name,
-          const MVk::ComputePipelineCreateInfo* const pCreateInfo)
+          const ComputePipelineCreateInfo* const pCreateInfo)
         {
             deviceHandle = device;
             VKM_CHECK(vkCreateComputePipelines(device,
@@ -436,12 +433,14 @@ namespace MVk
         constexpr operator VkPipeline() const { return handle; }
     };
 
-#define MVK_HANDLE_POOL_INDEX_TYPE uint8_t
-#define MVK_HANDLE_POOL_COUNT 32
+    #define FORCE_INLINE inline __attribute__((always_inline))
+
+    #define MVK_HANDLE_POOL_INDEX_TYPE uint8_t
+    #define MVK_HANDLE_POOL_COUNT 32
     constexpr static MVK_HANDLE_POOL_INDEX_TYPE HandleIndexCapacity = (1 << 8 * sizeof(MVK_HANDLE_POOL_INDEX_TYPE)) - 1;
     static_assert(MVK_HANDLE_POOL_COUNT <= 1 << (8 * sizeof(MVK_HANDLE_POOL_INDEX_TYPE)));
 
-#define MVK_HANDLE_GENERATION_TYPE uint8_t
+    #define MVK_HANDLE_GENERATION_TYPE uint8_t
     constexpr static MVK_HANDLE_GENERATION_TYPE HandleGenerationCount = (1 << 8 * sizeof(MVK_HANDLE_GENERATION_TYPE)) - 1;
 
     template<typename T, T N>
@@ -450,20 +449,17 @@ namespace MVk
         T current{N - 1};
         T data[];
 
-        T Pop()
-        {
+        T Pop() {
             assert(current != 0 && "Trying to pop stack below 0.");
             return data[current--];
         }
 
-        void Push(T value)
-        {
+        void Push(T value) {
             assert(current != HandleIndexCapacity && "Tring to push stack above capacity.");
             data[++current] = value;
         }
 
-        constexpr Stack()
-        {
+        Stack() {
             assert(current <= HandleIndexCapacity && "Tring to create stack with capacity greater than type supports.");
             for (size_t i = 0; i < N; ++i) {
                 data[i] = (T) i;
@@ -486,96 +482,73 @@ namespace MVk
         MVK_HANDLE_POOL_INDEX_TYPE handleIndex;
         MVK_HANDLE_GENERATION_TYPE handleGeneration;
 
-        // THandle& GetHandle() { return IsValid() ? HandlePool<THandle, TState>::handles[handleIndex] : nullptr; }
-        // TState& GetState() { return IsValid() ? HandlePool<THandle, TState>::states[handleIndex] : nullptr; }
+        THandle& Handle() const { return HandlePool<THandle, TState>::handles[handleIndex]; }
+        TState& State() { return HandlePool<THandle, TState>::states[handleIndex]; }
 
-        THandle& handle() const { return HandlePool<THandle, TState>::handles[handleIndex]; }
-        TState& state() { return HandlePool<THandle, TState>::states[handleIndex]; }
-
-        static Derived Acquire()
-        {
+        static Derived Acquire() {
             const auto index = HandlePool<THandle, TState>::freeIndexStack.Pop();
             const auto generation = HandlePool<THandle, TState>::generations[index];
             return Derived{index, generation};
         }
 
-        void Release()
-        {
+        void Release() const {
             const auto generation = HandlePool<THandle, TState>::generations[handleIndex];
             assert(generation != HandleGenerationCount && "Max handle generations reached.");
             ++HandlePool<THandle, TState>::generations[handleIndex];
             HandlePool<THandle, TState>::freeIndexStack.Push(handleIndex);
         }
 
-        bool IsValid() const { return handleGeneration == HandlePool<THandle, TState>::generations[handleIndex]; }
+        bool IsValid() const {
+            return HandlePool<THandle, TState>::generations[handleIndex] == handleGeneration &&
+                   HandlePool<THandle, TState>::handles[handleIndex] != VK_NULL_HANDLE;
+        }
 
-        operator THandle&() const { return handle(); }
+        operator THandle&() const { return Handle(); }
     };
 
-    template<typename T, uint32_t N>
-    struct Array
-    {
-        T data[N];
-    };
-    template<typename T, typename... Ts>
-    Array(T, Ts...) -> Array<T, 1 + sizeof...(Ts)>;
+    struct Device;
+    struct HandleState;
 
-    struct Value
-    {
-        int value{1};
-    };
-
-    template<uint32_t N>
-    struct Info
-    {
-        int value{1};
-        Array<Value, N> values{};
-    };
-
-    template<typename... Ts>
-    auto makeArray(Ts... ts)
-    {
-        return Array{ts...};
-    }
-
-    inline void TestConstruct()
-    {
-        Info info{
-          .value{10},
-          .values = makeArray(
-            Value{.value = 1},
-            Value{.value = 2}),
+    struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, HandleState> {
+        template<uint32_t NCreateInfoCount>
+        struct Desc
+        {
+            const char* name{"ComputePipeline"};
+            uint32_t createInfoCount{NCreateInfoCount};
+            ComputePipelineCreateInfo createInfos[NCreateInfoCount];
+            VkAllocationCallbacks* pAllocator{nullptr};
         };
-    }
 
-    struct Image;
+        static ComputePipeline2 Create(
+          Device device,
+          const char* name,
+          uint32_t createInfoCount,
+          const ComputePipelineCreateInfo* pCreateInfos,
+          VkAllocationCallbacks* pAllocator);
 
-    template<uint32_t N>
-    struct ComputePipelineCreateDesc
-    {
-        const char* name{"ComputePipeline"};
-        constexpr static uint32_t CreateInfoCount{N};
-        ComputePipelineCreateInfo createInfos[N]{};
-        const VkAllocationCallbacks* pAllocator{nullptr};
+        void BindPipeline(VkCommandBuffer commandBuffer) const;
+        void Destroy();
     };
-    struct ComputePipeline2;
+
+    struct Image : HandleBase<Image, VkImage, HandleState> {
+        void Destroy();
+    };
 
     struct DeviceState
     {
-        const VkAllocationCallbacks* pDefaultAllocator{nullptr};
+        VkAllocationCallbacks* pDefaultAllocator{nullptr};
         VkResult result{VK_NOT_READY};
     };
     struct Device : HandleBase<Device, VkDevice, DeviceState>
     {
-        const VkAllocationCallbacks* defaultAllocator(const VkAllocationCallbacks* pAllocator) {
-            return pAllocator == nullptr ? state().pDefaultAllocator : pAllocator;
+        VkAllocationCallbacks* DefaultAllocator(VkAllocationCallbacks* pAllocator);
+
+        template<uint32_t NCreateInfoCount>
+        FORCE_INLINE ComputePipeline2 CreateComputePipeline(ComputePipeline2::Desc<NCreateInfoCount>&& desc) {
+            return Mid::Vk::ComputePipeline2::Create(*this, desc.name, desc.createInfoCount, desc.createInfos, desc.pAllocator);
         }
 
-        template<uint32_t N>
-        ComputePipeline2 CreateComputePipeline(const ComputePipelineCreateDesc<N>&& createInfo);
-
-        void operator=(const Device& other)
-        {
+        void operator=(const Device& other) {
             handleIndex = other.handleIndex;
             handleGeneration = other.handleGeneration;
         }
@@ -584,47 +557,16 @@ namespace MVk
     struct HandleState
     {
         Device device;
-        const VkAllocationCallbacks* pAllocator{nullptr};
+        VkAllocationCallbacks* pAllocator{nullptr};
         VkResult result{VK_NOT_READY};
     };
-    struct Image : HandleBase<Image, VkImage, HandleState>
+
+    template<typename T>
+    struct DeferDestroy
     {
-        void Destroy()
-        {
-            assert(state().device.IsValid());
-            HandleBase::Release();
-            vkDestroyImage(state().device, handle(), state().pAllocator);
-        }
+        T create;
+        ~DeferDestroy() { create.Destroy(); }
     };
-
-    struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, HandleState>
-    {
-        // static ComputePipeline2 Acquire()
-        // {
-        //     const auto index = HandlePool<VkPipeline, HandleState>::freeIndexStack.Pop();
-        //     const auto generation = HandlePool<VkPipeline, HandleState>::generations[index];
-        //     return ComputePipeline2{index, generation};
-        // }
-
-        void BindPipeline(const VkCommandBuffer commandBuffer) const
-        {
-            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, handle());
-        }
-
-        void Destroy()
-        {
-            assert(state().device.IsValid());
-            HandleBase::Release();
-            vkDestroyPipeline(state().device, handle(), state().pAllocator);
-        }
-    };
-
-    // template<typename T>
-    // struct DeferDestroy
-    // {
-    //     T create;
-    //     ~DeferDestroy() { create.Destroy(); }
-    // };
 
     //------------------------------------------------------------------------------------
     // Functions Declaration
@@ -640,9 +582,8 @@ namespace MVk
 
     inline VkResult CreateDescriptorSetLayout(
       const VkDevice device,
-      const MVk::DescriptorSetLayoutCreateInfo* pCreateInfo,
-      VkDescriptorSetLayout* pSetLayout)
-    {
+      const DescriptorSetLayoutCreateInfo* pCreateInfo,
+      VkDescriptorSetLayout* pSetLayout) {
         return vkCreateDescriptorSetLayout(device, (VkDescriptorSetLayoutCreateInfo*) pCreateInfo, MVK_DEFAULT_ALLOCATOR, pSetLayout);
     }
 
@@ -651,16 +592,14 @@ namespace MVk
       uint32_t descriptorWriteCount,
       const WriteDescriptorSet* pDescriptorWrites,
       uint32_t descriptorCopyCount = 0,
-      const VkCopyDescriptorSet* pDescriptorCopies = nullptr)
-    {
+      const VkCopyDescriptorSet* pDescriptorCopies = nullptr) {
         vkUpdateDescriptorSets(device, descriptorWriteCount, (VkWriteDescriptorSet*) pDescriptorWrites, 0, nullptr);
     }
 
     inline VkResult AllocateDescriptorSets(
       VkDevice device,
       const DescriptorSetAllocateInfo* pAllocateInfo,
-      VkDescriptorSet* pDescriptorSets)
-    {
+      VkDescriptorSet* pDescriptorSets) {
         return vkAllocateDescriptorSets(device, (VkDescriptorSetAllocateInfo*) pAllocateInfo, pDescriptorSets);
     }
 
@@ -668,34 +607,63 @@ namespace MVk
 
 /***********************************************************************************
 *
-*   VULKAN MEDIUM IMPLEMENTATION
+*   Mid-Level Vulkan Implementation
 *
 ************************************************************************************/
 
 #if defined(MID_VULKAN_IMPLEMENTATION)
 
-template<uint32_t N>
-MVk::ComputePipeline2 MVk::Device::CreateComputePipeline(const MVk::ComputePipelineCreateDesc<N>&& desc)
+
+void Mid::Vk::ComputePipeline2::BindPipeline(const VkCommandBuffer commandBuffer) const {
+    assert(Handle() == VK_NULL_HANDLE);
+    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
+}
+
+void Mid::Vk::ComputePipeline2::Destroy() {
+    printf("ComputePipeline2::Destroy\n");
+    // assert(State().device.IsValid());
+    // HandleBase::Release();
+    // vkDestroyPipeline(State().device, Handle(), State().pAllocator);
+}
+
+VkAllocationCallbacks* Mid::Vk::Device::DefaultAllocator(VkAllocationCallbacks* pAllocator) {
+    return pAllocator == nullptr ? State().pDefaultAllocator : pAllocator;
+}
+
+Mid::Vk::ComputePipeline2 Mid::Vk::ComputePipeline2::Create(
+  Device device,
+  const char* name,
+  uint32_t createInfoCount,
+  const ComputePipelineCreateInfo* pCreateInfos,
+  VkAllocationCallbacks* pAllocator)
 {
+    printf("ComputePipeline2::Create\n");
     auto pipeline = ComputePipeline2::Acquire();
-    auto& state = pipeline.state();
-    state.device = *this;
-    state.pAllocator = defaultAllocator(desc.pAllocator);
-    state.result = vkCreateComputePipelines(*this,
-                                            VK_NULL_HANDLE,
-                                            desc.CreateInfoCount,
-                                            (VkComputePipelineCreateInfo*) &desc.createInfos,
-                                            state.pAllocator,
-                                            &pipeline.handle());
+    // auto& state = pipeline.State();
+    // state.device = *this;
+    // state.pAllocator = DefaultAllocator(pAllocator);
+    // state.result = vkCreateComputePipelines(*this,
+    //                                         VK_NULL_HANDLE,
+    //                                         createInfoCount,
+    //                                         (VkComputePipelineCreateInfo*) pCreateInfos,
+    //                                         state.pAllocator,
+    //                                         &pipeline.Handle());
     // const DebugUtilsObjectNameInfoEXT debugInfo{
     //   .objectType = VK_OBJECT_TYPE_PIPELINE,
-    //   .objectHandle = (uint64_t) pipeline.handle(),
-    //   .pObjectName = desc.name};
-    // PFN.SetDebugUtilsObjectNameEXT(*this, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
+    //   .objectHandle = (uint64_t) pipeline.Handle(),
+    //   .pObjectName = name};
+    // PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*) &debugInfo);
     return pipeline;
 }
 
-void MVk::CmdPipelineImageBarrier2(
+void Mid::Vk::Image::Destroy()
+{
+    assert(State().device.IsValid());
+    HandleBase::Release();
+    vkDestroyImage(State().device, Handle(), State().pAllocator);
+}
+
+void Mid::Vk::CmdPipelineImageBarrier2(
   VkCommandBuffer commandBuffer,
   uint32_t imageMemoryBarrierCount,
   const VkImageMemoryBarrier2* pImageMemoryBarriers)
@@ -708,57 +676,57 @@ void MVk::CmdPipelineImageBarrier2(
     vkCmdPipelineBarrier2(commandBuffer, &toComputeDependencyInfo);
 }
 
-VkResult vkCreateImageView2D(
-  VkDevice device,
-  VkImage image,
-  VkFormat format,
-  VkImageAspectFlags aspectMask,
-  const VkAllocationCallbacks* pAllocator,
-  VkImageView* pView)
-{
-    const VkImageViewCreateInfo imageViewCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image = image,
-      .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = format,
-      .subresourceRange = {
-        .aspectMask = aspectMask,
-        .levelCount = 1,
-        .layerCount = 1,
-      },
-    };
-    return vkCreateImageView(device,
-                             &imageViewCreateInfo,
-                             pAllocator,
-                             pView);
-}
-
-VkResult vkCreateMipImageView2D(
-  VkDevice device,
-  VkImage image,
-  VkFormat format,
-  VkImageAspectFlags aspectMask,
-  uint32_t mipLevelCount,
-  uint32_t mipLevel,
-  const VkAllocationCallbacks* pAllocator,
-  VkImageView* pView)
-{
-    const VkImageViewCreateInfo imageViewCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image = image,
-      .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = format,
-      .subresourceRange = {
-        .aspectMask = aspectMask,
-        .baseMipLevel = mipLevel,
-        .levelCount = mipLevelCount,
-        .layerCount = 1,
-      },
-    };
-    return vkCreateImageView(device,
-                             &imageViewCreateInfo,
-                             pAllocator,
-                             pView);
-}
+// VkResult vkCreateImageView2D(
+//   VkDevice device,
+//   VkImage image,
+//   VkFormat format,
+//   VkImageAspectFlags aspectMask,
+//   const VkAllocationCallbacks* pAllocator,
+//   VkImageView* pView)
+// {
+//     const VkImageViewCreateInfo imageViewCreateInfo = {
+//       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+//       .image = image,
+//       .viewType = VK_IMAGE_VIEW_TYPE_2D,
+//       .format = format,
+//       .subresourceRange = {
+//         .aspectMask = aspectMask,
+//         .levelCount = 1,
+//         .layerCount = 1,
+//       },
+//     };
+//     return vkCreateImageView(device,
+//                              &imageViewCreateInfo,
+//                              pAllocator,
+//                              pView);
+// }
+//
+// VkResult vkCreateMipImageView2D(
+//   VkDevice device,
+//   VkImage image,
+//   VkFormat format,
+//   VkImageAspectFlags aspectMask,
+//   uint32_t mipLevelCount,
+//   uint32_t mipLevel,
+//   const VkAllocationCallbacks* pAllocator,
+//   VkImageView* pView)
+// {
+//     const VkImageViewCreateInfo imageViewCreateInfo = {
+//       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+//       .image = image,
+//       .viewType = VK_IMAGE_VIEW_TYPE_2D,
+//       .format = format,
+//       .subresourceRange = {
+//         .aspectMask = aspectMask,
+//         .baseMipLevel = mipLevel,
+//         .levelCount = mipLevelCount,
+//         .layerCount = 1,
+//       },
+//     };
+//     return vkCreateImageView(device,
+//                              &imageViewCreateInfo,
+//                              pAllocator,
+//                              pView);
+// }
 
 #endif

@@ -4,7 +4,7 @@
 #include "moxaic_logging.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_device.hpp"
-#include "vulkan_medium.hpp"
+#include "mid_vulkan.hpp"
 
 #include <vulkan/vulkan.h>
 
@@ -40,12 +40,12 @@ namespace Moxaic::Vulkan
         static VkResult InitLayout(const Vulkan::Device& device)
         {
             VulkanDescriptorBase2::device = &device;
-            const MVk::DescriptorSetLayoutCreateInfo createInfo{
+            const Mid::Vk::DescriptorSetLayoutCreateInfo createInfo{
               .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
               .bindingCount = Derived::LayoutBindings.size(),
               .pBindings = Derived::LayoutBindings.data(),
             };
-            return MVk::CreateDescriptorSetLayout(device.GetVkDevice(),
+            return Mid::Vk::CreateDescriptorSetLayout(device.GetVkDevice(),
                                                   &createInfo,
                                                   &vkSharedDescriptorSetLayoutHandle);
         }
@@ -59,11 +59,11 @@ namespace Moxaic::Vulkan
 
         MXC_RESULT Init()
         {
-            const MVk::DescriptorSetAllocateInfo allocInfo{
+            const Mid::Vk::DescriptorSetAllocateInfo allocInfo{
               .descriptorPool = device->GetVkDescriptorPool(),
               .pSetLayouts = &vkSharedDescriptorSetLayoutHandle,
             };
-            VK_CHK(MVk::AllocateDescriptorSets(device->GetVkDevice(),
+            VK_CHK(Mid::Vk::AllocateDescriptorSets(device->GetVkDevice(),
                                                &allocInfo,
                                                &vkDescriptorSetHandle));
             const VkDebugUtilsObjectNameInfoEXT debugInfo{
@@ -78,10 +78,10 @@ namespace Moxaic::Vulkan
 
         static void EmplaceDescriptorWrite(const uint32_t bindingIndex,
                                            const VkDescriptorSet dstSet,
-                                           const MVk::DescriptorImageInfo* pImageInfo,
-                                           MVk::WriteDescriptorSet* pWriteDescriptorSet)
+                                           const Mid::Vk::DescriptorImageInfo* pImageInfo,
+                                           Mid::Vk::WriteDescriptorSet* pWriteDescriptorSet)
         {
-            new (pWriteDescriptorSet) MVk::WriteDescriptorSet{
+            new (pWriteDescriptorSet) Mid::Vk::WriteDescriptorSet{
               .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
               .dstSet = dstSet,
               .dstBinding = Derived::LayoutBindings[bindingIndex].binding,

@@ -2,7 +2,7 @@
 
 #include "moxaic_scene.hpp"
 #include "moxaic_window.hpp"
-#include "vulkan_medium.hpp"
+#include "mid_vulkan.hpp"
 
 #include <thread>
 
@@ -441,7 +441,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
       framebuffer.DepthTexture.GetImageBarrier(Vulkan::GraphicsAttach2, Vulkan::GraphicsComputeRead2),
       framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsAttach2, Vulkan::GraphicsComputeWrite2),
     };
-    MVk::CmdPipelineImageBarrier2(commandBuffer,
+    Mid::Vk::CmdPipelineImageBarrier2(commandBuffer,
                                   toComputeBarriers.size(),
                                   toComputeBarriers.data());
 
@@ -456,7 +456,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
     const auto groupCount = VkExtent2D{Window::GetExtents().width / Vulkan::NodeProcessPipeline::LocalSize, Window::GetExtents().height / Vulkan::NodeProcessPipeline::LocalSize};
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
     for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-        MVk::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
+        Mid::Vk::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
         nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
                                                                    framebuffer.VkGbufferImageViewMipHandles[i - 1],
                                                                    framebuffer.VkGbufferImageViewMipHandles[i]);
@@ -487,7 +487,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
       framebuffer.DepthTexture.GetImageBarrier(Vulkan::GraphicsComputeRead2, externalRead),
       framebuffer.GbufferTexture.GetImageBarrier(Vulkan::GraphicsComputeWrite2, externalRead),
     };
-    MVk::CmdPipelineImageBarrier2(commandBuffer,
+    Mid::Vk::CmdPipelineImageBarrier2(commandBuffer,
                                   toExternalBarriers.size(),
                                   toExternalBarriers.data());
 

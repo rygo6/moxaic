@@ -1,7 +1,7 @@
 #define MXC_DISABLE_LOG
 
-#include "moxaic_vulkan_device.hpp"
 #include "main.hpp"
+#include "moxaic_vulkan_device.hpp"
 #include "moxaic_logging.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"

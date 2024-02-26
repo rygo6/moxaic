@@ -1,15 +1,15 @@
 #pragma once
 
-#include "../descriptors/moxaic_vulkan_descriptor.hpp"
-#include "../utilities/static_array.hpp"
-#include "../utilities/vulkan_medium.hpp"
+#include "moxaic_vulkan_descriptor.hpp"
+#include "static_array.hpp"
+#include "mid_vulkan.hpp"
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
 {
-    struct NodeProcessDescriptorLayout : MVk::DescriptorSetLayout
+    struct NodeProcessDescriptorLayout : Mid::Vk::DescriptorSetLayout
     {
         constexpr static const char* Name{"NodeProcessDescriptorLayout"};
         constexpr static uint32_t SetIndex{0};
@@ -18,12 +18,12 @@ namespace Moxaic::Vulkan
             DstTexture,
         };
         constexpr static StaticArray LayoutBindings{
-          MVk::DescriptorSetLayoutBinding{
+          Mid::Vk::DescriptorSetLayoutBinding{
             .binding = SrcTexture,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
           },
-          MVk::DescriptorSetLayoutBinding{
+          Mid::Vk::DescriptorSetLayoutBinding{
             .binding = DstTexture,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -36,7 +36,7 @@ namespace Moxaic::Vulkan
               LayoutBindings[SrcTexture].WithSamplers(&srcSampler),
               LayoutBindings[DstTexture],
             };
-            VKM_CHECK(MVk::DescriptorSetLayout::Create(
+            VKM_CHECK(Mid::Vk::DescriptorSetLayout::Create(
               deviceHandle,
               Name,
               {
@@ -48,10 +48,10 @@ namespace Moxaic::Vulkan
         }
 
         static void EmplaceDescriptorWrite(const uint32_t bindingIndex,
-                                           const MVk::DescriptorImageInfo* pImageInfo,
-                                           MVk::WriteDescriptorSet* pWriteDescriptorSet)
+                                           const Mid::Vk::DescriptorImageInfo* pImageInfo,
+                                           Mid::Vk::WriteDescriptorSet* pWriteDescriptorSet)
         {
-            new (pWriteDescriptorSet) MVk::WriteDescriptorSet{
+            new (pWriteDescriptorSet) Mid::Vk::WriteDescriptorSet{
               .dstBinding = NodeProcessDescriptorLayout::LayoutBindings[bindingIndex].binding,
               .descriptorCount = NodeProcessDescriptorLayout::LayoutBindings[bindingIndex].descriptorCount,
               .descriptorType = NodeProcessDescriptorLayout::LayoutBindings[bindingIndex].descriptorType,
@@ -60,18 +60,18 @@ namespace Moxaic::Vulkan
         }
 
         static void EmplaceSrcTextureImageInfo(const VkImageView srcImageView,
-                                               MVk::DescriptorImageInfo* pImageInfo,
-                                               MVk::WriteDescriptorSet* pWriteDescriptorSet)
+                                               Mid::Vk::DescriptorImageInfo* pImageInfo,
+                                               Mid::Vk::WriteDescriptorSet* pWriteDescriptorSet)
         {
-            new (pImageInfo) MVk::DescriptorImageInfo{
+            new (pImageInfo) Mid::Vk::DescriptorImageInfo{
               .imageView = srcImageView,
               .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
             EmplaceDescriptorWrite(NodeProcessDescriptorLayout::BindingIndex::SrcTexture, pImageInfo, pWriteDescriptorSet);
         }
 
         static void EmplaceDstTextureImageInfo(const VkImageView dstImageView,
-                                               MVk::DescriptorImageInfo* pImageInfo,
-                                               MVk::WriteDescriptorSet* pWriteDescriptorSet)
+                                               Mid::Vk::DescriptorImageInfo* pImageInfo,
+                                               Mid::Vk::WriteDescriptorSet* pWriteDescriptorSet)
         {
             new (pImageInfo) VkDescriptorImageInfo{
               .imageView = dstImageView,
@@ -80,7 +80,7 @@ namespace Moxaic::Vulkan
         }
     };
 
-    struct NodeProcessPipelineLayout : MVk::PipelineLayout
+    struct NodeProcessPipelineLayout : Mid::Vk::PipelineLayout
     {
         constexpr static const char* Name{"NodeProcessPipelinLayout"};
 
@@ -89,11 +89,11 @@ namespace Moxaic::Vulkan
             const StaticArray setLayouts{
               nodeProcessDescriptorLayout.vkHandle,
             };
-            const MVk::PipelineLayoutCreateInfo createInfo{
+            const Mid::Vk::PipelineLayoutCreateInfo createInfo{
               .setLayoutCount = setLayouts.size(),
               .pSetLayouts = setLayouts.data(),
             };
-            VKM_CHECK(MVk::PipelineLayout::Create(nodeProcessDescriptorLayout.vkDeviceHandle, Name, &createInfo));
+            VKM_CHECK(Mid::Vk::PipelineLayout::Create(nodeProcessDescriptorLayout.vkDeviceHandle, Name, &createInfo));
             return VK_SUCCESS;
         }
 
@@ -101,8 +101,8 @@ namespace Moxaic::Vulkan
                                               const VkImageView srcImageView,
                                               const VkImageView dstImageView)
         {
-            MVk::DescriptorImageInfo imageInfos[2];
-            MVk::WriteDescriptorSet writes[2];
+            Mid::Vk::DescriptorImageInfo imageInfos[2];
+            Mid::Vk::WriteDescriptorSet writes[2];
             NodeProcessDescriptorLayout::EmplaceSrcTextureImageInfo(srcImageView, &imageInfos[0], &writes[0]);
             NodeProcessDescriptorLayout::EmplaceDstTextureImageInfo(dstImageView, &imageInfos[1], &writes[1]);
             VkFunc.CmdPushDescriptorSetKHR(commandBuffer,
@@ -114,7 +114,7 @@ namespace Moxaic::Vulkan
         }
     };
 
-    struct NodeProcessPipeline : MVk::ComputePipeline
+    struct NodeProcessPipeline : Mid::Vk::ComputePipeline
     {
         constexpr static const char* Name{"NodeProcessPipeline"};
         constexpr static int LocalSize{32};
@@ -122,17 +122,17 @@ namespace Moxaic::Vulkan
         VkResult Create(const NodeProcessPipelineLayout& layout,
                         const char* const pShaderPath)
         {
-            MVk::ShaderModule shader;
+            Mid::Vk::ShaderModule shader;
             VKM_CHECK(shader.Create(layout.deviceHandle, pShaderPath));
-            const MVk::PipelineShaderStageCreateInfo stage{
+            const Mid::Vk::PipelineShaderStageCreateInfo stage{
               .stage = VK_SHADER_STAGE_COMPUTE_BIT,
               .module = shader,
             };
-            const MVk::ComputePipelineCreateInfo createInfo{
+            const Mid::Vk::ComputePipelineCreateInfo createInfo{
               .stage = stage,
               .layout = layout,
             };
-            VKM_CHECK(MVk::ComputePipeline::Create(layout.deviceHandle, Name, &createInfo));
+            VKM_CHECK(Mid::Vk::ComputePipeline::Create(layout.deviceHandle, Name, &createInfo));
             return VK_SUCCESS;
         }
     };

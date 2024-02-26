@@ -7,6 +7,7 @@
 #include "moxaic_vulkan_device.hpp"
 #include "moxaic_vulkan_pipeline.hpp"
 #include "static_array.hpp"
+#include "mid_vulkan.hpp"
 #include <vulkan/vulkan.h>
 
 namespace Moxaic::Vulkan
@@ -47,9 +48,8 @@ namespace Moxaic::Vulkan
             MXC_CHK(CreateComputePipe(compStage));
             vkDestroyShaderModule(Device->GetVkDevice(), shader, VK_ALLOC);
 
-            CheckLayoutInitialized(*Device);
-
-            MVk::ComputePipelineCreateDesc desc{
+            Mid::Vk::Device device;
+            auto pipeline = Mid::Vk::DeferDestroy(device.CreateComputePipeline(Mid::Vk::ComputePipeline2::Desc{
               .name = "ComputeCompositePipeline",
               .createInfos{
                 {
@@ -60,7 +60,7 @@ namespace Moxaic::Vulkan
                   .layout = sharedVkPipelineLayout,
                 },
               },
-            };
+            }));
 
             return MXC_SUCCESS;
         }

@@ -10,6 +10,10 @@ file(GLOB SRC_FILES
         src/*.hpp
         src/*.c
         src/*.h
+        src/mid/*.cpp
+        src/mid/*.hpp
+        src/mid/*.c
+        src/mid/*.h
         third_party/*.cpp
         third_party/*.hpp
         third_party/*.c
@@ -44,6 +48,7 @@ target_include_directories(${TARGET_NAME} PUBLIC
         src/descriptors
         src/pipelines
         src/utilities
+        src/mid
         third_party
         "${VULKAN_SDK_PATH}/Include"
 )
