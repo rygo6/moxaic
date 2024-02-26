@@ -508,11 +508,9 @@ struct HandleBase {
   }
 };
 
-struct LogicalDevice;
-struct ComputePipeline2;
-struct PipelineLayout2;
-
 /* PhysicalDevice */
+struct LogicalDevice;
+
 template <vkCount N0, vkCount N1, vkCount N2>
 struct PhysicalDeviceDesc {
   const char*                  debugName{"Device"};
@@ -525,6 +523,7 @@ struct PhysicalDeviceState {
   const VkAllocationCallbacks* pDefaultAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
+
 struct PhysicalDevice : HandleBase<PhysicalDevice, VkDevice, PhysicalDeviceState> {
   static PhysicalDevice Create(
       VkPhysicalDevice             physicalDevice,
@@ -537,6 +536,9 @@ struct PhysicalDevice : HandleBase<PhysicalDevice, VkDevice, PhysicalDeviceState
 };
 
 /* LogicalDevice */
+struct ComputePipeline2;
+struct PipelineLayout2;
+
 template <vkCount N0, vkCount N1, vkCount N2>
 struct LocalDeviceDesc {
   const char*                  debugName{"Device"};
@@ -549,6 +551,7 @@ struct LogicalDeviceState {
   const VkAllocationCallbacks* pDefaultAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
+
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   static LogicalDevice Create(
       VkPhysicalDevice             physicalDevice,
@@ -561,11 +564,6 @@ struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   PipelineLayout2 CreatePipelineLayout(const auto&& desc);
 
   const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
-
-  void operator=(const LogicalDevice& other) {
-    handleIndex = other.handleIndex;
-    handleGeneration = other.handleGeneration;
-  }
 };
 MVK_HANDLE_METHOD LogicalDevice PhysicalDevice::CreateLogicalDevice(const auto&& desc) {
   return Create(desc.physicalDevice, desc.debugName, &desc.createInfo, desc.pAllocator);
@@ -583,6 +581,7 @@ struct PipelineLayoutDesc {
   PipelineLayoutCreateInfo     createInfo{};
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
+
 struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, GenericHandleState> {
   static PipelineLayout2 Create(
       LogicalDevice                   logicalDevice,
@@ -600,9 +599,10 @@ template <vkCount N0>
 struct ComputePipelineDesc {
   const char*                  debugName{"ComputePipeline"};
   uint32_t                     createInfoCount{N0};
-  ComputePipelineCreateInfo    createInfos[N0];
+  ComputePipelineCreateInfo    createInfos[N0]{};
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
+
 struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, GenericHandleState> {
   static ComputePipeline2 Create(
       LogicalDevice                    logicalDevice,
@@ -617,8 +617,6 @@ struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, GenericHandle
 MVK_HANDLE_METHOD ComputePipeline2 LogicalDevice::CreateComputePipeline(const auto&& desc) {
   return ComputePipeline2::Create(*this, desc.debugName, desc.createInfoCount, desc.createInfos, desc.pAllocator);
 }
-
-
 
 template <typename T>
 struct DeferDestroy {
