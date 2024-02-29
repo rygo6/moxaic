@@ -11,10 +11,10 @@ using namespace Moxaic;
 
 int main(int argc, char* argv[])
 {
-    // Renderer renderer;
-    // renderer.Init();
-    //
-    // return 0;
+    Renderer renderer;
+    renderer.Init();
+
+    return 0;
     SetConsoleTextDefault();
 
     for (int i = 0; i < argc; ++i) {

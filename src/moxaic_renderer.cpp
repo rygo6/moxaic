@@ -23,13 +23,13 @@ void Moxaic::Renderer::Init()
 
     auto instance = Instance::Create({
       .createInfo{
-        .applicationInfo{
-          .pApplicationName{"Moxaic"},
+        .pApplicationInfo = ApplicationInfo{
+          .pApplicationName = "Moxaic",
         },
-        .enabledLayerNames = {
+        .pEnabledLayerNames{
           "VK_LAYER_KHRONOS_validation",
         },
-        .enabledExtensionNames{
+        .pEnabledExtensionNames{
           VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
           VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
           VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
@@ -38,7 +38,7 @@ void Moxaic::Renderer::Init()
         },
       },
       .validationFeatures{
-        .enabledValidationFeatures{
+        .pEnabledValidationFeatures{
           // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
           // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
           // VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
@@ -47,6 +47,7 @@ void Moxaic::Renderer::Init()
         },
       },
     });
+    MXC_LOG(instance.ResultName());
     if (!instance.IsValid()) {
         MXC_LOG_ERROR(instance.ResultName());
     }

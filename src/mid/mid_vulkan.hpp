@@ -66,106 +66,61 @@ struct VkTexture {
   VkImageView    view;
 };
 
-typedef uint32_t    VkSize;
-typedef const char* VkString;
-
 template <typename T>
-struct span {
-  const VkSize count;
-  const T*     data;
+struct Ptr {
+  const T* data;
 
-  constexpr span(std::initializer_list<T> l)
-      : count{VkSize(l.size())}, data{l.begin()} {}
+  constexpr Ptr(T&& value) : data{&value} {}
 };
 
 template <typename T>
-struct ptr {
-  T         data;
-  constexpr operator T*() { return &data; }
+struct Array {
+  const uint32_t count;
+  const T*       data;
+
+  constexpr Array(std::initializer_list<T> l) : count{uint32_t(l.size())}, data{l.begin()} {}
 };
 
-struct ApplicationInfo {
+template <typename T>
+struct VkStruct {
+  const T* ptr() const { return (T*)this; }
+  operator const T&() const { return *(T*)this; };
+};
+
+struct ApplicationInfo : VkStruct<VkApplicationInfo> {
   VkStructureType sType{VK_STRUCTURE_TYPE_APPLICATION_INFO};
   const void*     pNext{nullptr};
-  VkString        pApplicationName{"Mid Vulkan Application"};
+  const char*     pApplicationName{"Mid Vulkan Application"};
   uint32_t        applicationVersion{VK_MAKE_VERSION(1, 0, 0)};
-  VkString        pEngineName{"Mid Vulkan"};
+  const char*     pEngineName{"Mid Vulkan"};
   uint32_t        engineVersion{VK_MAKE_VERSION(1, 0, 0)};
   uint32_t        apiVersion{VK_HEADER_VERSION_COMPLETE};
-
-  constexpr operator VkApplicationInfo() const {
-    return VkApplicationInfo{
-        .sType{VK_STRUCTURE_TYPE_APPLICATION_INFO},
-        .pNext{pNext},
-        .pApplicationName{pApplicationName},
-        .applicationVersion{applicationVersion},
-        .pEngineName{pEngineName},
-        .engineVersion{engineVersion},
-        .apiVersion{apiVersion},
-    };
-  }
 };
 
-struct InstanceCreateInfo {
+struct InstanceCreateInfo : VkStruct<VkInstanceCreateInfo> {
+  VkStructureType       sType{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
   const void*           pNext{nullptr};
-  VkInstanceCreateFlags flags{};
-  ApplicationInfo       applicationInfo{};
-  span<VkString>        enabledLayerNames;
-  span<VkString>        enabledExtensionNames;
-
-  constexpr VkInstanceCreateInfo Vk() const {
-    return VkInstanceCreateInfo{
-        .sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO},
-        .pNext{pNext},
-        .flags{flags},
-        .pApplicationInfo{ptr<VkApplicationInfo>(applicationInfo)},
-        .enabledLayerCount{enabledLayerNames.count},
-        .ppEnabledLayerNames{enabledLayerNames.data},
-        .enabledExtensionCount{enabledExtensionNames.count},
-        .ppEnabledExtensionNames{enabledExtensionNames.data},
-    };
-  }
+  VkInstanceCreateFlags flags;
+  Ptr<ApplicationInfo>  pApplicationInfo;
+  Array<const char*>    pEnabledLayerNames;
+  Array<const char*>    pEnabledExtensionNames;
 };
 
-struct ValidationFeatures {
-  const void*                         pNext{nullptr};
-  span<VkValidationFeatureEnableEXT>  enabledValidationFeatures{};
-  span<VkValidationFeatureDisableEXT> disabledValidationFeatures{};
-
-  constexpr operator VkValidationFeaturesEXT() const {
-    return (VkValidationFeaturesEXT){
-        .sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT},
-        .pNext{pNext},
-        .enabledValidationFeatureCount{enabledValidationFeatures.count},
-        .pEnabledValidationFeatures{enabledValidationFeatures.data},
-        .disabledValidationFeatureCount{disabledValidationFeatures.count},
-        .pDisabledValidationFeatures{disabledValidationFeatures.data},
-    };
-  }
+struct ValidationFeatures : VkStruct<VkValidationFeaturesEXT> {
+  VkStructureType                      sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
+  const void*                          pNext{nullptr};
+  Array<VkValidationFeatureEnableEXT>  pEnabledValidationFeatures;
+  Array<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
 };
 
-struct DeviceCreateInfo {
-  const void*                   pNext{nullptr};
-  VkDeviceCreateFlags           flags{0};
-  span<VkDeviceQueueCreateInfo> queueCreateInfos{};
-  span<VkString>                enabledLayerNames{};
-  span<VkString>                enabledExtensionNames{};
-  VkPhysicalDeviceFeatures      enabledFeatures{};
-
-  constexpr operator VkDeviceCreateInfo() const {
-    return {
-        .sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO},
-        .pNext{pNext},
-        .flags{flags},
-        .queueCreateInfoCount{queueCreateInfos.count},
-        .pQueueCreateInfos{queueCreateInfos.data},
-        .enabledLayerCount{enabledLayerNames.count},
-        .ppEnabledLayerNames{enabledLayerNames.data},
-        .enabledExtensionCount{enabledExtensionNames.count},
-        .ppEnabledExtensionNames{enabledExtensionNames.data},
-        .pEnabledFeatures{&enabledFeatures},
-    };
-  }
+struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
+  VkStructureType                sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+  const void*                    pNext{nullptr};
+  VkDeviceCreateFlags            flags{0};
+  Array<VkDeviceQueueCreateInfo> queueCreateInfos;
+  Array<const char*>             pEnabledLayerNames;
+  Array<const char*>             pEnabledExtensionNames;
+  Ptr<VkPhysicalDeviceFeatures>  pEnabledFeatures;
 };
 
 struct DescriptorSetLayoutBinding {
@@ -570,13 +525,11 @@ struct HandleBase {
     HandlePool<THandle, TState>::freeIndexStack.Push(handleIndex);
   }
 
-  VkResult Result() const { return HandlePool<THandle, TState>::states[handleIndex].result; }
-  VkString ResultName() const { return string_VkResult(Result()); }
+  VkResult    Result() const { return HandlePool<THandle, TState>::states[handleIndex].result; }
+  const char* ResultName() const { return string_VkResult(Result()); }
 
   bool IsValid() const {
-    return HandlePool<THandle, TState>::generations[handleIndex] == handleGeneration &&
-           HandlePool<THandle, TState>::handles[handleIndex] != VK_NULL_HANDLE &&
-           Result() == VK_SUCCESS;
+    return HandlePool<THandle, TState>::generations[handleIndex] == handleGeneration;
   }
 
   operator THandle&() const {
@@ -587,8 +540,8 @@ struct HandleBase {
 
 /* Instance */
 struct InstanceDesc {
-  const InstanceCreateInfo     createInfo{};
-  const ValidationFeatures     validationFeatures{};
+  InstanceCreateInfo           createInfo;
+  ValidationFeatures           validationFeatures;
   const VkAllocationCallbacks* pAllocator{};
 };
 struct InstanceState {
@@ -637,7 +590,7 @@ struct PipelineLayout2;
 struct LocalDeviceDesc {
   const char*            debugName{"Device"};
   PhysicalDevice         physicalDevice{};
-  DeviceCreateInfo       createInfo{};
+  DeviceCreateInfo       createInfo;
   VkAllocationCallbacks* pAllocator{nullptr};
 };
 struct LogicalDeviceState {
@@ -689,7 +642,7 @@ MVK_HANDLE_METHOD PipelineLayout2 LogicalDevice::CreatePipelineLayout(const auto
 }
 
 /* ComputePipeline */
-template <VkSize N0>
+template <uint32_t N0>
 struct ComputePipelineDesc {
   const char*                  debugName{"ComputePipeline"};
   uint32_t                     createInfoCount{N0};

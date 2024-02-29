@@ -9,7 +9,7 @@
 using namespace Mid;
 using namespace Mid::Vk;
 
-void SetDebugInfo(
+static void SetDebugInfo(
     LogicalDevice      logicalDevice,
     const VkObjectType objectType,
     const uint64_t     objectHandle,
@@ -27,17 +27,13 @@ void ComputePipeline2::BindPipeline(const VkCommandBuffer commandBuffer) const {
 }
 
 Instance Instance::Create(const InstanceDesc&& desc) {
-
-  auto test = desc.createInfo.Vk();
-  auto name = test.pApplicationInfo->pApplicationName;
-
   auto  handle = Acquire();
   auto& state = handle.State();
   state.pInstanceAllocator = desc.pAllocator;
-  // state.result = vkCreateInstance(
-  //     &desc.createInfo.Vk(),
-  //     desc.pAllocator,
-  //     &handle.Handle());
+  state.result = vkCreateInstance(
+      desc.createInfo.ptr(),
+      desc.pAllocator,
+      &handle.Handle());
   return handle;
 }
 
