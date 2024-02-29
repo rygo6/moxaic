@@ -1,4 +1,4 @@
-#define MXC_DISABLE_LOG
+// #define MXC_DISABLE_LOG
 
 #include "moxaic_node.hpp"
 
@@ -69,7 +69,7 @@ MXC_RESULT NodeReference::Init(const Vulkan::PipelineType pipelineType)
     ipcToNode.Init(k_TempSharedProducerName);
     exportedGlobalDescriptor.Init(k_TempSharedCamMemoryName);
 
-    for (int i = 0; i < exportedFramebuffers.size(); ++i) {
+    for (uint32_t i = 0; i < exportedFramebuffers.size(); ++i) {
         exportedFramebuffers[i].Init(pipelineType,
                                      Window::GetExtents());
     }

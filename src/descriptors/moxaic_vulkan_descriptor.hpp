@@ -136,7 +136,7 @@ namespace Moxaic::Vulkan
                                                     StaticArray<VkDescriptorSetLayoutBinding, N>& bindings)
         {
             assert(sharedVkDescriptorSetLayout == VK_NULL_HANDLE);
-            for (int i = 0; i < bindings.size(); ++i) {
+            for (uint32_t i = 0; i < bindings.size(); ++i) {
                 bindings[i].binding = i;
                 bindings[i].descriptorCount = bindings[i].descriptorCount == 0 ? 1 : bindings[i].descriptorCount;
             }
@@ -184,7 +184,7 @@ namespace Moxaic::Vulkan
         {
             assert(sharedVkDescriptorSetLayout != VK_NULL_HANDLE);
             assert(vkDescriptorSet != nullptr);
-            for (int i = 0; i < writes.size(); ++i) {
+            for (uint32_t i = 0; i < writes.size(); ++i) {
                 writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[i].dstSet = vkDescriptorSet;
                 writes[i].dstBinding = writes[i].dstBinding == 0 ? i : writes[i].dstBinding;

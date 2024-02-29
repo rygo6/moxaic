@@ -68,6 +68,9 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 target_compile_options(${TARGET_NAME} PRIVATE
         -fno-exceptions
 #        -fpermissive
+        -Wall
+#        -Wextra
+#        -Wpedantic
 )
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Clang")

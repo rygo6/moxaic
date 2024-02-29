@@ -3,7 +3,7 @@
 #include "moxaic_logging.hpp"
 #include "static_array.hpp"
 
-#include <cstdint>
+#include <stdint.h>
 #include <functional>
 
 #ifdef WIN32

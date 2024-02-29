@@ -2,7 +2,6 @@
 
 #include "moxaic_scene.hpp"
 #include "moxaic_window.hpp"
-#include "mid_vulkan.hpp"
 
 #include <thread>
 
@@ -12,7 +11,7 @@ using namespace glm;
 MXC_RESULT CompositorScene::Init()
 {
     MXC_CHK(meshNodePipeline.Init());
-    for (int i = 0; i < framebuffers.size(); ++i) {
+    for (uint32_t i = 0; i < framebuffers.size(); ++i) {
         MXC_CHK(framebuffers[i].Init(meshNodePipeline.PipelineType,
                                      Window::GetExtents()));
     }
@@ -39,7 +38,7 @@ MXC_RESULT CompositorScene::Init()
 
     MXC_CHK(nodeReference.Init(Vulkan::PipelineType::Graphics));
 
-    for (int i = 0; i < meshNodeDescriptor.size(); ++i) {
+    for (uint32_t i = 0; i < meshNodeDescriptor.size(); ++i) {
         MXC_CHK(meshNodeDescriptor[i].Init(globalDescriptor.localBuffer,
                                            nodeReference.GetExportedFramebuffer(i)));
     }
@@ -258,7 +257,7 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
                     Vulkan::FromUndefined2,
                     Vulkan::ToComputeWrite2);
 
-    const auto& swapImage = swap.GetVkSwapImage(swapIndex);
+    // const auto& swapImage = swap.GetVkSwapImage(swapIndex);
     const auto& swapImageView = swap.GetVkSwapImageView(swapIndex);
     computeNodeDescriptor.WriteOutputColorImage(swapImageView);
 
@@ -364,8 +363,8 @@ MXC_RESULT ComputeCompositorScene::Loop(const uint32_t& deltaTime)
 
     semaphore.Wait();
 
-    const auto timestamps = Device->GetTimestamps();
-    const float computeMs = timestamps[1] - timestamps[0];
+    // const auto timestamps = Device->GetTimestamps();
+    // const float computeMs = timestamps[1] - timestamps[0];
     // MXC_LOG_NAMED(computeMs);
 
     return MXC_SUCCESS;
@@ -455,7 +454,7 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                                                                framebuffer.VkGbufferImageViewMipHandles[0]);
     const auto groupCount = VkExtent2D{Window::GetExtents().width / Vulkan::NodeProcessPipeline::LocalSize, Window::GetExtents().height / Vulkan::NodeProcessPipeline::LocalSize};
     vkCmdDispatch(commandBuffer, groupCount.width, groupCount.height, 1);
-    for (int i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
+    for (uint32_t i = 1; i < framebuffer.GBufferMipLevelCount; ++i) {
         Mid::Vk::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
         nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
                                                                    framebuffer.VkGbufferImageViewMipHandles[i - 1],

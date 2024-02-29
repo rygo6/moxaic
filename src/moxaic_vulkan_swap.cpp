@@ -1,4 +1,4 @@
-#define MXC_DISABLE_LOG
+// #define MXC_DISABLE_LOG
 
 #include "moxaic_vulkan_swap.hpp"
 
@@ -30,7 +30,7 @@ static MXC_RESULT ChooseSwapPresentMode(const VkPhysicalDevice physicalDevice,
     // VK_PRESENT_MODE_FIFO_KHR - equivalent of eglSwapInterval(1).  The presentation engine waits for the next vertical blanking period to update
     // the current image. Tearing cannot be observed. This mode must be supported by all implementations.
     *pPresentMode = VK_PRESENT_MODE_FIFO_KHR;
-    for (int i = 0; i < presentModeCount; ++i) {
+    for (uint32_t i = 0; i < presentModeCount; ++i) {
         // Order of preference for no vsync:
         // 1. VK_PRESENT_MODE_IMMEDIATE_KHR - The presentation engine does not wait for a vertical blanking period to update the current image,
         //                                    meaning this mode may result in visible tearing
@@ -77,15 +77,15 @@ MXC_RESULT ChooseSwapSurfaceFormat(const VkPhysicalDevice physicalDevice,
                                                 &formatCount,
                                                 (VkSurfaceFormatKHR*) &formats));
 
-    for (int i = 0; i < formatCount; ++i) {
+    for (uint32_t i = 0; i < formatCount; ++i) {
         if (pipelineType == PipelineType::Compute &&
             formats[i].format == VK_FORMAT_B8G8R8A8_UNORM) {
             *pSurfaceFormat = formats[i];
             return MXC_SUCCESS;
         }
         if (pipelineType == PipelineType::Graphics &&
-              formats[i].format == VK_FORMAT_B8G8R8A8_SRGB ||
-            formats[i].format == VK_FORMAT_R8G8B8A8_SRGB) {
+              (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB ||
+            formats[i].format == VK_FORMAT_R8G8B8A8_SRGB)) {
             *pSurfaceFormat = formats[i];
             return MXC_SUCCESS;
         }
@@ -105,7 +105,7 @@ Swap::~Swap()
     vkDestroySemaphore(Device->GetVkDevice(), vkAcquireCompleteSemaphore, VK_ALLOC);
     vkDestroySemaphore(Device->GetVkDevice(), vkRenderCompleteSemaphore, VK_ALLOC);
     vkDestroySwapchainKHR(Device->GetVkDevice(), vkSwapchain, VK_ALLOC);
-    for (int i = 0; i < SwapCount; ++i) {
+    for (uint32_t i = 0; i < SwapCount; ++i) {
         vkDestroyImageView(Device->GetVkDevice(), vkSwapImageViews[i], VK_ALLOC);
     }
 }
@@ -204,7 +204,7 @@ MXC_RESULT Swap::Init(const PipelineType pipelineType,
                                    &swapCount,
                                    vkSwapImages.data()));
 
-    for (int i = 0; i < vkSwapImages.size(); ++i) {
+    for (uint32_t i = 0; i < vkSwapImages.size(); ++i) {
         const VkDebugUtilsObjectNameInfoEXT swapImageDebugInfo{
             .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
             .objectType = VK_OBJECT_TYPE_IMAGE,

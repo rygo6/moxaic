@@ -40,7 +40,7 @@ MXC_RESULT Framebuffer::Init(const PipelineType pipelineType,
     MXC_CHK(gbufferTexture.Init(extents));
     MXC_CHK(gbufferTexture.TransitionInitialImmediate(pipelineType));
 
-    for (int i = 0; i < GBufferMipLevelCount; ++i) {
+    for (uint32_t i = 0; i < GBufferMipLevelCount; ++i) {
         gbufferTexture.InitMipImageView(i, &vkGbufferImageViewMipHandles[i]);
     }
 
@@ -64,7 +64,7 @@ MXC_RESULT Framebuffer::InitFromImport(const PipelineType pipelineType,
     MXC_CHK(depthTexture.InitFromImport(depthExternalHandle, extents));
     MXC_CHK(gbufferTexture.InitFromImport(gBufferExternalHandle, extents));
 
-    for (int i = 0; i < GBufferMipLevelCount; ++i) {
+    for (uint32_t i = 0; i < GBufferMipLevelCount; ++i) {
         gbufferTexture.InitMipImageView(i, &vkGbufferImageViewMipHandles[i]);
     }
 

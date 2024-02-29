@@ -28,24 +28,11 @@ inline constexpr VkFormat kDepthBufferFormat = VK_FORMAT_D32_SFLOAT;
         VkResult result = command;                               \
         if (result != VK_SUCCESS) [[unlikely]] {                 \
             printf("(%s:%d) VKCheck fail on command: %s - %s\n", \
+                    MXC_FILE_NO_PATH,                             \
                    __LINE__,                                     \
-                   MXC_FILE_NO_PATH,                             \
                    #command,                                     \
                    string_VkResult(result));                     \
             return false;                                        \
-        }                                                        \
-    }
-
-#define VK_CHK2(command)                                         \
-    {                                                            \
-        VkResult result = command;                               \
-        if (result != VK_SUCCESS) [[unlikely]] {                 \
-            printf("(%s:%d) VKCheck fail on command: %s - %s\n", \
-                   __LINE__,                                     \
-                   MXC_FILE_NO_PATH,                             \
-                   #command,                                     \
-                   string_VkResult(result));                     \
-            return result;                                       \
         }                                                        \
     }
 

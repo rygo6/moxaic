@@ -1,6 +1,5 @@
 #pragma once
 
-#include "mid_vulkan.hpp"
 #include "moxaic_compute_composite_descriptor.hpp"
 #include "moxaic_global_descriptor.hpp"
 #include "moxaic_logging.hpp"
@@ -47,20 +46,6 @@ namespace Moxaic::Vulkan
             };
             MXC_CHK(CreateComputePipe(compStage));
             vkDestroyShaderModule(Device->GetVkDevice(), shader, VK_ALLOC);
-
-            // Mid::Vk::LogicalDevice device;
-            // auto pipeline = device.CreateComputePipeline(Mid::Vk::ComputePipelineDesc{
-            //   .debugName = "ComputeCompositePipeline",
-            //   .createInfos{
-            //     {
-            //       .stage = {
-            //         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-            //         .module = shader,
-            //         .pName = "main"},
-            //       .layout = sharedVkPipelineLayout,
-            //     },
-            //   },
-            // });
 
             return MXC_SUCCESS;
         }

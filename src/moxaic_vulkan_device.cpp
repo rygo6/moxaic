@@ -1,4 +1,4 @@
-#define MXC_DISABLE_LOG
+// #define MXC_DISABLE_LOG
 
 #include "main.hpp"
 #include "moxaic_vulkan_device.hpp"
@@ -107,7 +107,7 @@ MXC_RESULT Device::FindQueues()
     }
     std::vector<VkQueueFamilyGlobalPriorityPropertiesEXT> queueFamilyGlobalPriorityProperties(queueFamilyCount);
     std::vector<VkQueueFamilyProperties2> queueFamilies(queueFamilyCount);
-    for (int i = 0; i < queueFamilyCount; ++i) {
+    for (uint32_t i = 0; i < queueFamilyCount; ++i) {
         queueFamilyGlobalPriorityProperties[i] = {
           .sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_GLOBAL_PRIORITY_PROPERTIES_EXT};
         queueFamilies[i] = {
@@ -120,7 +120,7 @@ MXC_RESULT Device::FindQueues()
     bool foundGraphics = false;
     bool foundCompute = false;
 
-    for (int i = 0; i < queueFamilyCount; ++i) {
+    for (uint32_t i = 0; i < queueFamilyCount; ++i) {
         const bool globalQueueSupport = queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
         const bool graphicsSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
         const bool computeSupport = queueFamilies[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
@@ -184,8 +184,6 @@ MXC_RESULT Device::CreateDevice()
         .queueFamilyIndex = computeQueueFamilyIndex,
         .queueCount = 1,
         .pQueuePriorities = &queuePriority}};
-
-    auto test = queueCreateInfos[3];
 
     VkPhysicalDeviceMeshShaderFeaturesEXT supportedPhysicalDeviceMeshShaderFeatures = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
@@ -505,7 +503,7 @@ MXC_RESULT Device::CreateSamplers()
 {
     MXC_LOG("Vulkan::Device::CreateSamplers");
 
-    constexpr auto anisotropyEnabled = Anisotropy > 1.0 ? VK_TRUE : VK_FALSE;
+    // constexpr auto anisotropyEnabled = Anisotropy > 1.0 ? VK_TRUE : VK_FALSE;
 
     constexpr VkSamplerCreateInfo linearSamplerInfo{
       .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1211,7 +1209,7 @@ StaticArray<double, Device::QueryPoolCount> Device::GetTimestamps() const
                           sizeof(uint64_t),
                           VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
     StaticArray<double, QueryPoolCount> timestampsMS;
-    for (int i = 0; i < QueryPoolCount; ++i) {
+    for (uint32_t i = 0; i < QueryPoolCount; ++i) {
         timestampsMS[i] = double(timestampsNS[i]) / double(1000000);// ns to ms
     }
     return timestampsMS;

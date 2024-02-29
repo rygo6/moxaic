@@ -14,20 +14,35 @@ void SetDebugInfo(
     const VkObjectType objectType,
     const uint64_t     objectHandle,
     const char*        name) {
-  // DebugUtilsObjectNameInfoEXT info{
-  //     .objectType = objectType,
-  //     .objectHandle = objectHandle,
-  //     .pObjectName = name,
-  // };
-  // PFN.SetDebugUtilsObjectNameEXT(logicalDevice, (VkDebugUtilsObjectNameInfoEXT*)&info);
+  DebugUtilsObjectNameInfoEXT info{
+      .objectType = objectType,
+      .objectHandle = objectHandle,
+      .pObjectName = name,
+  };
+  PFN.SetDebugUtilsObjectNameEXT(logicalDevice, (VkDebugUtilsObjectNameInfoEXT*)&info);
 }
 
 void ComputePipeline2::BindPipeline(const VkCommandBuffer commandBuffer) const {
   vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, Handle());
 }
 
+Instance Instance::Create(const InstanceDesc&& desc) {
+
+  auto test = desc.createInfo.Vk();
+  auto name = test.pApplicationInfo->pApplicationName;
+
+  auto  handle = Acquire();
+  auto& state = handle.State();
+  state.pInstanceAllocator = desc.pAllocator;
+  // state.result = vkCreateInstance(
+  //     &desc.createInfo.Vk(),
+  //     desc.pAllocator,
+  //     &handle.Handle());
+  return handle;
+}
+
 LogicalDevice Vk::LogicalDevice::Create(
-    VkPhysicalDevice             physicalDevice,
+    PhysicalDevice               physicalDevice,
     const char*                  debugName,
     const VkDeviceCreateInfo*    pCreateInfo,
     const VkAllocationCallbacks* pAllocator) {
@@ -45,7 +60,7 @@ LogicalDevice Vk::LogicalDevice::Create(
 }
 
 const VkAllocationCallbacks*
-LogicalDevice::DefaultAllocator(
+LogicalDevice::LogicalDeviceAllocator(
     const VkAllocationCallbacks* pAllocator) {
   return pAllocator == nullptr ? State().pDefaultAllocator : pAllocator;
 }
@@ -59,7 +74,7 @@ PipelineLayout2 Vk::PipelineLayout2::Create(
   auto  handle = Acquire();
   auto& state = handle.State();
   state.logicalDevice = logicalDevice;
-  state.pAllocator = logicalDevice.DefaultAllocator(pAllocator);
+  state.pAllocator = logicalDevice.LogicalDeviceAllocator(pAllocator);
   state.result = vkCreatePipelineLayout(
       logicalDevice,
       (VkPipelineLayoutCreateInfo*)pCreateInfo,
@@ -84,7 +99,7 @@ ComputePipeline2 Vk::ComputePipeline2::Create(
   auto  handle = Acquire();
   auto& state = handle.State();
   state.logicalDevice = logicalDevice;
-  state.pAllocator = logicalDevice.DefaultAllocator(pAllocator);
+  state.pAllocator = logicalDevice.LogicalDeviceAllocator(pAllocator);
   state.result = vkCreateComputePipelines(
       logicalDevice,
       VK_NULL_HANDLE,

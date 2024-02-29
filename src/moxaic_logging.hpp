@@ -2,8 +2,8 @@
 
 #include "main.hpp"
 
-#include <cstdio>
-#include <cstring>
+#include <stdio.h>
+#include <string.h>
 #include <iostream>
 
 namespace Moxaic
@@ -17,17 +17,17 @@ namespace Moxaic
 
     void SetConsoleTextRed();
 
-    static void LogParams()
-    {
-        std::cerr << '\n';
-    }
-
-    static void LogParamsMultiline()
-    {
-        std::cerr << '\n';
-    }
-
     // I really don't know if I like all this std::cerr stuff and recursive templates... has got to be slow
+
+    inline void LogParams()
+    {
+        std::cerr << '\n';
+    }
+
+    inline void LogParamsMultiline()
+    {
+        std::cerr << '\n';
+    }
 
     template<typename T, typename... Types>
     void LogParams(T param, Types... params)
