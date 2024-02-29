@@ -27,6 +27,7 @@ void ComputePipeline2::BindPipeline(const VkCommandBuffer commandBuffer) const {
 }
 
 Instance Instance::Create(const InstanceDesc&& desc) {
+  printf("Creating Instance... ");
   auto  handle = Acquire();
   auto& state = handle.State();
   state.pInstanceAllocator = desc.pAllocator;
@@ -34,6 +35,7 @@ Instance Instance::Create(const InstanceDesc&& desc) {
       desc.createInfo.ptr(),
       desc.pAllocator,
       &handle.Handle());
+  printf("%s\n", handle.ResultName());
   return handle;
 }
 

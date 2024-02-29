@@ -20,9 +20,17 @@ void Moxaic::Renderer::Init()
     //   },
     // };
 
-
     auto instance = Instance::Create({
       .createInfo{
+        .pNext = ValidationFeatures{
+          .pEnabledValidationFeatures{
+            // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+            // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+            // VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+            VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
+            // VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+          },
+        },
         .pApplicationInfo = ApplicationInfo{
           .pApplicationName = "Moxaic",
         },
@@ -35,15 +43,6 @@ void Moxaic::Renderer::Init()
           VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
           VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
           VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
-        },
-      },
-      .validationFeatures{
-        .pEnabledValidationFeatures{
-          // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-          // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-          // VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-          VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
-          // VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
         },
       },
     });

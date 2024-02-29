@@ -66,57 +66,73 @@ struct VkTexture {
   VkImageView    view;
 };
 
+typedef const char* VkString;
+typedef uint32_t    VkCount;
+
+struct VoidPtr {
+  void* data{nullptr};
+
+  template <typename T>
+  constexpr VoidPtr(T&& value) : data{&value} {}
+  constexpr VoidPtr() = default;
+};
+
 template <typename T>
 struct Ptr {
-  const T* data;
+  const T* data{nullptr};
 
   constexpr Ptr(T&& value) : data{&value} {}
+  constexpr Ptr() = default;
 };
 
 template <typename T>
 struct Array {
-  const uint32_t count;
-  const T*       data;
+  const VkCount count{0};
+  const T*      data{nullptr};
 
-  constexpr Array(std::initializer_list<T> l) : count{uint32_t(l.size())}, data{l.begin()} {}
+  constexpr Array(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
+  constexpr Array() = default;
 };
 
 template <typename T>
 struct VkStruct {
-  const T* ptr() const { return (T*)this; }
+  T* ptr() const { return (T*)this; }
   operator const T&() const { return *(T*)this; };
 };
 
 struct ApplicationInfo : VkStruct<VkApplicationInfo> {
   VkStructureType sType{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-  const void*     pNext{nullptr};
-  const char*     pApplicationName{"Mid Vulkan Application"};
+  VoidPtr         pNext;
+  VkString        pApplicationName{"Mid Vulkan Application"};
   uint32_t        applicationVersion{VK_MAKE_VERSION(1, 0, 0)};
-  const char*     pEngineName{"Mid Vulkan"};
+  VkString        pEngineName{"Mid Vulkan"};
   uint32_t        engineVersion{VK_MAKE_VERSION(1, 0, 0)};
   uint32_t        apiVersion{VK_HEADER_VERSION_COMPLETE};
 };
+static_assert(sizeof(ApplicationInfo) == sizeof(VkApplicationInfo));
 
 struct InstanceCreateInfo : VkStruct<VkInstanceCreateInfo> {
   VkStructureType       sType{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-  const void*           pNext{nullptr};
+  VoidPtr               pNext;
   VkInstanceCreateFlags flags;
   Ptr<ApplicationInfo>  pApplicationInfo;
   Array<const char*>    pEnabledLayerNames;
   Array<const char*>    pEnabledExtensionNames;
 };
+static_assert(sizeof(InstanceCreateInfo) == sizeof(VkInstanceCreateInfo));
 
 struct ValidationFeatures : VkStruct<VkValidationFeaturesEXT> {
   VkStructureType                      sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-  const void*                          pNext{nullptr};
+  VoidPtr                              pNext;
   Array<VkValidationFeatureEnableEXT>  pEnabledValidationFeatures;
   Array<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
 };
+static_assert(sizeof(ValidationFeatures) == sizeof(VkValidationFeaturesEXT));
 
 struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
   VkStructureType                sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-  const void*                    pNext{nullptr};
-  VkDeviceCreateFlags            flags{0};
+  void*                          pNext;
+  VkDeviceCreateFlags            flags;
   Array<VkDeviceQueueCreateInfo> queueCreateInfos;
   Array<const char*>             pEnabledLayerNames;
   Array<const char*>             pEnabledExtensionNames;
