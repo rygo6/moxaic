@@ -23,15 +23,6 @@ void Moxaic::Renderer::Init()
 
     auto instance = Instance::Create(InstanceDesc{
       .createInfo{
-        .pNext = ValidationFeatures{
-          .pEnabledValidationFeatures{
-            // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-            // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-            // VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-            VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
-            // VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-          },
-        },
         .pApplicationInfo = ApplicationInfo{
           .pApplicationName = "Moxaic",
         },
@@ -45,6 +36,26 @@ void Moxaic::Renderer::Init()
           VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
           VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         },
+      },
+      .validationFeatures{
+        .pEnabledValidationFeatures{
+          // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+          // VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+          // VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+          VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
+          // VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
+        },
+      },
+      .debugUtilsMessageSeverityFlags{
+        // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT,
+        // VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+      },
+      .debugUtilsMessageTypeFlags{
+        // VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
+        // VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
       },
     });
 

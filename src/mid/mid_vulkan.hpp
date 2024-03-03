@@ -44,8 +44,9 @@
 namespace Mid::Vk {
 
 struct {
-#define MVK_PFN_FUNCTIONS \
-  MVK_PFN_FUNCTION(SetDebugUtilsObjectNameEXT)
+#define MVK_PFN_FUNCTIONS                      \
+  MVK_PFN_FUNCTION(SetDebugUtilsObjectNameEXT) \
+  MVK_PFN_FUNCTION(CreateDebugUtilsMessengerEXT)
 
 #define MVK_PFN_FUNCTION(func) PFN_vk##func func;
   MVK_PFN_FUNCTIONS
@@ -563,11 +564,14 @@ struct PhysicalDeviceDesc;
 
 /* Instance */
 struct InstanceDesc {
-  InstanceCreateInfo           createInfo;
-  ValidationFeatures           validationFeatures;
-  const VkAllocationCallbacks* pAllocator{};
+  InstanceCreateInfo                                       createInfo;
+  ValidationFeatures                                       validationFeatures;
+  static_array_ptr<VkDebugUtilsMessageSeverityFlagBitsEXT> debugUtilsMessageSeverityFlags;
+  static_array_ptr<VkDebugUtilsMessageTypeFlagBitsEXT>     debugUtilsMessageTypeFlags;
+  const VkAllocationCallbacks*                             pAllocator{nullptr};
 };
 struct InstanceState {
+  VkDebugUtilsMessengerEXT     debugUtilsMessengerEXT;
   const VkAllocationCallbacks* pInstanceAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };

@@ -6,6 +6,8 @@
 
 #include "mid_vulkan.hpp"
 
+#include <string.h>
+
 #define LOG(...) printf(__VA_ARGS__)
 
 #define CHECK_RESULT(handle)                                       \
@@ -30,8 +32,13 @@ static void SetDebugInfo(
   PFN.SetDebugUtilsObjectNameEXT(logicalDevice, (VkDebugUtilsObjectNameInfoEXT*)&info);
 }
 
-void ComputePipeline2::BindPipeline(const VkCommandBuffer commandBuffer) const {
-  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *this);
+static VkBool32 DebugCallback(
+    const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    const VkDebugUtilsMessageTypeFlagsEXT        messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT*  pCallbackData,
+    void*                                        pUserData) {
+  LOG("\n\n%s\n\n", pCallbackData->pMessage);
+  return VK_FALSE;
 }
 
 Instance Instance::Create(const InstanceDesc&& desc) {
@@ -43,7 +50,17 @@ Instance Instance::Create(const InstanceDesc&& desc) {
   state->pInstanceAllocator = desc.pAllocator;
 
   LOG("Creating... ");
-  state->result = vkCreateInstance(desc.createInfo.ptr(), desc.pAllocator, instance.handle());
+  const VkValidationFeaturesEXT validationFeatures{
+      .sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+      .pNext = nullptr,
+      .enabledValidationFeatureCount = desc.validationFeatures.pEnabledValidationFeatures.count,
+      .pEnabledValidationFeatures = desc.validationFeatures.pEnabledValidationFeatures.data,
+      .disabledValidationFeatureCount = desc.validationFeatures.pDisabledValidationFeatures.count,
+      .pDisabledValidationFeatures = desc.validationFeatures.pDisabledValidationFeatures.data,
+  };
+  VkInstanceCreateInfo createInfo = desc.createInfo;
+  createInfo.pNext = &validationFeatures;
+  state->result = vkCreateInstance(&createInfo, desc.pAllocator, instance.handle());
   CHECK_RESULT(instance);
 
 #define MVK_PFN_FUNCTION(func)                                                    \
@@ -55,6 +72,30 @@ Instance Instance::Create(const InstanceDesc&& desc) {
   }
   MVK_PFN_FUNCTIONS
 #undef MVK_PFN_FUNCTION
+
+  LOG("Setting up DebugUtilsMessenger... ");
+  VkDebugUtilsMessageSeverityFlagsEXT messageSeverity{};
+  for (int i = 0; i < desc.debugUtilsMessageSeverityFlags.count; ++i)
+    messageSeverity |= desc.debugUtilsMessageSeverityFlags.data[i];
+
+  VkDebugUtilsMessageTypeFlagsEXT messageType{};
+  for (int i = 0; i < desc.debugUtilsMessageTypeFlags.count; ++i)
+    messageType |= desc.debugUtilsMessageTypeFlags.data[i];
+
+  const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+      .flags = 0,
+      .messageSeverity = messageSeverity,
+      .messageType = messageType,
+      .pfnUserCallback = DebugCallback,
+      .pUserData = nullptr,
+  };
+  state->result = PFN.CreateDebugUtilsMessengerEXT(
+      instance,
+      &debugUtilsMessengerCreateInfo,
+      state->pInstanceAllocator,
+      &state->debugUtilsMessengerEXT);
+  CHECK_RESULT(instance);
 
   LOG("%s\n\n", instance.ResultName());
   return instance;
@@ -92,7 +133,7 @@ static bool CheckPhysicalDeviceFeatureBools(
     const VkBoolFeatureStruct** supported,
     const size_t*               structSize) {
   for (int i = 0; i < requiredCount; ++i) {
-    printf("Checking %s... ", string_VkStructureType(supported[i]->sType));
+    printf("Checking %s... ", string_VkStructureType(supported[i]->sType) + strlen("VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_"));
     if (!CheckFeatureBools(required[i], supported[i], structSize[i])) {
       LOG("PhysicalDevicel didn't support necessary feature! Skipping!... ");
       return false;
@@ -180,8 +221,7 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   if (chosenDeviceIndex == -1) {
     LOG("No suitable PhysicalDevice found!");
     state->result = VK_ERROR_INITIALIZATION_FAILED;
-  }
-  else {
+  } else {
     LOG("Picking device %d... ", desc.deviceIndex);
     *physicalDevice.handle() = devices[desc.deviceIndex];
     state->result = VK_SUCCESS;
@@ -280,6 +320,9 @@ void Vk::ComputePipeline2::Destroy() {
   printf("ComputePipeline2::Destroy\n");
   HandleBase::Release();
   vkDestroyPipeline(state()->logicalDevice, *this, state()->pAllocator);
+}
+void ComputePipeline2::BindPipeline(const VkCommandBuffer commandBuffer) const {
+  vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *this);
 }
 
 void Vk::CmdPipelineImageBarrier2(
