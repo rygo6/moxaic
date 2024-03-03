@@ -209,6 +209,7 @@ MXC_RESULT Device::CreateDevice()
       .pNext = &supportedPhysicalDeviceVulkan11Features,
     };
     vkGetPhysicalDeviceFeatures2(vkPhysicalDevice, &supportedPhysicalDeviceFeatures2);
+
     if (!supportedPhysicalDeviceFeatures2.features.robustBufferAccess)
         MXC_LOG_ERROR("robustBufferAccess no support!");
     if (!supportedPhysicalDeviceFeatures2.features.samplerAnisotropy)
@@ -253,22 +254,22 @@ MXC_RESULT Device::CreateDevice()
     };
     VkPhysicalDeviceVulkan13Features enabledFeatures13 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-      .pNext = &physicalDeviceRobustness2Features,
-      .robustImageAccess = VK_TRUE,
-      .shaderDemoteToHelperInvocation = VK_TRUE,
-      .shaderTerminateInvocation = VK_TRUE,
+      .pNext = &physicalDeviceGlobalPriorityQueryFeatures,
+      // .robustImageAccess = VK_TRUE,
+      // .shaderDemoteToHelperInvocation = VK_TRUE,
+      // .shaderTerminateInvocation = VK_TRUE,
       .synchronization2 = VK_TRUE,
     };
     VkPhysicalDeviceVulkan12Features enabledFeatures12 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &enabledFeatures13,
-      .shaderFloat16 = VK_TRUE,
-      .shaderInt8 = VK_TRUE,
+      // .shaderFloat16 = VK_TRUE,
+      // .shaderInt8 = VK_TRUE,
       .samplerFilterMinmax = VK_TRUE,
       .hostQueryReset = VK_TRUE,
       .timelineSemaphore = VK_TRUE,
-      .bufferDeviceAddress = VK_TRUE,
-      .bufferDeviceAddressCaptureReplay = VK_TRUE,
+      // .bufferDeviceAddress = VK_TRUE,
+      // .bufferDeviceAddressCaptureReplay = VK_TRUE,
     };
     VkPhysicalDeviceVulkan11Features enabledFeatures11 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
@@ -278,13 +279,13 @@ MXC_RESULT Device::CreateDevice()
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR,
       .pNext = &enabledFeatures11,
       .features = {
-        .robustBufferAccess = VK_TRUE,
-        .tessellationShader = VK_TRUE,
-        .fillModeNonSolid = VK_TRUE,
-        .samplerAnisotropy = VK_TRUE,
-        .vertexPipelineStoresAndAtomics = VK_TRUE,
-        .fragmentStoresAndAtomics = VK_TRUE,
-        .shaderStorageImageMultisample = VK_TRUE,
+        // .robustBufferAccess = VK_TRUE,
+        // .tessellationShader = VK_TRUE,
+        // .fillModeNonSolid = VK_TRUE,
+        // .samplerAnisotropy = VK_TRUE,
+        // .vertexPipelineStoresAndAtomics = VK_TRUE,
+        // .fragmentStoresAndAtomics = VK_TRUE,
+        // .shaderStorageImageMultisample = VK_TRUE,
       }};
 
     constexpr StaticArray requiredDeviceExtensions{

@@ -1,7 +1,8 @@
 #include "moxaic_renderer.hpp"
 #include "mid_vulkan.hpp"
 #include "moxaic_logging.hpp"
-#include "static_array.hpp"
+
+#include <span>
 
 using namespace Mid::Vk;
 
@@ -20,7 +21,7 @@ void Moxaic::Renderer::Init()
     //   },
     // };
 
-    auto instance = Instance::Create({
+    auto instance = Instance::Create(InstanceDesc{
       .createInfo{
         .pNext = ValidationFeatures{
           .pEnabledValidationFeatures{
@@ -34,7 +35,7 @@ void Moxaic::Renderer::Init()
         .pApplicationInfo = ApplicationInfo{
           .pApplicationName = "Moxaic",
         },
-        .pEnabledLayerNames{
+        .pEnabledLayerNames = {
           "VK_LAYER_KHRONOS_validation",
         },
         .pEnabledExtensionNames{
@@ -46,8 +47,28 @@ void Moxaic::Renderer::Init()
         },
       },
     });
-    MXC_LOG(instance.ResultName());
-    if (!instance.IsValid()) {
-        MXC_LOG_ERROR(instance.ResultName());
-    }
+
+    instance.CreatePhysicalDevice(PhysicalDeviceDesc{
+      .deviceIndex = 0,
+      .physicalDeviceFeatures{
+        .features{
+          .robustBufferAccess = VK_TRUE,
+        }},
+      .physicalDeviceFeatures11{},
+      .physicalDeviceFeatures12{
+        .samplerFilterMinmax = VK_TRUE,
+        .hostQueryReset = VK_TRUE,
+        .timelineSemaphore = VK_TRUE,
+      },
+      .physicalDeviceFeatures13{
+        .synchronization2 = VK_TRUE,
+      },
+      .physicalDeviceMeshShaderFeatures{
+        .taskShader = VK_TRUE,
+        .meshShader = VK_TRUE,
+      },
+      .physicalDeviceGlobalPriorityQueryFeatures{
+        .globalPriorityQuery = VK_TRUE,
+      },
+    });
 }

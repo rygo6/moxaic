@@ -39,6 +39,8 @@
     }                                              \
   }
 
+#define FORCE_INLINE inline __attribute__((always_inline))
+
 namespace Mid::Vk {
 
 struct {
@@ -69,29 +71,29 @@ struct VkTexture {
 typedef const char* VkString;
 typedef uint32_t    VkCount;
 
-struct VoidPtr {
+struct static_void_ptr {
   void* data{nullptr};
 
   template <typename T>
-  constexpr VoidPtr(T&& value) : data{&value} {}
-  constexpr VoidPtr() = default;
+  constexpr static_void_ptr(T&& value) : data{&value} {}
+  constexpr static_void_ptr() = default;
 };
 
 template <typename T>
-struct Ptr {
+struct static_ptr {
   const T* data{nullptr};
 
-  constexpr Ptr(T&& value) : data{&value} {}
-  constexpr Ptr() = default;
+  constexpr static_ptr(T&& value) : data{&value} {}
+  constexpr static_ptr() = default;
 };
 
 template <typename T>
-struct Array {
+struct static_array_ptr {
   const VkCount count{0};
   const T*      data{nullptr};
 
-  constexpr Array(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
-  constexpr Array() = default;
+  constexpr static_array_ptr(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
+  constexpr static_array_ptr() = default;
 };
 
 template <typename T>
@@ -102,7 +104,7 @@ struct VkStruct {
 
 struct ApplicationInfo : VkStruct<VkApplicationInfo> {
   VkStructureType sType{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-  VoidPtr         pNext;
+  static_void_ptr pNext;
   VkString        pApplicationName{"Mid Vulkan Application"};
   uint32_t        applicationVersion{VK_MAKE_VERSION(1, 0, 0)};
   VkString        pEngineName{"Mid Vulkan"};
@@ -112,32 +114,35 @@ struct ApplicationInfo : VkStruct<VkApplicationInfo> {
 static_assert(sizeof(ApplicationInfo) == sizeof(VkApplicationInfo));
 
 struct InstanceCreateInfo : VkStruct<VkInstanceCreateInfo> {
-  VkStructureType       sType{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-  VoidPtr               pNext;
-  VkInstanceCreateFlags flags;
-  Ptr<ApplicationInfo>  pApplicationInfo;
-  Array<const char*>    pEnabledLayerNames;
-  Array<const char*>    pEnabledExtensionNames;
+  VkStructureType             sType{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+  static_void_ptr             pNext;
+  VkInstanceCreateFlags       flags;
+  static_ptr<ApplicationInfo> pApplicationInfo;
+  static_array_ptr<VkString>  pEnabledLayerNames;
+  static_array_ptr<VkString>  pEnabledExtensionNames;
 };
 static_assert(sizeof(InstanceCreateInfo) == sizeof(VkInstanceCreateInfo));
 
 struct ValidationFeatures : VkStruct<VkValidationFeaturesEXT> {
-  VkStructureType                      sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-  VoidPtr                              pNext;
-  Array<VkValidationFeatureEnableEXT>  pEnabledValidationFeatures;
-  Array<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
+  VkStructureType                                 sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
+  static_void_ptr                                 pNext;
+  static_array_ptr<VkValidationFeatureEnableEXT>  pEnabledValidationFeatures;
+  static_array_ptr<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
 };
 static_assert(sizeof(ValidationFeatures) == sizeof(VkValidationFeaturesEXT));
 
+#pragma pack(push, 1)
 struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
-  VkStructureType                sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-  void*                          pNext;
-  VkDeviceCreateFlags            flags;
-  Array<VkDeviceQueueCreateInfo> queueCreateInfos;
-  Array<const char*>             pEnabledLayerNames;
-  Array<const char*>             pEnabledExtensionNames;
-  Ptr<VkPhysicalDeviceFeatures>  pEnabledFeatures;
+  VkStructureType                           sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+  static_void_ptr                           pNext;
+  VkDeviceCreateFlags                       flags;
+  static_array_ptr<VkDeviceQueueCreateInfo> queueCreateInfos;
+  static_array_ptr<const char*>             pEnabledLayerNames;
+  static_array_ptr<const char*>             pEnabledExtensionNames;
+  static_ptr<VkPhysicalDeviceFeatures>      pEnabledFeatures;
 };
+#pragma pack(pop)
+static_assert(sizeof(DeviceCreateInfo) == sizeof(VkDeviceCreateInfo));
 
 struct DescriptorSetLayoutBinding {
   uint32_t           binding{0};
@@ -481,8 +486,6 @@ static_assert(MVK_HANDLE_COUNT <= 1 << (8 * sizeof(MVK_HANDLE_INDEX_TYPE)));
 #define MVK_HANDLE_GENERATION_TYPE uint8_t
 constexpr static MVK_HANDLE_GENERATION_TYPE HandleGenerationCount = (1 << 8 * sizeof(MVK_HANDLE_GENERATION_TYPE)) - 1;
 
-#define MVK_HANDLE_METHOD inline __attribute__((always_inline))
-
 template <typename T, T N>
 struct Stack {
   T current{N - 1};
@@ -519,16 +522,17 @@ struct HandleBase {
   MVK_HANDLE_INDEX_TYPE      handleIndex;
   MVK_HANDLE_GENERATION_TYPE handleGeneration;
 
-  THandle& Handle() const {
+  THandle* handle() const {
     assert(IsValid());
-    return HandlePool<THandle, TState>::handles[handleIndex];
+    return &HandlePool<THandle, TState>::handles[handleIndex];
   }
-  TState& State() {
+  TState* state() {
     assert(IsValid());
-    return HandlePool<THandle, TState>::states[handleIndex];
+    return &HandlePool<THandle, TState>::states[handleIndex];
   }
 
   static Derived Acquire() {
+    printf("Acquiring... ");
     const auto index = HandlePool<THandle, TState>::freeIndexStack.Pop();
     const auto generation = HandlePool<THandle, TState>::generations[index];
     return Derived{index, generation};
@@ -541,18 +545,21 @@ struct HandleBase {
     HandlePool<THandle, TState>::freeIndexStack.Push(handleIndex);
   }
 
-  VkResult    Result() const { return HandlePool<THandle, TState>::states[handleIndex].result; }
-  const char* ResultName() const { return string_VkResult(Result()); }
+  VkResult       Result() const { return HandlePool<THandle, TState>::states[handleIndex].result; }
+  const VkString ResultName() const { return string_VkResult(Result()); }
 
   bool IsValid() const {
     return HandlePool<THandle, TState>::generations[handleIndex] == handleGeneration;
   }
 
-  operator THandle&() const {
+  operator THandle() const {
     assert(IsValid());
-    return Handle();
+    return *handle();
   }
 };
+
+struct PhysicalDevice;
+struct PhysicalDeviceDesc;
 
 /* Instance */
 struct InstanceDesc {
@@ -564,73 +571,69 @@ struct InstanceState {
   const VkAllocationCallbacks* pInstanceAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-
-struct PhysicalDevice;
 struct Instance : HandleBase<Instance, VkInstance, InstanceState> {
-  static Instance Create(const InstanceDesc&& desc);
-
-  void Destroy();
-
-  PhysicalDevice CreatePhysicalDevice(const auto&& desc);
-
   const VkAllocationCallbacks* InstanceAllocator(const VkAllocationCallbacks* pAllocator);
-};
-
-/* PhysicalDevice */
-struct PhysicalDeviceDesc {
-  const char* debugName{"PhysicalDevice"};
-};
-struct PhysicalDeviceState {
-  VkPhysicalDeviceProperties2             physicalDeviceProperties{};
-  VkPhysicalDeviceMeshShaderPropertiesEXT pysicalDeviceMeshShaderProperties{};
-  VkPhysicalDeviceSubgroupProperties      physicalDeviceSubgroupProperties{};
-  VkPhysicalDeviceMemoryProperties        physicalDeviceMemoryProperties{};
-  const VkAllocationCallbacks*            pDefaultAllocator{nullptr};
-  VkResult                                result{VK_NOT_READY};
+  static Instance              Create(const InstanceDesc&& desc);
+  void                         Destroy();
+  PhysicalDevice               CreatePhysicalDevice(const PhysicalDeviceDesc&& desc);
 };
 
 struct LogicalDevice;
-struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState> {
-  static PhysicalDevice Create(
-      VkInstance  instance,
-      const char* debugName);
-  void Destroy();
+struct LocalDeviceDesc;
 
-  LogicalDevice CreateLogicalDevice(const auto&& desc);
+/* PhysicalDevice */
+struct PhysicalDeviceDesc {
+  uint32_t                                       deviceIndex;
+  VkPhysicalDeviceFeatures2                      physicalDeviceFeatures;
+  VkPhysicalDeviceVulkan11Features               physicalDeviceFeatures11;
+  VkPhysicalDeviceVulkan12Features               physicalDeviceFeatures12;
+  VkPhysicalDeviceVulkan13Features               physicalDeviceFeatures13;
+  VkPhysicalDeviceMeshShaderFeaturesEXT          physicalDeviceMeshShaderFeatures;
+  VkPhysicalDeviceRobustness2FeaturesEXT         physicalDeviceRobustness2Features;
+  VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
+};
+struct PhysicalDeviceState {
+  Instance                                       instance;
+  VkPhysicalDeviceProperties                     physicalDeviceProperties;
+  VkPhysicalDeviceSubgroupProperties             physicalDeviceSubgroupProperties;
+  VkPhysicalDeviceMeshShaderPropertiesEXT        physicalDeviceMeshShaderProperties;
+  VkPhysicalDeviceMemoryProperties               physicalDeviceMemoryProperties;
+  VkPhysicalDeviceFeatures2                      physicalDeviceFeatures;
+  VkPhysicalDeviceVulkan11Features               physicalDeviceFeatures11;
+  VkPhysicalDeviceVulkan12Features               physicalDeviceFeatures12;
+  VkPhysicalDeviceVulkan13Features               physicalDeviceFeatures13;
+  VkPhysicalDeviceMeshShaderFeaturesEXT          physicalDeviceMeshShaderFeatures;
+  VkPhysicalDeviceRobustness2FeaturesEXT         physicalDeviceRobustness2Features;
+  VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
+  VkResult                                       result{VK_NOT_READY};
+};
+struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState> {
+  void          Destroy();
+  LogicalDevice CreateLogicalDevice(const LocalDeviceDesc&& desc);
 };
 
-/* LogicalDevice */
 struct ComputePipeline2;
+struct ComputePipelineDesc;
 struct PipelineLayout2;
+struct PipelineLayoutDesc;
 
+/* LogicalDevice */
 struct LocalDeviceDesc {
   const char*            debugName{"Device"};
-  PhysicalDevice         physicalDevice{};
   DeviceCreateInfo       createInfo;
   VkAllocationCallbacks* pAllocator{nullptr};
 };
 struct LogicalDeviceState {
-  PhysicalDevice               physicalDevice{};
+  PhysicalDevice               physicalDevice;
   const VkAllocationCallbacks* pDefaultAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
-  static LogicalDevice Create(
-      PhysicalDevice               physicalDevice,
-      const char*                  debugName,
-      const VkDeviceCreateInfo*    pCreateInfo,
-      const VkAllocationCallbacks* pAllocator);
-  void Destroy();
-
-  ComputePipeline2 CreateComputePipeline(const auto&& desc);
-  PipelineLayout2  CreatePipelineLayout(const auto&& desc);
-
+  void                         Destroy();
+  ComputePipeline2             CreateComputePipeline(const ComputePipelineDesc&& desc);
+  PipelineLayout2              CreatePipelineLayout(const PipelineLayoutDesc&& desc);
   const VkAllocationCallbacks* LogicalDeviceAllocator(const VkAllocationCallbacks* pAllocator);
 };
-// MVK_HANDLE_METHOD LogicalDevice PhysicalDevice::CreateLogicalDevice(const auto&& desc) {
-//   return Create(desc.physicalDevice, desc.debugName, &desc.createInfo, desc.pAllocator);
-// }
 
 struct GenericHandleState {
   LogicalDevice                logicalDevice;
@@ -641,45 +644,23 @@ struct GenericHandleState {
 /* PipelineLayout */
 struct PipelineLayoutDesc {
   const char*                  debugName{"PipelineLayout"};
-  PipelineLayoutCreateInfo     createInfo{};
+  PipelineLayoutCreateInfo     createInfo;
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
-
 struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, GenericHandleState> {
-  static PipelineLayout2 Create(
-      LogicalDevice                   logicalDevice,
-      const char*                     debugName,
-      const PipelineLayoutCreateInfo* pCreateInfo,
-      const VkAllocationCallbacks*    pAllocator);
   void Destroy();
 };
-MVK_HANDLE_METHOD PipelineLayout2 LogicalDevice::CreatePipelineLayout(const auto&& desc) {
-  return PipelineLayout2::Create(*this, desc.debugName, &desc.createInfo, desc.pAllocator);
-}
 
 /* ComputePipeline */
-template <uint32_t N0>
 struct ComputePipelineDesc {
-  const char*                  debugName{"ComputePipeline"};
-  uint32_t                     createInfoCount{N0};
-  ComputePipelineCreateInfo    createInfos[N0]{};
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const char*                                 debugName{"ComputePipeline"};
+  static_array_ptr<ComputePipelineCreateInfo> createInfos;
+  const VkAllocationCallbacks*                pAllocator{nullptr};
 };
-
 struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, GenericHandleState> {
-  static ComputePipeline2 Create(
-      LogicalDevice                    logicalDevice,
-      const char*                      debugName,
-      uint32_t                         createInfoCount,
-      const ComputePipelineCreateInfo* pCreateInfos,
-      const VkAllocationCallbacks*     pAllocator);
   void Destroy();
-
   void BindPipeline(VkCommandBuffer commandBuffer) const;
 };
-MVK_HANDLE_METHOD ComputePipeline2 LogicalDevice::CreateComputePipeline(const auto&& desc) {
-  return ComputePipeline2::Create(*this, desc.debugName, desc.createInfoCount, desc.createInfos, desc.pAllocator);
-}
 
 template <typename T>
 struct DeferDestroy {
