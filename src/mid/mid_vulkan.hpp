@@ -86,6 +86,7 @@ struct static_ptr {
   const T* data{nullptr};
 
   constexpr static_ptr(T&& value) : data{&value} {}
+  constexpr static_ptr(std::initializer_list<T> l) : data{l.begin()} {}
   constexpr static_ptr() = default;
 };
 
@@ -97,6 +98,18 @@ struct static_array_ptr {
   constexpr static_array_ptr(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
   constexpr static_array_ptr() = default;
 };
+
+// Yes you need this for some reason. I really hate.
+#pragma pack(push, 4)
+template <typename T>
+struct static_array_ptr_packed {
+  const VkCount count{0};
+  const T*      data{nullptr};
+
+  constexpr static_array_ptr_packed(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
+  constexpr static_array_ptr_packed() = default;
+};
+#pragma pack(pop)
 
 template <typename T>
 struct VkStruct {
@@ -133,18 +146,40 @@ struct ValidationFeatures : VkStruct<VkValidationFeaturesEXT> {
 };
 static_assert(sizeof(ValidationFeatures) == sizeof(VkValidationFeaturesEXT));
 
-#pragma pack(push, 1)
-struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
-  VkStructureType                           sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-  static_void_ptr                           pNext;
-  VkDeviceCreateFlags                       flags;
-  static_array_ptr<VkDeviceQueueCreateInfo> queueCreateInfos;
-  static_array_ptr<const char*>             pEnabledLayerNames;
-  static_array_ptr<const char*>             pEnabledExtensionNames;
-  static_ptr<VkPhysicalDeviceFeatures>      pEnabledFeatures;
+struct DeviceQueueCreateInfo : VkStruct<VkDeviceQueueCreateInfo> {
+  VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
+  static_void_ptr          pNext;
+  VkDeviceQueueCreateFlags flags;
+  uint32_t                 queueFamilyIndex;
+  uint32_t                 queueCount{1};
+  static_ptr<float>        pQueuePriorities;
 };
-#pragma pack(pop)
+static_assert(sizeof(DeviceQueueCreateInfo) == sizeof(VkDeviceQueueCreateInfo));
+
+struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
+  VkStructureType                                sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+  static_void_ptr                                pNext;
+  VkDeviceCreateFlags                            flags;
+  static_array_ptr_packed<DeviceQueueCreateInfo> pQueueCreateInfos;
+  static_array_ptr<VkString>           pEnabledLayerNames;
+  static_array_ptr<VkString>           pEnabledExtensionNames;
+  static_ptr<VkPhysicalDeviceFeatures> pEnabledFeatures;
+};
+// I really hate this, I think I am going to just make simpliffied C++ structs that you copy
 static_assert(sizeof(DeviceCreateInfo) == sizeof(VkDeviceCreateInfo));
+static_assert(offsetof(DeviceCreateInfo, sType) == offsetof(VkDeviceCreateInfo, sType));
+static_assert(offsetof(DeviceCreateInfo, pNext) == offsetof(VkDeviceCreateInfo, pNext));
+static_assert(offsetof(DeviceCreateInfo, flags) == offsetof(VkDeviceCreateInfo, flags));
+static_assert(offsetof(DeviceCreateInfo, pQueueCreateInfos) == offsetof(VkDeviceCreateInfo, queueCreateInfoCount));
+static_assert(offsetof(DeviceCreateInfo, pEnabledLayerNames) == offsetof(VkDeviceCreateInfo, enabledLayerCount));
+static_assert(offsetof(DeviceCreateInfo, pEnabledExtensionNames) == offsetof(VkDeviceCreateInfo, enabledExtensionCount));
+static_assert(offsetof(DeviceCreateInfo, pEnabledFeatures) == offsetof(VkDeviceCreateInfo, pEnabledFeatures));
+
+struct DeviceQueueGlobalPriorityCreateInfo : VkStruct<VkDeviceQueueGlobalPriorityCreateInfoKHR> {
+  VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT};
+  static_void_ptr          pNext;
+  VkQueueGlobalPriorityKHR globalPriority;
+};
 
 struct DescriptorSetLayoutBinding {
   uint32_t           binding{0};
@@ -209,16 +244,6 @@ struct DescriptorSetAllocateInfo {
   constexpr operator VkDescriptorSetAllocateInfo() const { return *(VkDescriptorSetAllocateInfo*)this; }
 };
 
-struct DebugUtilsObjectNameInfoEXT {
-  const VkStructureType sType{VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT};
-  const void*           pNext{nullptr};
-  const VkObjectType    objectType{};
-  const uint64_t        objectHandle{NULL};
-  const char*           pObjectName{"unnamed"};
-
-  constexpr operator VkDebugUtilsObjectNameInfoEXT() const { return *(VkDebugUtilsObjectNameInfoEXT*)this; }
-};
-
 struct PipelineLayoutCreateInfo {
   const VkStructureType             sType{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   const void*                       pNext{nullptr};
@@ -278,15 +303,6 @@ struct SwapChain {
   const VkSwapchainKHR handle{VK_NULL_HANDLE};
   const VkDevice       deviceHandle{VK_NULL_HANDLE};
 
-  void SetDebugInfo(VkDevice device) {
-    const DebugUtilsObjectNameInfoEXT debugInfo{
-        .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
-        .objectHandle = (uint64_t)handle,
-        .pObjectName = "SwapChain",
-    };
-    PFN.SetDebugUtilsObjectNameEXT(device, (VkDebugUtilsObjectNameInfoEXT*)&debugInfo);
-  }
-
   ~SwapChain() {
     if (handle != VK_NULL_HANDLE)
       vkDestroySwapchainKHR(deviceHandle, handle, MVK_DEFAULT_ALLOCATOR);
@@ -306,7 +322,10 @@ struct DescriptorSetLayout {
       const char* const                     name,
       const DescriptorSetLayoutCreateInfo&& createInfo) {
     this->vkDeviceHandle = vkDeviceHandle;
-    VKM_CHECK(vkCreateDescriptorSetLayout(vkDeviceHandle, &createInfo.vkHandle, MVK_DEFAULT_ALLOCATOR, &vkHandle));
+    VKM_CHECK(vkCreateDescriptorSetLayout(vkDeviceHandle,
+                                          &createInfo.vkHandle,
+                                          MVK_DEFAULT_ALLOCATOR,
+                                          &vkHandle));
     // const DebugUtilsObjectNameInfoEXT debugInfo{
     //   .objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
     //   .objectHandle = (uint64_t) handle,
@@ -364,7 +383,10 @@ struct PipelineLayout {
       const char* const                     name,
       const PipelineLayoutCreateInfo* const pCreateInfo) {
     deviceHandle = device;
-    VKM_CHECK2(vkCreatePipelineLayout(device, (VkPipelineLayoutCreateInfo*)pCreateInfo, MVK_DEFAULT_ALLOCATOR, &handle));
+    VKM_CHECK2(vkCreatePipelineLayout(device,
+                                      (VkPipelineLayoutCreateInfo*)pCreateInfo,
+                                      MVK_DEFAULT_ALLOCATOR,
+                                      &handle));
     // const DebugUtilsObjectNameInfoEXT debugInfo{
     //   .objectType = VK_OBJECT_TYPE_PIPELINE_LAYOUT,
     //   .objectHandle = (uint64_t) handle,
@@ -421,7 +443,10 @@ struct ShaderModule {
         .codeSize = codeLength,
         .pCode = (uint32_t*)pShaderCode,
     };
-    VKM_CHECK(vkCreateShaderModule(deviceHandle, (VkShaderModuleCreateInfo*)&createInfo, MVK_DEFAULT_ALLOCATOR, &handle));
+    VKM_CHECK(vkCreateShaderModule(deviceHandle,
+                                   (VkShaderModuleCreateInfo*)&createInfo,
+                                   MVK_DEFAULT_ALLOCATOR,
+                                   &handle));
     // const DebugUtilsObjectNameInfoEXT debugInfo{
     //   .objectType = VK_OBJECT_TYPE_SHADER_MODULE,
     //   .objectHandle = (uint64_t) handle,
@@ -578,18 +603,18 @@ struct InstanceDesc {
 struct InstanceState {
   ApplicationInfo              applicationInfo;
   VkDebugUtilsMessengerEXT     debugUtilsMessengerEXT;
-  const VkAllocationCallbacks* pInstanceAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
 struct Instance : HandleBase<Instance, VkInstance, InstanceState, 1> {
-  const VkAllocationCallbacks* InstanceAllocator(const VkAllocationCallbacks* pAllocator);
+  const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
   static Instance              Create(const InstanceDesc&& desc);
   void                         Destroy();
   PhysicalDevice               CreatePhysicalDevice(const PhysicalDeviceDesc&& desc);
 };
 
 struct LogicalDevice;
-struct LocalDeviceDesc;
+struct LogicalDeviceDesc;
 
 /* PhysicalDevice */
 struct PhysicalDeviceDesc {
@@ -619,7 +644,7 @@ struct PhysicalDeviceState {
 };
 struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState, 1> {
   void          Destroy();
-  LogicalDevice CreateLogicalDevice(const LocalDeviceDesc&& desc);
+  LogicalDevice CreateLogicalDevice(const LogicalDeviceDesc&& desc);
 };
 
 struct ComputePipeline2;
@@ -628,21 +653,21 @@ struct PipelineLayout2;
 struct PipelineLayoutDesc;
 
 /* LogicalDevice */
-struct LocalDeviceDesc {
-  const char*            debugName{"Device"};
+struct LogicalDeviceDesc {
+  const char*            debugName{"LogicalDevice"};
   DeviceCreateInfo       createInfo;
   VkAllocationCallbacks* pAllocator{nullptr};
 };
 struct LogicalDeviceState {
   PhysicalDevice               physicalDevice;
-  const VkAllocationCallbacks* pDefaultAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState, 1> {
   void                         Destroy();
   ComputePipeline2             CreateComputePipeline(const ComputePipelineDesc&& desc);
   PipelineLayout2              CreatePipelineLayout(const PipelineLayoutDesc&& desc);
-  const VkAllocationCallbacks* LogicalDeviceAllocator(const VkAllocationCallbacks* pAllocator);
+  const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
 };
 
 struct GenericHandleState {

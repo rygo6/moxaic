@@ -4,7 +4,9 @@
 #include "moxaic_window.hpp"
 
 #include <windows.h>
+
 #include <vulkan/vulkan_win32.h>
+
 
 using namespace Mid::Vk;
 
@@ -82,15 +84,49 @@ void Moxaic::Renderer::Init()
         .taskShader = VK_TRUE,
         .meshShader = VK_TRUE,
       },
-      .physicalDeviceRobustness2Features{},
+      .physicalDeviceRobustness2Features{
+        .robustBufferAccess2 = VK_TRUE,
+        .robustImageAccess2 = VK_TRUE,
+      },
       .physicalDeviceGlobalPriorityQueryFeatures{
-        // .globalPriorityQuery = VK_TRUE,
+        .globalPriorityQuery = VK_TRUE,
       },
     });
 
-    auto instanceHandle = instance.handle();
-    auto deviceHandle = physicalDevice.handle();
-
+    auto logicalDevice = physicalDevice.CreateLogicalDevice(LogicalDeviceDesc{
+      .createInfo{
+        .pQueueCreateInfos{
+          DeviceQueueCreateInfo{
+            .pNext = DeviceQueueGlobalPriorityCreateInfo{
+              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
+            },
+            .queueFamilyIndex = 0,
+            .pQueuePriorities{1.0},
+          },
+          DeviceQueueCreateInfo{
+            .pNext = DeviceQueueGlobalPriorityCreateInfo{
+              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
+            },
+            .queueFamilyIndex = 1,
+            .pQueuePriorities{1.0},
+          }},
+        .pEnabledExtensionNames{
+          VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+          VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+          VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
+          VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+          VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
+          VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
+          VK_EXT_MESH_SHADER_EXTENSION_NAME,
+          VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+          VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+          VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
+          VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
+          VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
+          VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
+        },
+      },
+    });
 
     Window::Init();
     VkSurfaceKHR surface;
