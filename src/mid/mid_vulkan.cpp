@@ -21,7 +21,7 @@ using namespace Mid;
 using namespace Mid::Vk;
 
 static VkResult SetDebugInfo(
-    LogicalDevice      logicalDevice,
+    VkDevice           logicalDevice,
     const VkObjectType objectType,
     const uint64_t     objectHandle,
     const char*        name) {
@@ -272,13 +272,31 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   }
   CHECK_RESULT(physicalDevice);
 
-  // Once device is chosen the properties in state should represent what is actually enabled on physicalDevice
-  for (int i = 0; i < requiredCount; ++i) {
-    supported[i] = required[i];
-  }
+  // // Once device is chosen the properties in state should represent what is actually enabled on physicalDevice
+  // for (int i = 0; i < requiredCount; ++i) {
+  //   supported[i] = required[i];
+  // }
 
   LOG("Getting Physical Device Memory Properties... ");
   vkGetPhysicalDeviceMemoryProperties(physicalDevice, &s->physicalDeviceMemoryProperties);
+
+  LOG("Getting queue family count... ");
+  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &s->queueFamilyCount, nullptr);
+
+  LOG("%d queue families found... ", s->queueFamilyCount);
+  s->result = s->queueFamilyCount > 0 ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
+  CHECK_RESULT(physicalDevice);
+
+  LOG("Getting queue families... ");
+  for (uint32_t i = 0; i < s->queueFamilyCount; ++i) {
+    s->queueFamilyGlobalPriorityProperties[i] = {
+        .sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_GLOBAL_PRIORITY_PROPERTIES_EXT};
+    s->queueFamilyProperties[i] = {
+        .sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2,
+        .pNext = &s->queueFamilyGlobalPriorityProperties[i],
+    };
+  }
+  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &s->queueFamilyCount, s->queueFamilyProperties);
 
   LOG("%s\n\n", physicalDevice.ResultName());
   return physicalDevice;
@@ -315,7 +333,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
   s->result = SetDebugInfo(
       logicalDevice,
       VK_OBJECT_TYPE_DEVICE,
-      (uint64_t)logicalDevice.handle(),
+      (uint64_t)(VkDevice)logicalDevice,
       desc.debugName);
   CHECK_RESULT(logicalDevice);
 
@@ -324,7 +342,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
   s->result = SetDebugInfo(
       logicalDevice,
       VK_OBJECT_TYPE_PHYSICAL_DEVICE,
-      (uint64_t)logicalDevice.handle(),
+      (uint64_t)(VkPhysicalDevice)*this,
       s->physicalDevice.state()->physicalDeviceProperties.properties.deviceName);
   CHECK_RESULT(logicalDevice);
 
@@ -333,7 +351,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
   s->result = SetDebugInfo(
       logicalDevice,
       VK_OBJECT_TYPE_INSTANCE,
-      (uint64_t)instance.handle(),
+      (uint64_t)(VkInstance)instance,
       instance.state()->applicationInfo.pApplicationName);
   CHECK_RESULT(logicalDevice);
 

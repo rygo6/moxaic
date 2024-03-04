@@ -161,9 +161,9 @@ struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
   static_void_ptr                                pNext;
   VkDeviceCreateFlags                            flags;
   static_array_ptr_packed<DeviceQueueCreateInfo> pQueueCreateInfos;
-  static_array_ptr<VkString>           pEnabledLayerNames;
-  static_array_ptr<VkString>           pEnabledExtensionNames;
-  static_ptr<VkPhysicalDeviceFeatures> pEnabledFeatures;
+  static_array_ptr<VkString>                     pEnabledLayerNames;
+  static_array_ptr<VkString>                     pEnabledExtensionNames;
+  static_ptr<VkPhysicalDeviceFeatures>           pEnabledFeatures;
 };
 // I really hate this, I think I am going to just make simpliffied C++ structs that you copy
 static_assert(sizeof(DeviceCreateInfo) == sizeof(VkDeviceCreateInfo));
@@ -627,7 +627,10 @@ struct PhysicalDeviceDesc {
   VkPhysicalDeviceRobustness2FeaturesEXT         physicalDeviceRobustness2Features;
   VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
 };
+
 struct PhysicalDeviceState {
+  constexpr static VkCount QueueFamilyCountCapacity{6};
+
   Instance                                       instance;
   VkPhysicalDeviceProperties2                    physicalDeviceProperties;
   VkPhysicalDeviceSubgroupProperties             physicalDeviceSubgroupProperties;
@@ -640,6 +643,9 @@ struct PhysicalDeviceState {
   VkPhysicalDeviceMeshShaderFeaturesEXT          physicalDeviceMeshShaderFeatures;
   VkPhysicalDeviceRobustness2FeaturesEXT         physicalDeviceRobustness2Features;
   VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
+  VkCount                                        queueFamilyCount;
+  VkQueueFamilyProperties2                       queueFamilyProperties[QueueFamilyCountCapacity];
+  VkQueueFamilyGlobalPriorityPropertiesEXT       queueFamilyGlobalPriorityProperties[QueueFamilyCountCapacity];
   VkResult                                       result{VK_NOT_READY};
 };
 struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState, 1> {
