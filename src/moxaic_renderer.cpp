@@ -1,8 +1,10 @@
 #include "moxaic_renderer.hpp"
 #include "mid_vulkan.hpp"
 #include "moxaic_logging.hpp"
+#include "moxaic_window.hpp"
 
-#include <span>
+#include <windows.h>
+#include <vulkan/vulkan_win32.h>
 
 using namespace Mid::Vk;
 
@@ -35,6 +37,8 @@ void Moxaic::Renderer::Init()
           VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
           VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
           VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+          VK_KHR_SURFACE_EXTENSION_NAME,
+          VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
         },
       },
       .validationFeatures{
@@ -60,7 +64,7 @@ void Moxaic::Renderer::Init()
     });
 
     instance.CreatePhysicalDevice(PhysicalDeviceDesc{
-      .deviceIndex = 0,
+      .preferredDeviceIndex = 0,
       .physicalDeviceFeatures{
         .features{
           .robustBufferAccess = VK_TRUE,
@@ -82,4 +86,8 @@ void Moxaic::Renderer::Init()
         .globalPriorityQuery = VK_TRUE,
       },
     });
+
+    Window::Init();
+    VkSurfaceKHR surface;
+    Window::InitSurface(instance, &surface);
 }

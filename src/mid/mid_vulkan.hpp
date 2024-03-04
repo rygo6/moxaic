@@ -107,9 +107,9 @@ struct ApplicationInfo : VkStruct<VkApplicationInfo> {
   VkStructureType sType{VK_STRUCTURE_TYPE_APPLICATION_INFO};
   static_void_ptr pNext;
   VkString        pApplicationName{"Mid Vulkan Application"};
-  uint32_t        applicationVersion{VK_MAKE_VERSION(1, 0, 0)};
+  uint32_t        applicationVersion;
   VkString        pEngineName{"Mid Vulkan"};
-  uint32_t        engineVersion{VK_MAKE_VERSION(1, 0, 0)};
+  uint32_t        engineVersion;
   uint32_t        apiVersion{VK_HEADER_VERSION_COMPLETE};
 };
 static_assert(sizeof(ApplicationInfo) == sizeof(VkApplicationInfo));
@@ -571,6 +571,7 @@ struct InstanceDesc {
   const VkAllocationCallbacks*                             pAllocator{nullptr};
 };
 struct InstanceState {
+  ApplicationInfo              applicationInfo;
   VkDebugUtilsMessengerEXT     debugUtilsMessengerEXT;
   const VkAllocationCallbacks* pInstanceAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
@@ -587,7 +588,7 @@ struct LocalDeviceDesc;
 
 /* PhysicalDevice */
 struct PhysicalDeviceDesc {
-  uint32_t                                       deviceIndex;
+  uint32_t                                       preferredDeviceIndex;
   VkPhysicalDeviceFeatures2                      physicalDeviceFeatures;
   VkPhysicalDeviceVulkan11Features               physicalDeviceFeatures11;
   VkPhysicalDeviceVulkan12Features               physicalDeviceFeatures12;
@@ -598,7 +599,7 @@ struct PhysicalDeviceDesc {
 };
 struct PhysicalDeviceState {
   Instance                                       instance;
-  VkPhysicalDeviceProperties                     physicalDeviceProperties;
+  VkPhysicalDeviceProperties2                    physicalDeviceProperties;
   VkPhysicalDeviceSubgroupProperties             physicalDeviceSubgroupProperties;
   VkPhysicalDeviceMeshShaderPropertiesEXT        physicalDeviceMeshShaderProperties;
   VkPhysicalDeviceMemoryProperties               physicalDeviceMemoryProperties;

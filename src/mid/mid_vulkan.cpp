@@ -47,6 +47,7 @@ Instance Instance::Create(const InstanceDesc&& desc) {
   auto instance = Instance::Acquire();
   auto state = instance.state();
 
+  state->applicationInfo = *desc.createInfo.pApplicationInfo.data;
   state->pInstanceAllocator = desc.pAllocator;
 
   LOG("Creating... ");
@@ -60,6 +61,12 @@ Instance Instance::Create(const InstanceDesc&& desc) {
   };
   VkInstanceCreateInfo createInfo = desc.createInfo;
   createInfo.pNext = &validationFeatures;
+  for(int i = 0; i < desc.createInfo.pEnabledExtensionNames.count; ++i) {
+    LOG("Loading %s... ", desc.createInfo.pEnabledExtensionNames.data[i]);
+  }
+  for(int i = 0; i < desc.createInfo.pEnabledLayerNames.count; ++i) {
+    LOG("Loading %s... ", desc.createInfo.pEnabledLayerNames.data[i]);
+  }
   state->result = vkCreateInstance(&createInfo, desc.pAllocator, instance.handle());
   CHECK_RESULT(instance);
 
@@ -162,6 +169,7 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   state->result = vkEnumeratePhysicalDevices(*this, &deviceCount, devices);
   CHECK_RESULT(physicalDevice);
 
+  // should these be cpp structs!?
   state->physicalDeviceGlobalPriorityQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT;
   state->physicalDeviceGlobalPriorityQueryFeatures.pNext = nullptr;
   state->physicalDeviceRobustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
@@ -206,13 +214,38 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   };
   constexpr int requiredCount = sizeof(required) / sizeof(required[0]);
 
+  state->physicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+  state->physicalDeviceMeshShaderProperties.pNext = nullptr;
+  state->physicalDeviceSubgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+  state->physicalDeviceSubgroupProperties.pNext = &state->physicalDeviceMeshShaderProperties;
+  state->physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+  state->physicalDeviceProperties.pNext = &state->physicalDeviceSubgroupProperties;
+
+  const auto requiredApiVersion = state->instance.state()->applicationInfo.apiVersion;
+  LOG("Required Vulkan API version %d.%d.%d.%d... ",
+    VK_API_VERSION_VARIANT(requiredApiVersion),
+    VK_API_VERSION_MAJOR(requiredApiVersion),
+    VK_API_VERSION_MINOR(requiredApiVersion),
+    VK_API_VERSION_PATCH(requiredApiVersion));
+
   int chosenDeviceIndex = -1;
   for (int deviceIndex = 0; deviceIndex < deviceCount; ++deviceIndex) {
-    printf("Getting Physical Device Index %d Memory Properties... ", deviceIndex);
+    printf("Getting Physical Device Index %d Features... ", deviceIndex);
     vkGetPhysicalDeviceFeatures2(devices[deviceIndex], &state->physicalDeviceFeatures);
 
     if (!CheckPhysicalDeviceFeatureBools(requiredCount, required, supported, structSize))
       continue;
+
+    LOG("Getting Physical Device Index %d Properties... ");
+    vkGetPhysicalDeviceProperties2(devices[deviceIndex], &state->physicalDeviceProperties);
+    if (state->physicalDeviceProperties.properties.apiVersion < requiredApiVersion) {
+      LOG("PhysicalDevice didn't support Vulkan API version %d.%d.%d.%d... ",
+          VK_API_VERSION_VARIANT(requiredApiVersion),
+          VK_API_VERSION_MAJOR(requiredApiVersion),
+          VK_API_VERSION_MINOR(requiredApiVersion),
+          VK_API_VERSION_PATCH(requiredApiVersion));
+      continue;
+    }
 
     chosenDeviceIndex = deviceIndex;
     break;
@@ -222,25 +255,13 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
     LOG("No suitable PhysicalDevice found!");
     state->result = VK_ERROR_INITIALIZATION_FAILED;
   } else {
-    LOG("Picking device %d... ", desc.deviceIndex);
-    *physicalDevice.handle() = devices[desc.deviceIndex];
+    LOG("Picking device %d... ", desc.preferredDeviceIndex);
+    *physicalDevice.handle() = devices[desc.preferredDeviceIndex];
     state->result = VK_SUCCESS;
   }
   CHECK_RESULT(physicalDevice);
 
-  LOG("Getting Physical Device Properties... ");
-  state->physicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
-  state->physicalDeviceMeshShaderProperties.pNext = nullptr;
-  state->physicalDeviceSubgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-  state->physicalDeviceSubgroupProperties.pNext = &state->physicalDeviceMeshShaderProperties;
-  VkPhysicalDeviceProperties2 physicalDeviceProperties2{
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-      .pNext = &state->physicalDeviceSubgroupProperties,
-  };
-  vkGetPhysicalDeviceProperties2(physicalDevice, &physicalDeviceProperties2);
-  state->physicalDeviceProperties = physicalDeviceProperties2.properties;
-
-  printf("Getting Physical Device Memory Properties... ");
+  LOG("Getting Physical Device Memory Properties... ");
   vkGetPhysicalDeviceMemoryProperties(physicalDevice, &state->physicalDeviceMemoryProperties);
 
   LOG("%s\n\n", physicalDevice.ResultName());
