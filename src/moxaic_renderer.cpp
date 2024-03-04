@@ -63,7 +63,7 @@ void Moxaic::Renderer::Init()
       },
     });
 
-    instance.CreatePhysicalDevice(PhysicalDeviceDesc{
+    auto physicalDevice = instance.CreatePhysicalDevice(PhysicalDeviceDesc{
       .preferredDeviceIndex = 0,
       .physicalDeviceFeatures{
         .features{
@@ -82,10 +82,15 @@ void Moxaic::Renderer::Init()
         .taskShader = VK_TRUE,
         .meshShader = VK_TRUE,
       },
+      .physicalDeviceRobustness2Features{},
       .physicalDeviceGlobalPriorityQueryFeatures{
-        .globalPriorityQuery = VK_TRUE,
+        // .globalPriorityQuery = VK_TRUE,
       },
     });
+
+    auto instanceHandle = instance.handle();
+    auto deviceHandle = physicalDevice.handle();
+
 
     Window::Init();
     VkSurfaceKHR surface;

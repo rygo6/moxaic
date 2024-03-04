@@ -8,7 +8,8 @@
 
 #include <string.h>
 
-#define LOG(...) printf(__VA_ARGS__)
+#define LOG(...) MVK_LOG(__VA_ARGS__)
+#define ASSERT(command) MVK_ASSERT(command)
 
 #define CHECK_RESULT(handle)                                       \
   if (handle.state()->result != VK_SUCCESS) [[unlikely]] {         \
@@ -61,10 +62,10 @@ Instance Instance::Create(const InstanceDesc&& desc) {
   };
   VkInstanceCreateInfo createInfo = desc.createInfo;
   createInfo.pNext = &validationFeatures;
-  for(int i = 0; i < desc.createInfo.pEnabledExtensionNames.count; ++i) {
+  for (int i = 0; i < desc.createInfo.pEnabledExtensionNames.count; ++i) {
     LOG("Loading %s... ", desc.createInfo.pEnabledExtensionNames.data[i]);
   }
-  for(int i = 0; i < desc.createInfo.pEnabledLayerNames.count; ++i) {
+  for (int i = 0; i < desc.createInfo.pEnabledLayerNames.count; ++i) {
     LOG("Loading %s... ", desc.createInfo.pEnabledLayerNames.data[i]);
   }
   state->result = vkCreateInstance(&createInfo, desc.pAllocator, instance.handle());
@@ -118,16 +119,15 @@ static bool CheckFeatureBools(
     const VkBoolFeatureStruct* requiredPtr,
     const VkBoolFeatureStruct* supportedPtr,
     const int                  structSize) {
-  constexpr int sTypeOffset = sizeof(VkStructureType);
-  constexpr int voidPtrOffset = sizeof(void*);
+  int size = (structSize - offsetof(VkBoolFeatureStruct, firstBool)) / sizeof(VkBool32);
 
   auto requiredBools = &requiredPtr->firstBool;
   auto supportedBools = &supportedPtr->firstBool;
-  int  size = (structSize - sTypeOffset - voidPtrOffset) / sizeof(VkBool32);
+
   LOG("Checking %d bools... ", size);
   for (int i = 0; i < size; ++i) {
     if (requiredBools[i] && !supportedBools[i]) {
-      LOG("Index %d feature not supported on physicalDevice!", i);
+      LOG("Feature Index %d not supported on physicalDevice! Skipping!... ", i);
       return false;
     }
   }
@@ -142,7 +142,6 @@ static bool CheckPhysicalDeviceFeatureBools(
   for (int i = 0; i < requiredCount; ++i) {
     printf("Checking %s... ", string_VkStructureType(supported[i]->sType) + strlen("VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_"));
     if (!CheckFeatureBools(required[i], supported[i], structSize[i])) {
-      LOG("PhysicalDevicel didn't support necessary feature! Skipping!... ");
       return false;
     }
   }
@@ -223,29 +222,34 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
 
   const auto requiredApiVersion = state->instance.state()->applicationInfo.apiVersion;
   LOG("Required Vulkan API version %d.%d.%d.%d... ",
-    VK_API_VERSION_VARIANT(requiredApiVersion),
-    VK_API_VERSION_MAJOR(requiredApiVersion),
-    VK_API_VERSION_MINOR(requiredApiVersion),
-    VK_API_VERSION_PATCH(requiredApiVersion));
+      VK_API_VERSION_VARIANT(requiredApiVersion),
+      VK_API_VERSION_MAJOR(requiredApiVersion),
+      VK_API_VERSION_MINOR(requiredApiVersion),
+      VK_API_VERSION_PATCH(requiredApiVersion));
 
   int chosenDeviceIndex = -1;
   for (int deviceIndex = 0; deviceIndex < deviceCount; ++deviceIndex) {
-    printf("Getting Physical Device Index %d Features... ", deviceIndex);
+    LOG("Getting Physical Device Index %d Properties... ");
+    vkGetPhysicalDeviceProperties2(devices[deviceIndex], &state->physicalDeviceProperties);
+    if (state->physicalDeviceProperties.properties.apiVersion < requiredApiVersion) {
+      LOG("PhysicalDevice %s didn't support Vulkan API version %d.%d.%d.%d it only supports %d.%d.%d.%d... ",
+          state->physicalDeviceProperties.properties.deviceName,
+          VK_API_VERSION_VARIANT(requiredApiVersion),
+          VK_API_VERSION_MAJOR(requiredApiVersion),
+          VK_API_VERSION_MINOR(requiredApiVersion),
+          VK_API_VERSION_PATCH(requiredApiVersion),
+          VK_API_VERSION_VARIANT(state->physicalDeviceProperties.properties.apiVersion),
+          VK_API_VERSION_MAJOR(state->physicalDeviceProperties.properties.apiVersion),
+          VK_API_VERSION_MINOR(state->physicalDeviceProperties.properties.apiVersion),
+          VK_API_VERSION_PATCH(state->physicalDeviceProperties.properties.apiVersion));
+      continue;
+    }
+
+    printf("Getting %s Physical Device Features... ", state->physicalDeviceProperties.properties.deviceName);
     vkGetPhysicalDeviceFeatures2(devices[deviceIndex], &state->physicalDeviceFeatures);
 
     if (!CheckPhysicalDeviceFeatureBools(requiredCount, required, supported, structSize))
       continue;
-
-    LOG("Getting Physical Device Index %d Properties... ");
-    vkGetPhysicalDeviceProperties2(devices[deviceIndex], &state->physicalDeviceProperties);
-    if (state->physicalDeviceProperties.properties.apiVersion < requiredApiVersion) {
-      LOG("PhysicalDevice didn't support Vulkan API version %d.%d.%d.%d... ",
-          VK_API_VERSION_VARIANT(requiredApiVersion),
-          VK_API_VERSION_MAJOR(requiredApiVersion),
-          VK_API_VERSION_MINOR(requiredApiVersion),
-          VK_API_VERSION_PATCH(requiredApiVersion));
-      continue;
-    }
 
     chosenDeviceIndex = deviceIndex;
     break;
@@ -255,7 +259,7 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
     LOG("No suitable PhysicalDevice found!");
     state->result = VK_ERROR_INITIALIZATION_FAILED;
   } else {
-    LOG("Picking device %d... ", desc.preferredDeviceIndex);
+    LOG("Picking Device %d %s... ", desc.preferredDeviceIndex, state->physicalDeviceProperties.properties.deviceName);
     *physicalDevice.handle() = devices[desc.preferredDeviceIndex];
     state->result = VK_SUCCESS;
   }

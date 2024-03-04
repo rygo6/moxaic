@@ -15,7 +15,8 @@
 #define MVK_DEFAULT_SHADER_STAGE VK_SHADER_STAGE_COMPUTE_BIT
 #define MVK_DEFAULT_ALLOCATOR nullptr
 
-#define VKM_ASSERT(command) assert(command == VK_SUCCESS)
+#define MVK_ASSERT(command) assert(command)
+#define MVK_LOG(...) printf(__VA_ARGS__)
 
 #define VKM_CHECK(command)                         \
   {                                                \
@@ -110,7 +111,7 @@ struct ApplicationInfo : VkStruct<VkApplicationInfo> {
   uint32_t        applicationVersion;
   VkString        pEngineName{"Mid Vulkan"};
   uint32_t        engineVersion;
-  uint32_t        apiVersion{VK_HEADER_VERSION_COMPLETE};
+  uint32_t        apiVersion{VK_MAKE_API_VERSION(0, 1, 3, 0)};
 };
 static_assert(sizeof(ApplicationInfo) == sizeof(VkApplicationInfo));
 
@@ -480,81 +481,85 @@ struct ComputePipeline {
 };
 
 #define MVK_HANDLE_INDEX_TYPE uint8_t
-#define MVK_HANDLE_COUNT 32
-constexpr static MVK_HANDLE_INDEX_TYPE HandleIndexCapacity = (1 << 8 * sizeof(MVK_HANDLE_INDEX_TYPE)) - 1;
+#define MVK_HANDLE_COUNT 16
+constexpr static MVK_HANDLE_INDEX_TYPE HandleLastIndex = (1 << 8 * sizeof(MVK_HANDLE_INDEX_TYPE)) - 1;
 static_assert(MVK_HANDLE_COUNT <= 1 << (8 * sizeof(MVK_HANDLE_INDEX_TYPE)));
 
 #define MVK_HANDLE_GENERATION_TYPE uint8_t
 constexpr static MVK_HANDLE_GENERATION_TYPE HandleGenerationCount = (1 << 8 * sizeof(MVK_HANDLE_GENERATION_TYPE)) - 1;
 
 template <typename T, T N>
-struct Stack {
+struct HandleStack {
   T current{N - 1};
-  T data[];
+  T data[N]{};
 
   T Pop() {
-    assert(current != 0 && "Trying to pop stack below 0.");
+    MVK_ASSERT(current >= 0 && "Trying to pop handle stack below 0.");
     return data[current--];
   }
 
   void Push(T value) {
-    assert(current != HandleIndexCapacity && "Tring to push stack above capacity.");
+    MVK_ASSERT(current != HandleLastIndex && "Tring to push handle stack above capacity.");
     data[++current] = value;
   }
 
-  Stack() {
-    assert(current <= HandleIndexCapacity && "Tring to create stack with capacity greater than type supports.");
+  HandleStack() {
+    MVK_ASSERT(current <= HandleLastIndex && "Trying to create handle stack with capacity greater than type supports.");
     for (size_t i = 0; i < N; ++i) {
       data[i] = (T)i;
     }
   }
 };
 
-template <typename THandle, typename TState>
-struct HandlePool {
-  static inline MVK_HANDLE_GENERATION_TYPE                     generations[MVK_HANDLE_COUNT];
-  static inline THandle                                        handles[MVK_HANDLE_COUNT];
-  static inline TState                                         states[MVK_HANDLE_COUNT];
-  static inline Stack<MVK_HANDLE_INDEX_TYPE, MVK_HANDLE_COUNT> freeIndexStack;
-};
+template <typename THandle, MVK_HANDLE_INDEX_TYPE N>
+static inline THandle handles[N]{};
 
-template <typename Derived, typename THandle, typename TState>
+template <typename THandle, MVK_HANDLE_INDEX_TYPE N>
+static inline MVK_HANDLE_GENERATION_TYPE generations[N]{};
+
+template <typename TState, MVK_HANDLE_INDEX_TYPE N>
+static inline TState states[N]{};
+
+template <typename THandle, MVK_HANDLE_INDEX_TYPE N>
+static inline HandleStack<MVK_HANDLE_INDEX_TYPE, N> freeIndexStack;
+
+template <typename Derived, typename THandle, typename TState, MVK_HANDLE_INDEX_TYPE TCapacity>
 struct HandleBase {
-  MVK_HANDLE_INDEX_TYPE      handleIndex;
-  MVK_HANDLE_GENERATION_TYPE handleGeneration;
+  MVK_HANDLE_INDEX_TYPE      handleIndex{};
+  MVK_HANDLE_GENERATION_TYPE handleGeneration{};
 
   THandle* handle() const {
-    assert(IsValid());
-    return &HandlePool<THandle, TState>::handles[handleIndex];
+    MVK_ASSERT(IsValid());
+    return &handles<THandle, TCapacity>[handleIndex];
   }
   TState* state() {
-    assert(IsValid());
-    return &HandlePool<THandle, TState>::states[handleIndex];
+    MVK_ASSERT(IsValid());
+    return &states<TState, TCapacity>[handleIndex];
   }
 
   static Derived Acquire() {
-    printf("Acquiring... ");
-    const auto index = HandlePool<THandle, TState>::freeIndexStack.Pop();
-    const auto generation = HandlePool<THandle, TState>::generations[index];
+    const auto index = freeIndexStack<THandle, TCapacity>.Pop();
+    const auto generation = generations<THandle, TCapacity>[index];
+    MVK_LOG("Acquiring index %d generation %d... ", index, generation);
     return Derived{index, generation};
   }
 
   void Release() const {
-    const auto generation = HandlePool<THandle, TState>::generations[handleIndex];
-    assert(generation != HandleGenerationCount && "Max handle generations reached.");
-    ++HandlePool<THandle, TState>::generations[handleIndex];
-    HandlePool<THandle, TState>::freeIndexStack.Push(handleIndex);
+    const auto generation = generations<THandle, TCapacity>[handleIndex];
+    MVK_ASSERT(generation != HandleGenerationCount && "Max handle generations reached.");
+    ++generations<THandle, TCapacity>[handleIndex];
+    freeIndexStack<THandle, TCapacity>.Push(handleIndex);
   }
 
-  VkResult       Result() const { return HandlePool<THandle, TState>::states[handleIndex].result; }
+  VkResult       Result() const { return states<TState, TCapacity>[handleIndex].result; }
   const VkString ResultName() const { return string_VkResult(Result()); }
 
   bool IsValid() const {
-    return HandlePool<THandle, TState>::generations[handleIndex] == handleGeneration;
+    return generations<THandle, TCapacity>[handleIndex] == handleGeneration;
   }
 
   operator THandle() const {
-    assert(IsValid());
+    MVK_ASSERT(IsValid());
     return *handle();
   }
 };
@@ -576,7 +581,7 @@ struct InstanceState {
   const VkAllocationCallbacks* pInstanceAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-struct Instance : HandleBase<Instance, VkInstance, InstanceState> {
+struct Instance : HandleBase<Instance, VkInstance, InstanceState, 1> {
   const VkAllocationCallbacks* InstanceAllocator(const VkAllocationCallbacks* pAllocator);
   static Instance              Create(const InstanceDesc&& desc);
   void                         Destroy();
@@ -612,7 +617,7 @@ struct PhysicalDeviceState {
   VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
   VkResult                                       result{VK_NOT_READY};
 };
-struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState> {
+struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState, 1> {
   void          Destroy();
   LogicalDevice CreateLogicalDevice(const LocalDeviceDesc&& desc);
 };
@@ -633,7 +638,7 @@ struct LogicalDeviceState {
   const VkAllocationCallbacks* pDefaultAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
+struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState, 1> {
   void                         Destroy();
   ComputePipeline2             CreateComputePipeline(const ComputePipelineDesc&& desc);
   PipelineLayout2              CreatePipelineLayout(const PipelineLayoutDesc&& desc);
@@ -652,7 +657,7 @@ struct PipelineLayoutDesc {
   PipelineLayoutCreateInfo     createInfo;
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
-struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, GenericHandleState> {
+struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, GenericHandleState, 32> {
   void Destroy();
 };
 
@@ -662,7 +667,7 @@ struct ComputePipelineDesc {
   static_array_ptr<ComputePipelineCreateInfo> createInfos;
   const VkAllocationCallbacks*                pAllocator{nullptr};
 };
-struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, GenericHandleState> {
+struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, GenericHandleState, 32> {
   void Destroy();
   void BindPipeline(VkCommandBuffer commandBuffer) const;
 };
