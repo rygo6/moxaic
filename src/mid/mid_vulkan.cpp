@@ -374,12 +374,12 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
   return logicalDevice;
 }
 uint32_t PhysicalDevice::FindQueueIndex(const FindQueueDesc&& desc) {
-  LOG("Finding queue family: graphics=%s compute=%s transfer=%s present=%s globalPriority=%s... ",
+  LOG("Finding queue family: graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
       string_Support(desc.graphics),
       string_Support(desc.compute),
       string_Support(desc.transfer),
-      string_Support(desc.present),
-      string_Support(desc.globalPriority));
+      string_Support(desc.globalPriority),
+      desc.present == nullptr ? "No" : "Yes");
 
   const auto s = state();
   for (uint32_t i = 0; i < s->queueFamilyCount; ++i) {
@@ -387,9 +387,6 @@ uint32_t PhysicalDevice::FindQueueIndex(const FindQueueDesc&& desc) {
     const bool computeSupport = s->queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
     const bool transferSupport = s->queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT;
     const bool globalPrioritySupport = s->queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
-
-    VkBool32 presentSupport = false;
-    vkGetPhysicalDeviceSurfaceSupportKHR(*this, i, desc.surface, &presentSupport);
 
     if (desc.graphics == Support::Yes && !graphicsSupport)
       continue;
@@ -406,15 +403,17 @@ uint32_t PhysicalDevice::FindQueueIndex(const FindQueueDesc&& desc) {
     if (desc.transfer == Support::No && transferSupport)
       continue;
 
-    if (desc.present == Support::Yes && !presentSupport)
-      continue;
-    if (desc.present == Support::No && presentSupport)
-      continue;
-
     if (desc.globalPriority == Support::Yes && !globalPrioritySupport)
       continue;
     if (desc.globalPriority == Support::No && globalPrioritySupport)
       continue;
+
+    if (desc.present != nullptr) {
+      VkBool32 presentSupport = VK_FALSE;
+      vkGetPhysicalDeviceSurfaceSupportKHR(*this, i, desc.present, &presentSupport);
+      if (!presentSupport)
+        continue;
+    }
 
     LOG("Found queue family index %d\n\n", i);
     return i;

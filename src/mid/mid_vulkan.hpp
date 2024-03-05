@@ -635,12 +635,11 @@ struct PhysicalDeviceDesc {
   VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
 };
 struct FindQueueDesc {
-  VkSurfaceKHR surface;
   Support      graphics;
   Support      compute;
   Support      transfer;
-  Support      present;
   Support      globalPriority;
+  VkSurfaceKHR present;
 };
 
 struct PhysicalDeviceState {

@@ -98,45 +98,42 @@ void Moxaic::Renderer::Init()
     Window::InitSurface(instance, &surface);
 
     auto mainGraphicsQueue = physicalDevice.FindQueueIndex({
-      .surface = surface,
       .graphics = Support::Yes,
       .compute = Support::Yes,
       .transfer = Support::Yes,
-      .present = Support::Yes,
       .globalPriority = Support::Yes,
+      .present = surface,
     });
-
     auto computeQueue = physicalDevice.FindQueueIndex({
-      .surface = surface,
       .graphics = Support::No,
       .compute = Support::Yes,
-      .present = Support::Yes,
       .globalPriority = Support::Yes,
+      .present = surface,
     });
-
     auto transferQueue = physicalDevice.FindQueueIndex({
-      .surface = surface,
       .graphics = Support::No,
       .compute = Support::No,
       .transfer = Support::Yes,
     });
+    auto globalQueue = Moxaic::IsCompositor() ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT;
+    auto queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
 
     auto logicalDevice = physicalDevice.CreateLogicalDevice(LogicalDeviceDesc{
       .createInfo{
         .pQueueCreateInfos{
           DeviceQueueCreateInfo{
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
-              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
+              .globalPriority = globalQueue,
             },
             .queueFamilyIndex = mainGraphicsQueue,
-            .pQueuePriorities{1.0},
+            .pQueuePriorities{queuePriority},
           },
           DeviceQueueCreateInfo{
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
-              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
+              .globalPriority = globalQueue,
             },
             .queueFamilyIndex = computeQueue,
-            .pQueuePriorities{1.0},
+            .pQueuePriorities{queuePriority},
           }},
         .pEnabledExtensionNames{
           VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -155,4 +152,6 @@ void Moxaic::Renderer::Init()
         },
       },
     });
+
+
 }
