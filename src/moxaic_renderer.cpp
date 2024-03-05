@@ -97,24 +97,24 @@ void Moxaic::Renderer::Init()
     VkSurfaceKHR surface;
     Window::InitSurface(instance, &surface);
 
-    auto mainGraphicsQueue = physicalDevice.FindQueueIndex({
-      .graphics = Support::Yes,
-      .compute = Support::Yes,
-      .transfer = Support::Yes,
-      .globalPriority = Support::Yes,
-      .present = surface,
-    });
-    auto computeQueue = physicalDevice.FindQueueIndex({
-      .graphics = Support::No,
-      .compute = Support::Yes,
-      .globalPriority = Support::Yes,
-      .present = surface,
-    });
-    auto transferQueue = physicalDevice.FindQueueIndex({
-      .graphics = Support::No,
-      .compute = Support::No,
-      .transfer = Support::Yes,
-    });
+    auto mainGraphicsQueueIndex = physicalDevice.FindQueueIndex(
+      Support::Yes,
+      Support::Yes,
+      Support::Yes,
+      Support::Yes,
+      surface);
+    auto computeQueueIndex = physicalDevice.FindQueueIndex(
+      Support::No,
+      Support::Yes,
+      Support::Optional,
+      Support::Yes,
+      surface);
+    auto transferQueueIndex = physicalDevice.FindQueueIndex(
+      Support::No,
+      Support::No,
+      Support::Yes,
+      Support::Optional,
+      VK_NULL_HANDLE);
     auto globalQueue = Moxaic::IsCompositor() ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT;
     auto queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
 
@@ -125,14 +125,14 @@ void Moxaic::Renderer::Init()
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
               .globalPriority = globalQueue,
             },
-            .queueFamilyIndex = mainGraphicsQueue,
+            .queueFamilyIndex = mainGraphicsQueueIndex,
             .pQueuePriorities{queuePriority},
           },
           DeviceQueueCreateInfo{
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
               .globalPriority = globalQueue,
             },
-            .queueFamilyIndex = computeQueue,
+            .queueFamilyIndex = computeQueueIndex,
             .pQueuePriorities{queuePriority},
           }},
         .pEnabledExtensionNames{
@@ -153,5 +153,95 @@ void Moxaic::Renderer::Init()
       },
     });
 
+    VkQueue graphicsQueue;
+    VkQueue computeQueue;
+    vkGetDeviceQueue(logicalDevice, mainGraphicsQueueIndex, 0, &graphicsQueue);
+    vkGetDeviceQueue(logicalDevice, computeQueueIndex, 0, &computeQueue);
 
+
+    constexpr VkFormat ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    constexpr VkFormat NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+    constexpr VkFormat DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
+    constexpr uint32_t ColorAttachmentIndex = 0;
+    constexpr uint32_t NormalAttachmentIndex = 1;
+    constexpr uint32_t DepthAttachmentIndex = 2;
+
+    auto renderPass = logicalDevice.CreateRenderPass({
+      .debugName = "StandardRenderPass",
+      .createInfo = {
+        .pAttachments{
+          {.format = ColorBufferFormat},
+          {.format = NormalBufferFormat},
+          {.format = DepthBufferFormat},
+        },
+        .pSubpasses{
+          {
+            .pColorAttachments{
+              {.attachment = ColorAttachmentIndex},
+              {.attachment = NormalAttachmentIndex},
+            },
+            .pDepthStencilAttachment{
+              {.attachment = DepthAttachmentIndex},
+            },
+          },
+        }}});
+
+    MXC_LOG(renderPass);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
