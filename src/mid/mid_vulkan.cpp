@@ -6,6 +6,8 @@
 
 #include "mid_vulkan.hpp"
 
+#include "moxaic_vulkan.hpp"
+
 #include <string.h>
 
 #define LOG(...) MVK_LOG(__VA_ARGS__)
@@ -19,6 +21,19 @@
 
 using namespace Mid;
 using namespace Mid::Vk;
+
+VkString Vk::string_Support(Support support) {
+  switch (support) {
+  case Support::Optional:
+    return "Optional";
+  case Support::Yes:
+    return "Yes";
+  case Support::No:
+    return "No";
+  default:
+    ASSERT(false);
+  }
+}
 
 static VkResult SetDebugInfo(
     VkDevice           logicalDevice,
@@ -342,7 +357,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
   s->result = SetDebugInfo(
       logicalDevice,
       VK_OBJECT_TYPE_PHYSICAL_DEVICE,
-      (uint64_t)(VkPhysicalDevice)*this,
+      (uint64_t)(VkPhysicalDevice) * this,
       s->physicalDevice.state()->physicalDeviceProperties.properties.deviceName);
   CHECK_RESULT(logicalDevice);
 
@@ -357,6 +372,56 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
 
   LOG("%s\n\n", logicalDevice.ResultName());
   return logicalDevice;
+}
+uint32_t PhysicalDevice::FindQueueIndex(const FindQueueDesc&& desc) {
+  LOG("Finding queue family: graphics=%s compute=%s transfer=%s present=%s globalPriority=%s... ",
+      string_Support(desc.graphics),
+      string_Support(desc.compute),
+      string_Support(desc.transfer),
+      string_Support(desc.present),
+      string_Support(desc.globalPriority));
+
+  const auto s = state();
+  for (uint32_t i = 0; i < s->queueFamilyCount; ++i) {
+    const bool graphicsSupport = s->queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
+    const bool computeSupport = s->queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
+    const bool transferSupport = s->queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT;
+    const bool globalPrioritySupport = s->queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
+
+    VkBool32 presentSupport = false;
+    vkGetPhysicalDeviceSurfaceSupportKHR(*this, i, desc.surface, &presentSupport);
+
+    if (desc.graphics == Support::Yes && !graphicsSupport)
+      continue;
+    if (desc.graphics == Support::No && graphicsSupport)
+      continue;
+
+    if (desc.compute == Support::Yes && !computeSupport)
+      continue;
+    if (desc.compute == Support::No && computeSupport)
+      continue;
+
+    if (desc.transfer == Support::Yes && !transferSupport)
+      continue;
+    if (desc.transfer == Support::No && transferSupport)
+      continue;
+
+    if (desc.present == Support::Yes && !presentSupport)
+      continue;
+    if (desc.present == Support::No && presentSupport)
+      continue;
+
+    if (desc.globalPriority == Support::Yes && !globalPrioritySupport)
+      continue;
+    if (desc.globalPriority == Support::No && globalPrioritySupport)
+      continue;
+
+    LOG("Found queue family index %d\n\n", i);
+    return i;
+  }
+
+  LOG("Failed to find Queue Family!\n\n");
+  return -1;
 }
 
 const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
@@ -384,7 +449,7 @@ const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
 // }
 void Vk::PipelineLayout2::Destroy() {
   printf("PipelineLayout::Destroy\n");
-  HandleBase::Release();
+  Release();
   vkDestroyPipelineLayout(state()->logicalDevice, *this, state()->pAllocator);
 }
 

@@ -93,6 +93,34 @@ void Moxaic::Renderer::Init()
       },
     });
 
+    Window::Init();
+    VkSurfaceKHR surface;
+    Window::InitSurface(instance, &surface);
+
+    auto mainGraphicsQueue = physicalDevice.FindQueueIndex({
+      .surface = surface,
+      .graphics = Support::Yes,
+      .compute = Support::Yes,
+      .transfer = Support::Yes,
+      .present = Support::Yes,
+      .globalPriority = Support::Yes,
+    });
+
+    auto computeQueue = physicalDevice.FindQueueIndex({
+      .surface = surface,
+      .graphics = Support::No,
+      .compute = Support::Yes,
+      .present = Support::Yes,
+      .globalPriority = Support::Yes,
+    });
+
+    auto transferQueue = physicalDevice.FindQueueIndex({
+      .surface = surface,
+      .graphics = Support::No,
+      .compute = Support::No,
+      .transfer = Support::Yes,
+    });
+
     auto logicalDevice = physicalDevice.CreateLogicalDevice(LogicalDeviceDesc{
       .createInfo{
         .pQueueCreateInfos{
@@ -100,14 +128,14 @@ void Moxaic::Renderer::Init()
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
               .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
             },
-            .queueFamilyIndex = 0,
+            .queueFamilyIndex = mainGraphicsQueue,
             .pQueuePriorities{1.0},
           },
           DeviceQueueCreateInfo{
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
               .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
             },
-            .queueFamilyIndex = 1,
+            .queueFamilyIndex = computeQueue,
             .pQueuePriorities{1.0},
           }},
         .pEnabledExtensionNames{
@@ -127,8 +155,4 @@ void Moxaic::Renderer::Init()
         },
       },
     });
-
-    Window::Init();
-    VkSurfaceKHR surface;
-    Window::InitSurface(instance, &surface);
 }

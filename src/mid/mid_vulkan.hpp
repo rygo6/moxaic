@@ -617,6 +617,13 @@ struct LogicalDevice;
 struct LogicalDeviceDesc;
 
 /* PhysicalDevice */
+enum class Support {
+  Optional,
+  Yes,
+  No,
+};
+VkString string_Support(Support support);
+
 struct PhysicalDeviceDesc {
   uint32_t                                       preferredDeviceIndex;
   VkPhysicalDeviceFeatures2                      physicalDeviceFeatures;
@@ -626,6 +633,14 @@ struct PhysicalDeviceDesc {
   VkPhysicalDeviceMeshShaderFeaturesEXT          physicalDeviceMeshShaderFeatures;
   VkPhysicalDeviceRobustness2FeaturesEXT         physicalDeviceRobustness2Features;
   VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
+};
+struct FindQueueDesc {
+  VkSurfaceKHR surface;
+  Support      graphics;
+  Support      compute;
+  Support      transfer;
+  Support      present;
+  Support      globalPriority;
 };
 
 struct PhysicalDeviceState {
@@ -651,6 +666,7 @@ struct PhysicalDeviceState {
 struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState, 1> {
   void          Destroy();
   LogicalDevice CreateLogicalDevice(const LogicalDeviceDesc&& desc);
+  uint32_t      FindQueueIndex(const FindQueueDesc&& desc);
 };
 
 struct ComputePipeline2;
