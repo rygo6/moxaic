@@ -1,8 +1,8 @@
 #pragma once
 
+#include "mid_vulkan.hpp"
 #include "moxaic_vulkan_descriptor.hpp"
 #include "static_array.hpp"
-#include "mid_vulkan.hpp"
 
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
@@ -30,19 +30,21 @@ namespace Moxaic::Vulkan
           },
         };
 
-        VkResult Create(const VkDevice deviceHandle, const VkSampler srcSampler)
+        VkResult Create(const VkDevice deviceHandle, VkSampler srcSampler)
         {
-            const StaticArray layoutBindings{
-              LayoutBindings[SrcTexture].WithSamplers(&srcSampler),
-              LayoutBindings[DstTexture],
-            };
+            // const StaticArray layoutBindings{
+            //   LayoutBindings[SrcTexture].WithSamplers(&srcSampler),
+            //   LayoutBindings[DstTexture],
+            // };
             VKM_CHECK(Mid::Vk::DescriptorSetLayout::Create(
               deviceHandle,
               Name,
-              {
+              Mid::Vk::DescriptorSetLayoutCreateInfo{
                 .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-                .bindingCount = layoutBindings.size(),
-                .pBindings = layoutBindings.data(),
+                .pBindings{
+                  LayoutBindings[SrcTexture].WithSamplers(&srcSampler),
+                  LayoutBindings[DstTexture],
+                },
               }));
             return VK_SUCCESS;
         }

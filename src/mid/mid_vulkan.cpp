@@ -446,6 +446,36 @@ void LogicalDevice::Destroy() {
   vkDestroyDevice(*pHandle(), pState()->pAllocator);
   Release();
 }
+
+template<typename T>
+static T CreateGeneric(LogicalDevice device, const auto&& desc) {
+  LOG("# CreateCommandPool... ");
+
+  auto handle = T::Acquire();
+  auto s = handle.pState();
+
+  s->pAllocator = DefaultAllocator(desc.pAllocator);
+  s->logicalDevice = device;
+
+  LOG("Creating... ");
+  s->result = vkCreateCommandPool(device,
+                                 desc.createInfo.p(),
+                                 s->pAllocator,
+                                 &handle.pHandle());
+  CHECK_RESULT(handle);
+
+  LOG("Setting DebugName... ");
+  s->result = SetDebugInfo(
+      device,
+      VK_OBJECT_TYPE_RENDER_PASS,
+      (uint64_t)*handle.pHandle(),
+      desc.debugName);
+  CHECK_RESULT(handle);
+
+  LOG("%s\n\n", handle.ResultName());
+  return handle;
+}
+
 RenderPass LogicalDevice::CreateRenderPass(const RenderPassDesc&& desc) {
   LOG("# CreateRenderPass... ");
 
@@ -472,6 +502,34 @@ RenderPass LogicalDevice::CreateRenderPass(const RenderPassDesc&& desc) {
 
   LOG("%s\n\n", renderPass.ResultName());
   return renderPass;
+}
+
+CommandPool LogicalDevice::CreateCommandPool(const CommandPoolDesc&& desc) {
+  LOG("# CreateCommandPool... ");
+
+  auto commandPool = CommandPool::Acquire();
+  auto s = commandPool.pState();
+
+  s->pAllocator = DefaultAllocator(desc.pAllocator);
+  s->logicalDevice = *this;
+
+  LOG("Creating... ");
+  s->result = vkCreateCommandPool(*pHandle(),
+                                 desc.createInfo.p(),
+                                 s->pAllocator,
+                                 commandPool.pHandle());
+  CHECK_RESULT(commandPool);
+
+  LOG("Setting DebugName... ");
+  s->result = SetDebugInfo(
+      *pHandle(),
+      VK_OBJECT_TYPE_RENDER_PASS,
+      (uint64_t)*commandPool.pHandle(),
+      desc.debugName);
+  CHECK_RESULT(commandPool);
+
+  LOG("%s\n\n", commandPool.ResultName());
+  return commandPool;
 }
 
 const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(

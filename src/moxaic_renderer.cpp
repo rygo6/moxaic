@@ -97,7 +97,7 @@ void Moxaic::Renderer::Init()
     VkSurfaceKHR surface;
     Window::InitSurface(instance, &surface);
 
-    auto mainGraphicsQueueIndex = physicalDevice.FindQueueIndex(
+    auto graphicsQueueIndex = physicalDevice.FindQueueIndex(
       Support::Yes,
       Support::Yes,
       Support::Yes,
@@ -125,7 +125,7 @@ void Moxaic::Renderer::Init()
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
               .globalPriority = globalQueue,
             },
-            .queueFamilyIndex = mainGraphicsQueueIndex,
+            .queueFamilyIndex = graphicsQueueIndex,
             .pQueuePriorities{queuePriority},
           },
           DeviceQueueCreateInfo{
@@ -155,7 +155,7 @@ void Moxaic::Renderer::Init()
 
     VkQueue graphicsQueue;
     VkQueue computeQueue;
-    vkGetDeviceQueue(logicalDevice, mainGraphicsQueueIndex, 0, &graphicsQueue);
+    vkGetDeviceQueue(logicalDevice, graphicsQueueIndex, 0, &graphicsQueue);
     vkGetDeviceQueue(logicalDevice, computeQueueIndex, 0, &computeQueue);
 
 
@@ -184,64 +184,25 @@ void Moxaic::Renderer::Init()
               {.attachment = DepthAttachmentIndex},
             },
           },
-        }}});
+        },
+      },
+    });
+
+    auto graphicsCommandPool = logicalDevice.CreateCommandPool({
+      .debugName = "GraphicsCommandPool",
+      .createInfo = CommandPoolCreateInfo{
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = graphicsQueueIndex,
+      },
+    });
+    auto computeCommandPool = logicalDevice.CreateCommandPool({
+      .debugName = "GraphicsCommandPool",
+      .createInfo = CommandPoolCreateInfo{
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = graphicsQueueIndex,
+      },
+    });
+
 
     MXC_LOG(renderPass);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

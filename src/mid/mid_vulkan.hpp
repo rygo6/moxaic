@@ -18,8 +18,12 @@
 #define MVK_LOG(...) printf(__VA_ARGS__)
 #endif
 
-#ifndef MVK_RENDERPASS_HANDLE_CAPACITY
-#define MVK_RENDERPASS_HANDLE_CAPACITY 4
+#ifndef MVK_RENDERPASS_CAPACITY
+#define MVK_RENDERPASS_CAPACITY 4
+#endif
+
+#ifndef MVK_COMMANDPOOL_CAPACITY
+#define MVK_COMMANDPOOL_CAPACITY 4
 #endif
 
 #ifndef MVK_PFN_FUNCTIONS
@@ -73,7 +77,7 @@ typedef const char* VkString;
 typedef uint32_t    VkCount;
 
 struct static_void_ptr {
-  void* data{nullptr};
+  const void* data{nullptr};
 
   template <typename T>
   constexpr static_void_ptr(T&& value) : data{&value} {}
@@ -84,9 +88,10 @@ template <typename T>
 struct static_ptr {
   const T* data{nullptr};
 
-  constexpr static_ptr(T&& value) : data{&value} {}
-  constexpr static_ptr(std::initializer_list<T> l) : data{l.begin()} {}
   constexpr static_ptr() = default;
+  constexpr static_ptr(T&& value) : data{&value} {}
+  constexpr static_ptr(T* value) : data{value} {}
+  constexpr static_ptr(std::initializer_list<T> l) : data{l.begin()} {}
 };
 
 template <typename T>
@@ -240,14 +245,31 @@ struct RenderPassCreateInfo : VkStruct<VkRenderPassCreateInfo> {
 };
 static_assert(sizeof(RenderPassCreateInfo) == sizeof(VkRenderPassCreateInfo));
 
-struct DescriptorSetLayoutBinding {
-  uint32_t           binding{0};
-  VkDescriptorType   descriptorType{MVK_DEFAULT_DESCRIPTOR_TYPE};
-  uint32_t           descriptorCount{1};
-  VkShaderStageFlags stageFlags{MVK_DEFAULT_SHADER_STAGE};
-  const VkSampler*   pImmutableSamplers{VK_NULL_HANDLE};
+struct CommandPoolCreateInfo : VkStruct<VkCommandPoolCreateInfo> {
+  VkStructureType          sType{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+  static_void_ptr          pNext;
+  VkCommandPoolCreateFlags flags;
+  uint32_t                 queueFamilyIndex;
+};
+static_assert(sizeof(CommandPoolCreateInfo) == sizeof(VkCommandPoolCreateInfo));
 
-  DescriptorSetLayoutBinding WithSamplers(const VkSampler* pImmutableSamplers) const {
+struct CommandBufferAllocateInfo : VkStruct<VkCommandBufferAllocateInfo> {
+  VkStructureType      sType{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+  static_void_ptr      pNext;
+  VkCommandPool        commandPool;
+  VkCommandBufferLevel level;
+  uint32_t             commandBufferCount;
+};
+static_assert(sizeof(CommandBufferAllocateInfo) == sizeof(VkCommandBufferAllocateInfo));
+
+struct DescriptorSetLayoutBinding : VkStruct<VkDescriptorSetLayoutBinding> {
+  uint32_t              binding;
+  VkDescriptorType      descriptorType{MVK_DEFAULT_DESCRIPTOR_TYPE};
+  uint32_t              descriptorCount{1};
+  VkShaderStageFlags    stageFlags{MVK_DEFAULT_SHADER_STAGE};
+  static_ptr<VkSampler> pImmutableSamplers;
+
+  DescriptorSetLayoutBinding WithSamplers(VkSampler* pImmutableSamplers) const {
     return {
         .binding = binding,
         .descriptorType = descriptorType,
@@ -255,9 +277,8 @@ struct DescriptorSetLayoutBinding {
         .stageFlags = stageFlags,
         .pImmutableSamplers = pImmutableSamplers};
   }
-
-  constexpr operator VkDescriptorSetLayoutBinding() const { return *(VkDescriptorSetLayoutBinding*)this; }
 };
+static_assert(sizeof(DescriptorSetLayoutBinding) == sizeof(VkDescriptorSetLayoutBinding));
 
 struct DescriptorImageInfo {
   const VkSampler     sampler{VK_NULL_HANDLE};
@@ -282,16 +303,13 @@ struct WriteDescriptorSet {
   constexpr operator VkWriteDescriptorSet() const { return *(VkWriteDescriptorSet*)this; }
 };
 
-struct DescriptorSetLayoutCreateInfo {
-  const VkStructureType                  sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  const void*                            pNext{nullptr};
-  const VkDescriptorSetLayoutCreateFlags flags{0};
-  const uint32_t                         bindingCount{1};
-  const DescriptorSetLayoutBinding*      pBindings{nullptr};
-
-  const VkDescriptorSetLayoutCreateInfo& vkHandle{*(VkDescriptorSetLayoutCreateInfo*)this};
-  constexpr                              operator VkDescriptorSetAllocateInfo() const { return *(VkDescriptorSetAllocateInfo*)this; }
+struct DescriptorSetLayoutCreateInfo : VkStruct<VkDescriptorSetLayoutCreateInfo> {
+  VkStructureType                                     sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  static_void_ptr                                     pNext;
+  VkDescriptorSetLayoutCreateFlags                    flags;
+  static_array_ptr_packed<DescriptorSetLayoutBinding> pBindings;
 };
+static_assert(sizeof(DescriptorSetLayoutCreateInfo) == sizeof(VkDescriptorSetLayoutCreateInfo));
 
 struct DescriptorSetAllocateInfo {
   const VkStructureType        sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
@@ -382,7 +400,7 @@ struct DescriptorSetLayout {
       const DescriptorSetLayoutCreateInfo&& createInfo) {
     this->vkDeviceHandle = vkDeviceHandle;
     VKM_CHECK(vkCreateDescriptorSetLayout(vkDeviceHandle,
-                                          &createInfo.vkHandle,
+                                          createInfo.p(),
                                           MVK_DEFAULT_ALLOCATOR,
                                           &vkHandle));
     // const DebugUtilsObjectNameInfoEXT debugInfo{
@@ -726,6 +744,8 @@ struct PipelineLayoutDesc;
 struct PipelineLayout2;
 struct RenderPassDesc;
 struct RenderPass;
+struct CommandPoolDesc;
+struct CommandPool;
 
 /* LogicalDevice */
 struct LogicalDeviceDesc {
@@ -741,6 +761,7 @@ struct LogicalDeviceState {
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState, 1> {
   void                         Destroy();
   RenderPass                   CreateRenderPass(const RenderPassDesc&& desc);
+  CommandPool                  CreateCommandPool(const CommandPoolDesc&& desc);
   ComputePipeline2             CreateComputePipeline(const ComputePipelineDesc&& desc);
   PipelineLayout2              CreatePipelineLayout(const PipelineLayoutDesc&& desc);
   const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
@@ -763,8 +784,19 @@ struct RenderPassState {
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-struct RenderPass : HandleBase<RenderPass, VkRenderPass, RenderPassState, MVK_RENDERPASS_HANDLE_CAPACITY> {
+struct RenderPass : HandleBase<RenderPass, VkRenderPass, RenderPassState, MVK_RENDERPASS_CAPACITY> {
   void Destroy();
+};
+
+/* CommandPool */
+struct CommandPoolDesc {
+  const char*            debugName{"CommandPool"};
+  CommandPoolCreateInfo  createInfo{};
+  VkAllocationCallbacks* pAllocator{nullptr};
+};
+struct CommandPool : HandleBase<CommandPool, VkCommandPool, GenericHandleState, MVK_COMMANDPOOL_CAPACITY> {
+  CommandPool CommandPoolDesc(const RenderPassDesc&& desc);
+  void        Destroy();
 };
 
 /* PipelineLayout */
