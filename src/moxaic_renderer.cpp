@@ -158,7 +158,6 @@ void Moxaic::Renderer::Init()
     vkGetDeviceQueue(logicalDevice, graphicsQueueIndex, 0, &graphicsQueue);
     vkGetDeviceQueue(logicalDevice, computeQueueIndex, 0, &computeQueue);
 
-
     constexpr VkFormat ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
     constexpr VkFormat NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
     constexpr VkFormat DepthBufferFormat = VK_FORMAT_D32_SFLOAT;
@@ -199,10 +198,16 @@ void Moxaic::Renderer::Init()
       .debugName = "GraphicsCommandPool",
       .createInfo = CommandPoolCreateInfo{
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = graphicsQueueIndex,
+        .queueFamilyIndex = computeQueueIndex,
       },
     });
 
+    auto graphicsCommandBuffer = graphicsCommandPool.AllocateCommandBuffer({
+      .debugName = "GraphicsCommandBuffer",
+    });
+    auto computeCommandBuffer = computeCommandPool.AllocateCommandBuffer({
+      .debugName = "ComputeCommandBuffer",
+    });
 
     MXC_LOG(renderPass);
 }

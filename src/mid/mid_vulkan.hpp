@@ -26,6 +26,10 @@
 #define MVK_COMMANDPOOL_CAPACITY 4
 #endif
 
+#ifndef MVK_COMMANDBUFFER_CAPACITY
+#define MVK_COMMANDBUFFER_CAPACITY 4
+#endif
+
 #ifndef MVK_PFN_FUNCTIONS
 #define MVK_PFN_FUNCTIONS                      \
   MVK_PFN_FUNCTION(SetDebugUtilsObjectNameEXT) \
@@ -76,42 +80,46 @@ struct {
 typedef const char* VkString;
 typedef uint32_t    VkCount;
 
-struct static_void_ptr {
+struct void_ptr {
   const void* data{nullptr};
 
   template <typename T>
-  constexpr static_void_ptr(T&& value) : data{&value} {}
-  constexpr static_void_ptr() = default;
+  constexpr void_ptr(T&& value) : data{&value} {}
+  constexpr void_ptr() = default;
 };
 
 template <typename T>
-struct static_ptr {
+struct ptr {
   const T* data{nullptr};
 
-  constexpr static_ptr() = default;
-  constexpr static_ptr(T&& value) : data{&value} {}
-  constexpr static_ptr(T* value) : data{value} {}
-  constexpr static_ptr(std::initializer_list<T> l) : data{l.begin()} {}
+  constexpr ptr() = default;
+  constexpr ptr(T&& value) : data{&value} {}
+  constexpr ptr(T& value) : data{&value} {}
+  constexpr ptr(T* value) : data{value} {}
+  constexpr ptr(std::initializer_list<T> l) : data{l.begin()} {}
+
+  constexpr operator const T*() const { return this; };
+  constexpr operator T*() const { return this; };
 };
 
 template <typename T>
-struct static_array_ptr {
+struct span {
   const VkCount count{0};
   const T*      data{nullptr};
 
-  constexpr static_array_ptr(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
-  constexpr static_array_ptr() = default;
+  constexpr span(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
+  constexpr span() = default;
 };
 
 // Yes you need this for some reason. I really hate.
 #pragma pack(push, 4)
 template <typename T>
-struct static_array_ptr_packed {
+struct span_pack {
   const VkCount count{0};
   const T*      data{nullptr};
 
-  constexpr static_array_ptr_packed(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
-  constexpr static_array_ptr_packed() = default;
+  constexpr span_pack(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
+  constexpr span_pack() = default;
 };
 #pragma pack(pop)
 
@@ -124,13 +132,17 @@ VkString string_Support(Support support);
 
 template <typename T>
 struct VkStruct {
-  T* p() const { return (T*)this; }
+  // do I like this?
+  // T*       pVk() const { return (T*)this; }
+  const T& vk() const { return *(T*)this; }
+
+  // these ok since cost?
   operator const T&() const { return *(T*)this; };
 };
 
 struct ApplicationInfo : VkStruct<VkApplicationInfo> {
   VkStructureType sType{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-  static_void_ptr pNext;
+  void_ptr        pNext;
   VkString        pApplicationName{"Mid Vulkan Application"};
   uint32_t        applicationVersion;
   VkString        pEngineName{"Mid Vulkan"};
@@ -140,41 +152,41 @@ struct ApplicationInfo : VkStruct<VkApplicationInfo> {
 static_assert(sizeof(ApplicationInfo) == sizeof(VkApplicationInfo));
 
 struct InstanceCreateInfo : VkStruct<VkInstanceCreateInfo> {
-  VkStructureType             sType{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-  static_void_ptr             pNext;
-  VkInstanceCreateFlags       flags;
-  static_ptr<ApplicationInfo> pApplicationInfo;
-  static_array_ptr<VkString>  pEnabledLayerNames;
-  static_array_ptr<VkString>  pEnabledExtensionNames;
+  VkStructureType       sType{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
+  void_ptr              pNext;
+  VkInstanceCreateFlags flags;
+  ptr<ApplicationInfo>  pApplicationInfo;
+  span<VkString>        pEnabledLayerNames;
+  span<VkString>        pEnabledExtensionNames;
 };
 static_assert(sizeof(InstanceCreateInfo) == sizeof(VkInstanceCreateInfo));
 
 struct ValidationFeatures : VkStruct<VkValidationFeaturesEXT> {
-  VkStructureType                                 sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-  static_void_ptr                                 pNext;
-  static_array_ptr<VkValidationFeatureEnableEXT>  pEnabledValidationFeatures;
-  static_array_ptr<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
+  VkStructureType                     sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
+  void_ptr                            pNext;
+  span<VkValidationFeatureEnableEXT>  pEnabledValidationFeatures;
+  span<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
 };
 static_assert(sizeof(ValidationFeatures) == sizeof(VkValidationFeaturesEXT));
 
 struct DeviceQueueCreateInfo : VkStruct<VkDeviceQueueCreateInfo> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
-  static_void_ptr          pNext;
+  void_ptr                 pNext;
   VkDeviceQueueCreateFlags flags;
   uint32_t                 queueFamilyIndex;
   uint32_t                 queueCount{1};
-  static_ptr<float>        pQueuePriorities;
+  ptr<float>               pQueuePriorities;
 };
 static_assert(sizeof(DeviceQueueCreateInfo) == sizeof(VkDeviceQueueCreateInfo));
 
 struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
-  VkStructureType                                sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-  static_void_ptr                                pNext;
-  VkDeviceCreateFlags                            flags;
-  static_array_ptr_packed<DeviceQueueCreateInfo> pQueueCreateInfos;
-  static_array_ptr<VkString>                     pEnabledLayerNames;
-  static_array_ptr<VkString>                     pEnabledExtensionNames;
-  static_ptr<VkPhysicalDeviceFeatures>           pEnabledFeatures;
+  VkStructureType                  sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+  void_ptr                         pNext;
+  VkDeviceCreateFlags              flags;
+  span_pack<DeviceQueueCreateInfo> pQueueCreateInfos;
+  span<VkString>                   pEnabledLayerNames;
+  span<VkString>                   pEnabledExtensionNames;
+  ptr<VkPhysicalDeviceFeatures>    pEnabledFeatures;
 };
 // I really hate this, I think I am going to just make simplified C++ structs that you copy
 // or maybe not... I do like that you use the real vulkan structs....
@@ -189,7 +201,7 @@ static_assert(offsetof(DeviceCreateInfo, pEnabledFeatures) == offsetof(VkDeviceC
 
 struct DeviceQueueGlobalPriorityCreateInfo : VkStruct<VkDeviceQueueGlobalPriorityCreateInfoKHR> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT};
-  static_void_ptr          pNext;
+  void_ptr                 pNext;
   VkQueueGlobalPriorityKHR globalPriority;
 };
 static_assert(sizeof(DeviceQueueGlobalPriorityCreateInfo) == sizeof(VkDeviceQueueGlobalPriorityCreateInfoKHR));
@@ -214,13 +226,13 @@ struct AttachmentReference : VkStruct<VkAttachmentReference> {
 static_assert(sizeof(AttachmentReference) == sizeof(VkAttachmentReference));
 
 struct SubpassDescription : VkStruct<VkSubpassDescription> {
-  VkSubpassDescriptionFlags             flags;
-  VkPipelineBindPoint                   pipelineBindPoint{VK_PIPELINE_BIND_POINT_GRAPHICS};
-  static_array_ptr<AttachmentReference> pInputAttachments;
-  static_array_ptr<AttachmentReference> pColorAttachments;
-  static_ptr<AttachmentReference>       pResolveAttachments;
-  static_ptr<AttachmentReference>       pDepthStencilAttachment;
-  static_array_ptr<uint32_t>            pPreserveAttachments;
+  VkSubpassDescriptionFlags flags;
+  VkPipelineBindPoint       pipelineBindPoint{VK_PIPELINE_BIND_POINT_GRAPHICS};
+  span<AttachmentReference> pInputAttachments;
+  span<AttachmentReference> pColorAttachments;
+  ptr<AttachmentReference>  pResolveAttachments;
+  ptr<AttachmentReference>  pDepthStencilAttachment;
+  span<uint32_t>            pPreserveAttachments;
 };
 static_assert(sizeof(SubpassDescription) == sizeof(VkSubpassDescription));
 
@@ -236,18 +248,18 @@ struct SubpassDependency : VkStruct<VkSubpassDependency> {
 static_assert(sizeof(SubpassDependency) == sizeof(VkSubpassDependency));
 
 struct RenderPassCreateInfo : VkStruct<VkRenderPassCreateInfo> {
-  VkStructureType                                sType{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-  static_void_ptr                                pNext;
-  VkRenderPassCreateFlags                        flags;
-  static_array_ptr_packed<AttachmentDescription> pAttachments;
-  static_array_ptr<SubpassDescription>           pSubpasses;
-  static_array_ptr<SubpassDependency>            pDependencies;
+  VkStructureType                  sType{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
+  void_ptr                         pNext;
+  VkRenderPassCreateFlags          flags;
+  span_pack<AttachmentDescription> pAttachments;
+  span<SubpassDescription>         pSubpasses;
+  span<SubpassDependency>          pDependencies;
 };
 static_assert(sizeof(RenderPassCreateInfo) == sizeof(VkRenderPassCreateInfo));
 
 struct CommandPoolCreateInfo : VkStruct<VkCommandPoolCreateInfo> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
-  static_void_ptr          pNext;
+  void_ptr                 pNext;
   VkCommandPoolCreateFlags flags;
   uint32_t                 queueFamilyIndex;
 };
@@ -255,19 +267,19 @@ static_assert(sizeof(CommandPoolCreateInfo) == sizeof(VkCommandPoolCreateInfo));
 
 struct CommandBufferAllocateInfo : VkStruct<VkCommandBufferAllocateInfo> {
   VkStructureType      sType{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-  static_void_ptr      pNext;
-  VkCommandPool        commandPool;
-  VkCommandBufferLevel level;
-  uint32_t             commandBufferCount;
+  void_ptr             pNext;
+  VkCommandPool        commandPool{VK_NULL_HANDLE};
+  VkCommandBufferLevel level{VK_COMMAND_BUFFER_LEVEL_PRIMARY};
+  uint32_t             commandBufferCount{1};
 };
 static_assert(sizeof(CommandBufferAllocateInfo) == sizeof(VkCommandBufferAllocateInfo));
 
 struct DescriptorSetLayoutBinding : VkStruct<VkDescriptorSetLayoutBinding> {
-  uint32_t              binding;
-  VkDescriptorType      descriptorType{MVK_DEFAULT_DESCRIPTOR_TYPE};
-  uint32_t              descriptorCount{1};
-  VkShaderStageFlags    stageFlags{MVK_DEFAULT_SHADER_STAGE};
-  static_ptr<VkSampler> pImmutableSamplers;
+  uint32_t           binding;
+  VkDescriptorType   descriptorType{MVK_DEFAULT_DESCRIPTOR_TYPE};
+  uint32_t           descriptorCount{1};
+  VkShaderStageFlags stageFlags{MVK_DEFAULT_SHADER_STAGE};
+  ptr<VkSampler>     pImmutableSamplers;
 
   DescriptorSetLayoutBinding WithSamplers(VkSampler* pImmutableSamplers) const {
     return {
@@ -304,10 +316,10 @@ struct WriteDescriptorSet {
 };
 
 struct DescriptorSetLayoutCreateInfo : VkStruct<VkDescriptorSetLayoutCreateInfo> {
-  VkStructureType                                     sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  static_void_ptr                                     pNext;
-  VkDescriptorSetLayoutCreateFlags                    flags;
-  static_array_ptr_packed<DescriptorSetLayoutBinding> pBindings;
+  VkStructureType                       sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  void_ptr                              pNext;
+  VkDescriptorSetLayoutCreateFlags      flags;
+  span_pack<DescriptorSetLayoutBinding> pBindings;
 };
 static_assert(sizeof(DescriptorSetLayoutCreateInfo) == sizeof(VkDescriptorSetLayoutCreateInfo));
 
@@ -400,7 +412,7 @@ struct DescriptorSetLayout {
       const DescriptorSetLayoutCreateInfo&& createInfo) {
     this->vkDeviceHandle = vkDeviceHandle;
     VKM_CHECK(vkCreateDescriptorSetLayout(vkDeviceHandle,
-                                          createInfo.p(),
+                                          &createInfo.vk(),
                                           MVK_DEFAULT_ALLOCATOR,
                                           &vkHandle));
     // const DebugUtilsObjectNameInfoEXT debugInfo{
@@ -613,6 +625,7 @@ struct HandleStack {
   }
 };
 
+// honestly don't know if this hot or cold thing does much
 template <typename THandle, MVK_HANDLE_INDEX_TYPE N>
 __attribute__((hot, section(".handle"))) static inline THandle handles[N]{};
 
@@ -641,6 +654,19 @@ struct HandleBase {
     return &states<TState, TCapacity>[handleIndex];
   }
 
+  // CANT DECIDE IF I WANT TO RETURN BY REF OR POINTER!?
+  // return by pointer in case someone saves the ref they need the pointer syntax
+  // to signify they are editing something nonlocal. Ref always be const
+
+  const THandle& handle() {
+    MVK_ASSERT(IsValid() && "Trying to get handle with wrong generation!");
+    return handles<THandle, TCapacity>[handleIndex];
+  }
+  const TState& state() {
+    MVK_ASSERT(IsValid() && "Trying to get state with wrong generation!");
+    return &states<TState, TCapacity>[handleIndex];
+  }
+
   static Derived Acquire() {
     const auto index = freeIndexStack<THandle, TCapacity>.Pop();
     const auto generation = generations<THandle, TCapacity>[index];
@@ -663,10 +689,32 @@ struct HandleBase {
   }
 
   // might want to get rid of this?
-  operator THandle() {
+  // operator THandle() {
+  //   MVK_ASSERT(IsValid());
+  //   return *pHandle();
+  // }
+  // operator const THandle() {
+  //   MVK_ASSERT(IsValid());
+  //   return *pHandle();
+  // }
+  // constexpr operator THandle&() {
+  //   MVK_ASSERT(IsValid());
+  //   return *pHandle();
+  // }
+
+  constexpr operator THandle() {
     MVK_ASSERT(IsValid());
-    return *pHandle();
+    return handles<THandle, TCapacity>[handleIndex];
   }
+
+  // constexpr operator &() {
+  //   MVK_ASSERT(IsValid());
+  //   return &handles<THandle, TCapacity>[handleIndex];
+  // }
+  // constexpr operator const THandle&() {
+  //   MVK_ASSERT(IsValid());
+  //   return *pHandle();
+  // }
 };
 
 struct PhysicalDevice;
@@ -674,11 +722,11 @@ struct PhysicalDeviceDesc;
 
 /* Instance */
 struct InstanceDesc {
-  InstanceCreateInfo                                       createInfo;
-  ValidationFeatures                                       validationFeatures;
-  static_array_ptr<VkDebugUtilsMessageSeverityFlagBitsEXT> debugUtilsMessageSeverityFlags;
-  static_array_ptr<VkDebugUtilsMessageTypeFlagBitsEXT>     debugUtilsMessageTypeFlags;
-  const VkAllocationCallbacks*                             pAllocator{nullptr};
+  InstanceCreateInfo                           createInfo;
+  ValidationFeatures                           validationFeatures;
+  span<VkDebugUtilsMessageSeverityFlagBitsEXT> debugUtilsMessageSeverityFlags;
+  span<VkDebugUtilsMessageTypeFlagBitsEXT>     debugUtilsMessageTypeFlags;
+  const VkAllocationCallbacks*                 pAllocator{nullptr};
 };
 struct InstanceState {
   ApplicationInfo              applicationInfo;
@@ -729,7 +777,7 @@ struct PhysicalDeviceState {
 };
 struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState, 1> {
   void          Destroy();
-  LogicalDevice CreateLogicalDevice(const LogicalDeviceDesc&& desc);
+  LogicalDevice CreateLogicalDevice(LogicalDeviceDesc&& desc);
   uint32_t      FindQueueIndex(
            Support      graphics,
            Support      compute,
@@ -767,10 +815,15 @@ struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState, 1
   const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
 };
 
-struct GenericHandleState {
+struct HandleAllocatorState {
   LogicalDevice                logicalDevice;
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
+};
+
+struct HandleState {
+  LogicalDevice logicalDevice;
+  VkResult      result{VK_NOT_READY};
 };
 
 /* RenderPass */
@@ -789,14 +842,29 @@ struct RenderPass : HandleBase<RenderPass, VkRenderPass, RenderPassState, MVK_RE
 };
 
 /* CommandPool */
+struct CommandBufferDesc;
+struct CommandBuffer;
 struct CommandPoolDesc {
-  const char*            debugName{"CommandPool"};
-  CommandPoolCreateInfo  createInfo{};
-  VkAllocationCallbacks* pAllocator{nullptr};
+  const char*                  debugName{"CommandPool"};
+  CommandPoolCreateInfo        createInfo;
+  const VkAllocationCallbacks* pAllocator{nullptr};
 };
-struct CommandPool : HandleBase<CommandPool, VkCommandPool, GenericHandleState, MVK_COMMANDPOOL_CAPACITY> {
-  CommandPool CommandPoolDesc(const RenderPassDesc&& desc);
-  void        Destroy();
+struct CommandPool : HandleBase<CommandPool, VkCommandPool, HandleAllocatorState, MVK_COMMANDPOOL_CAPACITY> {
+  CommandBuffer AllocateCommandBuffer(CommandBufferDesc&& desc);
+  void          Destroy();
+};
+
+/* CommandBuffer */
+struct CommandBufferDesc {
+  const char*               debugName{"CommandBuffer"};
+  CommandBufferAllocateInfo allocateInfo;
+};
+struct CommandBufferState {
+  CommandPool commandPool;
+  VkResult    result{VK_NOT_READY};
+};
+struct CommandBuffer : HandleBase<CommandBuffer, VkCommandBuffer, CommandBufferState, MVK_COMMANDBUFFER_CAPACITY> {
+  void Destroy();
 };
 
 /* PipelineLayout */
@@ -805,17 +873,17 @@ struct PipelineLayoutDesc {
   PipelineLayoutCreateInfo     createInfo;
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
-struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, GenericHandleState, 32> {
+struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, HandleAllocatorState, 32> {
   void Destroy();
 };
 
 /* ComputePipeline */
 struct ComputePipelineDesc {
-  const char*                                 debugName{"ComputePipeline"};
-  static_array_ptr<ComputePipelineCreateInfo> createInfos;
-  const VkAllocationCallbacks*                pAllocator{nullptr};
+  const char*                     debugName{"ComputePipeline"};
+  span<ComputePipelineCreateInfo> createInfos;
+  const VkAllocationCallbacks*    pAllocator{nullptr};
 };
-struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, GenericHandleState, 32> {
+struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, HandleAllocatorState, 32> {
   void Destroy();
   void BindPipeline(VkCommandBuffer commandBuffer);
 };

@@ -123,7 +123,7 @@ Instance Instance::Create(const InstanceDesc&& desc) {
       .pUserData = nullptr,
   };
   s->result = PFN.CreateDebugUtilsMessengerEXT(
-      instance,
+      instance.handle(),
       &debugUtilsMessengerCreateInfo,
       s->pAllocator,
       &s->debugUtilsMessengerEXT);
@@ -184,7 +184,7 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
 
   LOG("Getting device count... ");
   uint32_t deviceCount = 0;
-  s->result = vkEnumeratePhysicalDevices(*this, &deviceCount, nullptr);
+  s->result = vkEnumeratePhysicalDevices(handle(), &deviceCount, nullptr);
   CHECK_RESULT(physicalDevice);
 
   LOG("%d devices found... ", deviceCount);
@@ -193,7 +193,7 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
 
   LOG("Getting devices... ");
   VkPhysicalDevice devices[deviceCount];
-  s->result = vkEnumeratePhysicalDevices(*this, &deviceCount, devices);
+  s->result = vkEnumeratePhysicalDevices(handle(), &deviceCount, devices);
   CHECK_RESULT(physicalDevice);
 
   // should these be cpp structs!?
@@ -330,7 +330,7 @@ void PhysicalDevice::Destroy() {
   Release();
 }
 
-LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc) {
+LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
   LOG("# CreateLogicalDevice... ");
 
   auto logicalDevice = LogicalDevice::Acquire();
@@ -340,18 +340,17 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
   s->physicalDevice = *this;
 
   LOG("Creating... ");
-  VkDeviceCreateInfo createInfo = desc.createInfo;
-  ASSERT(createInfo.pNext == nullptr &&
+  ASSERT(desc.createInfo.pNext.data == nullptr &&
          "Chaining onto VkDeviceCreateInfo.pNext not supported.");
-  ASSERT(createInfo.ppEnabledLayerNames == nullptr &&
+  ASSERT(desc.createInfo.pEnabledLayerNames.data == nullptr &&
          "VkDeviceCreateInfo.ppEnabledLayerNames obsolete.");
-  ASSERT(createInfo.pEnabledFeatures == nullptr &&
+  ASSERT(desc.createInfo.pEnabledFeatures.data == nullptr &&
          "LogicalDeviceDesc.createInfo.pEnabledFeatures should be nullptr. "
          "Internally VkPhysicalDeviceFeatures2 is used from PhysicalDevice.");
-  createInfo.pNext = &pState()->physicalDeviceFeatures;
+  desc.createInfo.pNext.data = &pState()->physicalDeviceFeatures;
   s->result = vkCreateDevice(
       *this,
-      &createInfo,
+      &desc.createInfo.vk(),
       s->pAllocator,
       logicalDevice.pHandle());
   CHECK_RESULT(logicalDevice);
@@ -369,7 +368,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(const LogicalDeviceDesc&& desc
   s->result = SetDebugInfo(
       logicalDevice,
       VK_OBJECT_TYPE_PHYSICAL_DEVICE,
-      (uint64_t)(VkPhysicalDevice) * this,
+      (uint64_t)(VkPhysicalDevice)handle(),
       s->physicalDevice.pState()->physicalDeviceProperties.properties.deviceName);
   CHECK_RESULT(logicalDevice);
 
@@ -443,11 +442,11 @@ uint32_t PhysicalDevice::FindQueueIndex(
 void LogicalDevice::Destroy() {
   ASSERT(*pHandle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!");
   ASSERT(pState()->result != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
-  vkDestroyDevice(*pHandle(), pState()->pAllocator);
+  vkDestroyDevice(*this, pState()->pAllocator);
   Release();
 }
 
-template<typename T>
+template <typename T>
 static T CreateGeneric(LogicalDevice device, const auto&& desc) {
   LOG("# CreateCommandPool... ");
 
@@ -459,9 +458,9 @@ static T CreateGeneric(LogicalDevice device, const auto&& desc) {
 
   LOG("Creating... ");
   s->result = vkCreateCommandPool(device,
-                                 desc.createInfo.p(),
-                                 s->pAllocator,
-                                 &handle.pHandle());
+                                  desc.createInfo.pVk(),
+                                  s->pAllocator,
+                                  &handle.pHandle());
   CHECK_RESULT(handle);
 
   LOG("Setting DebugName... ");
@@ -486,17 +485,17 @@ RenderPass LogicalDevice::CreateRenderPass(const RenderPassDesc&& desc) {
   s->logicalDevice = *this;
 
   LOG("Creating... ");
-  s->result = vkCreateRenderPass(*pHandle(),
-                                 desc.createInfo.p(),
+  s->result = vkCreateRenderPass(handle(),
+                                 &desc.createInfo.vk(),
                                  s->pAllocator,
                                  renderPass.pHandle());
   CHECK_RESULT(renderPass);
 
   LOG("Setting DebugName... ");
   s->result = SetDebugInfo(
-      *pHandle(),
+      handle(),
       VK_OBJECT_TYPE_RENDER_PASS,
-      (uint64_t)*renderPass.pHandle(),
+      (uint64_t)renderPass.handle(),
       desc.debugName);
   CHECK_RESULT(renderPass);
 
@@ -514,17 +513,17 @@ CommandPool LogicalDevice::CreateCommandPool(const CommandPoolDesc&& desc) {
   s->logicalDevice = *this;
 
   LOG("Creating... ");
-  s->result = vkCreateCommandPool(*pHandle(),
-                                 desc.createInfo.p(),
-                                 s->pAllocator,
-                                 commandPool.pHandle());
+  s->result = vkCreateCommandPool(handle(),
+                                  &desc.createInfo.vk(),
+                                  s->pAllocator,
+                                  commandPool.pHandle());
   CHECK_RESULT(commandPool);
 
   LOG("Setting DebugName... ");
   s->result = SetDebugInfo(
-      *pHandle(),
-      VK_OBJECT_TYPE_RENDER_PASS,
-      (uint64_t)*commandPool.pHandle(),
+      handle(),
+      VK_OBJECT_TYPE_COMMAND_POOL,
+      (uint64_t)commandPool.handle(),
       desc.debugName);
   CHECK_RESULT(commandPool);
 
@@ -535,6 +534,39 @@ CommandPool LogicalDevice::CreateCommandPool(const CommandPoolDesc&& desc) {
 const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
     const VkAllocationCallbacks* pAllocator) {
   return pAllocator == nullptr ? pState()->pAllocator : pAllocator;
+}
+
+CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) {
+  LOG("# AllocateCommandBuffer... ");
+
+  auto commandBuffer = CommandBuffer::Acquire();
+  auto state = commandBuffer.pState();
+
+  state->commandPool = *this;
+
+  LOG("Allocating... ");
+  ASSERT(desc.allocateInfo.commandBufferCount == 1 &&
+         "Can only allocate one command buffer with CommandPool::AllocateCommandBuffer!");
+  ASSERT(desc.allocateInfo.commandPool == VK_NULL_HANDLE &&
+         "CommandPool::AllocateCommandBuffer overrides allocateInfo.commandPool!");
+  desc.allocateInfo.commandPool = handle();
+  auto logicalDevice = pState()->logicalDevice;
+  state->result = vkAllocateCommandBuffers(
+      logicalDevice,
+      &desc.allocateInfo.vk(),
+      commandBuffer.pHandle());
+  CHECK_RESULT(commandBuffer);
+
+  LOG("Setting DebugName... ");
+  state->result = SetDebugInfo(
+      logicalDevice,
+      VK_OBJECT_TYPE_COMMAND_BUFFER,
+      (uint64_t)commandBuffer.handle(),
+      desc.debugName);
+  CHECK_RESULT(commandBuffer);
+
+  LOG("%s\n\n", commandBuffer.ResultName());
+  return commandBuffer;
 }
 
 // PipelineLayout2 Vk::LogicalDevice::CreatePipelineLayout(
