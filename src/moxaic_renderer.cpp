@@ -95,7 +95,7 @@ void Moxaic::Renderer::Init()
 
     Window::Init();
     VkSurfaceKHR surface;
-    Window::InitSurface(instance, &surface);
+    Window::InitSurface(instance.handle(), &surface);
 
     auto graphicsQueueIndex = physicalDevice.FindQueueIndex(
       Support::Yes,
@@ -155,8 +155,8 @@ void Moxaic::Renderer::Init()
 
     VkQueue graphicsQueue;
     VkQueue computeQueue;
-    vkGetDeviceQueue(logicalDevice, graphicsQueueIndex, 0, &graphicsQueue);
-    vkGetDeviceQueue(logicalDevice, computeQueueIndex, 0, &computeQueue);
+    vkGetDeviceQueue(logicalDevice.handle(), graphicsQueueIndex, 0, &graphicsQueue);
+    vkGetDeviceQueue(logicalDevice.handle(), computeQueueIndex, 0, &computeQueue);
 
     constexpr VkFormat ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
     constexpr VkFormat NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -209,5 +209,4 @@ void Moxaic::Renderer::Init()
       .debugName = "ComputeCommandBuffer",
     });
 
-    MXC_LOG(renderPass);
 }

@@ -18,18 +18,6 @@
 #define MVK_LOG(...) printf(__VA_ARGS__)
 #endif
 
-#ifndef MVK_RENDERPASS_CAPACITY
-#define MVK_RENDERPASS_CAPACITY 4
-#endif
-
-#ifndef MVK_COMMANDPOOL_CAPACITY
-#define MVK_COMMANDPOOL_CAPACITY 4
-#endif
-
-#ifndef MVK_COMMANDBUFFER_CAPACITY
-#define MVK_COMMANDBUFFER_CAPACITY 4
-#endif
-
 #ifndef MVK_PFN_FUNCTIONS
 #define MVK_PFN_FUNCTIONS                      \
   MVK_PFN_FUNCTION(SetDebugUtilsObjectNameEXT) \
@@ -80,12 +68,12 @@ struct {
 typedef const char* VkString;
 typedef uint32_t    VkCount;
 
-struct void_ptr {
+struct ptr_void {
   const void* data{nullptr};
 
   template <typename T>
-  constexpr void_ptr(T&& value) : data{&value} {}
-  constexpr void_ptr() = default;
+  constexpr ptr_void(T&& value) : data{&value} {}
+  constexpr ptr_void() = default;
 };
 
 template <typename T>
@@ -137,12 +125,12 @@ struct VkStruct {
   const T& vk() const { return *(T*)this; }
 
   // these ok since cost?
-  operator const T&() const { return *(T*)this; };
+  // operator const T&() const { return *(T*)this; };
 };
 
 struct ApplicationInfo : VkStruct<VkApplicationInfo> {
   VkStructureType sType{VK_STRUCTURE_TYPE_APPLICATION_INFO};
-  void_ptr        pNext;
+  ptr_void        pNext;
   VkString        pApplicationName{"Mid Vulkan Application"};
   uint32_t        applicationVersion;
   VkString        pEngineName{"Mid Vulkan"};
@@ -153,7 +141,7 @@ static_assert(sizeof(ApplicationInfo) == sizeof(VkApplicationInfo));
 
 struct InstanceCreateInfo : VkStruct<VkInstanceCreateInfo> {
   VkStructureType       sType{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-  void_ptr              pNext;
+  ptr_void              pNext;
   VkInstanceCreateFlags flags;
   ptr<ApplicationInfo>  pApplicationInfo;
   span<VkString>        pEnabledLayerNames;
@@ -163,7 +151,7 @@ static_assert(sizeof(InstanceCreateInfo) == sizeof(VkInstanceCreateInfo));
 
 struct ValidationFeatures : VkStruct<VkValidationFeaturesEXT> {
   VkStructureType                     sType{VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
-  void_ptr                            pNext;
+  ptr_void                            pNext;
   span<VkValidationFeatureEnableEXT>  pEnabledValidationFeatures;
   span<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
 };
@@ -171,7 +159,7 @@ static_assert(sizeof(ValidationFeatures) == sizeof(VkValidationFeaturesEXT));
 
 struct DeviceQueueCreateInfo : VkStruct<VkDeviceQueueCreateInfo> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
-  void_ptr                 pNext;
+  ptr_void                 pNext;
   VkDeviceQueueCreateFlags flags;
   uint32_t                 queueFamilyIndex;
   uint32_t                 queueCount{1};
@@ -181,7 +169,7 @@ static_assert(sizeof(DeviceQueueCreateInfo) == sizeof(VkDeviceQueueCreateInfo));
 
 struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
   VkStructureType                  sType{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
-  void_ptr                         pNext;
+  ptr_void                         pNext;
   VkDeviceCreateFlags              flags;
   span_pack<DeviceQueueCreateInfo> pQueueCreateInfos;
   span<VkString>                   pEnabledLayerNames;
@@ -201,7 +189,7 @@ static_assert(offsetof(DeviceCreateInfo, pEnabledFeatures) == offsetof(VkDeviceC
 
 struct DeviceQueueGlobalPriorityCreateInfo : VkStruct<VkDeviceQueueGlobalPriorityCreateInfoKHR> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT};
-  void_ptr                 pNext;
+  ptr_void                 pNext;
   VkQueueGlobalPriorityKHR globalPriority;
 };
 static_assert(sizeof(DeviceQueueGlobalPriorityCreateInfo) == sizeof(VkDeviceQueueGlobalPriorityCreateInfoKHR));
@@ -249,7 +237,7 @@ static_assert(sizeof(SubpassDependency) == sizeof(VkSubpassDependency));
 
 struct RenderPassCreateInfo : VkStruct<VkRenderPassCreateInfo> {
   VkStructureType                  sType{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-  void_ptr                         pNext;
+  ptr_void                         pNext;
   VkRenderPassCreateFlags          flags;
   span_pack<AttachmentDescription> pAttachments;
   span<SubpassDescription>         pSubpasses;
@@ -259,7 +247,7 @@ static_assert(sizeof(RenderPassCreateInfo) == sizeof(VkRenderPassCreateInfo));
 
 struct CommandPoolCreateInfo : VkStruct<VkCommandPoolCreateInfo> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
-  void_ptr                 pNext;
+  ptr_void                 pNext;
   VkCommandPoolCreateFlags flags;
   uint32_t                 queueFamilyIndex;
 };
@@ -267,7 +255,7 @@ static_assert(sizeof(CommandPoolCreateInfo) == sizeof(VkCommandPoolCreateInfo));
 
 struct CommandBufferAllocateInfo : VkStruct<VkCommandBufferAllocateInfo> {
   VkStructureType      sType{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-  void_ptr             pNext;
+  ptr_void             pNext;
   VkCommandPool        commandPool{VK_NULL_HANDLE};
   VkCommandBufferLevel level{VK_COMMAND_BUFFER_LEVEL_PRIMARY};
   uint32_t             commandBufferCount{1};
@@ -317,7 +305,7 @@ struct WriteDescriptorSet {
 
 struct DescriptorSetLayoutCreateInfo : VkStruct<VkDescriptorSetLayoutCreateInfo> {
   VkStructureType                       sType{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  void_ptr                              pNext;
+  ptr_void                              pNext;
   VkDescriptorSetLayoutCreateFlags      flags;
   span_pack<DescriptorSetLayoutBinding> pBindings;
 };
@@ -626,95 +614,60 @@ struct HandleStack {
 };
 
 // honestly don't know if this hot or cold thing does much
-template <typename THandle, MVK_HANDLE_INDEX_TYPE N>
-__attribute__((hot, section(".handle"))) static inline THandle handles[N]{};
+template <typename THandle>
+__attribute__((hot, section(".handle"))) static inline THandle handles[MVK_HANDLE_CAPACITY]{};
 
-template <typename THandle, MVK_HANDLE_INDEX_TYPE N>
-__attribute__((hot, section(".generation"))) static inline MVK_HANDLE_GENERATION_TYPE generations[N]{};
+template <typename THandle>
+__attribute__((hot, section(".generation"))) static inline MVK_HANDLE_GENERATION_TYPE generations[MVK_HANDLE_CAPACITY]{};
 
-template <typename TState, MVK_HANDLE_INDEX_TYPE N>
-__attribute__((cold, section(".state"))) static inline TState states[N]{};
+template <typename TState>
+__attribute__((cold, section(".state"))) static inline TState states[MVK_HANDLE_CAPACITY]{};
 
-template <typename THandle, MVK_HANDLE_INDEX_TYPE N>
-__attribute__((cold, section(".free_index_stack"))) static inline HandleStack<MVK_HANDLE_INDEX_TYPE, N> freeIndexStack;
+template <typename THandle>
+__attribute__((cold, section(".free_index_stack"))) static inline HandleStack<MVK_HANDLE_INDEX_TYPE, MVK_HANDLE_CAPACITY> freeIndexStack;
 
-template <typename Derived, typename THandle, typename TState, MVK_HANDLE_INDEX_TYPE TCapacity>
+template <typename Derived, typename THandle, typename TState>
 struct HandleBase {
   MVK_HANDLE_INDEX_TYPE      handleIndex{};
   MVK_HANDLE_GENERATION_TYPE handleGeneration{};
 
-  // Conceptually, yes, I think I like this returning just a pointer as this should be thought of as struct
-  // and a pointer simply gives you the state which would otherwise be in this struct.
   THandle* pHandle() {
     MVK_ASSERT(IsValid() && "Trying to get handle with wrong generation!");
-    return &handles<THandle, TCapacity>[handleIndex];
+    return &handles<THandle>[handleIndex];
   }
   TState* pState() {
     MVK_ASSERT(IsValid() && "Trying to get state with wrong generation!");
-    return &states<TState, TCapacity>[handleIndex];
+    return &states<TState>[handleIndex];
   }
 
-  // CANT DECIDE IF I WANT TO RETURN BY REF OR POINTER!?
-  // return by pointer in case someone saves the ref they need the pointer syntax
-  // to signify they are editing something nonlocal. Ref always be const
-
-  const THandle& handle() {
+  const THandle& handle() const {
     MVK_ASSERT(IsValid() && "Trying to get handle with wrong generation!");
-    return handles<THandle, TCapacity>[handleIndex];
+    return handles<THandle>[handleIndex];
   }
-  const TState& state() {
+  const TState& state() const {
     MVK_ASSERT(IsValid() && "Trying to get state with wrong generation!");
-    return &states<TState, TCapacity>[handleIndex];
+    return states<TState>[handleIndex];
   }
 
   static Derived Acquire() {
-    const auto index = freeIndexStack<THandle, TCapacity>.Pop();
-    const auto generation = generations<THandle, TCapacity>[index];
+    const auto index = freeIndexStack<THandle>.Pop();
+    const auto generation = generations<THandle>[index];
     MVK_LOG("Acquiring index %d generation %d... ", index, generation);
     return Derived{index, generation};
   }
 
   void Release() const {
-    const auto generation = generations<THandle, TCapacity>[handleIndex];
+    const auto generation = generations<THandle>[handleIndex];
     MVK_ASSERT(generation != HandleGenerationLastIndex && "Max handle generations reached.");
-    ++generations<THandle, TCapacity>[handleIndex];
-    freeIndexStack<THandle, TCapacity>.Push(handleIndex);
+    ++generations<THandle>[handleIndex];
+    freeIndexStack<THandle>.Push(handleIndex);
   }
 
-  VkResult       Result() const { return states<TState, TCapacity>[handleIndex].result; }
-  const VkString ResultName() const { return string_VkResult(Result()); }
+  VkResult Result() const { return states<TState>[handleIndex].result; }
 
   bool IsValid() const {
-    return generations<THandle, TCapacity>[handleIndex] == handleGeneration;
+    return generations<THandle>[handleIndex] == handleGeneration;
   }
-
-  // might want to get rid of this?
-  // operator THandle() {
-  //   MVK_ASSERT(IsValid());
-  //   return *pHandle();
-  // }
-  // operator const THandle() {
-  //   MVK_ASSERT(IsValid());
-  //   return *pHandle();
-  // }
-  // constexpr operator THandle&() {
-  //   MVK_ASSERT(IsValid());
-  //   return *pHandle();
-  // }
-
-  constexpr operator THandle() {
-    MVK_ASSERT(IsValid());
-    return handles<THandle, TCapacity>[handleIndex];
-  }
-
-  // constexpr operator &() {
-  //   MVK_ASSERT(IsValid());
-  //   return &handles<THandle, TCapacity>[handleIndex];
-  // }
-  // constexpr operator const THandle&() {
-  //   MVK_ASSERT(IsValid());
-  //   return *pHandle();
-  // }
 };
 
 struct PhysicalDevice;
@@ -734,9 +687,9 @@ struct InstanceState {
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-struct Instance : HandleBase<Instance, VkInstance, InstanceState, 1> {
+struct Instance : HandleBase<Instance, VkInstance, InstanceState> {
   const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
-  static Instance              Create(const InstanceDesc&& desc);
+  static Instance              Create(InstanceDesc&& desc);
   void                         Destroy();
   PhysicalDevice               CreatePhysicalDevice(const PhysicalDeviceDesc&& desc);
 };
@@ -775,7 +728,7 @@ struct PhysicalDeviceState {
   VkQueueFamilyGlobalPriorityPropertiesEXT       queueFamilyGlobalPriorityProperties[QueueFamilyCountCapacity];
   VkResult                                       result{VK_NOT_READY};
 };
-struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState, 1> {
+struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState> {
   void          Destroy();
   LogicalDevice CreateLogicalDevice(LogicalDeviceDesc&& desc);
   uint32_t      FindQueueIndex(
@@ -806,7 +759,7 @@ struct LogicalDeviceState {
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState, 1> {
+struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   void                         Destroy();
   RenderPass                   CreateRenderPass(const RenderPassDesc&& desc);
   CommandPool                  CreateCommandPool(const CommandPoolDesc&& desc);
@@ -837,7 +790,7 @@ struct RenderPassState {
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
-struct RenderPass : HandleBase<RenderPass, VkRenderPass, RenderPassState, MVK_RENDERPASS_CAPACITY> {
+struct RenderPass : HandleBase<RenderPass, VkRenderPass, RenderPassState> {
   void Destroy();
 };
 
@@ -849,7 +802,7 @@ struct CommandPoolDesc {
   CommandPoolCreateInfo        createInfo;
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
-struct CommandPool : HandleBase<CommandPool, VkCommandPool, HandleAllocatorState, MVK_COMMANDPOOL_CAPACITY> {
+struct CommandPool : HandleBase<CommandPool, VkCommandPool, HandleAllocatorState> {
   CommandBuffer AllocateCommandBuffer(CommandBufferDesc&& desc);
   void          Destroy();
 };
@@ -863,7 +816,7 @@ struct CommandBufferState {
   CommandPool commandPool;
   VkResult    result{VK_NOT_READY};
 };
-struct CommandBuffer : HandleBase<CommandBuffer, VkCommandBuffer, CommandBufferState, MVK_COMMANDBUFFER_CAPACITY> {
+struct CommandBuffer : HandleBase<CommandBuffer, VkCommandBuffer, CommandBufferState> {
   void Destroy();
 };
 
@@ -873,7 +826,7 @@ struct PipelineLayoutDesc {
   PipelineLayoutCreateInfo     createInfo;
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
-struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, HandleAllocatorState, 32> {
+struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, HandleAllocatorState> {
   void Destroy();
 };
 
@@ -883,7 +836,7 @@ struct ComputePipelineDesc {
   span<ComputePipelineCreateInfo> createInfos;
   const VkAllocationCallbacks*    pAllocator{nullptr};
 };
-struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, HandleAllocatorState, 32> {
+struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, HandleAllocatorState> {
   void Destroy();
   void BindPipeline(VkCommandBuffer commandBuffer);
 };

@@ -65,7 +65,7 @@ const VkAllocationCallbacks* Instance::DefaultAllocator(const VkAllocationCallba
   return pAllocator == nullptr ? pState()->pAllocator : pAllocator;
 }
 
-Instance Instance::Create(const InstanceDesc&& desc) {
+Instance Instance::Create(InstanceDesc&& desc) {
   LOG("# VkInstance... ");
 
   auto instance = Instance::Acquire();
@@ -75,24 +75,15 @@ Instance Instance::Create(const InstanceDesc&& desc) {
   s->pAllocator = desc.pAllocator;
 
   LOG("Creating... ");
-  const VkValidationFeaturesEXT validationFeatures{
-      .sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-      .pNext = nullptr,
-      .enabledValidationFeatureCount = desc.validationFeatures.pEnabledValidationFeatures.count,
-      .pEnabledValidationFeatures = desc.validationFeatures.pEnabledValidationFeatures.data,
-      .disabledValidationFeatureCount = desc.validationFeatures.pDisabledValidationFeatures.count,
-      .pDisabledValidationFeatures = desc.validationFeatures.pDisabledValidationFeatures.data,
-  };
-  VkInstanceCreateInfo createInfo = desc.createInfo;
-  ASSERT(createInfo.pNext == nullptr && "Chaining onto VkInstanceCreateInfo.pNext not supported.");
-  createInfo.pNext = &validationFeatures;
+  ASSERT(desc.createInfo.pNext.data == nullptr && "Chaining onto VkInstanceCreateInfo.pNext not supported.");
+  desc.createInfo.pNext = desc.validationFeatures;
   for (int i = 0; i < desc.createInfo.pEnabledExtensionNames.count; ++i) {
     LOG("Loading %s... ", desc.createInfo.pEnabledExtensionNames.data[i]);
   }
   for (int i = 0; i < desc.createInfo.pEnabledLayerNames.count; ++i) {
     LOG("Loading %s... ", desc.createInfo.pEnabledLayerNames.data[i]);
   }
-  s->result = vkCreateInstance(&createInfo, desc.pAllocator, instance.pHandle());
+  s->result = vkCreateInstance(&desc.createInfo.vk(), desc.pAllocator, instance.pHandle());
   CHECK_RESULT(instance);
 
 #define MVK_PFN_FUNCTION(func)                                                     \
@@ -106,6 +97,7 @@ Instance Instance::Create(const InstanceDesc&& desc) {
 #undef MVK_PFN_FUNCTION
 
   LOG("Setting up DebugUtilsMessenger... ");
+  // change to use full struct
   VkDebugUtilsMessageSeverityFlagsEXT messageSeverity{};
   for (int i = 0; i < desc.debugUtilsMessageSeverityFlags.count; ++i)
     messageSeverity |= desc.debugUtilsMessageSeverityFlags.data[i];
@@ -129,7 +121,7 @@ Instance Instance::Create(const InstanceDesc&& desc) {
       &s->debugUtilsMessengerEXT);
   CHECK_RESULT(instance);
 
-  LOG("%s\n\n", instance.ResultName());
+  LOG("%s\n\n", string_VkResult(instance.Result()));
   return instance;
 }
 void Instance::Destroy() {
@@ -181,6 +173,8 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
 
   auto physicalDevice = PhysicalDevice::Acquire();
   auto s = physicalDevice.pState();
+
+  s->instance = *this;
 
   LOG("Getting device count... ");
   uint32_t deviceCount = 0;
@@ -299,10 +293,10 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   }
 
   LOG("Getting Physical Device Memory Properties... ");
-  vkGetPhysicalDeviceMemoryProperties(physicalDevice, &s->physicalDeviceMemoryProperties);
+  vkGetPhysicalDeviceMemoryProperties(physicalDevice.handle(), &s->physicalDeviceMemoryProperties);
 
   LOG("Getting queue family count... ");
-  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &s->queueFamilyCount, nullptr);
+  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice.handle(), &s->queueFamilyCount, nullptr);
 
   LOG("%d queue families found... ", s->queueFamilyCount);
   s->result = s->queueFamilyCount > 0 ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
@@ -317,9 +311,9 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
         .pNext = &s->queueFamilyGlobalPriorityProperties[i],
     };
   }
-  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &s->queueFamilyCount, s->queueFamilyProperties);
+  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice.handle(), &s->queueFamilyCount, s->queueFamilyProperties);
 
-  LOG("%s\n\n", physicalDevice.ResultName());
+  LOG("%s\n\n", string_VkResult(physicalDevice.Result()));
   return physicalDevice;
 }
 
@@ -349,7 +343,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
          "Internally VkPhysicalDeviceFeatures2 is used from PhysicalDevice.");
   desc.createInfo.pNext.data = &pState()->physicalDeviceFeatures;
   s->result = vkCreateDevice(
-      *this,
+      handle(),
       &desc.createInfo.vk(),
       s->pAllocator,
       logicalDevice.pHandle());
@@ -357,31 +351,31 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
 
   LOG("Setting LogicalDevice DebugName... ");
   s->result = SetDebugInfo(
-      logicalDevice,
+      logicalDevice.handle(),
       VK_OBJECT_TYPE_DEVICE,
-      (uint64_t)(VkDevice)logicalDevice,
+      (uint64_t)logicalDevice.handle(),
       desc.debugName);
   CHECK_RESULT(logicalDevice);
 
   // Set debug on physical device and instance now that we can...
   LOG("Setting PhysicalDevice DebugName... ");
   s->result = SetDebugInfo(
-      logicalDevice,
+      logicalDevice.handle(),
       VK_OBJECT_TYPE_PHYSICAL_DEVICE,
-      (uint64_t)(VkPhysicalDevice)handle(),
+      (uint64_t)handle(),
       s->physicalDevice.pState()->physicalDeviceProperties.properties.deviceName);
   CHECK_RESULT(logicalDevice);
 
   LOG("Setting Instance DebugName... ");
   auto instance = s->physicalDevice.pState()->instance;
   s->result = SetDebugInfo(
-      logicalDevice,
+      logicalDevice.handle(),
       VK_OBJECT_TYPE_INSTANCE,
-      (uint64_t)(VkInstance)instance,
+      (uint64_t)instance.handle(),
       instance.pState()->applicationInfo.pApplicationName);
   CHECK_RESULT(logicalDevice);
 
-  LOG("%s\n\n", logicalDevice.ResultName());
+  LOG("%s\n\n", string_VkResult(logicalDevice.Result()));
   return logicalDevice;
 }
 uint32_t PhysicalDevice::FindQueueIndex(
@@ -426,7 +420,7 @@ uint32_t PhysicalDevice::FindQueueIndex(
 
     if (present != nullptr) {
       VkBool32 presentSupport = VK_FALSE;
-      vkGetPhysicalDeviceSurfaceSupportKHR(*this, i, present, &presentSupport);
+      vkGetPhysicalDeviceSurfaceSupportKHR(handle(), i, present, &presentSupport);
       if (!presentSupport)
         continue;
     }
@@ -442,7 +436,7 @@ uint32_t PhysicalDevice::FindQueueIndex(
 void LogicalDevice::Destroy() {
   ASSERT(*pHandle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!");
   ASSERT(pState()->result != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
-  vkDestroyDevice(*this, pState()->pAllocator);
+  vkDestroyDevice(handle(), pState()->pAllocator);
   Release();
 }
 
@@ -471,7 +465,7 @@ static T CreateGeneric(LogicalDevice device, const auto&& desc) {
       desc.debugName);
   CHECK_RESULT(handle);
 
-  LOG("%s\n\n", handle.ResultName());
+  LOG("%s\n\n", string_VkResult(handle.Result()));
   return handle;
 }
 
@@ -499,7 +493,7 @@ RenderPass LogicalDevice::CreateRenderPass(const RenderPassDesc&& desc) {
       desc.debugName);
   CHECK_RESULT(renderPass);
 
-  LOG("%s\n\n", renderPass.ResultName());
+  LOG("%s\n\n", string_VkResult(renderPass.Result()));
   return renderPass;
 }
 
@@ -527,7 +521,7 @@ CommandPool LogicalDevice::CreateCommandPool(const CommandPoolDesc&& desc) {
       desc.debugName);
   CHECK_RESULT(commandPool);
 
-  LOG("%s\n\n", commandPool.ResultName());
+  LOG("%s\n\n", string_VkResult(commandPool.Result()));
   return commandPool;
 }
 
@@ -552,20 +546,20 @@ CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) {
   desc.allocateInfo.commandPool = handle();
   auto logicalDevice = pState()->logicalDevice;
   state->result = vkAllocateCommandBuffers(
-      logicalDevice,
+      logicalDevice.handle(),
       &desc.allocateInfo.vk(),
       commandBuffer.pHandle());
   CHECK_RESULT(commandBuffer);
 
   LOG("Setting DebugName... ");
   state->result = SetDebugInfo(
-      logicalDevice,
+      logicalDevice.handle(),
       VK_OBJECT_TYPE_COMMAND_BUFFER,
       (uint64_t)commandBuffer.handle(),
       desc.debugName);
   CHECK_RESULT(commandBuffer);
 
-  LOG("%s\n\n", commandBuffer.ResultName());
+  LOG("%s\n\n", string_VkResult(commandBuffer.Result()));
   return commandBuffer;
 }
 
@@ -590,7 +584,7 @@ CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) {
 void Vk::PipelineLayout2::Destroy() {
   printf("PipelineLayout::Destroy\n");
   Release();
-  vkDestroyPipelineLayout(pState()->logicalDevice, *this, pState()->pAllocator);
+  vkDestroyPipelineLayout(state().logicalDevice.handle(), handle(), pState()->pAllocator);
 }
 
 // ComputePipeline2 Vk::LogicalDevice::CreateComputePipeline(
@@ -617,7 +611,7 @@ void Vk::PipelineLayout2::Destroy() {
 void Vk::ComputePipeline2::Destroy() {
   printf("ComputePipeline2::Destroy\n");
   HandleBase::Release();
-  vkDestroyPipeline(pState()->logicalDevice, *this, pState()->pAllocator);
+  vkDestroyPipeline(state().logicalDevice.handle(), handle(), pState()->pAllocator);
 }
 void ComputePipeline2::BindPipeline(const VkCommandBuffer commandBuffer) {
   vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, *pHandle());
