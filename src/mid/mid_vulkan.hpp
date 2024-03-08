@@ -69,22 +69,22 @@ typedef const char* VkString;
 typedef uint32_t    VkCount;
 
 struct ptr_void {
-  const void* data{nullptr};
+  const void* p{nullptr};
 
   template <typename T>
-  constexpr ptr_void(T&& value) : data{&value} {}
+  constexpr ptr_void(T&& value) : p{&value} {}
   constexpr ptr_void() = default;
 };
 
 template <typename T>
 struct ptr {
-  const T* data{nullptr};
+  const T* p{nullptr};
 
   constexpr ptr() = default;
-  constexpr ptr(T&& value) : data{&value} {}
-  constexpr ptr(T& value) : data{&value} {}
-  constexpr ptr(T* value) : data{value} {}
-  constexpr ptr(std::initializer_list<T> l) : data{l.begin()} {}
+  constexpr ptr(T&& value) : p{&value} {}
+  constexpr ptr(T& value) : p{&value} {}
+  constexpr ptr(T* value) : p{value} {}
+  constexpr ptr(std::initializer_list<T> l) : p{l.begin()} {}
 
   constexpr operator const T*() const { return this; };
   constexpr operator T*() const { return this; };
@@ -93,9 +93,9 @@ struct ptr {
 template <typename T>
 struct span {
   const VkCount count{0};
-  const T*      data{nullptr};
+  const T*      p{nullptr};
 
-  constexpr span(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
+  constexpr span(std::initializer_list<T> l) : count{VkCount(l.size())}, p{l.begin()} {}
   constexpr span() = default;
 };
 
@@ -104,9 +104,9 @@ struct span {
 template <typename T>
 struct span_pack {
   const VkCount count{0};
-  const T*      data{nullptr};
+  const T*      p{nullptr};
 
-  constexpr span_pack(std::initializer_list<T> l) : count{VkCount(l.size())}, data{l.begin()} {}
+  constexpr span_pack(std::initializer_list<T> l) : count{VkCount(l.size())}, p{l.begin()} {}
   constexpr span_pack() = default;
 };
 #pragma pack(pop)
@@ -156,6 +156,18 @@ struct ValidationFeatures : VkStruct<VkValidationFeaturesEXT> {
   span<VkValidationFeatureDisableEXT> pDisabledValidationFeatures;
 };
 static_assert(sizeof(ValidationFeatures) == sizeof(VkValidationFeaturesEXT));
+
+struct DebugUtilsMessengerCreateInfo : VkStruct<VkDebugUtilsMessengerCreateInfoEXT> {
+  VkStructureType                      sType{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
+  ptr_void                             pNext;
+  VkDebugUtilsMessengerCreateFlagsEXT  flags;
+  VkDebugUtilsMessageSeverityFlagsEXT  messageSeverity{VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                                      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT};
+  VkDebugUtilsMessageTypeFlagsEXT      messageType{VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT};
+  PFN_vkDebugUtilsMessengerCallbackEXT pfnUserCallback;
+  ptr_void                             pUserData;
+};
+static_assert(sizeof(DebugUtilsMessengerCreateInfo) == sizeof(VkDebugUtilsMessengerCreateInfoEXT));
 
 struct DeviceQueueCreateInfo : VkStruct<VkDeviceQueueCreateInfo> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
@@ -675,11 +687,10 @@ struct PhysicalDeviceDesc;
 
 /* Instance */
 struct InstanceDesc {
-  InstanceCreateInfo                           createInfo;
-  ValidationFeatures                           validationFeatures;
-  span<VkDebugUtilsMessageSeverityFlagBitsEXT> debugUtilsMessageSeverityFlags;
-  span<VkDebugUtilsMessageTypeFlagBitsEXT>     debugUtilsMessageTypeFlags;
-  const VkAllocationCallbacks*                 pAllocator{nullptr};
+  InstanceCreateInfo            createInfo;
+  ValidationFeatures            validationFeatures;
+  DebugUtilsMessengerCreateInfo debugUtilsMessengerCreateInfo;
+  const VkAllocationCallbacks*  pAllocator{nullptr};
 };
 struct InstanceState {
   ApplicationInfo              applicationInfo;
@@ -696,6 +707,7 @@ struct Instance : HandleBase<Instance, VkInstance, InstanceState> {
 
 struct LogicalDevice;
 struct LogicalDeviceDesc;
+struct QueueIndexDesc;
 
 /* PhysicalDevice */
 struct PhysicalDeviceDesc {
@@ -708,7 +720,6 @@ struct PhysicalDeviceDesc {
   VkPhysicalDeviceRobustness2FeaturesEXT         physicalDeviceRobustness2Features;
   VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures;
 };
-
 struct PhysicalDeviceState {
   Instance                                       instance;
   VkPhysicalDeviceProperties2                    physicalDeviceProperties;
@@ -731,12 +742,7 @@ struct PhysicalDeviceState {
 struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState> {
   void          Destroy();
   LogicalDevice CreateLogicalDevice(LogicalDeviceDesc&& desc);
-  uint32_t      FindQueueIndex(
-           Support      graphics,
-           Support      compute,
-           Support      transfer,
-           Support      globalPriority,
-           VkSurfaceKHR present);
+  uint32_t      FindQueueIndex(QueueIndexDesc&& desc);
 };
 
 struct ComputePipelineDesc;
@@ -747,6 +753,8 @@ struct RenderPassDesc;
 struct RenderPass;
 struct CommandPoolDesc;
 struct CommandPool;
+struct QueueDesc;
+struct Queue;
 
 /* LogicalDevice */
 struct LogicalDeviceDesc {
@@ -761,10 +769,11 @@ struct LogicalDeviceState {
 };
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   void                         Destroy();
-  RenderPass                   CreateRenderPass(const RenderPassDesc&& desc);
-  CommandPool                  CreateCommandPool(const CommandPoolDesc&& desc);
-  ComputePipeline2             CreateComputePipeline(const ComputePipelineDesc&& desc);
-  PipelineLayout2              CreatePipelineLayout(const PipelineLayoutDesc&& desc);
+  RenderPass                   CreateRenderPass(RenderPassDesc&& desc);
+  Queue                        GetQueue(QueueDesc&& desc);
+  CommandPool                  CreateCommandPool(CommandPoolDesc&& desc);
+  ComputePipeline2             CreateComputePipeline(ComputePipelineDesc&& desc);
+  PipelineLayout2              CreatePipelineLayout(PipelineLayoutDesc&& desc);
   const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
 };
 
@@ -777,6 +786,25 @@ struct HandleAllocatorState {
 struct HandleState {
   LogicalDevice logicalDevice;
   VkResult      result{VK_NOT_READY};
+};
+
+/* Queue */
+struct QueueIndexDesc {
+  Support      graphics{Support::Optional};
+  Support      compute{Support::Optional};
+  Support      transfer{Support::Optional};
+  Support      globalPriority{Support::Optional};
+  VkSurfaceKHR present{VK_NULL_HANDLE};
+};
+struct QueueDesc {
+  const char* debugName{"Queue"};
+  uint32_t    queueIndex;
+};
+struct QueueState {
+  LogicalDevice logicalDevice;
+};
+struct Queue : HandleBase<Queue, VkQueue, QueueState> {
+  void Destroy();
 };
 
 /* RenderPass */

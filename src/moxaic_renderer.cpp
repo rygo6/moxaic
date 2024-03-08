@@ -25,7 +25,7 @@ void Moxaic::Renderer::Init()
     //   },
     // };
 
-    auto instance = Instance::Create(InstanceDesc{
+    auto instance = Instance::Create({
       .createInfo{
         .pApplicationInfo = ApplicationInfo{
           .pApplicationName = "Moxaic",
@@ -52,25 +52,28 @@ void Moxaic::Renderer::Init()
           // VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
         },
       },
-      .debugUtilsMessageSeverityFlags{
-        // VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT,
-        // VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT,
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
-      },
-      .debugUtilsMessageTypeFlags{
-        // VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT,
-        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
-        // VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+      .debugUtilsMessengerCreateInfo{
+        // .messageSeverity{
+        //     VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+        //     VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+        //     VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+        //     VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT
+        // },
+        // .messageType{
+        //     VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+        //     VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+        //     VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT
+        // },
       },
     });
 
-    auto physicalDevice = instance.CreatePhysicalDevice(PhysicalDeviceDesc{
+    auto physicalDevice = instance.CreatePhysicalDevice({
       .preferredDeviceIndex = 0,
       .physicalDeviceFeatures{
         .features{
           .robustBufferAccess = VK_TRUE,
-        }},
+        },
+      },
       .physicalDeviceFeatures11{},
       .physicalDeviceFeatures12{
         .samplerFilterMinmax = VK_TRUE,
@@ -97,38 +100,39 @@ void Moxaic::Renderer::Init()
     VkSurfaceKHR surface;
     Window::InitSurface(instance.handle(), &surface);
 
-    auto graphicsQueueIndex = physicalDevice.FindQueueIndex(
-      Support::Yes,
-      Support::Yes,
-      Support::Yes,
-      Support::Yes,
-      surface);
-    auto computeQueueIndex = physicalDevice.FindQueueIndex(
-      Support::No,
-      Support::Yes,
-      Support::Optional,
-      Support::Yes,
-      surface);
-    auto transferQueueIndex = physicalDevice.FindQueueIndex(
-      Support::No,
-      Support::No,
-      Support::Yes,
-      Support::Optional,
-      VK_NULL_HANDLE);
+    auto graphicsQueueIndex = physicalDevice.FindQueueIndex({
+      .graphics = Support::Yes,
+      .compute = Support::Yes,
+      .transfer = Support::Yes,
+      .globalPriority = Support::Yes,
+      .present = surface,
+    });
+    auto computeQueueIndex = physicalDevice.FindQueueIndex({
+      .graphics = Support::No,
+      .compute = Support::Yes,
+      .transfer = Support::Yes,
+      .globalPriority = Support::Yes,
+      .present = surface,
+    });
+    auto transferQueueIndex = physicalDevice.FindQueueIndex({
+      .graphics = Support::No,
+      .compute = Support::No,
+      .transfer = Support::Yes,
+    });
     auto globalQueue = Moxaic::IsCompositor() ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT;
     auto queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
 
-    auto logicalDevice = physicalDevice.CreateLogicalDevice(LogicalDeviceDesc{
+    auto logicalDevice = physicalDevice.CreateLogicalDevice({
       .createInfo{
         .pQueueCreateInfos{
-          DeviceQueueCreateInfo{
+          {
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
               .globalPriority = globalQueue,
             },
             .queueFamilyIndex = graphicsQueueIndex,
             .pQueuePriorities{queuePriority},
           },
-          DeviceQueueCreateInfo{
+          {
             .pNext = DeviceQueueGlobalPriorityCreateInfo{
               .globalPriority = globalQueue,
             },
@@ -153,10 +157,14 @@ void Moxaic::Renderer::Init()
       },
     });
 
-    VkQueue graphicsQueue;
-    VkQueue computeQueue;
-    vkGetDeviceQueue(logicalDevice.handle(), graphicsQueueIndex, 0, &graphicsQueue);
-    vkGetDeviceQueue(logicalDevice.handle(), computeQueueIndex, 0, &computeQueue);
+    Queue graphicsQueue = logicalDevice.GetQueue({
+      .debugName = "GraphicsQueue",
+      .queueIndex = graphicsQueueIndex,
+    });
+    Queue computeQueue = logicalDevice.GetQueue({
+      .debugName = "ComputeQueue",
+      .queueIndex = computeQueueIndex,
+    });
 
     constexpr VkFormat ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
     constexpr VkFormat NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -208,5 +216,4 @@ void Moxaic::Renderer::Init()
     auto computeCommandBuffer = computeCommandPool.AllocateCommandBuffer({
       .debugName = "ComputeCommandBuffer",
     });
-
 }
