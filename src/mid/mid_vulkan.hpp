@@ -48,22 +48,21 @@ struct {
 #undef MVK_PFN_FUNCTION
 } PFN;
 
-// someday
-// struct VkFormatAspect {
-//   VkFormat           format;
-//   VkImageAspectFlags aspectMask;
-// };
-//
-// constexpr VkFormatAspect VkFormatR8B8G8A8UNorm{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT};
-// constexpr VkFormatAspect VkFormatD32SFloat{VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT};
-//
-// struct VkTexture {
-//   VkFormatAspect formatAspect;
-//   uint32_t       levelCount;
-//   uint32_t       layerCount;
-//   VkImage        image;
-//   VkImageView    view;
-// };
+struct VkFormatAspect {
+  VkFormat           format;
+  VkImageAspectFlags aspectMask;
+};
+
+constexpr VkFormatAspect VkFormatR8B8G8A8UNorm{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT};
+constexpr VkFormatAspect VkFormatD32SFloat{VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT};
+
+struct VkTexture {
+  VkFormatAspect formatAspect;
+  uint32_t       levelCount;
+  uint32_t       layerCount;
+  VkImage        image;
+  VkImageView    view;
+};
 
 typedef const char* VkString;
 typedef uint32_t    VkCount;
@@ -82,7 +81,6 @@ struct ptr {
 
   constexpr ptr() = default;
   constexpr ptr(T&& value) : p{&value} {}
-  constexpr ptr(T& value) : p{&value} {}
   constexpr ptr(T* value) : p{value} {}
   constexpr ptr(std::initializer_list<T> l) : p{l.begin()} {}
 
@@ -120,12 +118,7 @@ VkString string_Support(Support support);
 
 template <typename T>
 struct VkStruct {
-  // do I like this?
-  // T*       pVk() const { return (T*)this; }
   const T& vk() const { return *(T*)this; }
-
-  // these ok since cost?
-  // operator const T&() const { return *(T*)this; };
 };
 
 struct ApplicationInfo : VkStruct<VkApplicationInfo> {
@@ -161,9 +154,8 @@ struct DebugUtilsMessengerCreateInfo : VkStruct<VkDebugUtilsMessengerCreateInfoE
   VkStructureType                      sType{VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT};
   ptr_void                             pNext;
   VkDebugUtilsMessengerCreateFlagsEXT  flags;
-  VkDebugUtilsMessageSeverityFlagsEXT  messageSeverity{VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-                                                      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT};
-  VkDebugUtilsMessageTypeFlagsEXT      messageType{VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT};
+  VkDebugUtilsMessageSeverityFlagsEXT  messageSeverity;
+  VkDebugUtilsMessageTypeFlagsEXT      messageType;
   PFN_vkDebugUtilsMessengerCallbackEXT pfnUserCallback;
   ptr_void                             pUserData;
 };
@@ -188,16 +180,7 @@ struct DeviceCreateInfo : VkStruct<VkDeviceCreateInfo> {
   span<VkString>                   pEnabledExtensionNames;
   ptr<VkPhysicalDeviceFeatures>    pEnabledFeatures;
 };
-// I really hate this, I think I am going to just make simplified C++ structs that you copy
-// or maybe not... I do like that you use the real vulkan structs....
 static_assert(sizeof(DeviceCreateInfo) == sizeof(VkDeviceCreateInfo));
-static_assert(offsetof(DeviceCreateInfo, sType) == offsetof(VkDeviceCreateInfo, sType));
-static_assert(offsetof(DeviceCreateInfo, pNext) == offsetof(VkDeviceCreateInfo, pNext));
-static_assert(offsetof(DeviceCreateInfo, flags) == offsetof(VkDeviceCreateInfo, flags));
-static_assert(offsetof(DeviceCreateInfo, pQueueCreateInfos) == offsetof(VkDeviceCreateInfo, queueCreateInfoCount));
-static_assert(offsetof(DeviceCreateInfo, pEnabledLayerNames) == offsetof(VkDeviceCreateInfo, enabledLayerCount));
-static_assert(offsetof(DeviceCreateInfo, pEnabledExtensionNames) == offsetof(VkDeviceCreateInfo, enabledExtensionCount));
-static_assert(offsetof(DeviceCreateInfo, pEnabledFeatures) == offsetof(VkDeviceCreateInfo, pEnabledFeatures));
 
 struct DeviceQueueGlobalPriorityCreateInfo : VkStruct<VkDeviceQueueGlobalPriorityCreateInfoKHR> {
   VkStructureType          sType{VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT};
@@ -237,6 +220,7 @@ struct SubpassDescription : VkStruct<VkSubpassDescription> {
 static_assert(sizeof(SubpassDescription) == sizeof(VkSubpassDescription));
 
 struct SubpassDependency : VkStruct<VkSubpassDependency> {
+  // needs defaults, but ive not used yet
   uint32_t             srcSubpass;
   uint32_t             dstSubpass;
   VkPipelineStageFlags srcStageMask;
@@ -291,6 +275,54 @@ struct DescriptorSetLayoutBinding : VkStruct<VkDescriptorSetLayoutBinding> {
   }
 };
 static_assert(sizeof(DescriptorSetLayoutBinding) == sizeof(VkDescriptorSetLayoutBinding));
+
+struct QueryPoolCreateInfo : VkStruct<VkQueryPoolCreateInfo> {
+  VkStructureType               sType{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+  ptr_void                      pNext;
+  VkQueryPoolCreateFlags        flags;
+  VkQueryType                   queryType;
+  uint32_t                      queryCount;
+  VkQueryPipelineStatisticFlags pipelineStatistics;
+};
+static_assert(sizeof(QueryPoolCreateInfo) == sizeof(VkQueryPoolCreateInfo));
+
+struct DescriptorPoolCreateInfo : VkStruct<VkDescriptorPoolCreateInfo> {
+  VkStructureType             sType{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  ptr_void                    pNext;
+  VkDescriptorPoolCreateFlags flags{VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT};
+  uint32_t                    maxSets;
+  span<VkDescriptorPoolSize>  pPoolSizes;
+};
+static_assert(sizeof(DescriptorPoolCreateInfo) == sizeof(VkDescriptorPoolCreateInfo));
+
+struct SamplerCreateInfo : VkStruct<VkSamplerCreateInfo> {
+  VkStructureType      sType{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+  ptr_void             pNext;
+  VkSamplerCreateFlags flags;
+  VkFilter             magFilter{VK_FILTER_LINEAR};
+  VkFilter             minFilter{VK_FILTER_LINEAR};
+  VkSamplerMipmapMode  mipmapMode{VK_SAMPLER_MIPMAP_MODE_LINEAR};
+  VkSamplerAddressMode addressModeU{VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE};
+  VkSamplerAddressMode addressModeV{VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE};
+  VkSamplerAddressMode addressModeW{VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE};
+  float                mipLodBias;
+  VkBool32             anisotropyEnable;
+  float                maxAnisotropy;
+  VkBool32             compareEnable;
+  VkCompareOp          compareOp;
+  float                minLod;
+  float                maxLod{16.0f};
+  VkBorderColor        borderColor{VK_BORDER_COLOR_INT_OPAQUE_BLACK};
+  VkBool32             unnormalizedCoordinates;
+};
+static_assert(sizeof(DescriptorPoolCreateInfo) == sizeof(VkDescriptorPoolCreateInfo));
+
+struct SamplerReductionModeCreateInfo : VkStruct<VkSamplerReductionModeCreateInfo> {
+  VkStructureType        sType{VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO_EXT};
+  ptr_void               pNext;
+  VkSamplerReductionMode reductionMode;
+};
+static_assert(sizeof(SamplerReductionModeCreateInfo) == sizeof(VkSamplerReductionModeCreateInfo));
 
 struct DescriptorImageInfo {
   const VkSampler     sampler{VK_NULL_HANDLE};
@@ -594,6 +626,11 @@ struct ComputePipeline {
   constexpr operator VkPipeline() const { return handle; }
 };
 
+typedef uint64_t Handle;
+typedef uint8_t HandleIndex;
+typedef uint8_t HandleGeneration;
+#define MAX_HANDLES 256
+
 #define MVK_HANDLE_INDEX_TYPE uint8_t
 #define MVK_HANDLE_CAPACITY 16
 constexpr static MVK_HANDLE_INDEX_TYPE HandleLastIndex = (1 << 8 * sizeof(MVK_HANDLE_INDEX_TYPE)) - 1;
@@ -602,7 +639,7 @@ static_assert(MVK_HANDLE_CAPACITY <= 1 << (8 * sizeof(MVK_HANDLE_INDEX_TYPE)));
 #define MVK_HANDLE_GENERATION_TYPE uint8_t
 constexpr static MVK_HANDLE_GENERATION_TYPE HandleGenerationLastIndex = (1 << 8 * sizeof(MVK_HANDLE_GENERATION_TYPE)) - 1;
 
-template <typename T, T N>
+template <typename T, size_t N>
 struct HandleStack {
   T current{N - 1};
   T data[N]{};
@@ -625,60 +662,131 @@ struct HandleStack {
   }
 };
 
-// honestly don't know if this hot or cold thing does much
-template <typename THandle>
-__attribute__((hot, section(".handle"))) static inline THandle handles[MVK_HANDLE_CAPACITY]{};
+#define MVK_STATE_POOL_CAPACITY 65536
+#define MVK_STATE_MAX_SIZE 4096
+static_assert(MVK_STATE_POOL_CAPACITY <= UINT16_MAX + 1);
+typedef uint16_t PoolIndex;
+struct DynamicPool {
+  MVK_HANDLE_INDEX_TYPE slotCount{};
+  uint8_t buffer[MVK_STATE_POOL_CAPACITY]{};
+  PoolIndex bufferIndex{};
+  PoolIndex freeSlotIndices[MVK_STATE_MAX_SIZE]{};
 
-template <typename THandle>
-__attribute__((hot, section(".generation"))) static inline MVK_HANDLE_GENERATION_TYPE generations[MVK_HANDLE_CAPACITY]{};
+  PoolIndex Pop(size_t size) {
+    MVK_ASSERT(size < MVK_STATE_MAX_SIZE && "Trying to pop state size larger than MVK_STATE_MAX_SIZE.");
 
-template <typename TState>
-__attribute__((cold, section(".state"))) static inline TState states[MVK_HANDLE_CAPACITY]{};
+    slotCount++;
+    MVK_LOG("Popping slot %d buffer %d... ", slotCount, bufferIndex);
 
-template <typename THandle>
-__attribute__((cold, section(".free_index_stack"))) static inline HandleStack<MVK_HANDLE_INDEX_TYPE, MVK_HANDLE_CAPACITY> freeIndexStack;
+    if (freeSlotIndices[size] == UINT16_MAX) {
+      MVK_ASSERT(bufferIndex + size < MVK_STATE_POOL_CAPACITY && "Trying to pop beyond MVK_STATE_CAPACITY.");
+      MVK_LOG("New slot at %d... ", bufferIndex);
+      PoolIndex poppedIndex = bufferIndex;
+      bufferIndex += size;
+      return poppedIndex;
+    }
+
+    PoolIndex* pFreeSlotIndex = &freeSlotIndices[size];
+    PoolIndex* pPriorFreeSlotIndex = pFreeSlotIndex;;
+    while (*pFreeSlotIndex != UINT16_MAX) {
+      MVK_LOG("Checking slot at %d... ", *pFreeSlotIndex);
+      pPriorFreeSlotIndex = pFreeSlotIndex;
+      pFreeSlotIndex = (PoolIndex*)(buffer + *pFreeSlotIndex);
+    }
+    *pPriorFreeSlotIndex = UINT16_MAX;
+    MVK_LOG("Popped slot index %d... ", *pFreeSlotIndex);
+    return *pFreeSlotIndex;
+  }
+
+  void Push(PoolIndex index, size_t size) {
+    MVK_ASSERT(size < MVK_STATE_MAX_SIZE && "Trying to push state size larger than MVK_STATE_MAX_SIZE.");
+    MVK_ASSERT(index < MVK_STATE_POOL_CAPACITY && "Trying to push state after buffer range.");
+
+    slotCount--;
+    MVK_LOG("Pushing slot %d buffer %d... ", slotCount, index);
+
+    void* bufferPtr = buffer + index;
+    *(PoolIndex*)bufferPtr = UINT16_MAX;
+
+    if (freeSlotIndices[size] == UINT16_MAX) {
+      MVK_LOG("Pushed first free slot index... ");
+      freeSlotIndices[size] = index;
+      return;
+    }
+
+    PoolIndex* pFreeSlotIndex = &freeSlotIndices[size];
+    while (*pFreeSlotIndex != UINT16_MAX) {
+      MVK_LOG("Checking slot at %d... ", *pFreeSlotIndex);
+      pFreeSlotIndex = (PoolIndex*)(buffer + *pFreeSlotIndex);
+    }
+    MVK_LOG("Pushing to index %d... ");
+    *pFreeSlotIndex = index;
+  }
+
+  DynamicPool() {
+    for (size_t i = 0; i < MVK_STATE_MAX_SIZE; ++i) {
+      freeSlotIndices[i] = UINT16_MAX;
+    }
+  }
+};
+
+
+static inline Handle handles2[MAX_HANDLES]{};
+static inline HandleGeneration generations2[MAX_HANDLES]{};
+static inline HandleStack<HandleIndex, MAX_HANDLES> freeHandleIndexStack;
+static inline PoolIndex states2[MAX_HANDLES]{};
+static inline DynamicPool statePool;
 
 template <typename Derived, typename THandle, typename TState>
 struct HandleBase {
-  MVK_HANDLE_INDEX_TYPE      handleIndex{};
-  MVK_HANDLE_GENERATION_TYPE handleGeneration{};
+  HandleIndex      handleIndex{};
+  HandleGeneration handleGeneration{};
 
   THandle* pHandle() {
     MVK_ASSERT(IsValid() && "Trying to get handle with wrong generation!");
-    return &handles<THandle>[handleIndex];
+    return (THandle*)&handles2[handleIndex];
   }
   TState* pState() {
     MVK_ASSERT(IsValid() && "Trying to get state with wrong generation!");
-    return &states<TState>[handleIndex];
+    PoolIndex poolIndex = states2[handleIndex];
+    return (TState*)(statePool.buffer + poolIndex);
   }
 
   const THandle& handle() const {
     MVK_ASSERT(IsValid() && "Trying to get handle with wrong generation!");
-    return handles<THandle>[handleIndex];
+    return *(THandle*)&handles2[handleIndex];
   }
   const TState& state() const {
     MVK_ASSERT(IsValid() && "Trying to get state with wrong generation!");
-    return states<TState>[handleIndex];
+    PoolIndex poolIndex = states2[handleIndex];
+    return *(TState*)(statePool.buffer + poolIndex);
   }
 
   static Derived Acquire() {
-    const auto index = freeIndexStack<THandle>.Pop();
-    const auto generation = generations<THandle>[index];
-    MVK_LOG("Acquiring index %d generation %d... ", index, generation);
-    return Derived{index, generation};
+    const auto handleIndex = freeHandleIndexStack.Pop();
+    const auto generation = generations2[handleIndex];
+    const auto poolIndex = statePool.Pop(sizeof(TState));
+    states2[handleIndex] = poolIndex;
+    new (statePool.buffer + poolIndex) TState;
+    MVK_LOG("Acquiring index %d generation %d... ", handleIndex, generation);
+    return Derived{handleIndex, generation};
   }
 
   void Release() const {
-    const auto generation = generations<THandle>[handleIndex];
+    const auto generation = generations2[handleIndex];
     MVK_ASSERT(generation != HandleGenerationLastIndex && "Max handle generations reached.");
-    ++generations<THandle>[handleIndex];
-    freeIndexStack<THandle>.Push(handleIndex);
+    ++generations2[handleIndex];
+    freeHandleIndexStack.Push(handleIndex);
+    PoolIndex poolIndex = states2[handleIndex];
+    statePool.Push(poolIndex, sizeof(TState));
   }
 
-  VkResult Result() const { return states<TState>[handleIndex].result; }
+  VkResult Result() const {
+    return state().result;
+  }
 
   bool IsValid() const {
-    return generations<THandle>[handleIndex] == handleGeneration;
+    return generations2[handleIndex] == handleGeneration;
   }
 };
 
@@ -755,6 +863,12 @@ struct CommandPoolDesc;
 struct CommandPool;
 struct QueueDesc;
 struct Queue;
+struct QueryPoolDesc;
+struct QueryPool;
+struct DescriptorPoolDesc;
+struct DescriptorPool;
+struct SamplerDesc;
+struct Sampler;
 
 /* LogicalDevice */
 struct LogicalDeviceDesc {
@@ -768,32 +882,27 @@ struct LogicalDeviceState {
   VkResult                     result{VK_NOT_READY};
 };
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
-  void                         Destroy();
-  RenderPass                   CreateRenderPass(RenderPassDesc&& desc);
-  Queue                        GetQueue(QueueDesc&& desc);
-  CommandPool                  CreateCommandPool(CommandPoolDesc&& desc);
-  ComputePipeline2             CreateComputePipeline(ComputePipelineDesc&& desc);
-  PipelineLayout2              CreatePipelineLayout(PipelineLayoutDesc&& desc);
+  void Destroy();
+
+  RenderPass       CreateRenderPass(RenderPassDesc&& desc);
+  Queue            GetQueue(QueueDesc&& desc);
+  CommandPool      CreateCommandPool(CommandPoolDesc&& desc);
+  QueryPool        CreateQueryPool(QueryPoolDesc&& desc);
+  DescriptorPool   CreateDescriptorPool(DescriptorPoolDesc&& desc);
+  Sampler          CreateSampler(SamplerDesc&& desc);
+  ComputePipeline2 CreateComputePipeline(ComputePipelineDesc&& desc);
+  PipelineLayout2  CreatePipelineLayout(PipelineLayoutDesc&& desc);
+
   const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
-};
-
-struct HandleAllocatorState {
-  LogicalDevice                logicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
-  VkResult                     result{VK_NOT_READY};
-};
-
-struct HandleState {
-  LogicalDevice logicalDevice;
-  VkResult      result{VK_NOT_READY};
 };
 
 /* Queue */
 struct QueueIndexDesc {
-  Support      graphics{Support::Optional};
-  Support      compute{Support::Optional};
-  Support      transfer{Support::Optional};
-  Support      globalPriority{Support::Optional};
+  Support graphics{Support::Optional};
+  Support compute{Support::Optional};
+  Support transfer{Support::Optional};
+  Support globalPriority{Support::Optional};
+
   VkSurfaceKHR present{VK_NULL_HANDLE};
 };
 struct QueueDesc {
@@ -830,7 +939,12 @@ struct CommandPoolDesc {
   CommandPoolCreateInfo        createInfo;
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
-struct CommandPool : HandleBase<CommandPool, VkCommandPool, HandleAllocatorState> {
+struct CommandPoolState {
+  LogicalDevice                logicalDevice;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct CommandPool : HandleBase<CommandPool, VkCommandPool, CommandPoolState> {
   CommandBuffer AllocateCommandBuffer(CommandBufferDesc&& desc);
   void          Destroy();
 };
@@ -848,13 +962,61 @@ struct CommandBuffer : HandleBase<CommandBuffer, VkCommandBuffer, CommandBufferS
   void Destroy();
 };
 
+/* QueryPool */
+struct QueryPoolDesc {
+  const char*         debugName{"QueryPool"};
+  QueryPoolCreateInfo createInfo;
+};
+struct QueryPoolState {
+  LogicalDevice                logicalDevice;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct QueryPool : HandleBase<QueryPool, VkQueryPool, QueryPoolState> {
+  void Destroy();
+};
+
+/* DescriptorPool */
+struct DescriptorPoolDesc {
+  const char*              debugName{"DescriptorPool"};
+  DescriptorPoolCreateInfo createInfo;
+};
+struct DescriptorPoolState {
+  DescriptorPoolCreateInfo     logicalDevice;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct DescriptorPool : HandleBase<DescriptorPool, VkDescriptorPool, DescriptorPoolState> {
+  void Destroy();
+};
+
+/* Sampler */
+struct SamplerDesc {
+  const char*                         debugName{"Sampler"};
+  SamplerCreateInfo                   createInfo;
+  ptr<SamplerReductionModeCreateInfo> pReductionModeCreateInfo;
+};
+struct SamplerState {
+  DescriptorPoolCreateInfo     logicalDevice;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct Sampler : HandleBase<Sampler, VkSampler, SamplerState> {
+  void Destroy();
+};
+
 /* PipelineLayout */
 struct PipelineLayoutDesc {
   const char*                  debugName{"PipelineLayout"};
   PipelineLayoutCreateInfo     createInfo;
   const VkAllocationCallbacks* pAllocator{nullptr};
 };
-struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, HandleAllocatorState> {
+struct PipelineLayoutState {
+  LogicalDevice                logicalDevice;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct PipelineLayout2 : HandleBase<PipelineLayout2, VkPipelineLayout, PipelineLayoutState> {
   void Destroy();
 };
 
@@ -864,7 +1026,12 @@ struct ComputePipelineDesc {
   span<ComputePipelineCreateInfo> createInfos;
   const VkAllocationCallbacks*    pAllocator{nullptr};
 };
-struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, HandleAllocatorState> {
+struct ComputePipelineState {
+  LogicalDevice                logicalDevice;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, ComputePipelineState> {
   void Destroy();
   void BindPipeline(VkCommandBuffer commandBuffer);
 };

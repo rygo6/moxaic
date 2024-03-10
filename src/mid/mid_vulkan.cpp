@@ -86,19 +86,20 @@ Instance Instance::Create(InstanceDesc&& desc) {
   state->result = vkCreateInstance(&desc.createInfo.vk(), desc.pAllocator, instance.pHandle());
   CHECK_RESULT(instance);
 
-#define MVK_PFN_FUNCTION(func)                                                     \
-  LOG("Loading PFN_%s... ", "vk" #func);                                           \
-  PFN.func = (PFN_vk##func)vkGetInstanceProcAddr(*instance.pHandle(), "vk" #func); \
-  if (PFN.SetDebugUtilsObjectNameEXT == nullptr) {                                 \
-    LOG("Fail! %s\n\n", #func);                                                    \
-    return instance;                                                               \
-  }
+#define MVK_PFN_FUNCTION(func)                                                       \
+  LOG("Loading PFN_%s... ", "vk" #func);                                             \
+  PFN.func = (PFN_vk##func)vkGetInstanceProcAddr(*instance.pHandle(), "vk" #func);   \
+  state->result = PFN.func == nullptr ? VK_ERROR_INITIALIZATION_FAILED : VK_SUCCESS; \
+  CHECK_RESULT(instance);
+
   MVK_PFN_FUNCTIONS
 #undef MVK_PFN_FUNCTION
 
   LOG("Setting up DebugUtilsMessenger... ");
   if (desc.debugUtilsMessengerCreateInfo.pfnUserCallback == nullptr)
     desc.debugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
+
+  auto t =  instance.handle();
 
   state->result = PFN.CreateDebugUtilsMessengerEXT(
       instance.handle(),
