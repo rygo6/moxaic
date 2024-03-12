@@ -125,15 +125,15 @@ constexpr static size_t           MaxHandles = (1 << 8 * sizeof(HandleIndex));
 constexpr static HandleIndex      HandleLastIndex = MaxHandles - 1;
 
 typedef uint32_t        PoolIndex;
-constexpr static size_t StaticPoolCapacity = 1024 * 512; // 512kb
-constexpr static size_t StateMaxSize = 4 * 512;          // 4kb
+constexpr static size_t StatePoolCapacity = 1024 * 512; // 512kb
+constexpr static size_t StateMaxSize = 1024 * 4;          // 4kb
 
 static size_t                                                 handleCount{};
 static Handle                                                 handles[MaxHandles]{};
 static HandleGeneration                                       generations[MaxHandles]{};
 static FreeIndexStack<HandleIndex, MaxHandles>                freeHandleIndexStack{};
 static PoolIndex                                              statePoolIndices[MaxHandles]{};
-static ArenaPool<PoolIndex, StateMaxSize, StaticPoolCapacity> statePool{};
+static ArenaPool<PoolIndex, StateMaxSize, StatePoolCapacity> statePool{};
 
 #define HANDLE_TEMPLATE template <typename Derived, typename THandle, typename TState>
 
@@ -696,7 +696,7 @@ DescriptorPool LogicalDevice::CreateDescriptorPool(DescriptorPoolDesc&& desc) co
       desc);
 }
 
-Sampler LogicalDevice::CreateSampler(SamplerDesc&& desc) {
+Sampler LogicalDevice::CreateSampler(SamplerDesc&& desc) const {
   // todo step through pnext and apply to end
   desc.createInfo.pNext.p = desc.pReductionModeCreateInfo.p;
   return CreateGeneric<Sampler, VkSampler, VkSamplerCreateInfo>(

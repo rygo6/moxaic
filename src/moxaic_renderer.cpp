@@ -10,6 +10,8 @@
 
 using namespace Mid::Vk;
 
+Instance instanceHandle;
+
 void Moxaic::Renderer::Init()
 {
     // auto test = ComputePipelineDesc{
@@ -67,9 +69,10 @@ void Moxaic::Renderer::Init()
         .messageSeverity{VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT},
         .messageType{VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT},
       },
-    });
+    }).DeferDestroy();
+    instanceHandle = instance.data;
 
-    auto physicalDevice = instance.CreatePhysicalDevice({
+    auto physicalDevice = instance.data.CreatePhysicalDevice({
       .physicalDeviceFeatures{
         .features{
           .robustBufferAccess = VK_TRUE,
@@ -95,27 +98,27 @@ void Moxaic::Renderer::Init()
       .physicalDeviceGlobalPriorityQueryFeatures{
         .globalPriorityQuery = VK_TRUE,
       },
-    });
+    }).DeferDestroy();
 
     Window::Init();
     VkSurfaceKHR surface;
-    Window::InitSurface(instance.handle(), &surface);
+    Window::InitSurface(instance.data.handle(), &surface);
 
-    auto graphicsQueueIndex = physicalDevice.FindQueueIndex({
+    auto graphicsQueueIndex = physicalDevice.data.FindQueueIndex({
       .graphics = Support::Yes,
       .compute = Support::Yes,
       .transfer = Support::Yes,
       .globalPriority = Support::Yes,
       .present = surface,
     });
-    auto computeQueueIndex = physicalDevice.FindQueueIndex({
+    auto computeQueueIndex = physicalDevice.data.FindQueueIndex({
       .graphics = Support::No,
       .compute = Support::Yes,
       .transfer = Support::Yes,
       .globalPriority = Support::Yes,
       .present = surface,
     });
-    auto transferQueueIndex = physicalDevice.FindQueueIndex({
+    auto transferQueueIndex = physicalDevice.data.FindQueueIndex({
       .graphics = Support::No,
       .compute = Support::No,
       .transfer = Support::Yes,
@@ -123,7 +126,7 @@ void Moxaic::Renderer::Init()
     auto globalQueue = Moxaic::IsCompositor() ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT;
     auto queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
 
-    auto logicalDevice = physicalDevice.CreateLogicalDevice({
+    auto logicalDevice = physicalDevice.data.CreateLogicalDevice({
       .createInfo{
         .pQueueCreateInfos{
           {
@@ -156,16 +159,16 @@ void Moxaic::Renderer::Init()
           VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
         },
       },
-    });
+    }).DeferDestroy();
 
-    Queue graphicsQueue = logicalDevice.GetQueue({
+    auto graphicsQueue = logicalDevice.data.GetQueue({
       .debugName = "GraphicsQueue",
       .queueIndex = graphicsQueueIndex,
-    });
-    Queue computeQueue = logicalDevice.GetQueue({
+    }).DeferDestroy();
+    auto computeQueue = logicalDevice.data.GetQueue({
       .debugName = "ComputeQueue",
       .queueIndex = computeQueueIndex,
-    });
+    }).DeferDestroy();
 
     constexpr VkFormat ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
     constexpr VkFormat NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -174,7 +177,7 @@ void Moxaic::Renderer::Init()
     constexpr uint32_t NormalAttachmentIndex = 1;
     constexpr uint32_t DepthAttachmentIndex = 2;
 
-    auto renderPass = logicalDevice.CreateRenderPass({
+    auto renderPass = logicalDevice.data.CreateRenderPass({
       .debugName = "StandardRenderPass",
       .createInfo = {
         .pAttachments{
@@ -196,14 +199,14 @@ void Moxaic::Renderer::Init()
       },
     });
 
-    auto graphicsCommandPool = logicalDevice.CreateCommandPool({
+    auto graphicsCommandPool = logicalDevice.data.CreateCommandPool({
       .debugName = "GraphicsCommandPool",
       .createInfo = CommandPoolCreateInfo{
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = graphicsQueueIndex,
       },
     });
-    auto computeCommandPool = logicalDevice.CreateCommandPool({
+    auto computeCommandPool = logicalDevice.data.CreateCommandPool({
       .debugName = "GraphicsCommandPool",
       .createInfo = CommandPoolCreateInfo{
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,

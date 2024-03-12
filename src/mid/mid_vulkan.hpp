@@ -48,22 +48,6 @@ struct {
 #undef MVK_PFN_FUNCTION
 } PFN;
 
-struct VkFormatAspect {
-  VkFormat           format;
-  VkImageAspectFlags aspectMask;
-};
-
-constexpr VkFormatAspect VkFormatR8B8G8A8UNorm{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT};
-constexpr VkFormatAspect VkFormatD32SFloat{VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT};
-
-struct VkTexture {
-  VkFormatAspect formatAspect;
-  uint32_t       levelCount;
-  uint32_t       layerCount;
-  VkImage        image;
-  VkImageView    view;
-};
-
 typedef const char* VkString;
 typedef uint32_t    VkCount;
 
@@ -323,6 +307,24 @@ struct SamplerReductionModeCreateInfo : VkStruct<VkSamplerReductionModeCreateInf
   VkSamplerReductionMode reductionMode;
 };
 static_assert(sizeof(SamplerReductionModeCreateInfo) == sizeof(VkSamplerReductionModeCreateInfo));
+
+struct ImageCreateInfo : VkStruct<VkImageCreateInfo> {
+  VkStructureType       sType{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+  ptr_void              pNext;
+  VkImageCreateFlags    flags;
+  VkImageType           imageType{VK_IMAGE_TYPE_2D};
+  VkFormat              format;
+  VkExtent3D            extent;
+  uint32_t              mipLevels{1};
+  uint32_t              arrayLayers{1};
+  VkSampleCountFlagBits samples{VK_SAMPLE_COUNT_1_BIT};
+  VkImageTiling         tiling{VK_IMAGE_TILING_OPTIMAL};
+  VkImageUsageFlags     usage;
+  VkSharingMode         sharingMode{VK_SHARING_MODE_EXCLUSIVE};
+  span<const uint32_t>  pQueueFamilyIndices;
+  VkImageLayout         initialLayout{VK_IMAGE_LAYOUT_UNDEFINED};
+};
+static_assert(sizeof(ImageCreateInfo) == sizeof(VkImageCreateInfo));
 
 struct DescriptorImageInfo {
   const VkSampler     sampler{VK_NULL_HANDLE};
@@ -626,8 +628,15 @@ struct ComputePipeline {
   constexpr operator VkPipeline() const { return handle; }
 };
 
+template <typename T>
+struct DeferredHandle {
+  T data;
+    DeferredHandle(T&& data) : data(data) {}
+  ~ DeferredHandle() { data.Destroy(); }
+};
+
 typedef uint64_t Handle;
-typedef uint16_t HandleIndex; // 65,536 vulkan handles. Could you possibly use more?
+typedef uint16_t HandleIndex;      // 65,536 vulkan handles. Could you possibly use more?
 typedef uint8_t  HandleGeneration; // Only 256 generations. They roll over. I guess it's like a generation ring.
 
 template <typename Derived, typename THandle, typename TState>
@@ -643,6 +652,10 @@ struct HandleBase {
   void           Release() const;
   VkResult       Result() const;
   bool           IsValid() const;
+
+  DeferredHandle<Derived> DeferDestroy() {
+    return DeferredHandle<Derived>{.data = (Derived) * this};
+  }
 };
 
 struct PhysicalDevice;
@@ -736,6 +749,11 @@ struct LogicalDeviceState {
   PhysicalDevice               physicalDevice;
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
+
+  // could do something like creating lists of things created to then destroy
+  // LogicalDevice* pDestroyLogicalDevice;
+  // RenderPass*    pDestroyRenderPass;
+  // CommandPool*   pDestroyCommandPool;
 };
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   void Destroy();
@@ -745,7 +763,7 @@ struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   CommandPool      CreateCommandPool(CommandPoolDesc&& desc) const;
   QueryPool        CreateQueryPool(QueryPoolDesc&& desc) const;
   DescriptorPool   CreateDescriptorPool(DescriptorPoolDesc&& desc) const;
-  Sampler          CreateSampler(SamplerDesc&& desc);
+  Sampler          CreateSampler(SamplerDesc&& desc) const;
   ComputePipeline2 CreateComputePipeline(ComputePipelineDesc&& desc);
   PipelineLayout2  CreatePipelineLayout(PipelineLayoutDesc&& desc);
 
@@ -864,6 +882,35 @@ struct Sampler : HandleBase<Sampler, VkSampler, SamplerState> {
   void Destroy();
 };
 
+/* Image */
+struct ImageDesc {
+  const char*                  debugName{"Image"};
+  VkImageCreateInfo            createInfo;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+};
+struct ImageState {
+  LogicalDevice                logicalDevice;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct Image : HandleBase<Image, VkImage, ImageState> {
+  void Destroy();
+};
+
+// struct VkFormatAspect {
+//   VkFormat           format;
+//   VkImageAspectFlags aspectMask;
+// };
+// constexpr VkFormatAspect VkFormatR8B8G8A8UNorm{VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT};
+// constexpr VkFormatAspect VkFormatD32SFloat{VK_FORMAT_D32_SFLOAT, VK_IMAGE_ASPECT_DEPTH_BIT};
+// struct VkTexture {
+//   VkFormatAspect formatAspect;
+//   uint32_t       levelCount;
+//   uint32_t       layerCount;
+//   VkImage        image;
+//   VkImageView    view;
+// };
+
 /* PipelineLayout */
 struct PipelineLayoutDesc {
   const char*                  debugName{"PipelineLayout"};
@@ -893,12 +940,6 @@ struct ComputePipelineState {
 struct ComputePipeline2 : HandleBase<ComputePipeline2, VkPipeline, ComputePipelineState> {
   void Destroy();
   void BindPipeline(VkCommandBuffer commandBuffer);
-};
-
-template <typename T>
-struct DeferDestroy {
-  T create;
-  ~ DeferDestroy() { create.Destroy(); }
 };
 
 //------------------------------------------------------------------------------------
