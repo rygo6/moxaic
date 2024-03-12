@@ -652,10 +652,6 @@ struct HandleBase {
   void           Release() const;
   VkResult       Result() const;
   bool           IsValid() const;
-
-  DeferredHandle<Derived> DeferDestroy() {
-    return DeferredHandle<Derived>{.data = (Derived) * this};
-  }
 };
 
 struct PhysicalDevice;
