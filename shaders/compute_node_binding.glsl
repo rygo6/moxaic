@@ -11,8 +11,7 @@ layout (set = 1, binding = 0) uniform NodeUBO {
 layout (set = 1, binding = 1) uniform sampler2D nodeColorTexture;
 layout (set = 1, binding = 2) uniform sampler2D nodeNormalTexture;
 layout (set = 1, binding = 3) uniform sampler2D nodeGBufferTexture;
-//layout (set = 1, binding = 3, rgba16f) uniform image2D nodeGBufferTexture;
-layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
+//layout (set = 1, binding = 4) uniform sampler2D nodeDepthTexture;
 
 struct VkDispatchIndirectCommand {
     uint x;

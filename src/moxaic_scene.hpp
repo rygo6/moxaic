@@ -118,7 +118,7 @@ namespace Moxaic
         // should node be here? maybe outside scene?
         Node node{Device};
         int framebufferIndex{0};
-        uint64_t compositorSempahoreStep{30};
+        uint64_t compositorSempahoreStep{128};
 
         Vulkan::Swap swap{Device};
 

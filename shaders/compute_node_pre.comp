@@ -67,7 +67,7 @@ bool SampleNode(const vec2 uv, out float nodeDepthSample)
     const vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     const vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-    nodeDepthSample = textureLod(nodeGBufferTexture, intersectNodeUV, 4).r;
+    nodeDepthSample = textureLod(nodeGBufferTexture, intersectNodeUV, 0).r;
     return intersected && nodeDepthSample > 0;
 }
 

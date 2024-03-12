@@ -32,10 +32,6 @@ namespace Moxaic::Vulkan
 
         VkResult Create(const VkDevice deviceHandle, VkSampler srcSampler)
         {
-            // const StaticArray layoutBindings{
-            //   LayoutBindings[SrcTexture].WithSamplers(&srcSampler),
-            //   LayoutBindings[DstTexture],
-            // };
             VKM_CHECK(Mid::Vk::DescriptorSetLayout::Create(
               deviceHandle,
               Name,

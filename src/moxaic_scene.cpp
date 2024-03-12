@@ -466,18 +466,20 @@ MXC_RESULT NodeScene::Loop(const uint32_t& deltaTime)
                       1);
     }
 
-    // nodeProcessBlitDownPipeline.BindPipeline(commandBuffer);
-    // for (int i = framebuffer.GBufferMipLevelCount - 1; i < framebuffer.GBufferMipLevelCount; ++i) {
-    //     Vkm::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
-    //     nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
-    //                                                                framebuffer.VkGbufferImageViewMipHandles[i - 1],
-    //                                                                framebuffer.VkGbufferImageViewMipHandles[i]);
-    //     const auto mipGroupCount = VkExtent2D{groupCount.width >> i, groupCount.height >> i};
-    //     vkCmdDispatch(commandBuffer,
-    //                   mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
-    //                   mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
-    //                   1);
-    // }
+    Mid::Vk::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
+
+    nodeProcessBlitDownPipeline.BindPipeline(commandBuffer);
+    for (uint32_t i = framebuffer.GBufferMipLevelCount - 1; i > 0; --i) {
+        Mid::Vk::CmdPipelineImageBarrier2(commandBuffer, 1, &depthBlitBarrier);
+        nodeProcessPipelineLayout.PushSrcDstTextureDescriptorWrite(commandBuffer,
+                                                                   framebuffer.VkGbufferImageViewMipHandles[i],
+                                                                   framebuffer.VkGbufferImageViewMipHandles[i - 1]);
+        const auto mipGroupCount = VkExtent2D{groupCount.width >> i - 1, groupCount.height >> i - 1};
+        vkCmdDispatch(commandBuffer,
+                      mipGroupCount.width < 1 ? 1 : mipGroupCount.width,
+                      mipGroupCount.height < 1 ? 1 : mipGroupCount.height,
+                      1);
+    }
 
     const auto& externalRead = ReleaseToExternalRead(Vulkan::CompositorPipelineType);
     const StaticArray toExternalBarriers{

@@ -16,10 +16,10 @@ void main()
     const ivec2 srcCoord = ivec2(dstUV * srcSize);
     const vec2 srcUV = vec2(srcCoord) / vec2(srcSize);
 
-    const float depth = texture(srcTexture, srcUV).r;
+    const float srcDepth = texture(srcTexture, srcUV).r;
     const float currentDepth = imageLoad(dstTexture, dstCoord).r;
 
-    const float newDepth = currentDepth > 0 ? currentDepth : depth;
+    const float newDepth = currentDepth > 0 ? currentDepth : srcDepth;
 
     imageStore(dstTexture, dstCoord, vec4(newDepth));
 }

@@ -46,7 +46,7 @@ bool NodeIntersect(const vec2 globalUV, out vec3 intersectNodeNDC, out vec3 dept
     const vec4 worldNormal = nodeUBO.invView * vec4(nodeNormalSample, 1);
     const float worldFacingRatio = dot(worldNormal.xyz, worldRay);
 
-    const float nodeDepthSample = textureLod(nodeGBufferTexture, nodeIntersectUV, 2).r;
+    const float nodeDepthSample = textureLod(nodeGBufferTexture, nodeIntersectUV, 0).r;
 
     const vec3 depthProjectNodeNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
     depthProjectGlobalNDC = GlobalNDCFromNodeNDC(depthProjectNodeNDC);

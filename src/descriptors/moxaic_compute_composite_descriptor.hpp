@@ -218,14 +218,14 @@ namespace Moxaic::Vulkan
                 .dstBinding = Indices::GBufferTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef{VkDescriptorImageInfo{
-                  .sampler = device->GetVkNearestSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetGBufferTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL}}},
               VkWriteDescriptorSet{
                 .dstBinding = Indices::DepthTexture,
                 .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .pImageInfo = StaticRef{VkDescriptorImageInfo{
-                  .sampler = device->GetVkNearestSampler(),
+                  .sampler = device->GetVkLinearSampler(),
                   .imageView = framebuffer.GetDepthTexture().VkImageViewHandle,
                   .imageLayout = VK_IMAGE_LAYOUT_GENERAL}}},
             };
