@@ -626,9 +626,9 @@ struct ComputePipeline {
   constexpr operator VkPipeline() const { return handle; }
 };
 
-typedef uint64_t                  Handle;
-typedef uint8_t                   HandleIndex; // 256 handles?
-typedef uint8_t                   HandleGeneration; // is 256 generations really enough?
+typedef uint64_t Handle;
+typedef uint8_t  HandleIndex;      // 256 handles?
+typedef uint8_t  HandleGeneration; // is 256 generations really enough?
 
 template <typename Derived, typename THandle, typename TState>
 struct HandleBase {
@@ -650,6 +650,7 @@ struct PhysicalDeviceDesc;
 
 /* Instance */
 struct InstanceDesc {
+  VkString                      debugName{"Instance"};
   InstanceCreateInfo            createInfo;
   ValidationFeatures            validationFeatures;
   DebugUtilsMessengerCreateInfo debugUtilsMessengerCreateInfo;
@@ -674,7 +675,7 @@ struct QueueIndexDesc;
 
 /* PhysicalDevice */
 struct PhysicalDeviceDesc {
-  uint32_t                                       preferredDeviceIndex;
+  VkString                                       debugName{"PhysicalDevice"};
   VkPhysicalDeviceFeatures2                      physicalDeviceFeatures;
   VkPhysicalDeviceVulkan11Features               physicalDeviceFeatures11;
   VkPhysicalDeviceVulkan12Features               physicalDeviceFeatures12;
@@ -727,7 +728,7 @@ struct Sampler;
 
 /* LogicalDevice */
 struct LogicalDeviceDesc {
-  const char*            debugName{"LogicalDevice"};
+  VkString               debugName{"LogicalDevice"};
   DeviceCreateInfo       createInfo;
   VkAllocationCallbacks* pAllocator{nullptr};
 };
@@ -739,16 +740,16 @@ struct LogicalDeviceState {
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   void Destroy();
 
-  RenderPass       CreateRenderPass(RenderPassDesc&& desc);
-  Queue            GetQueue(QueueDesc&& desc);
-  CommandPool      CreateCommandPool(CommandPoolDesc&& desc);
-  QueryPool        CreateQueryPool(QueryPoolDesc&& desc);
-  DescriptorPool   CreateDescriptorPool(DescriptorPoolDesc&& desc);
+  RenderPass       CreateRenderPass(RenderPassDesc&& desc) const;
+  Queue            GetQueue(QueueDesc&& desc) const;
+  CommandPool      CreateCommandPool(CommandPoolDesc&& desc) const;
+  QueryPool        CreateQueryPool(QueryPoolDesc&& desc) const;
+  DescriptorPool   CreateDescriptorPool(DescriptorPoolDesc&& desc) const;
   Sampler          CreateSampler(SamplerDesc&& desc);
   ComputePipeline2 CreateComputePipeline(ComputePipelineDesc&& desc);
   PipelineLayout2  CreatePipelineLayout(PipelineLayoutDesc&& desc);
 
-  const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
+  const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator) const;
 };
 
 /* Queue */
@@ -819,8 +820,9 @@ struct CommandBuffer : HandleBase<CommandBuffer, VkCommandBuffer, CommandBufferS
 
 /* QueryPool */
 struct QueryPoolDesc {
-  const char*         debugName{"QueryPool"};
-  QueryPoolCreateInfo createInfo;
+  const char*                  debugName{"QueryPool"};
+  QueryPoolCreateInfo          createInfo;
+  const VkAllocationCallbacks* pAllocator{nullptr};
 };
 struct QueryPoolState {
   LogicalDevice                logicalDevice;
@@ -833,11 +835,12 @@ struct QueryPool : HandleBase<QueryPool, VkQueryPool, QueryPoolState> {
 
 /* DescriptorPool */
 struct DescriptorPoolDesc {
-  const char*              debugName{"DescriptorPool"};
-  DescriptorPoolCreateInfo createInfo;
+  const char*                  debugName{"DescriptorPool"};
+  DescriptorPoolCreateInfo     createInfo;
+  const VkAllocationCallbacks* pAllocator{nullptr};
 };
 struct DescriptorPoolState {
-  DescriptorPoolCreateInfo     logicalDevice;
+  LogicalDevice                logicalDevice;
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };
@@ -850,9 +853,10 @@ struct SamplerDesc {
   const char*                         debugName{"Sampler"};
   SamplerCreateInfo                   createInfo;
   ptr<SamplerReductionModeCreateInfo> pReductionModeCreateInfo;
+  const VkAllocationCallbacks*        pAllocator{nullptr};
 };
 struct SamplerState {
-  DescriptorPoolCreateInfo     logicalDevice;
+  LogicalDevice                logicalDevice;
   const VkAllocationCallbacks* pAllocator{nullptr};
   VkResult                     result{VK_NOT_READY};
 };

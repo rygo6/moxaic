@@ -70,7 +70,6 @@ void Moxaic::Renderer::Init()
     });
 
     auto physicalDevice = instance.CreatePhysicalDevice({
-      .preferredDeviceIndex = 0,
       .physicalDeviceFeatures{
         .features{
           .robustBufferAccess = VK_TRUE,
@@ -219,69 +218,69 @@ void Moxaic::Renderer::Init()
       .debugName = "ComputeCommandBuffer",
     });
 
-    // auto queryPool = logicalDevice.CreateQueryPool({
-    //   .debugName = "TimestampeQueryPool",
-    //   .createInfo{
-    //     .queryType = VK_QUERY_TYPE_TIMESTAMP,
-    //     .queryCount = 2,
-    //   },
-    // });
-    //
-    // auto descriptorPool = logicalDevice.CreateDescriptorPool({
-    //   .debugName = "TimestampeQueryPool",
-    //   .createInfo{
-    //     .maxSets = 30,
-    //     .pPoolSizes{
-    //       {
-    //         .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-    //         .descriptorCount = 10,
-    //       },
-    //       {
-    //         .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-    //         .descriptorCount = 10,
-    //       },
-    //       {
-    //         .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-    //         .descriptorCount = 10,
-    //       },
-    //     },
-    //   },
-    // });
-    //
-    // auto linearSampler = logicalDevice.CreateSampler({
-    //   .debugName = "LinearSampler",
-    //   .createInfo{
-    //     .magFilter = VK_FILTER_LINEAR,
-    //     .minFilter = VK_FILTER_LINEAR,
-    //   },
-    // });
-    // auto nearestSampler = logicalDevice.CreateSampler({
-    //   .debugName = "LinearSampler",
-    //   .createInfo{
-    //     .magFilter = VK_FILTER_NEAREST,
-    //     .minFilter = VK_FILTER_NEAREST,
-    //   },
-    // });
-    // auto minSampler = logicalDevice.CreateSampler({
-    //   .debugName = "LinearSampler",
-    //   .createInfo{
-    //     .magFilter = VK_FILTER_NEAREST,
-    //     .minFilter = VK_FILTER_NEAREST,
-    //   },
-    //   .pReductionModeCreateInfo = SamplerReductionModeCreateInfo{
-    //     .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
-    //   },
-    // });
-    // auto maxSampler = logicalDevice.CreateSampler({
-    //   .debugName = "LinearSampler",
-    //   .createInfo{
-    //     .magFilter = VK_FILTER_NEAREST,
-    //     .minFilter = VK_FILTER_NEAREST,
-    //   },
-    //   .pReductionModeCreateInfo = SamplerReductionModeCreateInfo{
-    //     .reductionMode = VK_SAMPLER_REDUCTION_MODE_MAX,
-    //   },
-    // });
+    auto queryPool = logicalDevice.CreateQueryPool({
+      .debugName = "TimestampeQueryPool",
+      .createInfo{
+        .queryType = VK_QUERY_TYPE_TIMESTAMP,
+        .queryCount = 2,
+      },
+    });
+
+    auto descriptorPool = logicalDevice.CreateDescriptorPool({
+      .debugName = "TimestampeQueryPool",
+      .createInfo{
+        .maxSets = 30,
+        .pPoolSizes{
+          {
+            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 10,
+          },
+          {
+            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .descriptorCount = 10,
+          },
+          {
+            .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .descriptorCount = 10,
+          },
+        },
+      },
+    });
+
+    auto linearSampler = logicalDevice.CreateSampler({
+      .debugName = "LinearSampler",
+      .createInfo{
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+      },
+    });
+    auto nearestSampler = logicalDevice.CreateSampler({
+      .debugName = "LinearSampler",
+      .createInfo{
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+      },
+    });
+    auto minSampler = logicalDevice.CreateSampler({
+      .debugName = "LinearSampler",
+      .createInfo{
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+      },
+      .pReductionModeCreateInfo = SamplerReductionModeCreateInfo{
+        .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
+      },
+    });
+    auto maxSampler = logicalDevice.CreateSampler({
+      .debugName = "LinearSampler",
+      .createInfo{
+        .magFilter = VK_FILTER_NEAREST,
+        .minFilter = VK_FILTER_NEAREST,
+      },
+      .pReductionModeCreateInfo = SamplerReductionModeCreateInfo{
+        .reductionMode = VK_SAMPLER_REDUCTION_MODE_MAX,
+      },
+    });
 
 
     MXC_LOG(sizeof(InstanceState));

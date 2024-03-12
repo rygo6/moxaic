@@ -129,10 +129,11 @@ typedef uint16_t PoolIndex;
 #define MVK_STATE_POOL_CAPACITY 65536
 #define MVK_STATE_MAX_SIZE 4096
 
+static size_t                                                            handleCount{};
 static Handle                                                            handles[MaxHandles]{};
 static HandleGeneration                                                  generations[MaxHandles]{};
 static FreeStack<HandleIndex, MaxHandles>                                freeHandleIndexStack{};
-static PoolIndex                                                         states[MaxHandles]{};
+static PoolIndex                                                         statePoolIndices[MaxHandles]{};
 static ArenaPool<PoolIndex, MVK_STATE_MAX_SIZE, MVK_STATE_POOL_CAPACITY> statePool{};
 
 template <typename Derived, typename THandle, typename TState>
@@ -143,7 +144,7 @@ THandle* HandleBase<Derived, THandle, TState>::pHandle() {
 template <typename Derived, typename THandle, typename TState>
 TState* HandleBase<Derived, THandle, TState>::pState() {
   ASSERT(IsValid() && "Trying to get state with wrong generation!");
-  PoolIndex poolIndex = states[handleIndex];
+  PoolIndex poolIndex = statePoolIndices[handleIndex];
   return (TState*)(statePool.buffer + poolIndex);
 }
 template <typename Derived, typename THandle, typename TState>
@@ -154,7 +155,7 @@ const THandle& HandleBase<Derived, THandle, TState>::handle() const {
 template <typename Derived, typename THandle, typename TState>
 const TState& HandleBase<Derived, THandle, TState>::state() const {
   ASSERT(IsValid() && "Trying to get state with wrong generation!");
-  PoolIndex poolIndex = states[handleIndex];
+  PoolIndex poolIndex = statePoolIndices[handleIndex];
   return *(TState*)(statePool.buffer + poolIndex);
 }
 template <typename Derived, typename THandle, typename TState>
@@ -162,9 +163,13 @@ Derived HandleBase<Derived, THandle, TState>::Acquire() {
   const auto handleIndex = freeHandleIndexStack.Pop();
   const auto generation = generations[handleIndex];
   const auto poolIndex = statePool.Pop(sizeof(TState));
-  states[handleIndex] = poolIndex;
+
+  statePoolIndices[handleIndex] = poolIndex;
   new (statePool.buffer + poolIndex) TState;
-  MVK_LOG("Acquiring index %d generation %d... ", handleIndex, generation);
+
+  handleCount++;
+  MVK_LOG("Acquiring handle index %d generation %d total %llu... ", handleIndex, generation, handleCount);
+
   return Derived{handleIndex, generation};
 }
 template <typename Derived, typename THandle, typename TState>
@@ -172,8 +177,13 @@ void HandleBase<Derived, THandle, TState>::Release() const {
   const auto generation = generations[handleIndex];
   ASSERT(generation != HandleGenerationLastIndex && "Max handle generations reached.");
   ++generations[handleIndex];
+
+  handleCount--;
+  MVK_LOG("Releasing handle index %d generation %d total %llu... ", handleIndex, generation, handleCount);
+
   freeHandleIndexStack.Push(handleIndex);
-  PoolIndex poolIndex = states[handleIndex];
+
+  PoolIndex poolIndex = statePoolIndices[handleIndex];
   statePool.Push(poolIndex, sizeof(TState));
 }
 template <typename Derived, typename THandle, typename TState>
@@ -229,7 +239,7 @@ const VkAllocationCallbacks* Instance::DefaultAllocator(const VkAllocationCallba
 }
 
 Instance Instance::Create(InstanceDesc&& desc) {
-  LOG("# VkInstance... ");
+  LOG("# %s... ", desc.debugName);
 
   auto instance = Instance::Acquire();
   auto state = instance.pState();
@@ -319,7 +329,7 @@ static bool CheckPhysicalDeviceFeatureBools(
 }
 
 PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
-  LOG("# VkPhysicalDevice... ");
+  LOG("# %s... ", desc.debugName);
 
   auto physicalDevice = PhysicalDevice::Acquire();
   auto state = physicalDevice.pState();
@@ -431,8 +441,8 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
     LOG("No suitable PhysicalDevice found!");
     state->result = VK_ERROR_INITIALIZATION_FAILED;
   } else {
-    LOG("Picking Device %d %s... ", desc.preferredDeviceIndex, state->physicalDeviceProperties.properties.deviceName);
-    *physicalDevice.pHandle() = devices[desc.preferredDeviceIndex];
+    LOG("Picking Device %d %s... ", chosenDeviceIndex, state->physicalDeviceProperties.properties.deviceName);
+    *physicalDevice.pHandle() = devices[chosenDeviceIndex];
     state->result = VK_SUCCESS;
   }
   CHECK_RESULT(physicalDevice);
@@ -475,7 +485,7 @@ void PhysicalDevice::Destroy() {
 }
 
 LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
-  LOG("# CreateLogicalDevice... ");
+  LOG("# %s... ", desc.debugName);
 
   auto logicalDevice = LogicalDevice::Acquire();
   auto state = logicalDevice.pState();
@@ -586,27 +596,32 @@ void LogicalDevice::Destroy() {
   Release();
 }
 
-template <typename T>
-static T CreateGeneric(LogicalDevice device, const auto&& desc) {
-  LOG("# CreateCommandPool... ");
+template <typename T, typename THandle, typename TInfo>
+static T CreateGeneric(
+    LogicalDevice device,
+    VkObjectType  objectType,
+    VkResult      (*vkCreateFunc)(VkDevice, const TInfo*, const VkAllocationCallbacks*, THandle*),
+    auto&&        desc) {
+  LOG("# %s... ", desc.debugName);
 
   auto handle = T::Acquire();
   auto state = handle.pState();
 
-  state->pAllocator = DefaultAllocator(desc.pAllocator);
+  state->pAllocator = device.DefaultAllocator(desc.pAllocator);
   state->logicalDevice = device;
 
   LOG("Creating... ");
-  state->result = vkCreateCommandPool(device,
-                                      desc.createInfo.pVk(),
-                                      state->pAllocator,
-                                      &handle.pHandle());
+  state->result = vkCreateFunc(
+      device.handle(),
+      &desc.createInfo.vk(),
+      state->pAllocator,
+      handle.pHandle());
   CHECK_RESULT(handle);
 
   LOG("Setting DebugName... ");
   state->result = SetDebugInfo(
       device.handle(),
-      VK_OBJECT_TYPE_RENDER_PASS,
+      objectType,
       (uint64_t)*handle.pHandle(),
       desc.debugName);
   CHECK_RESULT(handle);
@@ -615,38 +630,21 @@ static T CreateGeneric(LogicalDevice device, const auto&& desc) {
   return handle;
 }
 
-RenderPass LogicalDevice::CreateRenderPass(RenderPassDesc&& desc) {
-  LOG("# CreateRenderPass... ");
-
-  auto renderPass = RenderPass::Acquire();
-  auto state = renderPass.pState();
-
-  state->pAllocator = DefaultAllocator(desc.pAllocator);
-  state->logicalDevice = *this;
-
-  LOG("Creating... ");
-  state->result = vkCreateRenderPass(handle(),
-                                     &desc.createInfo.vk(),
-                                     state->pAllocator,
-                                     renderPass.pHandle());
-  CHECK_RESULT(renderPass);
-
-  LOG("Setting DebugName... ");
-  state->result = SetDebugInfo(
-      handle(),
+RenderPass LogicalDevice::CreateRenderPass(RenderPassDesc&& desc) const {
+  return CreateGeneric<RenderPass, VkRenderPass, VkRenderPassCreateInfo>(
+      *this,
       VK_OBJECT_TYPE_RENDER_PASS,
-      (uint64_t)renderPass.handle(),
-      desc.debugName);
-  CHECK_RESULT(renderPass);
-
-  LOG("%s\n\n", string_VkResult(renderPass.Result()));
-  return renderPass;
+      vkCreateRenderPass,
+      desc);
 }
 
-Queue LogicalDevice::GetQueue(QueueDesc&& desc) {
-  LOG("# Queue... ");
+Queue LogicalDevice::GetQueue(QueueDesc&& desc) const {
+  LOG("# %s... ", desc.debugName);
 
   auto queue = Queue::Acquire();
+  auto state = queue.pState();
+
+  state->logicalDevice = *this;
 
   LOG("Getting... ");
   vkGetDeviceQueue(
@@ -666,37 +664,43 @@ Queue LogicalDevice::GetQueue(QueueDesc&& desc) {
   return queue;
 }
 
-CommandPool LogicalDevice::CreateCommandPool(CommandPoolDesc&& desc) {
-  LOG("# CreateCommandPool... ");
-
-  auto commandPool = CommandPool::Acquire();
-  auto state = commandPool.pState();
-
-  state->pAllocator = DefaultAllocator(desc.pAllocator);
-  state->logicalDevice = *this;
-
-  LOG("Creating... ");
-  state->result = vkCreateCommandPool(handle(),
-                                      &desc.createInfo.vk(),
-                                      state->pAllocator,
-                                      commandPool.pHandle());
-  CHECK_RESULT(commandPool);
-
-  LOG("Setting DebugName... ");
-  state->result = SetDebugInfo(
-      handle(),
+CommandPool LogicalDevice::CreateCommandPool(CommandPoolDesc&& desc) const {
+  return CreateGeneric<CommandPool, VkCommandPool, VkCommandPoolCreateInfo>(
+      *this,
       VK_OBJECT_TYPE_COMMAND_POOL,
-      (uint64_t)commandPool.handle(),
-      desc.debugName);
-  CHECK_RESULT(commandPool);
+      vkCreateCommandPool,
+      desc);
+}
 
-  LOG("%s\n\n", string_VkResult(commandPool.Result()));
-  return commandPool;
+QueryPool LogicalDevice::CreateQueryPool(QueryPoolDesc&& desc) const {
+  return CreateGeneric<QueryPool, VkQueryPool, VkQueryPoolCreateInfo>(
+      *this,
+      VK_OBJECT_TYPE_QUERY_POOL,
+      vkCreateQueryPool,
+      desc);
+}
+
+DescriptorPool LogicalDevice::CreateDescriptorPool(DescriptorPoolDesc&& desc) const {
+  return CreateGeneric<DescriptorPool, VkDescriptorPool, VkDescriptorPoolCreateInfo>(
+      *this,
+      VK_OBJECT_TYPE_DESCRIPTOR_POOL,
+      vkCreateDescriptorPool,
+      desc);
+}
+
+Sampler LogicalDevice::CreateSampler(SamplerDesc&& desc) {
+  // todo step through pnext and apply to end
+  desc.createInfo.pNext.p = desc.pReductionModeCreateInfo.p;
+  return CreateGeneric<Sampler, VkSampler, VkSamplerCreateInfo>(
+      *this,
+      VK_OBJECT_TYPE_SAMPLER,
+      vkCreateSampler,
+      desc);
 }
 
 const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
-    const VkAllocationCallbacks* pAllocator) {
-  return pAllocator == nullptr ? pState()->pAllocator : pAllocator;
+    const VkAllocationCallbacks* pAllocator) const {
+  return pAllocator == nullptr ? state().pAllocator : pAllocator;
 }
 
 CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) {
