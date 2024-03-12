@@ -22,6 +22,169 @@
 using namespace Mid;
 using namespace Mid::Vk;
 
+/* FreeStack */
+template <typename T, size_t Capacity>
+struct FreeStack {
+  constexpr static T LastIndex = (1 << 8 * sizeof(T)) - 1;
+  static_assert(Capacity <= LastIndex + 1);
+
+  T current{Capacity - 1};
+  T data[Capacity]{};
+
+  FreeStack() {
+    ASSERT(current <= LastIndex && "Trying to create handle stack with capacity greater than type supports.");
+    for (size_t i = 0; i < Capacity; ++i) {
+      data[i] = (T)i;
+    }
+  }
+
+  T Pop() {
+    ASSERT(current >= 0 && "Trying to pop handle stack below 0.");
+    return data[current--];
+  }
+
+  void Push(T value) {
+    ASSERT(current != LastIndex && "Tring to push handle stack above capacity.");
+    data[++current] = value;
+  }
+};
+
+/* ArenaPool */
+template <typename TBufferIndex, size_t SlotMaxSize, size_t Capacity>
+struct ArenaPool {
+  constexpr static TBufferIndex LastBufferIndex = (1 << 8 * sizeof(TBufferIndex)) - 1;
+  static_assert(Capacity <= LastBufferIndex + 1);
+
+  size_t       slotCount{};
+  uint8_t      buffer[Capacity]{};
+  TBufferIndex bufferIndex{};
+  TBufferIndex freeSlotIndices[SlotMaxSize]{};
+
+  ArenaPool() {
+    for (size_t i = 0; i < SlotMaxSize; ++i) {
+      freeSlotIndices[i] = LastBufferIndex;
+    }
+  }
+
+  TBufferIndex Pop(size_t size) {
+    ASSERT(size < SlotMaxSize && "Trying to pop state size larger than MVK_STATE_MAX_SIZE.");
+
+    slotCount++;
+    LOG("Popping slot %llu buffer %d... ", slotCount, bufferIndex);
+
+    if (freeSlotIndices[size] == LastBufferIndex) {
+      ASSERT(bufferIndex + size < Capacity && "Trying to pop beyond MVK_STATE_CAPACITY.");
+      LOG("New slot at %d... ", bufferIndex);
+      TBufferIndex poppedIndex = bufferIndex;
+      bufferIndex += size;
+      return poppedIndex;
+    }
+
+    TBufferIndex* pFreeSlotIndex = &freeSlotIndices[size];
+    TBufferIndex* pPriorFreeSlotIndex = pFreeSlotIndex;
+
+    while (*pFreeSlotIndex != LastBufferIndex) {
+      LOG("Checking slot at %d... ", *pFreeSlotIndex);
+      pPriorFreeSlotIndex = pFreeSlotIndex;
+      pFreeSlotIndex = (TBufferIndex*)(buffer + *pFreeSlotIndex);
+    }
+    *pPriorFreeSlotIndex = LastBufferIndex;
+    LOG("Popped slot index %d... ", *pFreeSlotIndex);
+    return *pFreeSlotIndex;
+  }
+
+  void Push(TBufferIndex index, size_t size) {
+    ASSERT(size < SlotMaxSize && "Trying to push state size larger than MVK_STATE_MAX_SIZE.");
+    ASSERT(index < Capacity && "Trying to push state after buffer range.");
+
+    slotCount--;
+    LOG("Pushing slot %llu buffer %d... ", slotCount, index);
+
+    void* bufferPtr = buffer + index;
+    *(TBufferIndex*)bufferPtr = LastBufferIndex;
+
+    if (freeSlotIndices[size] == LastBufferIndex) {
+      LOG("Pushed first free slot index... ");
+      freeSlotIndices[size] = index;
+      return;
+    }
+
+    TBufferIndex* pFreeSlotIndex = &freeSlotIndices[size];
+    while (*pFreeSlotIndex != LastBufferIndex) {
+      LOG("Checking slot at %d... ", *pFreeSlotIndex);
+      pFreeSlotIndex = (TBufferIndex*)(buffer + *pFreeSlotIndex);
+    }
+    LOG("Pushing to index %d... ", index);
+    *pFreeSlotIndex = index;
+  }
+};
+
+/* HandleBase */
+constexpr static size_t           MaxHandleGenerations = (1 << 8 * sizeof(HandleGeneration));
+constexpr static HandleGeneration HandleGenerationLastIndex = MaxHandleGenerations - 1;
+constexpr static size_t           MaxHandles = (1 << 8 * sizeof(HandleIndex));
+constexpr static HandleIndex      HandleLastIndex = (1 << 8 * sizeof(HandleIndex)) - 1;
+
+typedef uint16_t PoolIndex;
+#define MVK_STATE_POOL_CAPACITY 65536
+#define MVK_STATE_MAX_SIZE 4096
+
+static Handle                                                            handles[MaxHandles]{};
+static HandleGeneration                                                  generations[MaxHandles]{};
+static FreeStack<HandleIndex, MaxHandles>                                freeHandleIndexStack{};
+static PoolIndex                                                         states[MaxHandles]{};
+static ArenaPool<PoolIndex, MVK_STATE_MAX_SIZE, MVK_STATE_POOL_CAPACITY> statePool{};
+
+template <typename Derived, typename THandle, typename TState>
+THandle* HandleBase<Derived, THandle, TState>::pHandle() {
+  ASSERT(IsValid() && "Trying to get handle with wrong generation!");
+  return (THandle*)&handles[handleIndex];
+}
+template <typename Derived, typename THandle, typename TState>
+TState* HandleBase<Derived, THandle, TState>::pState() {
+  ASSERT(IsValid() && "Trying to get state with wrong generation!");
+  PoolIndex poolIndex = states[handleIndex];
+  return (TState*)(statePool.buffer + poolIndex);
+}
+template <typename Derived, typename THandle, typename TState>
+const THandle& HandleBase<Derived, THandle, TState>::handle() const {
+  ASSERT(IsValid() && "Trying to get handle with wrong generation!");
+  return *(THandle*)&handles[handleIndex];
+}
+template <typename Derived, typename THandle, typename TState>
+const TState& HandleBase<Derived, THandle, TState>::state() const {
+  ASSERT(IsValid() && "Trying to get state with wrong generation!");
+  PoolIndex poolIndex = states[handleIndex];
+  return *(TState*)(statePool.buffer + poolIndex);
+}
+template <typename Derived, typename THandle, typename TState>
+Derived HandleBase<Derived, THandle, TState>::Acquire() {
+  const auto handleIndex = freeHandleIndexStack.Pop();
+  const auto generation = generations[handleIndex];
+  const auto poolIndex = statePool.Pop(sizeof(TState));
+  states[handleIndex] = poolIndex;
+  new (statePool.buffer + poolIndex) TState;
+  MVK_LOG("Acquiring index %d generation %d... ", handleIndex, generation);
+  return Derived{handleIndex, generation};
+}
+template <typename Derived, typename THandle, typename TState>
+void HandleBase<Derived, THandle, TState>::Release() const {
+  const auto generation = generations[handleIndex];
+  ASSERT(generation != HandleGenerationLastIndex && "Max handle generations reached.");
+  ++generations[handleIndex];
+  freeHandleIndexStack.Push(handleIndex);
+  PoolIndex poolIndex = states[handleIndex];
+  statePool.Push(poolIndex, sizeof(TState));
+}
+template <typename Derived, typename THandle, typename TState>
+VkResult HandleBase<Derived, THandle, TState>::Result() const {
+  return state().result;
+}
+template <typename Derived, typename THandle, typename TState>
+bool HandleBase<Derived, THandle, TState>::IsValid() const {
+  return generations[handleIndex] == handleGeneration;
+}
+
 VkString Vk::string_Support(Support support) {
   switch (support) {
   case Support::Optional:
@@ -99,7 +262,7 @@ Instance Instance::Create(InstanceDesc&& desc) {
   if (desc.debugUtilsMessengerCreateInfo.pfnUserCallback == nullptr)
     desc.debugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
 
-  auto t =  instance.handle();
+  auto t = instance.handle();
 
   state->result = PFN.CreateDebugUtilsMessengerEXT(
       instance.handle(),

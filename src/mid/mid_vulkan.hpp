@@ -626,168 +626,23 @@ struct ComputePipeline {
   constexpr operator VkPipeline() const { return handle; }
 };
 
-typedef uint64_t Handle;
-typedef uint8_t HandleIndex;
-typedef uint8_t HandleGeneration;
-#define MAX_HANDLES 256
-
-#define MVK_HANDLE_INDEX_TYPE uint8_t
-#define MVK_HANDLE_CAPACITY 16
-constexpr static MVK_HANDLE_INDEX_TYPE HandleLastIndex = (1 << 8 * sizeof(MVK_HANDLE_INDEX_TYPE)) - 1;
-static_assert(MVK_HANDLE_CAPACITY <= 1 << (8 * sizeof(MVK_HANDLE_INDEX_TYPE)));
-
-#define MVK_HANDLE_GENERATION_TYPE uint8_t
-constexpr static MVK_HANDLE_GENERATION_TYPE HandleGenerationLastIndex = (1 << 8 * sizeof(MVK_HANDLE_GENERATION_TYPE)) - 1;
-
-template <typename T, size_t N>
-struct HandleStack {
-  T current{N - 1};
-  T data[N]{};
-
-  T Pop() {
-    MVK_ASSERT(current >= 0 && "Trying to pop handle stack below 0.");
-    return data[current--];
-  }
-
-  void Push(T value) {
-    MVK_ASSERT(current != HandleLastIndex && "Tring to push handle stack above capacity.");
-    data[++current] = value;
-  }
-
-  HandleStack() {
-    MVK_ASSERT(current <= HandleLastIndex && "Trying to create handle stack with capacity greater than type supports.");
-    for (size_t i = 0; i < N; ++i) {
-      data[i] = (T)i;
-    }
-  }
-};
-
-#define MVK_STATE_POOL_CAPACITY 65536
-#define MVK_STATE_MAX_SIZE 4096
-static_assert(MVK_STATE_POOL_CAPACITY <= UINT16_MAX + 1);
-typedef uint16_t PoolIndex;
-struct DynamicPool {
-  MVK_HANDLE_INDEX_TYPE slotCount{};
-  uint8_t buffer[MVK_STATE_POOL_CAPACITY]{};
-  PoolIndex bufferIndex{};
-  PoolIndex freeSlotIndices[MVK_STATE_MAX_SIZE]{};
-
-  PoolIndex Pop(size_t size) {
-    MVK_ASSERT(size < MVK_STATE_MAX_SIZE && "Trying to pop state size larger than MVK_STATE_MAX_SIZE.");
-
-    slotCount++;
-    MVK_LOG("Popping slot %d buffer %d... ", slotCount, bufferIndex);
-
-    if (freeSlotIndices[size] == UINT16_MAX) {
-      MVK_ASSERT(bufferIndex + size < MVK_STATE_POOL_CAPACITY && "Trying to pop beyond MVK_STATE_CAPACITY.");
-      MVK_LOG("New slot at %d... ", bufferIndex);
-      PoolIndex poppedIndex = bufferIndex;
-      bufferIndex += size;
-      return poppedIndex;
-    }
-
-    PoolIndex* pFreeSlotIndex = &freeSlotIndices[size];
-    PoolIndex* pPriorFreeSlotIndex = pFreeSlotIndex;;
-    while (*pFreeSlotIndex != UINT16_MAX) {
-      MVK_LOG("Checking slot at %d... ", *pFreeSlotIndex);
-      pPriorFreeSlotIndex = pFreeSlotIndex;
-      pFreeSlotIndex = (PoolIndex*)(buffer + *pFreeSlotIndex);
-    }
-    *pPriorFreeSlotIndex = UINT16_MAX;
-    MVK_LOG("Popped slot index %d... ", *pFreeSlotIndex);
-    return *pFreeSlotIndex;
-  }
-
-  void Push(PoolIndex index, size_t size) {
-    MVK_ASSERT(size < MVK_STATE_MAX_SIZE && "Trying to push state size larger than MVK_STATE_MAX_SIZE.");
-    MVK_ASSERT(index < MVK_STATE_POOL_CAPACITY && "Trying to push state after buffer range.");
-
-    slotCount--;
-    MVK_LOG("Pushing slot %d buffer %d... ", slotCount, index);
-
-    void* bufferPtr = buffer + index;
-    *(PoolIndex*)bufferPtr = UINT16_MAX;
-
-    if (freeSlotIndices[size] == UINT16_MAX) {
-      MVK_LOG("Pushed first free slot index... ");
-      freeSlotIndices[size] = index;
-      return;
-    }
-
-    PoolIndex* pFreeSlotIndex = &freeSlotIndices[size];
-    while (*pFreeSlotIndex != UINT16_MAX) {
-      MVK_LOG("Checking slot at %d... ", *pFreeSlotIndex);
-      pFreeSlotIndex = (PoolIndex*)(buffer + *pFreeSlotIndex);
-    }
-    MVK_LOG("Pushing to index %d... ");
-    *pFreeSlotIndex = index;
-  }
-
-  DynamicPool() {
-    for (size_t i = 0; i < MVK_STATE_MAX_SIZE; ++i) {
-      freeSlotIndices[i] = UINT16_MAX;
-    }
-  }
-};
-
-
-static inline Handle handles2[MAX_HANDLES]{};
-static inline HandleGeneration generations2[MAX_HANDLES]{};
-static inline HandleStack<HandleIndex, MAX_HANDLES> freeHandleIndexStack;
-static inline PoolIndex states2[MAX_HANDLES]{};
-static inline DynamicPool statePool;
+typedef uint64_t                  Handle;
+typedef uint8_t                   HandleIndex; // 256 handles?
+typedef uint8_t                   HandleGeneration; // is 256 generations really enough?
 
 template <typename Derived, typename THandle, typename TState>
 struct HandleBase {
   HandleIndex      handleIndex{};
   HandleGeneration handleGeneration{};
 
-  THandle* pHandle() {
-    MVK_ASSERT(IsValid() && "Trying to get handle with wrong generation!");
-    return (THandle*)&handles2[handleIndex];
-  }
-  TState* pState() {
-    MVK_ASSERT(IsValid() && "Trying to get state with wrong generation!");
-    PoolIndex poolIndex = states2[handleIndex];
-    return (TState*)(statePool.buffer + poolIndex);
-  }
-
-  const THandle& handle() const {
-    MVK_ASSERT(IsValid() && "Trying to get handle with wrong generation!");
-    return *(THandle*)&handles2[handleIndex];
-  }
-  const TState& state() const {
-    MVK_ASSERT(IsValid() && "Trying to get state with wrong generation!");
-    PoolIndex poolIndex = states2[handleIndex];
-    return *(TState*)(statePool.buffer + poolIndex);
-  }
-
-  static Derived Acquire() {
-    const auto handleIndex = freeHandleIndexStack.Pop();
-    const auto generation = generations2[handleIndex];
-    const auto poolIndex = statePool.Pop(sizeof(TState));
-    states2[handleIndex] = poolIndex;
-    new (statePool.buffer + poolIndex) TState;
-    MVK_LOG("Acquiring index %d generation %d... ", handleIndex, generation);
-    return Derived{handleIndex, generation};
-  }
-
-  void Release() const {
-    const auto generation = generations2[handleIndex];
-    MVK_ASSERT(generation != HandleGenerationLastIndex && "Max handle generations reached.");
-    ++generations2[handleIndex];
-    freeHandleIndexStack.Push(handleIndex);
-    PoolIndex poolIndex = states2[handleIndex];
-    statePool.Push(poolIndex, sizeof(TState));
-  }
-
-  VkResult Result() const {
-    return state().result;
-  }
-
-  bool IsValid() const {
-    return generations2[handleIndex] == handleGeneration;
-  }
+  THandle*       pHandle();
+  TState*        pState();
+  const THandle& handle() const;
+  const TState&  state() const;
+  static Derived Acquire();
+  void           Release() const;
+  VkResult       Result() const;
+  bool           IsValid() const;
 };
 
 struct PhysicalDevice;
