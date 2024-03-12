@@ -23,47 +23,46 @@ using namespace Mid;
 using namespace Mid::Vk;
 
 /* FreeStack */
-template <typename T, size_t Capacity>
-struct FreeStack {
-  constexpr static T LastIndex = (1 << 8 * sizeof(T)) - 1;
+template <typename TIndex, size_t Capacity>
+struct FreeIndexStack {
+  constexpr static TIndex LastIndex = (1 << 8 * sizeof(TIndex)) - 1;
   static_assert(Capacity <= LastIndex + 1);
 
-  T current{Capacity - 1};
-  T data[Capacity]{};
+  TIndex current{Capacity - 1};
+  TIndex data[Capacity]{};
 
-  FreeStack() {
+  FreeIndexStack() {
     ASSERT(current <= LastIndex && "Trying to create handle stack with capacity greater than type supports.");
     for (size_t i = 0; i < Capacity; ++i) {
-      data[i] = (T)i;
+      data[i] = (TIndex)i;
     }
   }
 
-  T Pop() {
+  TIndex Pop() {
     ASSERT(current >= 0 && "Trying to pop handle stack below 0.");
     return data[current--];
   }
 
-  void Push(T value) {
+  void Push(TIndex value) {
     ASSERT(current != LastIndex && "Tring to push handle stack above capacity.");
     data[++current] = value;
   }
 };
 
 /* ArenaPool */
-template <typename TBufferIndex, size_t SlotMaxSize, size_t Capacity>
+template <typename TBufferIndex, size_t SlotMaxSize, size_t BufferCapacity>
 struct ArenaPool {
-  constexpr static TBufferIndex LastBufferIndex = (1 << 8 * sizeof(TBufferIndex)) - 1;
-  static_assert(Capacity <= LastBufferIndex + 1);
+  constexpr static size_t LastBufferIndex = (1ULL << 8 * sizeof(TBufferIndex)) - 1;
+  static_assert(BufferCapacity <= LastBufferIndex + 1);
 
   size_t       slotCount{};
-  uint8_t      buffer[Capacity]{};
+  uint8_t      buffer[BufferCapacity]{};
   TBufferIndex bufferIndex{};
   TBufferIndex freeSlotIndices[SlotMaxSize]{};
 
   ArenaPool() {
-    for (size_t i = 0; i < SlotMaxSize; ++i) {
+    for (size_t i = 0; i < SlotMaxSize; ++i)
       freeSlotIndices[i] = LastBufferIndex;
-    }
   }
 
   TBufferIndex Pop(size_t size) {
@@ -73,7 +72,7 @@ struct ArenaPool {
     LOG("Popping slot %llu buffer %d... ", slotCount, bufferIndex);
 
     if (freeSlotIndices[size] == LastBufferIndex) {
-      ASSERT(bufferIndex + size < Capacity && "Trying to pop beyond MVK_STATE_CAPACITY.");
+      ASSERT(bufferIndex + size < BufferCapacity && "Trying to pop beyond MVK_STATE_CAPACITY.");
       LOG("New slot at %d... ", bufferIndex);
       TBufferIndex poppedIndex = bufferIndex;
       bufferIndex += size;
@@ -95,7 +94,7 @@ struct ArenaPool {
 
   void Push(TBufferIndex index, size_t size) {
     ASSERT(size < SlotMaxSize && "Trying to push state size larger than MVK_STATE_MAX_SIZE.");
-    ASSERT(index < Capacity && "Trying to push state after buffer range.");
+    ASSERT(index < BufferCapacity && "Trying to push state after buffer range.");
 
     slotCount--;
     LOG("Pushing slot %llu buffer %d... ", slotCount, index);
@@ -123,42 +122,48 @@ struct ArenaPool {
 constexpr static size_t           MaxHandleGenerations = (1 << 8 * sizeof(HandleGeneration));
 constexpr static HandleGeneration HandleGenerationLastIndex = MaxHandleGenerations - 1;
 constexpr static size_t           MaxHandles = (1 << 8 * sizeof(HandleIndex));
-constexpr static HandleIndex      HandleLastIndex = (1 << 8 * sizeof(HandleIndex)) - 1;
+constexpr static HandleIndex      HandleLastIndex = MaxHandles - 1;
 
-typedef uint16_t PoolIndex;
-#define MVK_STATE_POOL_CAPACITY 65536
-#define MVK_STATE_MAX_SIZE 4096
+typedef uint32_t        PoolIndex;
+constexpr static size_t StaticPoolCapacity = 1024 * 512; // 512kb
+constexpr static size_t StateMaxSize = 4 * 512;          // 4kb
 
-static size_t                                                            handleCount{};
-static Handle                                                            handles[MaxHandles]{};
-static HandleGeneration                                                  generations[MaxHandles]{};
-static FreeStack<HandleIndex, MaxHandles>                                freeHandleIndexStack{};
-static PoolIndex                                                         statePoolIndices[MaxHandles]{};
-static ArenaPool<PoolIndex, MVK_STATE_MAX_SIZE, MVK_STATE_POOL_CAPACITY> statePool{};
+static size_t                                                 handleCount{};
+static Handle                                                 handles[MaxHandles]{};
+static HandleGeneration                                       generations[MaxHandles]{};
+static FreeIndexStack<HandleIndex, MaxHandles>                freeHandleIndexStack{};
+static PoolIndex                                              statePoolIndices[MaxHandles]{};
+static ArenaPool<PoolIndex, StateMaxSize, StaticPoolCapacity> statePool{};
 
-template <typename Derived, typename THandle, typename TState>
+#define HANDLE_TEMPLATE template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 THandle* HandleBase<Derived, THandle, TState>::pHandle() {
   ASSERT(IsValid() && "Trying to get handle with wrong generation!");
   return (THandle*)&handles[handleIndex];
 }
-template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 TState* HandleBase<Derived, THandle, TState>::pState() {
   ASSERT(IsValid() && "Trying to get state with wrong generation!");
   PoolIndex poolIndex = statePoolIndices[handleIndex];
   return (TState*)(statePool.buffer + poolIndex);
 }
-template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 const THandle& HandleBase<Derived, THandle, TState>::handle() const {
   ASSERT(IsValid() && "Trying to get handle with wrong generation!");
   return *(THandle*)&handles[handleIndex];
 }
-template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 const TState& HandleBase<Derived, THandle, TState>::state() const {
   ASSERT(IsValid() && "Trying to get state with wrong generation!");
   PoolIndex poolIndex = statePoolIndices[handleIndex];
   return *(TState*)(statePool.buffer + poolIndex);
 }
-template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 Derived HandleBase<Derived, THandle, TState>::Acquire() {
   const auto handleIndex = freeHandleIndexStack.Pop();
   const auto generation = generations[handleIndex];
@@ -172,7 +177,8 @@ Derived HandleBase<Derived, THandle, TState>::Acquire() {
 
   return Derived{handleIndex, generation};
 }
-template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 void HandleBase<Derived, THandle, TState>::Release() const {
   const auto generation = generations[handleIndex];
   ASSERT(generation != HandleGenerationLastIndex && "Max handle generations reached.");
@@ -186,11 +192,13 @@ void HandleBase<Derived, THandle, TState>::Release() const {
   PoolIndex poolIndex = statePoolIndices[handleIndex];
   statePool.Push(poolIndex, sizeof(TState));
 }
-template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 VkResult HandleBase<Derived, THandle, TState>::Result() const {
   return state().result;
 }
-template <typename Derived, typename THandle, typename TState>
+
+HANDLE_TEMPLATE
 bool HandleBase<Derived, THandle, TState>::IsValid() const {
   return generations[handleIndex] == handleGeneration;
 }

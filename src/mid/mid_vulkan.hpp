@@ -627,8 +627,8 @@ struct ComputePipeline {
 };
 
 typedef uint64_t Handle;
-typedef uint8_t  HandleIndex;      // 256 handles?
-typedef uint8_t  HandleGeneration; // is 256 generations really enough?
+typedef uint16_t HandleIndex; // 65,536 vulkan handles. Could you possibly use more?
+typedef uint8_t  HandleGeneration; // Only 256 generations. They roll over. I guess it's like a generation ring.
 
 template <typename Derived, typename THandle, typename TState>
 struct HandleBase {
