@@ -63,10 +63,10 @@ template <typename T>
 struct ptr {
   const T* p{nullptr};
 
-  constexpr ptr() = default;
   constexpr ptr(T&& value) : p{&value} {}
   constexpr ptr(T* value) : p{value} {}
   constexpr ptr(std::initializer_list<T> l) : p{l.begin()} {}
+  constexpr ptr() = default;
 
   constexpr operator const T*() const { return this; };
   constexpr operator T*() const { return this; };
@@ -641,8 +641,8 @@ typedef uint8_t  HandleGeneration; // Only 256 generations. They roll over. I gu
 
 template <typename Derived, typename THandle, typename TState>
 struct HandleBase {
-  HandleIndex      handleIndex{};
-  HandleGeneration handleGeneration{};
+  HandleIndex      handleIndex;
+  HandleGeneration handleGeneration;
 
   THandle*       pHandle();
   TState*        pState();
@@ -656,6 +656,8 @@ struct HandleBase {
 
 struct PhysicalDevice;
 struct PhysicalDeviceDesc;
+struct Surface;
+struct SurfaceDesc;
 
 /* Instance */
 struct InstanceDesc {
@@ -672,10 +674,12 @@ struct InstanceState {
   VkResult                     result{VK_NOT_READY};
 };
 struct Instance : HandleBase<Instance, VkInstance, InstanceState> {
+  static Instance Create(InstanceDesc&& desc);
+  void            Destroy();
+  Surface         CreateSurface(SurfaceDesc&& desc);
+  PhysicalDevice  CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) const;
+
   const VkAllocationCallbacks* DefaultAllocator(const VkAllocationCallbacks* pAllocator);
-  static Instance              Create(InstanceDesc&& desc);
-  void                         Destroy();
-  PhysicalDevice               CreatePhysicalDevice(const PhysicalDeviceDesc&& desc);
 };
 
 struct LogicalDevice;
@@ -718,6 +722,20 @@ struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDev
   uint32_t      FindQueueIndex(QueueIndexDesc&& desc);
 };
 
+/* PhysicalDevice */
+struct SurfaceDesc {
+  VkString                     debugName{"PhysicalDevice"};
+  const VkAllocationCallbacks* pAllocator{nullptr};
+};
+struct SurfaceState {
+  Instance                     instance;
+  const VkAllocationCallbacks* pAllocator{nullptr};
+  VkResult                     result{VK_NOT_READY};
+};
+struct Surface : HandleBase<Surface, VkSurfaceKHR, SurfaceState> {
+  void Destroy() const;
+};
+
 struct ComputePipelineDesc;
 struct ComputePipeline2;
 struct PipelineLayoutDesc;
@@ -752,7 +770,7 @@ struct LogicalDeviceState {
   // CommandPool*   pDestroyCommandPool;
 };
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
-  void Destroy();
+  void Destroy() const;
 
   RenderPass       CreateRenderPass(RenderPassDesc&& desc) const;
   Queue            GetQueue(QueueDesc&& desc) const;
@@ -781,9 +799,10 @@ struct QueueDesc {
 };
 struct QueueState {
   LogicalDevice logicalDevice;
+  VkResult      result{VK_NOT_READY};
 };
 struct Queue : HandleBase<Queue, VkQueue, QueueState> {
-  void Destroy();
+  void Destroy() const;
 };
 
 /* RenderPass */
@@ -815,8 +834,8 @@ struct CommandPoolState {
   VkResult                     result{VK_NOT_READY};
 };
 struct CommandPool : HandleBase<CommandPool, VkCommandPool, CommandPoolState> {
-  CommandBuffer AllocateCommandBuffer(CommandBufferDesc&& desc);
-  void          Destroy();
+  CommandBuffer AllocateCommandBuffer(CommandBufferDesc&& desc) const;
+  void          Destroy() const;
 };
 
 /* CommandBuffer */

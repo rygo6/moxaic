@@ -10,24 +10,13 @@
 
 using namespace Mid::Vk;
 
+#define ASSERT_HANDLE(handle) assert(handle.Result() == VK_SUCCESS && "#handle != VK_SUCCESS")
+
 Instance instanceHandle;
 
 void Moxaic::Renderer::Init()
 {
-    // auto test = ComputePipelineDesc{
-    //   .debugName{"ComputeCompositePipeline"},
-    //   .createInfos{
-    //     {
-    //       .stage{
-    //         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-    //         // .module = shader,
-    //         .pName = "main"},
-    //       // .layout = sharedVkPipelineLayout,
-    //     },
-    //   },
-    // };
-
-    auto instance = Instance::Create({
+    instance = Instance::Create({
       .createInfo{
         .pApplicationInfo = ApplicationInfo{
           .pApplicationName = "Moxaic",
@@ -70,8 +59,9 @@ void Moxaic::Renderer::Init()
         .messageType{VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT},
       },
     });
+    ASSERT_HANDLE(instance);
 
-    auto physicalDevice = instance.CreatePhysicalDevice({
+    physicalDevice = instance.CreatePhysicalDevice({
       .physicalDeviceFeatures{
         .features{
           .robustBufferAccess = VK_TRUE,
@@ -98,24 +88,26 @@ void Moxaic::Renderer::Init()
         .globalPriorityQuery = VK_TRUE,
       },
     });
+    ASSERT_HANDLE(physicalDevice);
 
+    surface = instance.CreateSurface({.debugName = "MainWindow"});
     Window::Init();
-    VkSurfaceKHR surface;
-    Window::InitSurface(instance.handle(), &surface);
+    Window::InitSurface(instance.handle(), surface.pHandle());
+    ASSERT_HANDLE(surface);
 
     auto graphicsQueueIndex = physicalDevice.FindQueueIndex({
       .graphics = Support::Yes,
       .compute = Support::Yes,
       .transfer = Support::Yes,
       .globalPriority = Support::Yes,
-      .present = surface,
+      .present = surface.handle(),
     });
     auto computeQueueIndex = physicalDevice.FindQueueIndex({
       .graphics = Support::No,
       .compute = Support::Yes,
       .transfer = Support::Yes,
       .globalPriority = Support::Yes,
-      .present = surface,
+      .present = surface.handle(),
     });
     auto transferQueueIndex = physicalDevice.FindQueueIndex({
       .graphics = Support::No,
@@ -125,23 +117,20 @@ void Moxaic::Renderer::Init()
     auto globalQueue = Moxaic::IsCompositor() ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT;
     auto queuePriority = Moxaic::IsCompositor() ? 1.0f : 0.0f;
 
-    auto logicalDevice = physicalDevice.CreateLogicalDevice({
+    logicalDevice = physicalDevice.CreateLogicalDevice({
       .createInfo{
         .pQueueCreateInfos{
           {
-            .pNext = DeviceQueueGlobalPriorityCreateInfo{
-              .globalPriority = globalQueue,
-            },
+            .pNext = DeviceQueueGlobalPriorityCreateInfo{.globalPriority = globalQueue},
             .queueFamilyIndex = graphicsQueueIndex,
             .pQueuePriorities{queuePriority},
           },
           {
-            .pNext = DeviceQueueGlobalPriorityCreateInfo{
-              .globalPriority = globalQueue,
-            },
+            .pNext = DeviceQueueGlobalPriorityCreateInfo{.globalPriority = globalQueue},
             .queueFamilyIndex = computeQueueIndex,
             .pQueuePriorities{queuePriority},
-          }},
+          },
+        },
         .pEnabledExtensionNames{
           VK_KHR_SWAPCHAIN_EXTENSION_NAME,
           VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
@@ -159,15 +148,23 @@ void Moxaic::Renderer::Init()
         },
       },
     });
+    ASSERT_HANDLE(logicalDevice);
 
     auto graphicsQueue = logicalDevice.GetQueue({
       .debugName = "GraphicsQueue",
       .queueIndex = graphicsQueueIndex,
     });
+    ASSERT_HANDLE(graphicsQueue);
     auto computeQueue = logicalDevice.GetQueue({
       .debugName = "ComputeQueue",
       .queueIndex = computeQueueIndex,
     });
+    ASSERT_HANDLE(computeQueue);
+    auto transferQueue = logicalDevice.GetQueue({
+      .debugName = "TransferQueue",
+      .queueIndex = transferQueueIndex,
+    });
+    ASSERT_HANDLE(transferQueue);
 
     constexpr VkFormat ColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
     constexpr VkFormat NormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
@@ -197,6 +194,7 @@ void Moxaic::Renderer::Init()
         },
       },
     });
+    ASSERT_HANDLE(renderPass);
 
     auto graphicsCommandPool = logicalDevice.CreateCommandPool({
       .debugName = "GraphicsCommandPool",
@@ -205,6 +203,7 @@ void Moxaic::Renderer::Init()
         .queueFamilyIndex = graphicsQueueIndex,
       },
     });
+    ASSERT_HANDLE(graphicsCommandPool);
     auto computeCommandPool = logicalDevice.CreateCommandPool({
       .debugName = "GraphicsCommandPool",
       .createInfo = CommandPoolCreateInfo{
@@ -212,13 +211,16 @@ void Moxaic::Renderer::Init()
         .queueFamilyIndex = computeQueueIndex,
       },
     });
+    ASSERT_HANDLE(computeCommandPool);
 
     auto graphicsCommandBuffer = graphicsCommandPool.AllocateCommandBuffer({
       .debugName = "GraphicsCommandBuffer",
     });
+    ASSERT_HANDLE(graphicsCommandBuffer);
     auto computeCommandBuffer = computeCommandPool.AllocateCommandBuffer({
       .debugName = "ComputeCommandBuffer",
     });
+    ASSERT_HANDLE(computeCommandBuffer);
 
     auto queryPool = logicalDevice.CreateQueryPool({
       .debugName = "TimestampeQueryPool",
@@ -227,6 +229,7 @@ void Moxaic::Renderer::Init()
         .queryCount = 2,
       },
     });
+    ASSERT_HANDLE(queryPool);
 
     auto descriptorPool = logicalDevice.CreateDescriptorPool({
       .debugName = "TimestampeQueryPool",
@@ -248,6 +251,7 @@ void Moxaic::Renderer::Init()
         },
       },
     });
+    ASSERT_HANDLE(descriptorPool);
 
     auto linearSampler = logicalDevice.CreateSampler({
       .debugName = "LinearSampler",
@@ -256,6 +260,7 @@ void Moxaic::Renderer::Init()
         .minFilter = VK_FILTER_LINEAR,
       },
     });
+    ASSERT_HANDLE(linearSampler);
     auto nearestSampler = logicalDevice.CreateSampler({
       .debugName = "LinearSampler",
       .createInfo{
@@ -263,6 +268,7 @@ void Moxaic::Renderer::Init()
         .minFilter = VK_FILTER_NEAREST,
       },
     });
+    ASSERT_HANDLE(nearestSampler);
     auto minSampler = logicalDevice.CreateSampler({
       .debugName = "LinearSampler",
       .createInfo{
@@ -273,6 +279,7 @@ void Moxaic::Renderer::Init()
         .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
       },
     });
+    ASSERT_HANDLE(minSampler);
     auto maxSampler = logicalDevice.CreateSampler({
       .debugName = "LinearSampler",
       .createInfo{
@@ -283,10 +290,19 @@ void Moxaic::Renderer::Init()
         .reductionMode = VK_SAMPLER_REDUCTION_MODE_MAX,
       },
     });
+    ASSERT_HANDLE(maxSampler);
 
 
-    MXC_LOG(sizeof(InstanceState));
-    MXC_LOG(sizeof(PhysicalDeviceState));
-    MXC_LOG(sizeof(QueryPoolState));
-
+    // auto test = ComputePipelineDesc{
+    //   .debugName{"ComputeCompositePipeline"},
+    //   .createInfos{
+    //     {
+    //       .stage{
+    //         .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+    //         // .module = shader,
+    //         .pName = "main"},
+    //       // .layout = sharedVkPipelineLayout,
+    //     },
+    //   },
+    // };
 }

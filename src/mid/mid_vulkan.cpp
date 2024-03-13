@@ -25,7 +25,7 @@ using namespace Mid::Vk;
 /* FreeStack */
 template <typename TIndex, size_t Capacity>
 struct FreeIndexStack {
-  constexpr static TIndex LastIndex = (1 << 8 * sizeof(TIndex)) - 1;
+  constexpr static TIndex LastIndex = (1ULL << 8 * sizeof(TIndex)) - 1;
   static_assert(Capacity <= LastIndex + 1);
 
   TIndex current{Capacity - 1};
@@ -119,20 +119,23 @@ struct ArenaPool {
 };
 
 /* HandleBase */
-constexpr static size_t           MaxHandleGenerations = (1 << 8 * sizeof(HandleGeneration));
+constexpr static size_t           MaxHandleGenerations = (1ULL << 8 * sizeof(HandleGeneration));
 constexpr static HandleGeneration HandleGenerationLastIndex = MaxHandleGenerations - 1;
-constexpr static size_t           MaxHandles = (1 << 8 * sizeof(HandleIndex));
+constexpr static size_t           MaxHandles = (1ULL << 8 * sizeof(HandleIndex));
 constexpr static HandleIndex      HandleLastIndex = MaxHandles - 1;
 
 typedef uint32_t        PoolIndex;
 constexpr static size_t StatePoolCapacity = 1024 * 512; // 512kb
-constexpr static size_t StateMaxSize = 1024 * 4;          // 4kb
+constexpr static size_t StateMaxSize = 1024 * 4;        // 4kb
 
-static size_t                                                 handleCount{};
-static Handle                                                 handles[MaxHandles]{};
-static HandleGeneration                                       generations[MaxHandles]{};
-static FreeIndexStack<HandleIndex, MaxHandles>                freeHandleIndexStack{};
-static PoolIndex                                              statePoolIndices[MaxHandles]{};
+static FreeIndexStack<HandleIndex, MaxHandles> freeHandleIndexStack{};
+
+// Hot Data. Stored in a linear pool.
+static Handle           handles[MaxHandles]{};
+static HandleGeneration generations[MaxHandles]{};
+
+// Cold Data. Stored in a packaed ArenaPool. Types of different sizes share the same pool, claiming their slot on a first come first serve basis.
+static PoolIndex                                             statePoolIndices[MaxHandles]{};
 static ArenaPool<PoolIndex, StateMaxSize, StatePoolCapacity> statePool{};
 
 #define HANDLE_TEMPLATE template <typename Derived, typename THandle, typename TState>
@@ -172,8 +175,7 @@ Derived HandleBase<Derived, THandle, TState>::Acquire() {
   statePoolIndices[handleIndex] = poolIndex;
   new (statePool.buffer + poolIndex) TState;
 
-  handleCount++;
-  MVK_LOG("Acquiring handle index %d generation %d total %llu... ", handleIndex, generation, handleCount);
+  MVK_LOG("Acquiring handle index %d generation %d total %llu... ", handleIndex, generation);
 
   return Derived{handleIndex, generation};
 }
@@ -184,8 +186,7 @@ void HandleBase<Derived, THandle, TState>::Release() const {
   ASSERT(generation != HandleGenerationLastIndex && "Max handle generations reached.");
   ++generations[handleIndex];
 
-  handleCount--;
-  MVK_LOG("Releasing handle index %d generation %d total %llu... ", handleIndex, generation, handleCount);
+  MVK_LOG("Releasing handle index %d generation %d total %llu... ", handleIndex, generation);
 
   freeHandleIndexStack.Push(handleIndex);
 
@@ -216,6 +217,10 @@ VkString Vk::string_Support(Support support) {
   }
 }
 
+#define DESTROY_ASSERT                                                             \
+ASSERT(handle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!"); \
+ASSERT(Result() != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
+
 static VkResult SetDebugInfo(
     VkDevice           logicalDevice,
     const VkObjectType objectType,
@@ -242,18 +247,17 @@ static VkBool32 DebugCallback(
   return VK_FALSE;
 }
 
-const VkAllocationCallbacks* Instance::DefaultAllocator(const VkAllocationCallbacks* pAllocator) {
-  return pAllocator == nullptr ? pState()->pAllocator : pAllocator;
-}
+/* Instance */
+template struct HandleBase<Instance, VkInstance, InstanceState>;
 
 Instance Instance::Create(InstanceDesc&& desc) {
   LOG("# %s... ", desc.debugName);
 
   auto instance = Instance::Acquire();
-  auto state = instance.pState();
+  auto s = instance.pState();
 
-  state->applicationInfo = *desc.createInfo.pApplicationInfo.p;
-  state->pAllocator = desc.pAllocator;
+  s->applicationInfo = *desc.createInfo.pApplicationInfo.p;
+  s->pAllocator = desc.pAllocator;
 
   LOG("Creating... ");
   ASSERT(desc.createInfo.pNext.p == nullptr && "Chaining onto VkInstanceCreateInfo.pNext not supported.");
@@ -264,13 +268,13 @@ Instance Instance::Create(InstanceDesc&& desc) {
   for (int i = 0; i < desc.createInfo.pEnabledLayerNames.count; ++i) {
     LOG("Loading %s... ", desc.createInfo.pEnabledLayerNames.p[i]);
   }
-  state->result = vkCreateInstance(&desc.createInfo.vk(), desc.pAllocator, instance.pHandle());
+  s->result = vkCreateInstance(&desc.createInfo.vk(), desc.pAllocator, instance.pHandle());
   CHECK_RESULT(instance);
 
-#define MVK_PFN_FUNCTION(func)                                                       \
-  LOG("Loading PFN_%s... ", "vk" #func);                                             \
-  PFN.func = (PFN_vk##func)vkGetInstanceProcAddr(*instance.pHandle(), "vk" #func);   \
-  state->result = PFN.func == nullptr ? VK_ERROR_INITIALIZATION_FAILED : VK_SUCCESS; \
+#define MVK_PFN_FUNCTION(func)                                                     \
+  LOG("Loading PFN_%s... ", "vk" #func);                                           \
+  PFN.func = (PFN_vk##func)vkGetInstanceProcAddr(*instance.pHandle(), "vk" #func); \
+  s->result = PFN.func == nullptr ? VK_ERROR_INITIALIZATION_FAILED : VK_SUCCESS;   \
   CHECK_RESULT(instance);
 
   MVK_PFN_FUNCTIONS
@@ -280,23 +284,36 @@ Instance Instance::Create(InstanceDesc&& desc) {
   if (desc.debugUtilsMessengerCreateInfo.pfnUserCallback == nullptr)
     desc.debugUtilsMessengerCreateInfo.pfnUserCallback = DebugCallback;
 
-  auto t = instance.handle();
-
-  state->result = PFN.CreateDebugUtilsMessengerEXT(
+  s->result = PFN.CreateDebugUtilsMessengerEXT(
       instance.handle(),
       &desc.debugUtilsMessengerCreateInfo.vk(),
-      state->pAllocator,
-      &state->debugUtilsMessengerEXT);
+      s->pAllocator,
+      &s->debugUtilsMessengerEXT);
   CHECK_RESULT(instance);
 
   LOG("%s\n\n", string_VkResult(instance.Result()));
   return instance;
 }
+
 void Instance::Destroy() {
-  ASSERT(*pHandle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!");
-  ASSERT(pState()->result != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
+  DESTROY_ASSERT
   vkDestroyInstance(*pHandle(), pState()->pAllocator);
   Release();
+}
+
+Surface Instance::CreateSurface(SurfaceDesc&& desc) {
+  LOG("# %s... ", desc.debugName);
+
+  auto surface = Surface::Acquire();
+  auto s = surface.pState();
+
+  s->pAllocator = DefaultAllocator(desc.pAllocator);
+
+  s->instance = *this;
+  s->result = VK_SUCCESS;
+
+  LOG("%s\n\n", string_VkResult(surface.Result()));
+  return surface;
 }
 
 struct VkBoolFeatureStruct {
@@ -304,7 +321,6 @@ struct VkBoolFeatureStruct {
   void*           pNext;
   VkBool32        firstBool;
 };
-
 static bool CheckFeatureBools(
     const VkBoolFeatureStruct* requiredPtr,
     const VkBoolFeatureStruct* supportedPtr,
@@ -321,7 +337,6 @@ static bool CheckFeatureBools(
   }
   return true;
 }
-
 static bool CheckPhysicalDeviceFeatureBools(
     int                         requiredCount,
     const VkBoolFeatureStruct** required,
@@ -336,43 +351,43 @@ static bool CheckPhysicalDeviceFeatureBools(
   return true;
 }
 
-PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
+PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) const {
   LOG("# %s... ", desc.debugName);
 
   auto physicalDevice = PhysicalDevice::Acquire();
-  auto state = physicalDevice.pState();
+  auto s = physicalDevice.pState();
 
-  state->instance = *this;
+  s->instance = *this;
 
   LOG("Getting device count... ");
   uint32_t deviceCount = 0;
-  state->result = vkEnumeratePhysicalDevices(handle(), &deviceCount, nullptr);
+  s->result = vkEnumeratePhysicalDevices(handle(), &deviceCount, nullptr);
   CHECK_RESULT(physicalDevice);
 
   LOG("%d devices found... ", deviceCount);
-  state->result = deviceCount > 0 ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
+  s->result = deviceCount > 0 ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
   CHECK_RESULT(physicalDevice);
 
   LOG("Getting devices... ");
   VkPhysicalDevice devices[deviceCount];
-  state->result = vkEnumeratePhysicalDevices(handle(), &deviceCount, devices);
+  s->result = vkEnumeratePhysicalDevices(handle(), &deviceCount, devices);
   CHECK_RESULT(physicalDevice);
 
   // should these be cpp structs!?
-  state->physicalDeviceGlobalPriorityQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT;
-  state->physicalDeviceGlobalPriorityQueryFeatures.pNext = nullptr;
-  state->physicalDeviceRobustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
-  state->physicalDeviceRobustness2Features.pNext = &state->physicalDeviceGlobalPriorityQueryFeatures;
-  state->physicalDeviceMeshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
-  state->physicalDeviceMeshShaderFeatures.pNext = &state->physicalDeviceRobustness2Features;
-  state->physicalDeviceFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-  state->physicalDeviceFeatures13.pNext = &state->physicalDeviceMeshShaderFeatures;
-  state->physicalDeviceFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-  state->physicalDeviceFeatures12.pNext = &state->physicalDeviceFeatures13;
-  state->physicalDeviceFeatures11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-  state->physicalDeviceFeatures11.pNext = &state->physicalDeviceFeatures12;
-  state->physicalDeviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  state->physicalDeviceFeatures.pNext = &state->physicalDeviceFeatures11;
+  s->physicalDeviceGlobalPriorityQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT;
+  s->physicalDeviceGlobalPriorityQueryFeatures.pNext = nullptr;
+  s->physicalDeviceRobustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
+  s->physicalDeviceRobustness2Features.pNext = &s->physicalDeviceGlobalPriorityQueryFeatures;
+  s->physicalDeviceMeshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
+  s->physicalDeviceMeshShaderFeatures.pNext = &s->physicalDeviceRobustness2Features;
+  s->physicalDeviceFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+  s->physicalDeviceFeatures13.pNext = &s->physicalDeviceMeshShaderFeatures;
+  s->physicalDeviceFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+  s->physicalDeviceFeatures12.pNext = &s->physicalDeviceFeatures13;
+  s->physicalDeviceFeatures11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+  s->physicalDeviceFeatures11.pNext = &s->physicalDeviceFeatures12;
+  s->physicalDeviceFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+  s->physicalDeviceFeatures.pNext = &s->physicalDeviceFeatures11;
 
   const VkBoolFeatureStruct* required[]{
       (VkBoolFeatureStruct*)&desc.physicalDeviceFeatures,
@@ -384,13 +399,13 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
       (VkBoolFeatureStruct*)&desc.physicalDeviceGlobalPriorityQueryFeatures,
   };
   const VkBoolFeatureStruct* supported[]{
-      (VkBoolFeatureStruct*)&state->physicalDeviceFeatures,
-      (VkBoolFeatureStruct*)&state->physicalDeviceFeatures11,
-      (VkBoolFeatureStruct*)&state->physicalDeviceFeatures12,
-      (VkBoolFeatureStruct*)&state->physicalDeviceFeatures13,
-      (VkBoolFeatureStruct*)&state->physicalDeviceMeshShaderFeatures,
-      (VkBoolFeatureStruct*)&state->physicalDeviceRobustness2Features,
-      (VkBoolFeatureStruct*)&state->physicalDeviceGlobalPriorityQueryFeatures,
+      (VkBoolFeatureStruct*)&s->physicalDeviceFeatures,
+      (VkBoolFeatureStruct*)&s->physicalDeviceFeatures11,
+      (VkBoolFeatureStruct*)&s->physicalDeviceFeatures12,
+      (VkBoolFeatureStruct*)&s->physicalDeviceFeatures13,
+      (VkBoolFeatureStruct*)&s->physicalDeviceMeshShaderFeatures,
+      (VkBoolFeatureStruct*)&s->physicalDeviceRobustness2Features,
+      (VkBoolFeatureStruct*)&s->physicalDeviceGlobalPriorityQueryFeatures,
   };
   const size_t structSize[]{
       sizeof(desc.physicalDeviceFeatures),
@@ -403,14 +418,14 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   };
   constexpr int requiredCount = sizeof(required) / sizeof(required[0]);
 
-  state->physicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
-  state->physicalDeviceMeshShaderProperties.pNext = nullptr;
-  state->physicalDeviceSubgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
-  state->physicalDeviceSubgroupProperties.pNext = &state->physicalDeviceMeshShaderProperties;
-  state->physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-  state->physicalDeviceProperties.pNext = &state->physicalDeviceSubgroupProperties;
+  s->physicalDeviceMeshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+  s->physicalDeviceMeshShaderProperties.pNext = nullptr;
+  s->physicalDeviceSubgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
+  s->physicalDeviceSubgroupProperties.pNext = &s->physicalDeviceMeshShaderProperties;
+  s->physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+  s->physicalDeviceProperties.pNext = &s->physicalDeviceSubgroupProperties;
 
-  const auto requiredApiVersion = state->instance.pState()->applicationInfo.apiVersion;
+  const auto requiredApiVersion = s->instance.pState()->applicationInfo.apiVersion;
   LOG("Required Vulkan API version %d.%d.%d.%d... ",
       VK_API_VERSION_VARIANT(requiredApiVersion),
       VK_API_VERSION_MAJOR(requiredApiVersion),
@@ -420,23 +435,23 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   int chosenDeviceIndex = -1;
   for (int deviceIndex = 0; deviceIndex < deviceCount; ++deviceIndex) {
     LOG("Getting Physical Device Index %d Properties... ");
-    vkGetPhysicalDeviceProperties2(devices[deviceIndex], &state->physicalDeviceProperties);
-    if (state->physicalDeviceProperties.properties.apiVersion < requiredApiVersion) {
+    vkGetPhysicalDeviceProperties2(devices[deviceIndex], &s->physicalDeviceProperties);
+    if (s->physicalDeviceProperties.properties.apiVersion < requiredApiVersion) {
       LOG("PhysicalDevice %s didn't support Vulkan API version %d.%d.%d.%d it only supports %d.%d.%d.%d... ",
-          state->physicalDeviceProperties.properties.deviceName,
+          s->physicalDeviceProperties.properties.deviceName,
           VK_API_VERSION_VARIANT(requiredApiVersion),
           VK_API_VERSION_MAJOR(requiredApiVersion),
           VK_API_VERSION_MINOR(requiredApiVersion),
           VK_API_VERSION_PATCH(requiredApiVersion),
-          VK_API_VERSION_VARIANT(state->physicalDeviceProperties.properties.apiVersion),
-          VK_API_VERSION_MAJOR(state->physicalDeviceProperties.properties.apiVersion),
-          VK_API_VERSION_MINOR(state->physicalDeviceProperties.properties.apiVersion),
-          VK_API_VERSION_PATCH(state->physicalDeviceProperties.properties.apiVersion));
+          VK_API_VERSION_VARIANT(s->physicalDeviceProperties.properties.apiVersion),
+          VK_API_VERSION_MAJOR(s->physicalDeviceProperties.properties.apiVersion),
+          VK_API_VERSION_MINOR(s->physicalDeviceProperties.properties.apiVersion),
+          VK_API_VERSION_PATCH(s->physicalDeviceProperties.properties.apiVersion));
       continue;
     }
 
-    printf("Getting %s Physical Device Features... ", state->physicalDeviceProperties.properties.deviceName);
-    vkGetPhysicalDeviceFeatures2(devices[deviceIndex], &state->physicalDeviceFeatures);
+    printf("Getting %s Physical Device Features... ", s->physicalDeviceProperties.properties.deviceName);
+    vkGetPhysicalDeviceFeatures2(devices[deviceIndex], &s->physicalDeviceFeatures);
 
     if (!CheckPhysicalDeviceFeatureBools(requiredCount, required, supported, structSize))
       continue;
@@ -447,11 +462,11 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
 
   if (chosenDeviceIndex == -1) {
     LOG("No suitable PhysicalDevice found!");
-    state->result = VK_ERROR_INITIALIZATION_FAILED;
+    s->result = VK_ERROR_INITIALIZATION_FAILED;
   } else {
-    LOG("Picking Device %d %s... ", chosenDeviceIndex, state->physicalDeviceProperties.properties.deviceName);
+    LOG("Picking Device %d %s... ", chosenDeviceIndex, s->physicalDeviceProperties.properties.deviceName);
     *physicalDevice.pHandle() = devices[chosenDeviceIndex];
-    state->result = VK_SUCCESS;
+    s->result = VK_SUCCESS;
   }
   CHECK_RESULT(physicalDevice);
 
@@ -461,29 +476,36 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) {
   }
 
   LOG("Getting Physical Device Memory Properties... ");
-  vkGetPhysicalDeviceMemoryProperties(physicalDevice.handle(), &state->physicalDeviceMemoryProperties);
+  vkGetPhysicalDeviceMemoryProperties(physicalDevice.handle(), &s->physicalDeviceMemoryProperties);
 
   LOG("Getting queue family count... ");
-  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice.handle(), &state->queueFamilyCount, nullptr);
+  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice.handle(), &s->queueFamilyCount, nullptr);
 
-  LOG("%d queue families found... ", state->queueFamilyCount);
-  state->result = state->queueFamilyCount > 0 ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
+  LOG("%d queue families found... ", s->queueFamilyCount);
+  s->result = s->queueFamilyCount > 0 ? VK_SUCCESS : VK_ERROR_INITIALIZATION_FAILED;
   CHECK_RESULT(physicalDevice);
 
   LOG("Getting queue families... ");
-  for (uint32_t i = 0; i < state->queueFamilyCount; ++i) {
-    state->queueFamilyGlobalPriorityProperties[i] = {
+  for (uint32_t i = 0; i < s->queueFamilyCount; ++i) {
+    s->queueFamilyGlobalPriorityProperties[i] = {
         .sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_GLOBAL_PRIORITY_PROPERTIES_EXT};
-    state->queueFamilyProperties[i] = {
+    s->queueFamilyProperties[i] = {
         .sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2,
-        .pNext = &state->queueFamilyGlobalPriorityProperties[i],
+        .pNext = &s->queueFamilyGlobalPriorityProperties[i],
     };
   }
-  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice.handle(), &state->queueFamilyCount, state->queueFamilyProperties);
+  vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice.handle(), &s->queueFamilyCount, s->queueFamilyProperties);
 
   LOG("%s\n\n", string_VkResult(physicalDevice.Result()));
   return physicalDevice;
 }
+
+const VkAllocationCallbacks* Instance::DefaultAllocator(const VkAllocationCallbacks* pAllocator) {
+  return pAllocator == nullptr ? pState()->pAllocator : pAllocator;
+}
+
+/* PhysicalDevice */
+template struct HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDeviceState>;
 
 void PhysicalDevice::Destroy() {
   ASSERT(*pHandle() != VK_NULL_HANDLE && "Trying to destroy null PhysicalDevice handle!");
@@ -496,10 +518,10 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
   LOG("# %s... ", desc.debugName);
 
   auto logicalDevice = LogicalDevice::Acquire();
-  auto state = logicalDevice.pState();
+  auto s = logicalDevice.pState();
 
-  state->pAllocator = pState()->instance.DefaultAllocator(desc.pAllocator);
-  state->physicalDevice = *this;
+  s->pAllocator = pState()->instance.DefaultAllocator(desc.pAllocator);
+  s->physicalDevice = *this;
 
   LOG("Creating... ");
   ASSERT(desc.createInfo.pNext.p == nullptr &&
@@ -510,15 +532,15 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
          "LogicalDeviceDesc.createInfo.pEnabledFeatures should be nullptr. "
          "Internally VkPhysicalDeviceFeatures2 is used from PhysicalDevice.");
   desc.createInfo.pNext.p = &pState()->physicalDeviceFeatures;
-  state->result = vkCreateDevice(
+  s->result = vkCreateDevice(
       handle(),
       &desc.createInfo.vk(),
-      state->pAllocator,
+      s->pAllocator,
       logicalDevice.pHandle());
   CHECK_RESULT(logicalDevice);
 
   LOG("Setting LogicalDevice DebugName... ");
-  state->result = SetDebugInfo(
+  s->result = SetDebugInfo(
       logicalDevice.handle(),
       VK_OBJECT_TYPE_DEVICE,
       (uint64_t)logicalDevice.handle(),
@@ -527,16 +549,16 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
 
   // Set debug on physical device and instance now that we can...
   LOG("Setting PhysicalDevice DebugName... ");
-  state->result = SetDebugInfo(
+  s->result = SetDebugInfo(
       logicalDevice.handle(),
       VK_OBJECT_TYPE_PHYSICAL_DEVICE,
       (uint64_t)handle(),
-      state->physicalDevice.pState()->physicalDeviceProperties.properties.deviceName);
+      s->physicalDevice.pState()->physicalDeviceProperties.properties.deviceName);
   CHECK_RESULT(logicalDevice);
 
   LOG("Setting Instance DebugName... ");
-  auto instance = state->physicalDevice.pState()->instance;
-  state->result = SetDebugInfo(
+  auto instance = s->physicalDevice.pState()->instance;
+  s->result = SetDebugInfo(
       logicalDevice.handle(),
       VK_OBJECT_TYPE_INSTANCE,
       (uint64_t)instance.handle(),
@@ -597,10 +619,21 @@ uint32_t PhysicalDevice::FindQueueIndex(QueueIndexDesc&& desc) {
   return -1;
 }
 
-void LogicalDevice::Destroy() {
-  ASSERT(*pHandle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!");
-  ASSERT(pState()->result != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
-  vkDestroyDevice(handle(), pState()->pAllocator);
+/* Surface */
+template struct HandleBase<Surface, VkSurfaceKHR, SurfaceState>;
+
+void Surface::Destroy() const {
+  DESTROY_ASSERT
+  vkDestroySurfaceKHR(state().instance.handle(), handle(), state().pAllocator);
+  Release();
+}
+
+/* LogicalDevice */
+template struct HandleBase<LogicalDevice, VkDevice, LogicalDeviceState>;
+
+void LogicalDevice::Destroy() const {
+  DESTROY_ASSERT
+  vkDestroyDevice(handle(), state().pAllocator);
   Release();
 }
 
@@ -613,21 +646,21 @@ static T CreateGeneric(
   LOG("# %s... ", desc.debugName);
 
   auto handle = T::Acquire();
-  auto state = handle.pState();
+  auto s = handle.pState();
 
-  state->pAllocator = device.DefaultAllocator(desc.pAllocator);
-  state->logicalDevice = device;
+  s->pAllocator = device.DefaultAllocator(desc.pAllocator);
+  s->logicalDevice = device;
 
   LOG("Creating... ");
-  state->result = vkCreateFunc(
+  s->result = vkCreateFunc(
       device.handle(),
       &desc.createInfo.vk(),
-      state->pAllocator,
+      s->pAllocator,
       handle.pHandle());
   CHECK_RESULT(handle);
 
   LOG("Setting DebugName... ");
-  state->result = SetDebugInfo(
+  s->result = SetDebugInfo(
       device.handle(),
       objectType,
       (uint64_t)*handle.pHandle(),
@@ -650,9 +683,9 @@ Queue LogicalDevice::GetQueue(QueueDesc&& desc) const {
   LOG("# %s... ", desc.debugName);
 
   auto queue = Queue::Acquire();
-  auto state = queue.pState();
+  auto s = queue.pState();
 
-  state->logicalDevice = *this;
+  s->logicalDevice = *this;
 
   LOG("Getting... ");
   vkGetDeviceQueue(
@@ -667,6 +700,8 @@ Queue LogicalDevice::GetQueue(QueueDesc&& desc) const {
       VK_OBJECT_TYPE_QUEUE,
       (uint64_t)queue.handle(),
       desc.debugName);
+
+  s->result = VK_SUCCESS;
 
   LOG("DONE\n\n");
   return queue;
@@ -711,13 +746,24 @@ const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
   return pAllocator == nullptr ? state().pAllocator : pAllocator;
 }
 
-CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) {
+/* Queue */
+template struct HandleBase<Queue, VkQueue, QueueState>;
+
+void Queue::Destroy() const {
+  DESTROY_ASSERT
+  Release();
+}
+
+/* CommandPool */
+template struct HandleBase<CommandPool, VkCommandPool, CommandPoolState>;
+
+CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) const {
   LOG("# AllocateCommandBuffer... ");
 
   auto commandBuffer = CommandBuffer::Acquire();
-  auto state = commandBuffer.pState();
+  auto s = commandBuffer.pState();
 
-  state->commandPool = *this;
+  s->commandPool = *this;
 
   LOG("Allocating... ");
   ASSERT(desc.allocateInfo.commandBufferCount == 1 &&
@@ -725,15 +771,15 @@ CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) {
   ASSERT(desc.allocateInfo.commandPool == VK_NULL_HANDLE &&
          "CommandPool::AllocateCommandBuffer overrides allocateInfo.commandPool!");
   desc.allocateInfo.commandPool = handle();
-  auto logicalDevice = pState()->logicalDevice;
-  state->result = vkAllocateCommandBuffers(
+  auto logicalDevice = state().logicalDevice;
+  s->result = vkAllocateCommandBuffers(
       logicalDevice.handle(),
       &desc.allocateInfo.vk(),
       commandBuffer.pHandle());
   CHECK_RESULT(commandBuffer);
 
   LOG("Setting DebugName... ");
-  state->result = SetDebugInfo(
+  s->result = SetDebugInfo(
       logicalDevice.handle(),
       VK_OBJECT_TYPE_COMMAND_BUFFER,
       (uint64_t)commandBuffer.handle(),
@@ -742,6 +788,12 @@ CommandBuffer CommandPool::AllocateCommandBuffer(CommandBufferDesc&& desc) {
 
   LOG("%s\n\n", string_VkResult(commandBuffer.Result()));
   return commandBuffer;
+}
+
+void CommandPool::Destroy() const {
+  DESTROY_ASSERT
+  vkDestroyCommandPool(state().logicalDevice.handle(), handle(), state().pAllocator);
+  Release();
 }
 
 // PipelineLayout2 Vk::LogicalDevice::CreatePipelineLayout(
