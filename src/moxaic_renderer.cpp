@@ -130,6 +130,10 @@ void Moxaic::Renderer::Init()
             .queueFamilyIndex = computeQueueIndex,
             .pQueuePriorities{queuePriority},
           },
+          {
+            .queueFamilyIndex = transferQueueIndex,
+            .pQueuePriorities{0},
+          },
         },
         .pEnabledExtensionNames{
           VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -262,7 +266,7 @@ void Moxaic::Renderer::Init()
     });
     ASSERT_HANDLE(linearSampler);
     auto nearestSampler = logicalDevice.CreateSampler({
-      .debugName = "LinearSampler",
+      .debugName = "NearestSampler",
       .createInfo{
         .magFilter = VK_FILTER_NEAREST,
         .minFilter = VK_FILTER_NEAREST,
@@ -270,7 +274,7 @@ void Moxaic::Renderer::Init()
     });
     ASSERT_HANDLE(nearestSampler);
     auto minSampler = logicalDevice.CreateSampler({
-      .debugName = "LinearSampler",
+      .debugName = "MinSampler",
       .createInfo{
         .magFilter = VK_FILTER_NEAREST,
         .minFilter = VK_FILTER_NEAREST,
@@ -281,7 +285,7 @@ void Moxaic::Renderer::Init()
     });
     ASSERT_HANDLE(minSampler);
     auto maxSampler = logicalDevice.CreateSampler({
-      .debugName = "LinearSampler",
+      .debugName = "MaxSampler",
       .createInfo{
         .magFilter = VK_FILTER_NEAREST,
         .minFilter = VK_FILTER_NEAREST,
@@ -291,6 +295,25 @@ void Moxaic::Renderer::Init()
       },
     });
     ASSERT_HANDLE(maxSampler);
+
+    auto image = logicalDevice.CreateImage({
+      .debugName = "CheckerImage",
+      .createInfo = ImageCreateInfo{
+        .format = VK_FORMAT_R8G8B8A8_SRGB,
+        .extent = {800, 600, 1},
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+      },
+      .memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+    });
+    ASSERT_HANDLE(image);
+
+    // auto imageDeviceMemory = logicalDevice.AllocateMemory({
+    //   .debugName = "CheckerImageMemory",
+    //   .allocateInfo = MemoryAllocateInfo{
+    //
+    //   },
+    //
+    // });
 
 
     // auto test = ComputePipelineDesc{

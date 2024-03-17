@@ -1,7 +1,7 @@
 // #define MXC_DISABLE_LOG
 
-#include "main.hpp"
 #include "moxaic_vulkan_device.hpp"
+#include "main.hpp"
 #include "moxaic_logging.hpp"
 #include "moxaic_vulkan.hpp"
 #include "moxaic_vulkan_framebuffer.hpp"
@@ -24,20 +24,21 @@ using namespace Moxaic::Vulkan;
 // From OVR Vulkan example. Is this better/same as vulkan tutorial!?
 static MXC_RESULT MemoryTypeFromProperties(const VkPhysicalDeviceMemoryProperties& physicalDeviceMemoryProperties,
                                            const VkMemoryPropertyFlags& requiredMemoryProperties,
-                                           uint32_t requiredMemoryTypeBits,
+                                           uint32_t supportedMemoryTypeBits,
                                            uint32_t* pMemTypeIndex)
 {
-    for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++) {
-        if ((requiredMemoryTypeBits & 1) == 1) {
-            if ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & requiredMemoryProperties) ==
-                requiredMemoryProperties) {
+    for (uint32_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++) {
+        bool requiredBit = (supportedMemoryTypeBits & 1) == 1;
+        auto flagName = string_VkMemoryPropertyFlags(physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags);
+
+        if (supportedMemoryTypeBits & 1 << i) {
+            if ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & requiredMemoryProperties) == requiredMemoryProperties) {
                 *pMemTypeIndex = i;
                 return MXC_SUCCESS;
             }
         }
-        requiredMemoryTypeBits >>= 1;
     }
-    MXC_LOG_ERROR("Can't find memory type.", requiredMemoryProperties, requiredMemoryTypeBits);
+    MXC_LOG_ERROR("Can't find memory type.", requiredMemoryProperties, supportedMemoryTypeBits);
     return MXC_FAIL;
 }
 

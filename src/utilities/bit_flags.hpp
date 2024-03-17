@@ -12,32 +12,17 @@ namespace Moxaic
             (SetFlag(flags), ...);
         }
 
-        bool None() const
-        {
-            return flags == 0;
-        }
+        bool None() const { return flags == 0; }
 
-        bool ContainsFlag(T flag) const
-        {
-            return (flags & flag) == flag;
-        }
+        bool ContainsFlag(T flag) const { return (flags & flag) == flag; }
 
-        void ToggleFlag(T flag, bool state)
-        {
-            state ? SetFlag(flag) : ClearFlag(flag);
-        }
+        void ToggleFlag(T flag, bool state) { state ? SetFlag(flag) : ClearFlag(flag); }
 
-        constexpr void SetFlag(T flag)
-        {
-            flags = flags | flag;
-        }
+        constexpr void SetFlag(T flag) { flags = flags | flag; }
 
-        void ClearFlag(T flag)
-        {
-            flags = flags & ~flag;
-        }
+        void ClearFlag(T flag) { flags = flags & ~flag; }
 
     private:
         int flags{0};
     };
-}
+}// namespace Moxaic

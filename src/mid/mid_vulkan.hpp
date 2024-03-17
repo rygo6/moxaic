@@ -10,6 +10,14 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 
+#ifdef WIN32
+#include <windows.h>
+
+#include <vulkan/vulkan_win32.h>
+
+#define MVK_EXTERNAL_MEMORY_HANDLE VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT_KHR
+#endif
+
 #ifndef MVK_ASSERT
 #define MVK_ASSERT(command) assert(command)
 #endif
@@ -93,12 +101,19 @@ struct span_pack {
 };
 #pragma pack(pop)
 
-enum class Support {
+enum class Support : uint8_t {
   Optional,
   Yes,
   No,
 };
 VkString string_Support(Support support);
+
+enum class Locality : uint8_t {
+  Local,
+  External,
+  Imported,
+};
+VkString string_Locality(Locality locality);
 
 template <typename T>
 struct VkStruct {
@@ -325,6 +340,39 @@ struct ImageCreateInfo : VkStruct<VkImageCreateInfo> {
   VkImageLayout         initialLayout{VK_IMAGE_LAYOUT_UNDEFINED};
 };
 static_assert(sizeof(ImageCreateInfo) == sizeof(VkImageCreateInfo));
+
+struct ExternalMemoryImageCreateInfo : VkStruct<VkExternalMemoryImageCreateInfo> {
+  VkStructureType                 sType{VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO};
+  ptr_void                        pNext;
+  VkExternalMemoryHandleTypeFlags handleTypes;
+};
+static_assert(sizeof(ExternalMemoryImageCreateInfo) == sizeof(VkExternalMemoryImageCreateInfo));
+
+struct MemoryAllocateInfo : VkStruct<VkMemoryAllocateInfo> {
+  VkStructureType sType{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+  ptr_void        pNext;
+  VkDeviceSize    allocationSize;
+  uint32_t        memoryTypeIndex;
+};
+static_assert(sizeof(MemoryAllocateInfo) == sizeof(VkMemoryAllocateInfo));
+
+struct ExportMemoryAllocateInfo : VkStruct<VkExportMemoryAllocateInfo> {
+  VkStructureType                 sType{VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO};
+  ptr_void                        pNext;
+  VkExternalMemoryHandleTypeFlags handleTypes{MVK_EXTERNAL_MEMORY_HANDLE};
+};
+static_assert(sizeof(ExportMemoryAllocateInfo) == sizeof(VkExportMemoryAllocateInfo));
+
+#ifdef WIN32
+struct ImportMemoryWin32HandleInfo : VkStruct<VkImportMemoryWin32HandleInfoKHR> {
+  VkStructureType                    sType{VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR};
+  ptr_void                           pNext;
+  VkExternalMemoryHandleTypeFlagBits handleType{MVK_EXTERNAL_MEMORY_HANDLE};
+  HANDLE                             handle;
+  LPCWSTR                            name;
+};
+static_assert(sizeof(ImportMemoryWin32HandleInfo) == sizeof(VkImportMemoryWin32HandleInfoKHR));
+#endif
 
 struct DescriptorImageInfo {
   const VkSampler     sampler{VK_NULL_HANDLE};
@@ -665,12 +713,12 @@ struct InstanceDesc {
   InstanceCreateInfo            createInfo;
   ValidationFeatures            validationFeatures;
   DebugUtilsMessengerCreateInfo debugUtilsMessengerCreateInfo;
-  const VkAllocationCallbacks*  pAllocator{nullptr};
+  const VkAllocationCallbacks*  pAllocator;
 };
 struct InstanceState {
   ApplicationInfo              applicationInfo;
   VkDebugUtilsMessengerEXT     debugUtilsMessengerEXT;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 };
 struct Instance : HandleBase<Instance, VkInstance, InstanceState> {
@@ -725,11 +773,11 @@ struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDev
 /* PhysicalDevice */
 struct SurfaceDesc {
   VkString                     debugName{"PhysicalDevice"};
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
 };
 struct SurfaceState {
   Instance                     instance;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 };
 struct Surface : HandleBase<Surface, VkSurfaceKHR, SurfaceState> {
@@ -752,16 +800,20 @@ struct DescriptorPoolDesc;
 struct DescriptorPool;
 struct SamplerDesc;
 struct Sampler;
+struct ImageDesc;
+struct Image;
+struct DeviceMemoryDesc;
+struct DeviceMemory;
 
 /* LogicalDevice */
 struct LogicalDeviceDesc {
   VkString               debugName{"LogicalDevice"};
   DeviceCreateInfo       createInfo;
-  VkAllocationCallbacks* pAllocator{nullptr};
+  VkAllocationCallbacks* pAllocator;
 };
 struct LogicalDeviceState {
   PhysicalDevice               physicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 
   // could do something like creating lists of things created to then destroy
@@ -772,12 +824,15 @@ struct LogicalDeviceState {
 struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   void Destroy() const;
 
-  RenderPass       CreateRenderPass(RenderPassDesc&& desc) const;
-  Queue            GetQueue(QueueDesc&& desc) const;
-  CommandPool      CreateCommandPool(CommandPoolDesc&& desc) const;
-  QueryPool        CreateQueryPool(QueryPoolDesc&& desc) const;
-  DescriptorPool   CreateDescriptorPool(DescriptorPoolDesc&& desc) const;
-  Sampler          CreateSampler(SamplerDesc&& desc) const;
+  RenderPass     CreateRenderPass(RenderPassDesc&& desc) const;
+  Queue          GetQueue(QueueDesc&& desc) const;
+  CommandPool    CreateCommandPool(CommandPoolDesc&& desc) const;
+  QueryPool      CreateQueryPool(QueryPoolDesc&& desc) const;
+  DescriptorPool CreateDescriptorPool(DescriptorPoolDesc&& desc) const;
+  Sampler        CreateSampler(SamplerDesc&& desc) const;
+  Image          CreateImage(ImageDesc&& desc) const;
+  DeviceMemory   AllocateMemory(DeviceMemoryDesc&& desc) const;
+
   ComputePipeline2 CreateComputePipeline(ComputePipelineDesc&& desc);
   PipelineLayout2  CreatePipelineLayout(PipelineLayoutDesc&& desc);
 
@@ -809,11 +864,11 @@ struct Queue : HandleBase<Queue, VkQueue, QueueState> {
 struct RenderPassDesc {
   const char*            debugName{"RenderPass"};
   RenderPassCreateInfo   createInfo;
-  VkAllocationCallbacks* pAllocator{nullptr};
+  VkAllocationCallbacks* pAllocator;
 };
 struct RenderPassState {
   LogicalDevice                logicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 };
 struct RenderPass : HandleBase<RenderPass, VkRenderPass, RenderPassState> {
@@ -826,11 +881,11 @@ struct CommandBuffer;
 struct CommandPoolDesc {
   const char*                  debugName{"CommandPool"};
   CommandPoolCreateInfo        createInfo;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
 };
 struct CommandPoolState {
   LogicalDevice                logicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 };
 struct CommandPool : HandleBase<CommandPool, VkCommandPool, CommandPoolState> {
@@ -855,11 +910,11 @@ struct CommandBuffer : HandleBase<CommandBuffer, VkCommandBuffer, CommandBufferS
 struct QueryPoolDesc {
   const char*                  debugName{"QueryPool"};
   QueryPoolCreateInfo          createInfo;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
 };
 struct QueryPoolState {
   LogicalDevice                logicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 };
 struct QueryPool : HandleBase<QueryPool, VkQueryPool, QueryPoolState> {
@@ -870,11 +925,11 @@ struct QueryPool : HandleBase<QueryPool, VkQueryPool, QueryPoolState> {
 struct DescriptorPoolDesc {
   const char*                  debugName{"DescriptorPool"};
   DescriptorPoolCreateInfo     createInfo;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
 };
 struct DescriptorPoolState {
   LogicalDevice                logicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator{};
   VkResult                     result{VK_NOT_READY};
 };
 struct DescriptorPool : HandleBase<DescriptorPool, VkDescriptorPool, DescriptorPoolState> {
@@ -886,11 +941,11 @@ struct SamplerDesc {
   const char*                         debugName{"Sampler"};
   SamplerCreateInfo                   createInfo;
   ptr<SamplerReductionModeCreateInfo> pReductionModeCreateInfo;
-  const VkAllocationCallbacks*        pAllocator{nullptr};
+  const VkAllocationCallbacks*        pAllocator;
 };
 struct SamplerState {
   LogicalDevice                logicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 };
 struct Sampler : HandleBase<Sampler, VkSampler, SamplerState> {
@@ -899,16 +954,50 @@ struct Sampler : HandleBase<Sampler, VkSampler, SamplerState> {
 
 /* Image */
 struct ImageDesc {
-  const char*                  debugName{"Image"};
-  VkImageCreateInfo            createInfo;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  const char*                    debugName{"Image"};
+  ImageCreateInfo                createInfo;
+  VkMemoryPropertyFlags          memoryPropertyFlags{VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
+  ExternalMemoryImageCreateInfo* pExternalMemoryImageCreateInfo;
+  const VkAllocationCallbacks*   pAllocator;
 };
 struct ImageState {
   LogicalDevice                logicalDevice;
-  const VkAllocationCallbacks* pAllocator{nullptr};
+  Locality                     locality;
+  VkImageType                  imageType;
+  VkFormat                     format;
+  VkExtent3D                   extent;
+  uint32_t                     mipLevels;
+  uint32_t                     arrayLayers;
+  VkSampleCountFlagBits        samples;
+  VkImageUsageFlags            usage;
+  VkMemoryRequirements         memoryRequirements;
+  VkMemoryPropertyFlags        memoryPropertyFlags;
+  uint32_t                     memoryTypeIndex;
+  HANDLE                       externalHandle;
+  const VkAllocationCallbacks* pAllocator;
   VkResult                     result{VK_NOT_READY};
 };
 struct Image : HandleBase<Image, VkImage, ImageState> {
+  void Destroy();
+};
+
+/* DeviceMemory */
+struct DeviceMemoryDesc {
+  const char*                    debugName{"DeviceMemory"};
+  MemoryAllocateInfo             allocateInfo;
+  ExternalMemoryImageCreateInfo* pExternalMemoryImageCreateInfo;
+  ImportMemoryWin32HandleInfo*   pImportMemoryWin32HandleInfo;
+  const VkAllocationCallbacks*   pAllocator;
+};
+struct DeviceMemoryState {
+  LogicalDevice                logicalDevice;
+  VkDeviceSize                 currentBindOffset;
+  VkDeviceSize                 allocationSize;
+  uint32_t                     memoryTypeIndex;
+  const VkAllocationCallbacks* pAllocator;
+  VkResult                     result{VK_NOT_READY};
+};
+struct DeviceMemory : HandleBase<DeviceMemory, VkDeviceMemory, DeviceMemoryState> {
   void Destroy();
 };
 

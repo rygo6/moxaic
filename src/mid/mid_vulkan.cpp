@@ -204,7 +204,7 @@ bool HandleBase<Derived, THandle, TState>::IsValid() const {
   return generations[handleIndex] == handleGeneration;
 }
 
-VkString Vk::string_Support(Support support) {
+VkString Vk::string_Support(const Support support) {
   switch (support) {
   case Support::Optional:
     return "Optional";
@@ -216,16 +216,28 @@ VkString Vk::string_Support(Support support) {
     ASSERT(false);
   }
 }
+VkString Vk::string_Locality(const Locality locality) {
+  switch (locality) {
+  case Locality::Local:
+    return "Local";
+  case Locality::External:
+    return "External";
+  case Locality::Imported:
+    return "Imported";
+  default:
+    ASSERT(false);
+  }
+}
 
 #define DESTROY_ASSERT                                                             \
-ASSERT(handle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!"); \
-ASSERT(Result() != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
+  ASSERT(handle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!"); \
+  ASSERT(Result() != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
 
 static VkResult SetDebugInfo(
-    VkDevice           logicalDevice,
+    const VkDevice     logicalDevice,
     const VkObjectType objectType,
     const uint64_t     objectHandle,
-    const char*        name) {
+    const VkString     name) {
   VkDebugUtilsObjectNameInfoEXT info{
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
       .objectType = objectType,
@@ -247,6 +259,17 @@ static VkBool32 DebugCallback(
   return VK_FALSE;
 }
 
+struct VkNextStruct {
+  VkStructureType sType;
+  void*           pNext;
+};
+void SetNextChainEnd(VkNextStruct* pNextStruct, VkNextStruct* pEndChainStruct) {
+  while (pNextStruct->pNext != nullptr) {
+    pNextStruct = (VkNextStruct*)pNextStruct->pNext;
+  }
+  pNextStruct->pNext = pEndChainStruct;
+}
+
 /* Instance */
 template struct HandleBase<Instance, VkInstance, InstanceState>;
 
@@ -260,8 +283,9 @@ Instance Instance::Create(InstanceDesc&& desc) {
   s->pAllocator = desc.pAllocator;
 
   LOG("Creating... ");
-  ASSERT(desc.createInfo.pNext.p == nullptr && "Chaining onto VkInstanceCreateInfo.pNext not supported.");
-  desc.createInfo.pNext = desc.validationFeatures;
+
+  SetNextChainEnd((VkNextStruct*)&desc.createInfo, (VkNextStruct*)&desc.validationFeatures);
+
   for (int i = 0; i < desc.createInfo.pEnabledExtensionNames.count; ++i) {
     LOG("Loading %s... ", desc.createInfo.pEnabledExtensionNames.p[i]);
   }
@@ -373,7 +397,8 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) c
   s->result = vkEnumeratePhysicalDevices(handle(), &deviceCount, devices);
   CHECK_RESULT(physicalDevice);
 
-  // should these be cpp structs!?
+  // This searches for a physical device that had all the features which were enabled on the instance.
+
   s->physicalDeviceGlobalPriorityQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT;
   s->physicalDeviceGlobalPriorityQueryFeatures.pNext = nullptr;
   s->physicalDeviceRobustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
@@ -531,7 +556,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
   ASSERT(desc.createInfo.pEnabledFeatures.p == nullptr &&
          "LogicalDeviceDesc.createInfo.pEnabledFeatures should be nullptr. "
          "Internally VkPhysicalDeviceFeatures2 is used from PhysicalDevice.");
-  desc.createInfo.pNext.p = &pState()->physicalDeviceFeatures;
+  SetNextChainEnd((VkNextStruct*)&desc.createInfo, (VkNextStruct*)&pState()->physicalDeviceFeatures);
   s->result = vkCreateDevice(
       handle(),
       &desc.createInfo.vk(),
@@ -570,7 +595,7 @@ LogicalDevice PhysicalDevice::CreateLogicalDevice(LogicalDeviceDesc&& desc) {
 }
 
 uint32_t PhysicalDevice::FindQueueIndex(QueueIndexDesc&& desc) {
-  LOG("Finding queue family: graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
+  LOG("# Finding queue family: graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
       string_Support(desc.graphics),
       string_Support(desc.compute),
       string_Support(desc.transfer),
@@ -638,23 +663,25 @@ void LogicalDevice::Destroy() const {
 }
 
 template <typename T, typename THandle, typename TInfo>
-static T CreateGeneric(
-    LogicalDevice device,
-    VkObjectType  objectType,
-    VkResult      (*vkCreateFunc)(VkDevice, const TInfo*, const VkAllocationCallbacks*, THandle*),
-    auto&&        desc) {
-  LOG("# %s... ", desc.debugName);
+inline T CreateHandle(
+    const LogicalDevice          device,
+    const VkString               debugName,
+    const VkObjectType           objectType,
+    const TInfo*                 pInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkResult                     (*vkFunc)(VkDevice, const TInfo*, const VkAllocationCallbacks*, THandle*)) {
+  LOG("# %s... ", debugName);
 
   auto handle = T::Acquire();
   auto s = handle.pState();
 
-  s->pAllocator = device.DefaultAllocator(desc.pAllocator);
+  s->pAllocator = device.DefaultAllocator(pAllocator);
   s->logicalDevice = device;
 
   LOG("Creating... ");
-  s->result = vkCreateFunc(
+  s->result = vkFunc(
       device.handle(),
-      &desc.createInfo.vk(),
+      pInfo,
       s->pAllocator,
       handle.pHandle());
   CHECK_RESULT(handle);
@@ -664,7 +691,7 @@ static T CreateGeneric(
       device.handle(),
       objectType,
       (uint64_t)*handle.pHandle(),
-      desc.debugName);
+      debugName);
   CHECK_RESULT(handle);
 
   LOG("%s\n\n", string_VkResult(handle.Result()));
@@ -672,11 +699,13 @@ static T CreateGeneric(
 }
 
 RenderPass LogicalDevice::CreateRenderPass(RenderPassDesc&& desc) const {
-  return CreateGeneric<RenderPass, VkRenderPass, VkRenderPassCreateInfo>(
+  return CreateHandle<RenderPass, VkRenderPass, VkRenderPassCreateInfo>(
       *this,
+      desc.debugName,
       VK_OBJECT_TYPE_RENDER_PASS,
-      vkCreateRenderPass,
-      desc);
+      &desc.createInfo.vk(),
+      desc.pAllocator,
+      vkCreateRenderPass);
 }
 
 Queue LogicalDevice::GetQueue(QueueDesc&& desc) const {
@@ -708,37 +737,151 @@ Queue LogicalDevice::GetQueue(QueueDesc&& desc) const {
 }
 
 CommandPool LogicalDevice::CreateCommandPool(CommandPoolDesc&& desc) const {
-  return CreateGeneric<CommandPool, VkCommandPool, VkCommandPoolCreateInfo>(
+  return CreateHandle<CommandPool, VkCommandPool, VkCommandPoolCreateInfo>(
       *this,
+      desc.debugName,
       VK_OBJECT_TYPE_COMMAND_POOL,
-      vkCreateCommandPool,
-      desc);
+      &desc.createInfo.vk(),
+      desc.pAllocator,
+      vkCreateCommandPool);
 }
 
 QueryPool LogicalDevice::CreateQueryPool(QueryPoolDesc&& desc) const {
-  return CreateGeneric<QueryPool, VkQueryPool, VkQueryPoolCreateInfo>(
+  return CreateHandle<QueryPool, VkQueryPool, VkQueryPoolCreateInfo>(
       *this,
+      desc.debugName,
       VK_OBJECT_TYPE_QUERY_POOL,
-      vkCreateQueryPool,
-      desc);
+      &desc.createInfo.vk(),
+      desc.pAllocator,
+      vkCreateQueryPool);
 }
 
 DescriptorPool LogicalDevice::CreateDescriptorPool(DescriptorPoolDesc&& desc) const {
-  return CreateGeneric<DescriptorPool, VkDescriptorPool, VkDescriptorPoolCreateInfo>(
+  return CreateHandle<DescriptorPool, VkDescriptorPool, VkDescriptorPoolCreateInfo>(
       *this,
+      desc.debugName,
       VK_OBJECT_TYPE_DESCRIPTOR_POOL,
-      vkCreateDescriptorPool,
-      desc);
+      &desc.createInfo.vk(),
+      desc.pAllocator,
+      vkCreateDescriptorPool);
 }
 
 Sampler LogicalDevice::CreateSampler(SamplerDesc&& desc) const {
   // todo step through pnext and apply to end
   desc.createInfo.pNext.p = desc.pReductionModeCreateInfo.p;
-  return CreateGeneric<Sampler, VkSampler, VkSamplerCreateInfo>(
+  return CreateHandle<Sampler, VkSampler, VkSamplerCreateInfo>(
       *this,
+      desc.debugName,
       VK_OBJECT_TYPE_SAMPLER,
-      vkCreateSampler,
-      desc);
+      &desc.createInfo.vk(),
+      desc.pAllocator,
+      vkCreateSampler);
+}
+
+static VkResult MemoryTypeFromProperties(
+    const VkPhysicalDeviceMemoryProperties& physicalDeviceMemoryProperties,
+    const VkMemoryRequirements&             memoryRequirements,
+    const VkMemoryPropertyFlags             memoryPropertyFlags,
+    uint32_t*                               pMemoryTypeIndex) {
+  LOG("With properties... ");
+  int  index = 0;
+  auto writeRequiredMemoryProperties = memoryPropertyFlags;
+  while (writeRequiredMemoryProperties) {
+    if (writeRequiredMemoryProperties & 1) {
+      LOG(" %s ", string_VkMemoryPropertyFlagBits((VkMemoryPropertyFlagBits)(1U << index)));
+    }
+    ++index;
+    writeRequiredMemoryProperties >>= 1;
+  }
+  LOG("... ");
+
+  for (uint32_t i = 0; i < physicalDeviceMemoryProperties.memoryTypeCount; i++) {
+    if ((memoryRequirements.memoryTypeBits & 1 << i) &&
+        ((physicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags)) {
+      LOG("Found index %d... ", i);
+      *pMemoryTypeIndex = i;
+      return VK_SUCCESS;
+    }
+  }
+
+  LOG("Can't find... ");
+  return VK_ERROR_INITIALIZATION_FAILED;
+}
+
+Image LogicalDevice::CreateImage(ImageDesc&& desc) const {
+  LOG("# %s... ", desc.debugName);
+
+  auto image = Image::Acquire();
+  auto s = image.pState();
+
+  Locality locality = Locality::Local;
+  if (desc.pExternalMemoryImageCreateInfo != nullptr) {
+    SetNextChainEnd((VkNextStruct*)&desc.createInfo, (VkNextStruct*)desc.pExternalMemoryImageCreateInfo);
+    locality = Locality::External;
+  }
+
+  s->pAllocator = DefaultAllocator(desc.pAllocator);
+  s->logicalDevice = *this;
+  s->locality = locality;
+  s->imageType = desc.createInfo.imageType;
+  s->format = desc.createInfo.format;
+  s->extent = desc.createInfo.extent;
+  s->mipLevels = desc.createInfo.mipLevels;
+  s->arrayLayers = desc.createInfo.arrayLayers;
+  s->samples = desc.createInfo.samples;
+  s->usage = desc.createInfo.usage;
+  s->memoryPropertyFlags = desc.memoryPropertyFlags;
+
+  LOG("Creating... ");
+  s->result = vkCreateImage(
+      handle(),
+      &desc.createInfo.vk(),
+      s->pAllocator,
+      image.pHandle());
+  CHECK_RESULT(image);
+
+  LOG("Getting memory requirements... ");
+  vkGetImageMemoryRequirements(
+      handle(),
+      image.handle(),
+      &s->memoryRequirements);
+
+  LOG("Getting memory type... ");
+  s->result = MemoryTypeFromProperties(
+      s->logicalDevice.state().physicalDevice.state().physicalDeviceMemoryProperties,
+      s->memoryRequirements,
+      s->memoryPropertyFlags,
+      &s->memoryTypeIndex);
+  CHECK_RESULT(image);
+
+  LOG("Setting DebugName... ");
+  s->result = SetDebugInfo(
+      handle(),
+      VK_OBJECT_TYPE_IMAGE,
+      (uint64_t)*image.pHandle(),
+      desc.debugName);
+  CHECK_RESULT(image);
+
+  LOG("%s\n\n", string_VkResult(image.Result()));
+  return image;
+}
+
+DeviceMemory LogicalDevice::AllocateMemory(DeviceMemoryDesc&& desc) const {
+  if (desc.pExternalMemoryImageCreateInfo != nullptr) {
+    ASSERT(desc.pImportMemoryWin32HandleInfo == nullptr && "Cannot have pImportMemoryWin32HandleInfo if pExternalMemoryImageCreateInfo is set.");
+    SetNextChainEnd((VkNextStruct*)&desc.allocateInfo, (VkNextStruct*)&desc.pExternalMemoryImageCreateInfo);
+  }
+  if (desc.pImportMemoryWin32HandleInfo != nullptr) {
+    ASSERT(desc.pExternalMemoryImageCreateInfo == nullptr && "Cannot have pExternalMemoryImageCreateInfo if pImportMemoryWin32HandleInfo is set.");
+    SetNextChainEnd((VkNextStruct*)&desc.allocateInfo, (VkNextStruct*)&desc.pImportMemoryWin32HandleInfo);
+  }
+  return CreateHandle<DeviceMemory, VkDeviceMemory, VkMemoryAllocateInfo>(
+      *this,
+      desc.debugName,
+      VK_OBJECT_TYPE_DEVICE_MEMORY,
+      &desc.allocateInfo.vk(),
+      desc.pAllocator,
+      vkAllocateMemory);
 }
 
 const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
