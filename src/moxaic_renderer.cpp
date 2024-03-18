@@ -17,6 +17,7 @@ Instance instanceHandle;
 void Moxaic::Renderer::Init()
 {
     instance = Instance::Create({
+      .debugName{"MainInstance"},
       .createInfo{
         .pApplicationInfo = ApplicationInfo{
           .pApplicationName = "Moxaic",
@@ -296,24 +297,31 @@ void Moxaic::Renderer::Init()
     });
     ASSERT_HANDLE(maxSampler);
 
-    auto image = logicalDevice.CreateImage({
+    auto checkerImage = logicalDevice.CreateImage({
       .debugName = "CheckerImage",
       .createInfo = ImageCreateInfo{
         .format = VK_FORMAT_R8G8B8A8_SRGB,
         .extent = {800, 600, 1},
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       },
-      .memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
     });
-    ASSERT_HANDLE(image);
+    ASSERT_HANDLE(checkerImage);
 
-    // auto imageDeviceMemory = logicalDevice.AllocateMemory({
-    //   .debugName = "CheckerImageMemory",
-    //   .allocateInfo = MemoryAllocateInfo{
-    //
-    //   },
-    //
-    // });
+    auto imageDeviceMemory = logicalDevice.AllocateMemory({
+      .debugName = "CheckerImageMemory",
+      .allocateInfo = MemoryAllocateInfo{
+        .allocationSize = checkerImage.state().memoryRequirements.size,
+        .memoryTypeIndex = checkerImage.state().memoryTypeIndex},
+    });
+    ASSERT_HANDLE(imageDeviceMemory);
+
+    checkerImage.BindImage(imageDeviceMemory);
+    ASSERT_HANDLE(checkerImage);
+
+    auto checkerImageView = checkerImage.CreateImageView(ImageViewDesc{
+      .debugName = "CheckerImageView",
+    });
+    ASSERT_HANDLE(checkerImageView);
 
 
     // auto test = ComputePipelineDesc{

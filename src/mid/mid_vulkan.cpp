@@ -19,6 +19,12 @@
     return handle;                                                  \
   }
 
+#define CHECK_RESULT_VOID(handle)                                   \
+  if (handle.pState()->result != VK_SUCCESS) [[unlikely]] {         \
+    LOG("Error! %s\n\n", string_VkResult(handle.pState()->result)); \
+    return;                                                         \
+  }
+
 using namespace Mid;
 using namespace Mid::Vk;
 
@@ -232,6 +238,10 @@ VkString Vk::string_Locality(const Locality locality) {
 #define DESTROY_ASSERT                                                             \
   ASSERT(handle() != VK_NULL_HANDLE && "Trying to destroy null Instance handle!"); \
   ASSERT(Result() != VK_SUCCESS && "Trying to destroy non-succesfully created Instance handle!");
+
+constexpr bool checkStringLiteral(VkString str) {
+  return std::is_constant_evaluated();
+}
 
 static VkResult SetDebugInfo(
     const VkDevice     logicalDevice,
@@ -814,10 +824,16 @@ Image LogicalDevice::CreateImage(ImageDesc&& desc) const {
   auto image = Image::Acquire();
   auto s = image.pState();
 
-  Locality locality = Locality::Local;
+  auto locality = Locality::Local;
   if (desc.pExternalMemoryImageCreateInfo != nullptr) {
-    SetNextChainEnd((VkNextStruct*)&desc.createInfo, (VkNextStruct*)desc.pExternalMemoryImageCreateInfo);
+    ASSERT(desc.pImportMemoryWin32HandleInfo == nullptr && "Cannot have pImportMemoryWin32HandleInfo if pExternalMemoryImageCreateInfo is set.");
+    SetNextChainEnd((VkNextStruct*)&desc.createInfo, (VkNextStruct*)&desc.pExternalMemoryImageCreateInfo);
     locality = Locality::External;
+  }
+  if (desc.pImportMemoryWin32HandleInfo != nullptr) {
+    ASSERT(desc.pExternalMemoryImageCreateInfo == nullptr && "Cannot have pExternalMemoryImageCreateInfo if pImportMemoryWin32HandleInfo is set.");
+    SetNextChainEnd((VkNextStruct*)&desc.createInfo, (VkNextStruct*)&desc.pImportMemoryWin32HandleInfo);
+    locality = Locality::Imported;
   }
 
   s->pAllocator = DefaultAllocator(desc.pAllocator);
@@ -867,21 +883,35 @@ Image LogicalDevice::CreateImage(ImageDesc&& desc) const {
 }
 
 DeviceMemory LogicalDevice::AllocateMemory(DeviceMemoryDesc&& desc) const {
-  if (desc.pExternalMemoryImageCreateInfo != nullptr) {
-    ASSERT(desc.pImportMemoryWin32HandleInfo == nullptr && "Cannot have pImportMemoryWin32HandleInfo if pExternalMemoryImageCreateInfo is set.");
-    SetNextChainEnd((VkNextStruct*)&desc.allocateInfo, (VkNextStruct*)&desc.pExternalMemoryImageCreateInfo);
-  }
-  if (desc.pImportMemoryWin32HandleInfo != nullptr) {
-    ASSERT(desc.pExternalMemoryImageCreateInfo == nullptr && "Cannot have pExternalMemoryImageCreateInfo if pImportMemoryWin32HandleInfo is set.");
-    SetNextChainEnd((VkNextStruct*)&desc.allocateInfo, (VkNextStruct*)&desc.pImportMemoryWin32HandleInfo);
-  }
-  return CreateHandle<DeviceMemory, VkDeviceMemory, VkMemoryAllocateInfo>(
-      *this,
-      desc.debugName,
-      VK_OBJECT_TYPE_DEVICE_MEMORY,
+  LOG("# %s... ", desc.debugName);
+
+  auto deviceMemory = DeviceMemory::Acquire();
+  auto s = deviceMemory.pState();
+
+  s->pAllocator = DefaultAllocator(desc.pAllocator);
+  s->logicalDevice = *this;
+
+  LOG("Creating... ");
+  s->result = vkAllocateMemory(
+      handle(),
       &desc.allocateInfo.vk(),
-      desc.pAllocator,
-      vkAllocateMemory);
+      s->pAllocator,
+      deviceMemory.pHandle());
+  CHECK_RESULT(deviceMemory);
+
+  LOG("Setting DebugName... ");
+  s->result = SetDebugInfo(
+      handle(),
+      VK_OBJECT_TYPE_DEVICE_MEMORY,
+      (uint64_t)*deviceMemory.pHandle(),
+      desc.debugName);
+  CHECK_RESULT(deviceMemory);
+
+  s->allocationSize = desc.allocateInfo.allocationSize;
+  s->memoryTypeIndex = desc.allocateInfo.memoryTypeIndex;
+
+  LOG("%s\n\n", string_VkResult(deviceMemory.Result()));
+  return deviceMemory;
 }
 
 const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
@@ -937,6 +967,74 @@ void CommandPool::Destroy() const {
   DESTROY_ASSERT
   vkDestroyCommandPool(state().logicalDevice.handle(), handle(), state().pAllocator);
   Release();
+}
+
+// void DeviceMemory::BindImage(Image image, VkDeviceSize memoryOffset) {
+// thinking BindImage like this should be on image, as it only binds one image
+// and multiple BindImage2 can be on the device memory
+// also because it being on the image then makes more sense to put the fail state on the image
+// because a binding failure does means the image isnt ready, not the device memory
+// assert(false);
+// LOG("# Binding image at offset %d... ", memoryOffset);
+//
+// auto s = image.pState();
+//
+// ASSERT(s->memoryTypeIndex == state().memoryTypeIndex && "MemoryTypeIndex of Image and DeviceMemory do not match.");
+// ASSERT(s->memoryRequirements.size <= state().allocationSize - state().currentBindOffset && "DeviceMemory allocationSize after currentBindOffset not large enough.");
+//
+// // should result also go in the device memory and I check device memory?
+// s->result = vkBindImageMemory(state().logicalDevice.handle(), image.handle(), handle(), memoryOffset);
+// CHECK_RESULT_VOID(image);
+//
+// s->deviceMemory = *this;
+// s->deviceMemoryOffset = pState()->currentBindOffset;
+//
+// pState()->currentBindOffset += s->memoryRequirements.size;
+//
+// LOG("%s\n\n", string_VkResult(image.Result()));
+// }
+
+template struct HandleBase<Image, VkImage, ImageState>;
+
+void Image::BindImage(DeviceMemory deviceMemory, VkDeviceSize memoryOffset) {
+  LOG("# Binding image at offset %d... ", memoryOffset);
+
+  Image image = *this;
+  auto  s = pState();
+  auto  ds = deviceMemory.pState();
+
+  ASSERT(s->memoryTypeIndex == ds->memoryTypeIndex && "MemoryTypeIndex of Image and DeviceMemory do not match.");
+  ASSERT(s->memoryRequirements.size <= ds->allocationSize - ds->currentBindOffset && "DeviceMemory allocationSize after currentBindOffset not large enough.");
+
+  // should result also go in the device memory and I check device memory?
+  s->result = vkBindImageMemory(state().logicalDevice.handle(), handle(), deviceMemory.handle(), memoryOffset);
+  CHECK_RESULT_VOID(image);
+
+  s->deviceMemory = deviceMemory;
+  s->deviceMemoryOffset = ds->currentBindOffset;
+
+  ds->currentBindOffset += s->memoryRequirements.size;
+
+  LOG("%s\n\n", string_VkResult(image.Result()));
+}
+
+template struct HandleBase<ImageView, VkImageView, ImageViewState>;
+
+ImageView Image::CreateImageView(ImageViewDesc&& desc) const {
+  desc.createInfo.image = handle();
+  desc.createInfo.format = state().format;
+
+  // if mip level count not set, then presume it's for the whole image and set to image mip level
+  auto levelCount = desc.createInfo.subresourceRange.levelCount;
+  desc.createInfo.subresourceRange.levelCount = levelCount == 0 ? state().mipLevels : levelCount;
+
+  return CreateHandle<ImageView, VkImageView, VkImageViewCreateInfo>(
+      state().logicalDevice,
+      desc.debugName,
+      VK_OBJECT_TYPE_IMAGE_VIEW,
+      &desc.createInfo.vk(),
+      desc.pAllocator,
+      vkCreateImageView);
 }
 
 // PipelineLayout2 Vk::LogicalDevice::CreatePipelineLayout(

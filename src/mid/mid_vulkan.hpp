@@ -59,6 +59,12 @@ struct {
 typedef const char* VkString;
 typedef uint32_t    VkCount;
 
+// do I want to do something this to enforce literals on debug names?
+// struct literal_name {
+//   const VkString p{"N/A"};
+//   constexpr      literal_name(VkString&& value) : p{value} {}
+// };
+
 struct ptr_void {
   const void* p{nullptr};
 
@@ -347,6 +353,27 @@ struct ExternalMemoryImageCreateInfo : VkStruct<VkExternalMemoryImageCreateInfo>
   VkExternalMemoryHandleTypeFlags handleTypes;
 };
 static_assert(sizeof(ExternalMemoryImageCreateInfo) == sizeof(VkExternalMemoryImageCreateInfo));
+
+struct ImageSubresourceRange : VkStruct<VkImageSubresourceRange> {
+  VkImageAspectFlags    aspectMask{VK_IMAGE_ASPECT_COLOR_BIT};
+  uint32_t              baseMipLevel;
+  uint32_t              levelCount; // leave this zero, so you could set it to one to make imageview per mip
+  uint32_t              baseArrayLayer;
+  uint32_t              layerCount{1};
+};
+static_assert(sizeof(ImageSubresourceRange) == sizeof(VkImageSubresourceRange));
+
+struct ImageViewCreateInfo : VkStruct<VkImageViewCreateInfo> {
+  VkStructureType         sType{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+  ptr_void                pNext;
+  VkImageViewCreateFlags  flags;
+  VkImage                 image;
+  VkImageViewType         viewType{VK_IMAGE_VIEW_TYPE_2D};
+  VkFormat                format;
+  VkComponentMapping      components;
+  ImageSubresourceRange subresourceRange;
+};
+static_assert(sizeof(ImageViewCreateInfo) == sizeof(VkImageViewCreateInfo));
 
 struct MemoryAllocateInfo : VkStruct<VkMemoryAllocateInfo> {
   VkStructureType sType{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
@@ -952,42 +979,12 @@ struct Sampler : HandleBase<Sampler, VkSampler, SamplerState> {
   void Destroy();
 };
 
-/* Image */
-struct ImageDesc {
-  const char*                    debugName{"Image"};
-  ImageCreateInfo                createInfo;
-  VkMemoryPropertyFlags          memoryPropertyFlags{VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
-  ExternalMemoryImageCreateInfo* pExternalMemoryImageCreateInfo;
-  const VkAllocationCallbacks*   pAllocator;
-};
-struct ImageState {
-  LogicalDevice                logicalDevice;
-  Locality                     locality;
-  VkImageType                  imageType;
-  VkFormat                     format;
-  VkExtent3D                   extent;
-  uint32_t                     mipLevels;
-  uint32_t                     arrayLayers;
-  VkSampleCountFlagBits        samples;
-  VkImageUsageFlags            usage;
-  VkMemoryRequirements         memoryRequirements;
-  VkMemoryPropertyFlags        memoryPropertyFlags;
-  uint32_t                     memoryTypeIndex;
-  HANDLE                       externalHandle;
-  const VkAllocationCallbacks* pAllocator;
-  VkResult                     result{VK_NOT_READY};
-};
-struct Image : HandleBase<Image, VkImage, ImageState> {
-  void Destroy();
-};
-
 /* DeviceMemory */
 struct DeviceMemoryDesc {
-  const char*                    debugName{"DeviceMemory"};
-  MemoryAllocateInfo             allocateInfo;
-  ExternalMemoryImageCreateInfo* pExternalMemoryImageCreateInfo;
-  ImportMemoryWin32HandleInfo*   pImportMemoryWin32HandleInfo;
-  const VkAllocationCallbacks*   pAllocator;
+  const char*                  debugName{"DeviceMemory"};
+  MemoryAllocateInfo           allocateInfo;
+  Image*                       pBindImage;
+  const VkAllocationCallbacks* pAllocator;
 };
 struct DeviceMemoryState {
   LogicalDevice                logicalDevice;
@@ -998,6 +995,67 @@ struct DeviceMemoryState {
   VkResult                     result{VK_NOT_READY};
 };
 struct DeviceMemory : HandleBase<DeviceMemory, VkDeviceMemory, DeviceMemoryState> {
+  // void BindImage(Image image, VkDeviceSize memoryOffset = 0);
+  void Destroy();
+};
+
+struct ImageViewDesc;
+struct ImageView;
+
+/* Image */
+struct ImageDesc {
+  const char*                    debugName{"Image"};
+  ImageCreateInfo                createInfo;
+  VkMemoryPropertyFlags          memoryPropertyFlags{VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT};
+  ExternalMemoryImageCreateInfo* pExternalMemoryImageCreateInfo;
+  ImportMemoryWin32HandleInfo*   pImportMemoryWin32HandleInfo;
+  const VkAllocationCallbacks*   pAllocator;
+};
+struct ImageState {
+  LogicalDevice logicalDevice;
+
+  DeviceMemory deviceMemory;
+  VkDeviceSize deviceMemoryOffset;
+
+  Locality           locality;
+
+  VkImageType           imageType;
+  VkFormat              format;
+  VkExtent3D            extent;
+  uint32_t              mipLevels;
+  uint32_t              arrayLayers;
+  VkSampleCountFlagBits samples;
+  VkImageUsageFlags     usage;
+
+  VkMemoryRequirements  memoryRequirements;
+  VkMemoryPropertyFlags memoryPropertyFlags;
+  uint32_t              memoryTypeIndex;
+
+  VkExternalMemoryHandleTypeFlags externalMemoryHandleTypeFlags;
+  HANDLE                          externalHandle;
+
+  const VkAllocationCallbacks* pAllocator;
+  VkResult                     result{VK_NOT_READY};
+};
+struct Image : HandleBase<Image, VkImage, ImageState> {
+  void      BindImage(DeviceMemory deviceMemory, VkDeviceSize memoryOffset = 0);
+  ImageView CreateImageView(ImageViewDesc&& imageViewDesc) const;
+  void      Destroy();
+};
+
+/* Image */
+struct ImageViewDesc {
+  const char*                  debugName{"ImageView"};
+  ImageViewCreateInfo          createInfo;
+  const VkAllocationCallbacks* pAllocator;
+};
+struct ImageViewState {
+  LogicalDevice                logicalDevice;
+  Image                        image;
+  const VkAllocationCallbacks* pAllocator;
+  VkResult                     result{VK_NOT_READY};
+};
+struct ImageView : HandleBase<ImageView, VkImageView, ImageViewState> {
   void Destroy();
 };
 
