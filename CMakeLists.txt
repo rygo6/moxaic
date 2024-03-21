@@ -67,6 +67,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 
 target_compile_options(${TARGET_NAME} PRIVATE
         -fno-exceptions
+        -fno-rtti
 #        -fpermissive
         -Wall
 #        -Wextra

@@ -301,7 +301,7 @@ void Moxaic::Renderer::Init()
       .debugName = "CheckerImage",
       .createInfo = ImageCreateInfo{
         .format = VK_FORMAT_R8G8B8A8_SRGB,
-        .extent = {800, 600, 1},
+        .extent = {DefaultWidth, DefaultHeight, 1},
         .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
       },
     });
@@ -322,6 +322,17 @@ void Moxaic::Renderer::Init()
       .debugName = "CheckerImageView",
     });
     ASSERT_HANDLE(checkerImageView);
+
+    auto swapchain = logicalDevice.CreateSwapchain(SwapchainDesc{
+      .createInfo{
+        .surface = surface.handle(),
+        .imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
+        .imageExtent = {DefaultWidth, DefaultHeight},
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+      },
+    });
+    ASSERT_HANDLE(swapchain);
 
 
     // auto test = ComputePipelineDesc{

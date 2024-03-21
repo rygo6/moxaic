@@ -50,12 +50,6 @@
 
 namespace Mid::Vk {
 
-struct {
-#define MVK_PFN_FUNCTION(func) PFN_vk##func func;
-  MVK_PFN_FUNCTIONS
-#undef MVK_PFN_FUNCTION
-} PFN;
-
 typedef const char* VkString;
 typedef uint32_t    VkCount;
 
@@ -79,7 +73,7 @@ struct ptr {
 
   constexpr ptr(T&& value) : p{&value} {}
   constexpr ptr(T* value) : p{value} {}
-  constexpr ptr(std::initializer_list<T> l) : p{l.begin()} {}
+  constexpr ptr(std::initializer_list<T>&& l) : p{l.begin()} {}
   constexpr ptr() = default;
 
   constexpr operator const T*() const { return this; };
@@ -91,7 +85,7 @@ struct span {
   const VkCount count{0};
   const T*      p{nullptr};
 
-  constexpr span(std::initializer_list<T> l) : count{VkCount(l.size())}, p{l.begin()} {}
+  constexpr span(std::initializer_list<T>&& l) : count{VkCount(l.size())}, p{l.begin()} {}
   constexpr span() = default;
 };
 
@@ -102,7 +96,7 @@ struct span_pack {
   const VkCount count{0};
   const T*      p{nullptr};
 
-  constexpr span_pack(std::initializer_list<T> l) : count{VkCount(l.size())}, p{l.begin()} {}
+  constexpr span_pack(std::initializer_list<T>&& l) : count{VkCount(l.size())}, p{l.begin()} {}
   constexpr span_pack() = default;
 };
 #pragma pack(pop)
@@ -355,23 +349,23 @@ struct ExternalMemoryImageCreateInfo : VkStruct<VkExternalMemoryImageCreateInfo>
 static_assert(sizeof(ExternalMemoryImageCreateInfo) == sizeof(VkExternalMemoryImageCreateInfo));
 
 struct ImageSubresourceRange : VkStruct<VkImageSubresourceRange> {
-  VkImageAspectFlags    aspectMask{VK_IMAGE_ASPECT_COLOR_BIT};
-  uint32_t              baseMipLevel;
-  uint32_t              levelCount; // leave this zero, so you could set it to one to make imageview per mip
-  uint32_t              baseArrayLayer;
-  uint32_t              layerCount{1};
+  VkImageAspectFlags aspectMask{VK_IMAGE_ASPECT_COLOR_BIT};
+  uint32_t           baseMipLevel;
+  uint32_t           levelCount; // leave this zero, so you could set it to one to make imageview per mip
+  uint32_t           baseArrayLayer;
+  uint32_t           layerCount{1};
 };
 static_assert(sizeof(ImageSubresourceRange) == sizeof(VkImageSubresourceRange));
 
 struct ImageViewCreateInfo : VkStruct<VkImageViewCreateInfo> {
-  VkStructureType         sType{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
-  ptr_void                pNext;
-  VkImageViewCreateFlags  flags;
-  VkImage                 image;
-  VkImageViewType         viewType{VK_IMAGE_VIEW_TYPE_2D};
-  VkFormat                format;
-  VkComponentMapping      components;
-  ImageSubresourceRange subresourceRange;
+  VkStructureType        sType{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+  ptr_void               pNext;
+  VkImageViewCreateFlags flags;
+  VkImage                image;
+  VkImageViewType        viewType{VK_IMAGE_VIEW_TYPE_2D};
+  VkFormat               format;
+  VkComponentMapping     components;
+  ImageSubresourceRange  subresourceRange;
 };
 static_assert(sizeof(ImageViewCreateInfo) == sizeof(VkImageViewCreateInfo));
 
@@ -400,6 +394,27 @@ struct ImportMemoryWin32HandleInfo : VkStruct<VkImportMemoryWin32HandleInfoKHR> 
 };
 static_assert(sizeof(ImportMemoryWin32HandleInfo) == sizeof(VkImportMemoryWin32HandleInfoKHR));
 #endif
+
+struct SwapchainCreateInfo : VkStruct<VkSwapchainCreateInfoKHR> {
+  VkStructureType               sType{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
+  ptr_void                      pNext;
+  VkSwapchainCreateFlagsKHR     flags;
+  VkSurfaceKHR                  surface;
+  uint32_t                      minImageCount{2};
+  VkFormat                      imageFormat;
+  VkColorSpaceKHR               imageColorSpace;
+  VkExtent2D                    imageExtent;
+  uint32_t                      imageArrayLayers{1};
+  VkImageUsageFlags             imageUsage{VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT};
+  VkSharingMode                 imageSharingMode{VK_SHARING_MODE_EXCLUSIVE};
+  span<const uint32_t>          pQueueFamilyIndices;
+  VkSurfaceTransformFlagBitsKHR preTransform{VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR};
+  VkCompositeAlphaFlagBitsKHR   compositeAlpha{VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR};
+  VkPresentModeKHR              presentMode{VK_PRESENT_MODE_FIFO_KHR};
+  VkBool32                      clipped{VK_TRUE};
+  VkSwapchainKHR                oldSwapchain;
+};
+static_assert(sizeof(SwapchainCreateInfo) == sizeof(VkSwapchainCreateInfoKHR));
 
 struct DescriptorImageInfo {
   const VkSampler     sampler{VK_NULL_HANDLE};
@@ -494,20 +509,6 @@ struct ShaderModuleCreateInfo {
   name() = default;                  \
   name(const name&) = delete;        \
   name& operator=(const name&) = delete;
-
-struct SwapChain {
-  MVK_HANDLE_CONSTRUCTOR(SwapChain)
-
-  const VkSwapchainKHR handle{VK_NULL_HANDLE};
-  const VkDevice       deviceHandle{VK_NULL_HANDLE};
-
-  ~SwapChain() {
-    if (handle != VK_NULL_HANDLE)
-      vkDestroySwapchainKHR(deviceHandle, handle, MVK_DEFAULT_ALLOCATOR);
-  }
-
-  constexpr operator VkSwapchainKHR() const { return handle; }
-};
 
 struct DescriptorSetLayout {
   MVK_HANDLE_CONSTRUCTOR(DescriptorSetLayout)
@@ -760,6 +761,8 @@ struct Instance : HandleBase<Instance, VkInstance, InstanceState> {
 struct LogicalDevice;
 struct LogicalDeviceDesc;
 struct QueueIndexDesc;
+struct SwapchainDesc;
+struct Swapchain;
 
 /* PhysicalDevice */
 struct PhysicalDeviceDesc {
@@ -797,7 +800,7 @@ struct PhysicalDevice : HandleBase<PhysicalDevice, VkPhysicalDevice, PhysicalDev
   uint32_t      FindQueueIndex(QueueIndexDesc&& desc);
 };
 
-/* PhysicalDevice */
+/* Surface */
 struct SurfaceDesc {
   VkString                     debugName{"PhysicalDevice"};
   const VkAllocationCallbacks* pAllocator;
@@ -859,6 +862,8 @@ struct LogicalDevice : HandleBase<LogicalDevice, VkDevice, LogicalDeviceState> {
   Sampler        CreateSampler(SamplerDesc&& desc) const;
   Image          CreateImage(ImageDesc&& desc) const;
   DeviceMemory   AllocateMemory(DeviceMemoryDesc&& desc) const;
+
+  Swapchain CreateSwapchain(SwapchainDesc&& desc) const;
 
   ComputePipeline2 CreateComputePipeline(ComputePipelineDesc&& desc);
   PipelineLayout2  CreatePipelineLayout(PipelineLayoutDesc&& desc);
@@ -1017,7 +1022,7 @@ struct ImageState {
   DeviceMemory deviceMemory;
   VkDeviceSize deviceMemoryOffset;
 
-  Locality           locality;
+  Locality locality;
 
   VkImageType           imageType;
   VkFormat              format;
@@ -1056,6 +1061,22 @@ struct ImageViewState {
   VkResult                     result{VK_NOT_READY};
 };
 struct ImageView : HandleBase<ImageView, VkImageView, ImageViewState> {
+  void Destroy();
+};
+
+/* Swapchain */
+struct SwapchainDesc {
+  const char*                  debugName{"Swapchain"};
+  SwapchainCreateInfo          createInfo;
+  const VkAllocationCallbacks* pAllocator;
+};
+struct SwapchainState {
+  LogicalDevice                logicalDevice;
+  Image                        image;
+  const VkAllocationCallbacks* pAllocator;
+  VkResult                     result{VK_NOT_READY};
+};
+struct Swapchain : HandleBase<Swapchain, VkSwapchainKHR, SwapchainState> {
   void Destroy();
 };
 

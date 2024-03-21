@@ -8,8 +8,6 @@
 
 #include "moxaic_vulkan.hpp"
 
-#include <string.h>
-
 #define LOG(...) MVK_LOG(__VA_ARGS__)
 #define ASSERT(command) MVK_ASSERT(command)
 
@@ -27,6 +25,12 @@
 
 using namespace Mid;
 using namespace Mid::Vk;
+
+static struct {
+#define MVK_PFN_FUNCTION(func) PFN_vk##func func;
+  MVK_PFN_FUNCTIONS
+#undef MVK_PFN_FUNCTION
+} PFN;
 
 /* FreeStack */
 template <typename TIndex, size_t Capacity>
@@ -409,6 +413,8 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) c
 
   // This searches for a physical device that had all the features which were enabled on the instance.
 
+  // I may not want to store these since technically there are stored on the CPU, but in vulkan driver
+
   s->physicalDeviceGlobalPriorityQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT;
   s->physicalDeviceGlobalPriorityQueryFeatures.pNext = nullptr;
   s->physicalDeviceRobustness2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT;
@@ -485,7 +491,7 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) c
       continue;
     }
 
-    printf("Getting %s Physical Device Features... ", s->physicalDeviceProperties.properties.deviceName);
+    LOG("Getting %s Physical Device Features... ", s->physicalDeviceProperties.properties.deviceName);
     vkGetPhysicalDeviceFeatures2(devices[deviceIndex], &s->physicalDeviceFeatures);
 
     if (!CheckPhysicalDeviceFeatureBools(requiredCount, required, supported, structSize))
@@ -506,6 +512,7 @@ PhysicalDevice Instance::CreatePhysicalDevice(const PhysicalDeviceDesc&& desc) c
   CHECK_RESULT(physicalDevice);
 
   // Once device is chosen the properties in state should represent what is actually enabled on physicalDevice so copy them over
+  // no dont save these, you can requery them
   for (int i = 0; i < requiredCount; ++i) {
     supported[i] = required[i];
   }
@@ -914,6 +921,183 @@ DeviceMemory LogicalDevice::AllocateMemory(DeviceMemoryDesc&& desc) const {
   return deviceMemory;
 }
 
+template <typename T, typename TBits>
+static void LogFlagBits(
+    T        flags,
+    VkString (*stringFunc)(TBits)) {
+  int index = 0;
+  while (flags) {
+    if (flags & 1) {
+      LOG(" %s ", stringFunc((TBits)(1U << index)));
+    }
+    ++index;
+    flags >>= 1;
+  }
+}
+
+Swapchain LogicalDevice::CreateSwapchain(SwapchainDesc&& desc) const {
+  LOG("# %s... ", desc.debugName);
+
+  auto swapchain = Swapchain::Acquire();
+  auto s = swapchain.pState();
+
+  s->pAllocator = DefaultAllocator(desc.pAllocator);
+  s->logicalDevice = *this;
+
+  {
+    LOG("Getting present mode count... ");
+    uint32_t presentModeCount;
+    s->result = vkGetPhysicalDeviceSurfacePresentModesKHR(
+        state().physicalDevice.handle(),
+        desc.createInfo.surface,
+        &presentModeCount,
+        nullptr);
+    CHECK_RESULT(swapchain);
+
+    LOG("Found %d... Getting present modes... ", presentModeCount);
+    VkPresentModeKHR presentModes[presentModeCount];
+    s->result = vkGetPhysicalDeviceSurfacePresentModesKHR(
+        state().physicalDevice.handle(),
+        desc.createInfo.surface,
+        &presentModeCount,
+        (VkPresentModeKHR*)&presentModes);
+    CHECK_RESULT(swapchain);
+
+    LOG("Checking for present mode %s... ",
+        string_VkPresentModeKHR(desc.createInfo.presentMode));
+    bool foundPresentMode = false;
+    for (uint32_t i = 0; i < presentModeCount; ++i) {
+      LOG("%s... ", string_VkPresentModeKHR(presentModes[i]));
+      if (presentModes[i] == desc.createInfo.presentMode) {
+        foundPresentMode = true;
+        break;
+      }
+    }
+
+    if (!foundPresentMode) {
+      s->result = VK_ERROR_INITIALIZATION_FAILED;
+      LOG("Present mode unavailable on PhysicalDevice... ");
+      CHECK_RESULT(swapchain);
+    }
+  }
+
+  {
+    LOG("Getting SurfaceFormat count... ");
+    uint32_t formatCount;
+    s->result = vkGetPhysicalDeviceSurfaceFormatsKHR(
+        state().physicalDevice.handle(),
+        desc.createInfo.surface,
+        &formatCount,
+        nullptr);
+    CHECK_RESULT(swapchain);
+
+    LOG("Found %d... Getting SurfaceFormats... ", formatCount);
+    VkSurfaceFormatKHR formats[formatCount];
+    s->result = vkGetPhysicalDeviceSurfaceFormatsKHR(
+        state().physicalDevice.handle(),
+        desc.createInfo.surface,
+        &formatCount,
+        (VkSurfaceFormatKHR*)&formats);
+    CHECK_RESULT(swapchain);
+
+    LOG("Checking for SurfaceFormat %s %s... ",
+        string_VkFormat(desc.createInfo.imageFormat),
+        string_VkColorSpaceKHR(desc.createInfo.imageColorSpace));
+    bool foundFormat = false;
+    for (uint32_t i = 0; i < formatCount; ++i) {
+      LOG("%s %s... ", string_VkFormat(formats[i].format),
+          string_VkColorSpaceKHR(formats[i].colorSpace));
+      if (formats[i].format == desc.createInfo.imageFormat) {
+        foundFormat = true;
+        desc.createInfo.imageColorSpace = formats[i].colorSpace;
+        break;
+      }
+    }
+
+    if (!foundFormat) {
+      s->result = VK_ERROR_INITIALIZATION_FAILED;
+      LOG("SurfaceFormat unavailable PhysicalDevice... ");
+      CHECK_RESULT(swapchain);
+    }
+  }
+
+  LOG("Getting SurfaceCapabilities... ");
+  VkSurfaceCapabilitiesKHR capabilities;
+  s->result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+      state().physicalDevice.handle(),
+      desc.createInfo.surface,
+      &capabilities);
+  CHECK_RESULT(swapchain);
+
+  LOG("Checking minImageCount %d maxImageCount %d... ", capabilities.minImageCount, capabilities.maxImageCount);
+  if (desc.createInfo.minImageCount < capabilities.minImageCount ||
+      desc.createInfo.minImageCount > capabilities.maxImageCount) {
+    LOG("MinImageCount %d not supported ... ", desc.createInfo.minImageCount);
+    s->result = VK_ERROR_INITIALIZATION_FAILED;
+    CHECK_RESULT(swapchain);
+  }
+
+  LOG("Checking imageExtent %d %d... ",
+      desc.createInfo.imageExtent.width,
+      desc.createInfo.imageExtent.height);
+  if (desc.createInfo.imageExtent.width < capabilities.minImageExtent.width ||
+      desc.createInfo.imageExtent.height < capabilities.minImageExtent.height ||
+      desc.createInfo.imageExtent.width > capabilities.maxImageExtent.width ||
+      desc.createInfo.imageExtent.height > capabilities.maxImageExtent.height) {
+    LOG("Error! Supported minImageExtent %d %d maxImageExtent %d %d... ",
+        capabilities.minImageExtent.width,
+        capabilities.minImageExtent.height,
+        capabilities.maxImageExtent.width,
+        capabilities.maxImageExtent.height);
+    s->result = VK_ERROR_INITIALIZATION_FAILED;
+    CHECK_RESULT(swapchain);
+  }
+
+  LOG("Checking imageUsage... ");
+  LogFlagBits<VkImageUsageFlags, VkImageUsageFlagBits>(desc.createInfo.imageUsage, string_VkImageUsageFlagBits);
+  if ((desc.createInfo.imageUsage & capabilities.supportedUsageFlags) != desc.createInfo.imageUsage) {
+    LOG("Error! Supported imageUsage ... ");
+    LogFlagBits<VkImageUsageFlags, VkImageUsageFlagBits>(capabilities.supportedUsageFlags, string_VkImageUsageFlagBits);
+    s->result = VK_ERROR_INITIALIZATION_FAILED;
+    CHECK_RESULT(swapchain);
+  }
+
+  LOG("Checking preTransform %s... ", string_VkSurfaceTransformFlagBitsKHR(desc.createInfo.preTransform));
+  if ((desc.createInfo.preTransform & capabilities.supportedTransforms) != desc.createInfo.preTransform) {
+    LOG("Error! Supported transforms... ");
+    LogFlagBits<VkSurfaceTransformFlagsKHR, VkSurfaceTransformFlagBitsKHR>(capabilities.supportedTransforms, string_VkSurfaceTransformFlagBitsKHR);
+    s->result = VK_ERROR_INITIALIZATION_FAILED;
+    CHECK_RESULT(swapchain);
+  }
+
+  LOG("Checking compositeAlpha %s... ", string_VkCompositeAlphaFlagBitsKHR(desc.createInfo.compositeAlpha));
+  if ((desc.createInfo.compositeAlpha & capabilities.supportedCompositeAlpha) != desc.createInfo.compositeAlpha) {
+    LOG("Error! compositeAlphas... ");
+    LogFlagBits<VkCompositeAlphaFlagsKHR, VkCompositeAlphaFlagBitsKHR>(capabilities.supportedCompositeAlpha, string_VkCompositeAlphaFlagBitsKHR);
+    s->result = VK_ERROR_INITIALIZATION_FAILED;
+    CHECK_RESULT(swapchain);
+  }
+
+  LOG("Creating... ");
+  s->result = vkCreateSwapchainKHR(
+      handle(),
+      &desc.createInfo.vk(),
+      s->pAllocator,
+      swapchain.pHandle());
+  CHECK_RESULT(swapchain);
+
+  LOG("Setting DebugName... ");
+  s->result = SetDebugInfo(
+      handle(),
+      VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+      (uint64_t)*swapchain.pHandle(),
+      desc.debugName);
+  CHECK_RESULT(swapchain);
+
+  LOG("%s\n\n", string_VkResult(swapchain.Result()));
+  return swapchain;
+}
+
 const VkAllocationCallbacks* LogicalDevice::DefaultAllocator(
     const VkAllocationCallbacks* pAllocator) const {
   return pAllocator == nullptr ? state().pAllocator : pAllocator;
@@ -1036,6 +1220,8 @@ ImageView Image::CreateImageView(ImageViewDesc&& desc) const {
       desc.pAllocator,
       vkCreateImageView);
 }
+
+template struct HandleBase<Swapchain, VkSwapchainKHR, SwapchainState>;
 
 // PipelineLayout2 Vk::LogicalDevice::CreatePipelineLayout(
 //     LogicalDevice                   logicalDevice,
