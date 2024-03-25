@@ -1,9 +1,10 @@
 #pragma once
 
-extern char g_Running;
-extern char g_IsCompositor;
+#include <vulkan/vulkan.h>
 
-extern const char* const g_WindowExtensionName;
-extern const char* const g_ExternalMemoryExntensionName;
-extern const char* const g_ExternalSemaphoreExntensionName;
-extern const char* const g_ExternalFenceExntensionName;
+extern char kIsCompositor;
+
+extern const char* const kWindowExtensionName;
+extern const char* const kExternalMemoryExntensionName;
+extern const char* const kExternalSemaphoreExntensionName;
+extern const char* const kExternalFenceExntensionName;

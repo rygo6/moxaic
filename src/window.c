@@ -8,10 +8,10 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 
-const char* const g_WindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
-const char* const g_ExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
-const char* const g_ExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
-const char* const g_ExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
+const char* const kWindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+const char* const kExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
+const char* const kExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
+const char* const kExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
 
 struct {
   HINSTANCE hInstance;
@@ -29,7 +29,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
   return 0;
 }
 
-int MxCreateWindow() {
+int mxCreateWindow() {
   window.hInstance = GetModuleHandle(NULL);
 
   const wchar_t CLASS_NAME[] = L"MoxaicWindowClass";
@@ -62,14 +62,13 @@ int MxCreateWindow() {
   ShowWindow(window.hwnd, SW_SHOW);
 }
 
-VkResult MxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
-
-  PFN_vkCreateWin32SurfaceKHR createWin32Surface = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
-  assert(createWin32Surface != NULL && "Couldn't load PFN_vkCreateWin32SurfaceKHR");
-  const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
+int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
+  PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
+  assert(vkCreateWin32SurfaceKHR != NULL && "Couldn't load PFN_vkCreateWin32SurfaceKHR");
+  VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
       .hinstance = window.hInstance,
       .hwnd = window.hwnd,
   };
-  return createWin32Surface(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
+  return vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
 }

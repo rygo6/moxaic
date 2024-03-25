@@ -2,12 +2,12 @@
 #include "window.h"
 #include "constants.h"
 
-char g_IsCompositor = 1;
+char kIsCompositor = 1;
 
 int main(void) {
 
-  MxCreateWindow();
-  MxRendererInit();
+  mxCreateWindow();
+  mxRendererInit();
 
   return 0;
 }
