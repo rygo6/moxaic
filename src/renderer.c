@@ -8,9 +8,9 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 
-#define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)
+#define VK_VERSION   VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define COUNT(array) sizeof(array) / sizeof(array[0])
-#define VK_ALLOC NULL
+#define VK_ALLOC     NULL
 #define CHECK_RESULT(command)                                             \
   {                                                                       \
     VkResult result = command;                                            \
@@ -32,13 +32,13 @@
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
   assert(vkFunction != NULL && "Couldn't load " #vkFunction)
 
-#define COLOR_BUFFER_FORMAT VK_FORMAT_R8G8B8A8_UNORM
-#define NORMAL_BUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
-#define DEPTH_BUFFER_FORMAT VK_FORMAT_D32_SFLOAT
-#define COLOR_ATTACHMENT_INDEX 0
+#define COLOR_BUFFER_FORMAT     VK_FORMAT_R8G8B8A8_UNORM
+#define NORMAL_BUFFER_FORMAT    VK_FORMAT_R16G16B16A16_SFLOAT
+#define DEPTH_BUFFER_FORMAT     VK_FORMAT_D32_SFLOAT
+#define COLOR_ATTACHMENT_INDEX  0
 #define NORMAL_ATTACHMENT_INDEX 1
-#define DEPTH_ATTACHMENT_INDEX 2
-#define SWAP_COUNT 2
+#define DEPTH_ATTACHMENT_INDEX  2
+#define SWAP_COUNT              2
 
 static struct {
   VkInstance       instance;
@@ -98,24 +98,21 @@ typedef enum Support {
 } Support;
 const char* string_Support(const Support support) {
   switch (support) {
-  case Optional:
-    return "Optional";
-  case Yes:
-    return "Yes";
-  case No:
-    return "No";
-  default:
-    assert(0);
+  case Optional: return "Optional";
+  case Yes: return "Yes";
+  case No: return "No";
+  default: assert(0);
   }
 }
 
-static uint32_t FindQueueIndex(
-    VkPhysicalDevice physicalDevice,
-    Support          graphics,
-    Support          compute,
-    Support          transfer,
-    Support          globalPriority,
-    VkSurfaceKHR     presentSurface) {
+typedef struct QueueDesc {
+  Support      graphics;
+  Support      compute;
+  Support      transfer;
+  Support      globalPriority;
+  VkSurfaceKHR presentSurface;
+} QueueDesc;
+static VkResult FindQueueIndex(VkPhysicalDevice physicalDevice, const QueueDesc* pQueueDesc, uint32_t* pQueueIndex) {
   uint32_t queueFamilyCount;
   vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, NULL);
   VkQueueFamilyProperties2                 queueFamilyProperties[queueFamilyCount] = {};
@@ -134,37 +131,30 @@ static uint32_t FindQueueIndex(
     char globalPrioritySupport = queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
 
     VkBool32 presentSupport = VK_FALSE;
-    if (presentSurface != NULL)
-      vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, presentSurface, &presentSupport);
-    if (graphics == Yes && !graphicsSupport)
-      continue;
-    if (graphics == No && graphicsSupport)
-      continue;
-    if (compute == Yes && !computeSupport)
-      continue;
-    if (compute == No && computeSupport)
-      continue;
-    if (transfer == Yes && !transferSupport)
-      continue;
-    if (transfer == No && transferSupport)
-      continue;
-    if (globalPriority == Yes && !globalPrioritySupport)
-      continue;
-    if (globalPriority == No && globalPrioritySupport)
-      continue;
-    if (presentSurface != NULL && !presentSupport)
-      continue;
+    if (pQueueDesc->presentSurface != NULL)
+      vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, pQueueDesc->presentSurface, &presentSupport);
 
-    return i;
+    if (pQueueDesc->graphics == Yes && !graphicsSupport) continue;
+    if (pQueueDesc->graphics == No && graphicsSupport) continue;
+    if (pQueueDesc->compute == Yes && !computeSupport) continue;
+    if (pQueueDesc->compute == No && computeSupport) continue;
+    if (pQueueDesc->transfer == Yes && !transferSupport) continue;
+    if (pQueueDesc->transfer == No && transferSupport) continue;
+    if (pQueueDesc->globalPriority == Yes && !globalPrioritySupport) continue;
+    if (pQueueDesc->globalPriority == No && globalPrioritySupport) continue;
+    if (pQueueDesc->presentSurface != NULL && !presentSupport) continue;
+
+    *pQueueIndex = i;
+    return VK_SUCCESS;
   }
 
   printf("Can't find queue family! graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
-         string_Support(graphics),
-         string_Support(compute),
-         string_Support(transfer),
-         string_Support(globalPriority),
-         presentSurface == NULL ? "No" : "Yes");
-  assert(0 && "Failed to find Queue Family!");
+         string_Support(pQueueDesc->graphics),
+         string_Support(pQueueDesc->compute),
+         string_Support(pQueueDesc->transfer),
+         string_Support(pQueueDesc->globalPriority),
+         pQueueDesc->presentSurface == NULL ? "No" : "Yes");
+  return VK_ERROR_FEATURE_NOT_PRESENT;
 }
 
 int mxRendererInitContext() {
@@ -236,14 +226,32 @@ int mxRendererInitContext() {
            VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
     assert(physicalDeviceProperties.properties.apiVersion >= VK_VERSION && "Insufficinet Vulkan API Version");
-
-    context.graphicsQueueFamilyIndex = FindQueueIndex(context.physicalDevice, Yes, Yes, Yes, Yes, context.surface);
-    context.computeQueueFamilyIndex = FindQueueIndex(context.physicalDevice, No, Yes, Yes, Yes, context.surface);
-    context.transferQueueFamilyIndex = FindQueueIndex(context.physicalDevice, No, No, Yes, Optional, NULL);
   }
 
   { // Surface
     ASSERT_RESULT(mxCreateSurface(context.instance, VK_ALLOC, &context.surface));
+  }
+
+  { // QueueIndices
+    QueueDesc graphicsQueueDesc = {
+        .graphics = Yes,
+        .compute = Yes,
+        .transfer = Yes,
+        .globalPriority = Yes,
+        .presentSurface = context.surface};
+    ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &graphicsQueueDesc, &context.graphicsQueueFamilyIndex));
+    QueueDesc computeQueueDesc = {
+        .graphics = No,
+        .compute = Yes,
+        .transfer = Yes,
+        .globalPriority = Yes,
+        .presentSurface = context.surface};
+    ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &computeQueueDesc, &context.computeQueueFamilyIndex));
+    QueueDesc transferQueueDesc = {
+        .graphics = No,
+        .compute = No,
+        .transfer = Yes};
+    ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &transferQueueDesc, &context.transferQueueFamilyIndex));
   }
 
   { // Device
@@ -338,7 +346,9 @@ int mxRendererInitContext() {
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
     ASSERT_RESULT(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &context.device));
+  }
 
+  { //Queues
     vkGetDeviceQueue(context.device, context.graphicsQueueFamilyIndex, 0, &context.graphicsQueue);
     assert(context.graphicsQueue != NULL && "graphicsQueue not found!");
     vkGetDeviceQueue(context.device, context.computeQueueFamilyIndex, 0, &context.computeQueue);
@@ -350,14 +360,14 @@ int mxRendererInitContext() {
   // PFN_LOAD(vkSetDebugUtilsObjectNameEXT);
 
   { // RenderPass
-#define VK_DEFAULT_ATTACHMENT_DESCRIPTION             \
-  .samples = VK_SAMPLE_COUNT_1_BIT,                   \
-  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
-  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
-  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,   \
-  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
-  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
-  .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
+    #define VK_DEFAULT_ATTACHMENT_DESCRIPTION             \
+      .samples = VK_SAMPLE_COUNT_1_BIT,                   \
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
+      .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,   \
+      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
+      .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
 
     VkRenderPassCreateInfo renderPassCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -381,6 +391,8 @@ int mxRendererInitContext() {
         },
     };
     ASSERT_RESULT(vkCreateRenderPass(context.device, &renderPassCreateInfo, VK_ALLOC, &context.renderPass));
+
+    #undef VK_DEFAULT_ATTACHMENT_DESCRIPTION
   }
 
   { // Pools
@@ -430,10 +442,19 @@ int mxRendererInitContext() {
   }
 
   { // CommandBuffers
-
   }
 
   {
+    #define DEFAULT_LINEAR_SAMPLER                           \
+      .magFilter = VK_FILTER_LINEAR,                         \
+      .minFilter = VK_FILTER_LINEAR,                         \
+      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,           \
+      .maxLod = 16.0,                                        \
+      .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+      .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+      .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
+
     VkSamplerCreateInfo nearestSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .maxLod = 16.0,
@@ -443,16 +464,6 @@ int mxRendererInitContext() {
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     };
     ASSERT_RESULT(vkCreateSampler(context.device, &nearestSampleCreateInfo, VK_ALLOC, &context.nearestSampler));
-
-#define DEFAULT_LINEAR_SAMPLER                           \
-  .magFilter = VK_FILTER_LINEAR,                         \
-  .minFilter = VK_FILTER_LINEAR,                         \
-  .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,           \
-  .maxLod = 16.0,                                        \
-  .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
-  .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
-  .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
-  .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
 
     VkSamplerCreateInfo linearSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -479,13 +490,15 @@ int mxRendererInitContext() {
         DEFAULT_LINEAR_SAMPLER,
     };
     ASSERT_RESULT(vkCreateSampler(context.device, &maxSamplerCreateInfo, VK_ALLOC, &context.minSampler));
+
+    #undef DEFAULT_LINEAR_SAMPLER
   }
 
   { // Swapchain
     VkSwapchainCreateInfoKHR swapchainCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = context.surface,
-        .minImageCount = 2,
+        .minImageCount = SWAP_COUNT,
         .imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
         .imageExtent = {DEFAULT_WIDTH, DEFAULT_HEIGHT},
         .imageArrayLayers = 1,
@@ -497,8 +510,6 @@ int mxRendererInitContext() {
         .clipped = VK_TRUE,
     };
     ASSERT_RESULT(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
-
-
   }
 }
 

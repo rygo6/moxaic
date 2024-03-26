@@ -7,6 +7,10 @@ BinPackParameters: false
 PenaltyReturnTypeOnItsOwnLine: 0
 ColumnLimit: 0
 PointerAlignment: Left
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine : true
+IndentPPDirectives: BeforeHash
+AlignConsecutiveMacros: true
 
 ## Generated from CLion C/C++ Code Style settings
 #BasedOnStyle: LLVM
