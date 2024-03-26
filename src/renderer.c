@@ -1,5 +1,5 @@
 #include "renderer.h"
-#include "constants.h"
+#include "globals.h"
 #include "window.h"
 
 #include <assert.h>
@@ -32,12 +32,13 @@
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
   assert(vkFunction != NULL && "Couldn't load " #vkFunction)
 
-static const VkFormat kColorBufferFormat = VK_FORMAT_R8G8B8A8_UNORM;
-static const VkFormat kNormalBufferFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-static const VkFormat kDepthBufferFormat = VK_FORMAT_D32_SFLOAT;
-static const uint32_t kColorAttachmentIndex = 0;
-static const uint32_t kNormalAttachmentIndex = 1;
-static const uint32_t kDepthAttachmentIndex = 2;
+#define COLOR_BUFFER_FORMAT VK_FORMAT_R8G8B8A8_UNORM
+#define NORMAL_BUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
+#define DEPTH_BUFFER_FORMAT VK_FORMAT_D32_SFLOAT
+#define COLOR_ATTACHMENT_INDEX 0
+#define NORMAL_ATTACHMENT_INDEX 1
+#define DEPTH_ATTACHMENT_INDEX 2
+#define SWAP_COUNT 2
 
 static struct {
   VkInstance       instance;
@@ -46,7 +47,16 @@ static struct {
 
   VkDevice device;
 
+  VkSwapchainKHR swapchain;
+  VkImage        swapImages[SWAP_COUNT];
+  VkImageView    swapImageViews[SWAP_COUNT];
+
   VkDescriptorPool descriptorPool;
+
+  VkSampler nearestSampler;
+  VkSampler linearSampler;
+  VkSampler minSampler;
+  VkSampler maxSampler;
 
   VkRenderPass    renderPass;
   VkCommandPool   graphicsCommandPool;
@@ -65,6 +75,9 @@ static struct {
   VkQueryPool timeQueryPool;
 
 } context;
+
+struct Node_t {
+};
 
 static VkBool32 DebugCallback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -154,7 +167,7 @@ static uint32_t FindQueueIndex(
   assert(0 && "Failed to find Queue Family!");
 }
 
-int mxRendererInit() {
+int mxRendererInitContext() {
   { // Instance
     VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = 0;
     // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
@@ -181,7 +194,7 @@ int mxRendererInit() {
         VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         VK_KHR_SURFACE_EXTENSION_NAME,
-        kWindowExtensionName,
+        WindowExtensionName,
     };
     VkInstanceCreateInfo instanceCreationInfo = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -287,42 +300,40 @@ int mxRendererInit() {
         VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME,
         VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
         VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
-        kExternalMemoryExntensionName,
-        kExternalSemaphoreExntensionName,
-        kExternalFenceExntensionName,
+        ExternalMemoryExntensionName,
+        ExternalSemaphoreExntensionName,
+        ExternalFenceExntensionName,
     };
     VkDeviceQueueGlobalPriorityCreateInfoEXT deviceQueueGlobalPriorityCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
-        .globalPriority = kIsCompositor ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT,
-    };
-    float                   pQueuePriorities[] = {kIsCompositor ? 1.0f : 0.0f};
-    VkDeviceQueueCreateInfo pQueueCreateInfos[] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .pNext = &deviceQueueGlobalPriorityCreateInfo,
-            .queueFamilyIndex = context.graphicsQueueFamilyIndex,
-            .queueCount = 1,
-            .pQueuePriorities = pQueuePriorities,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .pNext = &deviceQueueGlobalPriorityCreateInfo,
-            .queueFamilyIndex = context.computeQueueFamilyIndex,
-            .queueCount = 1,
-            .pQueuePriorities = pQueuePriorities,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-            .queueFamilyIndex = context.transferQueueFamilyIndex,
-            .queueCount = 1,
-            .pQueuePriorities = (float[]){0},
-        },
+        .globalPriority = IsCompositor ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT,
     };
     VkDeviceCreateInfo deviceCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = &physicalDeviceFeatures,
-        .queueCreateInfoCount = COUNT(pQueueCreateInfos),
-        .pQueueCreateInfos = pQueueCreateInfos,
+        .queueCreateInfoCount = 3,
+        .pQueueCreateInfos = (VkDeviceQueueCreateInfo[]){
+            {
+                .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                .pNext = &deviceQueueGlobalPriorityCreateInfo,
+                .queueFamilyIndex = context.graphicsQueueFamilyIndex,
+                .queueCount = 1,
+                .pQueuePriorities = &(float){IsCompositor ? 1.0f : 0.0f},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                .pNext = &deviceQueueGlobalPriorityCreateInfo,
+                .queueFamilyIndex = context.computeQueueFamilyIndex,
+                .queueCount = 1,
+                .pQueuePriorities = &(float){IsCompositor ? 1.0f : 0.0f},
+            },
+            {
+                .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                .queueFamilyIndex = context.transferQueueFamilyIndex,
+                .queueCount = 1,
+                .pQueuePriorities = &(float){0},
+            },
+        },
         .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
@@ -336,42 +347,35 @@ int mxRendererInit() {
     assert(context.transferQueue != NULL && "transferQueue not found!");
   }
 
-  PFN_LOAD(vkSetDebugUtilsObjectNameEXT);
+  // PFN_LOAD(vkSetDebugUtilsObjectNameEXT);
 
   { // RenderPass
-    VkAttachmentReference pColorAttachments[] = {
-        {.attachment = kColorAttachmentIndex,
-         .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL},
-        {.attachment = kNormalAttachmentIndex,
-         .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL},
-    };
-#define VK_DEFAULT_ATTACHMENT_DESCRIPTION {             \
-    .samples = VK_SAMPLE_COUNT_1_BIT,                   \
-    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
-    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
-    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,   \
-    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
-    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
-    .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL}
-    VkAttachmentDescription pAttachments[] = {
-        VK_DEFAULT_ATTACHMENT_DESCRIPTION,
-        VK_DEFAULT_ATTACHMENT_DESCRIPTION,
-        VK_DEFAULT_ATTACHMENT_DESCRIPTION,
-    };
-#undef VK_DEFAULT_ATTACHMENT_DESCRIPTION
-    pAttachments[kColorAttachmentIndex].format = kColorBufferFormat;
-    pAttachments[kNormalAttachmentIndex].format = kNormalBufferFormat;
-    pAttachments[kDepthAttachmentIndex].format = kDepthBufferFormat;
+#define VK_DEFAULT_ATTACHMENT_DESCRIPTION             \
+  .samples = VK_SAMPLE_COUNT_1_BIT,                   \
+  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
+  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
+  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,   \
+  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
+  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
+  .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
+
     VkRenderPassCreateInfo renderPassCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = COUNT(pAttachments),
-        .pAttachments = pAttachments,
+        .attachmentCount = 3,
+        .pAttachments = (VkAttachmentDescription[]){
+            {.format = COLOR_BUFFER_FORMAT, VK_DEFAULT_ATTACHMENT_DESCRIPTION},
+            {.format = NORMAL_BUFFER_FORMAT, VK_DEFAULT_ATTACHMENT_DESCRIPTION},
+            {.format = DEPTH_BUFFER_FORMAT, VK_DEFAULT_ATTACHMENT_DESCRIPTION},
+        },
         .subpassCount = 1,
         .pSubpasses = &(VkSubpassDescription){
-            .colorAttachmentCount = COUNT(pColorAttachments),
-            .pColorAttachments = pColorAttachments,
+            .colorAttachmentCount = 2,
+            .pColorAttachments = (VkAttachmentReference[]){
+                {.attachment = COLOR_ATTACHMENT_INDEX, .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL},
+                {.attachment = NORMAL_ATTACHMENT_INDEX, .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL},
+            },
             .pDepthStencilAttachment = &(VkAttachmentReference){
-                .attachment = kDepthAttachmentIndex,
+                .attachment = DEPTH_ATTACHMENT_INDEX,
                 .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
             },
         },
@@ -385,18 +389,18 @@ int mxRendererInit() {
         .queueFamilyIndex = context.graphicsQueueFamilyIndex,
     };
     ASSERT_RESULT(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &context.graphicsCommandPool));
+    VkCommandPoolCreateInfo computeCommandPoolCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .queueFamilyIndex = context.computeQueueFamilyIndex,
+    };
+    ASSERT_RESULT(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
+
     VkCommandBufferAllocateInfo graphicsCommandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = context.graphicsCommandPool,
         .commandBufferCount = 1,
     };
     ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
-
-    VkCommandPoolCreateInfo computeCommandPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .queueFamilyIndex = context.computeQueueFamilyIndex,
-    };
-    ASSERT_RESULT(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
     VkCommandBufferAllocateInfo computeCommandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = context.computeCommandPool,
@@ -404,34 +408,100 @@ int mxRendererInit() {
     };
     ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
 
+    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets = 30,
+        .poolSizeCount = 3,
+        .pPoolSizes = (VkDescriptorPoolSize[]){
+            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 10},
+            {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 10},
+            {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
+        },
+    };
+    ASSERT_RESULT(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VK_ALLOC, &context.descriptorPool));
+
     VkQueryPoolCreateInfo queryPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
     };
     ASSERT_RESULT(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VK_ALLOC, &context.timeQueryPool));
-
-    VkDescriptorPoolSize pPoolSizes[] = {
-        {
-            .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 10,
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .descriptorCount = 10,
-        },
-        {
-            .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .descriptorCount = 10,
-        },
-    };
-    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-        .maxSets = 30,
-        .poolSizeCount = COUNT(pPoolSizes),
-        .pPoolSizes = pPoolSizes,
-    };
-    ASSERT_RESULT(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VK_ALLOC, &context.descriptorPool));
   }
+
+  { // CommandBuffers
+
+  }
+
+  {
+    VkSamplerCreateInfo nearestSampleCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .maxLod = 16.0,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+    };
+    ASSERT_RESULT(vkCreateSampler(context.device, &nearestSampleCreateInfo, VK_ALLOC, &context.nearestSampler));
+
+#define DEFAULT_LINEAR_SAMPLER                           \
+  .magFilter = VK_FILTER_LINEAR,                         \
+  .minFilter = VK_FILTER_LINEAR,                         \
+  .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,           \
+  .maxLod = 16.0,                                        \
+  .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
+
+    VkSamplerCreateInfo linearSampleCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        DEFAULT_LINEAR_SAMPLER,
+    };
+    ASSERT_RESULT(vkCreateSampler(context.device, &linearSampleCreateInfo, VK_ALLOC, &context.linearSampler));
+
+    VkSamplerCreateInfo minSamplerCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext = &(VkSamplerReductionModeCreateInfo){
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
+            .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
+        },
+        DEFAULT_LINEAR_SAMPLER,
+    };
+    ASSERT_RESULT(vkCreateSampler(context.device, &minSamplerCreateInfo, VK_ALLOC, &context.minSampler));
+
+    VkSamplerCreateInfo maxSamplerCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .pNext = &(VkSamplerReductionModeCreateInfo){
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
+            .reductionMode = VK_SAMPLER_REDUCTION_MODE_MIN,
+        },
+        DEFAULT_LINEAR_SAMPLER,
+    };
+    ASSERT_RESULT(vkCreateSampler(context.device, &maxSamplerCreateInfo, VK_ALLOC, &context.minSampler));
+  }
+
+  { // Swapchain
+    VkSwapchainCreateInfoKHR swapchainCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .surface = context.surface,
+        .minImageCount = 2,
+        .imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
+        .imageExtent = {DEFAULT_WIDTH, DEFAULT_HEIGHT},
+        .imageArrayLayers = 1,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+        .clipped = VK_TRUE,
+    };
+    ASSERT_RESULT(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
+
+
+  }
+}
+
+int mxRenderInitNode() {
+  struct Node_t node;
 }

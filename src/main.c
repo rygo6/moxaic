@@ -1,13 +1,13 @@
 #include "renderer.h"
 #include "window.h"
-#include "constants.h"
+#include "globals.h"
 
-char kIsCompositor = 1;
+char IsCompositor = 1;
 
 int main(void) {
 
   mxCreateWindow();
-  mxRendererInit();
+  mxRendererInitContext();
 
   return 0;
 }

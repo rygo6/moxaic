@@ -1,19 +1,18 @@
 #include "window.h"
-#include "constants.h"
+#include "globals.h"
 
 #include <assert.h>
 #include <windows.h>
 
-#include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 
-const char* const kWindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
-const char* const kExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
-const char* const kExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
-const char* const kExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
+const char* const WindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+const char* const ExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
+const char* const ExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
+const char* const ExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
 
-struct {
+static struct {
   HINSTANCE hInstance;
   HWND      hwnd;
 } window;
@@ -33,6 +32,7 @@ int mxCreateWindow() {
   window.hInstance = GetModuleHandle(NULL);
 
   const wchar_t CLASS_NAME[] = L"MoxaicWindowClass";
+  DWORD windowStyle = WS_OVERLAPPEDWINDOW;
 
   WNDCLASS wc = {
       .lpfnWndProc = WindowProc,
@@ -42,14 +42,22 @@ int mxCreateWindow() {
 
   RegisterClass(&wc);
 
+  RECT rect = {
+      .right = DEFAULT_WIDTH,
+      .bottom = DEFAULT_HEIGHT,
+  };
+  AdjustWindowRect(&rect, windowStyle, FALSE);
+  int windowWidth = rect.right - rect.left;
+  int windowHeight = rect.bottom - rect.top;
+
   window.hwnd = CreateWindowEx(
       0,                   // Optional window styles.
       CLASS_NAME,          // Window class
       L"moxaic",           // Window text
-      WS_OVERLAPPEDWINDOW, // Window style
+      windowStyle, // Window style
 
       // Size and position
-      CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+      CW_USEDEFAULT, CW_USEDEFAULT, windowWidth, windowHeight,
 
       NULL,             // Parent window
       NULL,             // Menu
