@@ -7,7 +7,7 @@ char IsCompositor = 1;
 int main(void) {
 
   mxCreateWindow();
-  mxRendererInitContext();
+  vkInitContext();
 
   return 0;
 }

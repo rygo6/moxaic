@@ -4,13 +4,18 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 
-#define VK_VERSION   VK_MAKE_API_VERSION(0, 1, 3, 2)
-#define COUNT(array) sizeof(array) / sizeof(array[0])
-#define VK_ALLOC     NULL
+//----------------------------------------------------------------------------------
+// Global Constants
+//----------------------------------------------------------------------------------
+
+#define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)
+#define VK_ALLOC   NULL
+
 #define CHECK_RESULT(command)                                             \
   {                                                                       \
     VkResult result = command;                                            \
@@ -27,10 +32,11 @@
       assert(0 && "Vulkan Handle Error!");                                \
     }                                                                     \
   }
-
 #define PFN_LOAD(vkFunction)                                                                            \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
   assert(vkFunction != NULL && "Couldn't load " #vkFunction)
+
+#define COUNT(array) sizeof(array) / sizeof(array[0])
 
 #define COLOR_BUFFER_FORMAT     VK_FORMAT_R8G8B8A8_UNORM
 #define NORMAL_BUFFER_FORMAT    VK_FORMAT_R16G16B16A16_SFLOAT
@@ -38,7 +44,40 @@
 #define COLOR_ATTACHMENT_INDEX  0
 #define NORMAL_ATTACHMENT_INDEX 1
 #define DEPTH_ATTACHMENT_INDEX  2
-#define SWAP_COUNT              2
+
+#define BINDING_GLOBAL 0
+
+#define SWAP_COUNT 2
+
+//----------------------------------------------------------------------------------
+// Math
+//----------------------------------------------------------------------------------
+
+#define MATH_ALIGN __attribute((aligned(16)))
+
+typedef MATH_ALIGN float    vec3[3];
+typedef MATH_ALIGN float    vec4[4];
+typedef MATH_ALIGN vec4     mat4[4];
+typedef MATH_ALIGN uint32_t ivec2[2];
+
+//----------------------------------------------------------------------------------
+// Global State
+//----------------------------------------------------------------------------------
+
+typedef struct CameraState {
+  vec3 position;
+  vec4 rotation;
+} CameraState;
+
+typedef struct GlobalSetState {
+  mat4  view;
+  mat4  proj;
+  mat4  viewProj;
+  mat4  invView;
+  mat4  invProj;
+  mat4  invViewProj;
+  ivec2 screenSize;
+} GlobalSetState;
 
 static struct {
   VkInstance       instance;
@@ -47,18 +86,23 @@ static struct {
 
   VkDevice device;
 
-  VkSwapchainKHR swapchain;
-  VkImage        swapImages[SWAP_COUNT];
-  VkImageView    swapImageViews[SWAP_COUNT];
-
-  VkDescriptorPool descriptorPool;
-
   VkSampler nearestSampler;
   VkSampler linearSampler;
   VkSampler minSampler;
   VkSampler maxSampler;
 
-  VkRenderPass    renderPass;
+  VkRenderPass renderPass;
+
+  GlobalSetState        globalSetMapped;
+  VkDeviceMemory        globalSetMemory;
+  VkBuffer              globalSetBuffer;
+  VkDescriptorSetLayout globalSetLayout;
+  VkDescriptorSet       globalSet;
+
+  VkSwapchainKHR swapchain;
+  VkImage        swapImages[SWAP_COUNT];
+  VkImageView    swapImageViews[SWAP_COUNT];
+
   VkCommandPool   graphicsCommandPool;
   VkCommandBuffer graphicsCommandBuffer;
   uint32_t        graphicsQueueFamilyIndex;
@@ -72,13 +116,163 @@ static struct {
   uint32_t transferQueueFamilyIndex;
   VkQueue  transferQueue;
 
+  VkDescriptorPool descriptorPool;
+
   VkQueryPool timeQueryPool;
 
 } context;
 
-struct Node_t {
+VkResult ReadFile(const char* pPath, int* pFileLength, char** ppFileContents) {
+  FILE* file = fopen(pPath, "rb");
+  if (file == NULL) {
+    printf("File can't be opened! %s\n", pPath);
+    return VK_ERROR_UNKNOWN;
+  }
+  fseek(file, 0, SEEK_END);
+  *pFileLength = ftell(file);
+  rewind(file);
+  *ppFileContents = malloc(*pFileLength * sizeof(char));
+  const size_t readCount = fread(*ppFileContents, *pFileLength, 1, file);
+  if (readCount == 0) {
+    printf("Failed to read file! %s\n", pPath);
+    return VK_ERROR_UNKNOWN;
+  }
+  fclose(file);
+}
+
+//----------------------------------------------------------------------------------
+// Graphics
+//----------------------------------------------------------------------------------
+
+VkResult CreateShader(const char* pShaderPath, VkShaderModule* pShaderModule) {
+  int   fileLength;
+  char* pFileContents;
+  if (ReadFile(pShaderPath, &fileLength, &pFileContents) != VK_SUCCESS) {
+    free(pFileContents);
+    return VK_ERROR_UNKNOWN;
+  }
+
+  VkShaderModuleCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+      .codeSize = fileLength,
+      .pCode = (uint32_t*)pFileContents,
+  };
+  VkResult result = vkCreateShaderModule(context.device, &createInfo, VK_ALLOC, pShaderModule);
+  free(pFileContents);
+  return result;
+}
+
+void WriteGlobalDescriptorSet() {
+  VkWriteDescriptorSet writeDescriptorSet = {
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = context.globalSet,
+      .dstBinding = BINDING_GLOBAL,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .pBufferInfo = &(VkDescriptorBufferInfo){
+          .buffer = context.globalSetBuffer,
+          .range = sizeof(GlobalSetState)},
+  };
+  vkUpdateDescriptorSets(context.device, 1, &writeDescriptorSet, 0, NULL);
+}
+
+//----------------------------------------------------------------------------------
+// Image Barriers
+//----------------------------------------------------------------------------------
+static VkResult BeginImmediateCommandBuffer(
+    VkCommandPool    commandPool,
+    VkCommandBuffer* pCommandBuffer) {
+  VkCommandBufferAllocateInfo allocInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = commandPool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = 1,
+  };
+  CHECK_RESULT(vkAllocateCommandBuffers(context.device, &allocInfo, pCommandBuffer));
+  VkCommandBufferBeginInfo beginInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+  };
+  CHECK_RESULT(vkBeginCommandBuffer(*pCommandBuffer, &beginInfo));
+}
+
+static VkResult EndImmediateCommandBuffer(
+    VkCommandPool   commandPool,
+    VkQueue         graphicsQueue,
+    VkCommandBuffer commandBuffer) {
+  CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
+  const VkSubmitInfo submitInfo = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &commandBuffer,
+  };
+  CHECK_RESULT(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+  CHECK_RESULT(vkQueueWaitIdle(graphicsQueue));
+  vkFreeCommandBuffers(context.device, commandPool, 1, &commandBuffer);
+}
+
+typedef enum VkQueueBarrier {
+  QUEUE_BARRIER_IGNORE,
+  QUEUE_BARRIER_GRAPHICS,
+  QUEUE_BARRIER_COMPUTE,
+  QUEUE_BARRIER_TRANSITION,
+  QUEUE_BARRIER_FAMILY_EXTERNAL,
+} VkQueueBarrier;
+typedef struct VkImageBarrier {
+  VkAccessFlagBits2        accessMask;
+  VkImageLayout            layout;
+  VkQueueBarrier           queueFamily;
+  VkPipelineStageFlagBits2 stageMask;
+} VkImageBarrier;
+const VkImageBarrier UndefinedImageBarrier = {
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .queueFamily = QUEUE_BARRIER_IGNORE,
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+};
+const VkImageBarrier PresentImageBarrier = {
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    .queueFamily = QUEUE_BARRIER_COMPUTE,
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
 };
 
+static VkResult TransitionImageLayoutImmediate(
+    const VkImageBarrier* pSrc,
+    const VkImageBarrier* pDst,
+    VkImageAspectFlags    aspectMask,
+    VkImage               image) {
+  VkCommandBuffer commandBuffer;
+  CHECK_RESULT(BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer));
+  VkImageMemoryBarrier2 barrier = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+      .srcStageMask = pSrc->stageMask,
+      .srcAccessMask = pSrc->accessMask,
+      .dstStageMask = pDst->stageMask,
+      .dstAccessMask = pDst->accessMask,
+      .oldLayout = pSrc->layout,
+      .newLayout = pDst->layout,
+      .srcQueueFamilyIndex = pSrc->queueFamily,
+      .dstQueueFamilyIndex = pSrc->queueFamily,
+      .image = image,
+      .subresourceRange = {
+          .aspectMask = aspectMask,
+          .levelCount = 1,
+          .layerCount = 1,
+      },
+  };
+  VkDependencyInfo dependencyInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .imageMemoryBarrierCount = 1,
+      .pImageMemoryBarriers = &barrier,
+  };
+  vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+  CHECK_RESULT(EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer));
+}
+
+//----------------------------------------------------------------------------------
+// Context
+//----------------------------------------------------------------------------------
 static VkBool32 DebugCallback(
     const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     const VkDebugUtilsMessageTypeFlagsEXT        messageType,
@@ -86,30 +280,78 @@ static VkBool32 DebugCallback(
     void*                                        pUserData) {
   printf("%s\n", pCallbackData->pMessage);
   if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-    assert(0 && "Validation Error! Exiting!");
+    assert(0 && "Validation Error!");
   }
   return VK_FALSE;
 }
 
-typedef enum Support {
-  Optional,
-  Yes,
-  No,
-} Support;
-const char* string_Support(const Support support) {
-  switch (support) {
-  case Optional: return "Optional";
-  case Yes: return "Yes";
-  case No: return "No";
-  default: assert(0);
+static VkResult FindMemoryTypeIndex(
+    const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties,
+    const VkMemoryRequirements*             pMemoryRequirements,
+    VkMemoryPropertyFlags                   memoryPropertyFlags,
+    uint32_t*                               pMemoryTypeIndex) {
+  VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+  for (uint32_t i = 0; i < pPhysicalDeviceMemoryProperties->memoryTypeCount; i++) {
+    if ((pMemoryRequirements->memoryTypeBits & 1 << i) &&
+        ((pPhysicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags)) {
+      *pMemoryTypeIndex = i;
+      result = VK_SUCCESS;
+      break;
+    }
   }
+
+  if (result != VK_SUCCESS) {
+    printf("Failed to find memory with properties: ");
+    int index = 0;
+    while (memoryPropertyFlags) {
+      if (memoryPropertyFlags & 1) {
+        printf(" %s ", string_VkMemoryPropertyFlagBits(1U << index));
+      }
+      ++index;
+      memoryPropertyFlags >>= 1;
+    }
+  }
+
+  return result;
 }
 
+static VkResult AllocateBufferMemory(
+    VkBuffer              buffer,
+    VkMemoryPropertyFlags memoryPropertyFlags,
+    VkDeviceMemory*       pDeviceMemory) {
+  uint32_t                         memoryTypeIndex;
+  VkMemoryRequirements             memoryRequirements;
+  VkPhysicalDeviceMemoryProperties memoryProperties;
+  vkGetBufferMemoryRequirements(context.device, buffer, &memoryRequirements);
+  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProperties);
+  CHECK_RESULT(FindMemoryTypeIndex(&memoryProperties, &memoryRequirements, memoryPropertyFlags, &memoryTypeIndex));
+
+  VkMemoryAllocateInfo allocateInfo = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .allocationSize = memoryRequirements.size,
+      .memoryTypeIndex = memoryTypeIndex,
+  };
+  CHECK_RESULT(vkAllocateMemory(context.device, &allocateInfo, VK_ALLOC, pDeviceMemory));
+}
+
+typedef enum VkSupport {
+  SUPPORT_OPTIONAL,
+  SUPPORT_YES,
+  SUPPORT_NO,
+} VkSupport;
+const char* string_Support(VkSupport support) {
+  switch (support) {
+  case SUPPORT_OPTIONAL: return "Optional";
+  case SUPPORT_YES: return "Yes";
+  case SUPPORT_NO: return "No";
+  default: assert(0 && "Error! string_Support does not support passed value!");
+  }
+}
 typedef struct QueueDesc {
-  Support      graphics;
-  Support      compute;
-  Support      transfer;
-  Support      globalPriority;
+  VkSupport    graphics;
+  VkSupport    compute;
+  VkSupport    transfer;
+  VkSupport    globalPriority;
   VkSurfaceKHR presentSurface;
 } QueueDesc;
 static VkResult FindQueueIndex(VkPhysicalDevice physicalDevice, const QueueDesc* pQueueDesc, uint32_t* pQueueIndex) {
@@ -134,14 +376,14 @@ static VkResult FindQueueIndex(VkPhysicalDevice physicalDevice, const QueueDesc*
     if (pQueueDesc->presentSurface != NULL)
       vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, pQueueDesc->presentSurface, &presentSupport);
 
-    if (pQueueDesc->graphics == Yes && !graphicsSupport) continue;
-    if (pQueueDesc->graphics == No && graphicsSupport) continue;
-    if (pQueueDesc->compute == Yes && !computeSupport) continue;
-    if (pQueueDesc->compute == No && computeSupport) continue;
-    if (pQueueDesc->transfer == Yes && !transferSupport) continue;
-    if (pQueueDesc->transfer == No && transferSupport) continue;
-    if (pQueueDesc->globalPriority == Yes && !globalPrioritySupport) continue;
-    if (pQueueDesc->globalPriority == No && globalPrioritySupport) continue;
+    if (pQueueDesc->graphics == SUPPORT_YES && !graphicsSupport) continue;
+    if (pQueueDesc->graphics == SUPPORT_NO && graphicsSupport) continue;
+    if (pQueueDesc->compute == SUPPORT_YES && !computeSupport) continue;
+    if (pQueueDesc->compute == SUPPORT_NO && computeSupport) continue;
+    if (pQueueDesc->transfer == SUPPORT_YES && !transferSupport) continue;
+    if (pQueueDesc->transfer == SUPPORT_NO && transferSupport) continue;
+    if (pQueueDesc->globalPriority == SUPPORT_YES && !globalPrioritySupport) continue;
+    if (pQueueDesc->globalPriority == SUPPORT_NO && globalPrioritySupport) continue;
     if (pQueueDesc->presentSurface != NULL && !presentSupport) continue;
 
     *pQueueIndex = i;
@@ -157,7 +399,7 @@ static VkResult FindQueueIndex(VkPhysicalDevice physicalDevice, const QueueDesc*
   return VK_ERROR_FEATURE_NOT_PRESENT;
 }
 
-int mxRendererInitContext() {
+int vkInitContext() {
   { // Instance
     VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = 0;
     // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
@@ -203,7 +445,7 @@ int mxRendererInitContext() {
         .ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
     };
     ASSERT_RESULT(vkCreateInstance(&instanceCreationInfo, VK_ALLOC, &context.instance));
-    printf("Instance Vulkan API version %d.%d.%d.%d\n",
+    printf("Instance Vulkan API version: %d.%d.%d.%d\n",
            VK_API_VERSION_VARIANT(instanceCreationInfo.pApplicationInfo->apiVersion),
            VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
            VK_API_VERSION_MINOR(instanceCreationInfo.pApplicationInfo->apiVersion),
@@ -215,12 +457,11 @@ int mxRendererInitContext() {
     ASSERT_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, NULL));
     VkPhysicalDevice devices[deviceCount];
     ASSERT_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, devices));
-    printf("Choosing PhysicalDevice Index: %d\n", 0);
-    context.physicalDevice = devices[0];
+    context.physicalDevice = devices[0]; // We are just assuming the best GPU is first. So far this seems to be true.
     VkPhysicalDeviceProperties2 physicalDeviceProperties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
     vkGetPhysicalDeviceProperties2(context.physicalDevice, &physicalDeviceProperties);
     printf("PhysicalDevice: %s\n", physicalDeviceProperties.properties.deviceName);
-    printf("PhysicalDevice Vulkan API version %d.%d.%d.%d\n",
+    printf("PhysicalDevice Vulkan API version: %d.%d.%d.%d\n",
            VK_API_VERSION_VARIANT(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_MAJOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
@@ -234,23 +475,23 @@ int mxRendererInitContext() {
 
   { // QueueIndices
     QueueDesc graphicsQueueDesc = {
-        .graphics = Yes,
-        .compute = Yes,
-        .transfer = Yes,
-        .globalPriority = Yes,
+        .graphics = SUPPORT_YES,
+        .compute = SUPPORT_YES,
+        .transfer = SUPPORT_YES,
+        .globalPriority = SUPPORT_YES,
         .presentSurface = context.surface};
     ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &graphicsQueueDesc, &context.graphicsQueueFamilyIndex));
     QueueDesc computeQueueDesc = {
-        .graphics = No,
-        .compute = Yes,
-        .transfer = Yes,
-        .globalPriority = Yes,
+        .graphics = SUPPORT_NO,
+        .compute = SUPPORT_YES,
+        .transfer = SUPPORT_YES,
+        .globalPriority = SUPPORT_YES,
         .presentSurface = context.surface};
     ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &computeQueueDesc, &context.computeQueueFamilyIndex));
     QueueDesc transferQueueDesc = {
-        .graphics = No,
-        .compute = No,
-        .transfer = Yes};
+        .graphics = SUPPORT_NO,
+        .compute = SUPPORT_NO,
+        .transfer = SUPPORT_YES};
     ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &transferQueueDesc, &context.transferQueueFamilyIndex));
   }
 
@@ -348,7 +589,7 @@ int mxRendererInitContext() {
     ASSERT_RESULT(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &context.device));
   }
 
-  { //Queues
+  { // Queues
     vkGetDeviceQueue(context.device, context.graphicsQueueFamilyIndex, 0, &context.graphicsQueue);
     assert(context.graphicsQueue != NULL && "graphicsQueue not found!");
     vkGetDeviceQueue(context.device, context.computeQueueFamilyIndex, 0, &context.computeQueue);
@@ -360,14 +601,14 @@ int mxRendererInitContext() {
   // PFN_LOAD(vkSetDebugUtilsObjectNameEXT);
 
   { // RenderPass
-    #define VK_DEFAULT_ATTACHMENT_DESCRIPTION             \
-      .samples = VK_SAMPLE_COUNT_1_BIT,                   \
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
-      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
-      .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,   \
-      .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
-      .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
+#define VK_DEFAULT_ATTACHMENT_DESCRIPTION             \
+  .samples = VK_SAMPLE_COUNT_1_BIT,                   \
+  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
+  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
+  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,   \
+  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
+  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
+  .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
 
     VkRenderPassCreateInfo renderPassCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
@@ -392,7 +633,7 @@ int mxRendererInitContext() {
     };
     ASSERT_RESULT(vkCreateRenderPass(context.device, &renderPassCreateInfo, VK_ALLOC, &context.renderPass));
 
-    #undef VK_DEFAULT_ATTACHMENT_DESCRIPTION
+#undef VK_DEFAULT_ATTACHMENT_DESCRIPTION
   }
 
   { // Pools
@@ -406,19 +647,6 @@ int mxRendererInitContext() {
         .queueFamilyIndex = context.computeQueueFamilyIndex,
     };
     ASSERT_RESULT(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
-
-    VkCommandBufferAllocateInfo graphicsCommandBufferAllocateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = context.graphicsCommandPool,
-        .commandBufferCount = 1,
-    };
-    ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
-    VkCommandBufferAllocateInfo computeCommandBufferAllocateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = context.computeCommandPool,
-        .commandBufferCount = 1,
-    };
-    ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
 
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -442,18 +670,30 @@ int mxRendererInitContext() {
   }
 
   { // CommandBuffers
+    VkCommandBufferAllocateInfo graphicsCommandBufferAllocateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = context.graphicsCommandPool,
+        .commandBufferCount = 1,
+    };
+    ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
+    VkCommandBufferAllocateInfo computeCommandBufferAllocateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = context.computeCommandPool,
+        .commandBufferCount = 1,
+    };
+    ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
   }
 
   {
-    #define DEFAULT_LINEAR_SAMPLER                           \
-      .magFilter = VK_FILTER_LINEAR,                         \
-      .minFilter = VK_FILTER_LINEAR,                         \
-      .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,           \
-      .maxLod = 16.0,                                        \
-      .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
-      .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
-      .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
-      .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
+#define DEFAULT_LINEAR_SAMPLER                           \
+  .magFilter = VK_FILTER_LINEAR,                         \
+  .minFilter = VK_FILTER_LINEAR,                         \
+  .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,           \
+  .maxLod = 16.0,                                        \
+  .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
 
     VkSamplerCreateInfo nearestSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -491,7 +731,7 @@ int mxRendererInitContext() {
     };
     ASSERT_RESULT(vkCreateSampler(context.device, &maxSamplerCreateInfo, VK_ALLOC, &context.minSampler));
 
-    #undef DEFAULT_LINEAR_SAMPLER
+#undef DEFAULT_LINEAR_SAMPLER
   }
 
   { // Swapchain
@@ -510,9 +750,72 @@ int mxRendererInitContext() {
         .clipped = VK_TRUE,
     };
     ASSERT_RESULT(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
+    uint32_t swapCount;
+    ASSERT_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, NULL));
+    assert(swapCount == SWAP_COUNT && "Resulting swap image count does not match requested swap count!");
+    ASSERT_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, context.swapImages));
+
+    for (int i = 0; i < SWAP_COUNT; ++i) {
+      VkImageViewCreateInfo swapImageViewCreateInfo = {
+          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+          .image = context.swapImages[i],
+          .viewType = VK_IMAGE_VIEW_TYPE_2D,
+          .format = VK_FORMAT_B8G8R8A8_SRGB,
+          .subresourceRange = {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .levelCount = 1,
+              .layerCount = 1,
+          },
+      };
+      ASSERT_RESULT(vkCreateImageView(context.device, &swapImageViewCreateInfo, VK_ALLOC, &context.swapImageViews[i]));
+      ASSERT_RESULT(TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]));
+    }
+  }
+
+  { // Global Descriptor Set
+    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &(VkDescriptorSetLayoutBinding){
+            .binding = BINDING_GLOBAL,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                          VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                          VK_SHADER_STAGE_COMPUTE_BIT |
+                          VK_SHADER_STAGE_FRAGMENT_BIT |
+                          VK_SHADER_STAGE_MESH_BIT_EXT |
+                          VK_SHADER_STAGE_TASK_BIT_EXT},
+    };
+    ASSERT_RESULT(vkCreateDescriptorSetLayout(context.device, &layoutCreateInfo, VK_ALLOC, &context.globalSetLayout));
+
+    VkDescriptorSetAllocateInfo allocInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = context.descriptorPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &context.globalSetLayout,
+    };
+    ASSERT_RESULT(vkAllocateDescriptorSets(context.device, &allocInfo, &context.globalSet));
+
+    const VkBufferCreateInfo bufferCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = sizeof(GlobalSetState),
+        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    };
+    ASSERT_RESULT(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, &context.globalSetBuffer));
+
+    VkMemoryPropertyFlags memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    ASSERT_RESULT(AllocateBufferMemory(context.globalSetBuffer, memoryPropertyFlags, &context.globalSetMemory));
+    ASSERT_RESULT(vkBindBufferMemory(context.device, context.globalSetBuffer, context.globalSetMemory, 0));
+    ASSERT_RESULT(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.globalSetMapped));
+
+    WriteGlobalDescriptorSet();
   }
 }
 
+int vkInitStandardPipeline() {
+}
+
 int mxRenderInitNode() {
-  struct Node_t node;
 }

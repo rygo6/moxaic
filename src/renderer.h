@@ -1,3 +1,3 @@
 #pragma once
 
-int mxRendererInitContext();
+int vkInitContext();

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(moxaic C)
 
 set(CMAKE_C_STANDARD 99)
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TARGET_NAME moxaic)
 
 file(GLOB SRC_FILES
