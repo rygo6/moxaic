@@ -1,3 +1,38 @@
+#BasedOnStyle: LLVM
+#IndentWidth: 4
+#ColumnLimit: 120
+#TabWidth: 4
+#UseTab: Never
+#BreakBeforeBraces: Custom
+#BraceWrapping:
+#  AfterEnum: false
+#  AfterStruct: false
+#  AfterUnion: false
+#  AfterClass: false
+#  AfterFunction: false
+#  AfterNamespace: false
+#  BeforeCatch: false
+#  BeforeElse: false
+#  BeforeLambdaBody: false
+#  AfterExternBlock: false
+#  SplitEmptyFunction: false
+#  SplitEmptyRecord: false
+#  SplitEmptyNamespace: false
+#PointerAlignment: Left
+#AlignConsecutiveAssignments: false
+#AlignConsecutiveDeclarations: false
+#AlignTrailingComments: true
+#AllowShortIfStatementsOnASingleLine: false
+#AllowShortLoopsOnASingleLine: false
+#AllowShortFunctionsOnASingleLine: None
+#SpaceAfterCStyleCast: true
+#SpacesInParentheses: false
+#SpacesInCStyleCastParentheses: false
+#SpaceBeforeParens: ControlStatements
+
+
+
+
 BasedOnStyle: LLVM
 AlignConsecutiveDeclarations: true
 AlignAfterOpenBracket: Align
@@ -8,22 +43,28 @@ AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine : true
 IndentPPDirectives: BeforeHash
 AlignConsecutiveMacros: true
+IndentWidth: 2
+TabWidth: 4
 
-BraceWrapping:
-  AfterCaseLabel: false
-  AfterClass: false
-  AfterStruct: false
-  AfterControlStatement: Never
-  AfterEnum: false
-  AfterFunction: false
-  AfterNamespace: false
-  AfterUnion: false
-  BeforeCatch: false
-  BeforeElse: false
-  IndentBraces: false
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: false
+
+#
+#BraceWrapping:
+#  AfterCaseLabel: false
+#  AfterClass: false
+#  AfterStruct: false
+#  AfterControlStatement: Never
+#  AfterEnum: false
+#  AfterFunction: false
+#  AfterNamespace: false
+#  AfterUnion: false
+#  BeforeCatch: false
+#  BeforeElse: false
+#  IndentBraces: false
+#  SplitEmptyFunction: false
+#  SplitEmptyRecord: false
+#  SplitEmptyNamespace: false
+
+
 
 
 ## Generated from CLion C/C++ Code Style settings

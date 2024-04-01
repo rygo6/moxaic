@@ -17,22 +17,15 @@
 #define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define VK_ALLOC   NULL
 
-#define CHECK_RESULT(command)                        \
-  {                                                  \
-    VkResult result = command;                       \
-    if (__builtin_expect(result != VK_SUCCESS, 1)) { \
-      LogResultError(#command, result);              \
-      return result;                                 \
-    }                                                \
+#define CHECK_RESULT(command)                                              \
+  {                                                                        \
+    VkResult result = command;                                             \
+    if (__builtin_expect(result != VK_SUCCESS, 1)) {                       \
+      printf("!!! Error! %s = %s\n\n", #command, string_VkResult(result)); \
+      return result;                                                       \
+    }                                                                      \
   }
-#define ASSERT_RESULT(command)                       \
-  {                                                  \
-    VkResult result = command;                       \
-    if (__builtin_expect(result != VK_SUCCESS, 1)) { \
-      LogResultError(#command, result);              \
-      assert(0 && "Vulkan Handle Error!");           \
-    }                                                \
-  }
+
 #define PFN_LOAD(vkFunction)                                                                            \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
   assert(vkFunction != NULL && "Couldn't load " #vkFunction)
@@ -45,8 +38,6 @@
 #define COLOR_ATTACHMENT_INDEX  0
 #define NORMAL_ATTACHMENT_INDEX 1
 #define DEPTH_ATTACHMENT_INDEX  2
-
-#define BINDING_GLOBAL 0
 
 #define SWAP_COUNT 2
 
@@ -65,10 +56,10 @@ typedef MATH_ALIGN uint32_t ivec2[2];
 // Global State
 //----------------------------------------------------------------------------------
 
-typedef struct CameraState {
+typedef struct Camera {
   vec3 position;
   vec4 rotation;
-} CameraState;
+} Camera;
 
 typedef struct GlobalSetState {
   mat4  view;
@@ -79,6 +70,10 @@ typedef struct GlobalSetState {
   mat4  invViewProj;
   ivec2 screenSize;
 } GlobalSetState;
+
+typedef struct StandardObjectSetState {
+  mat4 model;
+} StandardObjectState;
 
 static struct Context {
   VkInstance       instance;
@@ -99,6 +94,12 @@ static struct Context {
   VkBuffer              globalSetBuffer;
   VkDescriptorSetLayout globalSetLayout;
   VkDescriptorSet       globalSet;
+
+  VkDescriptorSetLayout materialSetLayout;
+  VkDescriptorSetLayout objectSetLayout;
+
+  VkPipelineLayout standardPipelineLayout;
+  VkPipeline       standardPipeline;
 
   VkSwapchainKHR swapchain;
   VkImage        swapImages[SWAP_COUNT];
@@ -123,10 +124,6 @@ static struct Context {
 
 } context;
 
-static void LogResultError(const char* command, VkResult result) {
-  printf("!!! Error! %s = %s\n\n", command, string_VkResult(result));
-}
-
 VkResult ReadFile(const char* pPath, int* pFileLength, char** ppFileContents) {
   FILE* file = fopen(pPath, "rb");
   if (file == NULL) {
@@ -146,10 +143,100 @@ VkResult ReadFile(const char* pPath, int* pFileLength, char** ppFileContents) {
 }
 
 //----------------------------------------------------------------------------------
-// Graphics
+// Descriptors
 //----------------------------------------------------------------------------------
 
-VkResult CreateShader(const char* pShaderPath, VkShaderModule* pShaderModule) {
+#define BINDING_GLOBAL            0
+#define BINDING_STANDARD_MATERIAL 1
+#define BINDING_STANDARD_OBJECT   2
+
+VkResult CreateGlobalSetLayout() {
+  VkDescriptorSetLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &(VkDescriptorSetLayoutBinding){
+          .binding = BINDING_GLOBAL,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                        VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                        VK_SHADER_STAGE_COMPUTE_BIT |
+                        VK_SHADER_STAGE_FRAGMENT_BIT |
+                        VK_SHADER_STAGE_MESH_BIT_EXT |
+                        VK_SHADER_STAGE_TASK_BIT_EXT},
+  };
+  return vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.globalSetLayout);
+}
+#define WRITE_SET_GLOBAL                                 \
+  {                                                      \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,     \
+    .dstSet = context.globalSet,                         \
+    .dstBinding = BINDING_GLOBAL,                        \
+    .descriptorCount = 1,                                \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+    .pBufferInfo = &(VkDescriptorBufferInfo){            \
+        .buffer = context.globalSetBuffer,               \
+        .range = sizeof(GlobalSetState),                 \
+    },                                                   \
+  }
+
+VkResult CreateStandardMaterialSetLayout() {
+  VkDescriptorSetLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &(VkDescriptorSetLayoutBinding){
+          .binding = BINDING_STANDARD_MATERIAL,
+          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT},
+  };
+  return vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.materialSetLayout);
+}
+#define WRITE_SET_STANDARD_MATERIAL(materialSet, imageView)      \
+  {                                                              \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
+    .dstSet = materialSet,                                       \
+    .dstBinding = BINDING_STANDARD_MATERIAL,                     \
+    .descriptorCount = 1,                                        \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+    .pImageInfo = &(VkDescriptorImageInfo){                      \
+        .sampler = context.linearSampler,                        \
+        .imageView = imageView,                                  \
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
+    },                                                           \
+  }
+
+VkResult CreateStandardObjectSetLayout() {
+  VkDescriptorSetLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &(VkDescriptorSetLayoutBinding){
+          .binding = BINDING_STANDARD_OBJECT,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                        VK_SHADER_STAGE_FRAGMENT_BIT},
+  };
+  return vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.materialSetLayout);
+}
+#define WRITE_SET_STANDARD_OBJECT(objectSet, buffer)     \
+  {                                                      \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,     \
+    .dstSet = objectSet,                                 \
+    .dstBinding = BINDING_STANDARD_OBJECT,               \
+    .descriptorCount = 1,                                \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+    .pBufferInfo = &(VkDescriptorBufferInfo){            \
+        .buffer = context.globalSetBuffer,               \
+        .range = sizeof(StandardObjectState),            \
+    },                                                   \
+  }
+
+//----------------------------------------------------------------------------------
+// Pipelines
+//----------------------------------------------------------------------------------
+
+VkResult CreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule) {
   int   fileLength;
   char* pFileContents;
   if (ReadFile(pShaderPath, &fileLength, &pFileContents) != VK_SUCCESS) {
@@ -167,18 +254,26 @@ VkResult CreateShader(const char* pShaderPath, VkShaderModule* pShaderModule) {
   return result;
 }
 
-void WriteGlobalDescriptorSet() {
-  VkWriteDescriptorSet writeDescriptorSet = {
-      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .dstSet = context.globalSet,
-      .dstBinding = BINDING_GLOBAL,
-      .descriptorCount = 1,
-      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-      .pBufferInfo = &(VkDescriptorBufferInfo){
-          .buffer = context.globalSetBuffer,
-          .range = sizeof(GlobalSetState)},
+VkResult CreateStandardPipelineLayout() {
+  VkPipelineLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = 3,
+      .pSetLayouts = (VkDescriptorSetLayout[]){
+          context.globalSetLayout,
+          context.materialSetLayout,
+          context.objectSetLayout,
+      },
   };
-  vkUpdateDescriptorSets(context.device, 1, &writeDescriptorSet, 0, NULL);
+  return vkCreatePipelineLayout(context.device, &createInfo, VK_ALLOC, &context.standardPipelineLayout);
+}
+
+VkResult CreateStandardPipeline() {
+
+  VkShaderModule vertShader;
+  CHECK_RESULT(CreateShaderModule("./shaders/basic_material.vert.spv", &vertShader));
+  VkShaderModule fragShader;
+  CHECK_RESULT(CreateShaderModule("./shaders/basic_material.frag.spv", &fragShader));
+
 }
 
 //----------------------------------------------------------------------------------
@@ -353,7 +448,7 @@ const char* string_Support(VkSupport support) {
   default: assert(0 && "Error! string_Support does not support passed value!");
   }
 }
-typedef struct QueueDesc {
+typedef struct VkQueueDesc {
   VkSupport    graphics;
   VkSupport    compute;
   VkSupport    transfer;
@@ -450,7 +545,7 @@ int vkInitContext() {
         .enabledExtensionCount = COUNT(ppEnabledInstanceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
     };
-    ASSERT_RESULT(vkCreateInstance(&instanceCreationInfo, VK_ALLOC, &context.instance));
+    CHECK_RESULT(vkCreateInstance(&instanceCreationInfo, VK_ALLOC, &context.instance));
     printf("Instance Vulkan API version: %d.%d.%d.%d\n",
            VK_API_VERSION_VARIANT(instanceCreationInfo.pApplicationInfo->apiVersion),
            VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
@@ -460,9 +555,9 @@ int vkInitContext() {
 
   { // PhysicalDevice
     uint32_t deviceCount = 0;
-    ASSERT_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, NULL));
+    CHECK_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, NULL));
     VkPhysicalDevice devices[deviceCount];
-    ASSERT_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, devices));
+    CHECK_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, devices));
     context.physicalDevice = devices[0]; // We are just assuming the best GPU is first. So far this seems to be true.
     VkPhysicalDeviceProperties2 physicalDeviceProperties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
     vkGetPhysicalDeviceProperties2(context.physicalDevice, &physicalDeviceProperties);
@@ -476,7 +571,7 @@ int vkInitContext() {
   }
 
   { // Surface
-    ASSERT_RESULT(mxCreateSurface(context.instance, VK_ALLOC, &context.surface));
+    CHECK_RESULT(mxCreateSurface(context.instance, VK_ALLOC, &context.surface));
   }
 
   { // QueueIndices
@@ -486,19 +581,19 @@ int vkInitContext() {
         .transfer = SUPPORT_YES,
         .globalPriority = SUPPORT_YES,
         .presentSurface = context.surface};
-    ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &graphicsQueueDesc, &context.graphicsQueueFamilyIndex));
+    CHECK_RESULT(FindQueueIndex(context.physicalDevice, &graphicsQueueDesc, &context.graphicsQueueFamilyIndex));
     QueueDesc computeQueueDesc = {
         .graphics = SUPPORT_NO,
         .compute = SUPPORT_YES,
         .transfer = SUPPORT_YES,
         .globalPriority = SUPPORT_YES,
         .presentSurface = context.surface};
-    ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &computeQueueDesc, &context.computeQueueFamilyIndex));
+    CHECK_RESULT(FindQueueIndex(context.physicalDevice, &computeQueueDesc, &context.computeQueueFamilyIndex));
     QueueDesc transferQueueDesc = {
         .graphics = SUPPORT_NO,
         .compute = SUPPORT_NO,
         .transfer = SUPPORT_YES};
-    ASSERT_RESULT(FindQueueIndex(context.physicalDevice, &transferQueueDesc, &context.transferQueueFamilyIndex));
+    CHECK_RESULT(FindQueueIndex(context.physicalDevice, &transferQueueDesc, &context.transferQueueFamilyIndex));
   }
 
   { // Device
@@ -592,7 +687,7 @@ int vkInitContext() {
         .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
-    ASSERT_RESULT(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &context.device));
+    CHECK_RESULT(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &context.device));
   }
 
   { // Queues
@@ -637,7 +732,7 @@ int vkInitContext() {
             },
         },
     };
-    ASSERT_RESULT(vkCreateRenderPass(context.device, &renderPassCreateInfo, VK_ALLOC, &context.renderPass));
+    CHECK_RESULT(vkCreateRenderPass(context.device, &renderPassCreateInfo, VK_ALLOC, &context.renderPass));
 
 #undef VK_DEFAULT_ATTACHMENT_DESCRIPTION
   }
@@ -647,12 +742,12 @@ int vkInitContext() {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = context.graphicsQueueFamilyIndex,
     };
-    ASSERT_RESULT(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &context.graphicsCommandPool));
+    CHECK_RESULT(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &context.graphicsCommandPool));
     VkCommandPoolCreateInfo computeCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = context.computeQueueFamilyIndex,
     };
-    ASSERT_RESULT(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
+    CHECK_RESULT(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
 
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -665,14 +760,14 @@ int vkInitContext() {
             {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
         },
     };
-    ASSERT_RESULT(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VK_ALLOC, &context.descriptorPool));
+    CHECK_RESULT(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VK_ALLOC, &context.descriptorPool));
 
     VkQueryPoolCreateInfo queryPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
     };
-    ASSERT_RESULT(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VK_ALLOC, &context.timeQueryPool));
+    CHECK_RESULT(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VK_ALLOC, &context.timeQueryPool));
   }
 
   { // CommandBuffers
@@ -681,13 +776,13 @@ int vkInitContext() {
         .commandPool = context.graphicsCommandPool,
         .commandBufferCount = 1,
     };
-    ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
+    CHECK_RESULT(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
     VkCommandBufferAllocateInfo computeCommandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = context.computeCommandPool,
         .commandBufferCount = 1,
     };
-    ASSERT_RESULT(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
+    CHECK_RESULT(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
   }
 
   {
@@ -709,13 +804,13 @@ int vkInitContext() {
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     };
-    ASSERT_RESULT(vkCreateSampler(context.device, &nearestSampleCreateInfo, VK_ALLOC, &context.nearestSampler));
+    CHECK_RESULT(vkCreateSampler(context.device, &nearestSampleCreateInfo, VK_ALLOC, &context.nearestSampler));
 
     VkSamplerCreateInfo linearSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         DEFAULT_LINEAR_SAMPLER,
     };
-    ASSERT_RESULT(vkCreateSampler(context.device, &linearSampleCreateInfo, VK_ALLOC, &context.linearSampler));
+    CHECK_RESULT(vkCreateSampler(context.device, &linearSampleCreateInfo, VK_ALLOC, &context.linearSampler));
 
     VkSamplerCreateInfo minSamplerCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -725,7 +820,7 @@ int vkInitContext() {
         },
         DEFAULT_LINEAR_SAMPLER,
     };
-    ASSERT_RESULT(vkCreateSampler(context.device, &minSamplerCreateInfo, VK_ALLOC, &context.minSampler));
+    CHECK_RESULT(vkCreateSampler(context.device, &minSamplerCreateInfo, VK_ALLOC, &context.minSampler));
 
     VkSamplerCreateInfo maxSamplerCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -735,7 +830,7 @@ int vkInitContext() {
         },
         DEFAULT_LINEAR_SAMPLER,
     };
-    ASSERT_RESULT(vkCreateSampler(context.device, &maxSamplerCreateInfo, VK_ALLOC, &context.minSampler));
+    CHECK_RESULT(vkCreateSampler(context.device, &maxSamplerCreateInfo, VK_ALLOC, &context.minSampler));
 
 #undef DEFAULT_LINEAR_SAMPLER
   }
@@ -755,11 +850,11 @@ int vkInitContext() {
         .presentMode = VK_PRESENT_MODE_FIFO_KHR,
         .clipped = VK_TRUE,
     };
-    ASSERT_RESULT(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
+    CHECK_RESULT(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
     uint32_t swapCount;
-    ASSERT_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, NULL));
+    CHECK_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, NULL));
     assert(swapCount == SWAP_COUNT && "Resulting swap image count does not match requested swap count!");
-    ASSERT_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, context.swapImages));
+    CHECK_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, context.swapImages));
 
     for (int i = 0; i < SWAP_COUNT; ++i) {
       VkImageViewCreateInfo swapImageViewCreateInfo = {
@@ -773,27 +868,13 @@ int vkInitContext() {
               .layerCount = 1,
           },
       };
-      ASSERT_RESULT(vkCreateImageView(context.device, &swapImageViewCreateInfo, VK_ALLOC, &context.swapImageViews[i]));
-      ASSERT_RESULT(TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]));
+      CHECK_RESULT(vkCreateImageView(context.device, &swapImageViewCreateInfo, VK_ALLOC, &context.swapImageViews[i]));
+      CHECK_RESULT(TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]));
     }
   }
 
-  { // Global Descriptor Set
-    VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &(VkDescriptorSetLayoutBinding){
-            .binding = BINDING_GLOBAL,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                          VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
-                          VK_SHADER_STAGE_COMPUTE_BIT |
-                          VK_SHADER_STAGE_FRAGMENT_BIT |
-                          VK_SHADER_STAGE_MESH_BIT_EXT |
-                          VK_SHADER_STAGE_TASK_BIT_EXT},
-    };
-    ASSERT_RESULT(vkCreateDescriptorSetLayout(context.device, &layoutCreateInfo, VK_ALLOC, &context.globalSetLayout));
+  { // Global Descriptor
+    CHECK_RESULT(CreateGlobalSetLayout());
 
     VkDescriptorSetAllocateInfo allocInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -801,7 +882,7 @@ int vkInitContext() {
         .descriptorSetCount = 1,
         .pSetLayouts = &context.globalSetLayout,
     };
-    ASSERT_RESULT(vkAllocateDescriptorSets(context.device, &allocInfo, &context.globalSet));
+    CHECK_RESULT(vkAllocateDescriptorSets(context.device, &allocInfo, &context.globalSet));
 
     const VkBufferCreateInfo bufferCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -809,14 +890,24 @@ int vkInitContext() {
         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
     };
-    ASSERT_RESULT(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, &context.globalSetBuffer));
 
-    VkMemoryPropertyFlags memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    ASSERT_RESULT(AllocateBufferMemory(context.globalSetBuffer, memoryPropertyFlags, &context.globalSetMemory));
-    ASSERT_RESULT(vkBindBufferMemory(context.device, context.globalSetBuffer, context.globalSetMemory, 0));
-    ASSERT_RESULT(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.globalSetMapped));
+    VkMemoryPropertyFlags memoryPropertyFlags =
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-    WriteGlobalDescriptorSet();
+    CHECK_RESULT(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, &context.globalSetBuffer));
+    CHECK_RESULT(AllocateBufferMemory(context.globalSetBuffer, memoryPropertyFlags, &context.globalSetMemory));
+    CHECK_RESULT(vkBindBufferMemory(context.device, context.globalSetBuffer, context.globalSetMemory, 0));
+    CHECK_RESULT(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.globalSetMapped));
+
+    VkWriteDescriptorSet writeSet = WRITE_SET_GLOBAL;
+    vkUpdateDescriptorSets(context.device, 1, &writeSet, 0, NULL);
+  }
+
+  { // Standard Pipeline
+    CHECK_RESULT(CreateStandardMaterialSetLayout());
+    CHECK_RESULT(CreateStandardObjectSetLayout());
   }
 }
 
