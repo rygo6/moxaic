@@ -5,7 +5,7 @@
 
 extern char IsCompositor;
 
-extern const char* const WindowExtensionName;
-extern const char* const ExternalMemoryExntensionName;
-extern const char* const ExternalSemaphoreExntensionName;
-extern const char* const ExternalFenceExntensionName;
+extern const char* WindowExtensionName;
+extern const char* ExternalMemoryExntensionName;
+extern const char* ExternalSemaphoreExntensionName;
+extern const char* ExternalFenceExntensionName;

@@ -1,16 +1,30 @@
 BasedOnStyle: LLVM
 AlignConsecutiveDeclarations: true
 AlignAfterOpenBracket: Align
-AllowAllParametersOfDeclarationOnNextLine: false
 AlwaysBreakAfterReturnType: None
-BinPackParameters: false
-PenaltyReturnTypeOnItsOwnLine: 0
 ColumnLimit: 0
 PointerAlignment: Left
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine : true
 IndentPPDirectives: BeforeHash
 AlignConsecutiveMacros: true
+
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterStruct: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
 
 ## Generated from CLion C/C++ Code Style settings
 #BasedOnStyle: LLVM

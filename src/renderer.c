@@ -3,6 +3,7 @@
 #include "window.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -16,21 +17,21 @@
 #define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define VK_ALLOC   NULL
 
-#define CHECK_RESULT(command)                                             \
-  {                                                                       \
-    VkResult result = command;                                            \
-    if (__builtin_expect(result != VK_SUCCESS, 1)) {                      \
-      printf("!!! Error! %s = %s\n\n", command, string_VkResult(result)); \
-      return result;                                                      \
-    }                                                                     \
+#define CHECK_RESULT(command)                        \
+  {                                                  \
+    VkResult result = command;                       \
+    if (__builtin_expect(result != VK_SUCCESS, 1)) { \
+      LogResultError(#command, result);              \
+      return result;                                 \
+    }                                                \
   }
-#define ASSERT_RESULT(command)                                            \
-  {                                                                       \
-    VkResult result = command;                                            \
-    if (__builtin_expect(result != VK_SUCCESS, 1)) {                      \
-      printf("!!! Error! %s = %s\n\n", command, string_VkResult(result)); \
-      assert(0 && "Vulkan Handle Error!");                                \
-    }                                                                     \
+#define ASSERT_RESULT(command)                       \
+  {                                                  \
+    VkResult result = command;                       \
+    if (__builtin_expect(result != VK_SUCCESS, 1)) { \
+      LogResultError(#command, result);              \
+      assert(0 && "Vulkan Handle Error!");           \
+    }                                                \
   }
 #define PFN_LOAD(vkFunction)                                                                            \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
@@ -79,7 +80,7 @@ typedef struct GlobalSetState {
   ivec2 screenSize;
 } GlobalSetState;
 
-static struct {
+static struct Context {
   VkInstance       instance;
   VkSurfaceKHR     surface;
   VkPhysicalDevice physicalDevice;
@@ -121,6 +122,10 @@ static struct {
   VkQueryPool timeQueryPool;
 
 } context;
+
+static void LogResultError(const char* command, VkResult result) {
+  printf("!!! Error! %s = %s\n\n", command, string_VkResult(result));
+}
 
 VkResult ReadFile(const char* pPath, int* pFileLength, char** ppFileContents) {
   FILE* file = fopen(pPath, "rb");
@@ -290,10 +295,11 @@ static VkResult FindMemoryTypeIndex(
     const VkMemoryRequirements*             pMemoryRequirements,
     VkMemoryPropertyFlags                   memoryPropertyFlags,
     uint32_t*                               pMemoryTypeIndex) {
-  VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+  VkResult result = VK_INCOMPLETE;
   for (uint32_t i = 0; i < pPhysicalDeviceMemoryProperties->memoryTypeCount; i++) {
-    if ((pMemoryRequirements->memoryTypeBits & 1 << i) &&
-        ((pPhysicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags)) {
+    bool hasTypeBits = pMemoryRequirements->memoryTypeBits & 1 << i;
+    bool hasPropertyFlags = (pPhysicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags;
+    if (hasTypeBits && hasPropertyFlags) {
       *pMemoryTypeIndex = i;
       result = VK_SUCCESS;
       break;
@@ -367,10 +373,10 @@ static VkResult FindQueueIndex(VkPhysicalDevice physicalDevice, const QueueDesc*
   vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, queueFamilyProperties);
 
   for (uint32_t i = 0; i < queueFamilyCount; ++i) {
-    char graphicsSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
-    char computeSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
-    char transferSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT;
-    char globalPrioritySupport = queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
+    bool graphicsSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
+    bool computeSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
+    bool transferSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT;
+    bool globalPrioritySupport = queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
 
     VkBool32 presentSupport = VK_FALSE;
     if (pQueueDesc->presentSurface != NULL)

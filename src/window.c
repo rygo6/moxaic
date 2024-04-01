@@ -7,10 +7,13 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 
-const char* const WindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
-const char* const ExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
-const char* const ExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
-const char* const ExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
+#define WINDOW_NAME "moxaic"
+#define CLASS_NAME  "MoxaicWindowClass"
+
+const char* WindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+const char* ExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
+const char* ExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
+const char* ExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
 
 static struct {
   HINSTANCE hInstance;
@@ -22,8 +25,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
   case WM_CLOSE:
     PostQuitMessage(0);
     break;
-  default:
-    return DefWindowProc(hWnd, message, wParam, lParam);
+  default: return DefWindowProc(hWnd, message, wParam, lParam);
   }
   return 0;
 }
@@ -31,7 +33,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 int mxCreateWindow() {
   window.hInstance = GetModuleHandle(NULL);
 
-  const wchar_t CLASS_NAME[] = L"MoxaicWindowClass";
   DWORD windowStyle = WS_OVERLAPPEDWINDOW;
 
   WNDCLASS wc = {
@@ -51,13 +52,16 @@ int mxCreateWindow() {
   int windowHeight = rect.bottom - rect.top;
 
   window.hwnd = CreateWindowEx(
-      0,                   // Optional window styles.
-      CLASS_NAME,          // Window class
-      L"moxaic",           // Window text
+      0,           // Optional window styles.
+      CLASS_NAME,  // Window class
+      WINDOW_NAME, // Window text
       windowStyle, // Window style
 
       // Size and position
-      CW_USEDEFAULT, CW_USEDEFAULT, windowWidth, windowHeight,
+      CW_USEDEFAULT,
+      CW_USEDEFAULT,
+      windowWidth,
+      windowHeight,
 
       NULL,             // Parent window
       NULL,             // Menu
@@ -71,7 +75,9 @@ int mxCreateWindow() {
 }
 
 int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
-  PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(instance, "vkCreateWin32SurfaceKHR");
+  PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(
+      instance,
+      "vkCreateWin32SurfaceKHR");
   assert(vkCreateWin32SurfaceKHR != NULL && "Couldn't load PFN_vkCreateWin32SurfaceKHR");
   VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
