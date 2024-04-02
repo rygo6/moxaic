@@ -1,0 +1,25 @@
+#version 450
+
+#define LOCAL_SIZE 32
+layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
+
+layout (set = 0, binding = 0) uniform sampler2D srcTexture;
+layout (set = 0, binding = 1, r32f) uniform image2D dstTexture;
+
+void main()
+{
+    const ivec2 srcSize = textureSize(srcTexture, 0);
+    const ivec2 dstSize = imageSize(dstTexture);
+
+    const ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
+    const vec2 dstUV = vec2(dstCoord) / vec2(dstSize);
+    const ivec2 srcCoord = ivec2(dstUV * srcSize);
+    const vec2 srcUV = vec2(srcCoord) / vec2(srcSize);
+
+    const float srcDepth = texture(srcTexture, srcUV).r;
+    const float currentDepth = imageLoad(dstTexture, dstCoord).r;
+
+    const float newDepth = currentDepth > 0 ? currentDepth : srcDepth;
+
+    imageStore(dstTexture, dstCoord, vec4(newDepth));
+}

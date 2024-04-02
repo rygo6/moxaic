@@ -31,8 +31,6 @@
 #SpaceBeforeParens: ControlStatements
 
 
-
-
 BasedOnStyle: LLVM
 AlignConsecutiveDeclarations: true
 AlignAfterOpenBracket: Align
@@ -45,7 +43,26 @@ IndentPPDirectives: BeforeHash
 AlignConsecutiveMacros: true
 IndentWidth: 2
 TabWidth: 4
-
+ReflowComments: false
+BraceWrapping:
+  AfterClass:      false
+  AfterControlStatement: false
+  AfterEnum:       false
+  AfterFunction:   false
+  AfterNamespace:  false
+  AfterStruct:     false
+  AfterUnion:      false
+  AfterExternBlock: false
+  BeforeCatch:     false
+  BeforeElse:      false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+MaxEmptyLinesToKeep: 2
+SpacesBeforeTrailingComments: 2
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 1
 
 #
 #BraceWrapping:
