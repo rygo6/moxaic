@@ -10,7 +10,7 @@ int main(void) {
 
   mxCreateWindow();
 
-  vkInitContext();
+  mxcInitContext();
 
   return 0;
 }

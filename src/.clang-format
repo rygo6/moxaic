@@ -38,23 +38,23 @@ AlwaysBreakAfterReturnType: None
 ColumnLimit: 0
 PointerAlignment: Left
 AllowShortCaseLabelsOnASingleLine: true
-AllowShortIfStatementsOnASingleLine : true
+AllowShortIfStatementsOnASingleLine: true
 IndentPPDirectives: BeforeHash
 AlignConsecutiveMacros: true
 IndentWidth: 2
 TabWidth: 4
 ReflowComments: false
 BraceWrapping:
-  AfterClass:      false
+  AfterClass: false
   AfterControlStatement: false
-  AfterEnum:       false
-  AfterFunction:   false
-  AfterNamespace:  false
-  AfterStruct:     false
-  AfterUnion:      false
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
   AfterExternBlock: false
-  BeforeCatch:     false
-  BeforeElse:      false
+  BeforeCatch: false
+  BeforeElse: false
   SplitEmptyFunction: false
   SplitEmptyRecord: false
   SplitEmptyNamespace: false
@@ -63,6 +63,9 @@ SpacesBeforeTrailingComments: 2
 AlignTrailingComments:
   Kind: Always
   OverEmptyLines: 1
+IndentGotoLabels: true
+BreakAfterAttributes: Leave
+
 
 #
 #BraceWrapping:
