@@ -21,13 +21,28 @@
 #define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define VK_ALLOC   NULL
 
-#define _LOG_RESULT(command) printf("%s:%d Error! %s = %s\n", FILE_NO_PATH, __LINE__, #command, string_VkResult(result));
+#define LOG_ERROR(command, message) printf("%s:%d Error! %s = %s\n", FILE_NO_PATH, __LINE__, #command, message)
+
+#define REQUIRE(condition, message)      \
+  if (__builtin_expect(!condition, 0)) { \
+    LOG_ERROR(#condition, message);      \
+    exit(1);                             \
+  }
+
+#define REQUIRE_RESULT(command)                      \
+  {                                                  \
+    VkResult result = command;                       \
+    if (__builtin_expect(result != VK_SUCCESS, 0)) { \
+      LOG_ERROR(command, string_VkResult(result));   \
+      exit(result);                                  \
+    }                                                \
+  }
 
 #define CHECK_RESULT(command)                        \
   {                                                  \
     VkResult result = command;                       \
-    if (__builtin_expect(result != VK_SUCCESS, 1)) { \
-      _LOG_RESULT(command)                           \
+    if (__builtin_expect(result != VK_SUCCESS, 0)) { \
+      LOG_ERROR(command, string_VkResult(result));   \
       assert(false && "Result Error!");              \
       return result;                                 \
     }                                                \
@@ -35,8 +50,8 @@
 
 #define CLEANUP_RESULT(command, cleanup_goto)      \
   result = command;                                \
-  if (__builtin_expect(result != VK_SUCCESS, 1)) { \
-    _LOG_RESULT(command)                           \
+  if (__builtin_expect(result != VK_SUCCESS, 0)) { \
+    LOG_ERROR(command, string_VkResult(result));   \
     goto cleanup_goto;                             \
   }
 
@@ -828,7 +843,7 @@ int mxcInitContext() {
         .enabledExtensionCount = COUNT(ppEnabledInstanceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
     };
-    CHECK_RESULT(vkCreateInstance(&instanceCreationInfo, VK_ALLOC, &context.instance));
+    REQUIRE_RESULT(vkCreateInstance(&instanceCreationInfo, VK_ALLOC, &context.instance));
     printf("Instance Vulkan API version: %d.%d.%d.%d\n",
            VK_API_VERSION_VARIANT(instanceCreationInfo.pApplicationInfo->apiVersion),
            VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
@@ -838,9 +853,9 @@ int mxcInitContext() {
 
   {  // PhysicalDevice
     uint32_t deviceCount = 0;
-    CHECK_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, NULL));
+    REQUIRE_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, NULL));
     VkPhysicalDevice devices[deviceCount];
-    CHECK_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, devices));
+    REQUIRE_RESULT(vkEnumeratePhysicalDevices(context.instance, &deviceCount, devices));
     context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this seems to be true.
     VkPhysicalDeviceProperties2 physicalDeviceProperties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
     vkGetPhysicalDeviceProperties2(context.physicalDevice, &physicalDeviceProperties);
@@ -850,11 +865,12 @@ int mxcInitContext() {
            VK_API_VERSION_MAJOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
-    assert(physicalDeviceProperties.properties.apiVersion >= VK_VERSION && "Insufficinet Vulkan API Version");
+    bool test = physicalDeviceProperties.properties.apiVersion >= VK_VERSION;
+    REQUIRE(physicalDeviceProperties.properties.apiVersion >= VK_VERSION, "Insufficinet Vulkan API Version");
   }
 
   {  // Surface
-    CHECK_RESULT(mxCreateSurface(context.instance, VK_ALLOC, &context.surface));
+    REQUIRE_RESULT(mxCreateSurface(context.instance, VK_ALLOC, &context.surface));
   }
 
   {  // QueueIndices
@@ -864,19 +880,19 @@ int mxcInitContext() {
         .transfer = SUPPORT_YES,
         .globalPriority = SUPPORT_YES,
         .presentSurface = context.surface};
-    CHECK_RESULT(FindQueueIndex(context.physicalDevice, &graphicsQueueDesc, &context.graphicsQueueFamilyIndex));
+    REQUIRE_RESULT(FindQueueIndex(context.physicalDevice, &graphicsQueueDesc, &context.graphicsQueueFamilyIndex));
     QueueDesc computeQueueDesc = {
         .graphics = SUPPORT_NO,
         .compute = SUPPORT_YES,
         .transfer = SUPPORT_YES,
         .globalPriority = SUPPORT_YES,
         .presentSurface = context.surface};
-    CHECK_RESULT(FindQueueIndex(context.physicalDevice, &computeQueueDesc, &context.computeQueueFamilyIndex));
+    REQUIRE_RESULT(FindQueueIndex(context.physicalDevice, &computeQueueDesc, &context.computeQueueFamilyIndex));
     QueueDesc transferQueueDesc = {
         .graphics = SUPPORT_NO,
         .compute = SUPPORT_NO,
         .transfer = SUPPORT_YES};
-    CHECK_RESULT(FindQueueIndex(context.physicalDevice, &transferQueueDesc, &context.transferQueueFamilyIndex));
+    REQUIRE_RESULT(FindQueueIndex(context.physicalDevice, &transferQueueDesc, &context.transferQueueFamilyIndex));
   }
 
   {  // Device
@@ -971,7 +987,7 @@ int mxcInitContext() {
         .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
-    CHECK_RESULT(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &context.device));
+    REQUIRE_RESULT(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &context.device));
   }
 
   {  // Queues
@@ -1016,7 +1032,7 @@ int mxcInitContext() {
             },
         },
     };
-    CHECK_RESULT(vkCreateRenderPass(context.device, &renderPassCreateInfo, VK_ALLOC, &context.renderPass));
+    REQUIRE_RESULT(vkCreateRenderPass(context.device, &renderPassCreateInfo, VK_ALLOC, &context.renderPass));
 
 #undef VK_DEFAULT_ATTACHMENT_DESCRIPTION
   }
@@ -1026,12 +1042,12 @@ int mxcInitContext() {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = context.graphicsQueueFamilyIndex,
     };
-    CHECK_RESULT(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &context.graphicsCommandPool));
+    REQUIRE_RESULT(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &context.graphicsCommandPool));
     VkCommandPoolCreateInfo computeCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = context.computeQueueFamilyIndex,
     };
-    CHECK_RESULT(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
+    REQUIRE_RESULT(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
 
     VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -1044,14 +1060,14 @@ int mxcInitContext() {
             {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
         },
     };
-    CHECK_RESULT(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VK_ALLOC, &context.descriptorPool));
+    REQUIRE_RESULT(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VK_ALLOC, &context.descriptorPool));
 
     VkQueryPoolCreateInfo queryPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
     };
-    CHECK_RESULT(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VK_ALLOC, &context.timeQueryPool));
+    REQUIRE_RESULT(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VK_ALLOC, &context.timeQueryPool));
   }
 
   {  // CommandBuffers
@@ -1060,13 +1076,13 @@ int mxcInitContext() {
         .commandPool = context.graphicsCommandPool,
         .commandBufferCount = 1,
     };
-    CHECK_RESULT(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
+    REQUIRE_RESULT(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
     VkCommandBufferAllocateInfo computeCommandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = context.computeCommandPool,
         .commandBufferCount = 1,
     };
-    CHECK_RESULT(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
+    REQUIRE_RESULT(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
   }
 
   {
@@ -1088,13 +1104,13 @@ int mxcInitContext() {
         .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     };
-    CHECK_RESULT(vkCreateSampler(context.device, &nearestSampleCreateInfo, VK_ALLOC, &context.nearestSampler));
+    REQUIRE_RESULT(vkCreateSampler(context.device, &nearestSampleCreateInfo, VK_ALLOC, &context.nearestSampler));
 
     VkSamplerCreateInfo linearSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         DEFAULT_LINEAR_SAMPLER,
     };
-    CHECK_RESULT(vkCreateSampler(context.device, &linearSampleCreateInfo, VK_ALLOC, &context.linearSampler));
+    REQUIRE_RESULT(vkCreateSampler(context.device, &linearSampleCreateInfo, VK_ALLOC, &context.linearSampler));
 
     VkSamplerCreateInfo minSamplerCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1104,7 +1120,7 @@ int mxcInitContext() {
         },
         DEFAULT_LINEAR_SAMPLER,
     };
-    CHECK_RESULT(vkCreateSampler(context.device, &minSamplerCreateInfo, VK_ALLOC, &context.minSampler));
+    REQUIRE_RESULT(vkCreateSampler(context.device, &minSamplerCreateInfo, VK_ALLOC, &context.minSampler));
 
     VkSamplerCreateInfo maxSamplerCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1114,7 +1130,7 @@ int mxcInitContext() {
         },
         DEFAULT_LINEAR_SAMPLER,
     };
-    CHECK_RESULT(vkCreateSampler(context.device, &maxSamplerCreateInfo, VK_ALLOC, &context.minSampler));
+    REQUIRE_RESULT(vkCreateSampler(context.device, &maxSamplerCreateInfo, VK_ALLOC, &context.minSampler));
 
 #undef DEFAULT_LINEAR_SAMPLER
   }
@@ -1134,11 +1150,11 @@ int mxcInitContext() {
         .presentMode = VK_PRESENT_MODE_FIFO_KHR,
         .clipped = VK_TRUE,
     };
-    CHECK_RESULT(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
+    REQUIRE_RESULT(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
     uint32_t swapCount;
-    CHECK_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, NULL));
+    REQUIRE_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, NULL));
     assert(swapCount == SWAP_COUNT && "Resulting swap image count does not match requested swap count!");
-    CHECK_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, context.swapImages));
+    REQUIRE_RESULT(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, context.swapImages));
 
     for (int i = 0; i < SWAP_COUNT; ++i) {
       VkImageViewCreateInfo swapImageViewCreateInfo = {
@@ -1152,15 +1168,15 @@ int mxcInitContext() {
               .layerCount = 1,
           },
       };
-      CHECK_RESULT(vkCreateImageView(context.device, &swapImageViewCreateInfo, VK_ALLOC, &context.swapImageViews[i]));
-      CHECK_RESULT(TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]));
+      REQUIRE_RESULT(vkCreateImageView(context.device, &swapImageViewCreateInfo, VK_ALLOC, &context.swapImageViews[i]));
+      REQUIRE_RESULT(TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]));
     }
   }
 
   {  // Global Descriptor
-    CHECK_RESULT(CreateGlobalSetLayout());
-    CHECK_RESULT(AllocateDescriptorSet(&context.globalSetLayout, &context.globalSet));
-    CHECK_RESULT(CreateAllocateBindMapBuffer(
+    REQUIRE_RESULT(CreateGlobalSetLayout());
+    REQUIRE_RESULT(AllocateDescriptorSet(&context.globalSetLayout, &context.globalSet));
+    REQUIRE_RESULT(CreateAllocateBindMapBuffer(
         VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
         sizeof(GlobalSetState),
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -1170,11 +1186,11 @@ int mxcInitContext() {
   }
 
   {  // Standard Pipeline
-    CHECK_RESULT(CreateStandardMaterialSetLayout());
-    CHECK_RESULT(CreateStandardObjectSetLayout());
+    REQUIRE_RESULT(CreateStandardMaterialSetLayout());
+    REQUIRE_RESULT(CreateStandardObjectSetLayout());
 
-    CHECK_RESULT(CreateStandardPipelineLayout());
-    CHECK_RESULT(CreateStandardPipeline());
+    REQUIRE_RESULT(CreateStandardPipelineLayout());
+    REQUIRE_RESULT(CreateStandardPipeline());
   }
 }
 
