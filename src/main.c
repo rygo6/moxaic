@@ -2,16 +2,14 @@
 #include "renderer.h"
 #include "window.h"
 
-bool IsCompositor = 1;
+bool isCompositor = true;
+bool isRunning = true;
 
 int main(void) {
 
-  if (mxCreateWindow()) {
-    return 1;
-  }
-  if (mxcInitContext()) {
-    return 1;
-  }
+  mxCreateWindow();
+  mxcInitContext();
+
   if (mxcRenderNode()) {
     return 1;
   }

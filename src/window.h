@@ -2,5 +2,6 @@
 
 #include <vulkan/vulkan.h>
 
-int mxCreateWindow();
+void mxUpdateWindow();
+void mxCreateWindow();
 int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface);

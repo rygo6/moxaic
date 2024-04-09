@@ -1,4 +1,4 @@
 #pragma once
 
-int mxcInitContext();
+void mxcInitContext();
 int mxcRenderNode();

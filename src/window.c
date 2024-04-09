@@ -2,6 +2,7 @@
 #include "globals.h"
 
 #include <assert.h>
+#include <stdio.h>
 #include <windows.h>
 
 #include <vulkan/vulkan.h>
@@ -23,19 +24,27 @@ static struct {
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
   switch (message) {
   case WM_CLOSE:
+    isRunning = false;
     PostQuitMessage(0);
-    break;
-  default: return DefWindowProc(hWnd, message, wParam, lParam);
+    return 0;
+  default:
+    return DefWindowProc(hWnd, message, wParam, lParam);
   }
-  return 0;
 }
 
-int mxCreateWindow() {
+void mxUpdateWindow() {
+  MSG msg;
+  while (GetMessage(&msg, NULL, 0, 0)) {
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
+  }
+}
+
+void mxCreateWindow() {
   window.hInstance = GetModuleHandle(NULL);
 
-  DWORD windowStyle = WS_OVERLAPPEDWINDOW;
-
-  WNDCLASS wc = {
+  const DWORD    windowStyle = WS_OVERLAPPEDWINDOW;
+  const WNDCLASS wc = {
       .lpfnWndProc = WindowProc,
       .hInstance = window.hInstance,
       .lpszClassName = CLASS_NAME,
@@ -48,14 +57,14 @@ int mxCreateWindow() {
       .bottom = DEFAULT_HEIGHT,
   };
   AdjustWindowRect(&rect, windowStyle, FALSE);
-  int windowWidth = rect.right - rect.left;
-  int windowHeight = rect.bottom - rect.top;
+  const int windowWidth = rect.right - rect.left;
+  const int windowHeight = rect.bottom - rect.top;
 
   window.hwnd = CreateWindowEx(
-      0,           // Optional window styles.
-      CLASS_NAME,  // Window class
-      WINDOW_NAME, // Window text
-      windowStyle, // Window style
+      0,            // Optional window styles.
+      CLASS_NAME,   // Window class
+      WINDOW_NAME,  // Window text
+      windowStyle,  // Window style
 
       // Size and position
       CW_USEDEFAULT,
@@ -63,15 +72,17 @@ int mxCreateWindow() {
       windowWidth,
       windowHeight,
 
-      NULL,             // Parent window
-      NULL,             // Menu
-      window.hInstance, // Instance handle
-      NULL              // Additional application data
+      NULL,              // Parent window
+      NULL,              // Menu
+      window.hInstance,  // Instance handle
+      NULL               // Additional application data
   );
 
-  assert(window.hwnd != NULL && "Failed to create window.");
+
+  REQUIRE(window.hwnd != NULL, "Failed to create window.");
 
   ShowWindow(window.hwnd, SW_SHOW);
+  UpdateWindow(window.hwnd);
 }
 
 int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
@@ -84,5 +95,5 @@ int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator
       .hinstance = window.hInstance,
       .hwnd = window.hwnd,
   };
-  return vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
+  vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
 }

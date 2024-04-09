@@ -2,10 +2,17 @@
 
 #include <stdbool.h>
 
-#define DEFAULT_WIDTH 1024
+#define REQUIRE(condition, message)                               \
+  if (__builtin_expect(!(condition), 0)) {                          \
+    printf("%s:%d Error! %s\n", __FILE__, __LINE__, message); \
+    exit(1);                                                      \
+  }
+
+#define DEFAULT_WIDTH  1024
 #define DEFAULT_HEIGHT 1024
 
-extern bool IsCompositor;
+extern bool isCompositor;
+extern bool isRunning;
 
 extern const char* WindowExtensionName;
 extern const char* ExternalMemoryExntensionName;

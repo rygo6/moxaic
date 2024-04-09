@@ -49,6 +49,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 )
 
 target_compile_options(${TARGET_NAME} PRIVATE
+        "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/="
 )
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
@@ -58,7 +59,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Clang"
     else ()
         message("Clang")
     endif ()
-endif()
+endif ()
 
 set(SHADER_COMPILER "${VULKAN_SDK_PATH}/Bin/glslc.exe")
 set(SHADER_OPTIMIZER "${VULKAN_SDK_PATH}/Bin/spirv-opt.exe")
