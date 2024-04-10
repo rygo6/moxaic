@@ -2,10 +2,12 @@
 
 #include <stdbool.h>
 
-#define REQUIRE(condition, message)                               \
-  if (__builtin_expect(!(condition), 0)) {                          \
-    printf("%s:%d Error! %s\n", __FILE__, __LINE__, message); \
-    exit(1);                                                      \
+#define PANIC(message)                                      \
+  printf("%s:%d Error! %s\n", __FILE__, __LINE__, message); \
+  exit(1);
+#define REQUIRE(condition, message)        \
+  if (__builtin_expect(!(condition), 0)) { \
+    PANIC(message);                        \
   }
 
 #define DEFAULT_WIDTH  1024

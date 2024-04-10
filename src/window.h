@@ -4,4 +4,4 @@
 
 void mxUpdateWindow();
 void mxCreateWindow();
-int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface);
+VkResult mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface);

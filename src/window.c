@@ -85,7 +85,7 @@ void mxCreateWindow() {
   UpdateWindow(window.hwnd);
 }
 
-int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
+VkResult mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
   PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(
       instance,
       "vkCreateWin32SurfaceKHR");
@@ -95,5 +95,5 @@ int mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator
       .hinstance = window.hInstance,
       .hwnd = window.hwnd,
   };
-  vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
+  return vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
 }
