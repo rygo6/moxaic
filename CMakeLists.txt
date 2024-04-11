@@ -46,11 +46,16 @@ target_link_libraries(${TARGET_NAME}
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE
+
 )
 
 target_compile_options(${TARGET_NAME} PRIVATE
         "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/="
 )
+
+if (CMAKE_BUILD_TYPE MATCHES Debug)
+    target_compile_definitions(${TARGET_NAME} PRIVATE DEBUG)
+endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
     if (MSVC)

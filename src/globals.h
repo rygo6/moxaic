@@ -2,9 +2,8 @@
 
 #include <stdbool.h>
 
-#define PANIC(message)                                      \
-  printf("%s:%d Error! %s\n", __FILE__, __LINE__, message); \
-  exit(1);
+extern void Panic(const char* file, int line, const char* message);
+#define PANIC(message) Panic(__FILE__, __LINE__, message)
 #define REQUIRE(condition, message)        \
   if (__builtin_expect(!(condition), 0)) { \
     PANIC(message);                        \

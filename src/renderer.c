@@ -19,7 +19,7 @@
 #define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define VK_ALLOC   NULL
 
-#define VK_REQUIRE(command)                \
+#define VK_REQUIRE(command)                    \
   {                                            \
     VkResult result = command;                 \
     REQUIRE(!result, string_VkResult(result)); \
@@ -58,7 +58,7 @@
 
 #define MATH_UNION(type, name, align, count, ...)    \
   typedef union __attribute((aligned(align))) name { \
-    type array[count];                               \
+    type arr[count];                                 \
     struct {                                         \
       type __VA_ARGS__;                              \
     };                                               \
@@ -70,7 +70,8 @@ MATH_UNION(float, vec3, 16, 4, x, y, z);
 MATH_UNION(uint32_t, ivec3, 16, 4, x, y, z);
 MATH_UNION(float, vec4, 16, 4, x, y, z, w);
 MATH_UNION(uint32_t, ivec4, 16, 4, x, y, z, w);
-MATH_UNION(vec4, mat4, 16, 4, x, y, z, w);
+MATH_UNION(float, mat4_row, 16, 4, m0, m1, m2, m3);
+MATH_UNION(mat4_row, mat4, 16, 4, m0, m1, m2, m3);
 
 typedef struct Vertex {
   vec3 position;
@@ -83,6 +84,16 @@ enum VertexAttributes {
   VERTEX_ATTR_UV,
   VERTEX_ATTR_COUNT
 };
+
+mat4 perspectiveRH_RZ(const float fovy, const float aspect, const float zNear, const float zFar) {
+  const float tanHalfFovy = tan(fovy / 2.0f);
+  return (mat4){
+      .m0 = {.m0 = 1.0f / (aspect * tanHalfFovy)},
+      .m1 = {.m1 = 1.0f / tanHalfFovy},
+      .m2 = {.m2 = zNear / (zFar - zNear), .m3 = -1.0f},
+      .m3 = {.m2 = -(zNear * zFar) / (zNear - zFar)},
+  };
+}
 
 //----------------------------------------------------------------------------------
 // Global State
@@ -173,13 +184,13 @@ static struct Context {
 
 static void ReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents) {
   FILE* file = fopen(pPath, "rb");
-  REQUIRE(file != NULL, sprintf("File can't be opened! %s\n", pPath));
+  REQUIRE(file != NULL, "File can't be opened!");
   fseek(file, 0, SEEK_END);
   *pFileLength = ftell(file);
   rewind(file);
   *ppFileContents = malloc(*pFileLength * sizeof(char));
   const size_t readCount = fread(*ppFileContents, *pFileLength, 1, file);
-  REQUIRE(readCount > 0, sprintf("Failed to read file! %s\n", pPath));
+  REQUIRE(readCount > 0, "Failed to read file!");
   fclose(file);
 }
 
@@ -677,12 +688,13 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const Queu
     return i;
   }
 
-  PANIC(sprintf("Can't find queue family! graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
-                string_Support[pQueueDesc->graphics],
-                string_Support[pQueueDesc->compute],
-                string_Support[pQueueDesc->transfer],
-                string_Support[pQueueDesc->globalPriority],
-                pQueueDesc->presentSurface == NULL ? "No" : "Yes"));
+  fprintf(stderr, "graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
+          string_Support[pQueueDesc->graphics],
+          string_Support[pQueueDesc->compute],
+          string_Support[pQueueDesc->transfer],
+          string_Support[pQueueDesc->globalPriority],
+          pQueueDesc->presentSurface == NULL ? "No" : "Yes");
+  PANIC("Can't find queue family");
 }
 
 void mxcInitContext() {
@@ -889,7 +901,7 @@ void mxcInitContext() {
   // PFN_LOAD(vkSetDebugUtilsObjectNameEXT);
 
   {  // RenderPass
-#define DEFAULT_ATTACHMENT_DESCRIPTION             \
+#define DEFAULT_ATTACHMENT_DESCRIPTION                \
   .samples = VK_SAMPLE_COUNT_1_BIT,                   \
   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
   .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
