@@ -1,5 +1,6 @@
 #include "renderer.h"
 #include "globals.h"
+#include "stb_image.h"
 #include "window.h"
 
 #include <assert.h>
@@ -16,46 +17,15 @@
 // Global Constants
 //----------------------------------------------------------------------------------
 
-#define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)
-#define VK_ALLOC   NULL
-
-#define VK_REQUIRE(command)                    \
-  {                                            \
-    VkResult result = command;                 \
-    REQUIRE(!result, string_VkResult(result)); \
-  }
-
-// #define CLEANUP_RESULT(command, cleanup_goto)      \
-//   result = command;                                \
-//   if (__builtin_expect(result != VK_SUCCESS, 0)) { \
-//     LOG_ERROR(command, string_VkResult(result));   \
-//     goto cleanup_goto;                             \
-//   }
-
-#define PFN_LOAD(vkFunction)                                                                            \
-  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
-  assert(vkFunction != NULL && "Couldn't load " #vkFunction)
-
-#define COUNT(array) sizeof(array) / sizeof(array[0])
-
-#define COLOR_BUFFER_FORMAT     VK_FORMAT_R8G8B8A8_UNORM
-#define NORMAL_BUFFER_FORMAT    VK_FORMAT_R16G16B16A16_SFLOAT
-#define DEPTH_BUFFER_FORMAT     VK_FORMAT_D32_SFLOAT
-#define COLOR_ATTACHMENT_INDEX  0
-#define NORMAL_ATTACHMENT_INDEX 1
-#define DEPTH_ATTACHMENT_INDEX  2
-
-#define SWAP_COUNT 2
-
-#define MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-#define MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+#define VK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
+#define VK_ALLOC      NULL
+#define VK_SWAP_COUNT 2
 
 //----------------------------------------------------------------------------------
 // Math
 //----------------------------------------------------------------------------------
 
 #define PI 3.14159265358979323846f
-
 #define MATH_UNION(type, name, align, count, ...)    \
   typedef union __attribute((aligned(align))) name { \
     type arr[count];                                 \
@@ -63,7 +33,6 @@
       type __VA_ARGS__;                              \
     };                                               \
   } name;
-
 MATH_UNION(float, vec2, 16, 4, x, y);
 MATH_UNION(uint32_t, ivec2, 16, 4, x, y);
 MATH_UNION(float, vec3, 16, 4, x, y, z);
@@ -96,7 +65,7 @@ mat4 perspectiveRH_RZ(const float fovy, const float aspect, const float zNear, c
 }
 
 //----------------------------------------------------------------------------------
-// Global State
+// State
 //----------------------------------------------------------------------------------
 
 typedef struct Camera {
@@ -128,6 +97,10 @@ typedef struct StandardObjectSetState {
   mat4 model;
 } StandardObjectSetState;
 
+//----------------------------------------------------------------------------------
+// Global State
+//----------------------------------------------------------------------------------
+
 static struct Context {
   VkInstance       instance;
   VkSurfaceKHR     surface;
@@ -155,8 +128,8 @@ static struct Context {
   VkPipeline       standardPipeline;
 
   VkSwapchainKHR swapchain;
-  VkImage        swapImages[SWAP_COUNT];
-  VkImageView    swapImageViews[SWAP_COUNT];
+  VkImage        swapImages[VK_SWAP_COUNT];
+  VkImageView    swapImageViews[VK_SWAP_COUNT];
 
   VkCommandPool   graphicsCommandPool;
   VkCommandBuffer graphicsCommandBuffer;
@@ -175,12 +148,43 @@ static struct Context {
 
   VkQueryPool timeQueryPool;
 
+  VkDebugUtilsMessengerEXT debugUtilsMessenger;
+
 } context;
 
 
 //----------------------------------------------------------------------------------
 // Utility
 //----------------------------------------------------------------------------------
+
+#define VK_REQUIRE(command)                                 \
+  {                                                         \
+    VkResult result = command;                              \
+    REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
+  }
+// #define CLEANUP_RESULT(command, cleanup_goto)      \
+//   result = command;                                \
+//   if (__builtin_expect(result != VK_SUCCESS, 0)) { \
+//     LOG_ERROR(command, string_VkResult(result));   \
+//     goto cleanup_goto;                             \
+//   }
+
+#define PFN_LOAD(vkFunction)                                                                            \
+  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
+  assert(vkFunction != NULL && "Couldn't load " #vkFunction)
+
+#define COUNT(array) sizeof(array) / sizeof(array[0])
+
+typedef enum Support {
+  SUPPORT_OPTIONAL,
+  SUPPORT_YES,
+  SUPPORT_NO,
+} Support;
+const char* string_Support[] = {
+    [SUPPORT_OPTIONAL] = "SUPPORT_OPTIONAL",
+    [SUPPORT_YES] = "SUPPORT_YES",
+    [SUPPORT_NO] = "SUPPORT_NO",
+};
 
 static void ReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents) {
   FILE* file = fopen(pPath, "rb");
@@ -194,11 +198,25 @@ static void ReadFile(const char* pPath, size_t* pFileLength, char** ppFileConten
   fclose(file);
 }
 
+static VkBool32 DebugUtilsCallback(
+    const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    const VkDebugUtilsMessageTypeFlagsEXT        messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT*  pCallbackData,
+    void*                                        pUserData) {
+  switch (messageSeverity) {
+    default:
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: printf("%s\n", pCallbackData->pMessage); return VK_FALSE;
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: PANIC(pCallbackData->pMessage); return VK_FALSE;
+  }
+}
+
 //----------------------------------------------------------------------------------
 // Descriptors
 //----------------------------------------------------------------------------------
 
-void CreateGlobalSetLayout() {
+static void CreateGlobalSetLayout() {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
@@ -229,7 +247,7 @@ void CreateGlobalSetLayout() {
     },                                                   \
   }
 
-void CreateStandardMaterialSetLayout() {
+static void CreateStandardMaterialSetLayout() {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
@@ -256,7 +274,7 @@ void CreateStandardMaterialSetLayout() {
     },                                                              \
   }
 
-void CreateStandardObjectSetLayout() {
+static void CreateStandardObjectSetLayout() {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
@@ -299,6 +317,13 @@ static void AllocateDescriptorSet(VkDescriptorSetLayout* pSetLayout, VkDescripto
 
 #define COLOR_WRITE_MASK_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
+#define COLOR_BUFFER_FORMAT     VK_FORMAT_R8G8B8A8_UNORM
+#define NORMAL_BUFFER_FORMAT    VK_FORMAT_R16G16B16A16_SFLOAT
+#define DEPTH_BUFFER_FORMAT     VK_FORMAT_D32_SFLOAT
+#define COLOR_ATTACHMENT_INDEX  0
+#define NORMAL_ATTACHMENT_INDEX 1
+#define DEPTH_ATTACHMENT_INDEX  2
+
 VkShaderModule CreateShaderModule(const char* pShaderPath) {
   size_t codeSize;
   char*  pCode;
@@ -314,6 +339,7 @@ VkShaderModule CreateShaderModule(const char* pShaderPath) {
   return shaderModule;
 }
 
+// Statndard Pipeline
 #define STANDARD_VERTEX_BINDING 0
 enum StandardSetBinding {
   STANDARD_SET_BINDING_GLOBAL,
@@ -333,7 +359,6 @@ void CreateStandardPipelineLayout() {
   };
   VK_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VK_ALLOC, &context.standardPipelineLayout));
 }
-
 void CreateStandardPipeline() {
   const VkShaderModule vertShader = CreateShaderModule("./shaders/basic_material.vert.spv");
   const VkShaderModule fragShader = CreateShaderModule("./shaders/basic_material.frag.spv");
@@ -454,9 +479,7 @@ void CreateStandardPipeline() {
 //----------------------------------------------------------------------------------
 // Image Barriers
 //----------------------------------------------------------------------------------
-static void BeginImmediateCommandBuffer(
-    const VkCommandPool commandPool,
-    VkCommandBuffer*    pCommandBuffer) {
+static void BeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCommandBuffer) {
   const VkCommandBufferAllocateInfo allocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = commandPool,
@@ -470,11 +493,7 @@ static void BeginImmediateCommandBuffer(
   };
   VK_REQUIRE(vkBeginCommandBuffer(*pCommandBuffer, &beginInfo));
 }
-
-static void EndImmediateCommandBuffer(
-    const VkCommandPool commandPool,
-    const VkQueue       graphicsQueue,
-    VkCommandBuffer     commandBuffer) {
+static void EndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue graphicsQueue, VkCommandBuffer commandBuffer) {
   VK_REQUIRE(vkEndCommandBuffer(commandBuffer));
   const VkSubmitInfo submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -492,73 +511,79 @@ typedef enum QueueBarrier {
   QUEUE_BARRIER_COMPUTE,
   QUEUE_BARRIER_TRANSITION,
   QUEUE_BARRIER_FAMILY_EXTERNAL,
-} VkQueueBarrier;
+} QueueBarrier;
+static uint32_t GetQueueIndex(const QueueBarrier queueBarrier) {
+  switch (queueBarrier) {
+    default:
+    case QUEUE_BARRIER_IGNORE: return VK_QUEUE_FAMILY_IGNORED;
+    case QUEUE_BARRIER_GRAPHICS: return context.graphicsQueueFamilyIndex;
+    case QUEUE_BARRIER_COMPUTE: return context.computeQueueFamilyIndex;
+    case QUEUE_BARRIER_TRANSITION: return context.transferQueueFamilyIndex;
+    case QUEUE_BARRIER_FAMILY_EXTERNAL: return VK_QUEUE_FAMILY_EXTERNAL;
+  }
+}
 typedef struct ImageBarrier {
+  VkPipelineStageFlagBits2 stageMask;
   VkAccessFlagBits2        accessMask;
   VkImageLayout            layout;
-  VkQueueBarrier           queueFamily;
-  VkPipelineStageFlagBits2 stageMask;
+  // QueueBarrier             queueFamily;
 } ImageBarrier;
 const ImageBarrier UndefinedImageBarrier = {
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
-    .queueFamily = QUEUE_BARRIER_IGNORE,
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
 };
 const ImageBarrier PresentImageBarrier = {
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-    .queueFamily = QUEUE_BARRIER_COMPUTE,
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+};
+const ImageBarrier TransferDstImageBarrier = {
+    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
+    .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+};
+const ImageBarrier ShaderReadImageBarrier = {
+    .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
 
-static void TransitionImageLayoutImmediate(
-    const ImageBarrier*      pSrc,
-    const ImageBarrier*      pDst,
-    const VkImageAspectFlags aspectMask,
-    const VkImage            image) {
+#define TRANSITION_IMAGE(pSrc, pDst, aspectMask, image) \
+  {                                                     \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,  \
+    .srcStageMask = pSrc->stageMask,                    \
+    .srcAccessMask = pSrc->accessMask,                  \
+    .dstStageMask = pDst->stageMask,                    \
+    .dstAccessMask = pDst->accessMask,                  \
+    .oldLayout = pSrc->layout,                          \
+    .newLayout = pDst->layout,                          \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,     \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,     \
+    .image = image,                                     \
+    .subresourceRange = {                               \
+      .aspectMask = aspectMask,                         \
+      .levelCount = 1,                                  \
+      .layerCount = 1,                                  \
+    }                                                   \
+  }
+static void TransitionImageLayoutImmediate(const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image) {
   VkCommandBuffer commandBuffer;
   BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer);
-  const VkImageMemoryBarrier2 barrier = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-      .srcStageMask = pSrc->stageMask,
-      .srcAccessMask = pSrc->accessMask,
-      .dstStageMask = pDst->stageMask,
-      .dstAccessMask = pDst->accessMask,
-      .oldLayout = pSrc->layout,
-      .newLayout = pDst->layout,
-      .srcQueueFamilyIndex = pSrc->queueFamily,
-      .dstQueueFamilyIndex = pSrc->queueFamily,
-      .image = image,
-      .subresourceRange = {
-          .aspectMask = aspectMask,
-          .levelCount = 1,
-          .layerCount = 1,
-      },
-  };
   const VkDependencyInfo dependencyInfo = {
       .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
       .imageMemoryBarrierCount = 1,
-      .pImageMemoryBarriers = &barrier,
-  };
+      .pImageMemoryBarriers = &(VkImageMemoryBarrier2)TRANSITION_IMAGE(pSrc, pDst, aspectMask, image)};
   vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
   EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
 }
 
 //----------------------------------------------------------------------------------
-// Context
+// Memory
 //----------------------------------------------------------------------------------
-static VkBool32 DebugUtilsCallback(
-    const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    const VkDebugUtilsMessageTypeFlagsEXT        messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT*  pCallbackData,
-    void*                                        pUserData) {
-  printf("\n%s\n", pCallbackData->pMessage);
-  if (messageSeverity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
-    exit(1);
-  }
-  return VK_FALSE;
-}
+
+#define MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+#define MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
 static uint32_t FindMemoryTypeIndex(
     const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties,
@@ -571,7 +596,6 @@ static uint32_t FindMemoryTypeIndex(
       return i;
     }
   }
-
   int index = 0;
   while (memoryPropertyFlags) {
     if (memoryPropertyFlags & 1) {
@@ -583,18 +607,16 @@ static uint32_t FindMemoryTypeIndex(
   PANIC("Failed to find memory with properties!");
 }
 
-static void AllocateBufferMemory(
-    const VkBuffer              buffer,
+static void AllocateMemory(
+    const VkMemoryRequirements* pMemoryRequirements,
     const VkMemoryPropertyFlags memoryPropertyFlags,
     VkDeviceMemory*             pDeviceMemory) {
-  VkMemoryRequirements             memoryRequirements;
   VkPhysicalDeviceMemoryProperties memoryProperties;
-  vkGetBufferMemoryRequirements(context.device, buffer, &memoryRequirements);
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProperties);
-  const uint32_t             memoryTypeIndex = FindMemoryTypeIndex(&memoryProperties, &memoryRequirements, memoryPropertyFlags);
+  const uint32_t             memoryTypeIndex = FindMemoryTypeIndex(&memoryProperties, pMemoryRequirements, memoryPropertyFlags);
   const VkMemoryAllocateInfo allocateInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .allocationSize = memoryRequirements.size,
+      .allocationSize = pMemoryRequirements->size,
       .memoryTypeIndex = memoryTypeIndex,
   };
   VK_REQUIRE(vkAllocateMemory(context.device, &allocateInfo, VK_ALLOC, pDeviceMemory));
@@ -602,31 +624,49 @@ static void AllocateBufferMemory(
 
 static void CreateAllocateBindBuffer(
     const VkMemoryPropertyFlags memoryPropertyFlags,
-    const uint32_t              bufferSize,
+    const VkDeviceSize          bufferSize,
     const VkBufferUsageFlags    usage,
-    VkBuffer*                   pBuffer,
-    VkDeviceMemory*             pDeviceMemory) {
+    VkDeviceMemory*             pDeviceMemory,
+    VkBuffer*                   pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .size = bufferSize,
       .usage = usage,
   };
   VK_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, pBuffer));
-  AllocateBufferMemory(*pBuffer, memoryPropertyFlags, pDeviceMemory);
+  VkMemoryRequirements memoryRequirements;
+  vkGetBufferMemoryRequirements(context.device, *pBuffer, &memoryRequirements);
+  AllocateMemory(&memoryRequirements, memoryPropertyFlags, pDeviceMemory);
   VK_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMemory, 0));
 }
 
+static void CreateStagingBuffer(
+    const void*        srcData,
+    const VkDeviceSize bufferSize,
+    VkDeviceMemory*    pStagingBufferMemory,
+    VkBuffer*          pStagingBuffer) {
+  void* dstData;
+  CreateAllocateBindBuffer(MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, pStagingBufferMemory, pStagingBuffer);
+  VK_REQUIRE(vkMapMemory(context.device, *pStagingBufferMemory, 0, bufferSize, 0, &dstData));
+  memcpy(dstData, srcData, bufferSize);
+  vkUnmapMemory(context.device, *pStagingBufferMemory);
+}
+
+static void CreateStagingBufferFromImageFile(const char* pPath, VkDeviceMemory* pStagingBufferMemory, VkBuffer* pStagingBuffer) {
+  int                texChannels, width, height;
+  stbi_uc*           pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
+  const VkDeviceSize imageBufferSize = width * height * 4;
+  CreateStagingBuffer(pImagePixels, imageBufferSize, pStagingBufferMemory, pStagingBuffer);
+  stbi_image_free(pImagePixels);
+}
+
 static void PopulateBufferViaStaging(
-    const void*    srcData,
-    const uint32_t bufferSize,
-    const VkBuffer buffer) {
+    const void*        srcData,
+    const VkDeviceSize bufferSize,
+    const VkBuffer     buffer) {
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
-  void*          dstData;
-  CreateAllocateBindBuffer(MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &stagingBuffer, &stagingBufferMemory);
-  VK_REQUIRE(vkMapMemory(context.device, stagingBufferMemory, 0, bufferSize, 0, &dstData));
-  memcpy(dstData, srcData, bufferSize);
-  vkUnmapMemory(context.device, stagingBufferMemory);
+  CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
   VkCommandBuffer commandBuffer;
   BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer);
   vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.size = bufferSize});
@@ -635,16 +675,9 @@ static void PopulateBufferViaStaging(
   vkDestroyBuffer(context.device, stagingBuffer, VK_ALLOC);
 }
 
-typedef enum Support {
-  SUPPORT_OPTIONAL,
-  SUPPORT_YES,
-  SUPPORT_NO,
-} Support;
-const char* string_Support[] = {
-    [SUPPORT_OPTIONAL] = "SUPPORT_OPTIONAL",
-    [SUPPORT_YES] = "SUPPORT_YES",
-    [SUPPORT_NO] = "SUPPORT_NO",
-};
+//----------------------------------------------------------------------------------
+// Context
+//----------------------------------------------------------------------------------
 
 typedef struct QueueDesc {
   Support      graphics;
@@ -699,21 +732,6 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const Queu
 
 void mxcInitContext() {
   {  // Instance
-    VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = 0;
-    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    VkDebugUtilsMessageTypeFlagsEXT messageType = 0;
-    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
-    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-        .messageSeverity = messageSeverity,
-        .messageType = messageType,
-        .pfnUserCallback = DebugUtilsCallback,
-    };
     const char* ppEnabledLayerNames[] = {
         "VK_LAYER_KHRONOS_validation",
     };
@@ -726,10 +744,9 @@ void mxcInitContext() {
         VK_KHR_SURFACE_EXTENSION_NAME,
         WindowExtensionName,
     };
-    VkInstanceCreateInfo instanceCreationInfo = {
+    const VkInstanceCreateInfo instanceCreationInfo = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pNext = &debugUtilsMessengerCreateInfo,
-        .pApplicationInfo = &(VkApplicationInfo){
+        .pApplicationInfo = &(const VkApplicationInfo){
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
             .pApplicationName = "Moxaic",
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
@@ -748,6 +765,26 @@ void mxcInitContext() {
            VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
            VK_API_VERSION_MINOR(instanceCreationInfo.pApplicationInfo->apiVersion),
            VK_API_VERSION_PATCH(instanceCreationInfo.pApplicationInfo->apiVersion));
+  }
+
+  {
+    VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = 0;
+    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    VkDebugUtilsMessageTypeFlagsEXT messageType = 0;
+    // messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
+    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+        .messageSeverity = messageSeverity,
+        .messageType = messageType,
+        .pfnUserCallback = DebugUtilsCallback,
+    };
+    PFN_LOAD(vkCreateDebugUtilsMessengerEXT);
+    VK_REQUIRE(vkCreateDebugUtilsMessengerEXT(context.instance, &debugUtilsMessengerCreateInfo, VK_ALLOC, &context.debugUtilsMessenger));
   }
 
   {  // PhysicalDevice
@@ -794,41 +831,41 @@ void mxcInitContext() {
   }
 
   {  // Device
-    VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures = {
+    const VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT,
         .pNext = NULL,
         .globalPriorityQuery = VK_TRUE,
     };
-    VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = {
+    const VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
         .pNext = &physicalDeviceGlobalPriorityQueryFeatures,
         .robustBufferAccess2 = VK_TRUE,
         .robustImageAccess2 = VK_TRUE,
         .nullDescriptor = VK_TRUE,
     };
-    VkPhysicalDeviceMeshShaderFeaturesEXT physicalDeviceMeshShaderFeatures = {
+    const VkPhysicalDeviceMeshShaderFeaturesEXT physicalDeviceMeshShaderFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
         .pNext = &physicalDeviceRobustness2Features,
         .taskShader = VK_TRUE,
         .meshShader = VK_TRUE,
     };
-    VkPhysicalDeviceVulkan13Features physicalDeviceVulkan13Features = {
+    const VkPhysicalDeviceVulkan13Features physicalDeviceVulkan13Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
         .pNext = &physicalDeviceMeshShaderFeatures,
         .synchronization2 = VK_TRUE,
     };
-    VkPhysicalDeviceVulkan12Features physicalDeviceVulkan12Features = {
+    const VkPhysicalDeviceVulkan12Features physicalDeviceVulkan12Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .pNext = &physicalDeviceVulkan13Features,
         .samplerFilterMinmax = VK_TRUE,
         .hostQueryReset = VK_TRUE,
         .timelineSemaphore = VK_TRUE,
     };
-    VkPhysicalDeviceVulkan11Features physicalDeviceVulkan11Features = {
+    const VkPhysicalDeviceVulkan11Features physicalDeviceVulkan11Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
         .pNext = &physicalDeviceVulkan12Features,
     };
-    VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
+    const VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &physicalDeviceVulkan11Features,
         .features = {
@@ -853,34 +890,34 @@ void mxcInitContext() {
         ExternalSemaphoreExntensionName,
         ExternalFenceExntensionName,
     };
-    VkDeviceQueueGlobalPriorityCreateInfoEXT deviceQueueGlobalPriorityCreateInfo = {
+    const VkDeviceQueueGlobalPriorityCreateInfoEXT deviceQueueGlobalPriorityCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
         .globalPriority = isCompositor ? VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT : VK_QUEUE_GLOBAL_PRIORITY_LOW_EXT,
     };
-    VkDeviceCreateInfo deviceCreateInfo = {
+    const VkDeviceCreateInfo deviceCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = &physicalDeviceFeatures,
         .queueCreateInfoCount = 3,
-        .pQueueCreateInfos = (VkDeviceQueueCreateInfo[]){
+        .pQueueCreateInfos = (const VkDeviceQueueCreateInfo[]){
             {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 .pNext = &deviceQueueGlobalPriorityCreateInfo,
                 .queueFamilyIndex = context.graphicsQueueFamilyIndex,
                 .queueCount = 1,
-                .pQueuePriorities = &(float){isCompositor ? 1.0f : 0.0f},
+                .pQueuePriorities = &(const float){isCompositor ? 1.0f : 0.0f},
             },
             {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 .pNext = &deviceQueueGlobalPriorityCreateInfo,
                 .queueFamilyIndex = context.computeQueueFamilyIndex,
                 .queueCount = 1,
-                .pQueuePriorities = &(float){isCompositor ? 1.0f : 0.0f},
+                .pQueuePriorities = &(const float){isCompositor ? 1.0f : 0.0f},
             },
             {
                 .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                 .queueFamilyIndex = context.transferQueueFamilyIndex,
                 .queueCount = 1,
-                .pQueuePriorities = &(float){0},
+                .pQueuePriorities = &(const float){0},
             },
         },
         .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
@@ -910,22 +947,22 @@ void mxcInitContext() {
   .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
   .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
 
-    VkRenderPassCreateInfo renderPassCreateInfo = {
+    const VkRenderPassCreateInfo renderPassCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = 3,
-        .pAttachments = (VkAttachmentDescription[]){
+        .pAttachments = (const VkAttachmentDescription[]){
             {.format = COLOR_BUFFER_FORMAT, DEFAULT_ATTACHMENT_DESCRIPTION},
             {.format = NORMAL_BUFFER_FORMAT, DEFAULT_ATTACHMENT_DESCRIPTION},
             {.format = DEPTH_BUFFER_FORMAT, DEFAULT_ATTACHMENT_DESCRIPTION},
         },
         .subpassCount = 1,
-        .pSubpasses = &(VkSubpassDescription){
+        .pSubpasses = &(const VkSubpassDescription){
             .colorAttachmentCount = 2,
-            .pColorAttachments = (VkAttachmentReference[]){
+            .pColorAttachments = (const VkAttachmentReference[]){
                 {.attachment = COLOR_ATTACHMENT_INDEX, .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL},
                 {.attachment = NORMAL_ATTACHMENT_INDEX, .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL},
             },
-            .pDepthStencilAttachment = &(VkAttachmentReference){
+            .pDepthStencilAttachment = &(const VkAttachmentReference){
                 .attachment = DEPTH_ATTACHMENT_INDEX,
                 .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
             },
@@ -937,18 +974,17 @@ void mxcInitContext() {
   }
 
   {  // Pools
-    VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = context.graphicsQueueFamilyIndex,
     };
     VK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &context.graphicsCommandPool));
-    VkCommandPoolCreateInfo computeCommandPoolCreateInfo = {
+    const VkCommandPoolCreateInfo computeCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex = context.computeQueueFamilyIndex,
     };
     VK_REQUIRE(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
-
-    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+    const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
         .maxSets = 30,
@@ -960,8 +996,7 @@ void mxcInitContext() {
         },
     };
     VK_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VK_ALLOC, &context.descriptorPool));
-
-    VkQueryPoolCreateInfo queryPoolCreateInfo = {
+    const VkQueryPoolCreateInfo queryPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
@@ -970,13 +1005,13 @@ void mxcInitContext() {
   }
 
   {  // CommandBuffers
-    VkCommandBufferAllocateInfo graphicsCommandBufferAllocateInfo = {
+    const VkCommandBufferAllocateInfo graphicsCommandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = context.graphicsCommandPool,
         .commandBufferCount = 1,
     };
     VK_REQUIRE(vkAllocateCommandBuffers(context.device, &graphicsCommandBufferAllocateInfo, &context.graphicsCommandBuffer));
-    VkCommandBufferAllocateInfo computeCommandBufferAllocateInfo = {
+    const VkCommandBufferAllocateInfo computeCommandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = context.computeCommandPool,
         .commandBufferCount = 1,
@@ -995,7 +1030,7 @@ void mxcInitContext() {
   .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
   .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
 
-    VkSamplerCreateInfo nearestSampleCreateInfo = {
+    const VkSamplerCreateInfo nearestSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .maxLod = 16.0,
         .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
@@ -1004,14 +1039,12 @@ void mxcInitContext() {
         .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     };
     VK_REQUIRE(vkCreateSampler(context.device, &nearestSampleCreateInfo, VK_ALLOC, &context.nearestSampler));
-
-    VkSamplerCreateInfo linearSampleCreateInfo = {
+    const VkSamplerCreateInfo linearSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         DEFAULT_LINEAR_SAMPLER,
     };
     VK_REQUIRE(vkCreateSampler(context.device, &linearSampleCreateInfo, VK_ALLOC, &context.linearSampler));
-
-    VkSamplerCreateInfo minSamplerCreateInfo = {
+    const VkSamplerCreateInfo minSamplerCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .pNext = &(VkSamplerReductionModeCreateInfo){
             .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
@@ -1020,8 +1053,7 @@ void mxcInitContext() {
         DEFAULT_LINEAR_SAMPLER,
     };
     VK_REQUIRE(vkCreateSampler(context.device, &minSamplerCreateInfo, VK_ALLOC, &context.minSampler));
-
-    VkSamplerCreateInfo maxSamplerCreateInfo = {
+    const VkSamplerCreateInfo maxSamplerCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
         .pNext = &(VkSamplerReductionModeCreateInfo){
             .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
@@ -1035,10 +1067,10 @@ void mxcInitContext() {
   }
 
   {  // Swapchain
-    VkSwapchainCreateInfoKHR swapchainCreateInfo = {
+    const VkSwapchainCreateInfoKHR swapchainCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .surface = context.surface,
-        .minImageCount = SWAP_COUNT,
+        .minImageCount = VK_SWAP_COUNT,
         .imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
         .imageExtent = {DEFAULT_WIDTH, DEFAULT_HEIGHT},
         .imageArrayLayers = 1,
@@ -1052,11 +1084,11 @@ void mxcInitContext() {
     VK_REQUIRE(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VK_ALLOC, &context.swapchain));
     uint32_t swapCount;
     VK_REQUIRE(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, NULL));
-    REQUIRE(swapCount == SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
+    REQUIRE(swapCount == VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
     VK_REQUIRE(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, context.swapImages));
 
-    for (int i = 0; i < SWAP_COUNT; ++i) {
-      VkImageViewCreateInfo swapImageViewCreateInfo = {
+    for (int i = 0; i < VK_SWAP_COUNT; ++i) {
+      const VkImageViewCreateInfo swapImageViewCreateInfo = {
           .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
           .image = context.swapImages[i],
           .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -1075,7 +1107,7 @@ void mxcInitContext() {
   {  // Global Descriptor
     CreateGlobalSetLayout();
     AllocateDescriptorSet(&context.globalSetLayout, &context.globalSet);
-    CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(GlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &context.globalSetBuffer, &context.globalSetMemory);
+    CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(GlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &context.globalSetMemory, &context.globalSetBuffer);
     VK_REQUIRE(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.globalSetMapped));
   }
 
@@ -1133,22 +1165,14 @@ static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t
     }
   }
 }
-
-static void CreateSphereMeshBuffers(
-    const float     radius,
-    const int       slicesCount,
-    const int       stackCount,
-    VkBuffer*       pIndexBuffer,
-    VkDeviceMemory* pIndexMemory,
-    VkBuffer*       pVertexBuffer,
-    VkDeviceMemory* pVertexMemory) {
+static void CreateSphereMeshBuffers(const float radius, const int slicesCount, const int stackCount, VkBuffer* pIndexBuffer, VkDeviceMemory* pIndexMemory, VkBuffer* pVertexBuffer, VkDeviceMemory* pVertexMemory) {
   {
     int indexCount;
     GenerateSphereIndexCount(slicesCount, stackCount, &indexCount);
     uint16_t pIndices[indexCount];
     GenerateSphereIndices(slicesCount, stackCount, pIndices);
     uint32_t indexBufferSize = sizeof(uint16_t) * indexCount;
-    CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, pIndexBuffer, pIndexMemory);
+    CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, pIndexMemory, pIndexBuffer);
     PopulateBufferViaStaging(pIndices, indexBufferSize, *pIndexBuffer);
   }
   {
@@ -1157,15 +1181,67 @@ static void CreateSphereMeshBuffers(
     Vertex pVertices[vertexCount];
     GenerateSphere(slicesCount, stackCount, radius, pVertices);
     uint32_t vertexBufferSize = sizeof(Vertex) * vertexCount;
-    CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, pVertexBuffer, pVertexMemory);
+    CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, pVertexMemory, pVertexBuffer);
     PopulateBufferViaStaging(pVertices, vertexBufferSize, *pVertexBuffer);
   }
 }
 
 int mxcRenderNode() {
 
-  // VkImage     checkerImage;
-  // VkImageView checkerImageView;
+  int      texChannels, width, height;
+  stbi_uc* pImagePixels = stbi_load("textures/uvgrid.jpg", &width, &height, &texChannels, STBI_rgb_alpha);
+  REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
+  const VkDeviceSize imageBufferSize = width * height * 4;
+  VkBuffer           stagingBuffer;
+  VkDeviceMemory     stagingBufferMemory;
+  CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
+  stbi_image_free(pImagePixels);
+
+  VkImage                 checkerImage;
+  VkImageView             checkerImageView;
+  VkDeviceMemory          checkerImageMemory;
+  const VkImageCreateInfo imageCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = VK_FORMAT_R8G8B8A8_SRGB,
+      .extent = {width, height, 1},
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+  VK_REQUIRE(vkCreateImage(context.device, &imageCreateInfo, VK_ALLOC, &checkerImage));
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(context.device, checkerImage, &memRequirements);
+  AllocateMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &checkerImageMemory);
+  VK_REQUIRE(vkBindImageMemory(context.device, checkerImage, checkerImageMemory, 0));
+
+  TransitionImageLayoutImmediate(&UndefinedImageBarrier, &TransferDstImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, checkerImage);
+  VkCommandBuffer commandBuffer;
+  BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer);
+  const VkBufferImageCopy region = {
+      .imageSubresource = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .layerCount = 1,
+      },
+      .imageExtent = {width, height, 1},
+  };
+  vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, checkerImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+  EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
+  TransitionImageLayoutImmediate(&TransferDstImageBarrier, &ShaderReadImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, checkerImage);
+
+  VkImageViewCreateInfo imageViewCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .image = checkerImage,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = VK_FORMAT_R8G8B8A8_SRGB,
+      .subresourceRange = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .levelCount = 1,
+          .layerCount = 1,
+      },
+  };
+  VK_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, VK_ALLOC, &checkerImageView));
 
   VkBuffer       sphereIndexBuffer;
   VkDeviceMemory sphereIndexMemory;
@@ -1183,7 +1259,7 @@ int mxcRenderNode() {
   StandardObjectSetState sphereObjectSetMapped;
   VkDeviceMemory         sphereObjectSetMemory;
   VkBuffer               sphereObjectSetBuffer;
-  CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(StandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sphereObjectSetBuffer, &sphereObjectSetMemory);
+  CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(StandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sphereObjectSetMemory, &sphereObjectSetBuffer);
   VK_REQUIRE(vkMapMemory(context.device, sphereObjectSetMemory, 0, sizeof(StandardObjectSetState), 0, (void**)&sphereObjectSetMapped));
   VkDescriptorSet checkerMaterialSet;
   AllocateDescriptorSet(&context.materialSetLayout, &checkerMaterialSet);

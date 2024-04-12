@@ -37,6 +37,7 @@ AlignAfterOpenBracket: Align
 AlwaysBreakAfterReturnType: None
 ColumnLimit: 0
 PointerAlignment: Left
+IndentCaseLabels: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: true
 IndentPPDirectives: BeforeHash
