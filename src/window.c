@@ -85,7 +85,7 @@ void mxCreateWindow() {
   UpdateWindow(window.hwnd);
 }
 
-VkResult mxCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
+VkResult mxcCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
   PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(
       instance,
       "vkCreateWin32SurfaceKHR");

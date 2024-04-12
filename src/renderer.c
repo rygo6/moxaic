@@ -212,6 +212,32 @@ static VkBool32 DebugUtilsCallback(
   }
 }
 
+static void BeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCommandBuffer) {
+  const VkCommandBufferAllocateInfo allocateInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = commandPool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = 1,
+  };
+  VK_REQUIRE(vkAllocateCommandBuffers(context.device, &allocateInfo, pCommandBuffer));
+  const VkCommandBufferBeginInfo beginInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+  };
+  VK_REQUIRE(vkBeginCommandBuffer(*pCommandBuffer, &beginInfo));
+}
+static void EndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue graphicsQueue, VkCommandBuffer commandBuffer) {
+  VK_REQUIRE(vkEndCommandBuffer(commandBuffer));
+  const VkSubmitInfo submitInfo = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &commandBuffer,
+  };
+  VK_REQUIRE(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+  VK_REQUIRE(vkQueueWaitIdle(graphicsQueue));
+  vkFreeCommandBuffers(context.device, commandPool, 1, &commandBuffer);
+}
+
 //----------------------------------------------------------------------------------
 // Descriptors
 //----------------------------------------------------------------------------------
@@ -301,14 +327,16 @@ static void CreateStandardObjectSetLayout() {
     },                                                        \
   }
 
-static void AllocateDescriptorSet(VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet) {
+static VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout* pSetLayout) {
   const VkDescriptorSetAllocateInfo allocateInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
       .descriptorPool = context.descriptorPool,
       .descriptorSetCount = 1,
       .pSetLayouts = pSetLayout,
   };
-  VK_REQUIRE(vkAllocateDescriptorSets(context.device, &allocateInfo, pSet));
+  VkDescriptorSet set;
+  VK_REQUIRE(vkAllocateDescriptorSets(context.device, &allocateInfo, &set));
+  return set;
 }
 
 //----------------------------------------------------------------------------------
@@ -477,33 +505,93 @@ void CreateStandardPipeline() {
 }
 
 //----------------------------------------------------------------------------------
+// Memory
+//----------------------------------------------------------------------------------
+
+#define MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+#define MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+
+static uint32_t FindMemoryTypeIndex(
+    const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties,
+    const VkMemoryRequirements*             pMemoryRequirements,
+    VkMemoryPropertyFlags                   memoryPropertyFlags) {
+  for (uint32_t i = 0; i < pPhysicalDeviceMemoryProperties->memoryTypeCount; i++) {
+    bool hasTypeBits = pMemoryRequirements->memoryTypeBits & 1 << i;
+    bool hasPropertyFlags = (pPhysicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags;
+    if (hasTypeBits && hasPropertyFlags) {
+      return i;
+    }
+  }
+  int index = 0;
+  while (memoryPropertyFlags) {
+    if (memoryPropertyFlags & 1) {
+      printf(" %s ", string_VkMemoryPropertyFlagBits(1U << index));
+    }
+    ++index;
+    memoryPropertyFlags >>= 1;
+  }
+  PANIC("Failed to find memory with properties!");
+}
+static void AllocateMemory(
+    const VkMemoryRequirements* pMemoryRequirements,
+    const VkMemoryPropertyFlags memoryPropertyFlags,
+    VkDeviceMemory*             pDeviceMemory) {
+  VkPhysicalDeviceMemoryProperties memoryProperties;
+  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProperties);
+  const uint32_t             memoryTypeIndex = FindMemoryTypeIndex(&memoryProperties, pMemoryRequirements, memoryPropertyFlags);
+  const VkMemoryAllocateInfo allocateInfo = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .allocationSize = pMemoryRequirements->size,
+      .memoryTypeIndex = memoryTypeIndex,
+  };
+  VK_REQUIRE(vkAllocateMemory(context.device, &allocateInfo, VK_ALLOC, pDeviceMemory));
+}
+static void CreateAllocateBindBuffer(
+    const VkMemoryPropertyFlags memoryPropertyFlags,
+    const VkDeviceSize          bufferSize,
+    const VkBufferUsageFlags    usage,
+    VkDeviceMemory*             pDeviceMemory,
+    VkBuffer*                   pBuffer) {
+  const VkBufferCreateInfo bufferCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .size = bufferSize,
+      .usage = usage,
+  };
+  VK_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, pBuffer));
+  VkMemoryRequirements memoryRequirements;
+  vkGetBufferMemoryRequirements(context.device, *pBuffer, &memoryRequirements);
+  AllocateMemory(&memoryRequirements, memoryPropertyFlags, pDeviceMemory);
+  VK_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMemory, 0));
+}
+static void CreateStagingBuffer(
+    const void*        srcData,
+    const VkDeviceSize bufferSize,
+    VkDeviceMemory*    pStagingBufferMemory,
+    VkBuffer*          pStagingBuffer) {
+  void* dstData;
+  CreateAllocateBindBuffer(MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, pStagingBufferMemory, pStagingBuffer);
+  VK_REQUIRE(vkMapMemory(context.device, *pStagingBufferMemory, 0, bufferSize, 0, &dstData));
+  memcpy(dstData, srcData, bufferSize);
+  vkUnmapMemory(context.device, *pStagingBufferMemory);
+}
+static void PopulateBufferViaStaging(
+    const void*        srcData,
+    const VkDeviceSize bufferSize,
+    const VkBuffer     buffer) {
+  VkBuffer       stagingBuffer;
+  VkDeviceMemory stagingBufferMemory;
+  CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
+  VkCommandBuffer commandBuffer;
+  BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer);
+  vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.size = bufferSize});
+  EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
+  vkFreeMemory(context.device, stagingBufferMemory, VK_ALLOC);
+  vkDestroyBuffer(context.device, stagingBuffer, VK_ALLOC);
+}
+
+//----------------------------------------------------------------------------------
 // Image Barriers
 //----------------------------------------------------------------------------------
-static void BeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCommandBuffer) {
-  const VkCommandBufferAllocateInfo allocateInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = commandPool,
-      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 1,
-  };
-  VK_REQUIRE(vkAllocateCommandBuffers(context.device, &allocateInfo, pCommandBuffer));
-  const VkCommandBufferBeginInfo beginInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-  };
-  VK_REQUIRE(vkBeginCommandBuffer(*pCommandBuffer, &beginInfo));
-}
-static void EndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue graphicsQueue, VkCommandBuffer commandBuffer) {
-  VK_REQUIRE(vkEndCommandBuffer(commandBuffer));
-  const VkSubmitInfo submitInfo = {
-      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .commandBufferCount = 1,
-      .pCommandBuffers = &commandBuffer,
-  };
-  VK_REQUIRE(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-  VK_REQUIRE(vkQueueWaitIdle(graphicsQueue));
-  vkFreeCommandBuffers(context.device, commandPool, 1, &commandBuffer);
-}
 
 typedef enum QueueBarrier {
   QUEUE_BARRIER_IGNORE,
@@ -548,131 +636,104 @@ const ImageBarrier ShaderReadImageBarrier = {
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-
-#define TRANSITION_IMAGE(pSrc, pDst, aspectMask, image) \
-  {                                                     \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,  \
-    .srcStageMask = pSrc->stageMask,                    \
-    .srcAccessMask = pSrc->accessMask,                  \
-    .dstStageMask = pDst->stageMask,                    \
-    .dstAccessMask = pDst->accessMask,                  \
-    .oldLayout = pSrc->layout,                          \
-    .newLayout = pDst->layout,                          \
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,     \
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,     \
-    .image = image,                                     \
-    .subresourceRange = {                               \
-      .aspectMask = aspectMask,                         \
-      .levelCount = 1,                                  \
-      .layerCount = 1,                                  \
-    }                                                   \
-  }
+static void EmplaceImageBarrier(
+    const ImageBarrier*      pSrc,
+    const ImageBarrier*      pDst,
+    const VkImageAspectFlags aspectMask,
+    const VkImage            image,
+    VkImageMemoryBarrier2*   pImageMemoryBarrier) {
+  *pImageMemoryBarrier = (const VkImageMemoryBarrier2){
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+      .srcStageMask = pSrc->stageMask,
+      .srcAccessMask = pSrc->accessMask,
+      .dstStageMask = pDst->stageMask,
+      .dstAccessMask = pDst->accessMask,
+      .oldLayout = pSrc->layout,
+      .newLayout = pDst->layout,
+      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .image = image,
+      .subresourceRange = (const VkImageSubresourceRange){
+          .aspectMask = aspectMask,
+          .levelCount = 1,
+          .layerCount = 1,
+      },
+  };
+}
+static void ImageBarrierCommand(const VkCommandBuffer commandBuffer, const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image) {
+  VkImageMemoryBarrier2 transferImageMemoryBarrier;
+  EmplaceImageBarrier(pSrc, pDst, aspectMask, image, &transferImageMemoryBarrier);
+  vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &transferImageMemoryBarrier});
+}
 static void TransitionImageLayoutImmediate(const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image) {
   VkCommandBuffer commandBuffer;
   BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer);
-  const VkDependencyInfo dependencyInfo = {
-      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-      .imageMemoryBarrierCount = 1,
-      .pImageMemoryBarriers = &(VkImageMemoryBarrier2)TRANSITION_IMAGE(pSrc, pDst, aspectMask, image)};
-  vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+  ImageBarrierCommand(commandBuffer, pSrc, pDst, aspectMask, image);
   EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
 }
 
-//----------------------------------------------------------------------------------
-// Memory
-//----------------------------------------------------------------------------------
-
-#define MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-#define MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-
-static uint32_t FindMemoryTypeIndex(
-    const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties,
-    const VkMemoryRequirements*             pMemoryRequirements,
-    VkMemoryPropertyFlags                   memoryPropertyFlags) {
-  for (uint32_t i = 0; i < pPhysicalDeviceMemoryProperties->memoryTypeCount; i++) {
-    bool hasTypeBits = pMemoryRequirements->memoryTypeBits & 1 << i;
-    bool hasPropertyFlags = (pPhysicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags;
-    if (hasTypeBits && hasPropertyFlags) {
-      return i;
-    }
-  }
-  int index = 0;
-  while (memoryPropertyFlags) {
-    if (memoryPropertyFlags & 1) {
-      printf(" %s ", string_VkMemoryPropertyFlagBits(1U << index));
-    }
-    ++index;
-    memoryPropertyFlags >>= 1;
-  }
-  PANIC("Failed to find memory with properties!");
-}
-
-static void AllocateMemory(
-    const VkMemoryRequirements* pMemoryRequirements,
-    const VkMemoryPropertyFlags memoryPropertyFlags,
-    VkDeviceMemory*             pDeviceMemory) {
-  VkPhysicalDeviceMemoryProperties memoryProperties;
-  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProperties);
-  const uint32_t             memoryTypeIndex = FindMemoryTypeIndex(&memoryProperties, pMemoryRequirements, memoryPropertyFlags);
-  const VkMemoryAllocateInfo allocateInfo = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .allocationSize = pMemoryRequirements->size,
-      .memoryTypeIndex = memoryTypeIndex,
+static VkImageView CreateImageView(const VkImage image) {
+  const VkImageViewCreateInfo imageViewCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .image = image,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = VK_FORMAT_B8G8R8A8_SRGB,
+      .subresourceRange = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .levelCount = 1,
+          .layerCount = 1,
+      },
   };
-  VK_REQUIRE(vkAllocateMemory(context.device, &allocateInfo, VK_ALLOC, pDeviceMemory));
+  VkImageView imageView;
+  VK_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, VK_ALLOC, &imageView));
+  return imageView;
 }
 
-static void CreateAllocateBindBuffer(
-    const VkMemoryPropertyFlags memoryPropertyFlags,
-    const VkDeviceSize          bufferSize,
-    const VkBufferUsageFlags    usage,
-    VkDeviceMemory*             pDeviceMemory,
-    VkBuffer*                   pBuffer) {
-  const VkBufferCreateInfo bufferCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = bufferSize,
-      .usage = usage,
+static void CreateAllocateBindImage(const VkExtent3D extent, VkDeviceMemory* pMemory, VkImage* pImage) {
+  const VkImageCreateInfo imageCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = VK_FORMAT_B8G8R8A8_SRGB,
+      .extent = extent,
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
-  VK_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, pBuffer));
-  VkMemoryRequirements memoryRequirements;
-  vkGetBufferMemoryRequirements(context.device, *pBuffer, &memoryRequirements);
-  AllocateMemory(&memoryRequirements, memoryPropertyFlags, pDeviceMemory);
-  VK_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMemory, 0));
+  VK_REQUIRE(vkCreateImage(context.device, &imageCreateInfo, VK_ALLOC, pImage));
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(context.device, *pImage, &memRequirements);
+  AllocateMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMemory);
+  VK_REQUIRE(vkBindImageMemory(context.device, *pImage, *pMemory, 0));
 }
 
-static void CreateStagingBuffer(
-    const void*        srcData,
-    const VkDeviceSize bufferSize,
-    VkDeviceMemory*    pStagingBufferMemory,
-    VkBuffer*          pStagingBuffer) {
-  void* dstData;
-  CreateAllocateBindBuffer(MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, pStagingBufferMemory, pStagingBuffer);
-  VK_REQUIRE(vkMapMemory(context.device, *pStagingBufferMemory, 0, bufferSize, 0, &dstData));
-  memcpy(dstData, srcData, bufferSize);
-  vkUnmapMemory(context.device, *pStagingBufferMemory);
-}
-
-static void CreateStagingBufferFromImageFile(const char* pPath, VkDeviceMemory* pStagingBufferMemory, VkBuffer* pStagingBuffer) {
-  int                texChannels, width, height;
-  stbi_uc*           pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
+static void CreateImageFromFile(const char* pPath, VkDeviceMemory* pImageMemory, VkImage* pImage, VkImageView* pImageView) {
+  int      texChannels, width, height;
+  stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
+  REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
   const VkDeviceSize imageBufferSize = width * height * 4;
-  CreateStagingBuffer(pImagePixels, imageBufferSize, pStagingBufferMemory, pStagingBuffer);
+  VkBuffer           stagingBuffer;
+  VkDeviceMemory     stagingBufferMemory;
+  CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
   stbi_image_free(pImagePixels);
-}
 
-static void PopulateBufferViaStaging(
-    const void*        srcData,
-    const VkDeviceSize bufferSize,
-    const VkBuffer     buffer) {
-  VkBuffer       stagingBuffer;
-  VkDeviceMemory stagingBufferMemory;
-  CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
+  CreateAllocateBindImage((VkExtent3D){width, height, 1}, pImageMemory, pImage);
+
   VkCommandBuffer commandBuffer;
   BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer);
-  vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.size = bufferSize});
+  ImageBarrierCommand(commandBuffer, &UndefinedImageBarrier, &TransferDstImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, *pImage);
+  const VkBufferImageCopy region = {
+      .imageSubresource = {
+          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+          .layerCount = 1,
+      },
+      .imageExtent = {width, height, 1},
+  };
+  vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, *pImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+  ImageBarrierCommand(commandBuffer, &TransferDstImageBarrier, &ShaderReadImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, *pImage);
   EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
-  vkFreeMemory(context.device, stagingBufferMemory, VK_ALLOC);
-  vkDestroyBuffer(context.device, stagingBuffer, VK_ALLOC);
+
+  *pImageView = CreateImageView(*pImage);
 }
 
 //----------------------------------------------------------------------------------
@@ -728,6 +789,7 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const Queu
           string_Support[pQueueDesc->globalPriority],
           pQueueDesc->presentSurface == NULL ? "No" : "Yes");
   PANIC("Can't find queue family");
+  return -1;
 }
 
 void mxcInitContext() {
@@ -805,7 +867,7 @@ void mxcInitContext() {
   }
 
   {  // Surface
-    VK_REQUIRE(mxCreateSurface(context.instance, VK_ALLOC, &context.surface));
+    VK_REQUIRE(mxcCreateSurface(context.instance, VK_ALLOC, &context.surface));
   }
 
   {  // QueueIndices
@@ -838,36 +900,36 @@ void mxcInitContext() {
     };
     const VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
-        .pNext = &physicalDeviceGlobalPriorityQueryFeatures,
+        .pNext = (void*)&physicalDeviceGlobalPriorityQueryFeatures,
         .robustBufferAccess2 = VK_TRUE,
         .robustImageAccess2 = VK_TRUE,
         .nullDescriptor = VK_TRUE,
     };
     const VkPhysicalDeviceMeshShaderFeaturesEXT physicalDeviceMeshShaderFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
-        .pNext = &physicalDeviceRobustness2Features,
+        .pNext = (void*)&physicalDeviceRobustness2Features,
         .taskShader = VK_TRUE,
         .meshShader = VK_TRUE,
     };
     const VkPhysicalDeviceVulkan13Features physicalDeviceVulkan13Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-        .pNext = &physicalDeviceMeshShaderFeatures,
+        .pNext = (void*)&physicalDeviceMeshShaderFeatures,
         .synchronization2 = VK_TRUE,
     };
     const VkPhysicalDeviceVulkan12Features physicalDeviceVulkan12Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
-        .pNext = &physicalDeviceVulkan13Features,
+        .pNext = (void*)&physicalDeviceVulkan13Features,
         .samplerFilterMinmax = VK_TRUE,
         .hostQueryReset = VK_TRUE,
         .timelineSemaphore = VK_TRUE,
     };
     const VkPhysicalDeviceVulkan11Features physicalDeviceVulkan11Features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
-        .pNext = &physicalDeviceVulkan12Features,
+        .pNext = (void*)&physicalDeviceVulkan12Features,
     };
     const VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-        .pNext = &physicalDeviceVulkan11Features,
+        .pNext = (void*)&physicalDeviceVulkan11Features,
         .features = {
             .robustBufferAccess = VK_TRUE,
         }};
@@ -1088,25 +1150,14 @@ void mxcInitContext() {
     VK_REQUIRE(vkGetSwapchainImagesKHR(context.device, context.swapchain, &swapCount, context.swapImages));
 
     for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-      const VkImageViewCreateInfo swapImageViewCreateInfo = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-          .image = context.swapImages[i],
-          .viewType = VK_IMAGE_VIEW_TYPE_2D,
-          .format = VK_FORMAT_B8G8R8A8_SRGB,
-          .subresourceRange = {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .levelCount = 1,
-              .layerCount = 1,
-          },
-      };
-      VK_REQUIRE(vkCreateImageView(context.device, &swapImageViewCreateInfo, VK_ALLOC, &context.swapImageViews[i]));
+      context.swapImageViews[i] = CreateImageView(context.swapImages[i]);
       TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]);
     }
   }
 
   {  // Global Descriptor
     CreateGlobalSetLayout();
-    AllocateDescriptorSet(&context.globalSetLayout, &context.globalSet);
+    context.globalSet = AllocateDescriptorSet(&context.globalSetLayout);
     CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(GlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &context.globalSetMemory, &context.globalSetBuffer);
     VK_REQUIRE(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.globalSetMapped));
   }
@@ -1119,12 +1170,8 @@ void mxcInitContext() {
   }
 }
 
-static void GenerateSphereVertexCount(const int slicesCount, const int stacksCount, int* pVertexCount) {
-  *pVertexCount = (slicesCount + 1) * (stacksCount + 1);
-}
-static void GenerateSphereIndexCount(const int slicesCount, const int stacksCount, int* pIndexCount) {
-  *pIndexCount = slicesCount * stacksCount * 2 * 3;
-}
+static int  GenerateSphereVertexCount(const int slicesCount, const int stacksCount) { return (slicesCount + 1) * (stacksCount + 1); }
+static int  GenerateSphereIndexCount(const int slicesCount, const int stacksCount) { return slicesCount * stacksCount * 2 * 3; }
 static void GenerateSphere(const int slicesCount, const int stacksCount, const float radius, Vertex* pVertex) {
   const float slices = (float)slicesCount;
   const float stacks = (float)stacksCount;
@@ -1165,20 +1212,18 @@ static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t
     }
   }
 }
-static void CreateSphereMeshBuffers(const float radius, const int slicesCount, const int stackCount, VkBuffer* pIndexBuffer, VkDeviceMemory* pIndexMemory, VkBuffer* pVertexBuffer, VkDeviceMemory* pVertexMemory) {
+static void CreateSphereMeshBuffers(const float radius, const int slicesCount, const int stackCount, VkDeviceMemory* pIndexMemory, VkBuffer* pIndexBuffer, VkDeviceMemory* pVertexMemory, VkBuffer* pVertexBuffer) {
   {
-    int indexCount;
-    GenerateSphereIndexCount(slicesCount, stackCount, &indexCount);
-    uint16_t pIndices[indexCount];
+    const int indexCount = GenerateSphereIndexCount(slicesCount, stackCount);
+    uint16_t  pIndices[indexCount];
     GenerateSphereIndices(slicesCount, stackCount, pIndices);
     uint32_t indexBufferSize = sizeof(uint16_t) * indexCount;
     CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, pIndexMemory, pIndexBuffer);
     PopulateBufferViaStaging(pIndices, indexBufferSize, *pIndexBuffer);
   }
   {
-    int vertexCount;
-    GenerateSphereVertexCount(slicesCount, stackCount, &vertexCount);
-    Vertex pVertices[vertexCount];
+    const int vertexCount = GenerateSphereVertexCount(slicesCount, stackCount);
+    Vertex    pVertices[vertexCount];
     GenerateSphere(slicesCount, stackCount, radius, pVertices);
     uint32_t vertexBufferSize = sizeof(Vertex) * vertexCount;
     CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, pVertexMemory, pVertexBuffer);
@@ -1186,88 +1231,35 @@ static void CreateSphereMeshBuffers(const float radius, const int slicesCount, c
   }
 }
 
+typedef struct Texture {
+  VkImage        image;
+  VkImageView    imageView;
+  VkDeviceMemory imageMemory;
+  VkFormat       format;
+  VkExtent3D     extent;
+} Texture;
+
 int mxcRenderNode() {
+  VkDeviceMemory checkerImageMemory;
+  VkImage        checkerImage;
+  VkImageView    checkerImageView;
+  CreateImageFromFile("textures/uvgrid.jpg", &checkerImageMemory, &checkerImage, &checkerImageView);
 
-  int      texChannels, width, height;
-  stbi_uc* pImagePixels = stbi_load("textures/uvgrid.jpg", &width, &height, &texChannels, STBI_rgb_alpha);
-  REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
-  const VkDeviceSize imageBufferSize = width * height * 4;
-  VkBuffer           stagingBuffer;
-  VkDeviceMemory     stagingBufferMemory;
-  CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
-  stbi_image_free(pImagePixels);
-
-  VkImage                 checkerImage;
-  VkImageView             checkerImageView;
-  VkDeviceMemory          checkerImageMemory;
-  const VkImageCreateInfo imageCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .imageType = VK_IMAGE_TYPE_2D,
-      .format = VK_FORMAT_R8G8B8A8_SRGB,
-      .extent = {width, height, 1},
-      .mipLevels = 1,
-      .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-  };
-  VK_REQUIRE(vkCreateImage(context.device, &imageCreateInfo, VK_ALLOC, &checkerImage));
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(context.device, checkerImage, &memRequirements);
-  AllocateMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &checkerImageMemory);
-  VK_REQUIRE(vkBindImageMemory(context.device, checkerImage, checkerImageMemory, 0));
-
-  TransitionImageLayoutImmediate(&UndefinedImageBarrier, &TransferDstImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, checkerImage);
-  VkCommandBuffer commandBuffer;
-  BeginImmediateCommandBuffer(context.graphicsCommandPool, &commandBuffer);
-  const VkBufferImageCopy region = {
-      .imageSubresource = {
-          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-          .layerCount = 1,
-      },
-      .imageExtent = {width, height, 1},
-  };
-  vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, checkerImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-  EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
-  TransitionImageLayoutImmediate(&TransferDstImageBarrier, &ShaderReadImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, checkerImage);
-
-  VkImageViewCreateInfo imageViewCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image = checkerImage,
-      .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = VK_FORMAT_R8G8B8A8_SRGB,
-      .subresourceRange = {
-          .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-          .levelCount = 1,
-          .layerCount = 1,
-      },
-  };
-  VK_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, VK_ALLOC, &checkerImageView));
-
-  VkBuffer       sphereIndexBuffer;
-  VkDeviceMemory sphereIndexMemory;
-  VkBuffer       sphereVertexBuffer;
-  VkDeviceMemory sphereVertexBufferMemory;
-  CreateSphereMeshBuffers(
-      0.5f,
-      32,
-      32,
-      &sphereIndexBuffer,
-      &sphereIndexMemory,
-      &sphereVertexBuffer,
-      &sphereVertexBufferMemory);
+  VkDeviceMemory sphereIndexMemory, sphereVertexBufferMemory;
+  VkBuffer       sphereIndexBuffer, sphereVertexBuffer;
+  CreateSphereMeshBuffers(0.5f, 32, 32, &sphereIndexMemory, &sphereIndexBuffer, &sphereVertexBufferMemory, &sphereVertexBuffer);
 
   StandardObjectSetState sphereObjectSetMapped;
   VkDeviceMemory         sphereObjectSetMemory;
   VkBuffer               sphereObjectSetBuffer;
   CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(StandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sphereObjectSetMemory, &sphereObjectSetBuffer);
   VK_REQUIRE(vkMapMemory(context.device, sphereObjectSetMemory, 0, sizeof(StandardObjectSetState), 0, (void**)&sphereObjectSetMapped));
-  VkDescriptorSet checkerMaterialSet;
-  AllocateDescriptorSet(&context.materialSetLayout, &checkerMaterialSet);
-  VkDescriptorSet sphereObjectSet;
-  AllocateDescriptorSet(&context.objectSetLayout, &sphereObjectSet);
+
+  const VkDescriptorSet      checkerMaterialSet = AllocateDescriptorSet(&context.materialSetLayout);
+  const VkDescriptorSet      sphereObjectSet = AllocateDescriptorSet(&context.objectSetLayout);
   const VkWriteDescriptorSet writeSets[] = {
       SET_WRITE_GLOBAL,
-      SET_WRITE_STANDARD_MATERIAL(checkerMaterialSet, NULL),
+      SET_WRITE_STANDARD_MATERIAL(checkerMaterialSet, checkerImageView),
       SET_WRITE_STANDARD_OBJECT(sphereObjectSet, sphereObjectSetBuffer),
   };
   vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
