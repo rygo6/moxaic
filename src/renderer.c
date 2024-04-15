@@ -125,12 +125,16 @@ static struct Context {
 
   VkDevice device;
 
-  VkSampler nearestSampler;
-  VkSampler linearSampler;
-  VkSampler minSampler;
-  VkSampler maxSampler;
-
   VkRenderPass renderPass;
+
+  VkSemaphore timelineSemaphore;
+  uint64_t    timelineWaitValue;
+
+  VkSwapchainKHR swapchain;
+  VkSemaphore    acquireSwapSemaphore;
+  VkSemaphore    renderCompleteSwapSemaphore;
+  VkImage        swapImages[VK_SWAP_COUNT];
+  VkImageView    swapImageViews[VK_SWAP_COUNT];
 
   GlobalSetState        globalSetMapped;
   VkDeviceMemory        globalSetMemory;
@@ -144,9 +148,10 @@ static struct Context {
   VkPipelineLayout standardPipelineLayout;
   VkPipeline       standardPipeline;
 
-  VkSwapchainKHR swapchain;
-  VkImage        swapImages[VK_SWAP_COUNT];
-  VkImageView    swapImageViews[VK_SWAP_COUNT];
+  VkSampler nearestSampler;
+  VkSampler linearSampler;
+  VkSampler minSampler;
+  VkSampler maxSampler;
 
   VkCommandPool   graphicsCommandPool;
   VkCommandBuffer graphicsCommandBuffer;
@@ -373,7 +378,7 @@ MATH_INLINE void Mat4Inv(const mat4* pSrc, mat4* pDst) {
   Mat4Scale(pDst, det);
 }
 
-MATH_INLINE void TransformToModelMat4(Transform* pTransform, mat4* pDstModelMat4) {
+MATH_INLINE void Mat4FromTransform(Transform* pTransform, mat4* pDstModelMat4) {
   mat4 translationMat4;
   Mat4Translation(&pTransform->position, &translationMat4);
   mat4 rotationMat4;
@@ -615,9 +620,14 @@ const VkFormat RenderPassFormats[] = {
     [RENDERPASS_DEPTH_ATTACHMENT] = VK_FORMAT_D32_SFLOAT,
 };
 const VkImageUsageFlags RenderPassUsages[] = {
-    [RENDERPASS_COLOR_ATTACHMENT] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    [RENDERPASS_COLOR_ATTACHMENT] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
     [RENDERPASS_NORMAL_ATTACHMENT] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     [RENDERPASS_DEPTH_ATTACHMENT] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+};
+const VkClearValue RenderPassClearValues[] = {
+    [RENDERPASS_COLOR_ATTACHMENT] = {.color = {{0.1f, 0.2f, 0.3f, 0.0f}}},
+    [RENDERPASS_NORMAL_ATTACHMENT] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
+    [RENDERPASS_DEPTH_ATTACHMENT] = {.depthStencil = {0.0f, 0}},
 };
 void CreateStandardPipeline() {
   const VkShaderModule vertShader = CreateShaderModule("./shaders/basic_material.vert.spv");
@@ -839,6 +849,11 @@ const ImageBarrier PresentImageBarrier = {
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
+const ImageBarrier TransferSrcImageBarrier = {
+    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
+    .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+};
 const ImageBarrier TransferDstImageBarrier = {
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -849,8 +864,13 @@ const ImageBarrier ShaderReadImageBarrier = {
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
+const ImageBarrier ColorAttachmentImageBarrier = {
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+};
 static void EmplaceImageBarrier(const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image, VkImageMemoryBarrier2* pImageMemoryBarrier) {
-  *pImageMemoryBarrier = (const VkImageMemoryBarrier2){
+  *pImageMemoryBarrier = (VkImageMemoryBarrier2){
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
       .srcStageMask = pSrc->stageMask,
       .srcAccessMask = pSrc->accessMask,
@@ -861,17 +881,20 @@ static void EmplaceImageBarrier(const ImageBarrier* pSrc, const ImageBarrier* pD
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .image = image,
-      .subresourceRange = (const VkImageSubresourceRange){
+      .subresourceRange = (VkImageSubresourceRange){
           .aspectMask = aspectMask,
           .levelCount = 1,
           .layerCount = 1,
       },
   };
 }
+static void CommandPipelineBarrier(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+  vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
+}
 static void CommandImageBarrier(const VkCommandBuffer commandBuffer, const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image) {
   VkImageMemoryBarrier2 transferImageMemoryBarrier;
   EmplaceImageBarrier(pSrc, pDst, aspectMask, image, &transferImageMemoryBarrier);
-  vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &transferImageMemoryBarrier});
+  CommandPipelineBarrier(commandBuffer, 1, &transferImageMemoryBarrier);
 }
 static void TransitionImageLayoutImmediate(const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image) {
   const VkCommandBuffer commandBuffer = BeginImmediateCommandBuffer(context.graphicsCommandPool);
@@ -1258,11 +1281,13 @@ void mxcInitContext() {
   {  // Pools
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = context.graphicsQueueFamilyIndex,
     };
     VK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &context.graphicsCommandPool));
     const VkCommandPoolCreateInfo computeCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = context.computeQueueFamilyIndex,
     };
     VK_REQUIRE(vkCreateCommandPool(context.device, &computeCommandPoolCreateInfo, VK_ALLOC, &context.computeCommandPool));
@@ -1348,7 +1373,7 @@ void mxcInitContext() {
         .imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
         .imageExtent = {DEFAULT_WIDTH, DEFAULT_HEIGHT},
         .imageArrayLayers = 1,
-        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
@@ -1372,6 +1397,20 @@ void mxcInitContext() {
       VK_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, VK_ALLOC, &context.swapImageViews[i]));
       TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]);
     }
+  }
+
+  {  // Semaphores
+    const VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+    VK_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &context.acquireSwapSemaphore));
+    VK_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &context.renderCompleteSwapSemaphore));
+    const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
+    const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = &timelineSemaphoreTypeCreateInfo,
+    };
+    VK_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VK_ALLOC, &context.timelineSemaphore));
   }
 
   {  // Global Descriptor
@@ -1500,9 +1539,7 @@ int mxcRenderNode() {
         .layers = 1,
     };
     VK_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VK_ALLOC, &framebuffers[i].framebuffer));
-
-    const VkSemaphoreCreateInfo renderCompleteCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-    VK_REQUIRE(vkCreateSemaphore(context.device, &renderCompleteCreateInfo, VK_ALLOC, &framebuffers[i].renderCompleteSemaphore));
+    VK_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VK_ALLOC, &framebuffers[i].renderCompleteSemaphore));
   }
 
   VkDeviceMemory checkerImageMemory;
@@ -1536,7 +1573,7 @@ int mxcRenderNode() {
   GlobalSetState globalSetState = {.screenSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT}};
   Mat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &globalSetState.projection);
   Mat4Inv(&globalSetState.projection, &globalSetState.inverseProjection);
-  TransformToModelMat4((Transform*)&camera.position, &globalSetState.inverseView);
+  Mat4FromTransform((Transform*)&camera.position, &globalSetState.inverseView);
   Mat4Inv(&globalSetState.inverseView, &globalSetState.view);
   Mat4Mul(&globalSetState.projection, &globalSetState.view, &globalSetState.viewProjection);
   Mat4Mul(&globalSetState.inverseView, &globalSetState.inverseViewProjection, &globalSetState.inverseViewProjection);
@@ -1547,34 +1584,115 @@ int mxcRenderNode() {
       .rotation = quatIdentity,
   };
   StandardObjectSetState sphereObjectState = {};
-  TransformToModelMat4(&sphereTransform, &sphereObjectState.model);
+  Mat4FromTransform(&sphereTransform, &sphereObjectState.model);
   memcpy(&sphereObjectSetMapped, &sphereObjectState, sizeof(StandardObjectSetState));
 
   int framebufferIndex = 0;
 
   while (isRunning) {
-    mxUpdateWindow();
+    // mxUpdateWindow();
 
     vkResetCommandBuffer(context.graphicsCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-    const VkCommandBufferBeginInfo beginInfo = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    vkBeginCommandBuffer(context.graphicsCommandBuffer, &beginInfo);
-    const VkViewport viewport = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f};
-    vkCmdSetViewport(context.graphicsCommandBuffer, 0, 1, &viewport);
-    const VkRect2D scissor = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}};
-    vkCmdSetScissor(context.graphicsCommandBuffer, 0, 1, &scissor);
+    vkBeginCommandBuffer(context.graphicsCommandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
+    vkCmdSetViewport(context.graphicsCommandBuffer, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
+    vkCmdSetScissor(context.graphicsCommandBuffer, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 
-    VkClearValue clearValues[RENDERPASS_ATTACHMENT_COUNT];
-    clearValues[RENDERPASS_COLOR_ATTACHMENT].color = (VkClearColorValue){{0.1f, 0.2f, 0.3f, 0.0f}};
-    clearValues[RENDERPASS_NORMAL_ATTACHMENT].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}},
-    clearValues[RENDERPASS_DEPTH_ATTACHMENT].depthStencil = (VkClearDepthStencilValue){0.0f, 0};
     const VkRenderPassBeginInfo renderPassBeginInfo = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = context.renderPass,
         .framebuffer = framebuffers[framebufferIndex].framebuffer,
         .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
-        .clearValueCount = COUNT(clearValues),
-        .pClearValues = clearValues,
+        .clearValueCount = RENDERPASS_ATTACHMENT_COUNT,
+        .pClearValues = RenderPassClearValues,
     };
     vkCmdBeginRenderPass(context.graphicsCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+
+    vkCmdEndRenderPass(context.graphicsCommandBuffer);
+
+    uint32_t swapIndex;
+    vkAcquireNextImageKHR(context.device, context.swapchain, UINT64_MAX, context.acquireSwapSemaphore, VK_NULL_HANDLE, &swapIndex);
+    VkImageMemoryBarrier2 toBlitBarrier[2];
+    EmplaceImageBarrier(&ColorAttachmentImageBarrier, &TransferSrcImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, framebuffers[framebufferIndex].colorImage, &toBlitBarrier[0]);
+    EmplaceImageBarrier(&PresentImageBarrier, &TransferDstImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[swapIndex], &toBlitBarrier[1]);
+    CommandPipelineBarrier(context.graphicsCommandBuffer, 2, toBlitBarrier);
+
+    const VkImageSubresourceLayers imageSubresourceLayers = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .layerCount = 1,
+    };
+    const VkOffset3D offsets[2] = {
+        {.x = 0, .y = 0, .z = 0},
+        {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1},
+    };
+    const VkImageBlit imageBlit = {
+        .srcSubresource = imageSubresourceLayers,
+        .srcOffsets = {offsets[0], offsets[1]},
+        .dstSubresource = imageSubresourceLayers,
+        .dstOffsets = {offsets[0], offsets[1]},
+    };
+    vkCmdBlitImage(context.graphicsCommandBuffer,
+                   framebuffers[framebufferIndex].colorImage,
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   context.swapImages[swapIndex],
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   1,
+                   &imageBlit,
+                   VK_FILTER_NEAREST);
+
+    VkImageMemoryBarrier2 toPresentBarrier[2];
+    EmplaceImageBarrier(&TransferSrcImageBarrier, &ColorAttachmentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, framebuffers[framebufferIndex].colorImage, &toPresentBarrier[0]);
+    EmplaceImageBarrier(&TransferDstImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[swapIndex], &toPresentBarrier[1]);
+    CommandPipelineBarrier(context.graphicsCommandBuffer, 2, toPresentBarrier);
+
+    vkEndCommandBuffer(context.graphicsCommandBuffer);
+
+
+    const uint64_t     waitValue = context.timelineWaitValue++;
+    const uint64_t     signalValue = context.timelineWaitValue;
+    const VkSubmitInfo submitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext = &(const VkTimelineSemaphoreSubmitInfo){
+            .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+            .waitSemaphoreValueCount = 2,
+            .pWaitSemaphoreValues = (const uint64_t[]){waitValue, 0},
+            .signalSemaphoreValueCount = 2,
+            .pSignalSemaphoreValues = (const uint64_t[]){signalValue, 0},
+        },
+        .waitSemaphoreCount = 2,
+        .pWaitSemaphores = (const VkSemaphore[]){
+            context.timelineSemaphore,
+            context.acquireSwapSemaphore,
+        },
+        .pWaitDstStageMask = (const VkPipelineStageFlags[]){
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        },
+        .commandBufferCount = 1,
+        .pCommandBuffers = &context.graphicsCommandBuffer,
+        .signalSemaphoreCount = 2,
+        .pSignalSemaphores = (const VkSemaphore[]){
+            context.timelineSemaphore,
+            context.renderCompleteSwapSemaphore,
+        },
+    };
+    VK_REQUIRE(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
+    const VkPresentInfoKHR presentInfo = {
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &context.renderCompleteSwapSemaphore,
+        .swapchainCount = 1,
+        .pSwapchains = &context.swapchain,
+        .pImageIndices = &swapIndex,
+    };
+    VK_REQUIRE(vkQueuePresentKHR(context.graphicsQueue, &presentInfo));
+
+    const VkSemaphoreWaitInfo semaphoreWaitInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .semaphoreCount = 1,
+        .pSemaphores = &context.timelineSemaphore,
+        .pValues = &context.timelineWaitValue,
+    };
+    VK_REQUIRE(vkWaitSemaphores(context.device, &semaphoreWaitInfo, UINT64_MAX));
   }
 }
