@@ -1590,7 +1590,7 @@ int mxcRenderNode() {
   int framebufferIndex = 0;
 
   while (isRunning) {
-    // mxUpdateWindow();
+    mxUpdateWindow();
 
     vkResetCommandBuffer(context.graphicsCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     vkBeginCommandBuffer(context.graphicsCommandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
@@ -1607,6 +1607,7 @@ int mxcRenderNode() {
     };
     vkCmdBeginRenderPass(context.graphicsCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+    // render
 
     vkCmdEndRenderPass(context.graphicsCommandBuffer);
 

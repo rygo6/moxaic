@@ -34,7 +34,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
 void mxUpdateWindow() {
   MSG msg;
-  while (GetMessage(&msg, NULL, 0, 0)) {
+  while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
