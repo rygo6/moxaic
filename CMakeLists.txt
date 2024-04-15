@@ -51,6 +51,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 
 target_compile_options(${TARGET_NAME} PRIVATE
         "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/="
+        "-fopt-info-vec"
 )
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
