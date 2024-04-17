@@ -13,6 +13,9 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 
+// #define CGLM_FORCE_DEPTH_ZERO_TO_ONE
+// #include <cglm/cglm.h>
+
 //----------------------------------------------------------------------------------
 // Global Constants
 //----------------------------------------------------------------------------------
@@ -63,10 +66,10 @@ typedef struct Vertex {
   vec2 uv;
 } Vertex;
 enum VertexAttributes {
-  VERTEX_ATTR_POSITION,
-  VERTEX_ATTR_NORMAL,
-  VERTEX_ATTR_UV,
-  VERTEX_ATTR_COUNT,
+  VERTEX_ATTRIBUTE_POSITION,
+  VERTEX_ATTRIBUTE_NORMAL,
+  VERTEX_ATTRIBUTE_UV,
+  VERTEX_ATTRIBUTE_COUNT,
 };
 
 typedef struct Transform {
@@ -136,7 +139,7 @@ static struct Context {
   VkImage        swapImages[VK_SWAP_COUNT];
   VkImageView    swapImageViews[VK_SWAP_COUNT];
 
-  GlobalSetState        globalSetMapped;
+  GlobalSetState*       pGlobalSetMapped;
   VkDeviceMemory        globalSetMemory;
   VkBuffer              globalSetBuffer;
   VkDescriptorSetLayout globalSetLayout;
@@ -178,18 +181,22 @@ static struct Context {
 // Math Operations
 //----------------------------------------------------------------------------------
 
-// MATH_INLINE void Vec4MulAdd(const vec4* restrict pSrc, const float s, vec4* restrict pDst) {
-//   for (int i = 0; i < 4; ++i) pDst->arr[i] += pSrc->arr[i] * s;
-// }
+MATH_INLINE void Vec4MulAdd(const vec4* restrict pSrc, const float s, vec4* restrict pDst) {
+  for (int i = 0; i < 4; ++i) pDst->vec[i] += pSrc->vec[i] * s;
+}
 MATH_INLINE void Mat4Translation(const vec3* pTranslationVec3, mat4* pDstMat4) {
   // can this be one loop?
-  for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[0].row[i] * pTranslationVec3->vec[0];
-  for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[1].row[i] * pTranslationVec3->vec[1];
-  for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[2].row[i] * pTranslationVec3->vec[2];
-  // Vec4MulAdd((vec4*)&mat4Identity.c0, pTranslationVec3->x, (vec4*)&pDstMat4->c3);
-  // Vec4MulAdd((vec4*)&mat4Identity.c1, pTranslationVec3->y, (vec4*)&pDstMat4->c3);
-  // Vec4MulAdd((vec4*)&mat4Identity.c2, pTranslationVec3->z, (vec4*)&pDstMat4->c3);
+  // for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[0].row[i] * pTranslationVec3->vec[0];
+  // for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[1].row[i] * pTranslationVec3->vec[1];
+  // for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[2].row[i] * pTranslationVec3->vec[2];
+  Vec4MulAdd((vec4*)&mat4Identity.c0, pTranslationVec3->x, (vec4*)&pDstMat4->c3);
+  Vec4MulAdd((vec4*)&mat4Identity.c1, pTranslationVec3->y, (vec4*)&pDstMat4->c3);
+  Vec4MulAdd((vec4*)&mat4Identity.c2, pTranslationVec3->z, (vec4*)&pDstMat4->c3);
 }
+// MATH_INLINE void translate(mat4* pSrc, vec3* pTranslation, mat4* pDst) {
+//   Result[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
+//   return Result;
+// }
 MATH_INLINE float Vec4Dot(const vec4* l, const vec4* r) {
   float sum = 0;
   for (int i = 0; i < 4; ++i) sum += l->vec[i] * r->vec[i];
@@ -276,7 +283,7 @@ MATH_INLINE void Mat4MulRot(const mat4* src, const mat4* rot, mat4* dst) {
   dst->c3.r2 = a32;
   dst->c3.r3 = a33;
 }
-MATH_INLINE void Mat4Mul(mat4* pLeft, mat4* pRight, mat4* pDest) {
+MATH_INLINE void Mat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDest) {
   float a00 = pLeft->col[0].row[0], a01 = pLeft->col[0].row[1], a02 = pLeft->col[0].row[2], a03 = pLeft->col[0].row[3],
         a10 = pLeft->col[1].row[0], a11 = pLeft->col[1].row[1], a12 = pLeft->col[1].row[2], a13 = pLeft->col[1].row[3],
         a20 = pLeft->col[2].row[0], a21 = pLeft->col[2].row[1], a22 = pLeft->col[2].row[2], a23 = pLeft->col[2].row[3],
@@ -377,17 +384,15 @@ MATH_INLINE void Mat4Inv(const mat4* pSrc, mat4* pDst) {
 
   Mat4Scale(pDst, det);
 }
-
-MATH_INLINE void Mat4FromTransform(Transform* pTransform, mat4* pDstModelMat4) {
-  mat4 translationMat4;
-  Mat4Translation(&pTransform->position, &translationMat4);
-  mat4 rotationMat4;
-  Mat4FromQuat(&pTransform->rotation, &rotationMat4);
+MATH_INLINE void Mat4FromTransform(vec3* pPos, quat* pRot, mat4* pDstModelMat4) {
+  mat4 translationMat4 = mat4Identity;
+  Mat4Translation(pPos, &translationMat4);
+  mat4 rotationMat4 = mat4Identity;
+  Mat4FromQuat(pRot, &rotationMat4);
   Mat4MulRot(&translationMat4, &rotationMat4, pDstModelMat4);
 }
-
 // Perspective matrix in Vulkan Reverse Z
-void Mat4Perspective(const float fovy, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
+MATH_INLINE void Mat4Perspective(const float fovy, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
   const float tanHalfFovy = tan(fovy / 2.0f);
   *pDstMat4 = (mat4){
       .c0 = {.r0 = 1.0f / (aspect * tanHalfFovy)},
@@ -395,6 +400,24 @@ void Mat4Perspective(const float fovy, const float aspect, const float zNear, co
       .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
       .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)},
   };
+}
+MATH_INLINE void QuatFromEulerVec3(const vec3 euler, quat* pDstQuat) {
+  vec3 c, s;
+  for (int i = 0; i < 3; ++i) {
+    c.vec[i] = cos(euler.vec[i] * 0.5f);
+    s.vec[i] = sin(euler.vec[i] * 0.5f);
+  }
+
+  pDstQuat->w = c.x * c.y * c.z + s.x * s.y * s.z;
+  pDstQuat->x = s.x * c.y * c.z - c.x * s.y * s.z;
+  pDstQuat->y = c.x * s.y * c.z + s.x * c.y * s.z;
+  pDstQuat->z = c.x * c.y * s.z - s.x * s.y * c.z;
+}
+MATH_INLINE void QuatMul(quat* pSrc, quat* pMul, quat* pDst) {
+  pDst->w = pSrc->w * pMul->w - pSrc->x * pMul->x - pSrc->y * pMul->y - pSrc->z * pMul->z;
+  pDst->x = pSrc->w * pMul->x + pSrc->x * pMul->w + pSrc->y * pMul->z - pSrc->z * pMul->y;
+  pDst->y = pSrc->w * pMul->y + pSrc->y * pMul->w + pSrc->z * pMul->x - pSrc->x * pMul->z;
+  pDst->z = pSrc->w * pMul->z + pSrc->z * pMul->w + pSrc->x * pMul->y - pSrc->y * pMul->x;
 }
 
 //----------------------------------------------------------------------------------
@@ -481,95 +504,12 @@ static void EndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQ
 }
 
 //----------------------------------------------------------------------------------
-// Descriptors
-//----------------------------------------------------------------------------------
-
-static void CreateGlobalSetLayout() {
-  const VkDescriptorSetLayoutCreateInfo createInfo = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 1,
-      .pBindings = &(const VkDescriptorSetLayoutBinding){
-          .binding = 0,
-          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-          .descriptorCount = 1,
-          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_TASK_BIT_EXT,
-      },
-  };
-  VK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.globalSetLayout));
-}
-#define SET_WRITE_GLOBAL                                                                                                                                                      \
-  {                                                                                                                                                                           \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = context.globalSet, .dstBinding = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-    .pBufferInfo = &(const VkDescriptorBufferInfo){                                                                                                                           \
-        .buffer = context.globalSetBuffer,                                                                                                                                    \
-        .range = sizeof(GlobalSetState),                                                                                                                                      \
-    },                                                                                                                                                                        \
-  }
-
-static void CreateStandardMaterialSetLayout() {
-  const VkDescriptorSetLayoutCreateInfo createInfo = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 1,
-      .pBindings = &(const VkDescriptorSetLayoutBinding){
-          .binding = 0,
-          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-          .descriptorCount = 1,
-          .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-      },
-  };
-  VK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.materialSetLayout));
-}
-#define SET_WRITE_STANDARD_MATERIAL(materialSet, materialImageView)                                                                                                             \
-  {                                                                                                                                                                             \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = materialSet, .dstBinding = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-    .pImageInfo = &(const VkDescriptorImageInfo){                                                                                                                               \
-        .sampler = context.linearSampler,                                                                                                                                       \
-        .imageView = materialImageView,                                                                                                                                         \
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                                                                                                                \
-    },                                                                                                                                                                          \
-  }
-
-static void CreateStandardObjectSetLayout() {
-  const VkDescriptorSetLayoutCreateInfo createInfo = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 1,
-      .pBindings = &(const VkDescriptorSetLayoutBinding){
-          .binding = 0,
-          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-          .descriptorCount = 1,
-          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-      },
-  };
-  VK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.objectSetLayout));
-}
-#define SET_WRITE_STANDARD_OBJECT(objectSet, objectSetBuffer)                                                                                                         \
-  {                                                                                                                                                                   \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstSet = objectSet, .dstBinding = 0, .descriptorCount = 1, .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-    .pBufferInfo = &(const VkDescriptorBufferInfo){                                                                                                                   \
-        .buffer = objectSetBuffer,                                                                                                                                    \
-        .range = sizeof(StandardObjectSetState),                                                                                                                      \
-    },                                                                                                                                                                \
-  }
-
-static VkDescriptorSet AllocateDescriptorSet(VkDescriptorSetLayout* pSetLayout) {
-  const VkDescriptorSetAllocateInfo allocateInfo = {
-      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-      .descriptorPool = context.descriptorPool,
-      .descriptorSetCount = 1,
-      .pSetLayouts = pSetLayout,
-  };
-  VkDescriptorSet set;
-  VK_REQUIRE(vkAllocateDescriptorSets(context.device, &allocateInfo, &set));
-  return set;
-}
-
-//----------------------------------------------------------------------------------
 // Pipelines
 //----------------------------------------------------------------------------------
 
 #define COLOR_WRITE_MASK_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
-VkShaderModule CreateShaderModule(const char* pShaderPath) {
+static VkShaderModule CreateShaderModule(const char* pShaderPath) {
   size_t codeSize;
   char*  pCode;
   ReadFile(pShaderPath, &codeSize, &pCode);
@@ -585,21 +525,21 @@ VkShaderModule CreateShaderModule(const char* pShaderPath) {
 }
 
 // Statndard Pipeline
-#define STANDARD_VERTEX_BINDING 0
-enum StandardSetBinding {
-  STANDARD_SET_BINDING_GLOBAL,
-  STANDARD_SET_BINDING_STANDARD_MATERIAL,
-  STANDARD_SET_BINDING_STANDARD_OBJECT,
-  STANDARD_SET_BINDING_STANDARD_COUNT,
+#define PIPE_VERTEX_BINDING_STANDARD 0
+enum StandardPipeSetBinding {
+  PIPE_SET_BINDING_STANDARD_GLOBAL,
+  PIPE_SET_BINDING_STANDARD_MATERIAL,
+  PIPE_SET_BINDING_STANDARD_OBJECT,
+  PIPE_SET_BINDING_STANDARD_COUNT,
 };
-void CreateStandardPipelineLayout() {
-  VkDescriptorSetLayout pSetLayouts[STANDARD_SET_BINDING_STANDARD_COUNT];
-  pSetLayouts[STANDARD_SET_BINDING_GLOBAL] = context.globalSetLayout;
-  pSetLayouts[STANDARD_SET_BINDING_STANDARD_MATERIAL] = context.materialSetLayout;
-  pSetLayouts[STANDARD_SET_BINDING_STANDARD_OBJECT] = context.objectSetLayout;
+static void CreateStandardPipelineLayout() {
+  VkDescriptorSetLayout pSetLayouts[PIPE_SET_BINDING_STANDARD_COUNT];
+  pSetLayouts[PIPE_SET_BINDING_STANDARD_GLOBAL] = context.globalSetLayout;
+  pSetLayouts[PIPE_SET_BINDING_STANDARD_MATERIAL] = context.materialSetLayout;
+  pSetLayouts[PIPE_SET_BINDING_STANDARD_OBJECT] = context.objectSetLayout;
   const VkPipelineLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = STANDARD_SET_BINDING_STANDARD_COUNT,
+      .setLayoutCount = PIPE_SET_BINDING_STANDARD_COUNT,
       .pSetLayouts = pSetLayouts,
   };
   VK_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VK_ALLOC, &context.standardPipelineLayout));
@@ -666,7 +606,7 @@ void CreateStandardPipeline() {
           .vertexBindingDescriptionCount = 1,
           .pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){
               {
-                  .binding = STANDARD_VERTEX_BINDING,
+                  .binding = PIPE_VERTEX_BINDING_STANDARD,
                   .stride = sizeof(Vertex),
                   .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
               },
@@ -674,66 +614,66 @@ void CreateStandardPipeline() {
           .vertexAttributeDescriptionCount = 3,
           .pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]){
               {
-                  .location = VERTEX_ATTR_POSITION,
-                  .binding = STANDARD_VERTEX_BINDING,
+                  .location = VERTEX_ATTRIBUTE_POSITION,
+                  .binding = PIPE_VERTEX_BINDING_STANDARD,
                   .format = VK_FORMAT_R32G32B32_SFLOAT,
                   .offset = offsetof(Vertex, position),
               },
               {
-                  .location = VERTEX_ATTR_NORMAL,
-                  .binding = STANDARD_VERTEX_BINDING,
+                  .location = VERTEX_ATTRIBUTE_NORMAL,
+                  .binding = PIPE_VERTEX_BINDING_STANDARD,
                   .format = VK_FORMAT_R32G32B32_SFLOAT,
                   .offset = offsetof(Vertex, normal),
               },
               {
-                  .location = VERTEX_ATTR_UV,
-                  .binding = STANDARD_VERTEX_BINDING,
+                  .location = VERTEX_ATTRIBUTE_UV,
+                  .binding = PIPE_VERTEX_BINDING_STANDARD,
                   .format = VK_FORMAT_R32G32_SFLOAT,
                   .offset = offsetof(Vertex, uv),
               },
           },
       },
-      .pInputAssemblyState = &(VkPipelineInputAssemblyStateCreateInfo){
+      .pInputAssemblyState = &(const VkPipelineInputAssemblyStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
           .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
           .primitiveRestartEnable = VK_FALSE,
       },
-      .pViewportState = &(VkPipelineViewportStateCreateInfo){
+      .pViewportState = &(const VkPipelineViewportStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
           .viewportCount = 1,
           .scissorCount = 1,
       },
-      .pRasterizationState = &(VkPipelineRasterizationStateCreateInfo){
+      .pRasterizationState = &(const VkPipelineRasterizationStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
           .polygonMode = VK_POLYGON_MODE_FILL,
           .frontFace = VK_FRONT_FACE_CLOCKWISE,
           .lineWidth = 1.0f,
       },
-      .pMultisampleState = &(VkPipelineMultisampleStateCreateInfo){
+      .pMultisampleState = &(const VkPipelineMultisampleStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
           .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
       },
-      .pDepthStencilState = &(VkPipelineDepthStencilStateCreateInfo){
+      .pDepthStencilState = &(const VkPipelineDepthStencilStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
           .depthTestEnable = VK_TRUE,
           .depthWriteEnable = VK_TRUE,
           .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
           .maxDepthBounds = 1.0f,
       },
-      .pColorBlendState = &(VkPipelineColorBlendStateCreateInfo){
+      .pColorBlendState = &(const VkPipelineColorBlendStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
           .logicOp = VK_LOGIC_OP_COPY,
           .attachmentCount = 2,
-          .pAttachments = (VkPipelineColorBlendAttachmentState[]){
+          .pAttachments = (const VkPipelineColorBlendAttachmentState[]){
               {/* Color */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},
               {/* Normal */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},
           },
           .blendConstants = {0.0f, 0.0f, 0.0f, 0.0f},
       },
-      .pDynamicState = &(VkPipelineDynamicStateCreateInfo){
+      .pDynamicState = &(const VkPipelineDynamicStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
           .dynamicStateCount = 2,
-          .pDynamicStates = (VkDynamicState[]){
+          .pDynamicStates = (const VkDynamicState[]){
               VK_DYNAMIC_STATE_VIEWPORT,
               VK_DYNAMIC_STATE_SCISSOR,
           },
@@ -744,6 +684,108 @@ void CreateStandardPipeline() {
   VK_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VK_ALLOC, &context.standardPipeline));
   vkDestroyShaderModule(context.device, fragShader, VK_ALLOC);
   vkDestroyShaderModule(context.device, vertShader, VK_ALLOC);
+}
+
+//----------------------------------------------------------------------------------
+// Descriptors
+//----------------------------------------------------------------------------------
+
+#define SET_BINDING_GLOBAL_BUFFER 0
+static void CreateGlobalSetLayout() {
+  const VkDescriptorSetLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &(const VkDescriptorSetLayoutBinding){
+          .binding = SET_BINDING_GLOBAL_BUFFER,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                        VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+                        VK_SHADER_STAGE_COMPUTE_BIT |
+                        VK_SHADER_STAGE_FRAGMENT_BIT |
+                        VK_SHADER_STAGE_MESH_BIT_EXT |
+                        VK_SHADER_STAGE_TASK_BIT_EXT,
+      },
+  };
+  VK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.globalSetLayout));
+}
+#define SET_WRITE_GLOBAL                                 \
+  {                                                      \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,     \
+    .dstSet = context.globalSet,                         \
+    .dstBinding = SET_BINDING_GLOBAL_BUFFER,             \
+    .descriptorCount = 1,                                \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+    .pBufferInfo = &(const VkDescriptorBufferInfo){      \
+        .buffer = context.globalSetBuffer,               \
+        .range = sizeof(GlobalSetState),                 \
+    },                                                   \
+  }
+
+#define SET_BINDING_STANDARD_MATERIAL_TEXTURE 0
+static void CreateStandardMaterialSetLayout() {
+  const VkDescriptorSetLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &(const VkDescriptorSetLayoutBinding){
+          .binding = SET_BINDING_STANDARD_MATERIAL_TEXTURE,
+          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+      },
+  };
+  VK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.materialSetLayout));
+}
+#define SET_WRITE_STANDARD_MATERIAL(materialSet, materialImageView) \
+  {                                                                 \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
+    .dstSet = materialSet,                                          \
+    .dstBinding = SET_BINDING_STANDARD_MATERIAL_TEXTURE,            \
+    .descriptorCount = 1,                                           \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,    \
+    .pImageInfo = &(const VkDescriptorImageInfo){                   \
+        .sampler = context.linearSampler,                           \
+        .imageView = materialImageView,                             \
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,    \
+    },                                                              \
+  }
+
+#define SET_BINDING_STANDARD_OBJECT_BUFFER 0
+static void CreateStandardObjectSetLayout() {
+  const VkDescriptorSetLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &(const VkDescriptorSetLayoutBinding){
+          .binding = SET_BINDING_STANDARD_OBJECT_BUFFER,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+                        VK_SHADER_STAGE_FRAGMENT_BIT,
+      },
+  };
+  VK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VK_ALLOC, &context.objectSetLayout));
+}
+#define SET_WRITE_STANDARD_OBJECT(objectSet, objectSetBuffer) \
+  {                                                           \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,          \
+    .dstSet = objectSet,                                      \
+    .dstBinding = SET_BINDING_STANDARD_OBJECT_BUFFER,         \
+    .descriptorCount = 1,                                     \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,      \
+    .pBufferInfo = &(const VkDescriptorBufferInfo){           \
+        .buffer = objectSetBuffer,                            \
+        .range = sizeof(StandardObjectSetState),              \
+    },                                                        \
+  }
+
+static VkDescriptorSet AllocateDescriptorSet(const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet) {
+  const VkDescriptorSetAllocateInfo allocateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = context.descriptorPool,
+      .descriptorSetCount = 1,
+      .pSetLayouts = pSetLayout,
+  };
+  VK_REQUIRE(vkAllocateDescriptorSets(context.device, &allocateInfo, pSet));
 }
 
 //----------------------------------------------------------------------------------
@@ -926,27 +968,7 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkI
   };
   VK_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, VK_ALLOC, pImageView));
 }
-// static void CreateImageView(const VkImage image, VkImageView* pImageView) {
-//   const VkImageViewCreateInfo imageViewCreateInfo = {
-//       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-//       .image = image,
-//       .viewType = VK_IMAGE_VIEW_TYPE_2D,
-//       .format = VK_FORMAT_B8G8R8A8_SRGB,
-//       .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1},
-//   };
-//   VK_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, VK_ALLOC, pImageView));
-// }
 static void CreateAllocateBindImage(const VkImageCreateInfo* pImageCreateInfo, VkDeviceMemory* pMemory, VkImage* pImage) {
-  // const VkImageCreateInfo imageCreateInfo = {
-  //     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-  //     .imageType = VK_IMAGE_TYPE_2D,
-  //     .format = VK_FORMAT_B8G8R8A8_SRGB,
-  //     .extent = extent,
-  //     .mipLevels = 1,
-  //     .arrayLayers = 1,
-  //     .samples = VK_SAMPLE_COUNT_1_BIT,
-  //     .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-  // };
   VK_REQUIRE(vkCreateImage(context.device, pImageCreateInfo, VK_ALLOC, pImage));
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, *pImage, &memRequirements);
@@ -1327,7 +1349,15 @@ void mxcInitContext() {
   }
 
   {
-#define DEFAULT_LINEAR_SAMPLER .magFilter = VK_FILTER_LINEAR, .minFilter = VK_FILTER_LINEAR, .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR, .maxLod = 16.0, .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
+#define DEFAULT_LINEAR_SAMPLER                           \
+  .magFilter = VK_FILTER_LINEAR,                         \
+  .minFilter = VK_FILTER_LINEAR,                         \
+  .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,           \
+  .maxLod = 16.0,                                        \
+  .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, \
+  .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK
 
     const VkSamplerCreateInfo nearestSampleCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1415,9 +1445,9 @@ void mxcInitContext() {
 
   {  // Global Descriptor
     CreateGlobalSetLayout();
-    context.globalSet = AllocateDescriptorSet(&context.globalSetLayout);
+    AllocateDescriptorSet(&context.globalSetLayout, &context.globalSet);
     CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(GlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &context.globalSetMemory, &context.globalSetBuffer);
-    VK_REQUIRE(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.globalSetMapped));
+    VK_REQUIRE(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.pGlobalSetMapped));
   }
 
   {  // Standard Pipeline
@@ -1485,50 +1515,57 @@ static void GenerateSphereIndices(const int nslices, const int nstacks, uint16_t
     }
   }
 }
-static void CreateSphereMeshBuffers(const float radius, const int slicesCount, const int stackCount, VkDeviceMemory* pIndexMemory, VkBuffer* pIndexBuffer, VkDeviceMemory* pVertexMemory, VkBuffer* pVertexBuffer) {
+static void CreateSphereMeshBuffers(
+    const float     radius,
+    const int       slicesCount,
+    const int       stackCount,
+    uint32_t*       pIndexCount,
+    uint32_t*       pVertexCount,
+    VkDeviceMemory* pIndexMemory,
+    VkBuffer*       pIndexBuffer,
+    VkDeviceMemory* pVertexMemory,
+    VkBuffer*       pVertexBuffer) {
   {
-    const int indexCount = GenerateSphereIndexCount(slicesCount, stackCount);
-    uint16_t  pIndices[indexCount];
+    *pIndexCount = GenerateSphereIndexCount(slicesCount, stackCount);
+    uint16_t pIndices[*pIndexCount];
     GenerateSphereIndices(slicesCount, stackCount, pIndices);
-    uint32_t indexBufferSize = sizeof(uint16_t) * indexCount;
+    uint32_t indexBufferSize = sizeof(uint16_t) * *pIndexCount;
     CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, pIndexMemory, pIndexBuffer);
     PopulateBufferViaStaging(pIndices, indexBufferSize, *pIndexBuffer);
   }
   {
-    const int vertexCount = GenerateSphereVertexCount(slicesCount, stackCount);
-    Vertex    pVertices[vertexCount];
+    *pVertexCount = GenerateSphereVertexCount(slicesCount, stackCount);
+    Vertex pVertices[*pVertexCount];
     GenerateSphere(slicesCount, stackCount, radius, pVertices);
-    uint32_t vertexBufferSize = sizeof(Vertex) * vertexCount;
+    uint32_t vertexBufferSize = sizeof(Vertex) * *pVertexCount;
     CreateAllocateBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, pVertexMemory, pVertexBuffer);
     PopulateBufferViaStaging(pVertices, vertexBufferSize, *pVertexBuffer);
   }
 }
 
-int mxcRenderNode() {
-
-  Framebuffer framebuffers[VK_SWAP_COUNT];
-  for (int i = 0; i < VK_SWAP_COUNT; ++i) {
+static void CreateFramebuffers(const uint32_t framebufferCount, Framebuffer* pFrameBuffers) {
+  for (int i = 0; i < framebufferCount; ++i) {
     VkImageCreateInfo imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
     imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
     imageCreateInfo.format = RenderPassFormats[RENDERPASS_COLOR_ATTACHMENT];
     imageCreateInfo.usage = RenderPassUsages[RENDERPASS_COLOR_ATTACHMENT];
-    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &framebuffers[i].colorImageMemory, &framebuffers[i].colorImage, &framebuffers[i].colorImageView);
+    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].colorImageMemory, &pFrameBuffers[i].colorImage, &pFrameBuffers[i].colorImageView);
     imageCreateInfo.format = RenderPassFormats[RENDERPASS_NORMAL_ATTACHMENT];
     imageCreateInfo.usage = RenderPassUsages[RENDERPASS_NORMAL_ATTACHMENT];
-    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &framebuffers[i].normalImageMemory, &framebuffers[i].normalImage, &framebuffers[i].normalImageView);
+    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].normalImageMemory, &pFrameBuffers[i].normalImage, &pFrameBuffers[i].normalImageView);
     imageCreateInfo.format = RenderPassFormats[RENDERPASS_DEPTH_ATTACHMENT];
     imageCreateInfo.usage = RenderPassUsages[RENDERPASS_DEPTH_ATTACHMENT];
-    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_DEPTH_BIT, &framebuffers[i].depthImageMemory, &framebuffers[i].depthImage, &framebuffers[i].depthImageView);
+    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_DEPTH_BIT, &pFrameBuffers[i].depthImageMemory, &pFrameBuffers[i].depthImage, &pFrameBuffers[i].depthImageView);
 
     imageCreateInfo.format = GBufferFormat;
     imageCreateInfo.usage = GBufferUsage;
-    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &framebuffers[i].gBufferImageMemory, &framebuffers[i].gBufferImage, &framebuffers[i].gBufferImageView);
+    CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].gBufferImageMemory, &pFrameBuffers[i].gBufferImage, &pFrameBuffers[i].gBufferImageView);
 
     VkImageView attachments[RENDERPASS_ATTACHMENT_COUNT];
-    attachments[RENDERPASS_COLOR_ATTACHMENT] = framebuffers[i].colorImageView;
-    attachments[RENDERPASS_NORMAL_ATTACHMENT] = framebuffers[i].normalImageView;
-    attachments[RENDERPASS_DEPTH_ATTACHMENT] = framebuffers[i].depthImageView;
+    attachments[RENDERPASS_COLOR_ATTACHMENT] = pFrameBuffers[i].colorImageView;
+    attachments[RENDERPASS_NORMAL_ATTACHMENT] = pFrameBuffers[i].normalImageView;
+    attachments[RENDERPASS_DEPTH_ATTACHMENT] = pFrameBuffers[i].depthImageView;
     const VkFramebufferCreateInfo framebufferCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .renderPass = context.renderPass,
@@ -1538,27 +1575,143 @@ int mxcRenderNode() {
         .height = DEFAULT_HEIGHT,
         .layers = 1,
     };
-    VK_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VK_ALLOC, &framebuffers[i].framebuffer));
-    VK_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VK_ALLOC, &framebuffers[i].renderCompleteSemaphore));
+    VK_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VK_ALLOC, &pFrameBuffers[i].framebuffer));
+    VK_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VK_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
   }
+}
+
+static void ResetBeginCommandBuffer(const VkCommandBuffer commandBuffer) {
+  vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+  vkBeginCommandBuffer(commandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
+  vkCmdSetViewport(commandBuffer, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
+  vkCmdSetScissor(commandBuffer, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
+}
+
+static void BeginRenderPass(const VkFramebuffer framebuffer) {
+  const VkRenderPassBeginInfo renderPassBeginInfo = {
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .renderPass = context.renderPass,
+      .framebuffer = framebuffer,
+      .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
+      .clearValueCount = RENDERPASS_ATTACHMENT_COUNT,
+      .pClearValues = RenderPassClearValues,
+  };
+  vkCmdBeginRenderPass(context.graphicsCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
+static void Blit(const VkImage srcImage, const VkImage dstImage) {
+  VkImageMemoryBarrier2 toBlitBarrier[2];
+  EmplaceImageBarrier(&ColorAttachmentImageBarrier, &TransferSrcImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, srcImage, &toBlitBarrier[0]);
+  EmplaceImageBarrier(&PresentImageBarrier, &TransferDstImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, dstImage, &toBlitBarrier[1]);
+  CommandPipelineBarrier(context.graphicsCommandBuffer, 2, toBlitBarrier);
+
+  const VkImageSubresourceLayers imageSubresourceLayers = {
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .layerCount = 1,
+  };
+  const VkOffset3D offsets[2] = {
+      {.x = 0, .y = 0, .z = 0},
+      {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1},
+  };
+  const VkImageBlit imageBlit = {
+      .srcSubresource = imageSubresourceLayers,
+      .srcOffsets = {offsets[0], offsets[1]},
+      .dstSubresource = imageSubresourceLayers,
+      .dstOffsets = {offsets[0], offsets[1]},
+  };
+  vkCmdBlitImage(context.graphicsCommandBuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
+
+  VkImageMemoryBarrier2 toPresentBarrier[2];
+  EmplaceImageBarrier(&TransferSrcImageBarrier, &ColorAttachmentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, srcImage, &toPresentBarrier[0]);
+  EmplaceImageBarrier(&TransferDstImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, dstImage, &toPresentBarrier[1]);
+  CommandPipelineBarrier(context.graphicsCommandBuffer, 2, toPresentBarrier);
+}
+
+static void SubmitPresentCommandBuffer(const VkCommandBuffer commandBuffer, const uint32_t swapIndex, const VkQueue queue) {
+  const uint64_t     waitValue = context.timelineWaitValue++;
+  const uint64_t     signalValue = context.timelineWaitValue;
+  const VkSubmitInfo submitInfo = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .pNext = &(const VkTimelineSemaphoreSubmitInfo){
+          .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+          .waitSemaphoreValueCount = 2,
+          .pWaitSemaphoreValues = (const uint64_t[]){waitValue, 0},
+          .signalSemaphoreValueCount = 2,
+          .pSignalSemaphoreValues = (const uint64_t[]){signalValue, 0},
+      },
+      .waitSemaphoreCount = 2,
+      .pWaitSemaphores = (const VkSemaphore[]){
+          context.timelineSemaphore,
+          context.acquireSwapSemaphore,
+      },
+      .pWaitDstStageMask = (const VkPipelineStageFlags[]){
+          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      },
+      .commandBufferCount = 1,
+      .pCommandBuffers = &commandBuffer,
+      .signalSemaphoreCount = 2,
+      .pSignalSemaphores = (const VkSemaphore[]){
+          context.timelineSemaphore,
+          context.renderCompleteSwapSemaphore,
+      },
+  };
+  VK_REQUIRE(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+  const VkPresentInfoKHR presentInfo = {
+      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+      .waitSemaphoreCount = 1,
+      .pWaitSemaphores = &context.renderCompleteSwapSemaphore,
+      .swapchainCount = 1,
+      .pSwapchains = &context.swapchain,
+      .pImageIndices = &swapIndex,
+  };
+  VK_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
+}
+
+// static GlobalSetState globalSetState = {.screenSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT}};
+
+// static void UpdateGlobalStateSet(Transform* pTransform) {
+
+// glm_perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, globalSetState.projection);
+// glm_mat4_inv(globalSetState.projection, globalSetState.inverseProjection);
+//
+// versor rotQ;
+// glm_quatv(rotQ, glm_rad(0.1f), GLM_YUP);
+// glm_quat_mul(pTransform->rotation, rotQ, pTransform->rotation);
+// glm_quat_look(pTransform->position, pTransform->rotation, globalSetState.view);
+// glm_mat4_inv(globalSetState.view, globalSetState.inverseView);
+//
+// glm_mat4_mul(globalSetState.projection, globalSetState.view, globalSetState.viewProjection);
+// glm_mat4_mul(globalSetState.inverseView, globalSetState.inverseProjection, globalSetState.inverseViewProjection);
+
+// memcpy(context.pGlobalSetMapped, &globalSetState, sizeof(GlobalSetState));
+// }
+
+int mxcRenderNode() {
+
+  Framebuffer framebuffers[VK_SWAP_COUNT];
+  CreateFramebuffers(VK_SWAP_COUNT, framebuffers);
 
   VkDeviceMemory checkerImageMemory;
   VkImage        checkerImage;
   VkImageView    checkerImageView;
   CreateImageFromFile("textures/uvgrid.jpg", &checkerImageMemory, &checkerImage, &checkerImageView);
 
-  VkDeviceMemory sphereIndexMemory, sphereVertexBufferMemory;
+  uint32_t       sphereIndexCount, sphereVertexCount;
+  VkDeviceMemory sphereIndexMemory, sphereVertexMemory;
   VkBuffer       sphereIndexBuffer, sphereVertexBuffer;
-  CreateSphereMeshBuffers(0.5f, 32, 32, &sphereIndexMemory, &sphereIndexBuffer, &sphereVertexBufferMemory, &sphereVertexBuffer);
+  CreateSphereMeshBuffers(0.5f, 32, 32, &sphereIndexCount, &sphereVertexCount, &sphereIndexMemory, &sphereIndexBuffer, &sphereVertexMemory, &sphereVertexBuffer);
 
-  StandardObjectSetState sphereObjectSetMapped;
-  VkDeviceMemory         sphereObjectSetMemory;
-  VkBuffer               sphereObjectSetBuffer;
-  CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(StandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sphereObjectSetMemory, &sphereObjectSetBuffer);
-  VK_REQUIRE(vkMapMemory(context.device, sphereObjectSetMemory, 0, sizeof(StandardObjectSetState), 0, (void**)&sphereObjectSetMapped));
+  StandardObjectSetState* pSphereObjectSetMapped;
+  VkDeviceMemory          sphereObjectSetMemory;
+  VkBuffer                sphereObjectSetBuffer;
+  CreateAllocateBindBuffer(MEMORY_HOST_VISIBLE_COHERENT, sizeof(StandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &sphereObjectSetMemory, &sphereObjectSetBuffer);
+  VK_REQUIRE(vkMapMemory(context.device, sphereObjectSetMemory, 0, sizeof(StandardObjectSetState), 0, (void**)&pSphereObjectSetMapped));
 
-  const VkDescriptorSet      checkerMaterialSet = AllocateDescriptorSet(&context.materialSetLayout);
-  const VkDescriptorSet      sphereObjectSet = AllocateDescriptorSet(&context.objectSetLayout);
+  VkDescriptorSet checkerMaterialSet;
+  AllocateDescriptorSet(&context.materialSetLayout, &checkerMaterialSet);
+  VkDescriptorSet sphereObjectSet;
+  AllocateDescriptorSet(&context.objectSetLayout, &sphereObjectSet);
   const VkWriteDescriptorSet writeSets[] = {
       SET_WRITE_GLOBAL,
       SET_WRITE_STANDARD_MATERIAL(checkerMaterialSet, checkerImageView),
@@ -1566,127 +1719,76 @@ int mxcRenderNode() {
   };
   vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
 
+  // Camera camera = {};
+  // glm_vec3_copy((vec3){0, 0, -2}, camera.position);
+  // glm_quatv(camera.rotation, glm_rad(180), GLM_YUP);
+  // UpdateGlobalStateSet((Transform*)&camera);
+
   Camera camera = {
-      .position = {0.0f, 0.0f, -1.0f},
+      .position = {0.0f, 0.0f, 2.0f},
       .rotation = quatIdentity,
   };
   GlobalSetState globalSetState = {.screenSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT}};
   Mat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &globalSetState.projection);
   Mat4Inv(&globalSetState.projection, &globalSetState.inverseProjection);
-  Mat4FromTransform((Transform*)&camera.position, &globalSetState.inverseView);
+  Mat4FromTransform(&camera.position, &camera.rotation, &globalSetState.inverseView);
   Mat4Inv(&globalSetState.inverseView, &globalSetState.view);
   Mat4Mul(&globalSetState.projection, &globalSetState.view, &globalSetState.viewProjection);
   Mat4Mul(&globalSetState.inverseView, &globalSetState.inverseViewProjection, &globalSetState.inverseViewProjection);
-  memcpy(&context.globalSetMapped, &globalSetState, sizeof(GlobalSetState));
+  memcpy(context.pGlobalSetMapped, &globalSetState, sizeof(GlobalSetState));
 
   Transform sphereTransform = {
       .position = {0.0f, 0.0f, 0.0f},
       .rotation = quatIdentity,
   };
   StandardObjectSetState sphereObjectState = {};
-  Mat4FromTransform(&sphereTransform, &sphereObjectState.model);
-  memcpy(&sphereObjectSetMapped, &sphereObjectState, sizeof(StandardObjectSetState));
+  Mat4FromTransform(&sphereTransform.position, &sphereTransform.rotation, &sphereObjectState.model);
+  memcpy(pSphereObjectSetMapped, &sphereObjectState, sizeof(StandardObjectSetState));
+
+  // Transform sphereTransform = {
+  //     .position = {0.0f, 0.0f, 0.0f},
+  //     .rotation = {0.0f, 0.0f, 0.0f, 1.0f},
+  // };
+  // StandardObjectSetState sphereObjectState;
+  // glm_mat4_copy(GLM_MAT4_IDENTITY, sphereObjectState.model);
+  // glm_translate_to(GLM_MAT4_IDENTITY, sphereTransform.position, sphereObjectState.model);
+  // glm_quat_rotate(sphereObjectState.model, sphereTransform.rotation, sphereObjectState.model);
+  // memcpy(pSphereObjectSetMapped, &sphereObjectState, sizeof(StandardObjectSetState));
 
   int framebufferIndex = 0;
 
   while (isRunning) {
     mxUpdateWindow();
 
-    vkResetCommandBuffer(context.graphicsCommandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-    vkBeginCommandBuffer(context.graphicsCommandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
-    vkCmdSetViewport(context.graphicsCommandBuffer, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
-    vkCmdSetScissor(context.graphicsCommandBuffer, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
+    // quat rotationQuat;
+    // QuatFromEulerVec3((vec3){0, 0.1f, 0}, &rotationQuat);
+    // QuatMul(&camera.rotation, &rotationQuat, &camera.rotation);
+    // UpdateGlobalStateSet((Transform*)&camera);
 
-    const VkRenderPassBeginInfo renderPassBeginInfo = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = context.renderPass,
-        .framebuffer = framebuffers[framebufferIndex].framebuffer,
-        .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
-        .clearValueCount = RENDERPASS_ATTACHMENT_COUNT,
-        .pClearValues = RenderPassClearValues,
-    };
-    vkCmdBeginRenderPass(context.graphicsCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    const VkCommandBuffer cmd = context.graphicsCommandBuffer;
 
-    // render
+    ResetBeginCommandBuffer(cmd);
+    BeginRenderPass(framebuffers[framebufferIndex].framebuffer);
 
-    vkCmdEndRenderPass(context.graphicsCommandBuffer);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, context.standardPipeline);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, context.standardPipelineLayout, PIPE_SET_BINDING_STANDARD_GLOBAL, 1, &context.globalSet, 0, NULL);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, context.standardPipelineLayout, PIPE_SET_BINDING_STANDARD_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, context.standardPipelineLayout, PIPE_SET_BINDING_STANDARD_OBJECT, 1, &sphereObjectSet, 0, NULL);
+
+    vkCmdBindVertexBuffers(cmd, 0, 1, (VkBuffer[]){sphereVertexBuffer}, (VkDeviceSize[]){0});
+    vkCmdBindIndexBuffer(cmd, sphereIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdDrawIndexed(cmd, sphereIndexCount, 1, 0, 0, 0);
+
+    vkCmdEndRenderPass(cmd);
 
     uint32_t swapIndex;
     vkAcquireNextImageKHR(context.device, context.swapchain, UINT64_MAX, context.acquireSwapSemaphore, VK_NULL_HANDLE, &swapIndex);
-    VkImageMemoryBarrier2 toBlitBarrier[2];
-    EmplaceImageBarrier(&ColorAttachmentImageBarrier, &TransferSrcImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, framebuffers[framebufferIndex].colorImage, &toBlitBarrier[0]);
-    EmplaceImageBarrier(&PresentImageBarrier, &TransferDstImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[swapIndex], &toBlitBarrier[1]);
-    CommandPipelineBarrier(context.graphicsCommandBuffer, 2, toBlitBarrier);
 
-    const VkImageSubresourceLayers imageSubresourceLayers = {
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .layerCount = 1,
-    };
-    const VkOffset3D offsets[2] = {
-        {.x = 0, .y = 0, .z = 0},
-        {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1},
-    };
-    const VkImageBlit imageBlit = {
-        .srcSubresource = imageSubresourceLayers,
-        .srcOffsets = {offsets[0], offsets[1]},
-        .dstSubresource = imageSubresourceLayers,
-        .dstOffsets = {offsets[0], offsets[1]},
-    };
-    vkCmdBlitImage(context.graphicsCommandBuffer,
-                   framebuffers[framebufferIndex].colorImage,
-                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   context.swapImages[swapIndex],
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   1,
-                   &imageBlit,
-                   VK_FILTER_NEAREST);
+    Blit(framebuffers[framebufferIndex].colorImage, context.swapImages[swapIndex]);
 
-    VkImageMemoryBarrier2 toPresentBarrier[2];
-    EmplaceImageBarrier(&TransferSrcImageBarrier, &ColorAttachmentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, framebuffers[framebufferIndex].colorImage, &toPresentBarrier[0]);
-    EmplaceImageBarrier(&TransferDstImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[swapIndex], &toPresentBarrier[1]);
-    CommandPipelineBarrier(context.graphicsCommandBuffer, 2, toPresentBarrier);
+    vkEndCommandBuffer(cmd);
 
-    vkEndCommandBuffer(context.graphicsCommandBuffer);
-
-
-    const uint64_t     waitValue = context.timelineWaitValue++;
-    const uint64_t     signalValue = context.timelineWaitValue;
-    const VkSubmitInfo submitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .pNext = &(const VkTimelineSemaphoreSubmitInfo){
-            .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-            .waitSemaphoreValueCount = 2,
-            .pWaitSemaphoreValues = (const uint64_t[]){waitValue, 0},
-            .signalSemaphoreValueCount = 2,
-            .pSignalSemaphoreValues = (const uint64_t[]){signalValue, 0},
-        },
-        .waitSemaphoreCount = 2,
-        .pWaitSemaphores = (const VkSemaphore[]){
-            context.timelineSemaphore,
-            context.acquireSwapSemaphore,
-        },
-        .pWaitDstStageMask = (const VkPipelineStageFlags[]){
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        },
-        .commandBufferCount = 1,
-        .pCommandBuffers = &context.graphicsCommandBuffer,
-        .signalSemaphoreCount = 2,
-        .pSignalSemaphores = (const VkSemaphore[]){
-            context.timelineSemaphore,
-            context.renderCompleteSwapSemaphore,
-        },
-    };
-    VK_REQUIRE(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-    const VkPresentInfoKHR presentInfo = {
-        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &context.renderCompleteSwapSemaphore,
-        .swapchainCount = 1,
-        .pSwapchains = &context.swapchain,
-        .pImageIndices = &swapIndex,
-    };
-    VK_REQUIRE(vkQueuePresentKHR(context.graphicsQueue, &presentInfo));
+    SubmitPresentCommandBuffer(cmd, swapIndex, context.graphicsQueue);
 
     const VkSemaphoreWaitInfo semaphoreWaitInfo = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
