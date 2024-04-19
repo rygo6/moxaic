@@ -10,7 +10,6 @@ AlignConsecutiveShortCaseStatements:
   AlignCaseColons: false
 AlignAfterOpenBracket: Align
 AlwaysBreakAfterReturnType: None
-ColumnLimit: 0
 PointerAlignment: Left
 IndentCaseLabels: true
 AllowShortCaseLabelsOnASingleLine: true
@@ -42,4 +41,7 @@ IndentGotoLabels: true
 BreakAfterAttributes: Leave
 UseCRLF: false
 AllowShortLoopsOnASingleLine: true
+AlignOperands:   true
+BreakBeforeTernaryOperators: false
+ColumnLimit: 0
 
