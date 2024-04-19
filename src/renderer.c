@@ -36,10 +36,10 @@
       type __VA_ARGS__;                                    \
     };                                                     \
   } name;
-MATH_UNION(float, vec2, 16, 4, vec, x, y);
-MATH_UNION(uint32_t, ivec2, 16, 4, vec, x, y);
-MATH_UNION(float, vec3, 16, 4, vec, x, y, z);
-MATH_UNION(uint32_t, ivec3, 16, 4, vec, x, y, z);
+MATH_UNION(float, vec2, 16, 2, vec, x, y);
+MATH_UNION(uint32_t, ivec2, 16, 2, vec, x, y);
+MATH_UNION(float, vec3, 16, 3, vec, x, y, z);
+MATH_UNION(uint32_t, ivec3, 16, 3, vec, x, y, z);
 MATH_UNION(float, vec4, 16, 4, vec, x, y, z, w);
 MATH_UNION(uint32_t, ivec4, 16, 4, vec, x, y, z, w);
 MATH_UNION(float, mat4_row, 16, 4, row, r0, r1, r2, r3);
@@ -74,11 +74,13 @@ enum VertexAttributes {
 
 typedef struct Transform {
   vec3 position;
+  vec3 euler;
   vec4 rotation;
 } Transform;
 
 typedef struct Camera {
   vec3 position;
+  vec3 euler;
   vec4 rotation;
   bool cameraLocked;
 } Camera;
@@ -181,22 +183,13 @@ static struct Context {
 // Math Operations
 //----------------------------------------------------------------------------------
 
-MATH_INLINE void Vec4MulAdd(const vec4* restrict pSrc, const float s, vec4* restrict pDst) {
-  for (int i = 0; i < 4; ++i) pDst->vec[i] += pSrc->vec[i] * s;
-}
 MATH_INLINE void Mat4Translation(const vec3* pTranslationVec3, mat4* pDstMat4) {
-  // can this be one loop?
-  // for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[0].row[i] * pTranslationVec3->vec[0];
-  // for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[1].row[i] * pTranslationVec3->vec[1];
-  // for (int i = 0; i < 4; ++i) pDstMat4->col[3].row[i] += mat4Identity.col[2].row[i] * pTranslationVec3->vec[2];
-  Vec4MulAdd((vec4*)&mat4Identity.c0, pTranslationVec3->x, (vec4*)&pDstMat4->c3);
-  Vec4MulAdd((vec4*)&mat4Identity.c1, pTranslationVec3->y, (vec4*)&pDstMat4->c3);
-  Vec4MulAdd((vec4*)&mat4Identity.c2, pTranslationVec3->z, (vec4*)&pDstMat4->c3);
+  for (int i = 0; i < 4; ++i) {
+    pDstMat4->col[3].row[i] += mat4Identity.col[0].row[i] * pTranslationVec3->vec[0];
+    pDstMat4->col[3].row[i] += mat4Identity.col[1].row[i] * pTranslationVec3->vec[1];
+    pDstMat4->col[3].row[i] += mat4Identity.col[2].row[i] * pTranslationVec3->vec[2];
+  }
 }
-// MATH_INLINE void translate(mat4* pSrc, vec3* pTranslation, mat4* pDst) {
-//   Result[3] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2] + m[3];
-//   return Result;
-// }
 MATH_INLINE float Vec4Dot(const vec4* l, const vec4* r) {
   float sum = 0;
   for (int i = 0; i < 4; ++i) sum += l->vec[i] * r->vec[i];
@@ -205,7 +198,7 @@ MATH_INLINE float Vec4Dot(const vec4* l, const vec4* r) {
 MATH_INLINE float Vec4Mag(const vec4* v) {
   return sqrtf(Vec4Dot(v, v));
 }
-MATH_INLINE void Mat4FromQuat(const quat* q, mat4* dst) {
+MATH_INLINE void QuatToMat4(const quat* q, mat4* dst) {
   // VECTORIZE
   float w, x, y, z,
       xx, yy, zz,
@@ -252,38 +245,38 @@ MATH_INLINE void Mat4FromQuat(const quat* q, mat4* dst) {
   dst->c3.r2 = 0.0f;
   dst->c3.r3 = 1.0f;
 }
-MATH_INLINE void Mat4MulRot(const mat4* src, const mat4* rot, mat4* dst) {
+MATH_INLINE void Mat4MulRot(const mat4* pSrc, const mat4* pRot, mat4* pDst) {
   // VECTORIZE
-  float a00 = src->c0.r0, a01 = src->c0.r1, a02 = src->c0.r2, a03 = src->c0.r3,
-        a10 = src->c1.r0, a11 = src->c1.r1, a12 = src->c1.r2, a13 = src->c1.r3,
-        a20 = src->c2.r0, a21 = src->c2.r1, a22 = src->c2.r2, a23 = src->c2.r3,
-        a30 = src->c3.r0, a31 = src->c3.r1, a32 = src->c3.r2, a33 = src->c3.r3,
+  float a00 = pSrc->c0.r0, a01 = pSrc->c0.r1, a02 = pSrc->c0.r2, a03 = pSrc->c0.r3,
+        a10 = pSrc->c1.r0, a11 = pSrc->c1.r1, a12 = pSrc->c1.r2, a13 = pSrc->c1.r3,
+        a20 = pSrc->c2.r0, a21 = pSrc->c2.r1, a22 = pSrc->c2.r2, a23 = pSrc->c2.r3,
+        a30 = pSrc->c3.r0, a31 = pSrc->c3.r1, a32 = pSrc->c3.r2, a33 = pSrc->c3.r3,
 
-        b00 = rot->c0.r0, b01 = rot->c0.r1, b02 = rot->c0.r2,
-        b10 = rot->c1.r0, b11 = rot->c1.r1, b12 = rot->c1.r2,
-        b20 = rot->c2.r0, b21 = rot->c2.r1, b22 = rot->c2.r2;
+        b00 = pRot->c0.r0, b01 = pRot->c0.r1, b02 = pRot->c0.r2,
+        b10 = pRot->c1.r0, b11 = pRot->c1.r1, b12 = pRot->c1.r2,
+        b20 = pRot->c2.r0, b21 = pRot->c2.r1, b22 = pRot->c2.r2;
 
-  dst->c0.r0 = a00 * b00 + a10 * b01 + a20 * b02;
-  dst->c0.r1 = a01 * b00 + a11 * b01 + a21 * b02;
-  dst->c0.r2 = a02 * b00 + a12 * b01 + a22 * b02;
-  dst->c0.r3 = a03 * b00 + a13 * b01 + a23 * b02;
+  pDst->c0.r0 = a00 * b00 + a10 * b01 + a20 * b02;
+  pDst->c0.r1 = a01 * b00 + a11 * b01 + a21 * b02;
+  pDst->c0.r2 = a02 * b00 + a12 * b01 + a22 * b02;
+  pDst->c0.r3 = a03 * b00 + a13 * b01 + a23 * b02;
 
-  dst->c1.r0 = a00 * b10 + a10 * b11 + a20 * b12;
-  dst->c1.r1 = a01 * b10 + a11 * b11 + a21 * b12;
-  dst->c1.r2 = a02 * b10 + a12 * b11 + a22 * b12;
-  dst->c1.r3 = a03 * b10 + a13 * b11 + a23 * b12;
+  pDst->c1.r0 = a00 * b10 + a10 * b11 + a20 * b12;
+  pDst->c1.r1 = a01 * b10 + a11 * b11 + a21 * b12;
+  pDst->c1.r2 = a02 * b10 + a12 * b11 + a22 * b12;
+  pDst->c1.r3 = a03 * b10 + a13 * b11 + a23 * b12;
 
-  dst->c2.r0 = a00 * b20 + a10 * b21 + a20 * b22;
-  dst->c2.r1 = a01 * b20 + a11 * b21 + a21 * b22;
-  dst->c2.r2 = a02 * b20 + a12 * b21 + a22 * b22;
-  dst->c2.r3 = a03 * b20 + a13 * b21 + a23 * b22;
+  pDst->c2.r0 = a00 * b20 + a10 * b21 + a20 * b22;
+  pDst->c2.r1 = a01 * b20 + a11 * b21 + a21 * b22;
+  pDst->c2.r2 = a02 * b20 + a12 * b21 + a22 * b22;
+  pDst->c2.r3 = a03 * b20 + a13 * b21 + a23 * b22;
 
-  dst->c3.r0 = a30;
-  dst->c3.r1 = a31;
-  dst->c3.r2 = a32;
-  dst->c3.r3 = a33;
+  pDst->c3.r0 = a30;
+  pDst->c3.r1 = a31;
+  pDst->c3.r2 = a32;
+  pDst->c3.r3 = a33;
 }
-MATH_INLINE void Mat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDest) {
+MATH_INLINE void Mat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDst) {
   float a00 = pLeft->col[0].row[0], a01 = pLeft->col[0].row[1], a02 = pLeft->col[0].row[2], a03 = pLeft->col[0].row[3],
         a10 = pLeft->col[1].row[0], a11 = pLeft->col[1].row[1], a12 = pLeft->col[1].row[2], a13 = pLeft->col[1].row[3],
         a20 = pLeft->col[2].row[0], a21 = pLeft->col[2].row[1], a22 = pLeft->col[2].row[2], a23 = pLeft->col[2].row[3],
@@ -294,41 +287,41 @@ MATH_INLINE void Mat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDest) {
         b20 = pRight->col[2].row[0], b21 = pRight->col[2].row[1], b22 = pRight->col[2].row[2], b23 = pRight->col[2].row[3],
         b30 = pRight->col[3].row[0], b31 = pRight->col[3].row[1], b32 = pRight->col[3].row[2], b33 = pRight->col[3].row[3];
 
-  pDest->col[0].row[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
-  pDest->col[0].row[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
-  pDest->col[0].row[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
-  pDest->col[0].row[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
-  pDest->col[1].row[0] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
-  pDest->col[1].row[1] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
-  pDest->col[1].row[2] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
-  pDest->col[1].row[3] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
-  pDest->col[2].row[0] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
-  pDest->col[2].row[1] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
-  pDest->col[2].row[2] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
-  pDest->col[2].row[3] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
-  pDest->col[3].row[0] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
-  pDest->col[3].row[1] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
-  pDest->col[3].row[2] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
-  pDest->col[3].row[3] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
+  pDst->col[0].row[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
+  pDst->col[0].row[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
+  pDst->col[0].row[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
+  pDst->col[0].row[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
+  pDst->col[1].row[0] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
+  pDst->col[1].row[1] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
+  pDst->col[1].row[2] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
+  pDst->col[1].row[3] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
+  pDst->col[2].row[0] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
+  pDst->col[2].row[1] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
+  pDst->col[2].row[2] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
+  pDst->col[2].row[3] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
+  pDst->col[3].row[0] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
+  pDst->col[3].row[1] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
+  pDst->col[3].row[2] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
+  pDst->col[3].row[3] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
 }
-MATH_INLINE void Mat4Scale(mat4* pMat4, float scale) {
+MATH_INLINE void Mat4Scale(const float scale, mat4* pDst) {
   // VECTORIZE
-  pMat4->c0.r0 *= scale;
-  pMat4->c0.r1 *= scale;
-  pMat4->c0.r2 *= scale;
-  pMat4->c0.r3 *= scale;
-  pMat4->c1.r0 *= scale;
-  pMat4->c1.r1 *= scale;
-  pMat4->c1.r2 *= scale;
-  pMat4->c1.r3 *= scale;
-  pMat4->c2.r0 *= scale;
-  pMat4->c2.r1 *= scale;
-  pMat4->c2.r2 *= scale;
-  pMat4->c2.r3 *= scale;
-  pMat4->c3.r0 *= scale;
-  pMat4->c3.r1 *= scale;
-  pMat4->c3.r2 *= scale;
-  pMat4->c3.r3 *= scale;
+  pDst->c0.r0 *= scale;
+  pDst->c0.r1 *= scale;
+  pDst->c0.r2 *= scale;
+  pDst->c0.r3 *= scale;
+  pDst->c1.r0 *= scale;
+  pDst->c1.r1 *= scale;
+  pDst->c1.r2 *= scale;
+  pDst->c1.r3 *= scale;
+  pDst->c2.r0 *= scale;
+  pDst->c2.r1 *= scale;
+  pDst->c2.r2 *= scale;
+  pDst->c2.r3 *= scale;
+  pDst->c3.r0 *= scale;
+  pDst->c3.r1 *= scale;
+  pDst->c3.r2 *= scale;
+  pDst->c3.r3 *= scale;
 }
 MATH_INLINE void Mat4Inv(const mat4* pSrc, mat4* pDst) {
   // VECTORIZE
@@ -382,38 +375,46 @@ MATH_INLINE void Mat4Inv(const mat4* pSrc, mat4* pDst) {
 
   det = 1.0f / (a * pDst->c0.r0 + b * pDst->c1.r0 + c * pDst->c2.r0 + d * pDst->c3.r0);
 
-  Mat4Scale(pDst, det);
+  Mat4Scale(det, pDst);
 }
-MATH_INLINE void Mat4FromTransform(vec3* pPos, quat* pRot, mat4* pDstModelMat4) {
+MATH_INLINE void Mat4FromTransform(const vec3* pPos, const quat* pRot, mat4* pDst) {
   mat4 translationMat4 = mat4Identity;
   Mat4Translation(pPos, &translationMat4);
   mat4 rotationMat4 = mat4Identity;
-  Mat4FromQuat(pRot, &rotationMat4);
-  Mat4MulRot(&translationMat4, &rotationMat4, pDstModelMat4);
+  QuatToMat4(pRot, &rotationMat4);
+  Mat4MulRot(&translationMat4, &rotationMat4, pDst);
 }
 // Perspective matrix in Vulkan Reverse Z
 MATH_INLINE void Mat4Perspective(const float fovy, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
   const float tanHalfFovy = tan(fovy / 2.0f);
-  *pDstMat4 = (mat4){
-      .c0 = {.r0 = 1.0f / (aspect * tanHalfFovy)},
-      .c1 = {.r1 = 1.0f / tanHalfFovy},
-      .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
-      .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)},
-  };
+  *pDstMat4 = (mat4){.c0 = {.r0 = 1.0f / (aspect * tanHalfFovy)},
+                     .c1 = {.r1 = 1.0f / tanHalfFovy},
+                     .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
+                     .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
 }
-MATH_INLINE void QuatFromEulerVec3(const vec3 euler, quat* pDstQuat) {
+MATH_INLINE void Vec3Cross(const vec3* pLeft, const vec3* pRight, vec3* pDst) {
+  *pDst = (vec3){pLeft->y * pRight->z - pRight->y * pLeft->z,
+                 pLeft->z * pRight->x - pRight->z * pLeft->x,
+                 pLeft->x * pRight->y - pRight->x * pLeft->y};
+}
+MATH_INLINE void Vec3Rot(const vec3* pSrc, const quat* pRot, vec3* pDst) {
+  const vec3 quatVec3 = {pRot->x, pRot->y, pRot->z};
+  vec3 uv; Vec3Cross(&quatVec3, pSrc, &uv);
+  vec3 uuv; Vec3Cross(&quatVec3, &uv, &uuv);
+  for (int i = 0; i < 3; ++i) pDst->vec[i] = pSrc->vec[i] + ((uv.vec[i] * pRot->w) + uuv.vec[i]) * 2.0f;
+}
+MATH_INLINE void Vec3EulerToQuat(const vec3* pEuler, quat* pDst) {
   vec3 c, s;
   for (int i = 0; i < 3; ++i) {
-    c.vec[i] = cos(euler.vec[i] * 0.5f);
-    s.vec[i] = sin(euler.vec[i] * 0.5f);
+    c.vec[i] = cos(pEuler->vec[i] * 0.5f);
+    s.vec[i] = sin(pEuler->vec[i] * 0.5f);
   }
-
-  pDstQuat->w = c.x * c.y * c.z + s.x * s.y * s.z;
-  pDstQuat->x = s.x * c.y * c.z - c.x * s.y * s.z;
-  pDstQuat->y = c.x * s.y * c.z + s.x * c.y * s.z;
-  pDstQuat->z = c.x * c.y * s.z - s.x * s.y * c.z;
+  pDst->w = c.x * c.y * c.z + s.x * s.y * s.z;
+  pDst->x = s.x * c.y * c.z - c.x * s.y * s.z;
+  pDst->y = c.x * s.y * c.z + s.x * c.y * s.z;
+  pDst->z = c.x * c.y * s.z - s.x * s.y * c.z;
 }
-MATH_INLINE void QuatMul(quat* pSrc, quat* pMul, quat* pDst) {
+MATH_INLINE void QuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
   pDst->w = pSrc->w * pMul->w - pSrc->x * pMul->x - pSrc->y * pMul->y - pSrc->z * pMul->z;
   pDst->x = pSrc->w * pMul->x + pSrc->x * pMul->w + pSrc->y * pMul->z - pSrc->z * pMul->y;
   pDst->y = pSrc->w * pMul->y + pSrc->y * pMul->w + pSrc->z * pMul->x - pSrc->x * pMul->z;
@@ -1567,13 +1568,13 @@ static void CreateFramebuffers(const uint32_t framebufferCount, Framebuffer* pFr
     attachments[RENDERPASS_NORMAL_ATTACHMENT] = pFrameBuffers[i].normalImageView;
     attachments[RENDERPASS_DEPTH_ATTACHMENT] = pFrameBuffers[i].depthImageView;
     const VkFramebufferCreateInfo framebufferCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = context.renderPass,
+        .sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass      = context.renderPass,
         .attachmentCount = RENDERPASS_ATTACHMENT_COUNT,
-        .pAttachments = attachments,
-        .width = DEFAULT_WIDTH,
-        .height = DEFAULT_HEIGHT,
-        .layers = 1,
+        .pAttachments    = attachments,
+        .width           = DEFAULT_WIDTH,
+        .height          = DEFAULT_HEIGHT,
+        .layers          = 1,
     };
     VK_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VK_ALLOC, &pFrameBuffers[i].framebuffer));
     VK_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VK_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
@@ -1589,12 +1590,12 @@ static void ResetBeginCommandBuffer(const VkCommandBuffer commandBuffer) {
 
 static void BeginRenderPass(const VkFramebuffer framebuffer) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-      .renderPass = context.renderPass,
-      .framebuffer = framebuffer,
-      .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
+      .sType           = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .renderPass      = context.renderPass,
+      .framebuffer     = framebuffer,
+      .renderArea      = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
       .clearValueCount = RENDERPASS_ATTACHMENT_COUNT,
-      .pClearValues = RenderPassClearValues,
+      .pClearValues    = RenderPassClearValues,
   };
   vkCmdBeginRenderPass(context.graphicsCommandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
@@ -1615,9 +1616,9 @@ static void Blit(const VkImage srcImage, const VkImage dstImage) {
   };
   const VkImageBlit imageBlit = {
       .srcSubresource = imageSubresourceLayers,
-      .srcOffsets = {offsets[0], offsets[1]},
+      .srcOffsets     = {offsets[0], offsets[1]},
       .dstSubresource = imageSubresourceLayers,
-      .dstOffsets = {offsets[0], offsets[1]},
+      .dstOffsets     = {offsets[0], offsets[1]},
   };
   vkCmdBlitImage(context.graphicsCommandBuffer, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 
@@ -1631,61 +1632,42 @@ static void SubmitPresentCommandBuffer(const VkCommandBuffer commandBuffer, cons
   const uint64_t     waitValue = context.timelineWaitValue++;
   const uint64_t     signalValue = context.timelineWaitValue;
   const VkSubmitInfo submitInfo = {
-      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-      .pNext = &(const VkTimelineSemaphoreSubmitInfo){
-          .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-          .waitSemaphoreValueCount = 2,
-          .pWaitSemaphoreValues = (const uint64_t[]){waitValue, 0},
-          .signalSemaphoreValueCount = 2,
-          .pSignalSemaphoreValues = (const uint64_t[]){signalValue, 0},
+       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+       .pNext = &(const VkTimelineSemaphoreSubmitInfo){
+           .sType                     = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+           .waitSemaphoreValueCount   = 2,
+           .pWaitSemaphoreValues      = (const uint64_t[]){waitValue, 0},
+           .signalSemaphoreValueCount = 2,
+           .pSignalSemaphoreValues    = (const uint64_t[]){signalValue, 0},
       },
-      .waitSemaphoreCount = 2,
-      .pWaitSemaphores = (const VkSemaphore[]){
+       .waitSemaphoreCount = 2,
+       .pWaitSemaphores    = (const VkSemaphore[]){
           context.timelineSemaphore,
           context.acquireSwapSemaphore,
       },
-      .pWaitDstStageMask = (const VkPipelineStageFlags[]){
+       .pWaitDstStageMask = (const VkPipelineStageFlags[]){
           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
       },
-      .commandBufferCount = 1,
-      .pCommandBuffers = &commandBuffer,
-      .signalSemaphoreCount = 2,
-      .pSignalSemaphores = (const VkSemaphore[]){
+       .commandBufferCount   = 1,
+       .pCommandBuffers      = &commandBuffer,
+       .signalSemaphoreCount = 2,
+       .pSignalSemaphores    = (const VkSemaphore[]){
           context.timelineSemaphore,
           context.renderCompleteSwapSemaphore,
       },
   };
   VK_REQUIRE(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
   const VkPresentInfoKHR presentInfo = {
-      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+      .sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &context.renderCompleteSwapSemaphore,
-      .swapchainCount = 1,
-      .pSwapchains = &context.swapchain,
-      .pImageIndices = &swapIndex,
+      .pWaitSemaphores    = &context.renderCompleteSwapSemaphore,
+      .swapchainCount     = 1,
+      .pSwapchains        = &context.swapchain,
+      .pImageIndices      = &swapIndex,
   };
   VK_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
 }
-
-// static GlobalSetState globalSetState = {.screenSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT}};
-
-// static void UpdateGlobalStateSet(Transform* pTransform) {
-
-// glm_perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, globalSetState.projection);
-// glm_mat4_inv(globalSetState.projection, globalSetState.inverseProjection);
-//
-// versor rotQ;
-// glm_quatv(rotQ, glm_rad(0.1f), GLM_YUP);
-// glm_quat_mul(pTransform->rotation, rotQ, pTransform->rotation);
-// glm_quat_look(pTransform->position, pTransform->rotation, globalSetState.view);
-// glm_mat4_inv(globalSetState.view, globalSetState.inverseView);
-//
-// glm_mat4_mul(globalSetState.projection, globalSetState.view, globalSetState.viewProjection);
-// glm_mat4_mul(globalSetState.inverseView, globalSetState.inverseProjection, globalSetState.inverseViewProjection);
-
-// memcpy(context.pGlobalSetMapped, &globalSetState, sizeof(GlobalSetState));
-// }
 
 int mxcRenderNode() {
 
@@ -1700,7 +1682,7 @@ int mxcRenderNode() {
   uint32_t       sphereIndexCount, sphereVertexCount;
   VkDeviceMemory sphereIndexMemory, sphereVertexMemory;
   VkBuffer       sphereIndexBuffer, sphereVertexBuffer;
-  CreateSphereMeshBuffers(0.5f, 32, 32, &sphereIndexCount, &sphereVertexCount, &sphereIndexMemory, &sphereIndexBuffer, &sphereVertexMemory, &sphereVertexBuffer);
+  CreateSphereMeshBuffers( 0.5f, 32, 32, &sphereIndexCount, &sphereVertexCount, &sphereIndexMemory, &sphereIndexBuffer, &sphereVertexMemory, &sphereVertexBuffer);
 
   StandardObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory          sphereObjectSetMemory;
@@ -1719,17 +1701,11 @@ int mxcRenderNode() {
   };
   vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
 
-  // Camera camera = {};
-  // glm_vec3_copy((vec3){0, 0, -2}, camera.position);
-  // glm_quatv(camera.rotation, glm_rad(180), GLM_YUP);
-  // UpdateGlobalStateSet((Transform*)&camera);
-
-  Camera camera = {
-      .position = {0.0f, 0.0f, 2.0f},
-      .rotation = quatIdentity,
-  };
+  Camera camera = { .position = { 0.0f, 0.0f, 2.0f },
+                    .euler    = { 0.0f, 0.0f, 0.0f } };
   GlobalSetState globalSetState = {.screenSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT}};
   Mat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &globalSetState.projection);
+  Vec3EulerToQuat(&camera.euler, &camera.rotation);
   Mat4Inv(&globalSetState.projection, &globalSetState.inverseProjection);
   Mat4FromTransform(&camera.position, &camera.rotation, &globalSetState.inverseView);
   Mat4Inv(&globalSetState.inverseView, &globalSetState.view);
@@ -1737,33 +1713,39 @@ int mxcRenderNode() {
   Mat4Mul(&globalSetState.inverseView, &globalSetState.inverseViewProjection, &globalSetState.inverseViewProjection);
   memcpy(context.pGlobalSetMapped, &globalSetState, sizeof(GlobalSetState));
 
-  Transform sphereTransform = {
-      .position = {0.0f, 0.0f, 0.0f},
-      .rotation = quatIdentity,
-  };
+  Transform sphereTransform = { .position = { 0.0f, 0.0f, 0.0f },
+                                .euler    = { 0.0f, 0.0f, 0.0f } };
   StandardObjectSetState sphereObjectState = {};
+  Vec3EulerToQuat(&sphereTransform.euler, &sphereTransform.rotation);
   Mat4FromTransform(&sphereTransform.position, &sphereTransform.rotation, &sphereObjectState.model);
   memcpy(pSphereObjectSetMapped, &sphereObjectState, sizeof(StandardObjectSetState));
-
-  // Transform sphereTransform = {
-  //     .position = {0.0f, 0.0f, 0.0f},
-  //     .rotation = {0.0f, 0.0f, 0.0f, 1.0f},
-  // };
-  // StandardObjectSetState sphereObjectState;
-  // glm_mat4_copy(GLM_MAT4_IDENTITY, sphereObjectState.model);
-  // glm_translate_to(GLM_MAT4_IDENTITY, sphereTransform.position, sphereObjectState.model);
-  // glm_quat_rotate(sphereObjectState.model, sphereTransform.rotation, sphereObjectState.model);
-  // memcpy(pSphereObjectSetMapped, &sphereObjectState, sizeof(StandardObjectSetState));
 
   int framebufferIndex = 0;
 
   while (isRunning) {
-    mxUpdateWindow();
+    mxUpdateWindowInput();
 
-    // quat rotationQuat;
-    // QuatFromEulerVec3((vec3){0, 0.1f, 0}, &rotationQuat);
-    // QuatMul(&camera.rotation, &rotationQuat, &camera.rotation);
-    // UpdateGlobalStateSet((Transform*)&camera);
+    bool inputDirty = false;
+    if (input.mouseLocked) {
+      camera.euler.y -= input.mouseDeltaX * input.mouseLocked;
+      Vec3EulerToQuat(&camera.euler, &camera.rotation);
+      inputDirty = true;
+    }
+    if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
+      const float moveSensitivity = .0002f;
+      vec3 localTranslate = { .x = input.moveRight ? 1 : input.moveLeft    ? -1 : 0,
+                              .z = input.moveBack  ? 1 : input.moveForward ? -1 : 0 };
+      Vec3Rot(&localTranslate, &camera.rotation, &localTranslate);
+      for (int i = 0; i < 3; ++i) camera.position.vec[i] += localTranslate.vec[i] * moveSensitivity;
+      inputDirty = true;
+    }
+    if (inputDirty) {
+      Mat4FromTransform( &camera.position, &camera.rotation, &globalSetState.inverseView );
+      Mat4Inv(&globalSetState.inverseView, &globalSetState.view);
+      Mat4Mul(&globalSetState.projection, &globalSetState.view, &globalSetState.viewProjection);
+      Mat4Mul(&globalSetState.inverseView, &globalSetState.inverseViewProjection, &globalSetState.inverseViewProjection);
+      memcpy(context.pGlobalSetMapped, &globalSetState, sizeof(GlobalSetState));
+    }
 
     const VkCommandBuffer cmd = context.graphicsCommandBuffer;
 

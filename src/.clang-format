@@ -1,5 +1,13 @@
 BasedOnStyle: LLVM
+AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
+AlignConsecutiveBitFields: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: true
+  AlignCaseColons: false
 AlignAfterOpenBracket: Align
 AlwaysBreakAfterReturnType: None
 ColumnLimit: 0
@@ -8,7 +16,6 @@ IndentCaseLabels: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: true
 IndentPPDirectives: BeforeHash
-AlignConsecutiveMacros: true
 IndentWidth: 2
 TabWidth: 4
 ReflowComments: false
@@ -35,3 +42,4 @@ IndentGotoLabels: true
 BreakAfterAttributes: Leave
 UseCRLF: false
 AllowShortLoopsOnASingleLine: true
+SpaceBeforeCpp11BracedList: true
