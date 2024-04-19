@@ -22,6 +22,8 @@ Input input;
 static struct {
   HINSTANCE hInstance;
   HWND      hwnd;
+  int       width;
+  int       height;
   int       localCenterX;
   int       localCenterY;
   int       globalCenterX;
@@ -32,10 +34,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
   switch (uMsg) {
     case WM_MOUSEMOVE: {
       if (input.mouseLocked) {
-        const int  xPos         = GET_X_LPARAM(lParam);
-        const int  yPos         = GET_Y_LPARAM(lParam);
-        const int  deltaXPos    = xPos - window.localCenterX ;
-        const int  deltaYPos    = yPos - window.localCenterX ;
+        const int   xPos        = GET_X_LPARAM(lParam);
+        const int   yPos        = GET_Y_LPARAM(lParam);
+        const int   deltaXPos   = xPos - window.localCenterX;
+        const int   deltaYPos   = yPos - window.localCenterX;
         const float sensitivity = .001f;
         input.mouseDeltaX       = (float)deltaXPos * sensitivity;
         input.mouseDeltaY       = (float)deltaYPos * sensitivity;
@@ -100,21 +102,17 @@ void mxUpdateWindowInput() {
 void mxCreateWindow() {
   window.hInstance           = GetModuleHandle(NULL);
   const DWORD    windowStyle = WS_OVERLAPPEDWINDOW;
-  const WNDCLASS wc          = {
-               .lpfnWndProc   = WindowProc,
-               .hInstance     = window.hInstance,
-               .lpszClassName = CLASS_NAME,
-  };
+  const WNDCLASS wc          = {.lpfnWndProc   = WindowProc,
+                                .hInstance     = window.hInstance,
+                                .lpszClassName = CLASS_NAME};
   RegisterClass(&wc);
-  RECT rect = {
-      .right  = DEFAULT_WIDTH,
-      .bottom = DEFAULT_HEIGHT,
-  };
+  RECT rect = {.right = DEFAULT_WIDTH, .bottom = DEFAULT_HEIGHT};
   AdjustWindowRect(&rect, windowStyle, FALSE);
-  const int windowWidth  = rect.right - rect.left;
-  const int windowHeight = rect.bottom - rect.top;
-  window.hwnd            = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle,
-                                          CW_USEDEFAULT, CW_USEDEFAULT, windowWidth, windowHeight, NULL, NULL, window.hInstance, NULL);
+  window.width  = rect.right - rect.left;
+  window.height = rect.bottom - rect.top;
+  window.hwnd   = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle,
+                                 CW_USEDEFAULT, CW_USEDEFAULT, window.width, window.height,
+                                 NULL, NULL, window.hInstance, NULL);
   REQUIRE(window.hwnd != NULL, "Failed to create window.");
   ShowWindow(window.hwnd, SW_SHOW);
   UpdateWindow(window.hwnd);

@@ -42,4 +42,4 @@ IndentGotoLabels: true
 BreakAfterAttributes: Leave
 UseCRLF: false
 AllowShortLoopsOnASingleLine: true
-SpaceBeforeCpp11BracedList: true
+
