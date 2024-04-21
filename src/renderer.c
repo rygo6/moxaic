@@ -28,13 +28,14 @@
 // Math Types
 //----------------------------------------------------------------------------------
 
-typedef float    float2_simd __attribute__((vector_size(sizeof(float) * 2)));
-typedef uint32_t int2_simd __attribute__((vector_size(sizeof(uint32_t) * 2)));
-typedef float    float3_simd __attribute__((vector_size(sizeof(float) * 4)));
-typedef uint32_t int3_simd __attribute__((vector_size(sizeof(uint32_t) * 4)));
-typedef float    float4_simd __attribute__((vector_size(sizeof(float) * 4)));
-typedef uint32_t int4_simd __attribute__((vector_size(sizeof(uint32_t) * 4)));
-typedef float    mat4_simd __attribute__((vector_size(sizeof(float) * 16)));
+#define SIMD_TYPE(type, name, count) typedef type name##_simd __attribute__((vector_size(sizeof(type) * count)))
+SIMD_TYPE(float, float2, 2);
+SIMD_TYPE(uint32_t, int2, 2);
+SIMD_TYPE(float, float3, 4);
+SIMD_TYPE(uint32_t, int3, 4);
+SIMD_TYPE(float, float4, 4);
+SIMD_TYPE(uint32_t, int4, 4);
+SIMD_TYPE(float, mat4, 16);
 
 #define PI 3.14159265358979323846f
 #define MATH_UNION(type, simd_type, name, align, count, vec_name, ...) \
@@ -218,12 +219,12 @@ enum MatElement {
   MAT_C3_R3,
   MAT_COUNT,
 };
-#define VEC_NA                -1
+#define SIMD_NIL              -1
 #define VEC3_ITERATE          for (int i = 0; i < 3; ++i)
 #define VEC4_ITERATE          for (int i = 0; i < 4; ++i)
 #define SHUFFLE_VEC(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
 MATH_INLINE float Float4Sum(float4_simd* pFloat4) {
-  // appears to make better SIMD assembly then a loop:
+  // appears to make better SIMD assembly than a loop:
   // https://godbolt.org/z/6jWe4Pj5b
   // https://godbolt.org/z/M5Goq57vj
   float4_simd shuf = SHUFFLE_VEC(*pFloat4, 2, 3, 0, 1);
@@ -247,18 +248,20 @@ MATH_INLINE void QuatToMat4(const quat* pQuat, mat4* pDst) {
   const float norm = Vec4Mag(pQuat);
   const float s = norm > 0.0f ? 2.0f / norm : 0.0f;
 
-  const float3_simd xxw = SHUFFLE_VEC(pQuat->simd, VEC_X, VEC_X, VEC_W, VEC_NA);
-  const float3_simd xyx = SHUFFLE_VEC(pQuat->simd, VEC_X, VEC_Y, VEC_X, VEC_NA);
+  const float3_simd xxw = SHUFFLE_VEC(pQuat->simd, VEC_X, VEC_X, VEC_W, SIMD_NIL);
+  const float3_simd xyx = SHUFFLE_VEC(pQuat->simd, VEC_X, VEC_Y, VEC_X, SIMD_NIL);
   const float3_simd xx_xy_wx = s * xxw * xyx;
 
-  const float3_simd yyw = SHUFFLE_VEC(pQuat->simd, VEC_Y, VEC_Y, VEC_W, VEC_NA);
-  const float3_simd yzy = SHUFFLE_VEC(pQuat->simd, VEC_Y, VEC_Z, VEC_Y, VEC_NA);
+  const float3_simd yyw = SHUFFLE_VEC(pQuat->simd, VEC_Y, VEC_Y, VEC_W, SIMD_NIL);
+  const float3_simd yzy = SHUFFLE_VEC(pQuat->simd, VEC_Y, VEC_Z, VEC_Y, SIMD_NIL);
   const float3_simd yy_yz_wy = s * yyw * yzy;
 
-  const float3_simd zxw = SHUFFLE_VEC(pQuat->simd, VEC_Z, VEC_X, VEC_W, VEC_NA);
-  const float3_simd zzz = SHUFFLE_VEC(pQuat->simd, VEC_Z, VEC_Z, VEC_Z, VEC_NA);
+  const float3_simd zxw = SHUFFLE_VEC(pQuat->simd, VEC_Z, VEC_X, VEC_W, SIMD_NIL);
+  const float3_simd zzz = SHUFFLE_VEC(pQuat->simd, VEC_Z, VEC_Z, VEC_Z, SIMD_NIL);
   const float3_simd zz_xz_wz = s * zxw * zzz;
 
+  // Setting to specific SIMD indices produces same SIMD assembly as long is the target
+  // SIMD vec is same size as source vecs https://godbolt.org/z/qqMMa4v3G
   pDst->c0.simd[0] = 1.0f - yy_yz_wy[VEC_X] - zz_xz_wz[VEC_X];
   pDst->c1.simd[1] = 1.0f - xx_xy_wx[VEC_X] - zz_xz_wz[VEC_X];
   pDst->c2.simd[2] = 1.0f - xx_xy_wx[VEC_X] - yy_yz_wy[VEC_X];
@@ -280,67 +283,85 @@ MATH_INLINE void QuatToMat4(const quat* pQuat, mat4* pDst) {
   pDst->c3.simd[3] = 1.0f;
 }
 MATH_INLINE void Mat4MulRot(const mat4* pSrc, const mat4* pRot, mat4* pDst) {
-  float a00 = pSrc->c0.r0, a01 = pSrc->c0.r1, a02 = pSrc->c0.r2, a03 = pSrc->c0.r3,
-        a10 = pSrc->c1.r0, a11 = pSrc->c1.r1, a12 = pSrc->c1.r2, a13 = pSrc->c1.r3,
-        a20 = pSrc->c2.r0, a21 = pSrc->c2.r1, a22 = pSrc->c2.r2, a23 = pSrc->c2.r3,
-        a30 = pSrc->c3.r0, a31 = pSrc->c3.r1, a32 = pSrc->c3.r2, a33 = pSrc->c3.r3,
-
-        b00 = pRot->c0.r0, b01 = pRot->c0.r1, b02 = pRot->c0.r2,
-        b10 = pRot->c1.r0, b11 = pRot->c1.r1, b12 = pRot->c1.r2,
-        b20 = pRot->c2.r0, b21 = pRot->c2.r1, b22 = pRot->c2.r2;
-
-  pDst->c0.r0 = a00 * b00 + a10 * b01 + a20 * b02;
-  pDst->c0.r1 = a01 * b00 + a11 * b01 + a21 * b02;
-  pDst->c0.r2 = a02 * b00 + a12 * b01 + a22 * b02;
-  pDst->c0.r3 = a03 * b00 + a13 * b01 + a23 * b02;
-
-  pDst->c1.r0 = a00 * b10 + a10 * b11 + a20 * b12;
-  pDst->c1.r1 = a01 * b10 + a11 * b11 + a21 * b12;
-  pDst->c1.r2 = a02 * b10 + a12 * b11 + a22 * b12;
-  pDst->c1.r3 = a03 * b10 + a13 * b11 + a23 * b12;
-
-  pDst->c2.r0 = a00 * b20 + a10 * b21 + a20 * b22;
-  pDst->c2.r1 = a01 * b20 + a11 * b21 + a21 * b22;
-  pDst->c2.r2 = a02 * b20 + a12 * b21 + a22 * b22;
-  pDst->c2.r3 = a03 * b20 + a13 * b21 + a23 * b22;
-
-  pDst->c3.r0 = a30;
-  pDst->c3.r1 = a31;
-  pDst->c3.r2 = a32;
-  pDst->c3.r3 = a33;
+  const mat4_simd src0 = SHUFFLE_VEC(pSrc->simd,
+                                     MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
+                                     MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
+                                     MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
+                                     SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
+  const mat4_simd rot0 = SHUFFLE_VEC(pRot->simd,
+                                     MAT_C0_R0, MAT_C0_R0, MAT_C0_R0, MAT_C0_R0,
+                                     MAT_C1_R0, MAT_C1_R0, MAT_C1_R0, MAT_C1_R0,
+                                     MAT_C2_R0, MAT_C2_R0, MAT_C2_R0, MAT_C2_R0,
+                                     SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
+  const mat4_simd src1 = SHUFFLE_VEC(pSrc->simd,
+                                     MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
+                                     MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
+                                     MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
+                                     SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
+  const mat4_simd rot1 = SHUFFLE_VEC(pRot->simd,
+                                     MAT_C0_R1, MAT_C0_R1, MAT_C0_R1, MAT_C0_R1,
+                                     MAT_C1_R1, MAT_C1_R1, MAT_C1_R1, MAT_C1_R1,
+                                     MAT_C2_R1, MAT_C2_R1, MAT_C2_R1, MAT_C2_R1,
+                                     SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
+  const mat4_simd src2 = SHUFFLE_VEC(pSrc->simd,
+                                     MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
+                                     MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
+                                     MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
+                                     SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
+  const mat4_simd rot2 = SHUFFLE_VEC(pRot->simd,
+                                     MAT_C0_R2, MAT_C0_R2, MAT_C0_R2, MAT_C0_R2,
+                                     MAT_C1_R2, MAT_C1_R2, MAT_C1_R2, MAT_C1_R2,
+                                     MAT_C2_R2, MAT_C2_R2, MAT_C2_R2, MAT_C2_R2,
+                                     SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
+  pDst->simd = src0 * rot0 + src1 * rot1 + src2 * rot2;
+  // I don't actually know if doing this simd_nil is faster and this whole rot only mat multiply is pointless
+  pDst->c3.simd = pSrc->c3.simd;
 }
 MATH_INLINE void Mat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDst) {
-  float a00 = pLeft->col[0].row[0], a01 = pLeft->col[0].row[1], a02 = pLeft->col[0].row[2], a03 = pLeft->col[0].row[3],
-        a10 = pLeft->col[1].row[0], a11 = pLeft->col[1].row[1], a12 = pLeft->col[1].row[2], a13 = pLeft->col[1].row[3],
-        a20 = pLeft->col[2].row[0], a21 = pLeft->col[2].row[1], a22 = pLeft->col[2].row[2], a23 = pLeft->col[2].row[3],
-        a30 = pLeft->col[3].row[0], a31 = pLeft->col[3].row[1], a32 = pLeft->col[3].row[2], a33 = pLeft->col[3].row[3],
-
-        b00 = pRight->col[0].row[0], b01 = pRight->col[0].row[1], b02 = pRight->col[0].row[2], b03 = pRight->col[0].row[3],
-        b10 = pRight->col[1].row[0], b11 = pRight->col[1].row[1], b12 = pRight->col[1].row[2], b13 = pRight->col[1].row[3],
-        b20 = pRight->col[2].row[0], b21 = pRight->col[2].row[1], b22 = pRight->col[2].row[2], b23 = pRight->col[2].row[3],
-        b30 = pRight->col[3].row[0], b31 = pRight->col[3].row[1], b32 = pRight->col[3].row[2], b33 = pRight->col[3].row[3];
-
-  pDst->col[0].row[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
-  pDst->col[0].row[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
-  pDst->col[0].row[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
-  pDst->col[0].row[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
-  pDst->col[1].row[0] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
-  pDst->col[1].row[1] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
-  pDst->col[1].row[2] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
-  pDst->col[1].row[3] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
-  pDst->col[2].row[0] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
-  pDst->col[2].row[1] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
-  pDst->col[2].row[2] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
-  pDst->col[2].row[3] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
-  pDst->col[3].row[0] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
-  pDst->col[3].row[1] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
-  pDst->col[3].row[2] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
-  pDst->col[3].row[3] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
+  const mat4_simd src0 = SHUFFLE_VEC(pLeft->simd,
+                                     MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
+                                     MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
+                                     MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
+                                     MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3);
+  const mat4_simd rot0 = SHUFFLE_VEC(pRight->simd,
+                                     MAT_C0_R0, MAT_C0_R0, MAT_C0_R0, MAT_C0_R0,
+                                     MAT_C1_R0, MAT_C1_R0, MAT_C1_R0, MAT_C1_R0,
+                                     MAT_C2_R0, MAT_C2_R0, MAT_C2_R0, MAT_C2_R0,
+                                     MAT_C3_R0, MAT_C3_R0, MAT_C3_R0, MAT_C3_R0);
+  const mat4_simd src1 = SHUFFLE_VEC(pLeft->simd,
+                                     MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
+                                     MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
+                                     MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
+                                     MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3);
+  const mat4_simd rot1 = SHUFFLE_VEC(pRight->simd,
+                                     MAT_C0_R1, MAT_C0_R1, MAT_C0_R1, MAT_C0_R1,
+                                     MAT_C1_R1, MAT_C1_R1, MAT_C1_R1, MAT_C1_R1,
+                                     MAT_C2_R1, MAT_C2_R1, MAT_C2_R1, MAT_C2_R1,
+                                     MAT_C3_R1, MAT_C3_R1, MAT_C3_R1, MAT_C3_R1);
+  const mat4_simd src2 = SHUFFLE_VEC(pLeft->simd,
+                                     MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
+                                     MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
+                                     MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
+                                     MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3);
+  const mat4_simd rot2 = SHUFFLE_VEC(pRight->simd,
+                                     MAT_C0_R2, MAT_C0_R2, MAT_C0_R2, MAT_C0_R2,
+                                     MAT_C1_R2, MAT_C1_R2, MAT_C1_R2, MAT_C1_R2,
+                                     MAT_C2_R2, MAT_C2_R2, MAT_C2_R2, MAT_C2_R2,
+                                     MAT_C3_R2, MAT_C3_R2, MAT_C3_R2, MAT_C3_R2);
+  const mat4_simd src3 = SHUFFLE_VEC(pLeft->simd,
+                                     MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
+                                     MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
+                                     MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
+                                     MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3);
+  const mat4_simd rot3 = SHUFFLE_VEC(pRight->simd,
+                                     MAT_C0_R3, MAT_C0_R3, MAT_C0_R3, MAT_C0_R3,
+                                     MAT_C1_R3, MAT_C1_R3, MAT_C1_R3, MAT_C1_R3,
+                                     MAT_C2_R3, MAT_C2_R3, MAT_C2_R3, MAT_C2_R3,
+                                     MAT_C3_R3, MAT_C3_R3, MAT_C3_R3, MAT_C3_R3);
+  pDst->simd = src0 * rot0 + src1 * rot1 + src2 * rot2 + src3 * rot3;
 }
 MATH_INLINE void Mat4Scale(const float scale, mat4* pDst) {
-  for (int c = 0; c < 4; ++c)
-    for (int r = 0; r < 4; ++r)
-      pDst->col[c].row[r] *= scale;
+  pDst->simd *= scale;
 }
 MATH_INLINE void Mat4Inv(const mat4* pSrc, mat4* pDst) {
   // VECTORIZE
