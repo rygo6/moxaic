@@ -1,12 +1,24 @@
 BasedOnStyle: LLVM
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
-AlignConsecutiveMacros: true
-AlignConsecutiveBitFields: true
+AlignConsecutiveAssignments:
+  Enabled: false
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
 AlignConsecutiveShortCaseStatements:
   Enabled: true
-  AcrossEmptyLines: true
-  AcrossComments: true
+  AcrossEmptyLines: false
+  AcrossComments: false
   AlignCaseColons: false
 AlignAfterOpenBracket: Align
 AlwaysBreakAfterReturnType: None
@@ -18,20 +30,21 @@ IndentPPDirectives: BeforeHash
 IndentWidth: 2
 TabWidth: 4
 ReflowComments: false
-BraceWrapping:
-  AfterClass: false
-  AfterControlStatement: false
-  AfterEnum: false
-  AfterFunction: false
-  AfterNamespace: false
-  AfterStruct: false
-  AfterUnion: false
-  AfterExternBlock: false
-  BeforeCatch: false
-  BeforeElse: false
-  SplitEmptyFunction: false
-  SplitEmptyRecord: false
-  SplitEmptyNamespace: false
+BreakBeforeBraces: Attach
+#BraceWrapping:
+#  AfterClass: false
+#  AfterControlStatement: false
+#  AfterEnum: false
+#  AfterFunction: false
+#  AfterNamespace: false
+#  AfterStruct: false
+#  AfterUnion: false
+#  AfterExternBlock: false
+#  BeforeCatch: false
+#  BeforeElse: false
+#  SplitEmptyFunction: false
+#  SplitEmptyRecord: false
+#  SplitEmptyNamespace: false
 MaxEmptyLinesToKeep: 2
 SpacesBeforeTrailingComments: 2
 AlignTrailingComments:
@@ -44,4 +57,9 @@ AllowShortLoopsOnASingleLine: true
 AlignOperands:   true
 BreakBeforeTernaryOperators: false
 ColumnLimit: 0
+AlwaysBreakAfterDefinitionReturnType: None
+AllowShortBlocksOnASingleLine: Always
+
+
+
 
