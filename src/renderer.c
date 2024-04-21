@@ -193,6 +193,8 @@ static struct Context {
 // Math Operations
 //----------------------------------------------------------------------------------
 
+void __builtin_shufflevector();
+
 enum VecElement {
   VEC_X,
   VEC_Y,
@@ -260,7 +262,7 @@ MATH_INLINE void QuatToMat4(const quat* pQuat, mat4* pDst) {
   const float3_simd zzz = SIMD_SHUFFLE(pQuat->simd, VEC_Z, VEC_Z, VEC_Z, SIMD_NIL);
   const float3_simd zz_xz_wz = s * zxw * zzz;
 
-  // Setting to specific SIMD indices produces same SIMD assembly as long is the target
+  // Setting to specific SIMD indices produces same SIMD assembly as long as target
   // SIMD vec is same size as source vecs https://godbolt.org/z/qqMMa4v3G
   pDst->c0.simd[0] = 1.0f - yy_yz_wy[VEC_X] - zz_xz_wz[VEC_X];
   pDst->c1.simd[1] = 1.0f - xx_xy_wx[VEC_X] - zz_xz_wz[VEC_X];
@@ -1694,26 +1696,7 @@ static void SubmitPresentCommandBuffer(const VkCommandBuffer commandBuffer, cons
   VK_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
 }
 
-
-typedef float testa __attribute__((vector_size(sizeof(float) * 4)));
-typedef int   v4si __attribute__((vector_size(16)));
-
 int mxcRenderNode() {
-
-  // vec4_simd v4s = {
-  //     1,
-  //     2,
-  //     3,
-  //     4,
-  // };
-  // v4s.simd += 1;
-  // vec4 a = {1, 2, 3, 4};
-  // vec4 b = a + 2;
-
-  // vec4_simd asimd = (vec4_simd)a;
-
-  // printf("%f %f", v4s.SIMD(1), v4s.y);
-
   Framebuffer framebuffers[VK_SWAP_COUNT];
   CreateFramebuffers(VK_SWAP_COUNT, framebuffers);
 
