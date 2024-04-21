@@ -219,17 +219,17 @@ enum MatElement {
   MAT_C3_R3,
   MAT_COUNT,
 };
-#define SIMD_NIL              -1
 #define VEC3_ITERATE          for (int i = 0; i < 3; ++i)
 #define VEC4_ITERATE          for (int i = 0; i < 4; ++i)
-#define SHUFFLE_VEC(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
+#define SIMD_NIL              -1
+#define SIMD_SHUFFLE(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
 MATH_INLINE float Float4Sum(float4_simd* pFloat4) {
   // appears to make better SIMD assembly than a loop:
   // https://godbolt.org/z/6jWe4Pj5b
   // https://godbolt.org/z/M5Goq57vj
-  float4_simd shuf = SHUFFLE_VEC(*pFloat4, 2, 3, 0, 1);
+  float4_simd shuf = SIMD_SHUFFLE(*pFloat4, 2, 3, 0, 1);
   float4_simd sums = *pFloat4 + shuf;
-  shuf = SHUFFLE_VEC(sums, 1, 0, 3, 2);
+  shuf = SIMD_SHUFFLE(sums, 1, 0, 3, 2);
   sums = sums + shuf;
   return sums[0];
 }
@@ -248,16 +248,16 @@ MATH_INLINE void QuatToMat4(const quat* pQuat, mat4* pDst) {
   const float norm = Vec4Mag(pQuat);
   const float s = norm > 0.0f ? 2.0f / norm : 0.0f;
 
-  const float3_simd xxw = SHUFFLE_VEC(pQuat->simd, VEC_X, VEC_X, VEC_W, SIMD_NIL);
-  const float3_simd xyx = SHUFFLE_VEC(pQuat->simd, VEC_X, VEC_Y, VEC_X, SIMD_NIL);
+  const float3_simd xxw = SIMD_SHUFFLE(pQuat->simd, VEC_X, VEC_X, VEC_W, SIMD_NIL);
+  const float3_simd xyx = SIMD_SHUFFLE(pQuat->simd, VEC_X, VEC_Y, VEC_X, SIMD_NIL);
   const float3_simd xx_xy_wx = s * xxw * xyx;
 
-  const float3_simd yyw = SHUFFLE_VEC(pQuat->simd, VEC_Y, VEC_Y, VEC_W, SIMD_NIL);
-  const float3_simd yzy = SHUFFLE_VEC(pQuat->simd, VEC_Y, VEC_Z, VEC_Y, SIMD_NIL);
+  const float3_simd yyw = SIMD_SHUFFLE(pQuat->simd, VEC_Y, VEC_Y, VEC_W, SIMD_NIL);
+  const float3_simd yzy = SIMD_SHUFFLE(pQuat->simd, VEC_Y, VEC_Z, VEC_Y, SIMD_NIL);
   const float3_simd yy_yz_wy = s * yyw * yzy;
 
-  const float3_simd zxw = SHUFFLE_VEC(pQuat->simd, VEC_Z, VEC_X, VEC_W, SIMD_NIL);
-  const float3_simd zzz = SHUFFLE_VEC(pQuat->simd, VEC_Z, VEC_Z, VEC_Z, SIMD_NIL);
+  const float3_simd zxw = SIMD_SHUFFLE(pQuat->simd, VEC_Z, VEC_X, VEC_W, SIMD_NIL);
+  const float3_simd zzz = SIMD_SHUFFLE(pQuat->simd, VEC_Z, VEC_Z, VEC_Z, SIMD_NIL);
   const float3_simd zz_xz_wz = s * zxw * zzz;
 
   // Setting to specific SIMD indices produces same SIMD assembly as long is the target
@@ -283,32 +283,32 @@ MATH_INLINE void QuatToMat4(const quat* pQuat, mat4* pDst) {
   pDst->c3.simd[3] = 1.0f;
 }
 MATH_INLINE void Mat4MulRot(const mat4* pSrc, const mat4* pRot, mat4* pDst) {
-  const mat4_simd src0 = SHUFFLE_VEC(pSrc->simd,
+  const mat4_simd src0 = SIMD_SHUFFLE(pSrc->simd,
                                      MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                      MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                      MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                      SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
-  const mat4_simd rot0 = SHUFFLE_VEC(pRot->simd,
+  const mat4_simd rot0 = SIMD_SHUFFLE(pRot->simd,
                                      MAT_C0_R0, MAT_C0_R0, MAT_C0_R0, MAT_C0_R0,
                                      MAT_C1_R0, MAT_C1_R0, MAT_C1_R0, MAT_C1_R0,
                                      MAT_C2_R0, MAT_C2_R0, MAT_C2_R0, MAT_C2_R0,
                                      SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
-  const mat4_simd src1 = SHUFFLE_VEC(pSrc->simd,
+  const mat4_simd src1 = SIMD_SHUFFLE(pSrc->simd,
                                      MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
                                      MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
                                      MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
                                      SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
-  const mat4_simd rot1 = SHUFFLE_VEC(pRot->simd,
+  const mat4_simd rot1 = SIMD_SHUFFLE(pRot->simd,
                                      MAT_C0_R1, MAT_C0_R1, MAT_C0_R1, MAT_C0_R1,
                                      MAT_C1_R1, MAT_C1_R1, MAT_C1_R1, MAT_C1_R1,
                                      MAT_C2_R1, MAT_C2_R1, MAT_C2_R1, MAT_C2_R1,
                                      SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
-  const mat4_simd src2 = SHUFFLE_VEC(pSrc->simd,
+  const mat4_simd src2 = SIMD_SHUFFLE(pSrc->simd,
                                      MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
                                      MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
                                      MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
                                      SIMD_NIL, SIMD_NIL, SIMD_NIL, SIMD_NIL);
-  const mat4_simd rot2 = SHUFFLE_VEC(pRot->simd,
+  const mat4_simd rot2 = SIMD_SHUFFLE(pRot->simd,
                                      MAT_C0_R2, MAT_C0_R2, MAT_C0_R2, MAT_C0_R2,
                                      MAT_C1_R2, MAT_C1_R2, MAT_C1_R2, MAT_C1_R2,
                                      MAT_C2_R2, MAT_C2_R2, MAT_C2_R2, MAT_C2_R2,
@@ -318,42 +318,42 @@ MATH_INLINE void Mat4MulRot(const mat4* pSrc, const mat4* pRot, mat4* pDst) {
   pDst->c3.simd = pSrc->c3.simd;
 }
 MATH_INLINE void Mat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDst) {
-  const mat4_simd src0 = SHUFFLE_VEC(pLeft->simd,
+  const mat4_simd src0 = SIMD_SHUFFLE(pLeft->simd,
                                      MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                      MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                      MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                      MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3);
-  const mat4_simd rot0 = SHUFFLE_VEC(pRight->simd,
+  const mat4_simd rot0 = SIMD_SHUFFLE(pRight->simd,
                                      MAT_C0_R0, MAT_C0_R0, MAT_C0_R0, MAT_C0_R0,
                                      MAT_C1_R0, MAT_C1_R0, MAT_C1_R0, MAT_C1_R0,
                                      MAT_C2_R0, MAT_C2_R0, MAT_C2_R0, MAT_C2_R0,
                                      MAT_C3_R0, MAT_C3_R0, MAT_C3_R0, MAT_C3_R0);
-  const mat4_simd src1 = SHUFFLE_VEC(pLeft->simd,
+  const mat4_simd src1 = SIMD_SHUFFLE(pLeft->simd,
                                      MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
                                      MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
                                      MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
                                      MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3);
-  const mat4_simd rot1 = SHUFFLE_VEC(pRight->simd,
+  const mat4_simd rot1 = SIMD_SHUFFLE(pRight->simd,
                                      MAT_C0_R1, MAT_C0_R1, MAT_C0_R1, MAT_C0_R1,
                                      MAT_C1_R1, MAT_C1_R1, MAT_C1_R1, MAT_C1_R1,
                                      MAT_C2_R1, MAT_C2_R1, MAT_C2_R1, MAT_C2_R1,
                                      MAT_C3_R1, MAT_C3_R1, MAT_C3_R1, MAT_C3_R1);
-  const mat4_simd src2 = SHUFFLE_VEC(pLeft->simd,
+  const mat4_simd src2 = SIMD_SHUFFLE(pLeft->simd,
                                      MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
                                      MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
                                      MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
                                      MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3);
-  const mat4_simd rot2 = SHUFFLE_VEC(pRight->simd,
+  const mat4_simd rot2 = SIMD_SHUFFLE(pRight->simd,
                                      MAT_C0_R2, MAT_C0_R2, MAT_C0_R2, MAT_C0_R2,
                                      MAT_C1_R2, MAT_C1_R2, MAT_C1_R2, MAT_C1_R2,
                                      MAT_C2_R2, MAT_C2_R2, MAT_C2_R2, MAT_C2_R2,
                                      MAT_C3_R2, MAT_C3_R2, MAT_C3_R2, MAT_C3_R2);
-  const mat4_simd src3 = SHUFFLE_VEC(pLeft->simd,
+  const mat4_simd src3 = SIMD_SHUFFLE(pLeft->simd,
                                      MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
                                      MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
                                      MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
                                      MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3);
-  const mat4_simd rot3 = SHUFFLE_VEC(pRight->simd,
+  const mat4_simd rot3 = SIMD_SHUFFLE(pRight->simd,
                                      MAT_C0_R3, MAT_C0_R3, MAT_C0_R3, MAT_C0_R3,
                                      MAT_C1_R3, MAT_C1_R3, MAT_C1_R3, MAT_C1_R3,
                                      MAT_C2_R3, MAT_C2_R3, MAT_C2_R3, MAT_C2_R3,
@@ -589,12 +589,12 @@ static void CreateStandardPipelineLayout() {
 const VkFormat          GBufferFormat = VK_FORMAT_R32_SFLOAT;
 const VkImageUsageFlags GBufferUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 
-typedef enum RenderPassAttachment {
+enum RenderPassAttachment {
   RENDERPASS_COLOR_ATTACHMENT,
   RENDERPASS_NORMAL_ATTACHMENT,
   RENDERPASS_DEPTH_ATTACHMENT,
   RENDERPASS_ATTACHMENT_COUNT,
-} RenderPassAttachment;
+};
 const VkFormat RenderPassFormats[] = {
     [RENDERPASS_COLOR_ATTACHMENT] = VK_FORMAT_R8G8B8A8_UNORM,
     [RENDERPASS_NORMAL_ATTACHMENT] = VK_FORMAT_R16G16B16A16_SFLOAT,
@@ -1142,7 +1142,6 @@ void mxcInitContext() {
            VK_API_VERSION_MINOR(instanceCreationInfo.pApplicationInfo->apiVersion),
            VK_API_VERSION_PATCH(instanceCreationInfo.pApplicationInfo->apiVersion));
   }
-
   {
     VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = 0;
     // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
@@ -1162,7 +1161,6 @@ void mxcInitContext() {
     PFN_LOAD(vkCreateDebugUtilsMessengerEXT);
     VK_REQUIRE(vkCreateDebugUtilsMessengerEXT(context.instance, &debugUtilsMessengerCreateInfo, VK_ALLOC, &context.debugUtilsMessenger));
   }
-
   {  // PhysicalDevice
     uint32_t deviceCount = 0;
     VK_REQUIRE(vkEnumeratePhysicalDevices(context.instance, &deviceCount, NULL));
@@ -1179,11 +1177,9 @@ void mxcInitContext() {
            VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
     REQUIRE(physicalDeviceProperties.properties.apiVersion >= VK_VERSION, "Insufficinet Vulkan API Version");
   }
-
   {  // Surface
     VK_REQUIRE(mxcCreateSurface(context.instance, VK_ALLOC, &context.surface));
   }
-
   {  // QueueIndices
     const QueueDesc graphicsQueueDesc = {.graphics = SUPPORT_YES, .compute = SUPPORT_YES, .transfer = SUPPORT_YES, .globalPriority = SUPPORT_YES, .presentSurface = context.surface};
     context.graphicsQueueFamilyIndex = FindQueueIndex(context.physicalDevice, &graphicsQueueDesc);
@@ -1192,7 +1188,6 @@ void mxcInitContext() {
     const QueueDesc transferQueueDesc = {.graphics = SUPPORT_NO, .compute = SUPPORT_NO, .transfer = SUPPORT_YES};
     context.transferQueueFamilyIndex = FindQueueIndex(context.physicalDevice, &transferQueueDesc);
   }
-
   {  // Device
     const VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT,
@@ -1289,7 +1284,6 @@ void mxcInitContext() {
     };
     VK_REQUIRE(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &context.device));
   }
-
   {  // Queues
     vkGetDeviceQueue(context.device, context.graphicsQueueFamilyIndex, 0, &context.graphicsQueue);
     REQUIRE((context.graphicsQueue != NULL), "graphicsQueue not found!");
@@ -1298,9 +1292,7 @@ void mxcInitContext() {
     vkGetDeviceQueue(context.device, context.transferQueueFamilyIndex, 0, &context.transferQueue);
     REQUIRE((context.transferQueue != NULL), "transferQueue not found!");
   }
-
   // PFN_LOAD(vkSetDebugUtilsObjectNameEXT);
-
   {  // RenderPass
 #define DEFAULT_ATTACHMENT_DESCRIPTION                \
   .samples = VK_SAMPLE_COUNT_1_BIT,                   \
@@ -1340,7 +1332,6 @@ void mxcInitContext() {
     VK_REQUIRE(vkCreateRenderPass(context.device, &renderPassCreateInfo, VK_ALLOC, &context.renderPass));
 #undef DEFAULT_ATTACHMENT_DESCRIPTION
   }
-
   {  // Pools
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -1373,7 +1364,6 @@ void mxcInitContext() {
     };
     VK_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VK_ALLOC, &context.timeQueryPool));
   }
-
   {  // CommandBuffers
     const VkCommandBufferAllocateInfo graphicsCommandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -1388,7 +1378,6 @@ void mxcInitContext() {
     };
     VK_REQUIRE(vkAllocateCommandBuffers(context.device, &computeCommandBufferAllocateInfo, &context.computeCommandBuffer));
   }
-
   {
 #define DEFAULT_LINEAR_SAMPLER                           \
   .magFilter = VK_FILTER_LINEAR,                         \
@@ -1435,7 +1424,6 @@ void mxcInitContext() {
 
 #undef DEFAULT_LINEAR_SAMPLER
   }
-
   {  // Swapchain
     const VkSwapchainCreateInfoKHR swapchainCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1469,7 +1457,6 @@ void mxcInitContext() {
       TransitionImageLayoutImmediate(&UndefinedImageBarrier, &PresentImageBarrier, VK_IMAGE_ASPECT_COLOR_BIT, context.swapImages[i]);
     }
   }
-
   {  // Semaphores
     const VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     VK_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &context.acquireSwapSemaphore));
@@ -1483,14 +1470,12 @@ void mxcInitContext() {
     };
     VK_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VK_ALLOC, &context.timelineSemaphore));
   }
-
   {  // Global Descriptor
     CreateGlobalSetLayout();
     AllocateDescriptorSet(&context.globalSetLayout, &context.globalSet);
     CreateAllocateBindBuffer(MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(GlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &context.globalSetMemory, &context.globalSetBuffer);
     VK_REQUIRE(vkMapMemory(context.device, context.globalSetMemory, 0, sizeof(GlobalSetState), 0, (void**)&context.pGlobalSetMapped));
   }
-
   {  // Standard Pipeline
     CreateStandardMaterialSetLayout();
     CreateStandardObjectSetLayout();
