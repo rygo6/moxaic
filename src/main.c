@@ -19,9 +19,10 @@ void Panic(const char* file, const int line, const char* message) {
 int main(void) {
   mxCreateWindow();
   mxcInitContext();
+  mxcRenderNodeInit();
 
-  if (mxcRenderNode()) {
-    return 1;
+  while (isRunning) {
+    mxcRenderNodeUpdate();
   }
 
   return 0;
