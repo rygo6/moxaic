@@ -1,8 +1,4 @@
-//
-// Created by Ryan on 4/21/2024.
-//
+#pragma once
 
-#ifndef MOXAIC_TEST_NODE_H
-#define MOXAIC_TEST_NODE_H
-
-#endif  //MOXAIC_TEST_NODE_H
+void mxcTestNodeUpdate();
+void mxcTestNodeInit(const MvkContext* pContext);

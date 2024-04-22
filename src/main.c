@@ -1,6 +1,7 @@
 #include "globals.h"
 #include "renderer.h"
 #include "window.h"
+#include "test_node.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -18,11 +19,11 @@ void Panic(const char* file, const int line, const char* message) {
 
 int main(void) {
   mxCreateWindow();
-  mxcInitContext();
-  mxcRenderNodeInit();
+  const MvkContext* pContext = mxcInitRendererContext();
+  mxcTestNodeInit(pContext);
 
   while (isRunning) {
-    mxcRenderNodeUpdate();
+    mxcTestNodeUpdate();
   }
 
   return 0;
