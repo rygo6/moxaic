@@ -23,7 +23,7 @@ enum VertexAttributes {
   VERTEX_ATTRIBUTE_COUNT,
 };
 
-static MvkContext context;
+static VkmContext context;
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -116,9 +116,9 @@ static VkShaderModule CreateShaderModule(const char* pShaderPath) {
 // Standard Pipeline
 static void CreateStandardPipelineLayout() {
   VkDescriptorSetLayout pSetLayouts[PIPE_SET_BINDING_STANDARD_COUNT];
-  pSetLayouts[PIPE_SET_BINDING_STANDARD_GLOBAL] = context.globalSetLayout;
-  pSetLayouts[PIPE_SET_BINDING_STANDARD_MATERIAL] = context.materialSetLayout;
-  pSetLayouts[PIPE_SET_BINDING_STANDARD_OBJECT] = context.objectSetLayout;
+  pSetLayouts[MVK_PIPE_SET_BINDING_STANDARD_GLOBAL] = context.globalSetLayout;
+  pSetLayouts[MVK_PIPE_SET_BINDING_STANDARD_MATERIAL] = context.materialSetLayout;
+  pSetLayouts[MVK_PIPE_SET_BINDING_STANDARD_OBJECT] = context.objectSetLayout;
   const VkPipelineLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = PIPE_SET_BINDING_STANDARD_COUNT,
@@ -389,7 +389,7 @@ static void PopulateBufferViaStaging(const void* srcData, const VkDeviceSize buf
 
 static void TransitionImageLayoutImmediate(const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image) {
   const VkCommandBuffer commandBuffer = BeginImmediateCommandBuffer(context.graphicsCommandPool);
-  CommandImageBarrier(commandBuffer, pSrc, pDst, aspectMask, image);
+  vkmCommandImageBarrier(commandBuffer, pSrc, pDst, aspectMask, image);
   EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
 }
 
@@ -434,24 +434,26 @@ void CreateTextureFromFile(const char* pPath, Texture* pTexture) {
   stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
   REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
   const VkDeviceSize imageBufferSize = width * height * 4;
+  pTexture->extent = (VkExtent3D){width, height, 1};
+
   VkBuffer           stagingBuffer;
   VkDeviceMemory     stagingBufferMemory;
   CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
   stbi_image_free(pImagePixels);
 
   VkImageCreateInfo imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
-  imageCreateInfo.extent = (VkExtent3D){width, height, 1.0f};
+  imageCreateInfo.extent = pTexture->extent;
   imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
   CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pTexture->imageMemory, &pTexture->image, &pTexture->imageView);
 
   const VkCommandBuffer commandBuffer = BeginImmediateCommandBuffer(context.graphicsCommandPool);
-  CommandImageBarrier(commandBuffer, &UNDEFINED_IMAGE_BARRIER, &TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image);
+  vkmCommandImageBarrier(commandBuffer, &UNDEFINED_IMAGE_BARRIER, &TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image);
   const VkBufferImageCopy region = {
       .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
       .imageExtent = {width, height, 1},
   };
   vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-  CommandImageBarrier(commandBuffer, &TRANSFER_DST_IMAGE_BARRIER, &SHADER_READ_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image);
+  vkmCommandImageBarrier(commandBuffer, &TRANSFER_DST_IMAGE_BARRIER, &SHADER_READ_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image);
   EndImmediateCommandBuffer(context.graphicsCommandPool, context.graphicsQueue, commandBuffer);
 }
 
@@ -510,7 +512,7 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const Queu
   return -1;
 }
 
-const MvkContext* mxcInitRendererContext() {
+const VkmContext* mxcInitRendererContext() {
   {  // Instance
     const char* ppEnabledLayerNames[] = {
         "VK_LAYER_KHRONOS_validation",

@@ -1,4 +1,4 @@
 #pragma once
 
 void mxcTestNodeUpdate();
-void mxcTestNodeInit(const MvkContext* pContext);
+void mxcTestNodeInit(const VkmContext* pContext);

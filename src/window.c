@@ -2,7 +2,6 @@
 #include "globals.h"
 
 #include <assert.h>
-#include <stdio.h>
 #include <windows.h>
 #include <windowsx.h>
 
@@ -12,10 +11,10 @@
 #define WINDOW_NAME "moxaic"
 #define CLASS_NAME  "MoxaicWindowClass"
 
-const char* WindowExtensionName             = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
-const char* ExternalMemoryExntensionName    = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
+const char* WindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+const char* ExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
 const char* ExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
-const char* ExternalFenceExntensionName     = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
+const char* ExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
 
 Input input;
 
@@ -24,24 +23,22 @@ static struct {
   HWND      hwnd;
   int       width;
   int       height;
-  int       localCenterX;
-  int       localCenterY;
-  int       globalCenterX;
-  int       globalCenterY;
+  POINT     localCenter;
+  POINT     globalCenter;
 } window;
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
     case WM_MOUSEMOVE: {
       if (input.mouseLocked) {
-        const int   xPos        = GET_X_LPARAM(lParam);
-        const int   yPos        = GET_Y_LPARAM(lParam);
-        const int   deltaXPos   = xPos - window.localCenterX;
-        const int   deltaYPos   = yPos - window.localCenterX;
+        const int   xPos = GET_X_LPARAM(lParam);
+        const int   yPos = GET_Y_LPARAM(lParam);
+        const int   deltaXPos = xPos - window.localCenter.x;
+        const int   deltaYPos = yPos - window.localCenter.y;
         const float sensitivity = .001f;
-        input.mouseDeltaX       = (float)deltaXPos * sensitivity;
-        input.mouseDeltaY       = (float)deltaYPos * sensitivity;
-        SetCursorPos(window.globalCenterX, window.globalCenterY);
+        input.mouseDeltaX = (float)deltaXPos * sensitivity;
+        input.mouseDeltaY = (float)deltaYPos * sensitivity;
+        SetCursorPos(window.globalCenter.x, window.globalCenter.y);
       }
       return 0;
     }
@@ -50,11 +47,9 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
       SetCapture(window.hwnd);
       RECT rect;
       GetClientRect(window.hwnd, &rect);
-      window.globalCenterX = window.localCenterX = (rect.right - rect.left) / 2;
-      window.globalCenterY = window.localCenterY = (rect.bottom - rect.top) / 2;
-      ClientToScreen(window.hwnd, (POINT*)&window.globalCenterX);
-      ClientToScreen(window.hwnd, (POINT*)&window.globalCenterY);
-      SetCursorPos(window.globalCenterX, window.globalCenterY);
+      window.globalCenter = window.localCenter = (POINT){(rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2};
+      ClientToScreen(window.hwnd, (POINT*)&window.globalCenter);
+      SetCursorPos(window.globalCenter.x, window.globalCenter.y);
       input.mouseLocked = true;
       return 0;
     case WM_LBUTTONUP:
@@ -100,19 +95,19 @@ void mxUpdateWindowInput() {
 }
 
 void mxCreateWindow() {
-  window.hInstance           = GetModuleHandle(NULL);
+  window.hInstance = GetModuleHandle(NULL);
   const DWORD    windowStyle = WS_OVERLAPPEDWINDOW;
-  const WNDCLASS wc          = {.lpfnWndProc   = WindowProc,
-                                .hInstance     = window.hInstance,
-                                .lpszClassName = CLASS_NAME};
+  const WNDCLASS wc = {.lpfnWndProc = WindowProc,
+                       .hInstance = window.hInstance,
+                       .lpszClassName = CLASS_NAME};
   RegisterClass(&wc);
   RECT rect = {.right = DEFAULT_WIDTH, .bottom = DEFAULT_HEIGHT};
   AdjustWindowRect(&rect, windowStyle, FALSE);
-  window.width  = rect.right - rect.left;
+  window.width = rect.right - rect.left;
   window.height = rect.bottom - rect.top;
-  window.hwnd   = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle,
-                                 CW_USEDEFAULT, CW_USEDEFAULT, window.width, window.height,
-                                 NULL, NULL, window.hInstance, NULL);
+  window.hwnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle,
+                               CW_USEDEFAULT, CW_USEDEFAULT, window.width, window.height,
+                               NULL, NULL, window.hInstance, NULL);
   REQUIRE(window.hwnd != NULL, "Failed to create window.");
   ShowWindow(window.hwnd, SW_SHOW);
   UpdateWindow(window.hwnd);
@@ -124,9 +119,9 @@ VkResult mxcCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAll
       "vkCreateWin32SurfaceKHR");
   assert(vkCreateWin32SurfaceKHR != NULL && "Couldn't load PFN_vkCreateWin32SurfaceKHR");
   VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
-      .sType     = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+      .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
       .hinstance = window.hInstance,
-      .hwnd      = window.hwnd,
+      .hwnd = window.hwnd,
   };
   return vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
 }

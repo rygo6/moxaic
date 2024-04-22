@@ -42,16 +42,16 @@ static struct {
 void mxcTestNodeUpdate() {
   mxUpdateWindowInput();
 
-  if (mxcProcessInput(&node.cameraTransform)) {
-    mxcUpdateGlobalSetView(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
+  if (mvkProcessInput(&node.cameraTransform)) {
+    mvkUpdateGlobalSetView(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
   }
-  mxcResetBeginCommandBuffer(node.cmd);
-  mxcBeginPass(node.cmd, node.pass, node.framebuffers[node.framebufferIndex]);
+  vkmResetBeginCommandBuffer(node.cmd);
+  vkmBeginPass(node.cmd, node.pass, node.framebuffers[node.framebufferIndex]);
 
   vkCmdBindPipeline(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipeline);
-  vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, PIPE_SET_BINDING_STANDARD_GLOBAL, 1, &node.globalSet, 0, NULL);
-  vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, PIPE_SET_BINDING_STANDARD_MATERIAL, 1, &node.checkerMaterialSet, 0, NULL);
-  vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, PIPE_SET_BINDING_STANDARD_OBJECT, 1, &node.sphereObjectSet, 0, NULL);
+  vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, MVK_PIPE_SET_BINDING_STANDARD_GLOBAL, 1, &node.globalSet, 0, NULL);
+  vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, MVK_PIPE_SET_BINDING_STANDARD_MATERIAL, 1, &node.checkerMaterialSet, 0, NULL);
+  vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, MVK_PIPE_SET_BINDING_STANDARD_OBJECT, 1, &node.sphereObjectSet, 0, NULL);
 
   vkCmdBindVertexBuffers(node.cmd, 0, 1, (VkBuffer[]){node.sphereVertexBuffer}, (VkDeviceSize[]){0});
   vkCmdBindIndexBuffer(node.cmd, node.sphereIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
@@ -61,19 +61,13 @@ void mxcTestNodeUpdate() {
 
   vkAcquireNextImageKHR(node.device, node.swap.chain, UINT64_MAX, node.swap.acquireSemaphore, VK_NULL_HANDLE, &node.swap.index);
 
-  mxcBlit(node.cmd, node.frameBufferColorImages[node.framebufferIndex], node.swapImages[node.swap.index]);
+  vkmBlit(node.cmd, node.frameBufferColorImages[node.framebufferIndex], node.swapImages[node.swap.index]);
 
   vkEndCommandBuffer(node.cmd);
 
-  mxcSubmitPresentCommandBuffer(node.cmd, node.graphicsQueue, &node.swap, &node.timeline);
+  vkmSubmitPresentCommandBuffer(node.cmd, node.graphicsQueue, &node.swap, &node.timeline);
 
-  const VkSemaphoreWaitInfo semaphoreWaitInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-      .semaphoreCount = 1,
-      .pSemaphores = &node.timeline.semaphore,
-      .pValues = &node.timeline.waitValue,
-  };
-  VK_REQUIRE(vkWaitSemaphores(node.device, &semaphoreWaitInfo, UINT64_MAX));
+  TimelineWait(node.device, &node.timeline);
 }
 
 static struct {
@@ -84,16 +78,16 @@ static struct {
   VkDeviceMemory globalSetMemory;
   VkBuffer       globalSetBuffer;
 
-  StandardObjectSetState* pSphereObjectSetMapped;
+  VkmStandardObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory          sphereObjectSetMemory;
   VkBuffer                sphereObjectSetBuffer;
 
   Transform              sphereTransform;
-  StandardObjectSetState sphereObjectState;
+  VkmStandardObjectSetState sphereObjectState;
 
 } nodeInit;
 
-void mxcTestNodeInit(const MvkContext* pContext) {
+void mxcTestNodeInit(const VkmContext* pContext) {
   CreateFramebuffers(VK_SWAP_COUNT, nodeInit.framebuffers);
 
   CreateSphereMeshBuffers(0.5f, 32, 32, &nodeInit.sphereMesh);
@@ -105,7 +99,7 @@ void mxcTestNodeInit(const MvkContext* pContext) {
   CreateTextureFromFile("textures/uvgrid.jpg", &nodeInit.checkerTexture);
 
   AllocateDescriptorSet(&pContext->objectSetLayout, &node.sphereObjectSet);
-  CreateAllocateBindMapBuffer(MEMORY_HOST_VISIBLE_COHERENT, sizeof(StandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &nodeInit.sphereObjectSetMemory, &nodeInit.sphereObjectSetBuffer, (void**)&nodeInit.pSphereObjectSetMapped);
+  CreateAllocateBindMapBuffer(MEMORY_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &nodeInit.sphereObjectSetMemory, &nodeInit.sphereObjectSetBuffer, (void**)&nodeInit.pSphereObjectSetMapped);
 
   const VkWriteDescriptorSet writeSets[] = {
       SET_WRITE_GLOBAL(node.globalSet, nodeInit.globalSetBuffer),
