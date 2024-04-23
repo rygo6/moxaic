@@ -28,8 +28,8 @@
     LOG_ERROR(command, string_VkResult(result));   \
     goto cleanup_goto;                             \
   }
-#define VKM_PFN_LOAD(vkFunction)                                                                        \
-  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
+#define VKM_PFN_LOAD(instance, vkFunction)                                                      \
+  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -150,23 +150,17 @@ typedef struct VkmStandardObjectSetState {
 } VkmStandardObjectSetState;
 
 typedef struct VkmContext {
-  VkInstance       instance;
+
   VkSurfaceKHR     surface;
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
   VkRenderPass     renderPass;
   VkmTimeline      timeline;
+  VkDescriptorPool descriptorPool;
+  VkQueryPool timeQueryPool;
 
   VkmSwap     swap;
   VkImage     swapImages[VKM_SWAP_COUNT];
-  VkImageView swapImageViews[VKM_SWAP_COUNT];
-
-  VkDescriptorSetLayout globalSetLayout;
-  VkDescriptorSetLayout materialSetLayout;
-  VkDescriptorSetLayout objectSetLayout;
-
-  VkPipelineLayout standardPipelineLayout;
-  VkPipeline       standardPipeline;
 
   VkSampler nearestSampler;
   VkSampler linearSampler;
@@ -183,16 +177,22 @@ typedef struct VkmContext {
   uint32_t        computeQueueFamilyIndex;
   VkQueue         computeQueue;
 
-  uint32_t transferQueueFamilyIndex;
-  VkQueue  transferQueue;
-
-  VkDescriptorPool descriptorPool;
-
-  VkQueryPool timeQueryPool;
-
-  VkDebugUtilsMessengerEXT debugUtilsMessenger;
+  VkCommandPool   transitionCommandPool;
+  VkCommandBuffer transitionCommandBuffer;
+  uint32_t        transferQueueFamilyIndex;
+  VkQueue         transferQueue;
 
 } VkmContext;
+
+typedef struct VkmStandardPipeline {
+  VkPipelineLayout pipelineLayout;
+  VkPipeline       pipeline;
+
+  VkDescriptorSetLayout globalSetLayout;
+  VkDescriptorSetLayout materialSetLayout;
+  VkDescriptorSetLayout objectSetLayout;
+
+} VkmStandardPipe;
 
 //----------------------------------------------------------------------------------
 // Render
@@ -561,12 +561,12 @@ typedef struct VkmImageBarrier {
   VkImageLayout            layout;
   // QueueBarrier             queueFamily;
 } VkmImageBarrier;
-static const VkmImageBarrier* VKM_UNDEFINED_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const VkmImageBarrier* VKM_PRESENT_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_PRESENT = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -621,7 +621,7 @@ static inline void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, co
   };
   vkCmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-static inline void vkmBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkFramebuffer framebuffer) {
+static inline void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkFramebuffer framebuffer) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .renderPass = renderPass,
@@ -636,7 +636,7 @@ static inline void vkmBeginPass(const VkCommandBuffer cmd, const VkRenderPass re
   };
   vkCmdBeginRenderPass(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
-static inline void vkmResetBeginCommandBuffer(const VkCommandBuffer commandBuffer) {
+static inline void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
@@ -735,10 +735,43 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   return inputDirty;
 }
 
-void            CreateFramebuffers(const uint32_t framebufferCount, VkmFramebuffer* pFrameBuffers);
-void            CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
-VkDescriptorSet AllocateDescriptorSet(const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void            CreateAllocateBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
-void            CreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
+void VkmBindContext(const VkmContext* pContext);
+void VkmCreateFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, VkmFramebuffer* pFrameBuffers);
+void VkmCreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
+void VkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void VkmCreateAllocateBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
+void VkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
+void VkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
 
-const VkmContext* mxcInitRendererContext();
+typedef enum VkmSupport {
+  VKM_SUPPORT_OPTIONAL,
+  VKM_SUPPORT_YES,
+  VKM_SUPPORT_NO,
+  VKM_SUPPORT_COUNT,
+} VkmSupport;
+static const char* string_Support[] = {
+    [VKM_SUPPORT_OPTIONAL] = "SUPPORT_OPTIONAL",
+    [VKM_SUPPORT_YES] = "SUPPORT_YES",
+    [VKM_SUPPORT_NO] = "SUPPORT_NO",
+};
+typedef struct VkmQueueInfo {
+  VkmSupport   graphics;
+  VkmSupport   compute;
+  VkmSupport   transfer;
+  VkmSupport   globalPriority;
+  VkSurfaceKHR presentSurface;
+} VkmQueueInfo;
+
+typedef struct VkmInstance {
+  VkInstance               instance;
+  VkDebugUtilsMessengerEXT debugUtilsMessenger;
+} VkmInstance;
+
+typedef struct VkmContextCreateInfo {
+  VkInstance    instance;
+  uint32_t      queueInfoCount;
+  VkmQueueInfo* pQueueInfos;
+} VkmContextCreateInfo;
+
+void mxcCreateInstance(VkmInstance* pInstance);
+void vkmCreateContext(const VkmContextCreateInfo* pCreateInfo, VkmContext* pContext);
