@@ -12,15 +12,15 @@
 #define CLASS_NAME  "MoxaicWindowClass"
 
 const char* WindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
-const char* ExternalMemoryExntensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
-const char* ExternalSemaphoreExntensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
-const char* ExternalFenceExntensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
+const char* ExternalMemoryExtensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
+const char* ExternalSemaphoreExtensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
+const char* ExternalFenceExtensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
 
 Input input;
 
 static struct {
   HINSTANCE hInstance;
-  HWND      hwnd;
+  HWND      hWnd;
   int       width;
   int       height;
   POINT     localCenter;
@@ -29,7 +29,7 @@ static struct {
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
-    case WM_MOUSEMOVE: {
+    case WM_MOUSEMOVE:
       if (input.mouseLocked) {
         const int   xPos = GET_X_LPARAM(lParam);
         const int   yPos = GET_Y_LPARAM(lParam);
@@ -41,14 +41,13 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         SetCursorPos(window.globalCenter.x, window.globalCenter.y);
       }
       return 0;
-    }
     case WM_LBUTTONDOWN:
       ShowCursor(FALSE);
-      SetCapture(window.hwnd);
+      SetCapture(window.hWnd);
       RECT rect;
-      GetClientRect(window.hwnd, &rect);
+      GetClientRect(window.hWnd, &rect);
       window.globalCenter = window.localCenter = (POINT){(rect.right - rect.left) / 2, (rect.bottom - rect.top) / 2};
-      ClientToScreen(window.hwnd, (POINT*)&window.globalCenter);
+      ClientToScreen(window.hWnd, (POINT*)&window.globalCenter);
       SetCursorPos(window.globalCenter.x, window.globalCenter.y);
       input.mouseLocked = true;
       return 0;
@@ -73,18 +72,16 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case 'A': input.moveLeft = false; return 0;
         default:  return 0;
       }
-    case WM_CLOSE: {
+    case WM_CLOSE:
       isRunning = false;
       PostQuitMessage(0);
       return 0;
-    }
-    default: {
+    default:
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
-    }
   }
 }
 
-void mxUpdateWindowInput() {
+void vkmUpdateWindowInput() {
   input.mouseDeltaX = 0;
   input.mouseDeltaY = 0;
   static MSG msg;
@@ -94,26 +91,22 @@ void mxUpdateWindowInput() {
   }
 }
 
-void mxCreateWindow() {
+void vkmCreateWindow() {
   window.hInstance = GetModuleHandle(NULL);
   const DWORD    windowStyle = WS_OVERLAPPEDWINDOW;
-  const WNDCLASS wc = {.lpfnWndProc = WindowProc,
-                       .hInstance = window.hInstance,
-                       .lpszClassName = CLASS_NAME};
+  const WNDCLASS wc = {.lpfnWndProc = WindowProc, .hInstance = window.hInstance, .lpszClassName = CLASS_NAME};
   RegisterClass(&wc);
   RECT rect = {.right = DEFAULT_WIDTH, .bottom = DEFAULT_HEIGHT};
   AdjustWindowRect(&rect, windowStyle, FALSE);
   window.width = rect.right - rect.left;
   window.height = rect.bottom - rect.top;
-  window.hwnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle,
-                               CW_USEDEFAULT, CW_USEDEFAULT, window.width, window.height,
-                               NULL, NULL, window.hInstance, NULL);
-  REQUIRE(window.hwnd != NULL, "Failed to create window.");
-  ShowWindow(window.hwnd, SW_SHOW);
-  UpdateWindow(window.hwnd);
+  window.hWnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle, CW_USEDEFAULT, CW_USEDEFAULT, window.width, window.height, NULL, NULL, window.hInstance, NULL);
+  REQUIRE(window.hWnd != NULL, "Failed to create window.");
+  ShowWindow(window.hWnd, SW_SHOW);
+  UpdateWindow(window.hWnd);
 }
 
-VkResult mxcCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
+VkResult vkmCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
   PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(
       instance,
       "vkCreateWin32SurfaceKHR");
@@ -121,7 +114,7 @@ VkResult mxcCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAll
   VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
       .hinstance = window.hInstance,
-      .hwnd = window.hwnd,
+      .hwnd = window.hWnd,
   };
   return vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
 }

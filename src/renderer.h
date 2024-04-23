@@ -10,10 +10,14 @@
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
 
-#define VK_ALLOC      NULL
-#define VK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
-#define VK_SWAP_COUNT 2
-#define VK_REQUIRE(command)                                 \
+//----------------------------------------------------------------------------------
+// Globals
+//----------------------------------------------------------------------------------
+
+#define VKM_ALLOC      NULL
+#define VKM_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
+#define VKM_SWAP_COUNT 2
+#define VKM_REQUIRE(command)                                \
   {                                                         \
     VkResult result = command;                              \
     REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
@@ -24,74 +28,90 @@
     LOG_ERROR(command, string_VkResult(result));   \
     goto cleanup_goto;                             \
   }
-#define VK_PFN_LOAD(vkFunction)                                                                         \
+#define VKM_PFN_LOAD(vkFunction)                                                                        \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(context.instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
-#define PI 3.14159265358979323846f
+#define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+#define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
-#define SIMD_TYPE(type, name, count) typedef type name##_simd __attribute__((vector_size(sizeof(type) * count)))
-#define MATH_UNION(type, simd_type, name, align, count, vec_name, ...) \
-  typedef union __attribute((aligned(align))) name {                   \
-    type vec_name[count];                                              \
-    struct {                                                           \
-      type __VA_ARGS__;                                                \
-    };                                                                 \
-    simd_type simd;                                                    \
+//----------------------------------------------------------------------------------
+// Math Types
+//----------------------------------------------------------------------------------
+
+#define VKM_SIMD_TYPE(type, name, count) typedef type name##_simd __attribute__((vector_size(sizeof(type) * count)))
+#define VKM_MATH_UNION(type, simd_type, name, align, count, vec_name, ...) \
+  typedef union __attribute((aligned(align))) name {                       \
+    type vec_name[count];                                                  \
+    struct {                                                               \
+      type __VA_ARGS__;                                                    \
+    };                                                                     \
+    simd_type simd;                                                        \
   } name;
-SIMD_TYPE(float, float2, 2);
-SIMD_TYPE(uint32_t, int2, 2);
-SIMD_TYPE(float, float3, 4);
-SIMD_TYPE(uint32_t, int3, 4);
-SIMD_TYPE(float, float4, 4);
-SIMD_TYPE(uint32_t, int4, 4);
-SIMD_TYPE(float, mat4, 16);
-MATH_UNION(float, float2_simd, vec2, 8, 2, vec, x, y);
-MATH_UNION(uint32_t, int2_simd, ivec2, 16, 2, vec, x, y);
-MATH_UNION(float, float3_simd, vec3, 16, 3, vec, x, y, z);
-MATH_UNION(uint32_t, int3_simd, ivec3, 16, 3, vec, x, y, z);
-MATH_UNION(float, float4_simd, vec4, 16, 4, vec, x, y, z, w);
-MATH_UNION(uint32_t, int4_simd, ivec4, 16, 4, vec, x, y, z, w);
-MATH_UNION(float, float4_simd, mat4_row, 16, 4, row, r0, r1, r2, r3);
-MATH_UNION(mat4_row, mat4_simd, mat4, 16, 4, col, c0, c1, c2, c3);
+VKM_SIMD_TYPE(float, float2, 2);
+VKM_SIMD_TYPE(uint32_t, int2, 2);
+VKM_SIMD_TYPE(float, float3, 4);
+VKM_SIMD_TYPE(uint32_t, int3, 4);
+VKM_SIMD_TYPE(float, float4, 4);
+VKM_SIMD_TYPE(uint32_t, int4, 4);
+VKM_SIMD_TYPE(float, mat4, 16);
+VKM_MATH_UNION(float, float2_simd, vec2, 8, 2, vec, x, y);
+VKM_MATH_UNION(uint32_t, int2_simd, ivec2, 16, 2, vec, x, y);
+VKM_MATH_UNION(float, float3_simd, vec3, 16, 3, vec, x, y, z);
+VKM_MATH_UNION(uint32_t, int3_simd, ivec3, 16, 3, vec, x, y, z);
+VKM_MATH_UNION(float, float4_simd, vec4, 16, 4, vec, x, y, z, w);
+VKM_MATH_UNION(uint32_t, int4_simd, ivec4, 16, 4, vec, x, y, z, w);
+VKM_MATH_UNION(float, float4_simd, mat4_row, 16, 4, row, r0, r1, r2, r3);
+VKM_MATH_UNION(mat4_row, mat4_simd, mat4, 16, 4, col, c0, c1, c2, c3);
 typedef vec4 quat;
+#define VKM_PI 3.14159265358979323846f
 
-typedef struct Timeline {
+//----------------------------------------------------------------------------------
+// Types
+//----------------------------------------------------------------------------------
+
+typedef struct VkmTimeline {
   VkSemaphore semaphore;
   uint64_t    waitValue;
-} Timeline;
+} VkmTimeline;
 
-typedef struct Swap {
+typedef struct VkmSwap {
   VkSwapchainKHR chain;
   VkSemaphore    acquireSemaphore;
   VkSemaphore    renderCompleteSemaphore;
   uint32_t       index;
-} Swap;
+} VkmSwap;
 
-typedef struct Transform {
+typedef struct VkmTransform {
   vec3 position;
   vec3 euler;
   vec4 rotation;
-} Transform;
+} VkmTransform;
 
-typedef struct Texture {
+typedef struct VkmTexture {
   VkImage        image;
   VkImageView    imageView;
   VkDeviceMemory imageMemory;
   VkFormat       format;
   VkExtent3D     extent;
-} Texture;
+} VkmTexture;
 
-typedef struct Mesh {
+typedef struct VkmVertex {
+  vec3 position;
+  vec3 normal;
+  vec2 uv;
+} VkmVertex;
+
+typedef struct VkmMesh {
   uint32_t       indexCount;
   VkDeviceMemory indexMemory;
   VkBuffer       indexBuffer;
   uint32_t       vertexCount;
   VkDeviceMemory vertexMemory;
   VkBuffer       vertexBuffer;
-} Mesh;
+} VkmMesh;
 
-typedef struct Framebuffer {
+typedef struct VkmFramebuffer {
   VkImage        colorImage;
   VkDeviceMemory colorImageMemory;
   VkImageView    colorImageView;
@@ -111,9 +131,9 @@ typedef struct Framebuffer {
   VkFramebuffer framebuffer;
   VkSemaphore   renderCompleteSemaphore;
 
-} Framebuffer;
+} VkmFramebuffer;
 
-typedef struct GlobalSetState {
+typedef struct VkmGlobalSetState {
   mat4 view;
   mat4 projection;
   mat4 viewProjection;
@@ -123,7 +143,7 @@ typedef struct GlobalSetState {
   mat4 inverseViewProjection;
 
   ivec2 screenSize;
-} GlobalSetState;
+} VkmGlobalSetState;
 
 typedef struct VkmStandardObjectSetState {
   mat4 model;
@@ -133,16 +153,13 @@ typedef struct VkmContext {
   VkInstance       instance;
   VkSurfaceKHR     surface;
   VkPhysicalDevice physicalDevice;
+  VkDevice         device;
+  VkRenderPass     renderPass;
+  VkmTimeline      timeline;
 
-  VkDevice device;
-
-  VkRenderPass renderPass;
-
-  Timeline timeline;
-
-  Swap        swap;
-  VkImage     swapImages[VK_SWAP_COUNT];
-  VkImageView swapImageViews[VK_SWAP_COUNT];
+  VkmSwap     swap;
+  VkImage     swapImages[VKM_SWAP_COUNT];
+  VkImageView swapImageViews[VKM_SWAP_COUNT];
 
   VkDescriptorSetLayout globalSetLayout;
   VkDescriptorSetLayout materialSetLayout;
@@ -181,66 +198,62 @@ typedef struct VkmContext {
 // Render
 //----------------------------------------------------------------------------------
 
-enum PassAttachment {
-  PASS_COLOR_ATTACHMENT,
-  PASS_NORMAL_ATTACHMENT,
-  PASS_DEPTH_ATTACHMENT,
-  PASS_ATTACHMENT_COUNT,
+enum VkmPassAttachmentStandardIndices {
+  VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
+  VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
+  VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX,
+  VKM_PASS_ATTACHMENT_STD_COUNT,
 };
-#define PASS_CLEAR_COLOR \
+enum VkmPipeSetStandardIndices {
+  VKM_PIPE_SET_STD_GLOBAL_INDEX,
+  VKM_PIPE_SET_STD_MATERIAL_INDEX,
+  VKM_PIPE_SET_STD_OBJECT_INDEX,
+  VKM_PIPE_SET_STD_INDEX_COUNT,
+};
+#define VKM_STD_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT;
+#define VKM_STD_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+#define VKM_PASS_CLEAR_COLOR \
   { 0.1f, 0.2f, 0.3f, 0.0f }
 
-#define MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-#define MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-
-// pipe should probably go in a diff file
-#define PIPE_VERTEX_BINDING_STANDARD 0
-enum StandardPipeSetBinding {
-  MVK_PIPE_SET_BINDING_STANDARD_GLOBAL,
-  MVK_PIPE_SET_BINDING_STANDARD_MATERIAL,
-  MVK_PIPE_SET_BINDING_STANDARD_OBJECT,
-  PIPE_SET_BINDING_STANDARD_COUNT,
-};
-
-#define SET_BINDING_GLOBAL_BUFFER             0
-#define SET_BINDING_STANDARD_MATERIAL_TEXTURE 0
-#define SET_BINDING_STANDARD_OBJECT_BUFFER    0
-#define SET_WRITE_GLOBAL(globalSet, globalSetBuffer)     \
-  {                                                      \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,     \
-    .dstSet = globalSet,                                 \
-    .dstBinding = SET_BINDING_GLOBAL_BUFFER,             \
-    .descriptorCount = 1,                                \
-    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-    .pBufferInfo = &(const VkDescriptorBufferInfo){      \
-        .buffer = globalSetBuffer,                       \
-        .range = sizeof(GlobalSetState),                 \
-    },                                                   \
+#define VKM_SET_BINDING_STD_GLOBAL_BUFFER 0
+#define VKM_SET_WRITE_STD_GLOBAL_BUFFER(globalSet, globalSetBuffer) \
+  {                                                                 \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
+    .dstSet = globalSet,                                            \
+    .dstBinding = VKM_SET_BINDING_STD_GLOBAL_BUFFER,                \
+    .descriptorCount = 1,                                           \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,            \
+    .pBufferInfo = &(const VkDescriptorBufferInfo){                 \
+        .buffer = globalSetBuffer,                                  \
+        .range = sizeof(VkmGlobalSetState),                         \
+    },                                                              \
   }
-#define SET_WRITE_STANDARD_MATERIAL(materialSet, material_image_view, material_image_sample) \
-  {                                                                                          \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                         \
-    .dstSet = materialSet,                                                                   \
-    .dstBinding = SET_BINDING_STANDARD_MATERIAL_TEXTURE,                                     \
-    .descriptorCount = 1,                                                                    \
-    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,                             \
-    .pImageInfo = &(const VkDescriptorImageInfo){                                            \
-        .sampler = material_image_sample,                                                    \
-        .imageView = material_image_view,                                                    \
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                             \
-    },                                                                                       \
+#define VKM_SET_BINDING_STD_MATERIAL_TEXTURE 0
+#define VKM_SET_WRITE_STD_MATERIAL_IMAGE(materialSet, material_image_view, material_image_sample) \
+  {                                                                                               \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                              \
+    .dstSet = materialSet,                                                                        \
+    .dstBinding = VKM_SET_BINDING_STD_MATERIAL_TEXTURE,                                           \
+    .descriptorCount = 1,                                                                         \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,                                  \
+    .pImageInfo = &(const VkDescriptorImageInfo){                                                 \
+        .sampler = material_image_sample,                                                         \
+        .imageView = material_image_view,                                                         \
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                                  \
+    },                                                                                            \
   }
-#define SET_WRITE_STANDARD_OBJECT(objectSet, objectSetBuffer) \
-  {                                                           \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,          \
-    .dstSet = objectSet,                                      \
-    .dstBinding = SET_BINDING_STANDARD_OBJECT_BUFFER,         \
-    .descriptorCount = 1,                                     \
-    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,      \
-    .pBufferInfo = &(const VkDescriptorBufferInfo){           \
-        .buffer = objectSetBuffer,                            \
-        .range = sizeof(VkmStandardObjectSetState),           \
-    },                                                        \
+#define VKM_SET_BINDING_STD_OBJECT_BUFFER 0
+#define VKM_SET_WRITE_STD_OBJECT_BUFFER(objectSet, objectSetBuffer) \
+  {                                                                 \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
+    .dstSet = objectSet,                                            \
+    .dstBinding = VKM_SET_BINDING_STD_OBJECT_BUFFER,                \
+    .descriptorCount = 1,                                           \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,            \
+    .pBufferInfo = &(const VkDescriptorBufferInfo){                 \
+        .buffer = objectSetBuffer,                                  \
+        .range = sizeof(VkmStandardObjectSetState),                 \
+    },                                                              \
   }
 
 //----------------------------------------------------------------------------------
@@ -285,7 +298,7 @@ static const mat4 MAT4_IDENT = {
     .c3 = {0.0f, 0.0f, 0.0f, 1.0f},
 };
 
-INLINE float mvkFloat4Sum(float4_simd* pFloat4) {
+static inline float vkmFloat4Sum(float4_simd* pFloat4) {
   // appears to make better SIMD assembly than a loop:
   // https://godbolt.org/z/6jWe4Pj5b
   // https://godbolt.org/z/M5Goq57vj
@@ -295,18 +308,18 @@ INLINE float mvkFloat4Sum(float4_simd* pFloat4) {
   sums = sums + shuf;
   return sums[0];
 }
-INLINE void mvkMat4Translation(const vec3* pTranslationVec3, mat4* pDstMat4) {
+static inline void vkmMat4Translation(const vec3* pTranslationVec3, mat4* pDstMat4) {
   VEC3_ITERATE pDstMat4->col[3].simd += MAT4_IDENT.col[i].simd * pTranslationVec3->vec[i];
 }
-INLINE float mvkVec4Dot(const vec4* l, const vec4* r) {
+static inline float vkmVec4Dot(const vec4* l, const vec4* r) {
   float4_simd product = l->simd * r->simd;
-  return mvkFloat4Sum(&product);
+  return vkmFloat4Sum(&product);
 }
-INLINE float mvkVec4Mag(const vec4* v) {
-  return sqrtf(mvkVec4Dot(v, v));
+static inline float vkmVec4Mag(const vec4* v) {
+  return sqrtf(vkmVec4Dot(v, v));
 }
-INLINE void mvkQuatToMat4(const quat* pQuat, mat4* pDst) {
-  const float norm = mvkVec4Mag(pQuat);
+static inline void vkmQuatToMat4(const quat* pQuat, mat4* pDst) {
+  const float norm = vkmVec4Mag(pQuat);
   const float s = norm > 0.0f ? 2.0f / norm : 0.0f;
 
   const float3_simd xxw = SIMD_SHUFFLE(pQuat->simd, VEC_X, VEC_X, VEC_W, SIMD_NIL);
@@ -343,7 +356,7 @@ INLINE void mvkQuatToMat4(const quat* pQuat, mat4* pDst) {
   pDst->c3.simd[2] = 0.0f;
   pDst->c3.simd[3] = 1.0f;
 }
-INLINE void mvkMat4MulRot(const mat4* pSrc, const mat4* pRot, mat4* pDst) {
+static inline void vkmMat4MulRot(const mat4* pSrc, const mat4* pRot, mat4* pDst) {
   const mat4_simd src0 = SIMD_SHUFFLE(pSrc->simd,
                                       MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                       MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
@@ -378,7 +391,7 @@ INLINE void mvkMat4MulRot(const mat4* pSrc, const mat4* pRot, mat4* pDst) {
   // I don't actually know if doing this simd_nil is faster and this whole rot only mat multiply is pointless
   pDst->c3.simd = pSrc->c3.simd;
 }
-INLINE void mvkMat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDst) {
+static inline void vkmMat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDst) {
   const mat4_simd src0 = SIMD_SHUFFLE(pLeft->simd,
                                       MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
                                       MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
@@ -421,10 +434,10 @@ INLINE void mvkMat4Mul(const mat4* pLeft, const mat4* pRight, mat4* pDst) {
                                       MAT_C3_R3, MAT_C3_R3, MAT_C3_R3, MAT_C3_R3);
   pDst->simd = src0 * rot0 + src1 * rot1 + src2 * rot2 + src3 * rot3;
 }
-INLINE void mvkMat4Scale(const float scale, mat4* pDst) {
+static inline void vkmMat4Scale(const float scale, mat4* pDst) {
   pDst->simd *= scale;
 }
-INLINE void mvkMat4Inv(const mat4* pSrc, mat4* pDst) {
+static inline void vkmMat4Inv(const mat4* pSrc, mat4* pDst) {
   float t[6];
   float det;
   float a = pSrc->c0.r0, b = pSrc->c0.r1, c = pSrc->c0.r2, d = pSrc->c0.r3,
@@ -475,35 +488,35 @@ INLINE void mvkMat4Inv(const mat4* pSrc, mat4* pDst) {
 
   det = 1.0f / (a * pDst->c0.r0 + b * pDst->c1.r0 + c * pDst->c2.r0 + d * pDst->c3.r0);
 
-  mvkMat4Scale(det, pDst);
+  vkmMat4Scale(det, pDst);
 }
-INLINE void mvkMat4FromTransform(const vec3* pPos, const quat* pRot, mat4* pDst) {
+static inline void vkmMat4FromTransform(const vec3* pPos, const quat* pRot, mat4* pDst) {
   mat4 translationMat4 = MAT4_IDENT;
-  mvkMat4Translation(pPos, &translationMat4);
+  vkmMat4Translation(pPos, &translationMat4);
   mat4 rotationMat4 = MAT4_IDENT;
-  mvkQuatToMat4(pRot, &rotationMat4);
-  mvkMat4MulRot(&translationMat4, &rotationMat4, pDst);
+  vkmQuatToMat4(pRot, &rotationMat4);
+  vkmMat4MulRot(&translationMat4, &rotationMat4, pDst);
 }
 // Perspective matrix in Vulkan Reverse Z
-INLINE void mvkMat4Perspective(const float fov, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
+static inline void vkmMat4Perspective(const float fov, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
   const float tanHalfFovy = tan(fov / 2.0f);
   *pDstMat4 = (mat4){.c0 = {.r0 = 1.0f / (aspect * tanHalfFovy)},
                      .c1 = {.r1 = 1.0f / tanHalfFovy},
                      .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
                      .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
 }
-INLINE void mvkVec3Cross(const vec3* pLeft, const vec3* pRight, vec3* pDst) {
+static inline void vkmVec3Cross(const vec3* pLeft, const vec3* pRight, vec3* pDst) {
   *pDst = (vec3){pLeft->y * pRight->z - pRight->y * pLeft->z,
                  pLeft->z * pRight->x - pRight->z * pLeft->x,
                  pLeft->x * pRight->y - pRight->x * pLeft->y};
 }
-INLINE void vkmVec3Rot(const vec3* pSrc, const quat* pRot, vec3* pDst) {
+static inline void vkmVec3Rot(const vec3* pSrc, const quat* pRot, vec3* pDst) {
   vec3 uv, uuv;
-  mvkVec3Cross((vec3*)pRot, pSrc, &uv);
-  mvkVec3Cross((vec3*)pRot, &uv, &uuv);
+  vkmVec3Cross((vec3*)pRot, pSrc, &uv);
+  vkmVec3Cross((vec3*)pRot, &uv, &uuv);
   for (int i = 0; i < 3; ++i) pDst->vec[i] = pSrc->vec[i] + ((uv.vec[i] * pRot->w) + uuv.vec[i]) * 2.0f;
 }
-INLINE void vkmVec3EulerToQuat(const vec3* pEuler, quat* pDst) {
+static inline void vkmVec3EulerToQuat(const vec3* pEuler, quat* pDst) {
   vec3 c, s;
   VEC3_ITERATE {
     c.vec[i] = cos(pEuler->vec[i] * 0.5f);
@@ -514,7 +527,7 @@ INLINE void vkmVec3EulerToQuat(const vec3* pEuler, quat* pDst) {
   pDst->y = c.x * s.y * c.z + s.x * c.y * s.z;
   pDst->z = c.x * c.y * s.z - s.x * s.y * c.z;
 }
-INLINE void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
+static inline void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
   pDst->w = pSrc->w * pMul->w - pSrc->x * pMul->x - pSrc->y * pMul->y - pSrc->z * pMul->z;
   pDst->x = pSrc->w * pMul->x + pSrc->x * pMul->w + pSrc->y * pMul->z - pSrc->z * pMul->y;
   pDst->y = pSrc->w * pMul->y + pSrc->y * pMul->w + pSrc->z * pMul->x - pSrc->x * pMul->z;
@@ -542,120 +555,94 @@ INLINE void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
 //    case QUEUE_BARRIER_FAMILY_EXTERNAL: return VK_QUEUE_FAMILY_EXTERNAL;
 //  }
 //}
-typedef struct ImageBarrier {
+typedef struct VkmImageBarrier {
   VkPipelineStageFlagBits2 stageMask;
   VkAccessFlagBits2        accessMask;
   VkImageLayout            layout;
   // QueueBarrier             queueFamily;
-} ImageBarrier;
-static const ImageBarrier UNDEFINED_IMAGE_BARRIER = {
+} VkmImageBarrier;
+static const VkmImageBarrier* VKM_UNDEFINED_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const ImageBarrier PRESENT_IMAGE_BARRIER = {
+static const VkmImageBarrier* VKM_PRESENT_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
-static const ImageBarrier TRANSFER_SRC_IMAGE_BARRIER = {
+static const VkmImageBarrier* VKM_TRANSFER_SRC_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 };
-static const ImageBarrier TRANSFER_DST_IMAGE_BARRIER = {
+static const VkmImageBarrier* VKM_TRANSFER_DST_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
-static const ImageBarrier SHADER_READ_IMAGE_BARRIER = {
+static const VkmImageBarrier* VKM_SHADER_READ_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const ImageBarrier COLOR_ATTACHMENT_IMAGE_BARRIER = {
+static const VkmImageBarrier* VKM_COLOR_ATTACHMENT_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
-INLINE void vkmEmplaceImageBarrier(const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image, VkImageMemoryBarrier2* pImageMemoryBarrier) {
-  *pImageMemoryBarrier = (VkImageMemoryBarrier2){
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-      .srcStageMask = pSrc->stageMask,
-      .srcAccessMask = pSrc->accessMask,
-      .dstStageMask = pDst->stageMask,
-      .dstAccessMask = pDst->accessMask,
-      .oldLayout = pSrc->layout,
-      .newLayout = pDst->layout,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = image,
-      .subresourceRange = (VkImageSubresourceRange){
-          .aspectMask = aspectMask,
-          .levelCount = 1,
-          .layerCount = 1,
-      },
-  };
+#define VKM_IMAGE_BARRIER(src, dst, aspect_mask, barrier_image) \
+  (const VkImageMemoryBarrier2) {                               \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,          \
+    .srcStageMask = src->stageMask,                             \
+    .srcAccessMask = src->accessMask,                           \
+    .dstStageMask = dst->stageMask,                             \
+    .dstAccessMask = dst->accessMask,                           \
+    .oldLayout = src->layout,                                   \
+    .newLayout = dst->layout,                                   \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,             \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,             \
+    .image = barrier_image,                                     \
+    .subresourceRange = (VkImageSubresourceRange){              \
+        .aspectMask = aspect_mask,                              \
+        .levelCount = 1,                                        \
+        .layerCount = 1,                                        \
+    },                                                          \
+  }
+static inline void vkmCommandPipelineBarrier(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+  vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-INLINE void vkmCommandPipelineBarrier(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
-  vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
-}
-INLINE void vkmCommandImageBarrier(const VkCommandBuffer commandBuffer, const ImageBarrier* pSrc, const ImageBarrier* pDst, const VkImageAspectFlags aspectMask, const VkImage image) {
-  VkImageMemoryBarrier2 transferImageMemoryBarrier;
-  vkmEmplaceImageBarrier(pSrc, pDst, aspectMask, image, &transferImageMemoryBarrier);
-  vkmCommandPipelineBarrier(commandBuffer, 1, &transferImageMemoryBarrier);
-}
-
-INLINE void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
-  VkImageMemoryBarrier2 toBlitBarrier[2];
-  vkmEmplaceImageBarrier(&COLOR_ATTACHMENT_IMAGE_BARRIER, &TRANSFER_SRC_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, srcImage, &toBlitBarrier[0]);
-  vkmEmplaceImageBarrier(&PRESENT_IMAGE_BARRIER, &TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, dstImage, &toBlitBarrier[1]);
-  vkmCommandPipelineBarrier(cmd, 2, toBlitBarrier);
-
-  const VkImageSubresourceLayers imageSubresourceLayers = {
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-      .layerCount = 1,
-  };
-  const VkOffset3D offsets[2] = {
-      {.x = 0, .y = 0, .z = 0},
-      {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1},
-  };
+static inline void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
   const VkImageBlit imageBlit = {
-      .srcSubresource = imageSubresourceLayers,
-      .srcOffsets = {offsets[0], offsets[1]},
-      .dstSubresource = imageSubresourceLayers,
-      .dstOffsets = {offsets[0], offsets[1]},
+      .srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
+      .srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
+      .dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
+      .dstOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
   };
   vkCmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
-
-  VkImageMemoryBarrier2 toPresentBarrier[2];
-  vkmEmplaceImageBarrier(&TRANSFER_SRC_IMAGE_BARRIER, &COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, srcImage, &toPresentBarrier[0]);
-  vkmEmplaceImageBarrier(&TRANSFER_DST_IMAGE_BARRIER, &PRESENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, dstImage, &toPresentBarrier[1]);
-  vkmCommandPipelineBarrier(cmd, 2, toPresentBarrier);
 }
-
-INLINE void vkmBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkFramebuffer framebuffer) {
+static inline void vkmBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkFramebuffer framebuffer) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .renderPass = renderPass,
       .framebuffer = framebuffer,
-      .renderArea = (const VkRect2D){.extent = (const VkExtent2D){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
-      .clearValueCount = PASS_ATTACHMENT_COUNT,
+      .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
+      .clearValueCount = VKM_PASS_ATTACHMENT_STD_COUNT,
       .pClearValues = (const VkClearValue[]){
-          {.color = (const VkClearColorValue){PASS_CLEAR_COLOR}},
-          {.color = (const VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}}},
-          {.depthStencil = (const VkClearDepthStencilValue){0.0f, 0}},
+          [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {.color = {VKM_PASS_CLEAR_COLOR}},
+          [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
+          [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {.depthStencil = {0.0f}},
       },
   };
   vkCmdBeginRenderPass(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
-INLINE void vkmResetBeginCommandBuffer(const VkCommandBuffer commandBuffer) {
+static inline void vkmResetBeginCommandBuffer(const VkCommandBuffer commandBuffer) {
   vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-  vkBeginCommandBuffer(commandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
-  vkCmdSetViewport(commandBuffer, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
-  vkCmdSetScissor(commandBuffer, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
+  vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
+  vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
+  vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
-INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const Swap* pSwap, Timeline* pTimeline) {
+static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, VkmTimeline* pTimeline) {
   const uint64_t     waitValue = pTimeline->waitValue++;
   const uint64_t     signalValue = pTimeline->waitValue;
   const VkSubmitInfo submitInfo = {
@@ -663,9 +650,9 @@ INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQue
       .pNext = &(const VkTimelineSemaphoreSubmitInfo){
           .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
           .waitSemaphoreValueCount = 2,
-          .pWaitSemaphoreValues = (const uint64_t[]){waitValue, 0},
+          .pWaitSemaphoreValues = (uint64_t[]){waitValue, 0},
           .signalSemaphoreValueCount = 2,
-          .pSignalSemaphoreValues = (const uint64_t[]){signalValue, 0},
+          .pSignalSemaphoreValues = (uint64_t[]){signalValue, 0},
       },
       .waitSemaphoreCount = 2,
       .pWaitSemaphores = (const VkSemaphore[]){
@@ -684,7 +671,7 @@ INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQue
           pSwap->renderCompleteSemaphore,
       },
   };
-  VK_REQUIRE(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
+  VKM_REQUIRE(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE));
   const VkPresentInfoKHR presentInfo = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
@@ -693,45 +680,45 @@ INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQue
       .pSwapchains = &pSwap->chain,
       .pImageIndices = &pSwap->index,
   };
-  VK_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
+  VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
 }
-INLINE void TimelineWait(const VkDevice device, const Timeline* pTimeline) {
+static inline void vkmTimelineWait(const VkDevice device, const VkmTimeline* pTimeline) {
   const VkSemaphoreWaitInfo semaphoreWaitInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
       .semaphoreCount = 1,
       .pSemaphores = &pTimeline->semaphore,
       .pValues = &pTimeline->waitValue,
   };
-  VK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
+  VKM_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 
-INLINE void UpdateGlobalSet(Transform* pCameraTransform, GlobalSetState* pState, GlobalSetState* pMapped) {
+static inline void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
   pState->screenSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
-  mvkMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->projection);
+  vkmMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->projection);
   vkmVec3EulerToQuat(&pCameraTransform->euler, &pCameraTransform->rotation);
-  mvkMat4Inv(&pState->projection, &pState->inverseProjection);
-  mvkMat4FromTransform(&pCameraTransform->position, &pCameraTransform->rotation, &pState->inverseView);
-  mvkMat4Inv(&pState->inverseView, &pState->view);
-  mvkMat4Mul(&pState->projection, &pState->view, &pState->viewProjection);
-  mvkMat4Mul(&pState->inverseView, &pState->inverseViewProjection, &pState->inverseViewProjection);
-  memcpy(pMapped, pState, sizeof(GlobalSetState));
+  vkmMat4Inv(&pState->projection, &pState->inverseProjection);
+  vkmMat4FromTransform(&pCameraTransform->position, &pCameraTransform->rotation, &pState->inverseView);
+  vkmMat4Inv(&pState->inverseView, &pState->view);
+  vkmMat4Mul(&pState->projection, &pState->view, &pState->viewProjection);
+  vkmMat4Mul(&pState->inverseView, &pState->inverseViewProjection, &pState->inverseViewProjection);
+  memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-INLINE void mvkUpdateGlobalSetView(Transform* pCameraTransform, GlobalSetState* pState, GlobalSetState* pMapped) {
-  mvkMat4FromTransform(&pCameraTransform->position, &pCameraTransform->rotation, &pState->inverseView);
-  mvkMat4Inv(&pState->inverseView, &pState->view);
-  mvkMat4Mul(&pState->projection, &pState->view, &pState->viewProjection);
-  mvkMat4Mul(&pState->inverseView, &pState->inverseViewProjection, &pState->inverseViewProjection);
-  memcpy(pMapped, pState, sizeof(GlobalSetState));
+static inline void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+  vkmMat4FromTransform(&pCameraTransform->position, &pCameraTransform->rotation, &pState->inverseView);
+  vkmMat4Inv(&pState->inverseView, &pState->view);
+  vkmMat4Mul(&pState->projection, &pState->view, &pState->viewProjection);
+  vkmMat4Mul(&pState->inverseView, &pState->inverseViewProjection, &pState->inverseViewProjection);
+  memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-INLINE void UpdateObjectSet(Transform* pTransform, VkmStandardObjectSetState* pState, VkmStandardObjectSetState* pSphereObjectSetMapped) {
+static inline void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjectSetState* pState, VkmStandardObjectSetState* pSphereObjectSetMapped) {
   vkmVec3EulerToQuat(&pTransform->euler, &pTransform->rotation);
-  mvkMat4FromTransform(&pTransform->position, &pTransform->rotation, &pState->model);
+  vkmMat4FromTransform(&pTransform->position, &pTransform->rotation, &pState->model);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStandardObjectSetState));
 }
 
-INLINE bool mvkProcessInput(Transform* pCameraTransform) {
+static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
   if (input.mouseLocked) {
     pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked;
@@ -748,10 +735,10 @@ INLINE bool mvkProcessInput(Transform* pCameraTransform) {
   return inputDirty;
 }
 
-void            CreateFramebuffers(const uint32_t framebufferCount, Framebuffer* pFrameBuffers);
-void            CreateSphereMeshBuffers(const float radius, const int slicesCount, const int stackCount, Mesh* pMesh);
+void            CreateFramebuffers(const uint32_t framebufferCount, VkmFramebuffer* pFrameBuffers);
+void            CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
 VkDescriptorSet AllocateDescriptorSet(const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 void            CreateAllocateBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
-void            CreateTextureFromFile(const char* pPath, Texture* pTexture);
+void            CreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 
 const VkmContext* mxcInitRendererContext();

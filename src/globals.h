@@ -9,8 +9,8 @@ extern void Panic(const char* file, int line, const char* message);
     PANIC(message);                        \
   }
 
+#define CACHE_ALIGN __attribute((aligned(64)))
 #define COUNT(array) sizeof(array) / sizeof(array[0])
-#define INLINE       static inline __attribute((always_inline))
 
 #define DEFAULT_WIDTH  1024
 #define DEFAULT_HEIGHT 1024
@@ -19,6 +19,6 @@ extern bool isCompositor;
 extern bool isRunning;
 
 extern const char* WindowExtensionName;
-extern const char* ExternalMemoryExntensionName;
-extern const char* ExternalSemaphoreExntensionName;
-extern const char* ExternalFenceExntensionName;
+extern const char* ExternalMemoryExtensionName;
+extern const char* ExternalSemaphoreExtensionName;
+extern const char* ExternalFenceExtensionName;

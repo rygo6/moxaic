@@ -18,11 +18,12 @@ void Panic(const char* file, const int line, const char* message) {
 }
 
 int main(void) {
-  mxCreateWindow();
+  vkmCreateWindow();
   const VkmContext* pContext = mxcInitRendererContext();
   mxcTestNodeInit(pContext);
 
   while (isRunning) {
+    vkmUpdateWindowInput();
     mxcTestNodeUpdate();
   }
 
