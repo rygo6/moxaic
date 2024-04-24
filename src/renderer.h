@@ -708,7 +708,6 @@ static inline void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjec
 
 static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
-  printf("%l", input.deltaTime);
   if (input.mouseLocked) {
     pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 4.0f;
     vkmVec3EulerToQuat(&pCameraTransform->euler, &pCameraTransform->rotation);
