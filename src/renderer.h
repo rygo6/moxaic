@@ -708,15 +708,16 @@ static inline void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjec
 
 static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
+  printf("%l", input.deltaTime);
   if (input.mouseLocked) {
-    pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked;
+    pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 4.0f;
     vkmVec3EulerToQuat(&pCameraTransform->euler, &pCameraTransform->rotation);
     inputDirty = true;
   }
   if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
     vec3 localTranslate = {.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward};
     vkmVec3Rot(&localTranslate, &pCameraTransform->rotation, &localTranslate);
-    const float moveSensitivity = .0002f;
+    const float moveSensitivity = input.deltaTime * 4.0f;
     for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
     inputDirty = true;
   }

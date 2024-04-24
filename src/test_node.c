@@ -128,7 +128,7 @@ void mxcCreateTestNodeContext() {
     VkmContextCreateSwap(&node.swap);
   }
 
-  { // Copy to cache-friendly loop queue
+  { // Copy to cache-friendly loop struct
     node.cmd = context.graphicsCommand.buffer;
     node.standardPipelineLayout = nodeContext.standardPipe.pipelineLayout;
     node.standardPipeline = nodeContext.standardPipe.pipeline;

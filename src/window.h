@@ -13,6 +13,8 @@ typedef struct Input {
   bool moveRight;
   bool moveLeft;
 
+  float deltaTime;
+
 } Input;
 
 extern Input input;

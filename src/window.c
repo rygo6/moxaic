@@ -19,25 +19,20 @@ const char* ExternalFenceExtensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_N
 Input input;
 
 static struct {
-  HINSTANCE hInstance;
-  HWND      hWnd;
-  int       width;
-  int       height;
-  POINT     localCenter;
-  POINT     globalCenter;
+  HINSTANCE     hInstance;
+  HWND          hWnd;
+  int           width, height;
+  POINT         localCenter, globalCenter;
+  LARGE_INTEGER frequency;
+  LARGE_INTEGER start, end;
 } window;
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
     case WM_MOUSEMOVE:
       if (input.mouseLocked) {
-        const int   xPos = GET_X_LPARAM(lParam);
-        const int   yPos = GET_Y_LPARAM(lParam);
-        const int   deltaXPos = xPos - window.localCenter.x;
-        const int   deltaYPos = yPos - window.localCenter.y;
-        const float sensitivity = .001f;
-        input.mouseDeltaX = (float)deltaXPos * sensitivity;
-        input.mouseDeltaY = (float)deltaYPos * sensitivity;
+        input.mouseDeltaX = (float)(GET_X_LPARAM(lParam) - window.localCenter.x);
+        input.mouseDeltaY = (float)(GET_Y_LPARAM(lParam) - window.localCenter.y);
         SetCursorPos(window.globalCenter.x, window.globalCenter.y);
       }
       return 0;
@@ -89,6 +84,9 @@ void vkmUpdateWindowInput() {
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
+  QueryPerformanceCounter(&window.end);
+  input.deltaTime = (double)(window.end.QuadPart - window.start.QuadPart) / window.frequency.QuadPart;
+  QueryPerformanceCounter(&window.start);
 }
 
 void vkmCreateWindow() {
@@ -104,6 +102,7 @@ void vkmCreateWindow() {
   REQUIRE(window.hWnd != NULL, "Failed to create window.");
   ShowWindow(window.hWnd, SW_SHOW);
   UpdateWindow(window.hWnd);
+  QueryPerformanceFrequency(&window.frequency);
 }
 
 VkResult vkmCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
