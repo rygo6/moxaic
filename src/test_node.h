@@ -3,4 +3,4 @@
 
 
 void mxcTestNodeUpdate();
-void mxcTestNodeInit(const VkmContext* pContext);
+void mxcCreateTestNodeContext();
