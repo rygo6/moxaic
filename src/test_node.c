@@ -40,7 +40,7 @@ void mxcTestNodeUpdate() {
     vkmUpdateGlobalSetView(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
   }
 
-  vkAcquireNextImageKHR(node.device, node.swap.chain, UINT64_MAX, node.swap.acquireSemaphore, VK_NULL_HANDLE, &node.swap.swapIndex);
+  printf("%f\n", 1.0f / input.deltaTime);
 
   vkmCmdResetBegin(node.cmd);
   vkmCmdBeginPass(node.cmd, node.renderPass, node.framebuffers[node.framebufferIndex]);
@@ -57,6 +57,7 @@ void mxcTestNodeUpdate() {
   vkCmdEndRenderPass(node.cmd);
 
   {  // Blit Framebuffer
+    vkAcquireNextImageKHR(node.device, node.swap.chain, UINT64_MAX, node.swap.acquireSemaphore, VK_NULL_HANDLE, &node.swap.swapIndex);
     const VkImage               framebufferColorImage = node.frameBufferColorImages[node.framebufferIndex];
     const VkImage               swapImage = node.swap.images[node.swap.swapIndex];
     const VkImageMemoryBarrier2 blitBarrier[] = {

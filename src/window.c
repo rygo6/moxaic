@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <windowsx.h>
 
+#include <stdio.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
 
@@ -19,12 +20,11 @@ const char* ExternalFenceExtensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_N
 Input input;
 
 static struct {
-  HINSTANCE     hInstance;
-  HWND          hWnd;
-  int           width, height;
-  POINT         localCenter, globalCenter;
-  LARGE_INTEGER frequency;
-  LARGE_INTEGER start, end;
+  HINSTANCE hInstance;
+  HWND      hWnd;
+  int       width, height;
+  POINT     localCenter, globalCenter;
+  uint64_t  frequency, start, current;
 } window;
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -84,9 +84,11 @@ void vkmUpdateWindowInput() {
     TranslateMessage(&msg);
     DispatchMessage(&msg);
   }
-  QueryPerformanceCounter(&window.end);
-  input.deltaTime = (double)(window.end.QuadPart - window.start.QuadPart) / window.frequency.QuadPart;
-  QueryPerformanceCounter(&window.start);
+
+  uint64_t prior = window.current;
+  QueryPerformanceCounter((LARGE_INTEGER*)&window.current);
+  uint64_t delta = ((window.current - prior) * 1000000) / window.frequency;
+  input.deltaTime = (double)delta * 0.000001f;
 }
 
 void vkmCreateWindow() {
@@ -102,7 +104,8 @@ void vkmCreateWindow() {
   REQUIRE(window.hWnd != NULL, "Failed to create window.");
   ShowWindow(window.hWnd, SW_SHOW);
   UpdateWindow(window.hWnd);
-  QueryPerformanceFrequency(&window.frequency);
+  QueryPerformanceFrequency((LARGE_INTEGER*)&window.frequency);
+  QueryPerformanceCounter((LARGE_INTEGER*)&window.start);
 }
 
 VkResult vkmCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {

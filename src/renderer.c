@@ -454,8 +454,8 @@ typedef struct VkmQueueInfo {
   VkmSupport   globalPriority;
   VkSurfaceKHR presentSurface;
 } VkmQueueInfo;
-#define QUEUE_DESC_GRAPHICS(surface) (VkmQueueInfo) { .graphics = VKM_SUPPORT_YES, .compute = VKM_SUPPORT_YES, .transfer = VKM_SUPPORT_YES, .globalPriority = VKM_SUPPORT_YES, .presentSurface = surface }
-#define QUEUE_DESC_COMPUTE(surface) (VkmQueueInfo) { .graphics = VKM_SUPPORT_NO, .compute = VKM_SUPPORT_YES, .transfer = VKM_SUPPORT_YES, .globalPriority = VKM_SUPPORT_YES, .presentSurface = surface }
+#define QUEUE_DESC_GRAPHICS(surface, global_priority) (VkmQueueInfo) { .graphics = VKM_SUPPORT_YES, .compute = VKM_SUPPORT_YES, .transfer = VKM_SUPPORT_YES, .globalPriority = global_priority, .presentSurface = surface }
+#define QUEUE_DESC_COMPUTE(surface, global_priority) (VkmQueueInfo) { .graphics = VKM_SUPPORT_NO, .compute = VKM_SUPPORT_YES, .transfer = VKM_SUPPORT_YES, .globalPriority = global_priority, .presentSurface = surface }
 #define QUEUE_DESC_TRANSFER (VkmQueueInfo) { .graphics = VKM_SUPPORT_NO, .compute = VKM_SUPPORT_NO, .transfer = VKM_SUPPORT_YES }
 static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQueueInfo* pQueueDesc) {
   uint32_t queueFamilyCount;
@@ -597,9 +597,9 @@ void vkmCreateContext(const VkmContextCreateInfo* pCreateInfo) {
   }
   const int commandCount = pCreateInfo->createGraphicsCommand + pCreateInfo->createComputeCommand + pCreateInfo->createTransferCommand;
   if (pCreateInfo->createGraphicsCommand)
-    context.graphicsCommand.queueFamilyIndex = FindQueueIndex(context.physicalDevice, &QUEUE_DESC_GRAPHICS(instance.surface));
+    context.graphicsCommand.queueFamilyIndex = FindQueueIndex(context.physicalDevice, &QUEUE_DESC_GRAPHICS(instance.surface, VKM_SUPPORT_OPTIONAL));
   if (pCreateInfo->createComputeCommand)
-    context.computeCommand.queueFamilyIndex = FindQueueIndex(context.physicalDevice, &QUEUE_DESC_COMPUTE(instance.surface));
+    context.computeCommand.queueFamilyIndex = FindQueueIndex(context.physicalDevice, &QUEUE_DESC_COMPUTE(instance.surface, VKM_SUPPORT_OPTIONAL));
   if (pCreateInfo->createTransferCommand)
     context.transferCommand.queueFamilyIndex = FindQueueIndex(context.physicalDevice, &QUEUE_DESC_TRANSFER);
   {  // Device

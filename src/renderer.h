@@ -648,8 +648,8 @@ static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, cons
           pSwap->acquireSemaphore,
       },
       .pWaitDstStageMask = (const VkPipelineStageFlags[]){
-          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
       },
       .commandBufferCount = 1,
       .pCommandBuffers = &cmd,
@@ -709,14 +709,14 @@ static inline void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjec
 static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
   if (input.mouseLocked) {
-    pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 4.0f;
+    pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 0.4f;
     vkmVec3EulerToQuat(&pCameraTransform->euler, &pCameraTransform->rotation);
     inputDirty = true;
   }
   if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
     vec3 localTranslate = {.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward};
     vkmVec3Rot(&localTranslate, &pCameraTransform->rotation, &localTranslate);
-    const float moveSensitivity = input.deltaTime * 4.0f;
+    const float moveSensitivity = input.deltaTime * 1.2f;
     for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
     inputDirty = true;
   }

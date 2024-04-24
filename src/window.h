@@ -13,7 +13,7 @@ typedef struct Input {
   bool moveRight;
   bool moveLeft;
 
-  float deltaTime;
+  double deltaTime;
 
 } Input;
 
