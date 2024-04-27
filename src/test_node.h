@@ -1,6 +1,5 @@
 #pragma once
 
 
-
 void mxcTestNodeUpdate();
-void mxcCreateTestNodeContext();
+void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR surface);

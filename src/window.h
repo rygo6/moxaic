@@ -19,6 +19,6 @@ typedef struct Input {
 
 extern Input input;
 
-void     vkmUpdateWindowInput();
-void     vkmCreateWindow();
-VkResult vkmCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface);
+void vkmUpdateWindowInput();
+void vkmCreateWindow();
+void vkmCreateSurface(const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);

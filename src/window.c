@@ -1,7 +1,7 @@
 #include "window.h"
 #include "globals.h"
+#include "renderer.h"
 
-#include <assert.h>
 #include <windows.h>
 #include <windowsx.h>
 
@@ -108,15 +108,12 @@ void vkmCreateWindow() {
   QueryPerformanceCounter((LARGE_INTEGER*)&window.start);
 }
 
-VkResult vkmCreateSurface(VkInstance instance, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pVkSurface) {
-  PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(
-      instance,
-      "vkCreateWin32SurfaceKHR");
-  assert(vkCreateWin32SurfaceKHR != NULL && "Couldn't load PFN_vkCreateWin32SurfaceKHR");
-  VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
+void vkmCreateSurface(const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface) {
+  const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
       .hinstance = window.hInstance,
       .hwnd = window.hWnd,
   };
-  return vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pVkSurface);
+  VKM_PFN_LOAD(vkCreateWin32SurfaceKHR);
+  VKM_REQUIRE(vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
 }

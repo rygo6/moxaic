@@ -22,13 +22,15 @@
     VkResult result = command;                              \
     REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
   }
+
 #define CLEANUP_RESULT(command, cleanup_goto)      \
   result = command;                                \
   if (__builtin_expect(result != VK_SUCCESS, 0)) { \
     LOG_ERROR(command, string_VkResult(result));   \
     goto cleanup_goto;                             \
   }
-#define VKM_PFN_LOAD(instance, vkFunction)                                                      \
+
+#define VKM_PFN_LOAD(vkFunction)                                                                \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
@@ -150,25 +152,30 @@ typedef struct VkmStandardObjectSetState {
   mat4 model;
 } VkmStandardObjectSetState;
 
-typedef struct VkmCommandContext {
-  VkCommandPool   pool;
-  VkCommandBuffer buffer;
-  uint32_t        queueFamilyIndex;
+typedef enum VkmQueueFamilyType {
+  VKM_QUEUE_FAMILY_TYPE_GRAPHICS,
+  VKM_QUEUE_FAMILY_TYPE_COMPUTE,
+  VKM_QUEUE_FAMILY_TYPE_TRANSFER,
+  VKM_QUEUE_FAMILY_TYPE_COUNT
+} VkmQueueFamilyType;
+typedef struct VkmQueueFamily {
+  VkCommandPool pool;
+  uint32_t      index;
+} VkmQueueFamily;
+
+typedef struct VkmQueue {
   VkQueue         queue;
-} VkmCommandContext;
+  VkCommandBuffer cmd;
+} VkmQueue;
 
 typedef struct VkmContext {
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
-
   VkmTimeline      timeline;
-
   VkDescriptorPool descriptorPool;
   VkQueryPool      timeQueryPool;
 
-  VkmCommandContext graphicsCommand;
-  VkmCommandContext computeCommand;
-  VkmCommandContext transferCommand;
+  VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
 
 } VkmContext;
 
@@ -705,7 +712,6 @@ static inline void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjec
   vkmMat4FromTransform(&pTransform->position, &pTransform->rotation, &pState->model);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStandardObjectSetState));
 }
-
 static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
   if (input.mouseLocked) {
@@ -716,43 +722,87 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
     vec3 localTranslate = {.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward};
     vkmVec3Rot(&localTranslate, &pCameraTransform->rotation, &localTranslate);
-    const float moveSensitivity = input.deltaTime * 1.2f;
+    const float moveSensitivity = input.deltaTime * 2.0f;
     for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
     inputDirty = true;
   }
   return inputDirty;
 }
 
-void VkmCreateFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, VkmFramebuffer* pFrameBuffers);
-void VkmCreateSphereMesh(const VkmCommandContext* pCommand, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
-void VkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void VkmCreateAllocateBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
-void VkmCreateTextureFromFile(const VkmCommandContext* pCommand, const char* pPath, VkmTexture* pTexture);
-void VkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
+void VkmCreateFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, VkmFramebuffer* pFrameBuffers);
+void VkmCreateSphereMesh(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
+void VkmAllocateDescriptorSet(const VkmContext* pContext, const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void VkmCreateAllocateBindMapBuffer(const VkmContext* pContext, const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
+void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
+void VkmCreateStandardPipeline(const VkmContext* pContext, const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
 
-typedef struct VkmInstance {
-  VkInstance               instance;
-  VkDebugUtilsMessengerEXT debugUtilsMessenger;
-  VkSurfaceKHR             surface;
-} VkmInstance;
-void vkmCreateInstance(const bool createSurface);
+extern VkInstance instance;
 
+typedef struct VkmInitializeDesc {
+  const char* applicationName;
+  uint32_t    applicationVersion;
+
+  bool enableMeshTaskShader;
+  bool enableBufferRobustness;
+  bool enableGlobalPriority;
+  bool enableExternalCapabilities;
+
+  bool enableMessageSeverityVerbose;
+  bool enableMessageSeverityInfo;
+  bool enableMessageSeverityWarnings;
+  bool enableMessageSeverityErrors;
+
+  bool enableGeneralMessages;
+  bool enableValidationMessages;
+  bool enablePerformanceMessages;
+} VkmInitializeDesc;
+void vkmInitialize();
+
+typedef enum VkmPriority {
+  VKM_PRIORITY_LOW,
+  VKM_PRIORITY_MEDIUM,
+  VKM_PRIORITY_HIGH,
+  VKM_PRIORITY_REALTIME,
+  VKM_PRIORITY_COUNT,
+} VkmPriority;
+typedef enum VkmSupport {
+  VKM_SUPPORT_OPTIONAL,
+  VKM_SUPPORT_YES,
+  VKM_SUPPORT_NO,
+  VKM_SUPPORT_COUNT,
+} VkmSupport;
+static const char* string_Support[] = {
+    [VKM_SUPPORT_OPTIONAL] = "SUPPORT_OPTIONAL",
+    [VKM_SUPPORT_YES] = "SUPPORT_YES",
+    [VKM_SUPPORT_NO] = "SUPPORT_NO",
+};
+typedef struct VkmQueueFamilyCreateInfo {
+  VkmSupport               supportsGraphics;
+  VkmSupport               supportsCompute;
+  VkmSupport               supportsTransfer;
+  VkmSupport               supportsGlobalPriority;
+  VkmSupport               supportsSparseBinding;
+  VkQueueGlobalPriorityKHR globalPriority;
+  uint32_t                 queueCount;
+  const float*             pQueuePriorities;
+} VkmQueueFamilyCreateInfo;
 typedef struct VkmContextCreateInfo {
-  bool highPriority;
-  bool createGraphicsCommand;
-  bool createComputeCommand;
-  bool createTransferCommand;
+  uint32_t                 maxDescriptorCount;
+  uint32_t                 uniformDescriptorCount;
+  uint32_t                 combinedImageSamplerDescriptorCount;
+  uint32_t                 storageImageDescriptorCount;
+  VkSurfaceKHR             presentSurface;
+  VkmQueueFamilyCreateInfo queueFamilyCreateInfos[VKM_QUEUE_FAMILY_TYPE_COUNT];
 } VkmContextCreateInfo;
+void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext* pContext);
+
 typedef struct VkmSamplerDesc {
   VkFilter               filter;
   VkSamplerAddressMode   addressMode;
   VkSamplerReductionMode reductionMode;
 } VkmSamplerDesc;
-#define VKM_SAMPLER_LINEAR_CLAMP_DESC (VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
-
-extern _Thread_local VkmContext context;
-
-void vkmCreateContext(const VkmContextCreateInfo* pCreateInfo);
-void VkmContextCreateSampler(const VkmSamplerDesc* pSamplerDesc, VkSampler* pSampler);
-void VkmCreateStandardRenderPass(VkRenderPass* pRenderPass);
-void VkmContextCreateSwap(VkmSwap* pSwap);
+#define VKM_SAMPLER_LINEAR_CLAMP_DESC \
+  (const VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
+void VkmCreateSampler(const VkmContext* pContext, const VkmSamplerDesc* pDesc, VkSampler* pSampler);
+void VkmCreateStandardRenderPass(const VkmContext* pContext, VkRenderPass* pRenderPass);
+void VkmCreateSwap(const VkmContext* pContext, const VkSurfaceKHR surface, VkmSwap* pSwap);

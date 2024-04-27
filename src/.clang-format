@@ -30,21 +30,20 @@ IndentPPDirectives: BeforeHash
 IndentWidth: 2
 TabWidth: 4
 ReflowComments: false
-BreakBeforeBraces: Attach
-#BraceWrapping:
-#  AfterClass: false
-#  AfterControlStatement: false
-#  AfterEnum: false
-#  AfterFunction: false
-#  AfterNamespace: false
-#  AfterStruct: false
-#  AfterUnion: false
-#  AfterExternBlock: false
-#  BeforeCatch: false
-#  BeforeElse: false
-#  SplitEmptyFunction: false
-#  SplitEmptyRecord: false
-#  SplitEmptyNamespace: false
+BraceWrapping:
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
 MaxEmptyLinesToKeep: 2
 SpacesBeforeTrailingComments: 2
 AlignTrailingComments:
@@ -59,6 +58,19 @@ BreakBeforeTernaryOperators: false
 ColumnLimit: 0
 AlwaysBreakAfterDefinitionReturnType: None
 AllowShortBlocksOnASingleLine: Always
+BreakAdjacentStringLiterals: false
+BreakArrays: false
+BreakBeforeBinaryOperators: None
+BreakAfterJavaFieldAnnotations: false
+BreakBeforeConceptDeclarations: false
+BreakBeforeInheritanceComma: false
+BreakBeforeInlineASMColon: Never
+BreakStringLiterals: false
+BreakBeforeBraces: Attach
+BreakConstructorInitializers: AfterColon
+BreakConstructorInitializersBeforeComma: false
+BreakInheritanceList: AfterColon
+
 
 
 
