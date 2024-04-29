@@ -431,7 +431,7 @@ void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool po
       .imageExtent = {width, height, 1},
   };
   vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-  vkmCommandPipelineImageBarrier(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_SHADER_READ_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
+  vkmCommandPipelineImageBarrier(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_TRANSFER_READ_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
   EndImmediateCommandBuffer(pContext, pool, queue, commandBuffer);
 }
 
@@ -627,30 +627,31 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
         ExternalSemaphoreExtensionName,
         ExternalFenceExtensionName,
     };
-
-    VkDeviceQueueGlobalPriorityCreateInfoEXT deviceQueueGlobalPriorityCreateInfos[VKM_QUEUE_FAMILY_TYPE_COUNT];
-    VkDeviceQueueCreateInfo                  deviceQueueCreateInfos[VKM_QUEUE_FAMILY_TYPE_COUNT];
-    for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
-      if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
-        continue;
-
-      pContext->queueFamilies[i].index = FindQueueIndex(pContext->physicalDevice, &pContextCreateInfo->queueFamilyCreateInfos[i]);
-      deviceQueueGlobalPriorityCreateInfos[i] = (VkDeviceQueueGlobalPriorityCreateInfoEXT){
+    uint32_t activeQueueIndex = 0;
+    uint32_t activeQueueCount = 0;
+    for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) activeQueueCount += pContextCreateInfo->queueFamilyCreateInfos[i].queueCount > 0;
+    VkDeviceQueueCreateInfo                  activeQueueCreateInfos[activeQueueCount];
+    VkDeviceQueueGlobalPriorityCreateInfoEXT activeQueueGlobalPriorityCreateInfos[activeQueueCount];
+    for (int queueFamilyTypeIndex = 0; queueFamilyTypeIndex < VKM_QUEUE_FAMILY_TYPE_COUNT; ++queueFamilyTypeIndex) {
+      if (pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].queueCount == 0) continue;
+      pContext->queueFamilies[queueFamilyTypeIndex].index = FindQueueIndex(pContext->physicalDevice, &pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex]);
+      activeQueueGlobalPriorityCreateInfos[activeQueueIndex] = (VkDeviceQueueGlobalPriorityCreateInfoEXT){
           .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
-          .globalPriority = pContextCreateInfo->queueFamilyCreateInfos[i].globalPriority,
+          .globalPriority = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].globalPriority,
       };
-      deviceQueueCreateInfos[i] = (VkDeviceQueueCreateInfo){
+      activeQueueCreateInfos[activeQueueIndex] = (VkDeviceQueueCreateInfo){
           .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-          .pNext = pContextCreateInfo->queueFamilyCreateInfos[i].globalPriority != 0 ? &deviceQueueGlobalPriorityCreateInfos[i] : NULL,
-          .queueFamilyIndex = pContext->queueFamilies[i].index,
-          .queueCount = pContextCreateInfo->queueFamilyCreateInfos[i].queueCount,
-          .pQueuePriorities = pContextCreateInfo->queueFamilyCreateInfos[i].pQueuePriorities};
+          .pNext = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].globalPriority != 0 ? &activeQueueGlobalPriorityCreateInfos[activeQueueIndex] : NULL,
+          .queueFamilyIndex = pContext->queueFamilies[queueFamilyTypeIndex].index,
+          .queueCount = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].queueCount,
+          .pQueuePriorities = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].pQueuePriorities};
+      activeQueueIndex++;
     }
     const VkDeviceCreateInfo deviceCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
         .pNext = &physicalDeviceFeatures,
-        .queueCreateInfoCount = VKM_QUEUE_FAMILY_TYPE_COUNT,
-        .pQueueCreateInfos = deviceQueueCreateInfos,
+        .queueCreateInfoCount = activeQueueCount,
+        .pQueueCreateInfos = activeQueueCreateInfos,
         .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
@@ -658,9 +659,12 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
   }
 
   for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
+    if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
+      continue;
+
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .flags = i == VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER ? VK_COMMAND_POOL_CREATE_TRANSIENT_BIT : VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = pContext->queueFamilies[i].index,
     };
     VKM_REQUIRE(vkCreateCommandPool(pContext->device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pContext->queueFamilies[i].pool));

@@ -114,6 +114,9 @@ void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR sur
     };
     VKM_REQUIRE(vkAllocateCommandBuffers(pContext->device, &commandBufferAllocateInfo, &node.cmd));
 
+//    VkQueue     transferQueue;
+//    vkGetDeviceQueue(pContext->device, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].index, 0, &transferQueue);
+
     VkmCreateStandardRenderPass(pContext, &node.standardRenderPass);
     VkmCreateFramebuffers(pContext, node.standardRenderPass, VKM_SWAP_COUNT, nodeContext.framebuffers);
     VkmCreateStandardPipeline(pContext, node.standardRenderPass, &nodeContext.standardPipe);

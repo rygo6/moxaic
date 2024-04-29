@@ -49,21 +49,21 @@ int main(void) {
               .queueCount = 1,
               .pQueuePriorities = (float[]){1.0f},
           },
-          [VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
-              .supportsGraphics = VKM_SUPPORT_NO,
-              .supportsCompute = VKM_SUPPORT_YES,
-              .supportsTransfer = VKM_SUPPORT_YES,
-              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
-              .queueCount = 1,
-              .pQueuePriorities = (float[]){1.0f},
-          },
-          [VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = {
-              .supportsGraphics = VKM_SUPPORT_NO,
-              .supportsCompute = VKM_SUPPORT_NO,
-              .supportsTransfer = VKM_SUPPORT_YES,
-              .queueCount = 1,
-              .pQueuePriorities = (float[]){0.0f},
-          },
+//          [VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
+//              .supportsGraphics = VKM_SUPPORT_NO,
+//              .supportsCompute = VKM_SUPPORT_YES,
+//              .supportsTransfer = VKM_SUPPORT_YES,
+//              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
+//              .queueCount = 1,
+//              .pQueuePriorities = (float[]){1.0f},
+//          },
+//          [VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = {
+//              .supportsGraphics = VKM_SUPPORT_NO,
+//              .supportsCompute = VKM_SUPPORT_NO,
+//              .supportsTransfer = VKM_SUPPORT_YES,
+//              .queueCount = 1,
+//              .pQueuePriorities = (float[]){0.0f},
+//          },
       },
   };
   VkmContext context;

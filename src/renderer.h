@@ -161,12 +161,17 @@ typedef enum VkmQueueFamilyType {
 typedef struct VkmQueueFamily {
   VkCommandPool pool;
   uint32_t      index;
+  uint32_t      queueCount;
 } VkmQueueFamily;
 
-typedef struct VkmQueue {
+typedef struct VkmDedicatedQueue {
   VkQueue         queue;
   VkCommandBuffer cmd;
-} VkmQueue;
+} VkmDedicatedQueue;
+typedef struct VkmSharedQueue {
+  VkQueue         queue;
+  VkCommandBuffer cmd;
+} VkmSharedQueue;
 
 typedef struct VkmContext {
   VkPhysicalDevice physicalDevice;
@@ -174,9 +179,7 @@ typedef struct VkmContext {
   VkmTimeline      timeline;
   VkDescriptorPool descriptorPool;
   VkQueryPool      timeQueryPool;
-
   VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
-
 } VkmContext;
 
 typedef struct VkmStandardPipeline {
@@ -533,13 +536,13 @@ static inline void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
 // Image Barriers
 //----------------------------------------------------------------------------------
 
-//typedef enum QueueBarrier {
-//  QUEUE_BARRIER_IGNORE,
-//  QUEUE_BARRIER_GRAPHICS,
-//  QUEUE_BARRIER_COMPUTE,
-//  QUEUE_BARRIER_TRANSITION,
-//  QUEUE_BARRIER_FAMILY_EXTERNAL,
-//} QueueBarrier;
+typedef enum VkmQueueBarrier {
+  QUEUE_BARRIER_MAIN_GRAPHICS,
+  QUEUE_BARRIER_DEDICATED_COMPUTE,
+  QUEUE_BARRIER_DEDICATED_TRANSITION,
+  QUEUE_BARRIER_IGNORE,
+  QUEUE_BARRIER_FAMILY_EXTERNAL,
+} VkmQueueBarrier;
 //static uint32_t GetQueueIndex(const QueueBarrier queueBarrier) {
 //  switch (queueBarrier) {
 //    default:
@@ -575,6 +578,11 @@ static const VkmImageBarrier* VKM_TRANSFER_DST_IMAGE_BARRIER = &(const VkmImageB
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+};
+static const VkmImageBarrier* VKM_TRANSFER_READ_IMAGE_BARRIER = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_SHADER_READ_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
