@@ -103,13 +103,13 @@ void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR sur
 
   {  // Create
     VkBool32 presentSupport = VK_FALSE;
-    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(pContext->physicalDevice,  pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_GRAPHICS].index, surface, &presentSupport));
+    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(pContext->physicalDevice,  pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, surface, &presentSupport));
     REQUIRE(presentSupport, "Queue can't present to surface!")
 
-    vkGetDeviceQueue(pContext->device, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_GRAPHICS].index, 0, &node.graphicsQueue);
+    vkGetDeviceQueue(pContext->device, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 0, &node.graphicsQueue);
     const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_GRAPHICS].pool,
+        .commandPool = pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool,
         .commandBufferCount = 1,
     };
     VKM_REQUIRE(vkAllocateCommandBuffers(pContext->device, &commandBufferAllocateInfo, &node.cmd));
@@ -123,7 +123,7 @@ void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR sur
     VkmCreateAllocateBindMapBuffer(pContext, VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &nodeContext.globalSetMemory, &nodeContext.globalSetBuffer, (void**)&node.pGlobalSetMapped);
 
     VkmAllocateDescriptorSet(pContext, pContext->descriptorPool, &nodeContext.standardPipe.materialSetLayout, &node.checkerMaterialSet);
-    VkmCreateTextureFromFile(pContext, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_GRAPHICS].pool, node.graphicsQueue, "textures/uvgrid.jpg", &nodeContext.checkerTexture);
+    VkmCreateTextureFromFile(pContext, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, "textures/uvgrid.jpg", &nodeContext.checkerTexture);
 
     VkmAllocateDescriptorSet(pContext, pContext->descriptorPool, &nodeContext.standardPipe.objectSetLayout, &node.sphereObjectSet);
     VkmCreateAllocateBindMapBuffer(pContext, VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &nodeContext.sphereObjectSetMemory, &nodeContext.sphereObjectSetBuffer, (void**)&nodeContext.pSphereObjectSetMapped);
@@ -137,7 +137,7 @@ void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR sur
     vkmUpdateGlobalSet(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
     vkmUpdateObjectSet(&nodeContext.sphereTransform, &nodeContext.sphereObjectState, nodeContext.pSphereObjectSetMapped);
 
-    VkmCreateSphereMesh(pContext, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_GRAPHICS].pool, node.graphicsQueue, 0.5f, 32, 32, &nodeContext.sphereMesh);
+    VkmCreateSphereMesh(pContext, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, 0.5f, 32, 32, &nodeContext.sphereMesh);
     VkmCreateSwap(pContext, surface, &node.swap);
   }
 

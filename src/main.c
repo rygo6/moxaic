@@ -41,32 +41,26 @@ int main(void) {
       .storageImageDescriptorCount = 10,
       .presentSurface = surface,
       .queueFamilyCreateInfos = {
-          [VKM_QUEUE_FAMILY_TYPE_GRAPHICS] = {
+          [VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
               .supportsGraphics = VKM_SUPPORT_YES,
               .supportsCompute = VKM_SUPPORT_YES,
               .supportsTransfer = VKM_SUPPORT_YES,
-              .supportsGlobalPriority = VKM_SUPPORT_YES,
-              .supportsSparseBinding = VKM_SUPPORT_OPTIONAL,
-              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_HIGH_EXT,
+              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
               .queueCount = 1,
               .pQueuePriorities = (float[]){1.0f},
           },
-          [VKM_QUEUE_FAMILY_TYPE_COMPUTE] = {
+          [VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
               .supportsGraphics = VKM_SUPPORT_NO,
               .supportsCompute = VKM_SUPPORT_YES,
               .supportsTransfer = VKM_SUPPORT_YES,
-              .supportsGlobalPriority = VKM_SUPPORT_YES,
-              .supportsSparseBinding = VKM_SUPPORT_OPTIONAL,
-              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_HIGH_EXT,
+              .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
               .queueCount = 1,
               .pQueuePriorities = (float[]){1.0f},
           },
-          [VKM_QUEUE_FAMILY_TYPE_TRANSFER] = {
+          [VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = {
               .supportsGraphics = VKM_SUPPORT_NO,
               .supportsCompute = VKM_SUPPORT_NO,
               .supportsTransfer = VKM_SUPPORT_YES,
-              .supportsGlobalPriority = VKM_SUPPORT_OPTIONAL,
-              .supportsSparseBinding = VKM_SUPPORT_OPTIONAL,
               .queueCount = 1,
               .pQueuePriorities = (float[]){0.0f},
           },

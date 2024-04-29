@@ -153,9 +153,9 @@ typedef struct VkmStandardObjectSetState {
 } VkmStandardObjectSetState;
 
 typedef enum VkmQueueFamilyType {
-  VKM_QUEUE_FAMILY_TYPE_GRAPHICS,
-  VKM_QUEUE_FAMILY_TYPE_COMPUTE,
-  VKM_QUEUE_FAMILY_TYPE_TRANSFER,
+  VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
+  VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE,
+  VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER,
   VKM_QUEUE_FAMILY_TYPE_COUNT
 } VkmQueueFamilyType;
 typedef struct VkmQueueFamily {
@@ -780,8 +780,6 @@ typedef struct VkmQueueFamilyCreateInfo {
   VkmSupport               supportsGraphics;
   VkmSupport               supportsCompute;
   VkmSupport               supportsTransfer;
-  VkmSupport               supportsGlobalPriority;
-  VkmSupport               supportsSparseBinding;
   VkQueueGlobalPriorityKHR globalPriority;
   uint32_t                 queueCount;
   const float*             pQueuePriorities;

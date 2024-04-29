@@ -451,11 +451,11 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQ
   }
   vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, queueFamilyProperties);
 
-  for (uint32_t i = 0; i < queueFamilyCount; ++i) {
-    bool graphicsSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
-    bool computeSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
-    bool transferSupport = queueFamilyProperties[i].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT;
-    bool globalPrioritySupport = queueFamilyGlobalPriorityProperties[i].priorityCount > 0;
+  for (uint32_t queueFamilyIndex = 0; queueFamilyIndex < queueFamilyCount; ++queueFamilyIndex) {
+
+    bool graphicsSupport = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT;
+    bool computeSupport = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT;
+    bool transferSupport = queueFamilyProperties[queueFamilyIndex].queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT;
 
     if (pQueueDesc->supportsGraphics == VKM_SUPPORT_YES && !graphicsSupport) continue;
     if (pQueueDesc->supportsGraphics == VKM_SUPPORT_NO && graphicsSupport) continue;
@@ -463,18 +463,29 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQ
     if (pQueueDesc->supportsCompute == VKM_SUPPORT_NO && computeSupport) continue;
     if (pQueueDesc->supportsTransfer == VKM_SUPPORT_YES && !transferSupport) continue;
     if (pQueueDesc->supportsTransfer == VKM_SUPPORT_NO && transferSupport) continue;
-    if (pQueueDesc->globalPriority == VKM_SUPPORT_YES && !globalPrioritySupport) continue;
-    if (pQueueDesc->globalPriority == VKM_SUPPORT_NO && globalPrioritySupport) continue;
 
-    return i;
+    if (pQueueDesc->globalPriority != 0) {
+      bool globalPrioritySupported = false;
+      for (int i = 0; i < queueFamilyGlobalPriorityProperties[queueFamilyIndex].priorityCount; ++i) {
+        if (queueFamilyGlobalPriorityProperties[queueFamilyIndex].priorities[i] == pQueueDesc->globalPriority) {
+          globalPrioritySupported = true;
+          break;
+        }
+      }
+
+      if (!globalPrioritySupported)
+        continue;
+    }
+
+    return queueFamilyIndex;
   }
 
   fprintf(stderr, "Can't find queue family: graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
           string_Support[pQueueDesc->supportsGraphics],
           string_Support[pQueueDesc->supportsCompute],
           string_Support[pQueueDesc->supportsTransfer],
-          string_Support[pQueueDesc->globalPriority]);
-  //  PANIC("Can't find queue family");
+          string_VkQueueGlobalPriorityKHR(pQueueDesc->globalPriority));
+  PANIC("Can't find queue family");
   return -1;
 }
 
@@ -630,10 +641,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
       };
       deviceQueueCreateInfos[i] = (VkDeviceQueueCreateInfo){
           .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-//          .pNext = pContextCreateInfo->queueFamilyCreateInfos[i].supportsGlobalPriority != VKM_SUPPORT_NO &&
-//                           pContextCreateInfo->queueFamilyCreateInfos[i].globalPriority != 0 ?
-//                       &deviceQueueGlobalPriorityCreateInfos[i] :
-//                       NULL,
+          .pNext = pContextCreateInfo->queueFamilyCreateInfos[i].globalPriority != 0 ? &deviceQueueGlobalPriorityCreateInfos[i] : NULL,
           .queueFamilyIndex = pContext->queueFamilies[i].index,
           .queueCount = pContextCreateInfo->queueFamilyCreateInfos[i].queueCount,
           .pQueuePriorities = pContextCreateInfo->queueFamilyCreateInfos[i].pQueuePriorities};
