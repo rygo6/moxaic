@@ -37,6 +37,12 @@
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
+extern const char*                              VKM_SURFACE_EXTENSION_NAME;
+extern const char*                              VKM_EXTERNAL_MEMORY_EXTENSION_NAME;
+extern const char*                              VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME;
+extern const char*                              VKM_EXTERNAL_FENCE_EXTENSION_NAME;
+extern const VkExternalMemoryHandleTypeFlagBits VKM_EXTERNAL_HANDLE_TYPE;
+
 //----------------------------------------------------------------------------------
 // Math Types
 //----------------------------------------------------------------------------------
@@ -72,6 +78,17 @@ typedef vec4 quat;
 // Types
 //----------------------------------------------------------------------------------
 
+typedef enum VkmLocality {
+  // Used only by the single node it was made within.
+  VKM_LOCALITY_NODE_LOCAL,
+  // Used by multiple nodes within the same context.
+  VKM_LOCALITY_CONTEXT_SHARED,
+  // Used by multiple nodes on the same device, but still in the same process.
+  VKM_LOCALITY_DEVICE_SHARED,
+  // Used by nodes external to this context, device and process.
+  VKM_LOCALITY_EXTERNAL_PROCESS_SHARED,
+} VkmLocality;
+
 typedef struct VkmTimeline {
   VkSemaphore semaphore;
   uint64_t    waitValue;
@@ -95,8 +112,6 @@ typedef struct VkmTexture {
   VkImage        image;
   VkImageView    imageView;
   VkDeviceMemory imageMemory;
-  VkFormat       format;
-  VkExtent3D     extent;
 } VkmTexture;
 
 typedef struct VkmVertex {
@@ -179,7 +194,7 @@ typedef struct VkmContext {
   VkmTimeline      timeline;
   VkDescriptorPool descriptorPool;
   VkQueryPool      timeQueryPool;
-  VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
+  VkmQueueFamily   queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
 } VkmContext;
 
 typedef struct VkmStandardPipeline {
@@ -737,12 +752,14 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   return inputDirty;
 }
 
-void VkmCreateFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, VkmFramebuffer* pFrameBuffers);
+void VkmCreateStandardFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
 void VkmCreateSphereMesh(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void VkmAllocateDescriptorSet(const VkmContext* pContext, const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 void VkmCreateAllocateBindMapBuffer(const VkmContext* pContext, const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
 void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
 void VkmCreateStandardPipeline(const VkmContext* pContext, const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
+//void VkmBeginImmediateCommandBuffer(const VkmContext* pContext, const VkCommandPool commandPool, VkCommandBuffer* pCmd);
+//void VkmEndImmediateCommandBuffer(const VkmContext* pContext, const VkCommandPool commandPool, const VkQueue queue, const VkCommandBuffer cmd);
 
 extern VkInstance instance;
 

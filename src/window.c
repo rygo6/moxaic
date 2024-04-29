@@ -12,10 +12,11 @@
 #define WINDOW_NAME "moxaic"
 #define CLASS_NAME  "MoxaicWindowClass"
 
-const char* WindowExtensionName = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
-const char* ExternalMemoryExtensionName = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
-const char* ExternalSemaphoreExtensionName = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
-const char* ExternalFenceExtensionName = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
+const char*                              VKM_SURFACE_EXTENSION_NAME = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+const char*                              VKM_EXTERNAL_MEMORY_EXTENSION_NAME = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
+const char*                              VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
+const char*                              VKM_EXTERNAL_FENCE_EXTENSION_NAME = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
+const VkExternalMemoryHandleTypeFlagBits VKM_EXTERNAL_HANDLE_TYPE = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT;
 
 Input input;
 

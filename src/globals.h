@@ -28,8 +28,3 @@ extern void Panic(const char* file, int line, const char* message);
 
 extern bool isCompositor;
 extern bool isRunning;
-
-extern const char* WindowExtensionName;
-extern const char* ExternalMemoryExtensionName;
-extern const char* ExternalSemaphoreExtensionName;
-extern const char* ExternalFenceExtensionName;

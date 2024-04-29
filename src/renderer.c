@@ -7,13 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-
-// single instance for whole application
 VkInstance                      instance = VK_NULL_HANDLE;
 static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
-
-// but process could have different contexts managed by different threads
-//_Thread_local VkmContext context = {};
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -39,7 +34,6 @@ static VkBool32 DebugUtilsCallback(const VkDebugUtilsMessageSeverityFlagBitsEXT 
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: printf("%s\n", pCallbackData->pMessage); return VK_FALSE;
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:   PANIC(pCallbackData->pMessage); return VK_FALSE;
   }
-  return 0;
 }
 
 static VkCommandBuffer BeginImmediateCommandBuffer(const VkmContext* pContext, const VkCommandPool commandPool) {
@@ -90,17 +84,6 @@ static VkShaderModule CreateShaderModule(const VkmContext* pContext, const char*
   free(pCode);
   return shaderModule;
 }
-
-static const VkFormat VKM_PASS_STD_FORMATS[] = {
-    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
-    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
-    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
-};
-static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
-    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-};
 
 // Standard Pipeline
 #define VKM_PIPE_VERTEX_BINDING_STD_INDEX 0
@@ -412,18 +395,15 @@ void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool po
   stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
   REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
   const VkDeviceSize imageBufferSize = width * height * 4;
-  pTexture->extent = (VkExtent3D){width, height, 1};
+  VkImageCreateInfo  imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
+  imageCreateInfo.extent = (VkExtent3D){width, height, 1};
+  imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pTexture->imageMemory, &pTexture->image, &pTexture->imageView);
 
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
   CreateStagingBuffer(pContext, pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
   stbi_image_free(pImagePixels);
-
-  VkImageCreateInfo imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
-  imageCreateInfo.extent = pTexture->extent;
-  imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pTexture->imageMemory, &pTexture->image, &pTexture->imageView);
-
   const VkCommandBuffer commandBuffer = BeginImmediateCommandBuffer(pContext, pool);
   vkmCommandPipelineImageBarrier(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
   const VkBufferImageCopy region = {
@@ -433,6 +413,71 @@ void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool po
   vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
   vkmCommandPipelineImageBarrier(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_TRANSFER_READ_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
   EndImmediateCommandBuffer(pContext, pool, queue, commandBuffer);
+  vkFreeMemory(pContext->device, stagingBufferMemory, VKM_ALLOC);
+  vkDestroyBuffer(pContext->device, stagingBuffer, VKM_ALLOC);
+}
+
+static const VkFormat VKM_PASS_STD_FORMATS[] = {
+    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
+    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
+    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
+};
+static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
+    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+};
+void VkmCreateStandardFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
+  REQUIRE(pContext->device != NULL, "Trying to create Framebuffers when Context has not been created!");
+  const VkExternalMemoryImageCreateInfo externalImageInfo = {
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+      .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
+  };
+  VkImageCreateInfo imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
+  switch (locality) {
+    default:
+    case VKM_LOCALITY_NODE_LOCAL:              break;
+    case VKM_LOCALITY_CONTEXT_SHARED:          break;
+    case VKM_LOCALITY_DEVICE_SHARED:           break;
+    case VKM_LOCALITY_EXTERNAL_PROCESS_SHARED: imageCreateInfo.pNext = &externalImageInfo; break;
+  }
+
+  for (int i = 0; i < framebufferCount; ++i) {
+
+    imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
+
+    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].colorImageMemory, &pFrameBuffers[i].colorImage, &pFrameBuffers[i].colorImageView);
+
+    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].normalImageMemory, &pFrameBuffers[i].normalImage, &pFrameBuffers[i].normalImageView);
+
+    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_DEPTH_BIT, &pFrameBuffers[i].depthImageMemory, &pFrameBuffers[i].depthImage, &pFrameBuffers[i].depthImageView);
+
+    imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
+    imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
+    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].gBufferImageMemory, &pFrameBuffers[i].gBufferImage, &pFrameBuffers[i].gBufferImageView);
+
+    const VkFramebufferCreateInfo framebufferCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = renderPass,
+        .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+        .pAttachments = (const VkImageView[]){
+            [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = pFrameBuffers[i].colorImageView,
+            [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = pFrameBuffers[i].normalImageView,
+            [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = pFrameBuffers[i].depthImageView,
+        },
+        .width = DEFAULT_WIDTH,
+        .height = DEFAULT_HEIGHT,
+        .layers = 1,
+    };
+    VKM_REQUIRE(vkCreateFramebuffer(pContext->device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
+    VKM_REQUIRE(vkCreateSemaphore(pContext->device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
+  }
 }
 
 //----------------------------------------------------------------------------------
@@ -501,7 +546,7 @@ void vkmInitialize() {
         VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         VK_KHR_SURFACE_EXTENSION_NAME,
-        WindowExtensionName,
+        VKM_SURFACE_EXTENSION_NAME,
     };
     const VkInstanceCreateInfo instanceCreationInfo = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -623,9 +668,9 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
         VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
         VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME,
         VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
-        ExternalMemoryExtensionName,
-        ExternalSemaphoreExtensionName,
-        ExternalFenceExtensionName,
+        VKM_EXTERNAL_MEMORY_EXTENSION_NAME,
+        VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+        VKM_EXTERNAL_FENCE_EXTENSION_NAME,
     };
     uint32_t activeQueueIndex = 0;
     uint32_t activeQueueCount = 0;
@@ -664,7 +709,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
 
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = i == VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER ? VK_COMMAND_POOL_CREATE_TRANSIENT_BIT : VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = pContext->queueFamilies[i].index,
     };
     VKM_REQUIRE(vkCreateCommandPool(pContext->device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pContext->queueFamilies[i].pool));
@@ -855,45 +900,5 @@ void VkmCreateSphereMesh(const VkmContext* pContext, const VkCommandPool pool, c
     uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
     CreateAllocateBindBuffer(pContext, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, &pMesh->vertexMemory, &pMesh->vertexBuffer);
     PopulateBufferViaStaging(pContext, pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
-  }
-}
-
-void VkmCreateFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, VkmFramebuffer* pFrameBuffers) {
-  REQUIRE(pContext->device != NULL, "Trying to create Framebuffers when Context has not been created!");
-  for (int i = 0; i < framebufferCount; ++i) {
-    VkImageCreateInfo imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
-    imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
-
-    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].colorImageMemory, &pFrameBuffers[i].colorImage, &pFrameBuffers[i].colorImageView);
-
-    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].normalImageMemory, &pFrameBuffers[i].normalImage, &pFrameBuffers[i].normalImageView);
-
-    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
-    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_DEPTH_BIT, &pFrameBuffers[i].depthImageMemory, &pFrameBuffers[i].depthImage, &pFrameBuffers[i].depthImageView);
-
-    imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
-    imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, &pFrameBuffers[i].gBufferImageMemory, &pFrameBuffers[i].gBufferImage, &pFrameBuffers[i].gBufferImageView);
-
-    const VkFramebufferCreateInfo framebufferCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = renderPass,
-        .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
-        .pAttachments = (const VkImageView[]){
-            [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = pFrameBuffers[i].colorImageView,
-            [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = pFrameBuffers[i].normalImageView,
-            [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = pFrameBuffers[i].depthImageView,
-        },
-        .width = DEFAULT_WIDTH,
-        .height = DEFAULT_HEIGHT,
-        .layers = 1,
-    };
-    VKM_REQUIRE(vkCreateFramebuffer(pContext->device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
-    VKM_REQUIRE(vkCreateSemaphore(pContext->device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
   }
 }
