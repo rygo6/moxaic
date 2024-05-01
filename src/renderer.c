@@ -346,21 +346,6 @@ void VkmCreateAllocBindMapBuffer(const VkmContext* pContext, const VkMemoryPrope
   VkmCreateAllocBindBuffer(pContext, memoryPropertyFlags, bufferSize, usage, locality, pDeviceMemory, pBuffer);
   VKM_REQUIRE(vkMapMemory(pContext->device, *pDeviceMemory, 0, bufferSize, 0, ppMapped));
 }
-typedef struct VkmCreateAllocBindMapExportInfo {
-  VkMemoryPropertyFlags memoryPropertyFlags;
-  VkDeviceSize          bufferSize;
-  VkBufferUsageFlags    usage;
-  VkmLocality           locality;
-} VkmCreateAllocBindMapExportInfo;
-void VkmCreateAllocBindMapExportBuffer(const VkmContext* pContext, const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped, HANDLE* pExternalHandle) {
-  VkmCreateAllocBindMapBuffer(pContext, memoryPropertyFlags, bufferSize, usage, locality, pDeviceMemory, pBuffer, ppMapped);
-  const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
-      .memory = *pDeviceMemory,
-      .handleType = VKM_EXTERNAL_HANDLE_TYPE};
-  VKM_PFN_LOAD(vkGetMemoryWin32HandleKHR);
-  VKM_REQUIRE(vkGetMemoryWin32HandleKHR(pContext->device, &getWin32HandleInfo, pExternalHandle));
-}
 static void CreateStagingBuffer(const VkmContext* pContext, const void* srcData, const VkDeviceSize bufferSize, const VkmLocality locality, VkDeviceMemory* pStagingBufferMemory, VkBuffer* pStagingBuffer) {
   void* dstData;
   VkmCreateAllocBindBuffer(pContext, VKM_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, locality, pStagingBufferMemory, pStagingBuffer);
@@ -393,12 +378,7 @@ static void PopulateBufferViaStaging(const VkmContext* pContext, const VkCommand
     .samples = VK_SAMPLE_COUNT_1_BIT,             \
     .usage = VK_IMAGE_USAGE_SAMPLED_BIT           \
   }
-//typedef struct VkmCreateTexture {
-//  VkMemoryPropertyFlags memoryPropertyFlags;
-//  VkDeviceSize          bufferSize;
-//  VkBufferUsageFlags    usage;
-//  VkmLocality           locality;
-//} VkmCreateAllocBindMapExportInfo;
+
 static void CreateImageView(const VkmContext* pContext, const VkImageCreateInfo* pImageCreateInfo, const VkImage image, const VkImageAspectFlags aspectMask, VkImageView* pImageView) {
   const VkImageViewCreateInfo imageViewCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -428,18 +408,30 @@ static void CreateAllocateBindImageView(const VkmContext* pContext, const VkImag
 typedef struct VkmTextureCreateInfo {
   VkImageCreateInfo  imageCreateInfo;
   VkImageAspectFlags aspectMask;
-  VkmLocality locality;
+  VkmLocality        locality;
 } VkmTextureCreateInfo;
-static void CreateAllocBindTexture(const VkmContext* pContext, const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture) {
+void VkmCreateTexture(const VkmContext* pContext, const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture) {
   VKM_REQUIRE(vkCreateImage(pContext->device, &pTextureCreateInfo->imageCreateInfo, VKM_ALLOC, &pTexture->image));
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(pContext->device, pTexture->image, &memRequirements);
   VkmAllocMemory(pContext, &memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pTextureCreateInfo->locality, &pTexture->imageMemory);
   VKM_REQUIRE(vkBindImageMemory(pContext->device, pTexture->image, pTexture->imageMemory, 0));
-}
-void VkmCreateTexture(const VkmContext* pContext, const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture) {
-  CreateAllocBindTexture(pContext, pTextureCreateInfo, pTexture);
   CreateImageView(pContext, &pTextureCreateInfo->imageCreateInfo, pTexture->image, pTextureCreateInfo->aspectMask, &pTexture->imageView);
+  switch (pTextureCreateInfo->locality) {
+    default:
+    case VKM_LOCALITY_NODE_LOCAL:              break;
+    case VKM_LOCALITY_CONTEXT_SHARED:          break;
+    case VKM_LOCALITY_DEVICE_SHARED:           break;
+    case VKM_LOCALITY_EXTERNAL_PROCESS_SHARED: {
+      const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+          .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+          .memory = pTexture->imageMemory,
+          .handleType = VKM_EXTERNAL_HANDLE_TYPE};
+      VKM_PFN_LOAD(vkGetMemoryWin32HandleKHR);
+      VKM_REQUIRE(vkGetMemoryWin32HandleKHR(pContext->device, &getWin32HandleInfo, &pTexture->externalHandle));
+      break;
+    }
+  }
 }
 void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture) {
   int      texChannels, width, height;
@@ -479,39 +471,42 @@ static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 };
 void VkmCreateStandardFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
-  REQUIRE(pContext->device != NULL, "Trying to create Framebuffers when Context has not been created!");
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
   };
-  VkImageCreateInfo imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
+  VkmTextureCreateInfo textureCreateInfo = {
+      .imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO,
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .locality = locality,
+  };
   switch (locality) {
     default:
     case VKM_LOCALITY_NODE_LOCAL:              break;
     case VKM_LOCALITY_CONTEXT_SHARED:          break;
     case VKM_LOCALITY_DEVICE_SHARED:           break;
-    case VKM_LOCALITY_EXTERNAL_PROCESS_SHARED: imageCreateInfo.pNext = &externalImageInfo; break;
+    case VKM_LOCALITY_EXTERNAL_PROCESS_SHARED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
-
   for (int i = 0; i < framebufferCount; ++i) {
+    textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
-    imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
+    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    VkmCreateTexture(pContext, &textureCreateInfo, &pFrameBuffers[i].color);
 
-    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, locality, &pFrameBuffers[i].color.imageMemory, &pFrameBuffers[i].color.image, &pFrameBuffers[i].color.imageView);
+    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    VkmCreateTexture(pContext, &textureCreateInfo, &pFrameBuffers[i].normal);
 
-    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, locality, &pFrameBuffers[i].normal.imageMemory, &pFrameBuffers[i].normal.image, &pFrameBuffers[i].normal.imageView);
+    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    VkmCreateTexture(pContext, &textureCreateInfo, &pFrameBuffers[i].depth);
 
-    imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
-    imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_DEPTH_BIT, locality, &pFrameBuffers[i].depth.imageMemory, &pFrameBuffers[i].depth.image, &pFrameBuffers[i].depth.imageView);
-
-    imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
-    imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
-    CreateAllocateBindImageView(pContext, &imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, locality, &pFrameBuffers[i].gBuffer.imageMemory, &pFrameBuffers[i].gBuffer.image, &pFrameBuffers[i].gBuffer.imageView);
+    textureCreateInfo.imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
+    textureCreateInfo.imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
+    textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkmCreateTexture(pContext, &textureCreateInfo, &pFrameBuffers[i].gBuffer);
 
     const VkFramebufferCreateInfo framebufferCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,

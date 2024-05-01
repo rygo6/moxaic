@@ -116,14 +116,8 @@ typedef struct VkmTexture {
   VkImage        image;
   VkImageView    imageView;
   VkDeviceMemory imageMemory;
-} VkmTexture;
-
-typedef struct VkmExternalTexture {
-  VkImage        image;
-  VkImageView    imageView;
-  VkDeviceMemory imageMemory;
   HANDLE         externalHandle;
-} VkmExternalTexture;
+} VkmTexture;
 
 typedef struct VkmVertex {
   vec3 position;
@@ -145,26 +139,8 @@ typedef struct VkmFramebuffer {
   VkmTexture normal;
   VkmTexture depth;
   VkmTexture gBuffer;
-
-  //  VkImage        colorImage;
-  //  VkDeviceMemory colorImageMemory;
-  //  VkImageView    colorImageView;
-  //
-  //  VkImage        normalImage;
-  //  VkDeviceMemory normalImageMemory;
-  //  VkImageView    normalImageView;
-  //
-  //  VkImage        depthImage;
-  //  VkDeviceMemory depthImageMemory;
-  //  VkImageView    depthImageView;
-  //
-  //  VkImage        gBufferImage;
-  //  VkDeviceMemory gBufferImageMemory;
-  //  VkImageView    gBufferImageView;
-
   VkFramebuffer framebuffer;
   VkSemaphore   renderCompleteSemaphore;
-
 } VkmFramebuffer;
 
 typedef struct VkmGlobalSetState {
