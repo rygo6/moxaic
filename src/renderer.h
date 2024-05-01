@@ -7,8 +7,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <vulkan/vk_enum_string_helper.h>
+
+#include <windows.h>
+
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_win32.h>
+#include <vulkan/vk_enum_string_helper.h>
 
 //----------------------------------------------------------------------------------
 // Globals
@@ -114,6 +118,13 @@ typedef struct VkmTexture {
   VkDeviceMemory imageMemory;
 } VkmTexture;
 
+typedef struct VkmExternalTexture {
+  VkImage        image;
+  VkImageView    imageView;
+  VkDeviceMemory imageMemory;
+  HANDLE         externalHandle;
+} VkmExternalTexture;
+
 typedef struct VkmVertex {
   vec3 position;
   vec3 normal;
@@ -130,21 +141,26 @@ typedef struct VkmMesh {
 } VkmMesh;
 
 typedef struct VkmFramebuffer {
-  VkImage        colorImage;
-  VkDeviceMemory colorImageMemory;
-  VkImageView    colorImageView;
+  VkmTexture color;
+  VkmTexture normal;
+  VkmTexture depth;
+  VkmTexture gBuffer;
 
-  VkImage        normalImage;
-  VkDeviceMemory normalImageMemory;
-  VkImageView    normalImageView;
-
-  VkImage        depthImage;
-  VkDeviceMemory depthImageMemory;
-  VkImageView    depthImageView;
-
-  VkImage        gBufferImage;
-  VkDeviceMemory gBufferImageMemory;
-  VkImageView    gBufferImageView;
+  //  VkImage        colorImage;
+  //  VkDeviceMemory colorImageMemory;
+  //  VkImageView    colorImageView;
+  //
+  //  VkImage        normalImage;
+  //  VkDeviceMemory normalImageMemory;
+  //  VkImageView    normalImageView;
+  //
+  //  VkImage        depthImage;
+  //  VkDeviceMemory depthImageMemory;
+  //  VkImageView    depthImageView;
+  //
+  //  VkImage        gBufferImage;
+  //  VkDeviceMemory gBufferImageMemory;
+  //  VkImageView    gBufferImageView;
 
   VkFramebuffer framebuffer;
   VkSemaphore   renderCompleteSemaphore;
@@ -755,7 +771,7 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
 void VkmCreateStandardFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
 void VkmCreateSphereMesh(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void VkmAllocateDescriptorSet(const VkmContext* pContext, const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void VkmCreateAllocateBindMapBuffer(const VkmContext* pContext, const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
+void VkmCreateAllocBindMapBuffer(const VkmContext* pContext, const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
 void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
 void VkmCreateStandardPipeline(const VkmContext* pContext, const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
 //void VkmBeginImmediateCommandBuffer(const VkmContext* pContext, const VkCommandPool commandPool, VkCommandBuffer* pCmd);

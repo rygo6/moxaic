@@ -120,13 +120,13 @@ void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR sur
     VkmCreateSampler(pContext, &VKM_SAMPLER_LINEAR_CLAMP_DESC, &nodeContext.linearSampler);
 
     VkmAllocateDescriptorSet(pContext, pContext->descriptorPool, &nodeContext.standardPipe.globalSetLayout, &node.globalSet);
-    VkmCreateAllocateBindMapBuffer(pContext, VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &nodeContext.globalSetMemory, &nodeContext.globalSetBuffer, (void**)&node.pGlobalSetMapped);
+    VkmCreateAllocBindMapBuffer(pContext, VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &nodeContext.globalSetMemory, &nodeContext.globalSetBuffer, (void**)&node.pGlobalSetMapped);
 
     VkmAllocateDescriptorSet(pContext, pContext->descriptorPool, &nodeContext.standardPipe.materialSetLayout, &node.checkerMaterialSet);
     VkmCreateTextureFromFile(pContext, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, "textures/uvgrid.jpg", &nodeContext.checkerTexture);
 
     VkmAllocateDescriptorSet(pContext, pContext->descriptorPool, &nodeContext.standardPipe.objectSetLayout, &node.sphereObjectSet);
-    VkmCreateAllocateBindMapBuffer(pContext, VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &nodeContext.sphereObjectSetMemory, &nodeContext.sphereObjectSetBuffer, (void**)&nodeContext.pSphereObjectSetMapped);
+    VkmCreateAllocBindMapBuffer(pContext, VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &nodeContext.sphereObjectSetMemory, &nodeContext.sphereObjectSetBuffer, (void**)&nodeContext.pSphereObjectSetMapped);
 
     const VkWriteDescriptorSet writeSets[] = {
         VKM_SET_WRITE_STD_GLOBAL_BUFFER(node.globalSet, nodeContext.globalSetBuffer),
@@ -146,7 +146,7 @@ void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR sur
     node.standardPipeline = nodeContext.standardPipe.pipeline;
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
       node.framebuffers[i] = nodeContext.framebuffers[i].framebuffer;
-      node.frameBufferColorImages[i] = nodeContext.framebuffers[i].colorImage;
+      node.frameBufferColorImages[i] = nodeContext.framebuffers[i].color.image;
     }
     node.sphereIndexCount = nodeContext.sphereMesh.indexCount;
     node.sphereIndexBuffer = nodeContext.sphereMesh.indexBuffer;
