@@ -2,4 +2,4 @@
 
 
 void mxcTestNodeUpdate();
-void mxcCreateTestNodeContext(const VkmContext* pContext, const VkSurfaceKHR surface);
+void mxcCreateTestNodeContext(const VkSurfaceKHR surface);

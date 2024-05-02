@@ -8,9 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 VkInstance                      instance = VK_NULL_HANDLE;
 static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
+
+_Thread_local VkmContext context;
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -770,7 +771,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
         .pNext = &timelineSemaphoreTypeCreateInfo,
     };
     VKM_REQUIRE(vkCreateSemaphore(pContext->device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &pContext->timeline.semaphore));
-    pContext->timeline.waitValue = 0;
+    pContext->timeline.value = 0;
   }
 
   {  // Pools
