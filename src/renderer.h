@@ -764,14 +764,14 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   return inputDirty;
 }
 
-void VkmCreateStandardFramebuffers(const VkmContext* pContext, const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
-void VkmCreateSphereMesh(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
-void VkmAllocateDescriptorSet(const VkmContext* pContext, const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void VkmCreateAllocBindMapBuffer(const VkmContext* pContext, const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
-void VkmCreateTextureFromFile(const VkmContext* pContext, const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
-void VkmCreateStandardPipeline(const VkmContext* pContext, const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
-//void VkmBeginImmediateCommandBuffer(const VkmContext* pContext, const VkCommandPool commandPool, VkCommandBuffer* pCmd);
-//void VkmEndImmediateCommandBuffer(const VkmContext* pContext, const VkCommandPool commandPool, const VkQueue queue, const VkCommandBuffer cmd);
+void VkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+void VkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
+void VkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void VkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
+void VkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
+void VkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
+//void VkmBeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCmd);
+//void VkmEndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue queue, const VkCommandBuffer cmd);
 
 extern VkInstance instance;
 extern _Thread_local VkmContext context;
@@ -839,6 +839,6 @@ typedef struct VkmSamplerDesc {
 } VkmSamplerDesc;
 #define VKM_SAMPLER_LINEAR_CLAMP_DESC \
   (const VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
-void VkmCreateSampler(const VkmContext* pContext, const VkmSamplerDesc* pDesc, VkSampler* pSampler);
-void VkmCreateStandardRenderPass(const VkmContext* pContext, VkRenderPass* pRenderPass);
-void VkmCreateSwap(const VkmContext* pContext, const VkSurfaceKHR surface, VkmSwap* pSwap);
+void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler);
+void VkmCreateStandardRenderPass(VkRenderPass* pRenderPass);
+void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap);
