@@ -1,12 +1,13 @@
 #include "globals.h"
 #include "renderer.h"
 #include "test_node.h"
-#include "window.h"
+//#include "window.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 typedef const VkmContextCreateInfo info;
 #include "stb_image.h"
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -24,17 +25,21 @@ void Panic(const char* file, const int line, const char* message) {
   abort();
 }
 
-bool cycle;
-
-DWORD TestNodeUpdate(LPVOID pVoid) {
+void* TestNodeUpdate(void* arg) {
   while (isRunning) {
     mxcTestNodeUpdate();
-    cycle = true;
   }
   return 0;
 }
 
 int main(void) {
+
+#ifdef __STDC_NO_THREADS__
+  printf("Threads are not supported.\n");
+#else
+  printf("Threads are supported.\n");
+#endif
+
   //  assert(sizeof(struct static_arena_memory) <= 1 << 16);
   //  arena_offset aInstance = offsetof(struct static_arena_memory, instance);
 
@@ -76,16 +81,16 @@ int main(void) {
           //          },
       },
   };
-//  VkmContext context;
   vkmCreateContext(&contextCreateInfo, &context);
 
   mxcCreateTestNodeContext(surface);
 
-  HANDLE hThread;
-  DWORD  threadId;
-  hThread = CreateThread(NULL, 0, TestNodeUpdate, NULL, 0, &threadId);
-  if (hThread == NULL) {
-    MessageBox(NULL, TEXT("Failed to create thread!"), TEXT("Error"), MB_OK);
+
+  pthread_t thread_id;
+  int       result;
+  result = pthread_create(&thread_id, NULL, TestNodeUpdate, NULL);
+  if (result != 0) {
+    perror("Thread creation failed");
     return 1;
   }
 
@@ -101,8 +106,11 @@ int main(void) {
     context.timeline.value++;
   }
 
-  WaitForSingleObject(hThread, INFINITE);
-  CloseHandle(hThread);
+  result = pthread_join(thread_id, NULL);
+  if (result != 0) {
+    perror("Thread join failed");
+    return 1;
+  }
 
   //  while (isRunning) {
   //    vkmUpdateWindowInput();

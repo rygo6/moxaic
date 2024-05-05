@@ -764,12 +764,12 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   return inputDirty;
 }
 
-void VkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
-void VkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
-void VkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void VkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
-void VkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
-void VkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
+void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+void vkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
+void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
+void vkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
+void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
 //void VkmBeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCmd);
 //void VkmEndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue queue, const VkCommandBuffer cmd);
 

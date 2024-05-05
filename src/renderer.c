@@ -276,7 +276,7 @@ static void CreateStandardObjectSetLayout(VkmStandardPipe* pStandardPipeline) {
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->objectSetLayout));
 }
 
-void VkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet) {
+void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet) {
   const VkDescriptorSetAllocateInfo allocateInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
       .descriptorPool = descriptorPool,
@@ -343,7 +343,7 @@ static void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyF
   VkmAllocMemory(&memoryRequirements, memoryPropertyFlags, locality, pDeviceMemory);
   VKM_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMemory, 0));
 }
-void VkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped) {
+void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped) {
   VkmCreateAllocBindBuffer(memoryPropertyFlags, bufferSize, usage, locality, pDeviceMemory, pBuffer);
   VKM_REQUIRE(vkMapMemory(context.device, *pDeviceMemory, 0, bufferSize, 0, ppMapped));
 }
@@ -434,7 +434,7 @@ void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
     }
   }
 }
-void VkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture) {
+void vkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture) {
   int      texChannels, width, height;
   stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
   REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
@@ -471,7 +471,7 @@ static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
     [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 };
-void VkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
+void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -879,7 +879,7 @@ void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap) {
   VKM_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VKM_ALLOC, &pSwap->renderCompleteSemaphore));
 }
 
-void VkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline) {
+void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline) {
   REQUIRE(context.device != NULL, "Trying to create StandardPipeline when Context has not been created!");
   CreateGlobalSetLayout(pStandardPipeline);
   CreateStandardMaterialSetLayout(pStandardPipeline);
@@ -930,7 +930,7 @@ static void GenerateSphereIndices(const int slicesCount, const int stacksCount, 
     }
   }
 }
-void VkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
+void vkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   {
     pMesh->indexCount = GenerateSphereIndexCount(slicesCount, stackCount);
     uint16_t pIndices[pMesh->indexCount];

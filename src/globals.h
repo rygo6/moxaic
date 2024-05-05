@@ -5,13 +5,13 @@
 
 typedef uint16_t arena_offset;
 
-extern void* static_arena;
-static uint8_t dynamic_arena[1 << 16];
+extern void*    static_arena;
+static uint8_t  dynamic_arena[1 << 16];
 static uint16_t dynamic_arena_end;
 
-#define A_OFFSET(arena, field) (void*)field - (void*)arena
-#define A_PTR(arena, offset, type) ((type*)((void*)& arena + offset))
-#define STC_A_PTR(offset, type) ((type*)(static_arena + offset))
+#define A_OFFSET(arena, field)     (void*)field - (void*)arena
+#define A_PTR(arena, offset, type) ((type*)((void*)&arena + offset))
+#define STC_A_PTR(offset, type)    ((type*)(static_arena + offset))
 
 extern void Panic(const char* file, int line, const char* message);
 #define PANIC(message) Panic(__FILE__, __LINE__, message)
@@ -20,7 +20,7 @@ extern void Panic(const char* file, int line, const char* message);
     PANIC(message);                        \
   }
 
-#define CACHE_ALIGN __attribute((aligned(64)))
+#define CACHE_ALIGN  __attribute((aligned(64)))
 #define COUNT(array) sizeof(array) / sizeof(array[0])
 
 #define DEFAULT_WIDTH  1024
@@ -28,3 +28,9 @@ extern void Panic(const char* file, int line, const char* message);
 
 extern bool isCompositor;
 extern bool isRunning;
+
+typedef enum MxcCycle {
+  MXC_CYCLE_INPUT,
+  MXC_CYCLE_RENDER,
+  MXC_CYCLE_COUNT
+} MxcCycle;

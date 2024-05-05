@@ -1,9 +1,12 @@
 cmake_minimum_required(VERSION 3.28)
 project(moxaic C)
 
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TARGET_NAME moxaic)
+
+#set(THREADS_PREFER_PTHREAD_FLAG ON)
+#set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
 
 file(GLOB SRC_FILES
         src/*.c
@@ -30,7 +33,6 @@ set(CGLM_SDK_PATH "C:/Developer/cglm")
 target_link_directories(${TARGET_NAME} PUBLIC
         lib
         "${VULKAN_SDK_PATH}/Lib"
-        "${CGLM_SDK_PATH}/build"
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC
@@ -41,12 +43,10 @@ target_include_directories(${TARGET_NAME} PUBLIC
         src/mid
         third_party
         "${VULKAN_SDK_PATH}/Include"
-        "${CGLM_SDK_PATH}/include"
 )
 
 target_link_libraries(${TARGET_NAME}
         vulkan-1
-        cglm
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE
