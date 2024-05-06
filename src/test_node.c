@@ -1,13 +1,15 @@
+#include "test_node.h"
 #include "globals.h"
 #include "renderer.h"
 
 #include <vulkan/vk_enum_string_helper.h>
 
-static struct {
+_Thread_local static struct {
   VkmTransform      cameraTransform;
   VkmGlobalSetState globalSetState;
 
   VkCommandBuffer cmd;
+  PFN_vkCmdBindPipeline vkCmdBindPipeline;
 
   int           framebufferIndex;
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
@@ -35,7 +37,7 @@ static struct {
 
 } node;
 
-void mxcTestNodeUpdate() {
+void mxcUpdateTestNode() {
 
   node.timeline.value++;
   vkmTimelineWait(node.device, &node.timeline);
@@ -44,12 +46,10 @@ void mxcTestNodeUpdate() {
     vkmUpdateGlobalSetView(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
   }
 
-  printf("%f\n", 1.0f / input.deltaTime);
-
   vkmCmdResetBegin(node.cmd);
   vkmCmdBeginPass(node.cmd, node.standardRenderPass, node.framebuffers[node.framebufferIndex]);
 
-  vkCmdBindPipeline(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipeline);
+  node.vkCmdBindPipeline(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipeline);
   vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &node.globalSet, 0, NULL);
   vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &node.checkerMaterialSet, 0, NULL);
   vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &node.sphereObjectSet, 0, NULL);
@@ -82,7 +82,7 @@ void mxcTestNodeUpdate() {
   vkmTimelineWait(node.device, &node.timeline);
 }
 
-static struct {
+_Thread_local static struct {
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkmTexture     checkerTexture;
   VkmMesh        sphereMesh;
@@ -103,11 +103,12 @@ static struct {
 
 } nodeContext;
 
-void mxcCreateTestNodeContext(const VkSurfaceKHR surface) {
+void mxcCreateTestNode(void* pArg) {
+  const MxcTestNodeCreateInfo* pCreateInfo = (MxcTestNodeCreateInfo*)pArg;
 
   {  // Create
     VkBool32 presentSupport = VK_FALSE;
-    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, surface, &presentSupport));
+    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pCreateInfo->surface, &presentSupport));
     REQUIRE(presentSupport, "Queue can't present to surface!")
 
     vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 0, &node.graphicsQueue);
@@ -119,7 +120,7 @@ void mxcCreateTestNodeContext(const VkSurfaceKHR surface) {
     VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &node.cmd));
 
     VkmCreateStandardRenderPass(&node.standardRenderPass);
-    vkmCreateStandardFramebuffers(node.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_NODE_LOCAL, nodeContext.framebuffers);
+    vkmCreateStandardFramebuffers(node.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_EXTERNAL_PROCESS_SHARED, nodeContext.framebuffers);
     vkmCreateStandardPipeline(node.standardRenderPass, &nodeContext.standardPipe);
     VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &nodeContext.linearSampler);
 
@@ -139,10 +140,11 @@ void mxcCreateTestNodeContext(const VkSurfaceKHR surface) {
     };
     vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
     vkmUpdateGlobalSet(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
+    nodeContext.sphereTransform = pCreateInfo->transform;
     vkmUpdateObjectSet(&nodeContext.sphereTransform, &nodeContext.sphereObjectState, nodeContext.pSphereObjectSetMapped);
 
     vkmCreateSphereMesh(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, 0.5f, 32, 32, &nodeContext.sphereMesh);
-    VkmCreateSwap(surface, &node.swap);
+    VkmCreateSwap(pCreateInfo->surface, &node.swap);
   }
 
   {  // Copy to cache-friendly loop struct
@@ -156,7 +158,7 @@ void mxcCreateTestNodeContext(const VkSurfaceKHR surface) {
     node.sphereIndexBuffer = nodeContext.sphereMesh.indexBuffer;
     node.sphereVertexBuffer = nodeContext.sphereMesh.vertexBuffer;
     node.device = context.device;
-    node.timeline = context.timeline;
+    node.timeline.semaphore = context.timeline.semaphore; // do not copy value as it may be above 0
   }
 
   {  // Initial State
@@ -174,5 +176,11 @@ void mxcCreateTestNodeContext(const VkSurfaceKHR surface) {
     };
     VKM_REQUIRE(vkQueueSubmit(node.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
     VKM_REQUIRE(vkQueueWaitIdle(node.graphicsQueue));
+  }
+
+  {
+    // should do this for all things repeatedly called...
+    VKM_DEVICE_FUNC(vkCmdBindPipeline);
+    node.vkCmdBindPipeline = vkCmdBindPipeline;
   }
 }

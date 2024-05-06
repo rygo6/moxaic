@@ -1,5 +1,12 @@
 #pragma once
 
+#include "renderer.h"
 
-void mxcTestNodeUpdate();
-void mxcCreateTestNodeContext(const VkSurfaceKHR surface);
+typedef struct MxcTestNodeCreateInfo {
+//  VkmContext
+  VkSurfaceKHR surface;
+  VkmTransform transform;
+} MxcTestNodeCreateInfo;
+
+void mxcUpdateTestNode();
+void mxcCreateTestNode(void* pArg);

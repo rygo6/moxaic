@@ -1,6 +1,7 @@
 #pragma once
 
 #include "globals.h"
+#include "renderer.h"
 
 #include <pthread.h>
 #include <stdint.h>
@@ -44,6 +45,11 @@ typedef struct MxcInterProcessBuffer {
 typedef struct MxcNodeContext {
   MxcNodeType nodeType;
 
+  const VkmContext* pContext;
+  void* pInitArg;
+  void (*initFunc)(void*);
+  void (*updateFunc)();
+
   MxcRingBuffer consumer;
   MxcRingBuffer producer;
 
@@ -58,6 +64,33 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
+typedef struct MxcNodeCreateInfo {
+  MxcNodeType nodeType;
+  void* pInitArg;
+  void (*initFunc)(void*);
+  void (*updateFunc)();
+} MxcNodeCreateInfo;
+
+extern _Thread_local MxcNodeContext nodeContext;
+
+void* mxcUpdateNode(void* pArg);
+
+static inline void mxcCreateNodeContext(const MxcNodeCreateInfo* pNodeCreateInfo, MxcNodeContext* pNode) {
+  pNode->nodeType = pNodeCreateInfo->nodeType;
+  pNode->pContext = &context;
+  pNode->pInitArg = pNodeCreateInfo->pInitArg;
+  pNode->initFunc = pNodeCreateInfo->initFunc;
+  pNode->updateFunc = pNodeCreateInfo->updateFunc;
+  switch (pNodeCreateInfo->nodeType) {
+    case MXC_NODE_TYPE_LOCAL_THREAD: {
+      int result = pthread_create(&pNode->threadId, NULL, mxcUpdateNode, pNode);
+      REQUIRE(result == 0, "Node thread creation failed!");
+      break;
+    }
+    case MXC_NODE_TYPE_PROCESS:
+      break;
+  }
+}
 
 typedef void (*MxcInterProcessFuncPtr)(void*);
 

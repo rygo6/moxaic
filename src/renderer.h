@@ -34,14 +34,19 @@
     goto cleanup_goto;                             \
   }
 
-#define VKM_PFN_LOAD(vkFunction)                                                                \
+#define VKM_INSTANCE_FUNC(vkFunction)                                                           \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
+
+#define VKM_DEVICE_FUNC(vkFunction)                                                                 \
+  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetDeviceProcAddr(context.device, #vkFunction); \
+  REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
+
 
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
-extern const char*                              VKM_SURFACE_EXTENSION_NAME;
+extern const char*                              VKM_PLATFORM_SURFACE_EXTENSION_NAME;
 extern const char*                              VKM_EXTERNAL_MEMORY_EXTENSION_NAME;
 extern const char*                              VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME;
 extern const char*                              VKM_EXTERNAL_FENCE_EXTENSION_NAME;
@@ -773,7 +778,7 @@ void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* p
 //void VkmBeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCmd);
 //void VkmEndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue queue, const VkCommandBuffer cmd);
 
-extern VkInstance instance;
+extern VkInstance               instance;
 extern _Thread_local VkmContext context;
 
 typedef struct VkmInitializeDesc {

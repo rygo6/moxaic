@@ -12,7 +12,7 @@
 #define WINDOW_NAME "moxaic"
 #define CLASS_NAME  "MoxaicWindowClass"
 
-const char*                              VKM_SURFACE_EXTENSION_NAME = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
+const char*                              VKM_PLATFORM_SURFACE_EXTENSION_NAME = VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
 const char*                              VKM_EXTERNAL_MEMORY_EXTENSION_NAME = VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME;
 const char*                              VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME = VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME;
 const char*                              VKM_EXTERNAL_FENCE_EXTENSION_NAME = VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME;
@@ -90,6 +90,14 @@ void vkmUpdateWindowInput() {
   QueryPerformanceCounter((LARGE_INTEGER*)&window.current);
   uint64_t delta = ((window.current - prior) * 1000000) / window.frequency;
   input.deltaTime = (double)delta * 0.000001f;
+
+  static int titleUpdateRate = 64;
+  if (!--titleUpdateRate) {
+    titleUpdateRate = 64;
+    static char titleBuffer[32];
+    sprintf(titleBuffer, "%s | FPS=%.2f", WINDOW_NAME, 1.0f / input.deltaTime);
+    SetWindowText(window.hWnd, titleBuffer);
+  }
 }
 
 void vkmCreateWindow() {
@@ -115,6 +123,6 @@ void vkmCreateSurface(const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSu
       .hinstance = window.hInstance,
       .hwnd = window.hWnd,
   };
-  VKM_PFN_LOAD(vkCreateWin32SurfaceKHR);
+  VKM_INSTANCE_FUNC(vkCreateWin32SurfaceKHR);
   VKM_REQUIRE(vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
 }

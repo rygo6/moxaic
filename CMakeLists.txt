@@ -28,11 +28,12 @@ add_executable(${TARGET_NAME}
 )
 
 set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.280.0")
-set(CGLM_SDK_PATH "C:/Developer/cglm")
+#set(CGLM_SDK_PATH "C:/Developer/cglm")
 
 target_link_directories(${TARGET_NAME} PUBLIC
         lib
         "${VULKAN_SDK_PATH}/Lib"
+#        "${CGLM_SDK_PATH}/build"
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC
@@ -43,10 +44,12 @@ target_include_directories(${TARGET_NAME} PUBLIC
         src/mid
         third_party
         "${VULKAN_SDK_PATH}/Include"
+#        "${CGLM_SDK_PATH}/include"
 )
 
 target_link_libraries(${TARGET_NAME}
         vulkan-1
+#        cglm
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE

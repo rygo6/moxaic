@@ -11,7 +11,7 @@
 VkInstance                      instance = VK_NULL_HANDLE;
 static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
 
-_Thread_local VkmContext context;
+_Thread_local VkmContext context = {};
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -428,7 +428,7 @@ void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .memory = pTexture->imageMemory,
           .handleType = VKM_EXTERNAL_HANDLE_TYPE};
-      VKM_PFN_LOAD(vkGetMemoryWin32HandleKHR);
+      VKM_INSTANCE_FUNC(vkGetMemoryWin32HandleKHR);
       VKM_REQUIRE(vkGetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &pTexture->externalHandle));
       break;
     }
@@ -584,16 +584,16 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQ
 void vkmInitialize() {
   {
     const char* ppEnabledLayerNames[] = {
-        "VK_LAYER_KHRONOS_validation",
+        //        "VK_LAYER_KHRONOS_validation",
+        //        "VK_LAYER_LUNARG_monitor"
     };
     const char* ppEnabledInstanceExtensionNames[] = {
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+        //        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
+        //        VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
+        //        VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
+        //        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VKM_SURFACE_EXTENSION_NAME,
+        VKM_PLATFORM_SURFACE_EXTENSION_NAME,
     };
     const VkInstanceCreateInfo instanceCreationInfo = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -618,23 +618,23 @@ void vkmInitialize() {
            VK_API_VERSION_PATCH(instanceCreationInfo.pApplicationInfo->apiVersion));
   }
   {
-    VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = {};
-    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    VkDebugUtilsMessageTypeFlagsEXT messageType = {};
-    // messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
-    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-        .messageSeverity = messageSeverity,
-        .messageType = messageType,
-        .pfnUserCallback = VkmDebugUtilsCallback,
-    };
-    VKM_PFN_LOAD(vkCreateDebugUtilsMessengerEXT);
-    VKM_REQUIRE(vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsMessengerCreateInfo, VKM_ALLOC, &debugUtilsMessenger));
+    //    VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = {};
+    //    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    //    // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+    //    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    //    messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    //    VkDebugUtilsMessageTypeFlagsEXT messageType = {};
+    //    // messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
+    //    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    //    messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    //    const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = {
+    //        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+    //        .messageSeverity = messageSeverity,
+    //        .messageType = messageType,
+    //        .pfnUserCallback = VkmDebugUtilsCallback,
+    //    };
+    //    VKM_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT);
+    //    VKM_REQUIRE(vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsMessengerCreateInfo, VKM_ALLOC, &debugUtilsMessenger));
   }
 }
 
@@ -655,13 +655,17 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
            VK_API_VERSION_MAJOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
-    REQUIRE(physicalDeviceProperties.properties.apiVersion >= VKM_VERSION, "Insufficinet Vulkan API Version");
+    REQUIRE(physicalDeviceProperties.properties.apiVersion >= VKM_VERSION, "Insufficient Vulkan API Version");
   }
 
   {  // Device
+    const VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT physicalDevicePageableDeviceLocalMemoryFeatures = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT,
+        .pageableDeviceLocalMemory = VK_TRUE,
+    };
     const VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT,
-        .pNext = NULL,
+        .pNext = (void*)&physicalDevicePageableDeviceLocalMemoryFeatures,
         .globalPriorityQuery = VK_TRUE,
     };
     const VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = {
@@ -702,19 +706,21 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
     };
     const char* ppEnabledDeviceExtensionNames[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-        VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
-        VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
+        //        VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+        //        VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
+        //        VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+        //        VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
+        //        VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
         VK_EXT_MESH_SHADER_EXTENSION_NAME,
-        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+        //        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
         VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-        VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
-        VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME,
-        VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
+        //        VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
+        VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME,
+        //        VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
         VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME,
         VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+        VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
+        VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
         VKM_EXTERNAL_MEMORY_EXTENSION_NAME,
         VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
         VKM_EXTERNAL_FENCE_EXTENSION_NAME,

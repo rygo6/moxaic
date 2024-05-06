@@ -27,7 +27,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 
 extern bool isCompositor;
-extern bool isRunning;
+extern volatile bool isRunning;
 
 typedef enum MxcCycle {
   MXC_CYCLE_INPUT,
