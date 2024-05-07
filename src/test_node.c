@@ -8,7 +8,7 @@ _Thread_local static struct {
   VkmTransform      cameraTransform;
   VkmGlobalSetState globalSetState;
 
-  VkCommandBuffer cmd;
+  VkCommandBuffer       cmd;
   PFN_vkCmdBindPipeline vkCmdBindPipeline;
 
   int           framebufferIndex;
@@ -47,6 +47,7 @@ void mxcUpdateTestNode() {
   }
 
   vkmCmdResetBegin(node.cmd);
+
   vkmCmdBeginPass(node.cmd, node.standardRenderPass, node.framebuffers[node.framebufferIndex]);
 
   node.vkCmdBindPipeline(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipeline);
@@ -68,18 +69,20 @@ void mxcUpdateTestNode() {
         VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_TRANSFER_SRC_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
         VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_PRESENT, VKM_TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, swapImage),
     };
-    vkmCommandPipelineImageBarrier(node.cmd, 2, blitBarrier);
-    vkmBlit(node.cmd, node.frameBufferColorImages[node.framebufferIndex], node.swap.images[node.swap.swapIndex]);
+    vkmCommandPipelineImageBarriers(node.cmd, 2, blitBarrier);
+    vkmBlit(node.cmd, framebufferColorImage, swapImage);
     const VkImageMemoryBarrier2 presentBarrier[] = {
-        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
+//        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
         VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_PRESENT, VK_IMAGE_ASPECT_COLOR_BIT, swapImage),
     };
-    vkmCommandPipelineImageBarrier(node.cmd, 2, presentBarrier);
+    vkmCommandPipelineImageBarriers(node.cmd, 1, presentBarrier);
   }
 
   vkEndCommandBuffer(node.cmd);
   vkmSubmitPresentCommandBuffer(node.cmd, node.graphicsQueue, &node.swap, &node.timeline);
   vkmTimelineWait(node.device, &node.timeline);
+
+  node.framebufferIndex = !node.framebufferIndex;
 }
 
 _Thread_local static struct {
@@ -118,6 +121,7 @@ void mxcCreateTestNode(void* pArg) {
         .commandBufferCount = 1,
     };
     VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &node.cmd));
+    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)node.cmd, "TestNode");
 
     VkmCreateStandardRenderPass(&node.standardRenderPass);
     vkmCreateStandardFramebuffers(node.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_EXTERNAL_PROCESS_SHARED, nodeContext.framebuffers);
@@ -158,7 +162,7 @@ void mxcCreateTestNode(void* pArg) {
     node.sphereIndexBuffer = nodeContext.sphereMesh.indexBuffer;
     node.sphereVertexBuffer = nodeContext.sphereMesh.vertexBuffer;
     node.device = context.device;
-    node.timeline.semaphore = context.timeline.semaphore; // do not copy value as it may be above 0
+    node.timeline.semaphore = context.timeline.semaphore;  // do not copy value as it may be above 0
   }
 
   {  // Initial State
@@ -167,7 +171,7 @@ void mxcCreateTestNode(void* pArg) {
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
       swapBarrier[i] = VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_PRESENT, VK_IMAGE_ASPECT_COLOR_BIT, node.swap.images[i]);
     }
-    vkmCommandPipelineImageBarrier(node.cmd, VKM_SWAP_COUNT, swapBarrier);
+    vkmCommandPipelineImageBarriers(node.cmd, VKM_SWAP_COUNT, swapBarrier);
     vkEndCommandBuffer(node.cmd);
     const VkSubmitInfo submitInfo = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,

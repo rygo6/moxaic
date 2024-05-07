@@ -204,6 +204,9 @@ typedef struct VkmStandardPipeline {
 
 } VkmStandardPipe;
 
+extern VkInstance               instance;
+extern _Thread_local VkmContext context;
+
 //----------------------------------------------------------------------------------
 // Render
 //----------------------------------------------------------------------------------
@@ -576,19 +579,24 @@ static const VkmImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const VkmImageBarr
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
+//static const VkmImageBarrier* VKM_IMAGE_BARRIER_PRESENT_BLIT_SRC = &(const VkmImageBarrier){
+//    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+//    .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
+//    .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+//};
 static const VkmImageBarrier* VKM_IMAGE_BARRIER_PRESENT = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
-    .accessMask = VK_ACCESS_2_NONE,
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
 static const VkmImageBarrier* VKM_TRANSFER_SRC_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-    .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
+    .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_TRANSFER_DST_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-    .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
+    .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_TRANSFER_READ_IMAGE_BARRIER = &(const VkmImageBarrier){
@@ -624,8 +632,11 @@ static const VkmImageBarrier* VKM_COLOR_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
         .layerCount = 1,                                        \
     },                                                          \
   }
-static inline void vkmCommandPipelineImageBarrier(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+static inline void vkmCommandPipelineImageBarriers(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
   vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
+}
+static inline void vkmCommandPipelineImageBarrier(const VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
+  vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
 static inline void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
   const VkImageBlit imageBlit = {
@@ -769,6 +780,17 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   return inputDirty;
 }
 
+static inline void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
+  const VkDebugUtilsObjectNameInfoEXT debugInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+      .objectType = objectType,
+      .objectHandle = objectHandle,
+      .pObjectName = pDebugName,
+  };
+  VKM_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
+  vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
+}
+
 void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
 void vkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
@@ -777,9 +799,6 @@ void vkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, con
 void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
 //void VkmBeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCmd);
 //void VkmEndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue queue, const VkCommandBuffer cmd);
-
-extern VkInstance               instance;
-extern _Thread_local VkmContext context;
 
 typedef struct VkmInitializeDesc {
   const char* applicationName;
