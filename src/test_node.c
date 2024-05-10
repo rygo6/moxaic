@@ -16,9 +16,9 @@ _Thread_local static struct {
   VkPipelineLayout standardPipelineLayout;
   VkPipeline       standardPipeline;
 
-  VkDescriptorSet    globalSet;
-  VkDescriptorSet    checkerMaterialSet;
-  VkDescriptorSet    sphereObjectSet;
+  VkDescriptorSet globalSet;
+  VkDescriptorSet checkerMaterialSet;
+  VkDescriptorSet sphereObjectSet;
 
   uint32_t sphereIndexCount;
   VkBuffer sphereIndexBuffer, sphereVertexBuffer;
@@ -36,6 +36,7 @@ _Thread_local static struct {
 
 void mxcUpdateTestNode() {
 
+  // wait on odd for input update complete
   node.timeline.value++;
   vkmTimelineWait(node.device, &node.timeline);
 
@@ -74,6 +75,9 @@ void mxcUpdateTestNode() {
   }
 
   vkEndCommandBuffer(node.cmd);
+
+  // wait on even for render complete
+  node.timeline.value++;
   vkmSubmitPresentCommandBuffer(node.cmd, node.graphicsQueue, &node.swap, &node.timeline);
   vkmTimelineWait(node.device, &node.timeline);
 

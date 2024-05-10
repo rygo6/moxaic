@@ -686,19 +686,11 @@ static inline void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
-static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, VkmTimeline* pTimeline) {
-  const uint64_t      waitValue = pTimeline->value++;
-  const uint64_t      signalValue = pTimeline->value;
+static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkmTimeline* pSignalTimeline) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-      .waitSemaphoreInfoCount = 2,
+      .waitSemaphoreInfoCount = 1,
       .pWaitSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
-          {
-              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-              .value = waitValue,
-              .semaphore = pTimeline->semaphore,
-              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-          },
           {
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
               .semaphore = pSwap->acquireSemaphore,
@@ -716,8 +708,8 @@ static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, cons
       .pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
           {
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-              .value = signalValue,
-              .semaphore = pTimeline->semaphore,
+              .value = pSignalTimeline->value,
+              .semaphore = pSignalTimeline->semaphore,
               .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
           },
           {
