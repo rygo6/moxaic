@@ -2,64 +2,41 @@
 #include "node.h"
 #include "renderer.h"
 #include "test_node.h"
-//#include "window.h"
+
+#include "comp_node.h"
 
 #define STB_IMAGE_IMPLEMENTATION
-typedef const VkmContextCreateInfo info;
 #include "stb_image.h"
 
 #include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <Windows.h>
-
-bool isCompositor = true;
+bool          isCompositor = true;
 volatile bool isRunning = true;
 
-//struct static_arena_memory {
-//  VkmInstance instance;
-//  VkmContext  context;
-//};
-//void* static_arena = &(struct static_arena_memory){};
-
-void Panic(const char* file, const int line, const char* message) {
+[[noreturn]] void Panic(const char* file, const int line, const char* message) {
   fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
   __builtin_trap();
 }
 
-void* TestNodeUpdate(void* arg) {
-  while (isRunning) {
-    mxcUpdateTestNode();
-  }
-  return 0;
-}
+typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 
-//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
+static VkmContext mainContext;
 
 int main(void) {
 
-#ifdef __STDC_NO_THREADS__
-  printf("Threads are not supported.\n");
-#else
-  printf("Threads are supported.\n");
-#endif
-
-  //  HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
-  //  if (vulkanLibrary == NULL) {
-  //    fprintf(stderr, "Failed to load Vulkan library.\n");
-  //    return EXIT_FAILURE;
-  //  }
-  //
-  //  GetInstanceProcAddrFunc vkGetInstanceProcAddr = (GetInstanceProcAddrFunc)GetProcAddress(vulkanLibrary, "vkGetInstanceProcAddr");
-  //  if (vkGetInstanceProcAddr == NULL) {
-  //    fprintf(stderr, "Failed to retrieve function pointer to vkGetInstanceProcAddr.\n");
-  //    return EXIT_FAILURE;
-  //  }
-
-  //  assert(sizeof(struct static_arena_memory) <= 1 << 16);
-  //  arena_offset aInstance = offsetof(struct static_arena_memory, instance);
+//  HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
+//  if (vulkanLibrary == NULL) {
+//    fprintf(stderr, "Failed to load Vulkan library.\n");
+//    return EXIT_FAILURE;
+//  }
+//
+//  GetInstanceProcAddrFunc vkGetInstanceProcAddr = (GetInstanceProcAddrFunc)GetProcAddress(vulkanLibrary, "vkGetInstanceProcAddr");
+//  if (vkGetInstanceProcAddr == NULL) {
+//    fprintf(stderr, "Failed to retrieve function pointer to vkGetInstanceProcAddr.\n");
+//    return EXIT_FAILURE;
+//  }
 
   vkmCreateWindow();
   vkmInitialize();
@@ -67,7 +44,7 @@ int main(void) {
   VkSurfaceKHR surface;
   vkmCreateSurface(VKM_ALLOC, &surface);
 
-  info contextCreateInfo = {
+  VkmContextCreateInfo contextCreateInfo = {
       .maxDescriptorCount = 30,
       .uniformDescriptorCount = 10,
       .combinedImageSamplerDescriptorCount = 10,
@@ -99,40 +76,48 @@ int main(void) {
           //          },
       },
   };
-  vkmCreateContext(&contextCreateInfo, &context);
+  vkmCreateContext(&contextCreateInfo, &mainContext);
+  pContext = &mainContext;
 
-  //  mxcCreateTestNode(surface);
+  // standard/common rendering
+  VkmCreateStandardRenderPass(&mainContext.standardRenderPass);
+  vkmCreateStandardPipeline(mainContext.standardRenderPass, &mainContext.standardPipe);
+  // global set
+  vkmAllocateDescriptorSet(pContext->descriptorPool, &mainContext.standardPipe.globalSetLayout, &mainContext.globalSet);
+  vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &mainContext.globalSetMemory, &mainContext.globalSetBuffer, (void**)&mainContext.pGlobalSetMapped);
+  vkUpdateDescriptorSets(pContext->device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pContext->globalSet, pContext->globalSetBuffer), 0, NULL);
+  vkmUpdateGlobalSet(&mainContext.globalCameraTransform, &mainContext.globalSetState, pContext->pGlobalSetMapped);
+  // global samplers
+  VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &mainContext.linearSampler);
 
-  MxcNodeCreateInfo nodeCreateInfo = {
+
+  MxcNodeContext testNode = {
       .nodeType = MXC_NODE_TYPE_LOCAL_THREAD,
+      .pContext = &mainContext,
       .pInitArg = &(MxcTestNodeCreateInfo){
           .surface = surface,
           .transform = {1, 0, 0},
       },
-      .initFunc = mxcCreateTestNode,
+      .createFunc = mxcCreateTestNode,
       .updateFunc = mxcUpdateTestNode,
   };
-  MxcNodeContext testNode;
-  mxcCreateNodeContext(&nodeCreateInfo, &testNode);
+  mxcCreateNodeContext(&testNode);
 
-//  pthread_t thread_id;
-//  int       result;
-//  result = pthread_create(&thread_id, NULL, TestNodeUpdate, NULL);
-//  if (result != 0) {
-//    perror("Thread creation failed");
-//    return 1;
-//  }
 
   while (isRunning) {
     // wait for rendering
-    vkmTimelineWait(context.device, &context.timeline);
-    context.timeline.value++;
+    vkmTimelineWait(mainContext.device, &mainContext.timeline);
+    mainContext.timeline.value++;
 
     vkmUpdateWindowInput();
 
+    if (vkmProcessInput(&mainContext.globalCameraTransform)) {
+      vkmUpdateGlobalSetView(&mainContext.globalCameraTransform, &mainContext.globalSetState, mainContext.pGlobalSetMapped);
+    }
+
     // signal input ready
-    vkmTimelineSignal(context.device, &context.timeline);
-    context.timeline.value++;
+    vkmTimelineSignal(mainContext.device, &mainContext.timeline);
+    mainContext.timeline.value++;
   }
 
   int result = pthread_join(testNode.threadId, NULL);
@@ -141,10 +126,5 @@ int main(void) {
     return 1;
   }
 
-  //  while (isRunning) {
-  //    vkmUpdateWindowInput();
-  //    mxcTestNodeUpdate();
-  //  }
-
-  return 0;
+  return EXIT_SUCCESS;
 }

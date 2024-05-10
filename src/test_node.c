@@ -5,8 +5,6 @@
 #include <vulkan/vk_enum_string_helper.h>
 
 _Thread_local static struct {
-  VkmTransform      cameraTransform;
-  VkmGlobalSetState globalSetState;
 
   VkCommandBuffer       cmd;
   PFN_vkCmdBindPipeline vkCmdBindPipeline;
@@ -18,7 +16,6 @@ _Thread_local static struct {
   VkPipelineLayout standardPipelineLayout;
   VkPipeline       standardPipeline;
 
-  VkmGlobalSetState* pGlobalSetMapped;
   VkDescriptorSet    globalSet;
   VkDescriptorSet    checkerMaterialSet;
   VkDescriptorSet    sphereObjectSet;
@@ -42,13 +39,12 @@ void mxcUpdateTestNode() {
   node.timeline.value++;
   vkmTimelineWait(node.device, &node.timeline);
 
-  if (vkmProcessInput(&node.cameraTransform)) {
-    vkmUpdateGlobalSetView(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
-  }
-
   vkmCmdResetBegin(node.cmd);
 
-  vkmCmdBeginPass(node.cmd, node.standardRenderPass, node.framebuffers[node.framebufferIndex]);
+  const VkImage       framebufferColorImage = node.frameBufferColorImages[node.framebufferIndex];
+  const VkFramebuffer framebuffer = node.framebuffers[node.framebufferIndex];
+
+  vkmCmdBeginPass(node.cmd, node.standardRenderPass, framebuffer);
 
   node.vkCmdBindPipeline(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipeline);
   vkCmdBindDescriptorSets(node.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, node.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &node.globalSet, 0, NULL);
@@ -63,7 +59,6 @@ void mxcUpdateTestNode() {
 
   {  // Blit Framebuffer
     vkAcquireNextImageKHR(node.device, node.swap.chain, UINT64_MAX, node.swap.acquireSemaphore, VK_NULL_HANDLE, &node.swap.swapIndex);
-    const VkImage               framebufferColorImage = node.frameBufferColorImages[node.framebufferIndex];
     const VkImage               swapImage = node.swap.images[node.swap.swapIndex];
     const VkImageMemoryBarrier2 blitBarrier[] = {
         VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_TRANSFER_SRC_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
@@ -72,7 +67,7 @@ void mxcUpdateTestNode() {
     vkmCommandPipelineImageBarriers(node.cmd, 2, blitBarrier);
     vkmBlit(node.cmd, framebufferColorImage, swapImage);
     const VkImageMemoryBarrier2 presentBarrier[] = {
-//        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
+        //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
         VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_PRESENT, VK_IMAGE_ASPECT_COLOR_BIT, swapImage),
     };
     vkmCommandPipelineImageBarriers(node.cmd, 1, presentBarrier);
@@ -90,19 +85,12 @@ _Thread_local static struct {
   VkmTexture     checkerTexture;
   VkmMesh        sphereMesh;
 
-  VkDeviceMemory globalSetMemory;
-  VkBuffer       globalSetBuffer;
-
   VkmStandardObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory             sphereObjectSetMemory;
   VkBuffer                   sphereObjectSetBuffer;
 
   VkmTransform              sphereTransform;
   VkmStandardObjectSetState sphereObjectState;
-
-  VkmStandardPipe standardPipe;
-
-  VkSampler linearSampler;
 
 } nodeContext;
 
@@ -111,49 +99,44 @@ void mxcCreateTestNode(void* pArg) {
 
   {  // Create
     VkBool32 presentSupport = VK_FALSE;
-    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pCreateInfo->surface, &presentSupport));
+    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(pContext->physicalDevice, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pCreateInfo->surface, &presentSupport));
     REQUIRE(presentSupport, "Queue can't present to surface!")
 
-    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 0, &node.graphicsQueue);
+    vkGetDeviceQueue(pContext->device, pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 0, &node.graphicsQueue);
     const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool,
+        .commandPool = pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool,
         .commandBufferCount = 1,
     };
-    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &node.cmd));
+    VKM_REQUIRE(vkAllocateCommandBuffers(pContext->device, &commandBufferAllocateInfo, &node.cmd));
     VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)node.cmd, "TestNode");
 
-    VkmCreateStandardRenderPass(&node.standardRenderPass);
-    vkmCreateStandardFramebuffers(node.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_EXTERNAL_PROCESS_SHARED, nodeContext.framebuffers);
-    vkmCreateStandardPipeline(node.standardRenderPass, &nodeContext.standardPipe);
-    VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &nodeContext.linearSampler);
+    vkmCreateStandardFramebuffers(pContext->standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_EXTERNAL_PROCESS_SHARED, nodeContext.framebuffers);
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &nodeContext.standardPipe.globalSetLayout, &node.globalSet);
-    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &nodeContext.globalSetMemory, &nodeContext.globalSetBuffer, (void**)&node.pGlobalSetMapped);
+    vkmAllocateDescriptorSet(pContext->descriptorPool, &pContext->standardPipe.materialSetLayout, &node.checkerMaterialSet);
+    vkmCreateTextureFromFile(pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, "textures/uvgrid.jpg", &nodeContext.checkerTexture);
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &nodeContext.standardPipe.materialSetLayout, &node.checkerMaterialSet);
-    vkmCreateTextureFromFile(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, "textures/uvgrid.jpg", &nodeContext.checkerTexture);
-
-    vkmAllocateDescriptorSet(context.descriptorPool, &nodeContext.standardPipe.objectSetLayout, &node.sphereObjectSet);
+    vkmAllocateDescriptorSet(pContext->descriptorPool, &pContext->standardPipe.objectSetLayout, &node.sphereObjectSet);
     vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &nodeContext.sphereObjectSetMemory, &nodeContext.sphereObjectSetBuffer, (void**)&nodeContext.pSphereObjectSetMapped);
 
     const VkWriteDescriptorSet writeSets[] = {
-        VKM_SET_WRITE_STD_GLOBAL_BUFFER(node.globalSet, nodeContext.globalSetBuffer),
-        VKM_SET_WRITE_STD_MATERIAL_IMAGE(node.checkerMaterialSet, nodeContext.checkerTexture.imageView, nodeContext.linearSampler),
+        VKM_SET_WRITE_STD_MATERIAL_IMAGE(node.checkerMaterialSet, nodeContext.checkerTexture.imageView, pContext->linearSampler),
         VKM_SET_WRITE_STD_OBJECT_BUFFER(node.sphereObjectSet, nodeContext.sphereObjectSetBuffer),
     };
-    vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
-    vkmUpdateGlobalSet(&node.cameraTransform, &node.globalSetState, node.pGlobalSetMapped);
+    vkUpdateDescriptorSets(pContext->device, COUNT(writeSets), writeSets, 0, NULL);
+
     nodeContext.sphereTransform = pCreateInfo->transform;
     vkmUpdateObjectSet(&nodeContext.sphereTransform, &nodeContext.sphereObjectState, nodeContext.pSphereObjectSetMapped);
 
-    vkmCreateSphereMesh(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, 0.5f, 32, 32, &nodeContext.sphereMesh);
+    vkmCreateSphereMesh(pContext->queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, node.graphicsQueue, 0.5f, 32, 32, &nodeContext.sphereMesh);
     VkmCreateSwap(pCreateInfo->surface, &node.swap);
   }
 
   {  // Copy to cache-friendly loop struct
-    node.standardPipelineLayout = nodeContext.standardPipe.pipelineLayout;
-    node.standardPipeline = nodeContext.standardPipe.pipeline;
+    node.globalSet = pContext->globalSet;
+    node.standardRenderPass = pContext->standardRenderPass;
+    node.standardPipelineLayout = pContext->standardPipe.pipelineLayout;
+    node.standardPipeline = pContext->standardPipe.pipeline;
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
       node.framebuffers[i] = nodeContext.framebuffers[i].framebuffer;
       node.frameBufferColorImages[i] = nodeContext.framebuffers[i].color.image;
@@ -161,8 +144,8 @@ void mxcCreateTestNode(void* pArg) {
     node.sphereIndexCount = nodeContext.sphereMesh.indexCount;
     node.sphereIndexBuffer = nodeContext.sphereMesh.indexBuffer;
     node.sphereVertexBuffer = nodeContext.sphereMesh.vertexBuffer;
-    node.device = context.device;
-    node.timeline.semaphore = context.timeline.semaphore;  // do not copy value as it may be above 0
+    node.device = pContext->device;
+    node.timeline.semaphore = pContext->timeline.semaphore;  // do not copy value as it may be above 0
   }
 
   {  // Initial State

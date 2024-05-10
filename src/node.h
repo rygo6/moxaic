@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <windows.h>
 
+typedef struct VkmNodeFramebuffer {
+  VkmTexture    color;
+  VkmTexture    gBuffer;
+} VkmNodeFramebuffer;
+
 typedef enum MxcNodeType {
   MXC_NODE_TYPE_LOCAL_THREAD,
   MXC_NODE_TYPE_PROCESS
@@ -46,8 +51,8 @@ typedef struct MxcNodeContext {
   MxcNodeType nodeType;
 
   const VkmContext* pContext;
-  void* pInitArg;
-  void (*initFunc)(void*);
+  void*             pInitArg;
+  void (*createFunc)(void*);
   void (*updateFunc)();
 
   MxcRingBuffer consumer;
@@ -64,41 +69,35 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-typedef struct MxcNodeCreateInfo {
-  MxcNodeType nodeType;
-  void* pInitArg;
-  void (*initFunc)(void*);
-  void (*updateFunc)();
-} MxcNodeCreateInfo;
-
-extern _Thread_local MxcNodeContext nodeContext;
+// One thread can only access one node
+extern _Thread_local const MxcNodeContext* pNodeContext;
 
 void* mxcUpdateNode(void* pArg);
 
-static inline void mxcCreateNodeContext(const MxcNodeCreateInfo* pNodeCreateInfo, MxcNodeContext* pNode) {
-  pNode->nodeType = pNodeCreateInfo->nodeType;
-  pNode->pContext = &context;
-  pNode->pInitArg = pNodeCreateInfo->pInitArg;
-  pNode->initFunc = pNodeCreateInfo->initFunc;
-  pNode->updateFunc = pNodeCreateInfo->updateFunc;
-  switch (pNodeCreateInfo->nodeType) {
+static inline void mxcCreateNodeContext(MxcNodeContext* pNode) {
+  switch (pNode->nodeType) {
     case MXC_NODE_TYPE_LOCAL_THREAD: {
       int result = pthread_create(&pNode->threadId, NULL, mxcUpdateNode, pNode);
       REQUIRE(result == 0, "Node thread creation failed!");
       break;
     }
     case MXC_NODE_TYPE_PROCESS:
+
+
       break;
   }
 }
+
+void mxcCreateSharedBuffer();
+void mxcCreateProcess();
 
 typedef void (*MxcInterProcessFuncPtr)(void*);
 
 void mxcInterProcessImportNode(void* pParam);
 
-typedef enum MxcInterprocessTarget {
+typedef enum MxcRingBufferTarget {
   MXC_INTERPROCESS_TARGET_IMPORT
-} MxcInterprocessTarget;
+} MxcRingBufferTarget;
 static const size_t MXC_INTERPROCESS_TARGET_SIZE[] = {
     [MXC_INTERPROCESS_TARGET_IMPORT] = sizeof(MxcImportParam),
 };
@@ -120,7 +119,7 @@ static inline int mxcRingBufferDeque(MxcRingBuffer* pBuffer) {
 
   printf("IPC Polling %d %d...\n", pBuffer->head, pBuffer->tail);
 
-  MxcInterprocessTarget target = (MxcInterprocessTarget)(pBuffer->ringBuffer[pBuffer->tail]);
+  MxcRingBufferTarget target = (MxcRingBufferTarget)(pBuffer->ringBuffer[pBuffer->tail]);
 
   // TODO do you copy it out of the IPC or just send that chunk of shared memory on through?
   // If consumer consumes too slow then producer might run out of data in a stream?

@@ -38,8 +38,8 @@
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
-#define VKM_DEVICE_FUNC(vkFunction)                                                                 \
-  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetDeviceProcAddr(context.device, #vkFunction); \
+#define VKM_DEVICE_FUNC(vkFunction)                                                                   \
+  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetDeviceProcAddr(pContext->device, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
 
@@ -185,15 +185,6 @@ typedef struct VkmSharedQueue {
   VkCommandBuffer cmd;
 } VkmSharedQueue;
 
-typedef struct VkmContext {
-  VkPhysicalDevice physicalDevice;
-  VkDevice         device;
-  VkmTimeline      timeline;
-  VkDescriptorPool descriptorPool;
-  VkQueryPool      timeQueryPool;
-  VkmQueueFamily   queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
-} VkmContext;
-
 typedef struct VkmStandardPipeline {
   VkPipelineLayout pipelineLayout;
   VkPipeline       pipeline;
@@ -204,8 +195,35 @@ typedef struct VkmStandardPipeline {
 
 } VkmStandardPipe;
 
-extern VkInstance               instance;
-extern _Thread_local VkmContext context;
+typedef struct VkmContext {
+  VkPhysicalDevice physicalDevice;
+  VkDevice         device;
+  VkmTimeline      timeline;
+  VkDescriptorPool descriptorPool;
+  VkQueryPool      timeQueryPool;
+
+  VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
+
+  VkmTransform      globalCameraTransform;
+  VkmGlobalSetState globalSetState;
+
+  VkmGlobalSetState* pGlobalSetMapped;
+  VkDeviceMemory     globalSetMemory;
+  VkBuffer           globalSetBuffer;
+  VkDescriptorSet    globalSet;
+
+  VkRenderPass    standardRenderPass;
+  VkmStandardPipe standardPipe;
+
+  VkSampler linearSampler;
+
+} VkmContext;
+
+// One process can only have one instance
+extern VkInstance instance;
+
+// One thread can only access one context
+extern _Thread_local const VkmContext* pContext;
 
 //----------------------------------------------------------------------------------
 // Render
@@ -230,7 +248,7 @@ enum VkmPipeSetStandardIndices {
 
 #define VKM_SET_BINDING_STD_GLOBAL_BUFFER 0
 #define VKM_SET_WRITE_STD_GLOBAL_BUFFER(globalSet, globalSetBuffer) \
-  {                                                                 \
+  (VkWriteDescriptorSet) {                                          \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
     .dstSet = globalSet,                                            \
     .dstBinding = VKM_SET_BINDING_STD_GLOBAL_BUFFER,                \
@@ -243,7 +261,7 @@ enum VkmPipeSetStandardIndices {
   }
 #define VKM_SET_BINDING_STD_MATERIAL_TEXTURE 0
 #define VKM_SET_WRITE_STD_MATERIAL_IMAGE(materialSet, material_image_view, material_image_sample) \
-  {                                                                                               \
+  (VkWriteDescriptorSet) {                                                                        \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                              \
     .dstSet = materialSet,                                                                        \
     .dstBinding = VKM_SET_BINDING_STD_MATERIAL_TEXTURE,                                           \
@@ -257,7 +275,7 @@ enum VkmPipeSetStandardIndices {
   }
 #define VKM_SET_BINDING_STD_OBJECT_BUFFER 0
 #define VKM_SET_WRITE_STD_OBJECT_BUFFER(objectSet, objectSetBuffer) \
-  {                                                                 \
+  (VkWriteDescriptorSet) {                                          \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
     .dstSet = objectSet,                                            \
     .dstBinding = VKM_SET_BINDING_STD_OBJECT_BUFFER,                \
@@ -788,7 +806,7 @@ static inline void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandl
       .pObjectName = pDebugName,
   };
   VKM_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
-  vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
+  vkSetDebugUtilsObjectNameEXT(pContext->device, &debugInfo);
 }
 
 void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
@@ -854,7 +872,7 @@ typedef struct VkmContextCreateInfo {
   VkSurfaceKHR             presentSurface;
   VkmQueueFamilyCreateInfo queueFamilyCreateInfos[VKM_QUEUE_FAMILY_TYPE_COUNT];
 } VkmContextCreateInfo;
-void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext* pContext);
+void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext* pNewContext);
 
 typedef struct VkmSamplerDesc {
   VkFilter               filter;

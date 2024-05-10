@@ -1,13 +1,13 @@
 #include "node.h"
 
-_Thread_local MxcNodeContext nodeContext;
+_Thread_local const MxcNodeContext* pNodeContext = NULL;
 
 void* mxcUpdateNode(void* pArg) {
-  nodeContext = *(MxcNodeContext*)pArg;
-  context = *nodeContext.pContext;
-  nodeContext.initFunc(nodeContext.pInitArg);
+  pNodeContext = (MxcNodeContext*)pArg;
+  pContext = pNodeContext->pContext;
+  pNodeContext->createFunc(pNodeContext->pInitArg);
   while (isRunning) {
-    nodeContext.updateFunc();
+    pNodeContext->updateFunc();
   }
   return 0;
 }
