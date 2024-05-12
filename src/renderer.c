@@ -10,7 +10,7 @@
 
 VkInstance                      instance = VK_NULL_HANDLE;
 static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
-_Thread_local VkmContext context;
+_Thread_local VkmContext        context;
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -324,7 +324,7 @@ static void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, cons
   };
   const VkMemoryAllocateInfo ai = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = locality == VKM_LOCALITY_EXTERNAL_PROCESS_SHARED ? &exportMemoryAllocInfo : NULL,
+      .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemoryAllocInfo : NULL,
       .allocationSize = pMemoryRequirements->size,
       .memoryTypeIndex = memoryTypeIndex,
   };
@@ -356,7 +356,7 @@ static void CreateStagingBuffer(const void* srcData, const VkDeviceSize bufferSi
 static void PopulateBufferViaStaging(const VkCommandPool pool, const VkQueue queue, const void* srcData, const VkDeviceSize bufferSize, const VkBuffer buffer) {
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
-  CreateStagingBuffer(srcData, bufferSize, VKM_LOCALITY_NODE_LOCAL, &stagingBufferMemory, &stagingBuffer);
+  CreateStagingBuffer(srcData, bufferSize, VKM_LOCALITY_CONTEXT, &stagingBufferMemory, &stagingBuffer);
   const VkCommandBuffer commandBuffer = VkmBeginImmediateCommandBuffer(pool);
   vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.size = bufferSize});
   EndImmediateCommandBuffer(pool, queue, commandBuffer);
@@ -420,10 +420,9 @@ void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
   CreateImageView(&pTextureCreateInfo->imageCreateInfo, pTexture->image, pTextureCreateInfo->aspectMask, &pTexture->imageView);
   switch (pTextureCreateInfo->locality) {
     default:
-    case VKM_LOCALITY_NODE_LOCAL:              break;
-    case VKM_LOCALITY_CONTEXT_SHARED:          break;
-    case VKM_LOCALITY_DEVICE_SHARED:           break;
-    case VKM_LOCALITY_EXTERNAL_PROCESS_SHARED: {
+    case VKM_LOCALITY_CONTEXT:          break;
+    case VKM_LOCALITY_PROCESS:          break;
+    case VKM_LOCALITY_PROCESS_EXPORTED: {
       const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .memory = pTexture->imageMemory,
@@ -443,11 +442,11 @@ void vkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, con
   VkImageCreateInfo  imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO;
   imageCreateInfo.extent = (VkExtent3D){width, height, 1};
   imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, VKM_LOCALITY_NODE_LOCAL, &pTexture->imageMemory, &pTexture->image, &pTexture->imageView);
+  CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, VKM_LOCALITY_CONTEXT, &pTexture->imageMemory, &pTexture->image, &pTexture->imageView);
 
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
-  CreateStagingBuffer(pImagePixels, imageBufferSize, VKM_LOCALITY_NODE_LOCAL, &stagingBufferMemory, &stagingBuffer);
+  CreateStagingBuffer(pImagePixels, imageBufferSize, VKM_LOCALITY_CONTEXT, &stagingBufferMemory, &stagingBuffer);
   stbi_image_free(pImagePixels);
   const VkCommandBuffer commandBuffer = VkmBeginImmediateCommandBuffer(pool);
   vkmCommandPipelineImageBarriers(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
@@ -484,10 +483,9 @@ void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t
   };
   switch (locality) {
     default:
-    case VKM_LOCALITY_NODE_LOCAL:              break;
-    case VKM_LOCALITY_CONTEXT_SHARED:          break;
-    case VKM_LOCALITY_DEVICE_SHARED:           break;
-    case VKM_LOCALITY_EXTERNAL_PROCESS_SHARED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
+    case VKM_LOCALITY_CONTEXT:          break;
+    case VKM_LOCALITY_PROCESS:          break;
+    case VKM_LOCALITY_PROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
   for (int i = 0; i < framebufferCount; ++i) {
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
@@ -529,6 +527,91 @@ void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t
     };
     VKM_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
     VKM_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
+  }
+}
+
+void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers) {
+  const VkExternalMemoryImageCreateInfo externalImageInfo = {
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+      .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
+  };
+  VkmTextureCreateInfo textureCreateInfo = {
+      .imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO,
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .locality = locality,
+  };
+  switch (locality) {
+    default:
+    case VKM_LOCALITY_CONTEXT:          break;
+    case VKM_LOCALITY_PROCESS:          break;
+    case VKM_LOCALITY_PROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
+  }
+  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
+
+    pFrameBuffers[i].color = pNodeFramebuffers[i].color;
+    pFrameBuffers[i].normal = pNodeFramebuffers[i].normal;
+    pFrameBuffers[i].gBuffer = pNodeFramebuffers[i].gBuffer;
+
+    textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
+
+    textureCreateInfo.debugName = "DepthFramebuffer";
+    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    VkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].depth);
+
+    const VkFramebufferCreateInfo framebufferCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .renderPass = renderPass,
+        .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+        .pAttachments = (const VkImageView[]){
+            [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = pFrameBuffers[i].color.imageView,
+            [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = pFrameBuffers[i].normal.imageView,
+            [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = pFrameBuffers[i].depth.imageView,
+        },
+        .width = DEFAULT_WIDTH,
+        .height = DEFAULT_HEIGHT,
+        .layers = 1,
+    };
+    VKM_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
+    VKM_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
+  }
+}
+
+void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers) {
+  const VkExternalMemoryImageCreateInfo externalImageInfo = {
+      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+      .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
+  };
+  VkmTextureCreateInfo textureCreateInfo = {
+      .imageCreateInfo = DEFAULT_IMAGE_CREATE_INFO,
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .locality = locality,
+  };
+  switch (locality) {
+    default:
+    case VKM_LOCALITY_CONTEXT:          break;
+    case VKM_LOCALITY_PROCESS:          break;
+    case VKM_LOCALITY_PROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
+  }
+  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
+    textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
+
+    textureCreateInfo.debugName = "ColorFramebuffer";
+    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    VkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].color);
+
+    textureCreateInfo.debugName = "NormalFramebuffer";
+    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    VkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].normal);
+
+    textureCreateInfo.debugName = "GBufferFramebuffer";
+    textureCreateInfo.imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
+    textureCreateInfo.imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
+    textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    VkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].gBuffer);
   }
 }
 
@@ -589,7 +672,7 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQ
 void vkmInitialize() {
   {
     const char* ppEnabledLayerNames[] = {
-//                "VK_LAYER_KHRONOS_validation",
+        //                "VK_LAYER_KHRONOS_validation",
         //        "VK_LAYER_LUNARG_monitor"
     };
     const char* ppEnabledInstanceExtensionNames[] = {
@@ -624,23 +707,23 @@ void vkmInitialize() {
            VK_API_VERSION_PATCH(instanceCreationInfo.pApplicationInfo->apiVersion));
   }
   {
-//        VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = {};
-//        // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-//        // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
-//        messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-//        messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-//        VkDebugUtilsMessageTypeFlagsEXT messageType = {};
-//        // messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
-//        messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-//        messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-//        const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = {
-//            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-//            .messageSeverity = messageSeverity,
-//            .messageType = messageType,
-//            .pfnUserCallback = VkmDebugUtilsCallback,
-//        };
-//        VKM_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT);
-//        VKM_REQUIRE(vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsMessengerCreateInfo, VKM_ALLOC, &debugUtilsMessenger));
+    //        VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = {};
+    //        // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+    //        // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+    //        messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    //        messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    //        VkDebugUtilsMessageTypeFlagsEXT messageType = {};
+    //        // messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
+    //        messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+    //        messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    //        const VkDebugUtilsMessengerCreateInfoEXT debugUtilsMessengerCreateInfo = {
+    //            .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+    //            .messageSeverity = messageSeverity,
+    //            .messageType = messageType,
+    //            .pfnUserCallback = VkmDebugUtilsCallback,
+    //        };
+    //        VKM_INSTANCE_FUNC(vkCreateDebugUtilsMessengerEXT);
+    //        VKM_REQUIRE(vkCreateDebugUtilsMessengerEXT(instance, &debugUtilsMessengerCreateInfo, VKM_ALLOC, &debugUtilsMessenger));
   }
 }
 
@@ -976,7 +1059,7 @@ void vkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const fl
     uint16_t pIndices[pMesh->indexCount];
     GenerateSphereIndices(slicesCount, stackCount, pIndices);
     uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &pMesh->indexMemory, &pMesh->indexBuffer);
+    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->indexMemory, &pMesh->indexBuffer);
     PopulateBufferViaStaging(pool, queue, pIndices, indexBufferSize, pMesh->indexBuffer);
   }
   {
@@ -984,7 +1067,7 @@ void vkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const fl
     VkmVertex pVertices[pMesh->vertexCount];
     GenerateSphere(slicesCount, stackCount, radius, pVertices);
     uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
-    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &pMesh->vertexMemory, &pMesh->vertexBuffer);
+    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->vertexMemory, &pMesh->vertexBuffer);
     PopulateBufferViaStaging(pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
   }
 }

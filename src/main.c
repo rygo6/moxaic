@@ -83,24 +83,26 @@ int main(void) {
   vkmCreateStandardPipeline(context.standardRenderPass, &context.standardPipe);
   // global set
   vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.globalSetLayout, &context.globalSet);
-  vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_NODE_LOCAL, &context.globalSetMemory, &context.globalSetBuffer, (void**)&context.pGlobalSetMapped);
+  vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &context.globalSetMemory, &context.globalSetBuffer, (void**)&context.pGlobalSetMapped);
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(context.globalSet, context.globalSetBuffer), 0, NULL);
   vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
   // global samplers
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
 
 
+  MxcNodeContext testNodeContext = {
+          .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
+          .pNode = &testNode,
+          .runFunc = mxcRunTestNode,
+          .timeline = context.timeline.semaphore,
+  };
+  vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, testNodeContext.framebuffers);
   MxcTestNodeCreateInfo testNodeCreateInfo = {
       .surface = surface,
-//      .transform = {1, 0, 0},
+      .transform = {0, 0, 0},
+      .pFramebuffers = testNodeContext.framebuffers,
   };
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
-  MxcNodeContext testNodeContext = {
-      .nodeType = MXC_NODE_TYPE_LOCAL_THREAD,
-      .pNode = &testNode,
-      .runFunc = mxcRunTestNode,
-      .timeline = context.timeline.semaphore
-  };
   mxcCreateNodeContext(&testNodeContext);
 
 

@@ -7,6 +7,7 @@ typedef struct MxcTestNodeCreateInfo {
   //  VkmContext
   VkSurfaceKHR surface;
   VkmTransform transform;
+  VkmNodeFramebuffer* pFramebuffers;
 } MxcTestNodeCreateInfo;
 
 typedef struct MxcTestNode {

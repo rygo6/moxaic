@@ -88,14 +88,15 @@ typedef vec4 quat;
 //----------------------------------------------------------------------------------
 
 typedef enum VkmLocality {
-  // Used only by the single node it was made within.
-  VKM_LOCALITY_NODE_LOCAL,
-  // Used by multiple nodes within the same context.
-  VKM_LOCALITY_CONTEXT_SHARED,
-  // Used by multiple nodes on the same device, but still in the same process.
-  VKM_LOCALITY_DEVICE_SHARED,
+  // Used within the context it was made
+  VKM_LOCALITY_CONTEXT,
+  // Used by multiple contexts, but in the same process
+  VKM_LOCALITY_PROCESS,
   // Used by nodes external to this context, device and process.
-  VKM_LOCALITY_EXTERNAL_PROCESS_SHARED,
+  VKM_LOCALITY_PROCESS_EXPORTED,
+  // Used by nodes external to this context, device and process.
+  VKM_LOCALITY_PROCESS_IMPORTED,
+  VKM_LOCALITY_COUNT,
 } VkmLocality;
 
 typedef struct VkmTimeline {
@@ -147,6 +148,12 @@ typedef struct VkmFramebuffer {
   VkFramebuffer framebuffer;
   VkSemaphore   renderCompleteSemaphore;
 } VkmFramebuffer;
+
+typedef struct VkmNodeFramebuffer {
+  VkmTexture    color;
+  VkmTexture    normal;
+  VkmTexture    gBuffer;
+} VkmNodeFramebuffer;
 
 typedef struct VkmGlobalSetState {
   mat4 view;
@@ -804,6 +811,8 @@ static inline void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandl
 }
 
 void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
+void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);

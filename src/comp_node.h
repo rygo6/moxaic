@@ -7,57 +7,37 @@ typedef struct MxcCompNodeCreateInfo {
 } MxcCompNodeCreateInfo;
 
 
-_Thread_local static struct {
-//  VkmTransform      cameraTransform;
-//  VkmGlobalSetState globalSetState;
-//
-//  VkCommandBuffer       cmd;
-//
-//  int           framebufferIndex;
-//  VkFramebuffer framebuffers[VKM_SWAP_COUNT];
-//
-//  VkRenderPass     standardRenderPass;
-//  VkPipelineLayout standardPipelineLayout;
-//  VkPipeline       standardPipeline;
-//
-//  VkmGlobalSetState* pGlobalSetMapped;
-//  VkDescriptorSet    globalSet;
-//  VkDescriptorSet    checkerMaterialSet;
-//  VkDescriptorSet    sphereObjectSet;
-//
-//  uint32_t sphereIndexCount;
-//  VkBuffer sphereIndexBuffer, sphereVertexBuffer;
-//
-//  VkDevice device;
-//
-//  VkImage frameBufferColorImages[VKM_SWAP_COUNT];
-//
-//  VkmSwap swap;
-//
-//  VkmTimeline timeline;
-//  VkQueue     graphicsQueue;
+typedef struct MxcCompNode {
+  VkRenderPass     standardRenderPass;
+  VkPipelineLayout standardPipelineLayout;
+  VkPipeline       standardPipeline;
 
-} local;
+  VkDevice device;
 
-void mxcUpdateCompNode() {
-}
+  VkCommandBuffer cmd;
 
-_Thread_local static struct {
-  VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
-  VkmTexture     checkerTexture;
-  VkmMesh        sphereMesh;
+  VkDescriptorSet globalSet;
+  VkDescriptorSet checkerMaterialSet;
+  VkDescriptorSet sphereObjectSet;
 
+  VkmTexture checkerTexture;
+
+  VkmMesh      sphereMesh;
+  VkmTransform sphereTransform;
+
+  VkmStandardObjectSetState  sphereObjectState;
   VkmStandardObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory             sphereObjectSetMemory;
   VkBuffer                   sphereObjectSetBuffer;
 
-  VkmTransform              sphereTransform;
-  VkmStandardObjectSetState sphereObjectState;
+  VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
-} nodeContext;
+  VkmSwap swap;
 
-void mxcCreateCompNode(void* pArg) {
+  VkQueue graphicsQueue;
 
-  vkmCreateStandardFramebuffers(context.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_NODE_LOCAL, nodeContext.framebuffers);
+} MxcCompNode;
 
-}
+
+void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pTestNode);
+void mxcRunTestNode(const MxcNodeContext* pNodeContext);

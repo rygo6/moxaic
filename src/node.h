@@ -8,14 +8,10 @@
 #include <stdio.h>
 #include <windows.h>
 
-typedef struct VkmNodeFramebuffer {
-  VkmTexture color;
-  VkmTexture gBuffer;
-} VkmNodeFramebuffer;
-
 typedef enum MxcNodeType {
-  MXC_NODE_TYPE_LOCAL_THREAD,
-  MXC_NODE_TYPE_PROCESS
+  MXC_NODE_TYPE_CONTEXT_THREAD,
+  MXC_NODE_TYPE_INTERCONTEXT_PROCESS,
+  MXC_NODE_TYPE_INTERPROCESS
 } MxcNodeType;
 
 typedef struct MxcImportParam {
@@ -55,6 +51,8 @@ typedef struct MxcNodeContext {
 
   VkSemaphore timeline;
 
+  VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
+
   MxcRingBuffer consumer;
   MxcRingBuffer producer;
 
@@ -70,15 +68,17 @@ typedef struct MxcNodeContext {
 } MxcNodeContext;
 
 static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
-  switch (pNodeContext->nodeType) {
-    case MXC_NODE_TYPE_LOCAL_THREAD: {
 
+
+  switch (pNodeContext->nodeType) {
+    case MXC_NODE_TYPE_CONTEXT_THREAD: {
       int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))pNodeContext->runFunc, pNodeContext);
       REQUIRE(result == 0, "Node thread creation failed!");
       break;
     }
-    case MXC_NODE_TYPE_PROCESS:
-
+    case MXC_NODE_TYPE_INTERCONTEXT_PROCESS:      break;
+    case MXC_NODE_TYPE_INTERPROCESS:
+      vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
 
       break;
   }
