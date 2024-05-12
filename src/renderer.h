@@ -39,7 +39,7 @@
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
 #define VKM_DEVICE_FUNC(vkFunction)                                                                   \
-  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetDeviceProcAddr(pContext->device, #vkFunction); \
+  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetDeviceProcAddr(context.device, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
 
@@ -199,10 +199,11 @@ typedef struct VkmContext {
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
   VkmTimeline      timeline;
-  VkDescriptorPool descriptorPool;
-  VkQueryPool      timeQueryPool;
 
   VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
+
+  VkDescriptorPool descriptorPool;
+  VkQueryPool      timeQueryPool;
 
   VkmTransform      globalCameraTransform;
   VkmGlobalSetState globalSetState;
@@ -212,6 +213,7 @@ typedef struct VkmContext {
   VkBuffer           globalSetBuffer;
   VkDescriptorSet    globalSet;
 
+  // these probably should go elsewhere
   VkRenderPass    standardRenderPass;
   VkmStandardPipe standardPipe;
 
@@ -223,7 +225,7 @@ typedef struct VkmContext {
 extern VkInstance instance;
 
 // One thread can only access one context
-extern _Thread_local const VkmContext* pContext;
+extern _Thread_local VkmContext context;
 
 //----------------------------------------------------------------------------------
 // Render
@@ -580,9 +582,9 @@ typedef enum VkmQueueBarrier {
 //  switch (queueBarrier) {
 //    default:
 //    case QUEUE_BARRIER_IGNORE:          return VK_QUEUE_FAMILY_IGNORED;
-//    case QUEUE_BARRIER_GRAPHICS:        return context.graphicsQueueFamilyIndex;
-//    case QUEUE_BARRIER_COMPUTE:         return context.computeQueueFamilyIndex;
-//    case QUEUE_BARRIER_TRANSITION:      return context.transferQueueFamilyIndex;
+//    case QUEUE_BARRIER_MAIN_GRAPHICS:        return context.graphicsQueueFamilyIndex;
+//    case QUEUE_BARRIER_DEDICATED_COMPUTE:         return context.computeQueueFamilyIndex;
+//    case QUEUE_BARRIER_DEDICATED_TRANSITION:      return context.transferQueueFamilyIndex;
 //    case QUEUE_BARRIER_FAMILY_EXTERNAL: return VK_QUEUE_FAMILY_EXTERNAL;
 //  }
 //}
@@ -682,7 +684,7 @@ static inline void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass
 }
 static inline void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-  vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO});
+  vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
@@ -798,7 +800,7 @@ static inline void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandl
       .pObjectName = pDebugName,
   };
   VKM_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
-  vkSetDebugUtilsObjectNameEXT(pContext->device, &debugInfo);
+  vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
 }
 
 void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
@@ -807,8 +809,6 @@ void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDes
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
 void vkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
 void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
-//void VkmBeginImmediateCommandBuffer(const VkCommandPool commandPool, VkCommandBuffer* pCmd);
-//void VkmEndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQueue queue, const VkCommandBuffer cmd);
 
 typedef struct VkmInitializeDesc {
   const char* applicationName;
@@ -830,13 +830,6 @@ typedef struct VkmInitializeDesc {
 } VkmInitializeDesc;
 void vkmInitialize();
 
-typedef enum VkmPriority {
-  VKM_PRIORITY_LOW,
-  VKM_PRIORITY_MEDIUM,
-  VKM_PRIORITY_HIGH,
-  VKM_PRIORITY_REALTIME,
-  VKM_PRIORITY_COUNT,
-} VkmPriority;
 typedef enum VkmSupport {
   VKM_SUPPORT_OPTIONAL,
   VKM_SUPPORT_YES,
@@ -864,7 +857,7 @@ typedef struct VkmContextCreateInfo {
   VkSurfaceKHR             presentSurface;
   VkmQueueFamilyCreateInfo queueFamilyCreateInfos[VKM_QUEUE_FAMILY_TYPE_COUNT];
 } VkmContextCreateInfo;
-void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext* pNewContext);
+void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo);
 
 typedef struct VkmSamplerDesc {
   VkFilter               filter;

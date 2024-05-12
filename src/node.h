@@ -9,8 +9,8 @@
 #include <windows.h>
 
 typedef struct VkmNodeFramebuffer {
-  VkmTexture    color;
-  VkmTexture    gBuffer;
+  VkmTexture color;
+  VkmTexture gBuffer;
 } VkmNodeFramebuffer;
 
 typedef enum MxcNodeType {
@@ -50,10 +50,10 @@ typedef struct MxcInterProcessBuffer {
 typedef struct MxcNodeContext {
   MxcNodeType nodeType;
 
-  const VkmContext* pContext;
-  void*             pInitArg;
-  void (*createFunc)(void*);
-  void (*updateFunc)();
+  const void* pNode;
+  void (*const runFunc)(const struct MxcNodeContext* pNode);
+
+  VkSemaphore timeline;
 
   MxcRingBuffer consumer;
   MxcRingBuffer producer;
@@ -69,15 +69,11 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-// One thread can only access one node
-extern _Thread_local const MxcNodeContext* pNodeContext;
-
-void* mxcUpdateNode(void* pArg);
-
-static inline void mxcCreateNodeContext(MxcNodeContext* pNode) {
-  switch (pNode->nodeType) {
+static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
+  switch (pNodeContext->nodeType) {
     case MXC_NODE_TYPE_LOCAL_THREAD: {
-      int result = pthread_create(&pNode->threadId, NULL, mxcUpdateNode, pNode);
+
+      int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))pNodeContext->runFunc, pNodeContext);
       REQUIRE(result == 0, "Node thread creation failed!");
       break;
     }

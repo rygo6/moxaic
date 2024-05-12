@@ -37,7 +37,7 @@ _Thread_local static struct {
 //  VkmTimeline timeline;
 //  VkQueue     graphicsQueue;
 
-} node;
+} local;
 
 void mxcUpdateCompNode() {
 }
@@ -58,6 +58,6 @@ _Thread_local static struct {
 
 void mxcCreateCompNode(void* pArg) {
 
-  vkmCreateStandardFramebuffers(pContext->standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_NODE_LOCAL, nodeContext.framebuffers);
+  vkmCreateStandardFramebuffers(context.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_NODE_LOCAL, nodeContext.framebuffers);
 
 }

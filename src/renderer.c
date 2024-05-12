@@ -10,7 +10,7 @@
 
 VkInstance                      instance = VK_NULL_HANDLE;
 static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
-_Thread_local const VkmContext* pContext = NULL;
+_Thread_local VkmContext context;
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -46,7 +46,7 @@ static VkCommandBuffer VkmBeginImmediateCommandBuffer(const VkCommandPool comman
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       .commandBufferCount = 1,
   };
-  VKM_REQUIRE(vkAllocateCommandBuffers(pContext->device, &allocateInfo, &commandBuffer));
+  VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &allocateInfo, &commandBuffer));
   const VkCommandBufferBeginInfo beginInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -63,7 +63,7 @@ static void EndImmediateCommandBuffer(const VkCommandPool commandPool, const VkQ
   };
   VKM_REQUIRE(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
   VKM_REQUIRE(vkQueueWaitIdle(graphicsQueue));
-  vkFreeCommandBuffers(pContext->device, commandPool, 1, &commandBuffer);
+  vkFreeCommandBuffers(context.device, commandPool, 1, &commandBuffer);
 }
 
 //----------------------------------------------------------------------------------
@@ -82,7 +82,7 @@ static VkShaderModule CreateShaderModule(const char* pShaderPath) {
       .pCode = (uint32_t*)pCode,
   };
   VkShaderModule shaderModule;
-  VKM_REQUIRE(vkCreateShaderModule(pContext->device, &createInfo, VKM_ALLOC, &shaderModule));
+  VKM_REQUIRE(vkCreateShaderModule(context.device, &createInfo, VKM_ALLOC, &shaderModule));
   free(pCode);
   return shaderModule;
 }
@@ -105,7 +105,7 @@ static void CreateStandardPipelineLayout(VkmStandardPipe* pStandardPipeline) {
       .setLayoutCount = VKM_PIPE_SET_STD_INDEX_COUNT,
       .pSetLayouts = pSetLayouts,
   };
-  VKM_REQUIRE(vkCreatePipelineLayout(pContext->device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipelineLayout));
+  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipelineLayout));
 }
 
 static void CreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline) {
@@ -220,9 +220,9 @@ static void CreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPip
       .layout = pStandardPipeline->pipelineLayout,
       .renderPass = renderPass,
   };
-  VKM_REQUIRE(vkCreateGraphicsPipelines(pContext->device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, &pStandardPipeline->pipeline));
-  vkDestroyShaderModule(pContext->device, fragShader, VKM_ALLOC);
-  vkDestroyShaderModule(pContext->device, vertShader, VKM_ALLOC);
+  VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, &pStandardPipeline->pipeline));
+  vkDestroyShaderModule(context.device, fragShader, VKM_ALLOC);
+  vkDestroyShaderModule(context.device, vertShader, VKM_ALLOC);
 }
 
 //----------------------------------------------------------------------------------
@@ -245,7 +245,7 @@ static void CreateGlobalSetLayout(VkmStandardPipe* pStandardPipeline) {
                         VK_SHADER_STAGE_TASK_BIT_EXT,
       },
   };
-  VKM_REQUIRE(vkCreateDescriptorSetLayout(pContext->device, &createInfo, VKM_ALLOC, &pStandardPipeline->globalSetLayout));
+  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->globalSetLayout));
 }
 static void CreateStandardMaterialSetLayout(VkmStandardPipe* pStandardPipeline) {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
@@ -258,7 +258,7 @@ static void CreateStandardMaterialSetLayout(VkmStandardPipe* pStandardPipeline) 
           .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
       },
   };
-  VKM_REQUIRE(vkCreateDescriptorSetLayout(pContext->device, &createInfo, VKM_ALLOC, &pStandardPipeline->materialSetLayout));
+  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->materialSetLayout));
 }
 static void CreateStandardObjectSetLayout(VkmStandardPipe* pStandardPipeline) {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
@@ -272,7 +272,7 @@ static void CreateStandardObjectSetLayout(VkmStandardPipe* pStandardPipeline) {
                         VK_SHADER_STAGE_FRAGMENT_BIT,
       },
   };
-  VKM_REQUIRE(vkCreateDescriptorSetLayout(pContext->device, &createInfo, VKM_ALLOC, &pStandardPipeline->objectSetLayout));
+  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->objectSetLayout));
 }
 
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet) {
@@ -282,7 +282,7 @@ void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDes
       .descriptorSetCount = 1,
       .pSetLayouts = pSetLayout,
   };
-  VKM_REQUIRE(vkAllocateDescriptorSets(pContext->device, &allocateInfo, pSet));
+  VKM_REQUIRE(vkAllocateDescriptorSets(context.device, &allocateInfo, pSet));
 }
 
 //----------------------------------------------------------------------------------
@@ -309,7 +309,7 @@ static uint32_t FindMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties* pPhy
 }
 static void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, const VkMemoryPropertyFlags pMemoryPropertyFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
   VkPhysicalDeviceMemoryProperties memoryProperties;
-  vkGetPhysicalDeviceMemoryProperties(pContext->physicalDevice, &memoryProperties);
+  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProperties);
   const uint32_t memoryTypeIndex = FindMemoryTypeIndex(&memoryProperties, pMemoryRequirements, pMemoryPropertyFlags);
   // todo your supposed check if it wants dedicated memory
   //    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
@@ -328,7 +328,7 @@ static void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, cons
       .allocationSize = pMemoryRequirements->size,
       .memoryTypeIndex = memoryTypeIndex,
   };
-  VKM_REQUIRE(vkAllocateMemory(pContext->device, &ai, VKM_ALLOC, pDeviceMemory));
+  VKM_REQUIRE(vkAllocateMemory(context.device, &ai, VKM_ALLOC, pDeviceMemory));
 }
 static void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
@@ -336,22 +336,22 @@ static void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyF
       .size = bufferSize,
       .usage = usage,
   };
-  VKM_REQUIRE(vkCreateBuffer(pContext->device, &bufferCreateInfo, NULL, pBuffer));
+  VKM_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, pBuffer));
   VkMemoryRequirements memoryRequirements;
-  vkGetBufferMemoryRequirements(pContext->device, *pBuffer, &memoryRequirements);
+  vkGetBufferMemoryRequirements(context.device, *pBuffer, &memoryRequirements);
   VkmAllocMemory(&memoryRequirements, memoryPropertyFlags, locality, pDeviceMemory);
-  VKM_REQUIRE(vkBindBufferMemory(pContext->device, *pBuffer, *pDeviceMemory, 0));
+  VKM_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMemory, 0));
 }
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped) {
   VkmCreateAllocBindBuffer(memoryPropertyFlags, bufferSize, usage, locality, pDeviceMemory, pBuffer);
-  VKM_REQUIRE(vkMapMemory(pContext->device, *pDeviceMemory, 0, bufferSize, 0, ppMapped));
+  VKM_REQUIRE(vkMapMemory(context.device, *pDeviceMemory, 0, bufferSize, 0, ppMapped));
 }
 static void CreateStagingBuffer(const void* srcData, const VkDeviceSize bufferSize, const VkmLocality locality, VkDeviceMemory* pStagingBufferMemory, VkBuffer* pStagingBuffer) {
   void* dstData;
   VkmCreateAllocBindBuffer(VKM_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, locality, pStagingBufferMemory, pStagingBuffer);
-  VKM_REQUIRE(vkMapMemory(pContext->device, *pStagingBufferMemory, 0, bufferSize, 0, &dstData));
+  VKM_REQUIRE(vkMapMemory(context.device, *pStagingBufferMemory, 0, bufferSize, 0, &dstData));
   memcpy(dstData, srcData, bufferSize);
-  vkUnmapMemory(pContext->device, *pStagingBufferMemory);
+  vkUnmapMemory(context.device, *pStagingBufferMemory);
 }
 static void PopulateBufferViaStaging(const VkCommandPool pool, const VkQueue queue, const void* srcData, const VkDeviceSize bufferSize, const VkBuffer buffer) {
   VkBuffer       stagingBuffer;
@@ -360,8 +360,8 @@ static void PopulateBufferViaStaging(const VkCommandPool pool, const VkQueue que
   const VkCommandBuffer commandBuffer = VkmBeginImmediateCommandBuffer(pool);
   vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.size = bufferSize});
   EndImmediateCommandBuffer(pool, queue, commandBuffer);
-  vkFreeMemory(pContext->device, stagingBufferMemory, VKM_ALLOC);
-  vkDestroyBuffer(pContext->device, stagingBuffer, VKM_ALLOC);
+  vkFreeMemory(context.device, stagingBufferMemory, VKM_ALLOC);
+  vkDestroyBuffer(context.device, stagingBuffer, VKM_ALLOC);
 }
 
 //----------------------------------------------------------------------------------
@@ -391,14 +391,14 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkI
           .layerCount = pImageCreateInfo->arrayLayers,
       },
   };
-  VKM_REQUIRE(vkCreateImageView(pContext->device, &imageViewCreateInfo, VKM_ALLOC, pImageView));
+  VKM_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, VKM_ALLOC, pImageView));
 }
 static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, const VkmLocality locality, VkDeviceMemory* pMemory, VkImage* pImage) {
-  VKM_REQUIRE(vkCreateImage(pContext->device, pImageCreateInfo, VKM_ALLOC, pImage));
+  VKM_REQUIRE(vkCreateImage(context.device, pImageCreateInfo, VKM_ALLOC, pImage));
   VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(pContext->device, *pImage, &memRequirements);
+  vkGetImageMemoryRequirements(context.device, *pImage, &memRequirements);
   VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, pMemory);
-  VKM_REQUIRE(vkBindImageMemory(pContext->device, *pImage, *pMemory, 0));
+  VKM_REQUIRE(vkBindImageMemory(context.device, *pImage, *pMemory, 0));
 }
 static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImageAspectFlags aspectMask, const VkmLocality locality, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView) {
   CreateAllocBindImage(pImageCreateInfo, locality, pMemory, pImage);
@@ -412,11 +412,11 @@ typedef struct VkmTextureCreateInfo {
   VkmLocality        locality;
 } VkmTextureCreateInfo;
 void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture) {
-  VKM_REQUIRE(vkCreateImage(pContext->device, &pTextureCreateInfo->imageCreateInfo, VKM_ALLOC, &pTexture->image));
+  VKM_REQUIRE(vkCreateImage(context.device, &pTextureCreateInfo->imageCreateInfo, VKM_ALLOC, &pTexture->image));
   VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(pContext->device, pTexture->image, &memRequirements);
+  vkGetImageMemoryRequirements(context.device, pTexture->image, &memRequirements);
   VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pTextureCreateInfo->locality, &pTexture->imageMemory);
-  VKM_REQUIRE(vkBindImageMemory(pContext->device, pTexture->image, pTexture->imageMemory, 0));
+  VKM_REQUIRE(vkBindImageMemory(context.device, pTexture->image, pTexture->imageMemory, 0));
   CreateImageView(&pTextureCreateInfo->imageCreateInfo, pTexture->image, pTextureCreateInfo->aspectMask, &pTexture->imageView);
   switch (pTextureCreateInfo->locality) {
     default:
@@ -429,7 +429,7 @@ void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
           .memory = pTexture->imageMemory,
           .handleType = VKM_EXTERNAL_HANDLE_TYPE};
       VKM_INSTANCE_FUNC(vkGetMemoryWin32HandleKHR);
-      VKM_REQUIRE(vkGetMemoryWin32HandleKHR(pContext->device, &getWin32HandleInfo, &pTexture->externalHandle));
+      VKM_REQUIRE(vkGetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &pTexture->externalHandle));
       break;
     }
   }
@@ -458,8 +458,8 @@ void vkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, con
   vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
   vkmCommandPipelineImageBarriers(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_TRANSFER_READ_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
   EndImmediateCommandBuffer(pool, queue, commandBuffer);
-  vkFreeMemory(pContext->device, stagingBufferMemory, VKM_ALLOC);
-  vkDestroyBuffer(pContext->device, stagingBuffer, VKM_ALLOC);
+  vkFreeMemory(context.device, stagingBufferMemory, VKM_ALLOC);
+  vkDestroyBuffer(context.device, stagingBuffer, VKM_ALLOC);
 }
 
 static const VkFormat VKM_PASS_STD_FORMATS[] = {
@@ -527,8 +527,8 @@ void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t
         .height = DEFAULT_HEIGHT,
         .layers = 1,
     };
-    VKM_REQUIRE(vkCreateFramebuffer(pContext->device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
-    VKM_REQUIRE(vkCreateSemaphore(pContext->device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
+    VKM_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
+    VKM_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
   }
 }
 
@@ -644,15 +644,15 @@ void vkmInitialize() {
   }
 }
 
-void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext* pNewContext) {
+void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
   {  // PhysicalDevice
     uint32_t deviceCount = 0;
     VKM_REQUIRE(vkEnumeratePhysicalDevices(instance, &deviceCount, NULL));
     VkPhysicalDevice devices[deviceCount];
     VKM_REQUIRE(vkEnumeratePhysicalDevices(instance, &deviceCount, devices));
-    pNewContext->physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this seems to be true.
+    context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this seems to be true.
     VkPhysicalDeviceProperties2 physicalDeviceProperties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-    vkGetPhysicalDeviceProperties2(pNewContext->physicalDevice, &physicalDeviceProperties);
+    vkGetPhysicalDeviceProperties2(context.physicalDevice, &physicalDeviceProperties);
     printf("PhysicalDevice: %s\n", physicalDeviceProperties.properties.deviceName);
     printf("PhysicalDevice Vulkan API version: %d.%d.%d.%d\n",
            VK_API_VERSION_VARIANT(physicalDeviceProperties.properties.apiVersion),
@@ -736,7 +736,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
     VkDeviceQueueGlobalPriorityCreateInfoEXT activeQueueGlobalPriorityCreateInfos[activeQueueCount];
     for (int queueFamilyTypeIndex = 0; queueFamilyTypeIndex < VKM_QUEUE_FAMILY_TYPE_COUNT; ++queueFamilyTypeIndex) {
       if (pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].queueCount == 0) continue;
-      pNewContext->queueFamilies[queueFamilyTypeIndex].index = FindQueueIndex(pNewContext->physicalDevice, &pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex]);
+      context.queueFamilies[queueFamilyTypeIndex].index = FindQueueIndex(context.physicalDevice, &pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex]);
       activeQueueGlobalPriorityCreateInfos[activeQueueIndex] = (VkDeviceQueueGlobalPriorityCreateInfoEXT){
           .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
           .globalPriority = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].globalPriority,
@@ -744,7 +744,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
       activeQueueCreateInfos[activeQueueIndex] = (VkDeviceQueueCreateInfo){
           .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
           .pNext = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].globalPriority != 0 ? &activeQueueGlobalPriorityCreateInfos[activeQueueIndex] : NULL,
-          .queueFamilyIndex = pNewContext->queueFamilies[queueFamilyTypeIndex].index,
+          .queueFamilyIndex = context.queueFamilies[queueFamilyTypeIndex].index,
           .queueCount = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].queueCount,
           .pQueuePriorities = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].pQueuePriorities};
       activeQueueIndex++;
@@ -757,7 +757,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
         .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
-    VKM_REQUIRE(vkCreateDevice(pNewContext->physicalDevice, &deviceCreateInfo, VKM_ALLOC, &pNewContext->device));
+    VKM_REQUIRE(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VKM_ALLOC, &context.device));
   }
 
   for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
@@ -767,9 +767,9 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = pNewContext->queueFamilies[i].index,
+        .queueFamilyIndex = context.queueFamilies[i].index,
     };
-    VKM_REQUIRE(vkCreateCommandPool(pNewContext->device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pNewContext->queueFamilies[i].pool));
+    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &context.queueFamilies[i].pool));
   }
 
   {  // Semaphore
@@ -780,8 +780,8 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = &timelineSemaphoreTypeCreateInfo,
     };
-    VKM_REQUIRE(vkCreateSemaphore(pNewContext->device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &pNewContext->timeline.semaphore));
-    pNewContext->timeline.value = 0;
+    VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &context.timeline.semaphore));
+    context.timeline.value = 0;
   }
 
   {  // Pools
@@ -796,13 +796,13 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo, VkmContext
             {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
         },
     };
-    VKM_REQUIRE(vkCreateDescriptorPool(pNewContext->device, &descriptorPoolCreateInfo, VKM_ALLOC, &pNewContext->descriptorPool));
+    VKM_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VKM_ALLOC, &context.descriptorPool));
     const VkQueryPoolCreateInfo queryPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
     };
-    VKM_REQUIRE(vkCreateQueryPool(pNewContext->device, &queryPoolCreateInfo, VKM_ALLOC, &pNewContext->timeQueryPool));
+    VKM_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VKM_ALLOC, &context.timeQueryPool));
   }
 }
 
@@ -872,7 +872,7 @@ void VkmCreateStandardRenderPass(VkRenderPass* pRenderPass) {
       //          },
       //      },
   };
-  VKM_REQUIRE(vkCreateRenderPass(pContext->device, &renderPassCreateInfo, VKM_ALLOC, pRenderPass));
+  VKM_REQUIRE(vkCreateRenderPass(context.device, &renderPassCreateInfo, VKM_ALLOC, pRenderPass));
 #undef DEFAULT_ATTACHMENT_DESCRIPTION
 }
 
@@ -891,7 +891,7 @@ void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler) {
       .addressModeV = pDesc->addressMode,
       .addressModeW = pDesc->addressMode,
       .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK};
-  VKM_REQUIRE(vkCreateSampler(pContext->device, &minSamplerCreateInfo, VKM_ALLOC, pSampler));
+  VKM_REQUIRE(vkCreateSampler(context.device, &minSamplerCreateInfo, VKM_ALLOC, pSampler));
 }
 
 void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap) {
@@ -909,14 +909,14 @@ void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap) {
       .presentMode = VK_PRESENT_MODE_FIFO_KHR,
       .clipped = VK_TRUE,
   };
-  VKM_REQUIRE(vkCreateSwapchainKHR(pContext->device, &swapchainCreateInfo, VKM_ALLOC, &pSwap->chain));
+  VKM_REQUIRE(vkCreateSwapchainKHR(context.device, &swapchainCreateInfo, VKM_ALLOC, &pSwap->chain));
   uint32_t swapCount;
-  VKM_REQUIRE(vkGetSwapchainImagesKHR(pContext->device, pSwap->chain, &swapCount, NULL));
+  VKM_REQUIRE(vkGetSwapchainImagesKHR(context.device, pSwap->chain, &swapCount, NULL));
   REQUIRE(swapCount == VKM_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
-  VKM_REQUIRE(vkGetSwapchainImagesKHR(pContext->device, pSwap->chain, &swapCount, pSwap->images));
+  VKM_REQUIRE(vkGetSwapchainImagesKHR(context.device, pSwap->chain, &swapCount, pSwap->images));
   const VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-  VKM_REQUIRE(vkCreateSemaphore(pContext->device, &acquireSwapSemaphoreCreateInfo, VKM_ALLOC, &pSwap->acquireSemaphore));
-  VKM_REQUIRE(vkCreateSemaphore(pContext->device, &acquireSwapSemaphoreCreateInfo, VKM_ALLOC, &pSwap->renderCompleteSemaphore));
+  VKM_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VKM_ALLOC, &pSwap->acquireSemaphore));
+  VKM_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VKM_ALLOC, &pSwap->renderCompleteSemaphore));
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
 }
 
