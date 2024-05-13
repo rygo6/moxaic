@@ -30,8 +30,6 @@ typedef enum MxcCycle {
 
 
 
-
-
 //typedef uint16_t arena_offset;
 //
 //extern void*    static_arena;

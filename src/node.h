@@ -49,7 +49,8 @@ typedef struct MxcNodeContext {
   const void* pNode;
   void (*const runFunc)(const struct MxcNodeContext* pNode);
 
-  VkSemaphore timeline;
+  VkSemaphore compTimeline;
+  VkSemaphore nodeTimeline;
 
   VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
 

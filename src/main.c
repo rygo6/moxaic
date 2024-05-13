@@ -22,7 +22,7 @@ volatile bool isRunning = true;
 
 typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 
-static MxcTestNode testNode;
+//static MxcTestNode testNode;
 
 int main(void) {
 
@@ -56,8 +56,8 @@ int main(void) {
               .supportsCompute = VKM_SUPPORT_YES,
               .supportsTransfer = VKM_SUPPORT_YES,
               .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
-              .queueCount = 1,
-              .pQueuePriorities = (float[]){1.0f},
+              .queueCount = 2,
+              .pQueuePriorities = (float[]){1.0f, 1.0f},
           },
           //          [VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
           //              .supportsGraphics = VKM_SUPPORT_NO,
@@ -90,13 +90,25 @@ int main(void) {
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
 
 
+  MxcTestNode    testNode;
   MxcNodeContext testNodeContext = {
-          .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
-          .pNode = &testNode,
-          .runFunc = mxcRunTestNode,
-          .timeline = context.timeline.semaphore,
+      .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
+      .pNode = &testNode,
+      .runFunc = mxcRunTestNode,
+      .compTimeline = context.timeline.semaphore,
   };
   vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, testNodeContext.framebuffers);
+  {
+    const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
+    const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+        .pNext = &timelineSemaphoreTypeCreateInfo,
+    };
+    VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &testNodeContext.nodeTimeline));
+  }
+  context.timeline.value = 0;
   MxcTestNodeCreateInfo testNodeCreateInfo = {
       .surface = surface,
       .transform = {0, 0, 0},
@@ -105,9 +117,23 @@ int main(void) {
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
   mxcCreateNodeContext(&testNodeContext);
 
+  MxcCompNode compNode = {
+      .pExternalsContexts = &testNodeContext,
+  };
+  MxcCompNodeCreateInfo compNodeCreateInfo = {
+      .surface = surface,
+  };
+  mxcCreateCompNode(&compNodeCreateInfo, &compNode);
+  MxcNodeContext compNodeContext = {
+      .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
+      .pNode = &compNode,
+      .runFunc = mxcRunCompNode,
+      .compTimeline = context.timeline.semaphore,
+  };
+  mxcCreateNodeContext(&compNodeContext);
 
   while (isRunning) {
-    // wait for rendering
+    // wait on even for rendering
     vkmTimelineWait(context.device, &context.timeline);
     context.timeline.value++;
 
@@ -117,7 +143,7 @@ int main(void) {
       vkmUpdateGlobalSetView(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
     }
 
-    // signal input ready
+    // signal odd for input ready
     vkmTimelineSignal(context.device, &context.timeline);
     context.timeline.value++;
   }

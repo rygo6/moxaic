@@ -549,12 +549,15 @@ void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLoca
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
 
     pFrameBuffers[i].color = pNodeFramebuffers[i].color;
+    VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.image, "ImportedColorFramebuffer");
     pFrameBuffers[i].normal = pNodeFramebuffers[i].normal;
+    VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.image, "ImportedNormalFramebuffer");
     pFrameBuffers[i].gBuffer = pNodeFramebuffers[i].gBuffer;
+    VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gBuffer.image, "ImportedGBufferFramebuffer");
 
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
-    textureCreateInfo.debugName = "DepthFramebuffer";
+    textureCreateInfo.debugName = "ImportedDepthFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -597,17 +600,17 @@ void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuff
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
-    textureCreateInfo.debugName = "ColorFramebuffer";
+    textureCreateInfo.debugName = "ExportedColorFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     VkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].color);
 
-    textureCreateInfo.debugName = "NormalFramebuffer";
+    textureCreateInfo.debugName = "ExportedNormalFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
     textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
     VkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].normal);
 
-    textureCreateInfo.debugName = "GBufferFramebuffer";
+    textureCreateInfo.debugName = "ExportedGBufferFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
     textureCreateInfo.imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -843,17 +846,17 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
     VKM_REQUIRE(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VKM_ALLOC, &context.device));
   }
 
-  for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
-    if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
-      continue;
-
-    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = context.queueFamilies[i].index,
-    };
-    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &context.queueFamilies[i].pool));
-  }
+//  for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
+//    if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
+//      continue;
+//
+//    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+//        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+//        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+//        .queueFamilyIndex = context.queueFamilies[i].index,
+//    };
+//    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &context.queueFamilies[i].pool));
+//  }
 
   {  // Semaphore
     const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {

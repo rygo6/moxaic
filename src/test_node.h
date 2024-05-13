@@ -3,6 +3,8 @@
 #include "node.h"
 #include "renderer.h"
 
+//#define DEBUG_TEST_NODE_SWAP
+
 typedef struct MxcTestNodeCreateInfo {
   //  VkmContext
   VkSurfaceKHR surface;
@@ -11,6 +13,7 @@ typedef struct MxcTestNodeCreateInfo {
 } MxcTestNodeCreateInfo;
 
 typedef struct MxcTestNode {
+  VkCommandPool pool;
 
   VkRenderPass     standardRenderPass;
   VkPipelineLayout standardPipelineLayout;
@@ -36,9 +39,11 @@ typedef struct MxcTestNode {
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
-  VkmSwap swap;
-
   VkQueue graphicsQueue;
+
+#ifdef DEBUG_TEST_NODE_SWAP
+  VkmSwap swap;
+#endif
 
 } MxcTestNode;
 

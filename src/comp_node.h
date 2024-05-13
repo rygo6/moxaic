@@ -1,16 +1,20 @@
 #pragma once
 
+#include "node.h"
 #include "renderer.h"
 
 typedef struct MxcCompNodeCreateInfo {
-  VkSurfaceKHR surface;
+  VkSurfaceKHR    surface;
 } MxcCompNodeCreateInfo;
 
-
 typedef struct MxcCompNode {
+  VkCommandPool pool;
+
   VkRenderPass     standardRenderPass;
   VkPipelineLayout standardPipelineLayout;
   VkPipeline       standardPipeline;
+
+  VkSampler       sampler;
 
   VkDevice device;
 
@@ -19,8 +23,6 @@ typedef struct MxcCompNode {
   VkDescriptorSet globalSet;
   VkDescriptorSet checkerMaterialSet;
   VkDescriptorSet sphereObjectSet;
-
-  VkmTexture checkerTexture;
 
   VkmMesh      sphereMesh;
   VkmTransform sphereTransform;
@@ -32,6 +34,8 @@ typedef struct MxcCompNode {
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
+  MxcNodeContext* pExternalsContexts;
+
   VkmSwap swap;
 
   VkQueue graphicsQueue;
@@ -40,4 +44,4 @@ typedef struct MxcCompNode {
 
 
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pTestNode);
-void mxcRunTestNode(const MxcNodeContext* pNodeContext);
+void mxcRunCompNode(const MxcNodeContext* pNodeContext);

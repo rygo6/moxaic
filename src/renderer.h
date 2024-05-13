@@ -38,7 +38,7 @@
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
-#define VKM_DEVICE_FUNC(vkFunction)                                                                   \
+#define VKM_DEVICE_FUNC(vkFunction)                                                                 \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetDeviceProcAddr(context.device, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
@@ -150,9 +150,9 @@ typedef struct VkmFramebuffer {
 } VkmFramebuffer;
 
 typedef struct VkmNodeFramebuffer {
-  VkmTexture    color;
-  VkmTexture    normal;
-  VkmTexture    gBuffer;
+  VkmTexture color;
+  VkmTexture normal;
+  VkmTexture gBuffer;
 } VkmNodeFramebuffer;
 
 typedef struct VkmGlobalSetState {
@@ -178,9 +178,9 @@ typedef enum VkmQueueFamilyType {
   VKM_QUEUE_FAMILY_TYPE_COUNT
 } VkmQueueFamilyType;
 typedef struct VkmQueueFamily {
-  VkCommandPool pool;
-  uint32_t      index;
-  uint32_t      queueCount;
+  //  VkCommandPool pool;
+  uint32_t index;
+  uint32_t queueCount;
 } VkmQueueFamily;
 
 typedef struct VkmDedicatedQueue {
@@ -606,6 +606,21 @@ static const VkmImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const VkmImageBarr
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+};
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+};
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+};
 //static const VkmImageBarrier* VKM_IMAGE_BARRIER_PRESENT_BLIT_SRC = &(const VkmImageBarrier){
 //    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 //    .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -631,7 +646,7 @@ static const VkmImageBarrier* VKM_TRANSFER_READ_IMAGE_BARRIER = &(const VkmImage
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_SHADER_READ_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_SHADER_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -739,6 +754,28 @@ static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, cons
   };
   VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
 }
+static inline void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmTimeline* pSignalTimeline) {
+  const VkSubmitInfo2 submitInfo2 = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+      .commandBufferInfoCount = 1,
+      .pCommandBufferInfos = (VkCommandBufferSubmitInfo[]){
+          {
+              .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+              .commandBuffer = cmd,
+          },
+      },
+      .signalSemaphoreInfoCount = 1,
+      .pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
+          {
+              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+              .value = pSignalTimeline->value,
+              .semaphore = pSignalTimeline->semaphore,
+              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+          },
+      },
+  };
+  VKM_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
+}
 static inline void vkmTimelineWait(const VkDevice device, const VkmTimeline* pTimeline) {
   const VkSemaphoreWaitInfo semaphoreWaitInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -755,6 +792,17 @@ static inline void vkmTimelineSignal(const VkDevice device, const VkmTimeline* p
       .value = pTimeline->value,
   };
   VKM_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
+}
+static inline void vkmTimelineSync(const VkDevice device, VkmTimeline* pTimeline) {
+  VKM_REQUIRE(vkGetSemaphoreCounterValue(device, pTimeline->semaphore, &pTimeline->value));
+}
+static inline bool vkmTimelineSyncCheck(const VkDevice device, VkmTimeline* pTimeline) {
+  const uint64_t priorValue = pTimeline->value;
+  VKM_REQUIRE(vkGetSemaphoreCounterValue(device, pTimeline->semaphore, &pTimeline->value));
+  return priorValue != pTimeline->value;
+}
+static inline void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
+  vkUpdateDescriptorSets(device, 1, pWriteSet, 0, NULL);
 }
 
 static inline void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
