@@ -76,6 +76,9 @@ int main(void) {
   };
   vkmCreateContext(&contextCreateInfo);
 
+
+  // global samplers
+  VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
   // standard/common rendering
   VkmCreateStandardRenderPass(&context.standardRenderPass);
   vkmCreateStandardPipeline(context.standardRenderPass, &context.standardPipe);
@@ -84,8 +87,6 @@ int main(void) {
   vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &context.globalSetMemory, &context.globalSetBuffer, (void**)&context.pGlobalSetMapped);
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(context.globalSet, context.globalSetBuffer), 0, NULL);
   vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
-  // global samplers
-  VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
 
 
   mxc_node_handle testNodeHandle = 0;

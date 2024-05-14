@@ -256,6 +256,7 @@ static void CreateStandardMaterialSetLayout(VkmStandardPipe* pStandardPipeline) 
           .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
           .descriptorCount = 1,
           .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+          .pImmutableSamplers = &context.linearSampler,
       },
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->materialSetLayout));

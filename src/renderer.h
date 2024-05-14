@@ -269,18 +269,17 @@ enum VkmPipeSetStandardIndices {
     },                                                              \
   }
 #define VKM_SET_BINDING_STD_MATERIAL_TEXTURE 0
-#define VKM_SET_WRITE_STD_MATERIAL_IMAGE(materialSet, material_image_view, material_image_sample) \
-  (VkWriteDescriptorSet) {                                                                        \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                              \
-    .dstSet = materialSet,                                                                        \
-    .dstBinding = VKM_SET_BINDING_STD_MATERIAL_TEXTURE,                                           \
-    .descriptorCount = 1,                                                                         \
-    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,                                  \
-    .pImageInfo = &(const VkDescriptorImageInfo){                                                 \
-        .sampler = material_image_sample,                                                         \
-        .imageView = material_image_view,                                                         \
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                                  \
-    },                                                                                            \
+#define VKM_SET_WRITE_STD_MATERIAL_IMAGE(materialSet, material_image_view) \
+  (VkWriteDescriptorSet) {                                                 \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                       \
+    .dstSet = materialSet,                                                 \
+    .dstBinding = VKM_SET_BINDING_STD_MATERIAL_TEXTURE,                    \
+    .descriptorCount = 1,                                                  \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,           \
+    .pImageInfo = &(const VkDescriptorImageInfo){                          \
+        .imageView = material_image_view,                                  \
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,           \
+    },                                                                     \
   }
 #define VKM_SET_BINDING_STD_OBJECT_BUFFER 0
 #define VKM_SET_WRITE_STD_OBJECT_BUFFER(objectSet, objectSetBuffer) \
