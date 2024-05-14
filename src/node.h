@@ -45,6 +45,7 @@ typedef struct MxcInterProcessBuffer {
 
 typedef struct MxcNodeContext {
   MxcNodeType nodeType;
+  int         compCycleSkip;
 
   const void* pNode;
   void (*const runFunc)(const struct MxcNodeContext* pNode);
@@ -77,7 +78,7 @@ static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
       REQUIRE(result == 0, "Node thread creation failed!");
       break;
     }
-    case MXC_NODE_TYPE_INTERCONTEXT_PROCESS:      break;
+    case MXC_NODE_TYPE_INTERCONTEXT_PROCESS: break;
     case MXC_NODE_TYPE_INTERPROCESS:
       vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
 

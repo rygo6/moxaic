@@ -93,6 +93,7 @@ int main(void) {
   MxcTestNode    testNode;
   MxcNodeContext testNodeContext = {
       .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
+      .compCycleSkip = 8,
       .pNode = &testNode,
       .runFunc = mxcRunTestNode,
       .compTimeline = context.timeline.semaphore,

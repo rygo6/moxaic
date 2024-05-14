@@ -148,7 +148,7 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
     vkmCmdResetBegin(local.cmd);
 
     if (vkmTimelineSyncCheck(local.device, &local.nodeTimeline) && local.nodeTimeline.value > 1) {
-      const int     nodeFramebufferIndex = (local.nodeTimeline.value % VKM_SWAP_COUNT);
+      const int     nodeFramebufferIndex = !(local.nodeTimeline.value % VKM_SWAP_COUNT);
       const VkImage nodeFramebufferColorImage = local.externalFramebufferColorImages[nodeFramebufferIndex];
 //      printf("Compositing %d...", nodeFramebufferIndex);
       const VkImageView nodeFramebufferColorImageView = local.externalFramebufferColorImageViews[nodeFramebufferIndex];

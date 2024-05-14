@@ -106,6 +106,9 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     VkmTimeline compTimeline;
     VkmTimeline nodeTimeline;
     VkQueue     graphicsQueue;
+
+    uint64_t compBaseCycleValue;
+    uint64_t compCyclesToSkip;
   } local;
 
   {
@@ -133,8 +136,12 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     // set timeline value to start of next cycle
     vkmTimelineSync(local.device, &local.compTimeline);
-    local.compTimeline.value -= local.compTimeline.value % MXC_CYCLE_COUNT;
-    local.compTimeline.value += MXC_CYCLE_COUNT;
+    local.compBaseCycleValue = local.compTimeline.value - (local.compTimeline.value % MXC_CYCLE_COUNT);
+
+    // wait on next cycle
+    local.compTimeline.value = local.compBaseCycleValue + MXC_CYCLE_COUNT;
+
+    local.compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
 
 #ifdef DEBUG_TEST_NODE_SWAP
     local.swap = pNode->swap;
@@ -143,8 +150,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   while (isRunning) {
 
-    // wait for render cycle
-    local.compTimeline.value++;
+    // wait for input cycle to finish
+    local.compTimeline.value = local.compBaseCycleValue + MXC_CYCLE_INPUT;
     vkmTimelineWait(local.device, &local.compTimeline);
 
     const int           framebufferIndex = local.nodeTimeline.value % VKM_SWAP_COUNT;
@@ -192,19 +199,16 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     vkEndCommandBuffer(local.cmd);
 
+    local.nodeTimeline.value++;
 #ifdef DEBUG_TEST_NODE_SWAP
-    // signal start of input cycle
-    local.compTimeline.value++;
     vkmSubmitPresentCommandBuffer(local.cmd, local.graphicsQueue, &local.swap, &local.timeline);
     vkmTimelineWait(local.device, &local.timeline);
 #else
-    local.nodeTimeline.value++;
     vkmSubmitCommandBuffer(local.cmd, local.graphicsQueue, &local.nodeTimeline);
     vkmTimelineWait(local.device, &local.nodeTimeline);
-    printf("Finished rendering into %d...", framebufferIndex);
+#endif
 
     // increment past input cycle and wait on render next cycle
-    local.compTimeline.value++;
-#endif
+    local.compBaseCycleValue += local.compCyclesToSkip;
   }
 }
