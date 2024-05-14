@@ -109,39 +109,39 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     uint64_t compBaseCycleValue;
     uint64_t compCyclesToSkip;
-  } local;
+  } hot;
 
   {
     MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
-    local.cmd = pNode->cmd;
-    local.globalSet = pNode->globalSet;
-    local.checkerMaterialSet = pNode->checkerMaterialSet;
-    local.sphereObjectSet = pNode->sphereObjectSet;
-    local.standardRenderPass = pNode->standardRenderPass;
-    local.standardPipelineLayout = pNode->standardPipelineLayout;
-    local.standardPipeline = pNode->standardPipeline;
+    hot.cmd = pNode->cmd;
+    hot.globalSet = pNode->globalSet;
+    hot.checkerMaterialSet = pNode->checkerMaterialSet;
+    hot.sphereObjectSet = pNode->sphereObjectSet;
+    hot.standardRenderPass = pNode->standardRenderPass;
+    hot.standardPipelineLayout = pNode->standardPipelineLayout;
+    hot.standardPipeline = pNode->standardPipeline;
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      local.framebuffers[i] = pNode->framebuffers[i].framebuffer;
-      local.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
+      hot.framebuffers[i] = pNode->framebuffers[i].framebuffer;
+      hot.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
     }
-    local.sphereIndexCount = pNode->sphereMesh.indexCount;
-    local.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
-    local.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
-    local.device = pNode->device;
-    local.graphicsQueue = pNode->graphicsQueue;
-    local.compTimeline.semaphore = pNodeContext->compTimeline;
-    local.compTimeline.value = 0;
-    local.nodeTimeline.semaphore = pNodeContext->nodeTimeline;
-    local.nodeTimeline.value = 0;
+    hot.sphereIndexCount = pNode->sphereMesh.indexCount;
+    hot.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
+    hot.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
+    hot.device = pNode->device;
+    hot.graphicsQueue = pNode->graphicsQueue;
+    hot.compTimeline.semaphore = pNodeContext->compTimeline;
+    hot.compTimeline.value = 0;
+    hot.nodeTimeline.semaphore = pNodeContext->nodeTimeline;
+    hot.nodeTimeline.value = 0;
 
     // set timeline value to start of next cycle
-    vkmTimelineSync(local.device, &local.compTimeline);
-    local.compBaseCycleValue = local.compTimeline.value - (local.compTimeline.value % MXC_CYCLE_COUNT);
+    vkmTimelineSync(hot.device, &hot.compTimeline);
+    hot.compBaseCycleValue = hot.compTimeline.value - (hot.compTimeline.value % MXC_CYCLE_COUNT);
 
     // wait on next cycle
-    local.compTimeline.value = local.compBaseCycleValue + MXC_CYCLE_COUNT;
+    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_COUNT;
 
-    local.compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
+    hot.compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
 
 #ifdef DEBUG_TEST_NODE_SWAP
     local.swap = pNode->swap;
@@ -151,31 +151,31 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   while (isRunning) {
 
     // wait for input cycle to finish
-    local.compTimeline.value = local.compBaseCycleValue + MXC_CYCLE_INPUT;
-    vkmTimelineWait(local.device, &local.compTimeline);
+    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_INPUT;
+    vkmTimelineWait(hot.device, &hot.compTimeline);
 
-    const int           framebufferIndex = local.nodeTimeline.value % VKM_SWAP_COUNT;
-    const VkFramebuffer framebuffer = local.framebuffers[framebufferIndex];
-    const VkImage       framebufferColorImage = local.frameBufferColorImages[framebufferIndex];
+    const int           framebufferIndex = hot.nodeTimeline.value % VKM_SWAP_COUNT;
+    const VkFramebuffer framebuffer = hot.framebuffers[framebufferIndex];
+    const VkImage       framebufferColorImage = hot.frameBufferColorImages[framebufferIndex];
 
 //    printf("Rendering into %d...", framebufferIndex);
 
-    vkmCmdResetBegin(local.cmd);
+    vkmCmdResetBegin(hot.cmd);
 
-    vkmCommandPipelineImageBarrier(local.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
+    vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
 
-    vkmCmdBeginPass(local.cmd, local.standardRenderPass, framebuffer);
+    vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, framebuffer);
 
-    vkCmdBindPipeline(local.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, local.standardPipeline);
-    vkCmdBindDescriptorSets(local.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, local.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &local.globalSet, 0, NULL);
-    vkCmdBindDescriptorSets(local.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, local.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &local.checkerMaterialSet, 0, NULL);
-    vkCmdBindDescriptorSets(local.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, local.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &local.sphereObjectSet, 0, NULL);
+    vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);
+    vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &hot.globalSet, 0, NULL);
+    vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &hot.checkerMaterialSet, 0, NULL);
+    vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &hot.sphereObjectSet, 0, NULL);
 
-    vkCmdBindVertexBuffers(local.cmd, 0, 1, (const VkBuffer[]){local.sphereVertexBuffer}, (const VkDeviceSize[]){0});
-    vkCmdBindIndexBuffer(local.cmd, local.sphereIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed(local.cmd, local.sphereIndexCount, 1, 0, 0, 0);
+    vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.sphereVertexBuffer}, (const VkDeviceSize[]){0});
+    vkCmdBindIndexBuffer(hot.cmd, hot.sphereIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdDrawIndexed(hot.cmd, hot.sphereIndexCount, 1, 0, 0, 0);
 
-    vkCmdEndRenderPass(local.cmd);
+    vkCmdEndRenderPass(hot.cmd);
 
 #ifdef DEBUG_TEST_NODE_SWAP
     {  // Blit Framebuffer
@@ -195,20 +195,20 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     }
 #endif
 
-    vkmCommandPipelineImageBarrier(local.cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
+    vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
 
-    vkEndCommandBuffer(local.cmd);
+    vkEndCommandBuffer(hot.cmd);
 
-    local.nodeTimeline.value++;
+    hot.nodeTimeline.value++;
 #ifdef DEBUG_TEST_NODE_SWAP
     vkmSubmitPresentCommandBuffer(local.cmd, local.graphicsQueue, &local.swap, &local.timeline);
     vkmTimelineWait(local.device, &local.timeline);
 #else
-    vkmSubmitCommandBuffer(local.cmd, local.graphicsQueue, &local.nodeTimeline);
-    vkmTimelineWait(local.device, &local.nodeTimeline);
+    vkmSubmitCommandBuffer(hot.cmd, hot.graphicsQueue, &hot.nodeTimeline);
+    vkmTimelineWait(hot.device, &hot.nodeTimeline);
 #endif
 
     // increment past input cycle and wait on render next cycle
-    local.compBaseCycleValue += local.compCyclesToSkip;
+    hot.compBaseCycleValue += hot.compCyclesToSkip;
   }
 }

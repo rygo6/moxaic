@@ -331,7 +331,7 @@ static void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, cons
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &ai, VKM_ALLOC, pDeviceMemory));
 }
-static void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
+void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .size = bufferSize,
@@ -354,7 +354,7 @@ static void CreateStagingBuffer(const void* srcData, const VkDeviceSize bufferSi
   memcpy(dstData, srcData, bufferSize);
   vkUnmapMemory(context.device, *pStagingBufferMemory);
 }
-static void PopulateBufferViaStaging(const VkCommandPool pool, const VkQueue queue, const void* srcData, const VkDeviceSize bufferSize, const VkBuffer buffer) {
+void VkmPopulateBufferViaStaging(const VkCommandPool pool, const VkQueue queue, const void* srcData, const VkDeviceSize bufferSize, const VkBuffer buffer) {
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
   CreateStagingBuffer(srcData, bufferSize, VKM_LOCALITY_CONTEXT, &stagingBufferMemory, &stagingBuffer);
@@ -847,17 +847,17 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
     VKM_REQUIRE(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VKM_ALLOC, &context.device));
   }
 
-//  for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
-//    if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
-//      continue;
-//
-//    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-//        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-//        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-//        .queueFamilyIndex = context.queueFamilies[i].index,
-//    };
-//    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &context.queueFamilies[i].pool));
-//  }
+  //  for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
+  //    if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
+  //      continue;
+  //
+  //    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+  //        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+  //        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+  //        .queueFamilyIndex = context.queueFamilies[i].index,
+  //    };
+  //    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &context.queueFamilies[i].pool));
+  //  }
 
   {  // Semaphore
     const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
@@ -1015,63 +1015,55 @@ void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* p
   CreateStandardPipeline(renderPass, pStandardPipeline);
 }
 
-static int  GenerateSphereVertexCount(const int slicesCount, const int stacksCount) { return (slicesCount + 1) * (stacksCount + 1); }
-static int  GenerateSphereIndexCount(const int slicesCount, const int stacksCount) { return slicesCount * stacksCount * 2 * 3; }
-static void GenerateSphere(const int slicesCount, const int stacksCount, const float radius, VkmVertex* pVertex) {
-  const float slices = (float)slicesCount;
-  const float stacks = (float)stacksCount;
-  const float dtheta = 2.0f * VKM_PI / slices;
-  const float dphi = VKM_PI / stacks;
-  int         idx = 0;
-  for (int i = 0; +i <= stacksCount; i++) {
-    const float fi = (float)i;
-    const float phi = fi * dphi;
-    for (int j = 0; j <= slicesCount; j++) {
-      const float ji = (float)j;
-      const float theta = ji * dtheta;
-      const float x = radius * sinf(phi) * cosf(theta);
-      const float y = radius * sinf(phi) * sinf(theta);
-      const float z = radius * cosf(phi);
-      pVertex[idx++] = (VkmVertex){
-          .position = {x, y, z},
-          .normal = {x, y, z},
-          .uv = {ji / slices, fi / stacks},
-      };
-    }
-  }
-}
-static void GenerateSphereIndices(const int slicesCount, const int stacksCount, uint16_t* pIndices) {
-  int idx = 0;
-  for (int i = 0; i < stacksCount; i++) {
-    for (int j = 0; j < slicesCount; j++) {
-      const uint16_t v1 = i * (slicesCount + 1) + j;
-      const uint16_t v2 = i * (slicesCount + 1) + j + 1;
-      const uint16_t v3 = (i + 1) * (slicesCount + 1) + j;
-      const uint16_t v4 = (i + 1) * (slicesCount + 1) + j + 1;
-      pIndices[idx++] = v1;
-      pIndices[idx++] = v2;
-      pIndices[idx++] = v3;
-      pIndices[idx++] = v2;
-      pIndices[idx++] = v4;
-      pIndices[idx++] = v3;
-    }
-  }
-}
 void vkmCreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   {
-    pMesh->indexCount = GenerateSphereIndexCount(slicesCount, stackCount);
+    pMesh->indexCount = slicesCount * stackCount * 2 * 3;
     uint16_t pIndices[pMesh->indexCount];
-    GenerateSphereIndices(slicesCount, stackCount, pIndices);
+    int      idx = 0;
+    for (int i = 0; i < stackCount; i++) {
+      for (int j = 0; j < slicesCount; j++) {
+        const uint16_t v1 = i * (slicesCount + 1) + j;
+        const uint16_t v2 = i * (slicesCount + 1) + j + 1;
+        const uint16_t v3 = (i + 1) * (slicesCount + 1) + j;
+        const uint16_t v4 = (i + 1) * (slicesCount + 1) + j + 1;
+        pIndices[idx++] = v1;
+        pIndices[idx++] = v2;
+        pIndices[idx++] = v3;
+        pIndices[idx++] = v2;
+        pIndices[idx++] = v4;
+        pIndices[idx++] = v3;
+      }
+    }
     uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
     VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->indexMemory, &pMesh->indexBuffer);
-    PopulateBufferViaStaging(pool, queue, pIndices, indexBufferSize, pMesh->indexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pIndices, indexBufferSize, pMesh->indexBuffer);
   }
   {
-    pMesh->vertexCount = GenerateSphereVertexCount(slicesCount, stackCount);
-    VkmVertex pVertices[pMesh->vertexCount];
-    GenerateSphere(slicesCount, stackCount, radius, pVertices);
+    pMesh->vertexCount = (slicesCount + 1) * (stackCount + 1);
+    VkmVertex   pVertices[pMesh->vertexCount];
+    const float slices = (float)slicesCount;
+    const float stacks = (float)stackCount;
+    const float dtheta = 2.0f * VKM_PI / slices;
+    const float dphi = VKM_PI / stacks;
+    int         idx = 0;
+    for (int i = 0; +i <= stackCount; i++) {
+      const float fi = (float)i;
+      const float phi = fi * dphi;
+      for (int j = 0; j <= slicesCount; j++) {
+        const float ji = (float)j;
+        const float theta = ji * dtheta;
+        const float x = radius * sinf(phi) * cosf(theta);
+        const float y = radius * sinf(phi) * sinf(theta);
+        const float z = radius * cosf(phi);
+        pVertices[idx++] = (VkmVertex){
+            .position = {x, y, z},
+            .normal = {x, y, z},
+            .uv = {ji / slices, fi / stacks},
+        };
+      }
+    }
     uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
     VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->vertexMemory, &pMesh->vertexBuffer);
-    PopulateBufferViaStaging(pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
   }
 }

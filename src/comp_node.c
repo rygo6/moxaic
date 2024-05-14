@@ -2,6 +2,29 @@
 
 #include <vulkan/vk_enum_string_helper.h>
 
+static void CreateQuadMesh(const VkCommandPool pool, const VkQueue queue, VkmMesh* pMesh) {
+  {
+    pMesh->indexCount = 6;
+    const uint16_t pIndices[] = {0, 1, 2, 1, 3, 2};
+    const uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
+    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->indexMemory, &pMesh->indexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pIndices, indexBufferSize, pMesh->indexBuffer);
+  }
+  {
+    pMesh->vertexCount = 4;
+    const VkmVertex pVertices[] = {
+        {.position = {-1, -1, 0}, .uv = {0, 0}},
+        {.position = {1, -1, 0}, .uv = {1, 0}},
+        {.position = {-1, 1, 0}, .uv = {0, 1}},
+        {.position = {1, 1, 0}, .uv = {1, 1}},
+    };
+    const uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
+    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->vertexMemory, &pMesh->vertexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
+  }
+}
+
+
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pTestNode) {
   {  // Create
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -31,10 +54,11 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pT
 
     vkmUpdateDescriptorSet(context.device, &VKM_SET_WRITE_STD_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer));
 
-    pTestNode->sphereTransform = (VkmTransform){.position = {1, 0, 0}};
+    pTestNode->sphereTransform = (VkmTransform){.position = {0, 0, 0}};
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
-    vkmCreateSphereMesh(pTestNode->pool, pTestNode->graphicsQueue, 0.5f, 32, 32, &pTestNode->sphereMesh);
+//    vkmCreateSphereMesh(pTestNode->pool, pTestNode->graphicsQueue, 0.5f, 32, 32, &pTestNode->sphereMesh);
+    CreateQuadMesh(pTestNode->pool, pTestNode->graphicsQueue, &pTestNode->sphereMesh);
 
     VkBool32 presentSupport = VK_FALSE;
     VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pCreateInfo->surface, &presentSupport));
