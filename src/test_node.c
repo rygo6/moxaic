@@ -1,5 +1,58 @@
 #include "test_node.h"
 
+void CreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
+  {
+    pMesh->indexCount = slicesCount * stackCount * 2 * 3;
+    uint16_t pIndices[pMesh->indexCount];
+    int      idx = 0;
+    for (int i = 0; i < stackCount; i++) {
+      for (int j = 0; j < slicesCount; j++) {
+        const uint16_t v1 = i * (slicesCount + 1) + j;
+        const uint16_t v2 = i * (slicesCount + 1) + j + 1;
+        const uint16_t v3 = (i + 1) * (slicesCount + 1) + j;
+        const uint16_t v4 = (i + 1) * (slicesCount + 1) + j + 1;
+        pIndices[idx++] = v1;
+        pIndices[idx++] = v2;
+        pIndices[idx++] = v3;
+        pIndices[idx++] = v2;
+        pIndices[idx++] = v4;
+        pIndices[idx++] = v3;
+      }
+    }
+    uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
+    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->indexMemory, &pMesh->indexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pIndices, indexBufferSize, pMesh->indexBuffer);
+  }
+  {
+    pMesh->vertexCount = (slicesCount + 1) * (stackCount + 1);
+    VkmVertex   pVertices[pMesh->vertexCount];
+    const float slices = (float)slicesCount;
+    const float stacks = (float)stackCount;
+    const float dtheta = 2.0f * VKM_PI / slices;
+    const float dphi = VKM_PI / stacks;
+    int         idx = 0;
+    for (int i = 0; +i <= stackCount; i++) {
+      const float fi = (float)i;
+      const float phi = fi * dphi;
+      for (int j = 0; j <= slicesCount; j++) {
+        const float ji = (float)j;
+        const float theta = ji * dtheta;
+        const float x = radius * sinf(phi) * cosf(theta);
+        const float y = radius * sinf(phi) * sinf(theta);
+        const float z = radius * cosf(phi);
+        pVertices[idx++] = (VkmVertex){
+            .position = {x, y, z},
+            .normal = {x, y, z},
+            .uv = {ji / slices, fi / stacks},
+        };
+      }
+    }
+    uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
+    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->vertexMemory, &pMesh->vertexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
+  }
+}
+
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode) {
   {  // Create
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -36,7 +89,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     pTestNode->sphereTransform = pCreateInfo->transform;
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
-    vkmCreateSphereMesh(pTestNode->pool, pTestNode->graphicsQueue, 0.5f, 32, 32, &pTestNode->sphereMesh);
+    CreateSphereMesh(pTestNode->pool, pTestNode->graphicsQueue, 0.5f, 32, 32, &pTestNode->sphereMesh);
   }
 
 #ifdef DEBUG_TEST_NODE_SWAP
