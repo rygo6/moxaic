@@ -34,8 +34,6 @@ typedef struct MxcCompNode {
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
-  MxcNodeContext* pExternalsContexts;
-
   VkmSwap swap;
 
   VkQueue graphicsQueue;

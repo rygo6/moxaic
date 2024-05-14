@@ -78,7 +78,7 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
     VkFramebuffer framebuffers[VKM_SWAP_COUNT];
     VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
 
-    VkSampler sampler; // move to immutable sampler
+    VkSampler sampler;  // move to immutable sampler
 
     VkRenderPass     standardRenderPass;
     VkPipelineLayout standardPipelineLayout;
@@ -93,13 +93,9 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
 
     VkDevice device;
 
-    VkImageView externalFramebufferColorImageViews[VKM_SWAP_COUNT];
-    VkImage     externalFramebufferColorImages[VKM_SWAP_COUNT];
-
     VkmSwap swap;
 
     VkmTimeline compTimeline;
-    VkmTimeline nodeTimeline;
 
     VkQueue graphicsQueue;
   } local;
@@ -118,8 +114,6 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
       local.framebuffers[i] = pNode->framebuffers[i].framebuffer;
       local.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
-      local.externalFramebufferColorImageViews[i] = pNode->pExternalsContexts->framebuffers[i].color.imageView;
-      local.externalFramebufferColorImages[i] = pNode->pExternalsContexts->framebuffers[i].color.image;
     }
     local.sphereIndexCount = pNode->sphereMesh.indexCount;
     local.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
@@ -132,9 +126,6 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
 
     local.compTimeline.semaphore = pNodeContext->compTimeline;
     local.compTimeline.value = 0;
-
-    local.nodeTimeline.semaphore = pNode->pExternalsContexts->nodeTimeline;
-    local.nodeTimeline.value = 0;
   }
 
   bool nodeAvailable = false;
@@ -147,20 +138,20 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
 
     vkmCmdResetBegin(local.cmd);
 
-    if (vkmTimelineSyncCheck(local.device, &local.nodeTimeline) && local.nodeTimeline.value > 1) {
-      const int     nodeFramebufferIndex = !(local.nodeTimeline.value % VKM_SWAP_COUNT);
-      const VkImage nodeFramebufferColorImage = local.externalFramebufferColorImages[nodeFramebufferIndex];
-//      printf("Compositing %d...", nodeFramebufferIndex);
-      const VkImageView nodeFramebufferColorImageView = local.externalFramebufferColorImageViews[nodeFramebufferIndex];
-//      vkmCommandPipelineImageBarrier(local.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
+    const VkFramebuffer framebuffer = local.framebuffers[local.framebufferIndex];
+    const VkImage       framebufferColorImage = local.frameBufferColorImages[local.framebufferIndex];
+
+    vkmCmdBeginPass(local.cmd, local.standardRenderPass, framebuffer);
+
+    const mxc_node_handle tempHandle = 0;
+    if (vkmTimelineSyncCheck(local.device, &MXC_HOT_NODE_CONTEXTS[tempHandle].nodeTimeline) && MXC_HOT_NODE_CONTEXTS[tempHandle].nodeTimeline.value > 1) {
+      const int         nodeFramebufferIndex = !(MXC_HOT_NODE_CONTEXTS[tempHandle].nodeTimeline.value % VKM_SWAP_COUNT);
+      const VkImageView nodeFramebufferColorImageView = MXC_HOT_NODE_CONTEXTS[tempHandle].framebufferColorImageViews[nodeFramebufferIndex];
+      const VkImage     nodeFramebufferColorImage = MXC_HOT_NODE_CONTEXTS[tempHandle].framebufferColorImages[nodeFramebufferIndex];
+      //      vkmCommandPipelineImageBarrier(local.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
       vkmUpdateDescriptorSet(local.device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(local.checkerMaterialSet, nodeFramebufferColorImageView, local.sampler));
       nodeAvailable = true;
     }
-
-    const VkFramebuffer framebuffer = local.framebuffers[local.framebufferIndex];
-    const VkImage framebufferColorImage = local.frameBufferColorImages[local.framebufferIndex];
-
-    vkmCmdBeginPass(local.cmd, local.standardRenderPass, framebuffer);
 
     if (nodeAvailable) {
       vkCmdBindPipeline(local.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, local.standardPipeline);

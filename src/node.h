@@ -48,7 +48,7 @@ typedef struct MxcNodeContext {
   int         compCycleSkip;
 
   const void* pNode;
-  void (*const runFunc)(const struct MxcNodeContext* pNode);
+  void (*runFunc)(const struct MxcNodeContext* pNode);
 
   VkSemaphore compTimeline;
   VkSemaphore nodeTimeline;
@@ -69,8 +69,28 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
+typedef struct MxcNodeContextHot {
+  VkmTimeline nodeTimeline;
+  VkImageView framebufferColorImageViews[VKM_SWAP_COUNT];
+  VkImage     framebufferColorImages[VKM_SWAP_COUNT];
+} MxcNodeContextHot;
 
+#define  MXC_NODE_CAPACITY 256
+typedef uint8_t       mxc_node_handle;
+extern size_t MXC_NODE_HANDLE_COUNT;
+extern MxcNodeContext MXC_NODE_CONTEXTS[MXC_NODE_CAPACITY];
+extern MxcNodeContextHot MXC_HOT_NODE_CONTEXTS[MXC_NODE_CAPACITY];
+
+
+static inline void mxcCopyHotNodeContext(mxc_node_handle handle) {
+  MXC_HOT_NODE_CONTEXTS[handle].nodeTimeline.semaphore = MXC_NODE_CONTEXTS[handle].nodeTimeline;
+  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
+    MXC_HOT_NODE_CONTEXTS[handle].framebufferColorImageViews[i] = MXC_NODE_CONTEXTS[handle].framebuffers[i].color.imageView;
+    MXC_HOT_NODE_CONTEXTS[handle].framebufferColorImages[i] = MXC_NODE_CONTEXTS[handle].framebuffers[i].color.image;
+  }
+}
+
+static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
 
   switch (pNodeContext->nodeType) {
     case MXC_NODE_TYPE_CONTEXT_THREAD: {

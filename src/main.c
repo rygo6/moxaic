@@ -22,8 +22,6 @@ volatile bool isRunning = true;
 
 typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 
-//static MxcTestNode testNode;
-
 int main(void) {
 
   //  HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
@@ -90,15 +88,17 @@ int main(void) {
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
 
 
+  mxc_node_handle testNodeHandle = 0;
+  MxcNodeContext* pTestNodeContext = &MXC_NODE_CONTEXTS[testNodeHandle];
   MxcTestNode    testNode;
-  MxcNodeContext testNodeContext = {
+  *pTestNodeContext = (MxcNodeContext) {
       .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
       .compCycleSkip = 8,
       .pNode = &testNode,
       .runFunc = mxcRunTestNode,
       .compTimeline = context.timeline.semaphore,
   };
-  vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, testNodeContext.framebuffers);
+  vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pTestNodeContext->framebuffers);
   {
     const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
@@ -107,20 +107,20 @@ int main(void) {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
         .pNext = &timelineSemaphoreTypeCreateInfo,
     };
-    VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &testNodeContext.nodeTimeline));
+    VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &pTestNodeContext->nodeTimeline));
   }
   context.timeline.value = 0;
   MxcTestNodeCreateInfo testNodeCreateInfo = {
       .surface = surface,
       .transform = {0, 0, 0},
-      .pFramebuffers = testNodeContext.framebuffers,
+      .pFramebuffers = pTestNodeContext->framebuffers,
   };
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
-  mxcCreateNodeContext(&testNodeContext);
+  mxcCreateNodeContext(pTestNodeContext);
+  mxcCopyHotNodeContext(testNodeHandle);
+  MXC_NODE_HANDLE_COUNT = 1;
 
-  MxcCompNode compNode = {
-      .pExternalsContexts = &testNodeContext,
-  };
+  MxcCompNode compNode = {};
   MxcCompNodeCreateInfo compNodeCreateInfo = {
       .surface = surface,
   };
@@ -132,6 +132,7 @@ int main(void) {
       .compTimeline = context.timeline.semaphore,
   };
   mxcCreateNodeContext(&compNodeContext);
+
 
   while (isRunning) {
     // wait on even for rendering
@@ -149,11 +150,11 @@ int main(void) {
     context.timeline.value++;
   }
 
-  int result = pthread_join(testNodeContext.threadId, NULL);
-  if (result != 0) {
-    perror("Thread join failed");
-    return 1;
-  }
+//  int result = pthread_join(testNodeContext.threadId, NULL);
+//  if (result != 0) {
+//    perror("Thread join failed");
+//    return 1;
+//  }
 
   return EXIT_SUCCESS;
 }
