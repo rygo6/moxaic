@@ -4,36 +4,23 @@
 void CreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   pMesh->indexCount = slicesCount * stackCount * 2 * 3;
   uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-  const VkBufferCreateInfo indexBufferCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = indexBufferSize,
-      .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-  };
-  VKM_REQUIRE(vkCreateBuffer(context.device, &indexBufferCreateInfo, VKM_ALLOC, &pMesh->indexBuffer));
-  VkMemoryRequirements indexMemRequirements;
-  vkGetBufferMemoryRequirements(context.device, pMesh->indexBuffer, &indexMemRequirements);
-
   pMesh->vertexCount = (slicesCount + 1) * (stackCount + 1);
   uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
-  const VkBufferCreateInfo vertexBufferCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = vertexBufferSize,
-      .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-  };
-  VKM_REQUIRE(vkCreateBuffer(context.device, &vertexBufferCreateInfo, VKM_ALLOC, &pMesh->vertexBuffer));
-  VkMemoryRequirements vertexMemRequirements;
-  vkGetBufferMemoryRequirements(context.device, pMesh->vertexBuffer, &vertexMemRequirements);
 
-  assert(indexMemRequirements.memoryTypeBits == vertexMemRequirements.memoryTypeBits);
   pMesh->indexOffset = 0;
-  pMesh->vertexOffset = indexMemRequirements.size + (indexMemRequirements.size % vertexMemRequirements.alignment);
-  VkMemoryRequirements memRequirements = {
-      .memoryTypeBits = indexMemRequirements.memoryTypeBits,
-      .size = pMesh->vertexOffset + vertexMemRequirements.size,
+  pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(VkmVertex));
+  pMesh->bufferSize = pMesh->vertexOffset + vertexBufferSize;
+  const VkBufferCreateInfo bufferCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .size = pMesh->bufferSize,
+      .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
   };
+  VKM_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, VKM_ALLOC, &pMesh->buffer));
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(context.device, pMesh->buffer, &memRequirements);
   VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VKM_LOCALITY_CONTEXT, &pMesh->memory);
-  VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->indexBuffer, pMesh->memory, 0));
-  VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->vertexBuffer, pMesh->memory, pMesh->vertexOffset));
+  VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->buffer, pMesh->memory, 0));
+
   {
     uint16_t pIndices[pMesh->indexCount];
     int      idx = 0;
@@ -51,7 +38,7 @@ void CreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float
         pIndices[idx++] = v3;
       }
     }
-    VkmPopulateBufferViaStaging(pool, queue, pIndices, indexBufferSize, pMesh->indexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
   }
   {
     VkmVertex   pVertices[pMesh->vertexCount];
@@ -76,7 +63,7 @@ void CreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float
         };
       }
     }
-    VkmPopulateBufferViaStaging(pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
   }
 }
 
@@ -174,7 +161,10 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     VkDescriptorSet sphereObjectSet;
 
     uint32_t sphereIndexCount;
-    VkBuffer sphereIndexBuffer, sphereVertexBuffer;
+//    VkBuffer sphereIndexBuffer, sphereVertexBuffer;
+    VkBuffer sphereBuffer;
+    VkDeviceSize sphereIndexOffset;
+    VkDeviceSize sphereVertexOffset;
 
     VkDevice device;
 
@@ -204,8 +194,11 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
       hot.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
     }
     hot.sphereIndexCount = pNode->sphereMesh.indexCount;
-    hot.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
-    hot.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
+//    hot.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
+//    hot.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
+    hot.sphereBuffer = pNode->sphereMesh.buffer;
+    hot.sphereIndexOffset = pNode->sphereMesh.indexOffset;
+    hot.sphereVertexOffset = pNode->sphereMesh.vertexOffset;
     hot.device = pNode->device;
     hot.graphicsQueue = pNode->graphicsQueue;
     hot.compTimeline.semaphore = pNodeContext->compTimeline;
@@ -237,7 +230,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     const VkFramebuffer framebuffer = hot.framebuffers[framebufferIndex];
     const VkImage       framebufferColorImage = hot.frameBufferColorImages[framebufferIndex];
 
-//    printf("Rendering into %d...", framebufferIndex);
+    //    printf("Rendering into %d...", framebufferIndex);
 
     vkmCmdResetBegin(hot.cmd);
 
@@ -250,8 +243,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &hot.checkerMaterialSet, 0, NULL);
     vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &hot.sphereObjectSet, 0, NULL);
 
-    vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.sphereVertexBuffer}, (const VkDeviceSize[]){0});
-    vkCmdBindIndexBuffer(hot.cmd, hot.sphereIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.sphereBuffer}, (const VkDeviceSize[]){hot.sphereVertexOffset});
+    vkCmdBindIndexBuffer(hot.cmd, hot.sphereBuffer, hot.sphereIndexOffset, VK_INDEX_TYPE_UINT16);
     vkCmdDrawIndexed(hot.cmd, hot.sphereIndexCount, 1, 0, 0, 0);
 
     vkCmdEndRenderPass(hot.cmd);

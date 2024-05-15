@@ -8,7 +8,7 @@ static void CreateQuadMesh(const VkCommandPool pool, const VkQueue queue, VkmMes
     const uint16_t pIndices[] = {0, 1, 2, 1, 3, 2};
     const uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
     VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->indexMemory, &pMesh->indexBuffer);
-    VkmPopulateBufferViaStaging(pool, queue, pIndices, indexBufferSize, pMesh->indexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pIndices, 0, indexBufferSize, pMesh->indexBuffer);
   }
   {
     pMesh->vertexCount = 4;
@@ -20,7 +20,7 @@ static void CreateQuadMesh(const VkCommandPool pool, const VkQueue queue, VkmMes
     };
     const uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
     VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->vertexMemory, &pMesh->vertexBuffer);
-    VkmPopulateBufferViaStaging(pool, queue, pVertices, vertexBufferSize, pMesh->vertexBuffer);
+    VkmPopulateBufferViaStaging(pool, queue, pVertices, 0, vertexBufferSize, pMesh->vertexBuffer);
   }
 }
 
