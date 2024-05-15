@@ -132,11 +132,14 @@ typedef struct VkmVertex {
 } VkmVertex;
 
 typedef struct VkmMesh {
+  VkDeviceMemory memory;
   uint32_t       indexCount;
   VkDeviceMemory indexMemory;
+  VkDeviceSize   indexOffset;
   VkBuffer       indexBuffer;
   uint32_t       vertexCount;
   VkDeviceMemory vertexMemory;
+  VkDeviceSize   vertexOffset;
   VkBuffer       vertexBuffer;
 } VkmMesh;
 
@@ -861,6 +864,7 @@ void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t
 void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, const VkMemoryPropertyFlags pMemoryPropertyFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory);
 void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer);
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
 void VkmPopulateBufferViaStaging(const VkCommandPool pool, const VkQueue queue, const void* srcData, const VkDeviceSize bufferSize, const VkBuffer buffer);

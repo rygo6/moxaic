@@ -290,9 +290,9 @@ void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDes
 // Memory
 //----------------------------------------------------------------------------------
 
-static uint32_t FindMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties, const VkMemoryRequirements* pMemoryRequirements, VkMemoryPropertyFlags memoryPropertyFlags) {
+static uint32_t FindMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties, const uint32_t memoryTypeBits, VkMemoryPropertyFlags memoryPropertyFlags) {
   for (uint32_t i = 0; i < pPhysicalDeviceMemoryProperties->memoryTypeCount; i++) {
-    bool hasTypeBits = pMemoryRequirements->memoryTypeBits & 1 << i;
+    bool hasTypeBits = memoryTypeBits & 1 << i;
     bool hasPropertyFlags = (pPhysicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags;
     if (hasTypeBits && hasPropertyFlags) {
       return i;
@@ -308,28 +308,55 @@ static uint32_t FindMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties* pPhy
   }
   PANIC("Failed to find memory with properties!");
 }
-static void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, const VkMemoryPropertyFlags pMemoryPropertyFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
+static size_t  totalAllocSize = 0;
+VkDeviceMemory localMemory;
+VkDeviceMemory localVisibleCoherentMemory;
+VkDeviceMemory visibleCoherentMemory;
+
+static void VkmAllocContextMemory(const VkMemoryRequirements* pMemoryRequirements, const VkMemoryPropertyFlags pMemoryPropertyFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
   VkPhysicalDeviceMemoryProperties memoryProperties;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProperties);
-  const uint32_t memoryTypeIndex = FindMemoryTypeIndex(&memoryProperties, pMemoryRequirements, pMemoryPropertyFlags);
+  const uint32_t                   memTypeIndex = FindMemoryTypeIndex(&memoryProperties, pMemoryRequirements->memoryTypeBits, pMemoryPropertyFlags);
+  const VkExportMemoryAllocateInfo exportMemAllocInfo = {
+      .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+      .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
+  };
+  const VkMemoryAllocateInfo memAllocInfo = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+      .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : NULL,
+      .allocationSize = pMemoryRequirements->size,
+      .memoryTypeIndex = memTypeIndex,
+  };
+  VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
+  totalAllocSize += pMemoryRequirements->size;
+  printf("%zu allocated\n", totalAllocSize);
+}
+
+
+void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, const VkMemoryPropertyFlags pMemoryPropertyFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
+  VkPhysicalDeviceMemoryProperties memoryProperties;
+  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProperties);
+  const uint32_t memTypeIndex = FindMemoryTypeIndex(&memoryProperties, pMemoryRequirements->memoryTypeBits, pMemoryPropertyFlags);
   // todo your supposed check if it wants dedicated memory
   //    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
   //            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
   //            .image = pTestTexture->image,
   //            .buffer = VK_NULL_HANDLE,
   //    };
-  const VkExportMemoryAllocateInfo exportMemoryAllocInfo = {
+  const VkExportMemoryAllocateInfo exportMemAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
       //            .pNext =&dedicatedAllocInfo,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
   };
-  const VkMemoryAllocateInfo ai = {
+  const VkMemoryAllocateInfo memAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemoryAllocInfo : NULL,
+      .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : NULL,
       .allocationSize = pMemoryRequirements->size,
-      .memoryTypeIndex = memoryTypeIndex,
+      .memoryTypeIndex = memTypeIndex,
   };
-  VKM_REQUIRE(vkAllocateMemory(context.device, &ai, VKM_ALLOC, pDeviceMemory));
+  VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
+  totalAllocSize += pMemoryRequirements->size;
+  printf("%zu allocated\n", totalAllocSize);
 }
 void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
@@ -337,10 +364,12 @@ void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, c
       .size = bufferSize,
       .usage = usage,
   };
-  VKM_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, NULL, pBuffer));
-  VkMemoryRequirements memoryRequirements;
-  vkGetBufferMemoryRequirements(context.device, *pBuffer, &memoryRequirements);
-  VkmAllocMemory(&memoryRequirements, memoryPropertyFlags, locality, pDeviceMemory);
+  VKM_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, VKM_ALLOC, pBuffer));
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(context.device, *pBuffer, &memRequirements);
+  printf("buffer memRequirements.alignment: %llu\n", memRequirements.alignment);
+
+  VkmAllocMemory(&memRequirements, memoryPropertyFlags, locality, pDeviceMemory);
   VKM_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMemory, 0));
 }
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped) {
@@ -398,6 +427,8 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, cons
   VKM_REQUIRE(vkCreateImage(context.device, pImageCreateInfo, VKM_ALLOC, pImage));
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, *pImage, &memRequirements);
+  printf("image memRequirements.alignment: %llu\n", memRequirements.alignment);
+
   VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, pMemory);
   VKM_REQUIRE(vkBindImageMemory(context.device, *pImage, *pMemory, 0));
 }
@@ -416,6 +447,8 @@ void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
   VKM_REQUIRE(vkCreateImage(context.device, &pTextureCreateInfo->imageCreateInfo, VKM_ALLOC, &pTexture->image));
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, pTexture->image, &memRequirements);
+  printf("texture memRequirements.alignment: %llu\n", memRequirements.alignment);
+
   VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pTextureCreateInfo->locality, &pTexture->imageMemory);
   VKM_REQUIRE(vkBindImageMemory(context.device, pTexture->image, pTexture->imageMemory, 0));
   CreateImageView(&pTextureCreateInfo->imageCreateInfo, pTexture->image, pTextureCreateInfo->aspectMask, &pTexture->imageView);
@@ -746,6 +779,9 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
            VK_API_VERSION_MAJOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
            VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
+
+    printf("minUniformBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment);
+    printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
     REQUIRE(physicalDeviceProperties.properties.apiVersion >= VKM_VERSION, "Insufficient Vulkan API Version");
   }
 

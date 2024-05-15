@@ -57,7 +57,6 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pT
     pTestNode->sphereTransform = (VkmTransform){.position = {0, 0, 0}};
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
-//    vkmCreateSphereMesh(pTestNode->pool, pTestNode->graphicsQueue, 0.5f, 32, 32, &pTestNode->sphereMesh);
     CreateQuadMesh(pTestNode->pool, pTestNode->graphicsQueue, &pTestNode->sphereMesh);
 
     VkBool32 presentSupport = VK_FALSE;
