@@ -1,94 +1,59 @@
 #include "test_node.h"
-#include <assert.h>
 
-void CreateSphereMesh(const VkCommandPool pool, const VkQueue queue, const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
-  pMesh->indexCount = slicesCount * stackCount * 2 * 3;
-  uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-  pMesh->vertexCount = (slicesCount + 1) * (stackCount + 1);
-  uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
-
-  pMesh->indexOffset = 0;
-  pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(VkmVertex));
-  pMesh->bufferSize = pMesh->vertexOffset + vertexBufferSize;
-  const VkBufferCreateInfo bufferCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = pMesh->bufferSize,
-      .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
+  VkmMeshCreateInfo info = {
+      .indexCount = slicesCount * stackCount * 2 * 3,
+      .vertexCount = (slicesCount + 1) * (stackCount + 1),
   };
-  VKM_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, VKM_ALLOC, &pMesh->buffer));
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(context.device, pMesh->buffer, &memRequirements);
-  VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VKM_LOCALITY_CONTEXT, &pMesh->memory);
-  VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->buffer, pMesh->memory, 0));
-
-  {
-    uint16_t pIndices[pMesh->indexCount];
-    int      idx = 0;
-    for (int i = 0; i < stackCount; i++) {
-      for (int j = 0; j < slicesCount; j++) {
-        const uint16_t v1 = i * (slicesCount + 1) + j;
-        const uint16_t v2 = i * (slicesCount + 1) + j + 1;
-        const uint16_t v3 = (i + 1) * (slicesCount + 1) + j;
-        const uint16_t v4 = (i + 1) * (slicesCount + 1) + j + 1;
-        pIndices[idx++] = v1;
-        pIndices[idx++] = v2;
-        pIndices[idx++] = v3;
-        pIndices[idx++] = v2;
-        pIndices[idx++] = v4;
-        pIndices[idx++] = v3;
-      }
+  uint16_t indices[info.indexCount];
+  int      index = 0;
+  for (int i = 0; i < stackCount; i++) {
+    for (int j = 0; j < slicesCount; j++) {
+      const uint16_t v1 = i * (slicesCount + 1) + j;
+      const uint16_t v2 = i * (slicesCount + 1) + j + 1;
+      const uint16_t v3 = (i + 1) * (slicesCount + 1) + j;
+      const uint16_t v4 = (i + 1) * (slicesCount + 1) + j + 1;
+      indices[index++] = v1;
+      indices[index++] = v2;
+      indices[index++] = v3;
+      indices[index++] = v2;
+      indices[index++] = v4;
+      indices[index++] = v3;
     }
-    VkmPopulateBufferViaStaging(pool, queue, pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
   }
-  {
-    VkmVertex   pVertices[pMesh->vertexCount];
-    const float slices = (float)slicesCount;
-    const float stacks = (float)stackCount;
-    const float dtheta = 2.0f * VKM_PI / slices;
-    const float dphi = VKM_PI / stacks;
-    int         idx = 0;
-    for (int i = 0; +i <= stackCount; i++) {
-      const float fi = (float)i;
-      const float phi = fi * dphi;
-      for (int j = 0; j <= slicesCount; j++) {
-        const float ji = (float)j;
-        const float theta = ji * dtheta;
-        const float x = radius * sinf(phi) * cosf(theta);
-        const float y = radius * sinf(phi) * sinf(theta);
-        const float z = radius * cosf(phi);
-        pVertices[idx++] = (VkmVertex){
-            .position = {x, y, z},
-            .normal = {x, y, z},
-            .uv = {ji / slices, fi / stacks},
-        };
-      }
+  VkmVertex   vertices[info.vertexCount];
+  const float slices = (float)slicesCount;
+  const float stacks = (float)stackCount;
+  const float dtheta = 2.0f * VKM_PI / slices;
+  const float dphi = VKM_PI / stacks;
+  int         vertex = 0;
+  for (int i = 0; +i <= stackCount; i++) {
+    const float fi = (float)i;
+    const float phi = fi * dphi;
+    for (int j = 0; j <= slicesCount; j++) {
+      const float ji = (float)j;
+      const float theta = ji * dtheta;
+      const float x = radius * sinf(phi) * cosf(theta);
+      const float y = radius * sinf(phi) * sinf(theta);
+      const float z = radius * cosf(phi);
+      vertices[vertex++] = (VkmVertex){
+          .position = {x, y, z},
+          .normal = {x, y, z},
+          .uv = {ji / slices, fi / stacks},
+      };
     }
-    VkmPopulateBufferViaStaging(pool, queue, pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
+    info.pIndices = indices;
+    info.pVertices = vertices;
+    VkmCreateMesh(&info, pMesh);
   }
 }
 
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode) {
   {  // Create
-    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-    };
-    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pTestNode->pool));
-
-    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 0, &pTestNode->graphicsQueue);
-    const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = pTestNode->pool,
-        .commandBufferCount = 1,
-    };
-    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pTestNode->cmd));
-    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "TestNode");
-
     vkmCreateNodeFramebufferImport(context.standardRenderPass, VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
 
     vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.materialSetLayout, &pTestNode->checkerMaterialSet);
-    vkmCreateTextureFromFile(pTestNode->pool, pTestNode->graphicsQueue, "textures/uvgrid.jpg", &pTestNode->checkerTexture);
+    vkmCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
     vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.objectSetLayout, &pTestNode->sphereObjectSet);
     vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
@@ -102,7 +67,22 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     pTestNode->sphereTransform = pCreateInfo->transform;
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
-    CreateSphereMesh(pTestNode->pool, pTestNode->graphicsQueue, 0.5f, 32, 32, &pTestNode->sphereMesh);
+    CreateSphereMesh(0.5f, 32, 32, &pTestNode->sphereMesh);
+
+    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 1, &pTestNode->graphicsQueue);
+    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+    };
+    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pTestNode->pool));
+    const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = pTestNode->pool,
+        .commandBufferCount = 1,
+    };
+    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pTestNode->cmd));
+    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "TestNode");
   }
 
 #ifdef DEBUG_TEST_NODE_SWAP
@@ -161,8 +141,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     VkDescriptorSet sphereObjectSet;
 
     uint32_t sphereIndexCount;
-//    VkBuffer sphereIndexBuffer, sphereVertexBuffer;
-    VkBuffer sphereBuffer;
+    VkBuffer     sphereBuffer;
     VkDeviceSize sphereIndexOffset;
     VkDeviceSize sphereVertexOffset;
 
@@ -194,8 +173,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
       hot.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
     }
     hot.sphereIndexCount = pNode->sphereMesh.indexCount;
-//    hot.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
-//    hot.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
+    //    hot.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
+    //    hot.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
     hot.sphereBuffer = pNode->sphereMesh.buffer;
     hot.sphereIndexOffset = pNode->sphereMesh.indexOffset;
     hot.sphereVertexOffset = pNode->sphereMesh.vertexOffset;

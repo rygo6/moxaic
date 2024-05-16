@@ -2,47 +2,25 @@
 
 #include <vulkan/vk_enum_string_helper.h>
 
-static void CreateQuadMesh(const VkCommandPool pool, const VkQueue queue, VkmMesh* pMesh) {
-  {
-    pMesh->indexCount = 6;
-    const uint16_t pIndices[] = {0, 1, 2, 1, 3, 2};
-    const uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->indexMemory, &pMesh->indexBuffer);
-    VkmPopulateBufferViaStaging(pool, queue, pIndices, 0, indexBufferSize, pMesh->indexBuffer);
-  }
-  {
-    pMesh->vertexCount = 4;
-    const VkmVertex pVertices[] = {
-        {.position = {-1, -1, 0}, .uv = {0, 0}},
-        {.position = {1, -1, 0}, .uv = {1, 0}},
-        {.position = {-1, 1, 0}, .uv = {0, 1}},
-        {.position = {1, 1, 0}, .uv = {1, 1}},
-    };
-    const uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
-    VkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->vertexMemory, &pMesh->vertexBuffer);
-    VkmPopulateBufferViaStaging(pool, queue, pVertices, 0, vertexBufferSize, pMesh->vertexBuffer);
-  }
+static void CreateQuadMesh(VkmMesh* pMesh) {
+  const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
+  const VkmVertex vertices[] = {
+      {.position = {-1, -1, 0}, .uv = {0, 0}},
+      {.position = {1, -1, 0}, .uv = {1, 0}},
+      {.position = {-1, 1, 0}, .uv = {0, 1}},
+      {.position = {1, 1, 0}, .uv = {1, 1}},
+  };
+  const VkmMeshCreateInfo info = {
+      .indexCount = 6,
+      .vertexCount = 4,
+      .pIndices = indices,
+      .pVertices = vertices,
+  };
+  VkmCreateMesh(&info, pMesh);
 }
-
 
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pTestNode) {
   {  // Create
-    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-    };
-    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pTestNode->pool));
-
-    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 1, &pTestNode->graphicsQueue);
-    const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = pTestNode->pool,
-        .commandBufferCount = 1,
-    };
-    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pTestNode->cmd));
-    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "CompNode");
-
     vkmCreateStandardFramebuffers(context.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_PROCESS_EXPORTED, pTestNode->framebuffers);
 
     vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.materialSetLayout, &pTestNode->checkerMaterialSet);
@@ -57,12 +35,27 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pT
     pTestNode->sphereTransform = (VkmTransform){.position = {0, 0, 0}};
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
-    CreateQuadMesh(pTestNode->pool, pTestNode->graphicsQueue, &pTestNode->sphereMesh);
+    CreateQuadMesh(&pTestNode->sphereMesh);
 
     VkBool32 presentSupport = VK_FALSE;
     VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pCreateInfo->surface, &presentSupport));
     REQUIRE(presentSupport, "Queue can't present to surface!")
     VkmCreateSwap(pCreateInfo->surface, &pTestNode->swap);
+
+    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 0, &pTestNode->graphicsQueue);
+    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+    };
+    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pTestNode->pool));
+    const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = pTestNode->pool,
+        .commandBufferCount = 1,
+    };
+    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pTestNode->cmd));
+    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "CompNode");
   }
 
   {  // Initial State
@@ -109,8 +102,10 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
     VkDescriptorSet checkerMaterialSet;
     VkDescriptorSet sphereObjectSet;
 
-    uint32_t sphereIndexCount;
-    VkBuffer sphereIndexBuffer, sphereVertexBuffer;
+    uint32_t     quadIndexCount;
+    VkBuffer     quadBuffer;
+    VkDeviceSize quadIndexOffset;
+    VkDeviceSize quadVertexOffset;
 
     VkDevice device;
 
@@ -135,9 +130,12 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
       hot.framebuffers[i] = pNode->framebuffers[i].framebuffer;
       hot.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
     }
-    hot.sphereIndexCount = pNode->sphereMesh.indexCount;
-    hot.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
-    hot.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
+
+    hot.quadIndexCount = pNode->sphereMesh.indexCount;
+    hot.quadBuffer = pNode->sphereMesh.buffer;
+    hot.quadIndexOffset = pNode->sphereMesh.indexOffset;
+    hot.quadVertexOffset = pNode->sphereMesh.vertexOffset;
+
     hot.device = pNode->device;
     hot.swap = pNode->swap;
     hot.graphicsQueue = pNode->graphicsQueue;
@@ -180,9 +178,9 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
       vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &hot.checkerMaterialSet, 0, NULL);
       vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &hot.sphereObjectSet, 0, NULL);
 
-      vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.sphereVertexBuffer}, (const VkDeviceSize[]){0});
-      vkCmdBindIndexBuffer(hot.cmd, hot.sphereIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
-      vkCmdDrawIndexed(hot.cmd, hot.sphereIndexCount, 1, 0, 0, 0);
+      vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.quadBuffer}, (const VkDeviceSize[]){hot.quadVertexOffset});
+      vkCmdBindIndexBuffer(hot.cmd, hot.quadBuffer, hot.quadIndexOffset, VK_INDEX_TYPE_UINT16);
+      vkCmdDrawIndexed(hot.cmd, hot.quadIndexCount, 1, 0, 0, 0);
     }
 
     vkCmdEndRenderPass(hot.cmd);

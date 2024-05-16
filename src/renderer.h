@@ -131,18 +131,20 @@ typedef struct VkmVertex {
   vec2 uv;
 } VkmVertex;
 
+typedef struct VkmMeshCreateInfo {
+  uint32_t         indexCount;
+  const uint16_t*  pIndices;
+  uint32_t         vertexCount;
+  const VkmVertex* pVertices;
+} VkmMeshCreateInfo;
+
 typedef struct VkmMesh {
   VkDeviceMemory memory;
-  VkDeviceSize   bufferSize;
   VkBuffer       buffer;
   uint32_t       indexCount;
-  VkDeviceMemory indexMemory;
   VkDeviceSize   indexOffset;
-  VkBuffer       indexBuffer;
   uint32_t       vertexCount;
-  VkDeviceMemory vertexMemory;
   VkDeviceSize   vertexOffset;
-  VkBuffer       vertexBuffer;
 } VkmMesh;
 
 typedef struct VkmFramebuffer {
@@ -213,6 +215,8 @@ typedef struct VkmContext {
   VkmTimeline      timeline;
 
   VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
+  VkCommandPool  pools[VKM_QUEUE_FAMILY_TYPE_COUNT];
+  VkQueue        queues[VKM_QUEUE_FAMILY_TYPE_COUNT];
 
   VkDescriptorPool descriptorPool;
   VkQueryPool      timeQueryPool;
@@ -228,6 +232,7 @@ typedef struct VkmContext {
   // these probably should go elsewhere
   VkRenderPass    standardRenderPass;
   VkmStandardPipe standardPipe;
+
 
   VkSampler linearSampler;
 
@@ -866,11 +871,12 @@ void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t
 void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void VkmAllocMemory(const VkMemoryRequirements* pMemoryRequirements, const VkMemoryPropertyFlags pMemoryPropertyFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory);
+void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory);
 void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer);
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
-void VkmPopulateBufferViaStaging(const VkCommandPool pool, const VkQueue queue, const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
-void vkmCreateTextureFromFile(const VkCommandPool pool, const VkQueue queue, const char* pPath, VkmTexture* pTexture);
+void VkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
+void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
 
 typedef struct VkmInitializeDesc {
