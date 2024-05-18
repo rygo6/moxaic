@@ -42,7 +42,7 @@ static VkCommandBuffer VkmBeginImmediateCommandBuffer() {
   VkCommandBuffer                   commandBuffer;
   const VkCommandBufferAllocateInfo allocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = context.pools[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER],
+      .commandPool = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool,
       .commandBufferCount = 1,
   };
   VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &allocateInfo, &commandBuffer));
@@ -60,9 +60,9 @@ static void VkmEndImmediateCommandBuffer(VkCommandBuffer commandBuffer) {
       .commandBufferCount = 1,
       .pCommandBuffers = &commandBuffer,
   };
-  VKM_REQUIRE(vkQueueSubmit(context.queues[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER], 1, &submitInfo, VK_NULL_HANDLE));
-  VKM_REQUIRE(vkQueueWaitIdle(context.queues[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER]));
-  vkFreeCommandBuffers(context.device, context.pools[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER], 1, &commandBuffer);
+  VKM_REQUIRE(vkQueueSubmit(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue, 1, &submitInfo, VK_NULL_HANDLE));
+  VKM_REQUIRE(vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue));
+  vkFreeCommandBuffers(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool, 1, &commandBuffer);
 }
 
 //----------------------------------------------------------------------------------
@@ -308,24 +308,25 @@ static uint32_t FindMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties* pPhy
   PANIC("Failed to find memory with properties!");
   return -1;
 }
+
+
 static size_t  totalAllocSize = 0;
 VkDeviceMemory localMemory;
 VkDeviceMemory localVisibleCoherentMemory;
 VkDeviceMemory visibleCoherentMemory;
-
-static void VkmAllocContextMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMem) {
+static void    VkmAllocContextMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMem) {
   VkPhysicalDeviceMemoryProperties memoryProps;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProps);
   const uint32_t                   memTypeIndex = FindMemoryTypeIndex(&memoryProps, pMemReqs->memoryTypeBits, memPropFlags);
   const VkExportMemoryAllocateInfo exportMemAllocInfo = {
-      .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-      .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
+         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+         .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
   };
   const VkMemoryAllocateInfo memAllocInfo = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : NULL,
-      .allocationSize = pMemReqs->size,
-      .memoryTypeIndex = memTypeIndex,
+         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+         .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : NULL,
+         .allocationSize = pMemReqs->size,
+         .memoryTypeIndex = memTypeIndex,
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMem));
   totalAllocSize += pMemReqs->size;
@@ -410,7 +411,6 @@ void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
   VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->buffer, pMesh->memory, 0));
   VkmPopulateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
   VkmPopulateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
-
 }
 
 //----------------------------------------------------------------------------------
@@ -492,7 +492,6 @@ void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture) {
   imageCreateInfo.extent = (VkExtent3D){width, height, 1};
   imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
   CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, VKM_LOCALITY_CONTEXT, &pTexture->imageMemory, &pTexture->image, &pTexture->imageView);
-
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
   CreateStagingBuffer(pImagePixels, imageBufferSize, VKM_LOCALITY_CONTEXT, &stagingBufferMemory, &stagingBuffer);
@@ -520,6 +519,7 @@ static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
     [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 };
+
 void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -629,7 +629,6 @@ void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLoca
     VKM_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
   }
 }
-
 void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -898,29 +897,17 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
     VKM_REQUIRE(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VKM_ALLOC, &context.device));
   }
 
-  {  // Semaphore
-    const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-    const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = &timelineSemaphoreTypeCreateInfo,
-    };
-    VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &context.timeline.semaphore));
-    context.timeline.value = 0;
-  }
-
   for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
     if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
       continue;
 
+    vkGetDeviceQueue(context.device, context.queueFamilies[i].index, 0, &context.queueFamilies[i].queue);
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
         .queueFamilyIndex = context.queueFamilies[i].index,
     };
-    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &context.pools[i]));
-    vkGetDeviceQueue(context.device, context.queueFamilies[i].index, 0, &context.queues[i]);
+    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &context.queueFamilies[i].pool));
   }
 
   {  // Pools
@@ -1065,4 +1052,15 @@ void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* p
   CreateStandardObjectSetLayout(pStandardPipeline);
   CreateStandardPipelineLayout(pStandardPipeline);
   CreateStandardPipeline(renderPass, pStandardPipeline);
+}
+
+void vkmCreateTimeline(VkSemaphore* pSemaphore) {
+  const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
+  const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+      .pNext = &timelineSemaphoreTypeCreateInfo,
+  };
+  VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, pSemaphore));
 }

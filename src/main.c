@@ -8,7 +8,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -77,6 +76,7 @@ int main(void) {
   vkmCreateContext(&contextCreateInfo);
 
 
+  // these probably should go elsewhere ?
   // global samplers
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
   // standard/common rendering
@@ -89,6 +89,13 @@ int main(void) {
   vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
 
 
+  MxcBasicComp           basicComp;
+  MxcBasicCompCreateInfo basicCompInfo = {
+      .surface = surface,
+  };
+  mxcCreateBasicComp(&basicCompInfo, &basicComp);
+
+
   mxc_node_handle testNodeHandle = 0;
   MxcNodeContext* pTestNodeContext = &MXC_NODE_CONTEXTS[testNodeHandle];
   MxcTestNode    testNode;
@@ -97,7 +104,7 @@ int main(void) {
       .compCycleSkip = 8,
       .pNode = &testNode,
       .runFunc = mxcRunTestNode,
-      .compTimeline = context.timeline.semaphore,
+      .compTimeline = basicComp.timeline,
   };
   vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pTestNodeContext->framebuffers);
   {
@@ -110,7 +117,6 @@ int main(void) {
     };
     VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &pTestNodeContext->nodeTimeline));
   }
-  context.timeline.value = 0;
   MxcTestNodeCreateInfo testNodeCreateInfo = {
       .surface = surface,
       .transform = {0, 0, 0},
@@ -121,35 +127,9 @@ int main(void) {
   mxcCopyHotNodeContext(testNodeHandle);
   MXC_NODE_HANDLE_COUNT = 1;
 
-  MxcCompNode compNode = {};
-  MxcCompNodeCreateInfo compNodeCreateInfo = {
-      .surface = surface,
-  };
-  mxcCreateCompNode(&compNodeCreateInfo, &compNode);
-  MxcNodeContext compNodeContext = {
-      .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
-      .pNode = &compNode,
-      .runFunc = mxcRunCompNode,
-      .compTimeline = context.timeline.semaphore,
-  };
-  mxcCreateNodeContext(&compNodeContext);
 
+  mxcRunCompNode(&basicComp);
 
-  while (isRunning) {
-    // wait on even for rendering
-    vkmTimelineWait(context.device, &context.timeline);
-    context.timeline.value++;
-
-    vkmUpdateWindowInput();
-
-    if (vkmProcessInput(&context.globalCameraTransform)) {
-      vkmUpdateGlobalSetView(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
-    }
-
-    // signal odd for input ready
-    vkmTimelineSignal(context.device, &context.timeline);
-    context.timeline.value++;
-  }
 
 //  int result = pthread_join(testNodeContext.threadId, NULL);
 //  if (result != 0) {

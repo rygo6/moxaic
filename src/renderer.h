@@ -185,19 +185,19 @@ typedef enum VkmQueueFamilyType {
   VKM_QUEUE_FAMILY_TYPE_COUNT
 } VkmQueueFamilyType;
 typedef struct VkmQueueFamily {
-  //  VkCommandPool pool;
-  uint32_t index;
-  uint32_t queueCount;
+  VkQueue       queue;
+  VkCommandPool pool;
+  uint32_t      index;
 } VkmQueueFamily;
 
-typedef struct VkmDedicatedQueue {
-  VkQueue         queue;
-  VkCommandBuffer cmd;
-} VkmDedicatedQueue;
-typedef struct VkmSharedQueue {
-  VkQueue         queue;
-  VkCommandBuffer cmd;
-} VkmSharedQueue;
+typedef enum VkmQueueMode {
+  VKM_QUEUE_MODE_DEDICATED,
+  VKM_QUEUE_MODE_SHARED,
+} VkmQueueMode;
+typedef struct VkmQueue {
+  VkmQueueMode mode;
+  VkQueue      queue;
+} VkmQueue;
 
 typedef struct VkmStandardPipeline {
   VkPipelineLayout pipelineLayout;
@@ -212,11 +212,8 @@ typedef struct VkmStandardPipeline {
 typedef struct VkmContext {
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
-  VkmTimeline      timeline;
 
   VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
-  VkCommandPool  pools[VKM_QUEUE_FAMILY_TYPE_COUNT];
-  VkQueue        queues[VKM_QUEUE_FAMILY_TYPE_COUNT];
 
   VkDescriptorPool descriptorPool;
   VkQueryPool      timeQueryPool;
@@ -232,8 +229,6 @@ typedef struct VkmContext {
   // these probably should go elsewhere
   VkRenderPass    standardRenderPass;
   VkmStandardPipe standardPipe;
-
-
   VkSampler linearSampler;
 
 } VkmContext;
@@ -878,6 +873,7 @@ void VkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffs
 void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
+void vkmCreateTimeline(VkSemaphore* pSemaphore);
 
 typedef struct VkmInitializeDesc {
   const char* applicationName;
@@ -915,7 +911,7 @@ typedef struct VkmQueueFamilyCreateInfo {
   VkmSupport               supportsCompute;
   VkmSupport               supportsTransfer;
   VkQueueGlobalPriorityKHR globalPriority;
-  uint32_t                 queueCount;
+  uint32_t                 queueCount; // probably get rid of this, we will multiplex queues automatically and presume only 1
   const float*             pQueuePriorities;
 } VkmQueueFamilyCreateInfo;
 typedef struct VkmContextCreateInfo {

@@ -3,22 +3,25 @@
 #include "node.h"
 #include "renderer.h"
 
+// we probably want to keep the comp node on its own thread so the main
+// thread/context can be used for loading in content
+// but the comp node can't make new things from context, main thread has to do that
+// but it seems so much simpler if main thread is comp thread, or node process thread
+// truth is context loading is side effort... it should be occasional thread
+
 typedef struct MxcCompNodeCreateInfo {
-  VkSurfaceKHR    surface;
-} MxcCompNodeCreateInfo;
+  VkSurfaceKHR surface;
+} MxcBasicCompCreateInfo;
 
 typedef struct MxcCompNode {
-  VkCommandPool pool;
+//  VkCommandPool   pool;
+  VkCommandBuffer cmd;
 
   VkRenderPass     standardRenderPass;
   VkPipelineLayout standardPipelineLayout;
   VkPipeline       standardPipeline;
 
-  VkSampler       sampler;
-
   VkDevice device;
-
-  VkCommandBuffer cmd;
 
   VkDescriptorSet globalSet;
   VkDescriptorSet checkerMaterialSet;
@@ -36,10 +39,10 @@ typedef struct MxcCompNode {
 
   VkmSwap swap;
 
-  VkQueue graphicsQueue;
+  VkSemaphore timeline;
 
-} MxcCompNode;
+} MxcBasicComp;
 
 
-void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pTestNode);
-void mxcRunCompNode(const MxcNodeContext* pNodeContext);
+void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp);
+void mxcRunCompNode(const MxcBasicComp* pNode);

@@ -19,105 +19,92 @@ static void CreateQuadMesh(VkmMesh* pMesh) {
   VkmCreateMesh(&info, pMesh);
 }
 
-void mxcCreateCompNode(const MxcCompNodeCreateInfo* pCreateInfo, MxcCompNode* pTestNode) {
+void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp) {
   {  // Create
-    vkmCreateStandardFramebuffers(context.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_PROCESS_EXPORTED, pTestNode->framebuffers);
+    vkmCreateStandardFramebuffers(context.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.materialSetLayout, &pTestNode->checkerMaterialSet);
-    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pTestNode->checkerMaterialSet, "CompCheckerMaterialSet");
+    vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.materialSetLayout, &pComp->checkerMaterialSet);
+    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->checkerMaterialSet, "CompCheckerMaterialSet");
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.objectSetLayout, &pTestNode->sphereObjectSet);
-    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pTestNode->sphereObjectSet, "CompSphereObjectSet");
-    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
+    vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.objectSetLayout, &pComp->sphereObjectSet);
+    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->sphereObjectSet, "CompSphereObjectSet");
+    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->sphereObjectSetMemory, &pComp->sphereObjectSetBuffer, (void**)&pComp->pSphereObjectSetMapped);
 
-    vkmUpdateDescriptorSet(context.device, &VKM_SET_WRITE_STD_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer));
+    vkmUpdateDescriptorSet(context.device, &VKM_SET_WRITE_STD_OBJECT_BUFFER(pComp->sphereObjectSet, pComp->sphereObjectSetBuffer));
 
-    pTestNode->sphereTransform = (VkmTransform){.position = {0, 0, 0}};
-    vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
+    pComp->sphereTransform = (VkmTransform){.position = {0, 0, 0}};
+    vkmUpdateObjectSet(&pComp->sphereTransform, &pComp->sphereObjectState, pComp->pSphereObjectSetMapped);
 
-    CreateQuadMesh(&pTestNode->sphereMesh);
+    CreateQuadMesh(&pComp->sphereMesh);
 
     VkBool32 presentSupport = VK_FALSE;
-    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pCreateInfo->surface, &presentSupport));
+    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pInfo->surface, &presentSupport));
     REQUIRE(presentSupport, "Queue can't present to surface!")
-    VkmCreateSwap(pCreateInfo->surface, &pTestNode->swap);
+    VkmCreateSwap(pInfo->surface, &pComp->swap);
 
-    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 0, &pTestNode->graphicsQueue);
-    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-    };
-    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pTestNode->pool));
+    vkmCreateTimeline(&pComp->timeline);
+
     const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = pTestNode->pool,
+        .commandPool = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool,
         .commandBufferCount = 1,
     };
-    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pTestNode->cmd));
-    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "CompNode");
+    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pComp->cmd));
+    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pComp->cmd, "CompCmd");
   }
 
+
   {  // Initial State
-    vkmCmdResetBegin(pTestNode->cmd);
+    vkmCmdResetBegin(pComp->cmd);
     VkImageMemoryBarrier2 swapBarrier[VKM_SWAP_COUNT];
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      swapBarrier[i] = VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_PRESENT, VK_IMAGE_ASPECT_COLOR_BIT, pTestNode->swap.images[i]);
+      swapBarrier[i] = VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_PRESENT, VK_IMAGE_ASPECT_COLOR_BIT, pComp->swap.images[i]);
     }
-    vkmCommandPipelineImageBarriers(pTestNode->cmd, VKM_SWAP_COUNT, swapBarrier);
-    vkEndCommandBuffer(pTestNode->cmd);
+    vkmCommandPipelineImageBarriers(pComp->cmd, VKM_SWAP_COUNT, swapBarrier);
+    vkEndCommandBuffer(pComp->cmd);
     const VkSubmitInfo submitInfo = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1,
-        .pCommandBuffers = &pTestNode->cmd,
+        .pCommandBuffers = &pComp->cmd,
     };
-    VKM_REQUIRE(vkQueueSubmit(pTestNode->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-    VKM_REQUIRE(vkQueueWaitIdle(pTestNode->graphicsQueue));
+    VKM_REQUIRE(vkQueueSubmit(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo, VK_NULL_HANDLE));
+    VKM_REQUIRE(vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue));
   }
 
   {  // Copy needed state
-    pTestNode->device = context.device;
-    pTestNode->standardRenderPass = context.standardRenderPass;
-    pTestNode->standardPipelineLayout = context.standardPipe.pipelineLayout;
-    pTestNode->standardPipeline = context.standardPipe.pipeline;
-    pTestNode->sampler = context.linearSampler;
-    pTestNode->globalSet = context.globalSet;
+    pComp->device = context.device;
+    pComp->standardRenderPass = context.standardRenderPass;
+    pComp->standardPipelineLayout = context.standardPipe.pipelineLayout;
+    pComp->standardPipeline = context.standardPipe.pipeline;
+    pComp->globalSet = context.globalSet;
   }
 }
 
-void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
+void mxcRunCompNode(const MxcBasicComp* pNode) {
 
   struct {
-    VkCommandBuffer cmd;
-
-    int           framebufferIndex;
-    VkFramebuffer framebuffers[VKM_SWAP_COUNT];
-    VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
-
+    VkCommandBuffer  cmd;
+    int              framebufferIndex;
+    VkFramebuffer    framebuffers[VKM_SWAP_COUNT];
+    VkImage          frameBufferColorImages[VKM_SWAP_COUNT];
     VkRenderPass     standardRenderPass;
     VkPipelineLayout standardPipelineLayout;
     VkPipeline       standardPipeline;
-
-    VkDescriptorSet globalSet;
-    VkDescriptorSet checkerMaterialSet;
-    VkDescriptorSet sphereObjectSet;
-
-    uint32_t     quadIndexCount;
-    VkBuffer     quadBuffer;
-    VkDeviceSize quadIndexOffset;
-    VkDeviceSize quadVertexOffset;
-
-    VkDevice device;
-
-    VkmSwap swap;
-
-    VkmTimeline compTimeline;
-
-    VkQueue graphicsQueue;
+    VkDescriptorSet  globalSet;
+    VkDescriptorSet  checkerMaterialSet;
+    VkDescriptorSet  sphereObjectSet;
+    uint32_t         quadIndexCount;
+    VkBuffer         quadBuffer;
+    VkDeviceSize     quadIndexOffset;
+    VkDeviceSize     quadVertexOffset;
+    VkDevice         device;
+    VkmSwap          swap;
+    VkmTimeline      compTimeline;
+    uint64_t         compBaseCycleValue;
+    VkQueue          graphicsQueue;
   } hot;
 
   {
-    MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
     hot.cmd = pNode->cmd;
     hot.globalSet = pNode->globalSet;
     hot.checkerMaterialSet = pNode->checkerMaterialSet;
@@ -130,29 +117,32 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
       hot.framebuffers[i] = pNode->framebuffers[i].framebuffer;
       hot.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
     }
-
     hot.quadIndexCount = pNode->sphereMesh.indexCount;
     hot.quadBuffer = pNode->sphereMesh.buffer;
     hot.quadIndexOffset = pNode->sphereMesh.indexOffset;
     hot.quadVertexOffset = pNode->sphereMesh.vertexOffset;
-
     hot.device = pNode->device;
     hot.swap = pNode->swap;
-    hot.graphicsQueue = pNode->graphicsQueue;
-
     hot.framebufferIndex = 0;
-
-    hot.compTimeline.semaphore = pNodeContext->compTimeline;
+    hot.compTimeline.semaphore = pNode->timeline;
     hot.compTimeline.value = 0;
+    hot.compBaseCycleValue = MXC_CYCLE_COUNT;
+    hot.graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
   }
 
   bool nodeAvailable = false;
 
   while (isRunning) {
 
-    // wait on odd value for input update complete
-    hot.compTimeline.value++;
-    vkmTimelineWait(hot.device, &hot.compTimeline);
+    vkmUpdateWindowInput();
+
+    if (vkmProcessInput(&context.globalCameraTransform)) {
+      vkmUpdateGlobalSetView(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
+    }
+
+    // signal odd for input ready
+    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_INPUT;
+    vkmTimelineSignal(context.device, &hot.compTimeline);
 
     vkmCmdResetBegin(hot.cmd);
 
@@ -204,11 +194,11 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
     vkEndCommandBuffer(hot.cmd);
 
     // signal even value for render complete
-    hot.compTimeline.value++;
+    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_RENDER;
     vkmSubmitPresentCommandBuffer(hot.cmd, hot.graphicsQueue, &hot.swap, &hot.compTimeline);
-
     vkmTimelineWait(hot.device, &hot.compTimeline);
 
     hot.framebufferIndex = !hot.framebufferIndex;
+    hot.compBaseCycleValue += MXC_CYCLE_COUNT;
   }
 }
