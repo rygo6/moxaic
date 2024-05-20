@@ -1,5 +1,6 @@
 #include "comp_node.h"
 
+#include <stdatomic.h>
 #include <vulkan/vk_enum_string_helper.h>
 
 static void CreateQuadMesh(VkmMesh* pMesh) {
@@ -130,8 +131,6 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
     hot.graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
   }
 
-  bool nodeAvailable = false;
-
   while (isRunning) {
 
     vkmUpdateWindowInput();
@@ -149,19 +148,31 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
     const VkFramebuffer framebuffer = hot.framebuffers[hot.framebufferIndex];
     const VkImage       framebufferColorImage = hot.frameBufferColorImages[hot.framebufferIndex];
 
-    vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, framebuffer);
+    vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, VKM_PASS_CLEAR_COLOR, framebuffer);
 
-    const mxc_node_handle tempHandle = 0;
-    if (vkmTimelineSyncCheck(hot.device, &MXC_HOT_NODE_CONTEXTS[tempHandle].nodeTimeline) && MXC_HOT_NODE_CONTEXTS[tempHandle].nodeTimeline.value > 1) {
-      const int         nodeFramebufferIndex = !(MXC_HOT_NODE_CONTEXTS[tempHandle].nodeTimeline.value % VKM_SWAP_COUNT);
-      const VkImageView nodeFramebufferColorImageView = MXC_HOT_NODE_CONTEXTS[tempHandle].framebufferColorImageViews[nodeFramebufferIndex];
-      const VkImage     nodeFramebufferColorImage = MXC_HOT_NODE_CONTEXTS[tempHandle].framebufferColorImages[nodeFramebufferIndex];
-      //      vkmCommandPipelineImageBarrier(local.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
-      vkmUpdateDescriptorSet(hot.device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(hot.checkerMaterialSet, nodeFramebufferColorImageView));
-      nodeAvailable = true;
-    }
+    for (int i = 0; i < MXC_COMP_NODE_HANDLE_COUNT; ++i) {
 
-    if (nodeAvailable) {
+      // submit commands
+      if (MXC_NODE_SIGNAL[i] > MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSignal) {
+        MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSignal = MXC_NODE_SIGNAL[i];
+        vkmSubmitCommandBuffer(MXC_COMP_NODE_CONTEXT_HOT[i].cmd, hot.graphicsQueue, MXC_COMP_NODE_CONTEXT_HOT[i].nodeTimeline, MXC_NODE_SIGNAL[i]);
+      }
+
+      if (!MXC_COMP_NODE_CONTEXT_HOT[i].active || MXC_NODE_CURRENT[i] < 1)
+        continue;
+
+      // swap buffers
+      if (MXC_NODE_CURRENT[i] > MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSwap) {
+        MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSwap = MXC_NODE_CURRENT[i];
+        const int         nodeFramebufferIndex = !(MXC_NODE_CURRENT[i] % VKM_SWAP_COUNT);
+        const VkImageView nodeFramebufferColorImageView = MXC_COMP_NODE_CONTEXT_HOT[i].framebufferColorImageViews[nodeFramebufferIndex];
+        const VkImage     nodeFramebufferColorImage = MXC_COMP_NODE_CONTEXT_HOT[i].framebufferColorImages[nodeFramebufferIndex];
+        if (MXC_COMP_NODE_CONTEXT_HOT[i].type == MXC_NODE_TYPE_INTERPROCESS) {
+          vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
+        }
+        vkmUpdateDescriptorSet(hot.device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(hot.checkerMaterialSet, nodeFramebufferColorImageView));
+      }
+
       vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);
       // move to array
       vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &hot.globalSet, 0, NULL);

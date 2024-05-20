@@ -229,7 +229,7 @@ typedef struct VkmContext {
   // these probably should go elsewhere
   VkRenderPass    standardRenderPass;
   VkmStandardPipe standardPipe;
-  VkSampler linearSampler;
+  VkSampler       linearSampler;
 
 } VkmContext;
 
@@ -258,7 +258,7 @@ enum VkmPipeSetStandardIndices {
 #define VKM_STD_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT;
 #define VKM_STD_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 #define VKM_PASS_CLEAR_COLOR \
-  { 0.1f, 0.2f, 0.3f, 0.0f }
+  (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
 #define VKM_SET_BINDING_STD_GLOBAL_BUFFER 0
 #define VKM_SET_WRITE_STD_GLOBAL_BUFFER(globalSet, globalSetBuffer) \
@@ -678,6 +678,24 @@ static const VkmImageBarrier* VKM_COLOR_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
         .layerCount = 1,                                        \
     },                                                          \
   }
+#define VKM_IMAGE_BARRIER_QUEUE_TRANSFER(src, dst, aspect_mask, barrier_image, src_queue, dst_queue) \
+  (const VkImageMemoryBarrier2) {                                                                    \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                               \
+    .srcStageMask = src->stageMask,                                                                  \
+    .srcAccessMask = src->accessMask,                                                                \
+    .dstStageMask = dst->stageMask,                                                                  \
+    .dstAccessMask = dst->accessMask,                                                                \
+    .oldLayout = src->layout,                                                                        \
+    .newLayout = dst->layout,                                                                        \
+    .srcQueueFamilyIndex = src_queue,                                                                \
+    .dstQueueFamilyIndex = dst_queue,                                                                \
+    .image = barrier_image,                                                                          \
+    .subresourceRange = (VkImageSubresourceRange){                                                   \
+        .aspectMask = aspect_mask,                                                                   \
+        .levelCount = 1,                                                                             \
+        .layerCount = 1,                                                                             \
+    },                                                                                               \
+  }
 static inline void vkmCommandPipelineImageBarriers(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
   vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
@@ -693,7 +711,7 @@ static inline void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, co
   };
   vkCmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-static inline void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkFramebuffer framebuffer) {
+static inline void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .renderPass = renderPass,
@@ -701,7 +719,7 @@ static inline void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass
       .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
       .clearValueCount = VKM_PASS_ATTACHMENT_STD_COUNT,
       .pClearValues = (const VkClearValue[]){
-          [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {.color = {VKM_PASS_CLEAR_COLOR}},
+          [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {.color = clearColor},
           [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
           [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {.depthStencil = {0.0f}},
       },
@@ -758,7 +776,7 @@ static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, cons
   };
   VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
 }
-static inline void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmTimeline* pSignalTimeline) {
+static inline void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .commandBufferInfoCount = 1,
@@ -772,8 +790,8 @@ static inline void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQue
       .pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
           {
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-              .value = pSignalTimeline->value,
-              .semaphore = pSignalTimeline->semaphore,
+              .value = signal,
+              .semaphore = timeline,
               .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
           },
       },
@@ -911,7 +929,7 @@ typedef struct VkmQueueFamilyCreateInfo {
   VkmSupport               supportsCompute;
   VkmSupport               supportsTransfer;
   VkQueueGlobalPriorityKHR globalPriority;
-  uint32_t                 queueCount; // probably get rid of this, we will multiplex queues automatically and presume only 1
+  uint32_t                 queueCount;  // probably get rid of this, we will multiplex queues automatically and presume only 1
   const float*             pQueuePriorities;
 } VkmQueueFamilyCreateInfo;
 typedef struct VkmContextCreateInfo {

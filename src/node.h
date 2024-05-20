@@ -9,9 +9,9 @@
 #include <windows.h>
 
 typedef enum MxcNodeType {
-  MXC_NODE_TYPE_CONTEXT_THREAD,
-  MXC_NODE_TYPE_INTERCONTEXT_PROCESS,
-  MXC_NODE_TYPE_INTERPROCESS
+  MXC_NODE_TYPE_THREAD,
+  MXC_NODE_TYPE_INTERPROCESS,
+  MXC_NODE_TYPE_COUNT
 } MxcNodeType;
 
 typedef struct MxcImportParam {
@@ -70,37 +70,50 @@ typedef struct MxcNodeContext {
 } MxcNodeContext;
 
 typedef struct MxcNodeContextHot {
-  VkmTimeline     nodeTimeline;
+  bool            active;
+  MxcNodeType     type;
   VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
   VkImage         framebufferColorImages[VKM_SWAP_COUNT];
+  uint64_t        lastNodeTimelineSignal;
+  uint64_t        lastNodeTimelineSwap;
+  VkSemaphore     nodeTimeline;
   VkCommandBuffer cmd;
-  bool            cmdReady;
 } MxcNodeContextHot;
+
+typedef struct MxcNodeContextShared {
+  uint64_t        current;
+  uint64_t        signal;
+} MxcNodeContextShared;
 
 #define MXC_NODE_CAPACITY 256
 typedef uint8_t          mxc_node_handle;
-extern size_t            MXC_NODE_HANDLE_COUNT;
-extern MxcNodeContext    MXC_NODE_CONTEXTS[MXC_NODE_CAPACITY];
-extern MxcNodeContextHot MXC_HOT_NODE_CONTEXTS[MXC_NODE_CAPACITY];
+extern size_t            MXC_COMP_NODE_HANDLE_COUNT;
+extern MxcNodeContext    MXC_COMP_NODE_CONTEXT[MXC_NODE_CAPACITY];
+extern MxcNodeContextHot MXC_COMP_NODE_CONTEXT_HOT[MXC_NODE_CAPACITY];
 
+volatile extern uint64_t MXC_NODE_CURRENT[MXC_NODE_CAPACITY];
+volatile extern uint64_t MXC_NODE_SIGNAL[MXC_NODE_CAPACITY];
 
-static inline void mxcCopyHotNodeContext(mxc_node_handle handle) {
-  MXC_HOT_NODE_CONTEXTS[handle].nodeTimeline.semaphore = MXC_NODE_CONTEXTS[handle].nodeTimeline;
+static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
+  MXC_COMP_NODE_CONTEXT_HOT[handle].active = true;
+  MXC_COMP_NODE_CONTEXT_HOT[handle].type = MXC_NODE_TYPE_THREAD;
+  MXC_COMP_NODE_CONTEXT_HOT[handle].lastNodeTimelineSignal = 0;
+  MXC_COMP_NODE_CONTEXT_HOT[handle].lastNodeTimelineSwap = 0;
+  MXC_COMP_NODE_CONTEXT_HOT[handle].nodeTimeline = MXC_COMP_NODE_CONTEXT[handle].nodeTimeline;
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    MXC_HOT_NODE_CONTEXTS[handle].framebufferColorImageViews[i] = MXC_NODE_CONTEXTS[handle].framebuffers[i].color.imageView;
-    MXC_HOT_NODE_CONTEXTS[handle].framebufferColorImages[i] = MXC_NODE_CONTEXTS[handle].framebuffers[i].color.image;
+    MXC_COMP_NODE_CONTEXT_HOT[handle].framebufferColorImageViews[i] = MXC_COMP_NODE_CONTEXT[handle].framebuffers[i].color.imageView;
+    MXC_COMP_NODE_CONTEXT_HOT[handle].framebufferColorImages[i] = MXC_COMP_NODE_CONTEXT[handle].framebuffers[i].color.image;
   }
 }
 
 static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
 
   switch (pNodeContext->nodeType) {
-    case MXC_NODE_TYPE_CONTEXT_THREAD: {
+    case MXC_NODE_TYPE_THREAD: {
       int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))pNodeContext->runFunc, pNodeContext);
       REQUIRE(result == 0, "Node thread creation failed!");
       break;
     }
-    case MXC_NODE_TYPE_INTERCONTEXT_PROCESS: break;
     case MXC_NODE_TYPE_INTERPROCESS:
       vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
 

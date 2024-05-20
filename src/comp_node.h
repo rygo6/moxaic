@@ -13,8 +13,7 @@ typedef struct MxcCompNodeCreateInfo {
   VkSurfaceKHR surface;
 } MxcBasicCompCreateInfo;
 
-typedef struct MxcCompNode {
-//  VkCommandPool   pool;
+typedef struct MxcBasicComp {
   VkCommandBuffer cmd;
 
   VkRenderPass     standardRenderPass;

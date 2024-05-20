@@ -7,8 +7,8 @@
 
 typedef struct MxcTestNodeCreateInfo {
   //  VkmContext
-  VkSurfaceKHR surface;
-  VkmTransform transform;
+  VkSurfaceKHR        surface;
+  VkmTransform        transform;
   VkmNodeFramebuffer* pFramebuffers;
 } MxcTestNodeCreateInfo;
 
@@ -39,7 +39,8 @@ typedef struct MxcTestNode {
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
-  VkQueue graphicsQueue;
+  uint32_t queueIndex;
+  VkQueue  queue;
 
 #ifdef DEBUG_TEST_NODE_SWAP
   VkmSwap swap;

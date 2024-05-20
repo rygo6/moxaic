@@ -53,8 +53,8 @@ int main(void) {
               .supportsCompute = VKM_SUPPORT_YES,
               .supportsTransfer = VKM_SUPPORT_YES,
               .globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
-              .queueCount = 2,
-              .pQueuePriorities = (float[]){1.0f, 1.0f},
+              .queueCount = 1,
+              .pQueuePriorities = (float[]){1.0f},
           },
           [VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
               .supportsGraphics = VKM_SUPPORT_NO,
@@ -97,10 +97,10 @@ int main(void) {
 
 
   mxc_node_handle testNodeHandle = 0;
-  MxcNodeContext* pTestNodeContext = &MXC_NODE_CONTEXTS[testNodeHandle];
+  MxcNodeContext* pTestNodeContext = &MXC_COMP_NODE_CONTEXT[testNodeHandle];
   MxcTestNode    testNode;
   *pTestNodeContext = (MxcNodeContext) {
-      .nodeType = MXC_NODE_TYPE_CONTEXT_THREAD,
+      .nodeType = MXC_NODE_TYPE_THREAD,
       .compCycleSkip = 8,
       .pNode = &testNode,
       .runFunc = mxcRunTestNode,
@@ -124,8 +124,9 @@ int main(void) {
   };
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
   mxcCreateNodeContext(pTestNodeContext);
-  mxcCopyHotNodeContext(testNodeHandle);
-  MXC_NODE_HANDLE_COUNT = 1;
+  MXC_COMP_NODE_CONTEXT_HOT[0].cmd = testNode.cmd;
+  mxcRegisterCompNodeThread(testNodeHandle);
+  MXC_COMP_NODE_HANDLE_COUNT = 1;
 
 
   mxcRunCompNode(&basicComp);

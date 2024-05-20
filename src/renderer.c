@@ -357,7 +357,7 @@ void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
   totalAllocSize += pMemReqs->size;
-  printf("%zu allocated in type %d\n", totalAllocSize, memTypeIndex);
+//  printf("%zu allocated in type %d\n", totalAllocSize, memTypeIndex);
 }
 void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {

@@ -1,4 +1,5 @@
 #include "test_node.h"
+#include <stdatomic.h>
 
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   VkmMeshCreateInfo info = {
@@ -69,7 +70,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
 
     CreateSphereMesh(0.5f, 32, 32, &pTestNode->sphereMesh);
 
-    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 1, &pTestNode->graphicsQueue);
+    //    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 1, &pTestNode->queue);
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -115,6 +116,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     pTestNode->standardPipelineLayout = context.standardPipe.pipelineLayout;
     pTestNode->standardPipeline = context.standardPipe.pipeline;
     pTestNode->globalSet = context.globalSet;
+    pTestNode->queueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
   }
 
   //  {
@@ -127,7 +129,11 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
 void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   struct {
+    MxcNodeType nodeType;
+
     VkCommandBuffer cmd;
+
+    //    uint8_t framebufferIndex;
 
     VkFramebuffer framebuffers[VKM_SWAP_COUNT];
     VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
@@ -140,7 +146,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     VkDescriptorSet checkerMaterialSet;
     VkDescriptorSet sphereObjectSet;
 
-    uint32_t sphereIndexCount;
+    uint32_t     sphereIndexCount;
     VkBuffer     sphereBuffer;
     VkDeviceSize sphereIndexOffset;
     VkDeviceSize sphereVertexOffset;
@@ -153,7 +159,9 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     VkmTimeline compTimeline;
     VkmTimeline nodeTimeline;
-    VkQueue     graphicsQueue;
+
+    uint32_t queueIndex;
+    VkQueue  queue;
 
     uint64_t compBaseCycleValue;
     uint64_t compCyclesToSkip;
@@ -161,6 +169,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   {
     MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
+    hot.nodeType = pNodeContext->nodeType;
     hot.cmd = pNode->cmd;
     hot.globalSet = pNode->globalSet;
     hot.checkerMaterialSet = pNode->checkerMaterialSet;
@@ -179,9 +188,12 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     hot.sphereIndexOffset = pNode->sphereMesh.indexOffset;
     hot.sphereVertexOffset = pNode->sphereMesh.vertexOffset;
     hot.device = pNode->device;
-    hot.graphicsQueue = pNode->graphicsQueue;
+    hot.device = pNode->device;
+    hot.queueIndex = pNode->queueIndex;
+    hot.queue = pNode->queue;
     hot.compTimeline.semaphore = pNodeContext->compTimeline;
     hot.compTimeline.value = 0;
+
     hot.nodeTimeline.semaphore = pNodeContext->nodeTimeline;
     hot.nodeTimeline.value = 0;
 
@@ -193,6 +205,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_COUNT;
 
     hot.compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
+
+    //    hot.framebufferIndex = 0;
 
 #ifdef DEBUG_TEST_NODE_SWAP
     local.swap = pNode->swap;
@@ -209,13 +223,17 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     const VkFramebuffer framebuffer = hot.framebuffers[framebufferIndex];
     const VkImage       framebufferColorImage = hot.frameBufferColorImages[framebufferIndex];
 
-    //    printf("Rendering into %d...", framebufferIndex);
-
     vkmCmdResetBegin(hot.cmd);
+    //    vkmCmdResetBegin(MXC_COMP_NODE_THREAD[0].cmd);
 
-    vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
+    switch (hot.nodeType) {
+      case MXC_NODE_TYPE_THREAD: break;
+      case MXC_NODE_TYPE_INTERPROCESS:
+        vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER_QUEUE_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage, VK_QUEUE_FAMILY_EXTERNAL, hot.queueIndex));
+        break;
+    }
 
-    vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, framebuffer);
+    vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, (VkClearColorValue){0, 0, 0, 0}, framebuffer);
 
     vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);
     vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &hot.globalSet, 0, NULL);
@@ -246,7 +264,14 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     }
 #endif
 
-    vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
+    switch (hot.nodeType) {
+      case MXC_NODE_TYPE_THREAD:
+        vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
+        break;
+      case MXC_NODE_TYPE_INTERPROCESS:
+        vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER_QUEUE_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage, hot.queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
+        break;
+    }
 
     vkEndCommandBuffer(hot.cmd);
 
@@ -255,11 +280,15 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     vkmSubmitPresentCommandBuffer(local.cmd, local.graphicsQueue, &local.swap, &local.timeline);
     vkmTimelineWait(local.device, &local.timeline);
 #else
-    vkmSubmitCommandBuffer(hot.cmd, hot.graphicsQueue, &hot.nodeTimeline);
-    vkmTimelineWait(hot.device, &hot.nodeTimeline);
+    MXC_NODE_SIGNAL[0] = hot.nodeTimeline.value;
 #endif
+
+    vkmTimelineWait(hot.device, &hot.nodeTimeline);
+    MXC_NODE_CURRENT[0] = hot.nodeTimeline.value;
+
 
     // increment past input cycle and wait on render next cycle
     hot.compBaseCycleValue += hot.compCyclesToSkip;
+    //    hot.framebufferIndex = !hot.framebufferIndex;
   }
 }
