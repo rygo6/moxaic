@@ -70,7 +70,6 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
 
     CreateSphereMesh(0.5f, 32, 32, &pTestNode->sphereMesh);
 
-    //    vkGetDeviceQueue(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, 1, &pTestNode->queue);
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -208,6 +207,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     //    hot.framebufferIndex = 0;
 
+    MXC_NODE_CONTEXT_HOT[0].nodeSetState.model = pNode->sphereObjectState.model;
+
 #ifdef DEBUG_TEST_NODE_SWAP
     local.swap = pNode->swap;
 #endif
@@ -223,8 +224,32 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     const VkFramebuffer framebuffer = hot.framebuffers[framebufferIndex];
     const VkImage       framebufferColorImage = hot.frameBufferColorImages[framebufferIndex];
 
-    vkmCmdResetBegin(hot.cmd);
-    //    vkmCmdResetBegin(MXC_COMP_NODE_THREAD[0].cmd);
+    vkResetCommandBuffer(hot.cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    vkBeginCommandBuffer(hot.cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+
+
+
+
+    const VkViewport viewport = {
+        .x = 512,
+        .y = 512,
+        .width = 512,
+        .height = 512,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(hot.cmd, 0, 1, &viewport);
+    const VkRect2D scissor = {
+        //        .offset = {
+        //            .x = 512,
+        //            .y = 512,
+        //        },
+        .extent = {
+            .width = DEFAULT_WIDTH,
+            .height = DEFAULT_HEIGHT,
+        },
+    };
+    vkCmdSetScissor(hot.cmd, 0, 1, &scissor);
 
     switch (hot.nodeType) {
       case MXC_NODE_TYPE_THREAD: break;
@@ -233,18 +258,23 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
         break;
     }
 
-    vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, (VkClearColorValue){0, 0, 0, 0}, framebuffer);
 
-    vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);
-    vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &hot.globalSet, 0, NULL);
-    vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &hot.checkerMaterialSet, 0, NULL);
-    vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &hot.sphereObjectSet, 0, NULL);
 
-    vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.sphereBuffer}, (const VkDeviceSize[]){hot.sphereVertexOffset});
-    vkCmdBindIndexBuffer(hot.cmd, hot.sphereBuffer, hot.sphereIndexOffset, VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed(hot.cmd, hot.sphereIndexCount, 1, 0, 0, 0);
+    { // this is really all that'd be user exposed....
+      vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, (VkClearColorValue){0, 0, 0, 0}, framebuffer);
 
-    vkCmdEndRenderPass(hot.cmd);
+      vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);
+      vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &hot.globalSet, 0, NULL);
+      vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &hot.checkerMaterialSet, 0, NULL);
+      vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &hot.sphereObjectSet, 0, NULL);
+
+      vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.sphereBuffer}, (const VkDeviceSize[]){hot.sphereVertexOffset});
+      vkCmdBindIndexBuffer(hot.cmd, hot.sphereBuffer, hot.sphereIndexOffset, VK_INDEX_TYPE_UINT16);
+      vkCmdDrawIndexed(hot.cmd, hot.sphereIndexCount, 1, 0, 0, 0);
+
+      vkCmdEndRenderPass(hot.cmd);
+    }
+
 
 #ifdef DEBUG_TEST_NODE_SWAP
     {  // Blit Framebuffer
@@ -280,11 +310,11 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     vkmSubmitPresentCommandBuffer(local.cmd, local.graphicsQueue, &local.swap, &local.timeline);
     vkmTimelineWait(local.device, &local.timeline);
 #else
-    MXC_NODE_SIGNAL[0] = hot.nodeTimeline.value;
+    MXC_NODE_CONTEXT_HOT[0].pendingTimelineSignal = hot.nodeTimeline.value;
 #endif
 
     vkmTimelineWait(hot.device, &hot.nodeTimeline);
-    MXC_NODE_CURRENT[0] = hot.nodeTimeline.value;
+    MXC_NODE_CONTEXT_HOT[0].currentTimelineSignal = hot.nodeTimeline.value;
 
 
     // increment past input cycle and wait on render next cycle

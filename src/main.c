@@ -81,7 +81,7 @@ int main(void) {
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
   // standard/common rendering
   VkmCreateStandardRenderPass(&context.standardRenderPass);
-  vkmCreateStandardPipeline(context.standardRenderPass, &context.standardPipe);
+  vkmCreateStandardPipeline(&context.standardPipe);
   // global set
   vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.globalSetLayout, &context.globalSet);
   vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &context.globalSetMemory, &context.globalSetBuffer, (void**)&context.pGlobalSetMapped);
@@ -97,8 +97,8 @@ int main(void) {
 
 
   mxc_node_handle testNodeHandle = 0;
-  MxcNodeContext* pTestNodeContext = &MXC_COMP_NODE_CONTEXT[testNodeHandle];
   MxcTestNode    testNode;
+  MxcNodeContext* pTestNodeContext = &MXC_NODE_CONTEXT[testNodeHandle];
   *pTestNodeContext = (MxcNodeContext) {
       .nodeType = MXC_NODE_TYPE_THREAD,
       .compCycleSkip = 8,
@@ -124,9 +124,9 @@ int main(void) {
   };
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
   mxcCreateNodeContext(pTestNodeContext);
-  MXC_COMP_NODE_CONTEXT_HOT[0].cmd = testNode.cmd;
+  MXC_NODE_CONTEXT_HOT[0].cmd = testNode.cmd;
   mxcRegisterCompNodeThread(testNodeHandle);
-  MXC_COMP_NODE_HANDLE_COUNT = 1;
+  MXC_NODE_HANDLE_COUNT = 1;
 
 
   mxcRunCompNode(&basicComp);

@@ -150,24 +150,29 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
 
     vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, VKM_PASS_CLEAR_COLOR, framebuffer);
 
-    for (int i = 0; i < MXC_COMP_NODE_HANDLE_COUNT; ++i) {
+    for (int i = 0; i < MXC_NODE_HANDLE_COUNT; ++i) {
+
+//      memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, &context.globalSetState, sizeof(context.globalSetState));
+//      vkmMat4Mul(&MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, &pState->view, &pState->viewProjection);
 
       // submit commands
-      if (MXC_NODE_SIGNAL[i] > MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSignal) {
-        MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSignal = MXC_NODE_SIGNAL[i];
-        vkmSubmitCommandBuffer(MXC_COMP_NODE_CONTEXT_HOT[i].cmd, hot.graphicsQueue, MXC_COMP_NODE_CONTEXT_HOT[i].nodeTimeline, MXC_NODE_SIGNAL[i]);
+      if (MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal > MXC_NODE_CONTEXT_HOT[i].lastTimelineSignal) {
+
+
+        MXC_NODE_CONTEXT_HOT[i].lastTimelineSignal = MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal;
+        vkmSubmitCommandBuffer(MXC_NODE_CONTEXT_HOT[i].cmd, hot.graphicsQueue, MXC_NODE_CONTEXT_HOT[i].nodeTimeline, MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal);
       }
 
-      if (!MXC_COMP_NODE_CONTEXT_HOT[i].active || MXC_NODE_CURRENT[i] < 1)
+      if (!MXC_NODE_CONTEXT_HOT[i].active || MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal < 1)
         continue;
 
       // swap buffers
-      if (MXC_NODE_CURRENT[i] > MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSwap) {
-        MXC_COMP_NODE_CONTEXT_HOT[i].lastNodeTimelineSwap = MXC_NODE_CURRENT[i];
-        const int         nodeFramebufferIndex = !(MXC_NODE_CURRENT[i] % VKM_SWAP_COUNT);
-        const VkImageView nodeFramebufferColorImageView = MXC_COMP_NODE_CONTEXT_HOT[i].framebufferColorImageViews[nodeFramebufferIndex];
-        const VkImage     nodeFramebufferColorImage = MXC_COMP_NODE_CONTEXT_HOT[i].framebufferColorImages[nodeFramebufferIndex];
-        if (MXC_COMP_NODE_CONTEXT_HOT[i].type == MXC_NODE_TYPE_INTERPROCESS) {
+      if (MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal > MXC_NODE_CONTEXT_HOT[i].lastTimelineSwap) {
+        MXC_NODE_CONTEXT_HOT[i].lastTimelineSwap = MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal;
+        const int         nodeFramebufferIndex = !(MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal % VKM_SWAP_COUNT);
+        const VkImageView nodeFramebufferColorImageView = MXC_NODE_CONTEXT_HOT[i].framebufferColorImageViews[nodeFramebufferIndex];
+        const VkImage     nodeFramebufferColorImage = MXC_NODE_CONTEXT_HOT[i].framebufferColorImages[nodeFramebufferIndex];
+        if (MXC_NODE_CONTEXT_HOT[i].type == MXC_NODE_TYPE_INTERPROCESS) {
           vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
         }
         vkmUpdateDescriptorSet(hot.device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(hot.checkerMaterialSet, nodeFramebufferColorImageView));

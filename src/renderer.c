@@ -107,7 +107,7 @@ static void CreateStandardPipelineLayout(VkmStandardPipe* pStandardPipeline) {
   VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipelineLayout));
 }
 
-static void CreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline) {
+static void CreateStandardPipeline(VkmStandardPipe* pStandardPipeline) {
   const VkShaderModule vertShader = CreateShaderModule("./shaders/basic_material.vert.spv");
   const VkShaderModule fragShader = CreateShaderModule("./shaders/basic_material.frag.spv");
 
@@ -195,7 +195,7 @@ static void CreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPip
           .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
           .depthTestEnable = VK_TRUE,
           .depthWriteEnable = VK_TRUE,
-          .depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL,
+          .depthCompareOp = VK_COMPARE_OP_GREATER,
           .maxDepthBounds = 1.0f,
       },
       .pColorBlendState = &(const VkPipelineColorBlendStateCreateInfo){
@@ -217,7 +217,7 @@ static void CreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPip
           },
       },
       .layout = pStandardPipeline->pipelineLayout,
-      .renderPass = renderPass,
+      .renderPass = context.standardRenderPass,
   };
   VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, &pStandardPipeline->pipeline));
   vkDestroyShaderModule(context.device, fragShader, VKM_ALLOC);
@@ -932,7 +932,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
   }
 }
 
-void VkmCreateStandardRenderPass(VkRenderPass* pRenderPass) {
+void VkmCreateStandardRenderPass() {
 #define DEFAULT_ATTACHMENT_DESCRIPTION                \
   .samples = VK_SAMPLE_COUNT_1_BIT,                   \
   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
@@ -998,7 +998,7 @@ void VkmCreateStandardRenderPass(VkRenderPass* pRenderPass) {
       //          },
       //      },
   };
-  VKM_REQUIRE(vkCreateRenderPass(context.device, &renderPassCreateInfo, VKM_ALLOC, pRenderPass));
+  VKM_REQUIRE(vkCreateRenderPass(context.device, &renderPassCreateInfo, VKM_ALLOC, &context.standardRenderPass));
 #undef DEFAULT_ATTACHMENT_DESCRIPTION
 }
 
@@ -1046,12 +1046,12 @@ void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap) {
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
 }
 
-void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline) {
+void vkmCreateStandardPipeline(VkmStandardPipe* pStandardPipeline) {
   CreateGlobalSetLayout(pStandardPipeline);
   CreateStandardMaterialSetLayout(pStandardPipeline);
   CreateStandardObjectSetLayout(pStandardPipeline);
   CreateStandardPipelineLayout(pStandardPipeline);
-  CreateStandardPipeline(renderPass, pStandardPipeline);
+  CreateStandardPipeline(pStandardPipeline);
 }
 
 void vkmCreateTimeline(VkSemaphore* pSemaphore) {

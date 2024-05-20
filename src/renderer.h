@@ -171,7 +171,7 @@ typedef struct VkmGlobalSetState {
   mat4 inverseProjection;
   mat4 inverseViewProjection;
 
-  ivec2 screenSize;
+  ivec2 framebufferSize;
 } VkmGlobalSetState;
 
 typedef struct VkmStandardObjectSetState {
@@ -830,7 +830,7 @@ static inline void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDe
 static inline void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
-  pState->screenSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
+  pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
   vkmMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->projection);
   vkmVec3EulerToQuat(&pCameraTransform->euler, &pCameraTransform->rotation);
   vkmMat4Inv(&pState->projection, &pState->inverseProjection);
@@ -890,7 +890,7 @@ void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags
 void VkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
 void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
-void vkmCreateStandardPipeline(const VkRenderPass renderPass, VkmStandardPipe* pStandardPipeline);
+void vkmCreateStandardPipeline(VkmStandardPipe* pStandardPipeline);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 
 typedef struct VkmInitializeDesc {
@@ -950,5 +950,5 @@ typedef struct VkmSamplerDesc {
 #define VKM_SAMPLER_LINEAR_CLAMP_DESC \
   (const VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler);
-void VkmCreateStandardRenderPass(VkRenderPass* pRenderPass);
+void VkmCreateStandardRenderPass();
 void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap);

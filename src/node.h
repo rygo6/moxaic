@@ -50,6 +50,7 @@ typedef struct MxcNodeContext {
   const void* pNode;
   void (*runFunc)(const struct MxcNodeContext* pNode);
 
+  // should just be in hot?
   VkSemaphore compTimeline;
   VkSemaphore nodeTimeline;
 
@@ -69,40 +70,64 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
+typedef struct MxcNodeSetState {
+      mat4 view;
+      mat4 projection;
+      mat4 viewProjection;
+
+      mat4 inverseView;
+      mat4 inverseProjection;
+      mat4 inverseViewProjection;
+
+      ivec2 framebufferSize;
+
+      mat4 model;
+
+} MxcNodeSetState;
+
 typedef struct MxcNodeContextHot {
-  bool            active;
-  MxcNodeType     type;
-  VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
-  VkImage         framebufferColorImages[VKM_SWAP_COUNT];
-  uint64_t        lastNodeTimelineSignal;
-  uint64_t        lastNodeTimelineSwap;
-  VkSemaphore     nodeTimeline;
+  bool        active;
+  MxcNodeType type;
+
+  float radius;
+
+  // need to be some sync around node setting this and it getting read?
+  MxcNodeSetState nodeSetState;
+
+  uint64_t    lastTimelineSwap;
+  uint64_t    lastTimelineSignal;
+  uint64_t    pendingTimelineSignal;
+  uint64_t    currentTimelineSignal;
+  VkSemaphore nodeTimeline;
+
   VkCommandBuffer cmd;
+
+  VkImageView framebufferColorImageViews[VKM_SWAP_COUNT];
+  VkImage     framebufferColorImages[VKM_SWAP_COUNT];
 } MxcNodeContextHot;
 
-typedef struct MxcNodeContextShared {
-  uint64_t        current;
-  uint64_t        signal;
-} MxcNodeContextShared;
+//typedef struct MxcNodeContextShared {
+//  uint64_t current;
+//  uint64_t signal;
+//} MxcNodeContextShared;
 
 #define MXC_NODE_CAPACITY 256
-typedef uint8_t          mxc_node_handle;
-extern size_t            MXC_COMP_NODE_HANDLE_COUNT;
-extern MxcNodeContext    MXC_COMP_NODE_CONTEXT[MXC_NODE_CAPACITY];
-extern MxcNodeContextHot MXC_COMP_NODE_CONTEXT_HOT[MXC_NODE_CAPACITY];
-
-volatile extern uint64_t MXC_NODE_CURRENT[MXC_NODE_CAPACITY];
-volatile extern uint64_t MXC_NODE_SIGNAL[MXC_NODE_CAPACITY];
+typedef uint8_t                   mxc_node_handle;
+extern size_t                     MXC_NODE_HANDLE_COUNT;
+extern MxcNodeContext             MXC_NODE_CONTEXT[MXC_NODE_CAPACITY];
+volatile extern MxcNodeContextHot MXC_NODE_CONTEXT_HOT[MXC_NODE_CAPACITY];
 
 static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
-  MXC_COMP_NODE_CONTEXT_HOT[handle].active = true;
-  MXC_COMP_NODE_CONTEXT_HOT[handle].type = MXC_NODE_TYPE_THREAD;
-  MXC_COMP_NODE_CONTEXT_HOT[handle].lastNodeTimelineSignal = 0;
-  MXC_COMP_NODE_CONTEXT_HOT[handle].lastNodeTimelineSwap = 0;
-  MXC_COMP_NODE_CONTEXT_HOT[handle].nodeTimeline = MXC_COMP_NODE_CONTEXT[handle].nodeTimeline;
+  MXC_NODE_CONTEXT_HOT[handle].active = true;
+  MXC_NODE_CONTEXT_HOT[handle].type = MXC_NODE_TYPE_THREAD;
+  MXC_NODE_CONTEXT_HOT[handle].lastTimelineSignal = 0;
+  MXC_NODE_CONTEXT_HOT[handle].lastTimelineSwap = 0;
+  MXC_NODE_CONTEXT_HOT[handle].pendingTimelineSignal = 0;
+  MXC_NODE_CONTEXT_HOT[handle].currentTimelineSignal = 0;
+  MXC_NODE_CONTEXT_HOT[handle].nodeTimeline = MXC_NODE_CONTEXT[handle].nodeTimeline;
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    MXC_COMP_NODE_CONTEXT_HOT[handle].framebufferColorImageViews[i] = MXC_COMP_NODE_CONTEXT[handle].framebuffers[i].color.imageView;
-    MXC_COMP_NODE_CONTEXT_HOT[handle].framebufferColorImages[i] = MXC_COMP_NODE_CONTEXT[handle].framebuffers[i].color.image;
+    MXC_NODE_CONTEXT_HOT[handle].framebufferColorImageViews[i] = MXC_NODE_CONTEXT[handle].framebuffers[i].color.imageView;
+    MXC_NODE_CONTEXT_HOT[handle].framebufferColorImages[i] = MXC_NODE_CONTEXT[handle].framebuffers[i].color.image;
   }
 }
 
