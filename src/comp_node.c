@@ -158,8 +158,14 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
     vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, VKM_PASS_CLEAR_COLOR, framebuffer);
 
     for (int i = 0; i < MXC_NODE_HANDLE_COUNT; ++i) {
-      //      memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, &context.globalSetState, sizeof(context.globalSetState));
-      //      vkmMat4Mul(&MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, &pState->view, &pState->viewProjection);
+
+      memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, &context.globalSetState, sizeof(context.globalSetState));
+
+      const vec4 world = Mat4MulVec4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, VEC4_IDENT);
+      const vec4 clip = Mat4MulVec4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, world);
+      const vec4 ndc = Mat4MulVec4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, clip);
+
+      printf("%.2f %.2f \n", ndc.x, ndc.y);
 
       {  // submit commands
         uint64_t pending = __atomic_load_n(&MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal, __ATOMIC_ACQUIRE);
