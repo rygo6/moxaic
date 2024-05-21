@@ -85,20 +85,24 @@ typedef struct MxcNodeSetState {
 
 } MxcNodeSetState;
 
-typedef struct MxcNodeContextHot {
-  bool        active;
-  MxcNodeType type;
+
+CACHE_ALIGN typedef struct MxcNodeContextHot {
+  // shared
+  uint64_t    pendingTimelineSignal;
+  uint64_t    currentTimelineSignal;
 
   float radius;
 
-  // need to be some sync around node setting this and it getting read?
-  MxcNodeSetState nodeSetState;
-
+  // unshared
   uint64_t    lastTimelineSwap;
   uint64_t    lastTimelineSignal;
-  uint64_t    pendingTimelineSignal;
-  uint64_t    currentTimelineSignal;
   VkSemaphore nodeTimeline;
+
+  bool        active;
+  MxcNodeType type;
+
+  // need to be some sync around node setting this and it getting read?
+  MxcNodeSetState nodeSetState;
 
   VkCommandBuffer cmd;
 

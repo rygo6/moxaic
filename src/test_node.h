@@ -42,10 +42,6 @@ typedef struct MxcTestNode {
   uint32_t queueIndex;
   VkQueue  queue;
 
-#ifdef DEBUG_TEST_NODE_SWAP
-  VkmSwap swap;
-#endif
-
 } MxcTestNode;
 
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode);

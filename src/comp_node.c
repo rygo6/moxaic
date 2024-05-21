@@ -1,5 +1,6 @@
 #include "comp_node.h"
 
+#include <assert.h>
 #include <stdatomic.h>
 #include <vulkan/vk_enum_string_helper.h>
 
@@ -129,6 +130,12 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
     hot.compTimeline.value = 0;
     hot.compBaseCycleValue = MXC_CYCLE_COUNT;
     hot.graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+
+    for (int i = 0; i < MXC_NODE_HANDLE_COUNT; ++i) {
+      // just making sure atomics are only using barriers, not locks
+      assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal), &MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal));
+      assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal), &MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal));
+    }
   }
 
   while (isRunning) {
@@ -151,31 +158,33 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
     vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, VKM_PASS_CLEAR_COLOR, framebuffer);
 
     for (int i = 0; i < MXC_NODE_HANDLE_COUNT; ++i) {
+      //      memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, &context.globalSetState, sizeof(context.globalSetState));
+      //      vkmMat4Mul(&MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, &pState->view, &pState->viewProjection);
 
-//      memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, &context.globalSetState, sizeof(context.globalSetState));
-//      vkmMat4Mul(&MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, &pState->view, &pState->viewProjection);
-
-      // submit commands
-      if (MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal > MXC_NODE_CONTEXT_HOT[i].lastTimelineSignal) {
-
-
-        MXC_NODE_CONTEXT_HOT[i].lastTimelineSignal = MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal;
-        vkmSubmitCommandBuffer(MXC_NODE_CONTEXT_HOT[i].cmd, hot.graphicsQueue, MXC_NODE_CONTEXT_HOT[i].nodeTimeline, MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal);
+      {  // submit commands
+        uint64_t pending = __atomic_load_n(&MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal, __ATOMIC_ACQUIRE);
+        if (pending > MXC_NODE_CONTEXT_HOT[i].lastTimelineSignal) {
+          MXC_NODE_CONTEXT_HOT[i].lastTimelineSignal = pending;
+          vkmSubmitCommandBuffer(MXC_NODE_CONTEXT_HOT[i].cmd, hot.graphicsQueue, MXC_NODE_CONTEXT_HOT[i].nodeTimeline, MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal);
+        }
       }
 
       if (!MXC_NODE_CONTEXT_HOT[i].active || MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal < 1)
         continue;
 
-      // swap buffers
-      if (MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal > MXC_NODE_CONTEXT_HOT[i].lastTimelineSwap) {
-        MXC_NODE_CONTEXT_HOT[i].lastTimelineSwap = MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal;
-        const int         nodeFramebufferIndex = !(MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal % VKM_SWAP_COUNT);
-        const VkImageView nodeFramebufferColorImageView = MXC_NODE_CONTEXT_HOT[i].framebufferColorImageViews[nodeFramebufferIndex];
-        const VkImage     nodeFramebufferColorImage = MXC_NODE_CONTEXT_HOT[i].framebufferColorImages[nodeFramebufferIndex];
-        if (MXC_NODE_CONTEXT_HOT[i].type == MXC_NODE_TYPE_INTERPROCESS) {
-          vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
+      {
+        // swap buffers
+        uint64_t current = __atomic_load_n(&MXC_NODE_CONTEXT_HOT[i].currentTimelineSignal, __ATOMIC_ACQUIRE);
+        if (current > MXC_NODE_CONTEXT_HOT[i].lastTimelineSwap) {
+          MXC_NODE_CONTEXT_HOT[i].lastTimelineSwap = current;
+          const int         nodeFramebufferIndex = !(current % VKM_SWAP_COUNT);
+          const VkImageView nodeFramebufferColorImageView = MXC_NODE_CONTEXT_HOT[i].framebufferColorImageViews[nodeFramebufferIndex];
+          const VkImage     nodeFramebufferColorImage = MXC_NODE_CONTEXT_HOT[i].framebufferColorImages[nodeFramebufferIndex];
+          if (MXC_NODE_CONTEXT_HOT[i].type == MXC_NODE_TYPE_INTERPROCESS) {
+            vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
+          }
+          vkmUpdateDescriptorSet(hot.device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(hot.checkerMaterialSet, nodeFramebufferColorImageView));
         }
-        vkmUpdateDescriptorSet(hot.device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(hot.checkerMaterialSet, nodeFramebufferColorImageView));
       }
 
       vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);

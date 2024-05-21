@@ -1,4 +1,5 @@
 #include "test_node.h"
+#include <assert.h>
 #include <stdatomic.h>
 
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
@@ -85,30 +86,6 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "TestNode");
   }
 
-#ifdef DEBUG_TEST_NODE_SWAP
-  {  // Swap
-    VkBool32 presentSupport = VK_FALSE;
-    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pCreateInfo->surface, &presentSupport));
-    REQUIRE(presentSupport, "Queue can't present to surface!")
-
-    VkmCreateSwap(pCreateInfo->surface, &pTestNode->swap);
-    vkmCmdResetBegin(pTestNode->cmd);
-    VkImageMemoryBarrier2 swapBarrier[VKM_SWAP_COUNT];
-    for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      swapBarrier[i] = VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_PRESENT, VK_IMAGE_ASPECT_COLOR_BIT, pTestNode->swap.images[i]);
-    }
-    vkmCommandPipelineImageBarriers(pTestNode->cmd, VKM_SWAP_COUNT, swapBarrier);
-    vkEndCommandBuffer(pTestNode->cmd);
-    const VkSubmitInfo submitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &pTestNode->cmd,
-    };
-    VKM_REQUIRE(vkQueueSubmit(pTestNode->graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-    VKM_REQUIRE(vkQueueWaitIdle(pTestNode->graphicsQueue));
-  }
-#endif
-
   {  // Copy needed state
     pTestNode->device = context.device;
     pTestNode->standardRenderPass = context.standardRenderPass;
@@ -152,10 +129,6 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     VkDevice device;
 
-#ifdef DEBUG_TEST_NODE_SWAP
-    VkmSwap swap;
-#endif
-
     VkmTimeline compTimeline;
     VkmTimeline nodeTimeline;
 
@@ -164,10 +137,13 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     uint64_t compBaseCycleValue;
     uint64_t compCyclesToSkip;
+
+    mxc_node_handle handle;
   } hot;
 
   {
     MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
+    hot.handle = 0;
     hot.nodeType = pNodeContext->nodeType;
     hot.cmd = pNode->cmd;
     hot.globalSet = pNode->globalSet;
@@ -209,9 +185,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     MXC_NODE_CONTEXT_HOT[0].nodeSetState.model = pNode->sphereObjectState.model;
 
-#ifdef DEBUG_TEST_NODE_SWAP
-    local.swap = pNode->swap;
-#endif
+    assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal), &MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal));
+    assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal), &MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal));
   }
 
   while (isRunning) {
@@ -226,8 +201,6 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     vkResetCommandBuffer(hot.cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     vkBeginCommandBuffer(hot.cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
-
-
 
 
     const VkViewport viewport = {
@@ -259,8 +232,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     }
 
 
-
-    { // this is really all that'd be user exposed....
+    {  // this is really all that'd be user exposed....
       vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, (VkClearColorValue){0, 0, 0, 0}, framebuffer);
 
       vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);
@@ -275,25 +247,6 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
       vkCmdEndRenderPass(hot.cmd);
     }
 
-
-#ifdef DEBUG_TEST_NODE_SWAP
-    {  // Blit Framebuffer
-      vkAcquireNextImageKHR(local.device, local.swap.chain, UINT64_MAX, local.swap.acquireSemaphore, VK_NULL_HANDLE, &local.swap.swapIndex);
-      const VkImage               swapImage = local.swap.images[local.swap.swapIndex];
-      const VkImageMemoryBarrier2 blitBarrier[] = {
-          VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_TRANSFER_SRC_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
-          VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_PRESENT, VKM_TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, swapImage),
-      };
-      vkmCommandPipelineImageBarriers(local.cmd, 2, blitBarrier);
-      vkmBlit(local.cmd, framebufferColorImage, swapImage);
-      const VkImageMemoryBarrier2 presentBarrier[] = {
-          //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage),
-          VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_PRESENT, VK_IMAGE_ASPECT_COLOR_BIT, swapImage),
-      };
-      vkmCommandPipelineImageBarriers(local.cmd, 1, presentBarrier);
-    }
-#endif
-
     switch (hot.nodeType) {
       case MXC_NODE_TYPE_THREAD:
         vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
@@ -306,16 +259,10 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     vkEndCommandBuffer(hot.cmd);
 
     hot.nodeTimeline.value++;
-#ifdef DEBUG_TEST_NODE_SWAP
-    vkmSubmitPresentCommandBuffer(local.cmd, local.graphicsQueue, &local.swap, &local.timeline);
-    vkmTimelineWait(local.device, &local.timeline);
-#else
-    MXC_NODE_CONTEXT_HOT[0].pendingTimelineSignal = hot.nodeTimeline.value;
-#endif
+    __atomic_store_n(&MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal, hot.nodeTimeline.value, __ATOMIC_RELEASE);
 
     vkmTimelineWait(hot.device, &hot.nodeTimeline);
-    MXC_NODE_CONTEXT_HOT[0].currentTimelineSignal = hot.nodeTimeline.value;
-
+    __atomic_store_n(&MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal, hot.nodeTimeline.value, __ATOMIC_RELEASE);
 
     // increment past input cycle and wait on render next cycle
     hot.compBaseCycleValue += hot.compCyclesToSkip;
