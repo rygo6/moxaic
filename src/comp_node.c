@@ -4,13 +4,13 @@
 #include <stdatomic.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-static void CreateQuadMesh(VkmMesh* pMesh) {
+static void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
   const VkmVertex vertices[] = {
-      {.position = {-1, -1, 0}, .uv = {0, 0}},
-      {.position = {1, -1, 0}, .uv = {1, 0}},
-      {.position = {-1, 1, 0}, .uv = {0, 1}},
-      {.position = {1, 1, 0}, .uv = {1, 1}},
+      {.position = {-size, -size, 0}, .uv = {0, 0}},
+      {.position = {size, -size, 0}, .uv = {1, 0}},
+      {.position = {-size, size, 0}, .uv = {0, 1}},
+      {.position = {size, size, 0}, .uv = {1, 1}},
   };
   const VkmMeshCreateInfo info = {
       .indexCount = 6,
@@ -37,7 +37,7 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
     pComp->sphereTransform = (VkmTransform){.position = {0, 0, 0}};
     vkmUpdateObjectSet(&pComp->sphereTransform, &pComp->sphereObjectState, pComp->pSphereObjectSetMapped);
 
-    CreateQuadMesh(&pComp->sphereMesh);
+    CreateQuadMesh(0.5f, &pComp->sphereMesh);
 
     VkBool32 presentSupport = VK_FALSE;
     VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pInfo->surface, &presentSupport));
@@ -161,11 +161,23 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
 
       memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, &context.globalSetState, sizeof(context.globalSetState));
 
-      const vec4 world = Mat4MulVec4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, VEC4_IDENT);
-      const vec4 clip = Mat4MulVec4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, world);
-      const vec4 ndc = Mat4MulVec4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, clip);
+      const float radius = MXC_NODE_CONTEXT_HOT[i].radius;
 
-      printf("%.2f %.2f \n", ndc.x, ndc.y);
+      const vec4 ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .w = 1});
+      const vec4 ulWorld = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, ulModel);
+      const vec4 ulClip = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, ulWorld);
+      const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, ulClip));
+      const vec2 ulUV = Vec2UVFromVec3NDC(ulNDC);
+
+      const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
+      const vec4 lrWorld = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, lrModel);
+      const vec4 lrClip = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, lrWorld);
+      const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, lrClip));
+      const vec2 lrUV = Vec2UVFromVec3NDC(lrNDC);
+
+      const vec2 diff = {.simd = lrUV.simd - ulUV.simd};
+
+      printf("%.2f %.2f | %.2f %.2f | %.2f %.2f \n", ulUV.x, ulUV.y, lrUV.x, lrUV.y, diff.x, diff.y);
 
       {  // submit commands
         uint64_t pending = __atomic_load_n(&MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal, __ATOMIC_ACQUIRE);

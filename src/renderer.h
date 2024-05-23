@@ -1,8 +1,8 @@
 #pragma once
 
 #include "globals.h"
-#include "window.h"
 #include "mid_math.h"
+#include "window.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -51,7 +51,6 @@ extern const char*                              VKM_EXTERNAL_MEMORY_EXTENSION_NA
 extern const char*                              VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME;
 extern const char*                              VKM_EXTERNAL_FENCE_EXTENSION_NAME;
 extern const VkExternalMemoryHandleTypeFlagBits VKM_EXTERNAL_HANDLE_TYPE;
-
 
 
 //----------------------------------------------------------------------------------
@@ -553,8 +552,7 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
     inputDirty = true;
   }
   if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
-    vec3 localTranslate = {.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward};
-    vkmVec3Rot(&localTranslate, &pCameraTransform->rotation, &localTranslate);
+    const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward});
     const float moveSensitivity = input.deltaTime * 2.0f;
     for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
     inputDirty = true;

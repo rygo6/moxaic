@@ -128,6 +128,7 @@ static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
   MXC_NODE_CONTEXT_HOT[handle].lastTimelineSwap = 0;
   MXC_NODE_CONTEXT_HOT[handle].pendingTimelineSignal = 0;
   MXC_NODE_CONTEXT_HOT[handle].currentTimelineSignal = 0;
+  MXC_NODE_CONTEXT_HOT[handle].radius = 0.5;
   MXC_NODE_CONTEXT_HOT[handle].nodeTimeline = MXC_NODE_CONTEXT[handle].nodeTimeline;
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     MXC_NODE_CONTEXT_HOT[handle].framebufferColorImageViews[i] = MXC_NODE_CONTEXT[handle].framebuffers[i].color.imageView;

@@ -11,6 +11,7 @@
 #define SHUFFLE(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
 
 #define VKM_SIMD_TYPE(type, name, count) typedef type name##_simd __attribute__((vector_size(sizeof(type) * count)))
+// should I rename simd to vec and get rid of vec_name?
 #define VKM_MATH_UNION(type, simd_type, name, align, count, vec_name, ...) \
   typedef union __attribute((aligned(align))) name {                       \
     type vec_name[count];                                                  \
@@ -83,8 +84,8 @@ MATH_INLINE float Float4Sum(float4_simd float4) {
   sums = sums + shuf;
   return sums[0];
 }
-MATH_INLINE void Mat4Translation(const vec3 translationVec3, mat4* pDstMat4) {
-  for (int i = 0; i < 3; ++i) pDstMat4->col[3].simd += MAT4_IDENT.col[i].simd * translationVec3.vec[i];
+MATH_INLINE void Mat4Translation(const vec3 v, mat4* pDst) {
+  for (int i = 0; i < 3; ++i) pDst->col[3].simd += MAT4_IDENT.col[i].simd * v.simd[i];
 }
 MATH_INLINE float Vec4Dot(const vec4 l, const vec4 r) {
   float4_simd product = l.simd * r.simd;
@@ -244,16 +245,24 @@ MATH_INLINE void vkmMat4Perspective(const float fov, const float aspect, const f
                      .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
                      .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
 }
-MATH_INLINE void vkmVec3Cross(const vec3* pLeft, const vec3* pRight, vec3* pDst) {
-  *pDst = (vec3){pLeft->y * pRight->z - pRight->y * pLeft->z,
-                 pLeft->z * pRight->x - pRight->z * pLeft->x,
-                 pLeft->x * pRight->y - pRight->x * pLeft->y};
+MATH_INLINE vec3 Vec3Cross(const float3_simd l, const float3_simd r) {
+  return (vec3){l[VEC_Y] * r[VEC_Z] - r[VEC_Y] * l[VEC_Z],
+                l[VEC_Z] * r[VEC_X] - r[VEC_Z] * l[VEC_X],
+                l[VEC_X] * r[VEC_Y] - r[VEC_X] * l[VEC_Y]};
 }
-MATH_INLINE void vkmVec3Rot(const vec3* pSrc, const quat* pRot, vec3* pDst) {
-  vec3 uv, uuv;
-  vkmVec3Cross((vec3*)pRot, pSrc, &uv);
-  vkmVec3Cross((vec3*)pRot, &uv, &uuv);
-  for (int i = 0; i < 3; ++i) pDst->vec[i] = pSrc->vec[i] + ((uv.vec[i] * pRot->w) + uuv.vec[i]) * 2.0f;
+MATH_INLINE vec3 Vec3Rot(const quat q, const vec3 v) {
+  const vec3 uv = Vec3Cross(q.simd, v.simd);
+  const vec3 uuv = Vec3Cross(q.simd, uv.simd);
+  vec3       out;
+  for (int i = 0; i < 3; ++i) out.simd[i] = v.simd[i] + ((uv.simd[i] * q.simd[VEC_W]) + uuv.simd[i]) * 2.0f;
+  return out;
+}
+MATH_INLINE vec4 Vec4Rot(const quat q, const vec4 v) {
+  const vec3 uv = Vec3Cross(q.simd, v.simd);
+  const vec3 uuv = Vec3Cross(q.simd, uv.simd);
+  vec4       out = {.w = v.w};
+  for (int i = 0; i < 3; ++i) out.simd[i] = v.simd[i] + ((uv.simd[i] * q.simd[VEC_W]) + uuv.simd[i]) * 2.0f;
+  return out;
 }
 MATH_INLINE void vkmVec3EulerToQuat(const vec3* pEuler, quat* pDst) {
   vec3 c, s;
@@ -274,12 +283,20 @@ MATH_INLINE void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
   pDst->y = pSrc->w * pMul->y + pSrc->y * pMul->w + pSrc->z * pMul->x - pSrc->x * pMul->z;
   pDst->z = pSrc->w * pMul->z + pSrc->z * pMul->w + pSrc->x * pMul->y - pSrc->y * pMul->x;
 }
-MATH_INLINE vec4 Mat4MulVec4(const mat4 m, const vec4 v) {
+MATH_INLINE vec4 Vec4MulMat4(const mat4 m, const vec4 v) {
   // todo SIMDIZE
   vec4 out;
   out.simd[0] = m.simd[MAT_C0_R0] * v.simd[0] + m.simd[MAT_C1_R0] * v.simd[1] + m.simd[MAT_C2_R0] * v.simd[2] + m.simd[MAT_C3_R0] * v.simd[3];
   out.simd[1] = m.simd[MAT_C0_R1] * v.simd[0] + m.simd[MAT_C1_R1] * v.simd[1] + m.simd[MAT_C2_R1] * v.simd[2] + m.simd[MAT_C3_R1] * v.simd[3];
   out.simd[2] = m.simd[MAT_C0_R2] * v.simd[0] + m.simd[MAT_C1_R2] * v.simd[1] + m.simd[MAT_C2_R2] * v.simd[2] + m.simd[MAT_C3_R2] * v.simd[3];
   out.simd[3] = m.simd[MAT_C0_R3] * v.simd[0] + m.simd[MAT_C1_R3] * v.simd[1] + m.simd[MAT_C2_R3] * v.simd[2] + m.simd[MAT_C3_R3] * v.simd[3];
+  return out;
+}
+MATH_INLINE vec3 Vec4WDivide(const vec4 v) {
+  return (vec3){.simd = v.simd / v.simd[VEC_W]};
+}
+MATH_INLINE vec2 Vec2UVFromVec3NDC(const vec3 ndc) {
+  vec2 out = {.x = ndc.x, .y = ndc.y};
+  out.simd = out.simd * 0.5f + 0.5f;
   return out;
 }
