@@ -83,10 +83,8 @@ int main(void) {
   VkmCreateStandardRenderPass(&context.standardRenderPass);
   vkmCreateStandardPipeline(&context.standardPipe);
   // global set
-  vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.globalSetLayout, &context.globalSet);
-  vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &context.globalSetMemory, &context.globalSetBuffer, (void**)&context.pGlobalSetMapped);
-  vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(context.globalSet, context.globalSetBuffer), 0, NULL);
-  vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
+  vkmCreateGlobalSet(&context.globalSet);
+  vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.globalSet.pMapped);
 
 
   MxcBasicComp           basicComp;

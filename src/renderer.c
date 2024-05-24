@@ -357,7 +357,7 @@ void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
   totalAllocSize += pMemReqs->size;
-//  printf("%zu allocated in type %d\n", totalAllocSize, memTypeIndex);
+  //  printf("%zu allocated in type %d\n", totalAllocSize, memTypeIndex);
 }
 void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
@@ -1063,4 +1063,11 @@ void vkmCreateTimeline(VkSemaphore* pSemaphore) {
       .pNext = &timelineSemaphoreTypeCreateInfo,
   };
   VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, pSemaphore));
+}
+
+void vkmCreateGlobalSet(VkmGlobalSet* pSet) {
+  vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.globalSetLayout, &pSet->set);
+  vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
+  vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
+  //  vkmUpdateGlobalSet(&context.globalCameraTransform, &pSet->globalSetState, pSet->pGlobalSetMapped);
 }

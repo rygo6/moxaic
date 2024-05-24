@@ -78,7 +78,7 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
     pComp->standardRenderPass = context.standardRenderPass;
     pComp->standardPipelineLayout = context.standardPipe.pipelineLayout;
     pComp->standardPipeline = context.standardPipe.pipeline;
-    pComp->globalSet = context.globalSet;
+    pComp->globalSet = context.globalSet.set;
   }
 }
 
@@ -143,7 +143,7 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
     vkmUpdateWindowInput();
 
     if (vkmProcessInput(&context.globalCameraTransform)) {
-      vkmUpdateGlobalSetView(&context.globalCameraTransform, &context.globalSetState, context.pGlobalSetMapped);
+      vkmUpdateGlobalSetView(&context.globalCameraTransform, &context.globalSetState, context.globalSet.pMapped);  // move global to hot?
     }
 
     // signal odd for input ready
@@ -159,25 +159,6 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
 
     for (int i = 0; i < MXC_NODE_HANDLE_COUNT; ++i) {
 
-      memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, &context.globalSetState, sizeof(context.globalSetState));
-
-      const float radius = MXC_NODE_CONTEXT_HOT[i].radius;
-
-      const vec4 ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .w = 1});
-      const vec4 ulWorld = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, ulModel);
-      const vec4 ulClip = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, ulWorld);
-      const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, ulClip));
-      const vec2 ulUV = Vec2UVFromVec3NDC(ulNDC);
-
-      const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
-      const vec4 lrWorld = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, lrModel);
-      const vec4 lrClip = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, lrWorld);
-      const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, lrClip));
-      const vec2 lrUV = Vec2UVFromVec3NDC(lrNDC);
-
-      const vec2 diff = {.simd = lrUV.simd - ulUV.simd};
-
-      printf("%.2f %.2f | %.2f %.2f | %.2f %.2f \n", ulUV.x, ulUV.y, lrUV.x, lrUV.y, diff.x, diff.y);
 
       {  // submit commands
         uint64_t pending = __atomic_load_n(&MXC_NODE_CONTEXT_HOT[i].pendingTimelineSignal, __ATOMIC_ACQUIRE);
@@ -202,6 +183,32 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
             vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
           }
           vkmUpdateDescriptorSet(hot.device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(hot.checkerMaterialSet, nodeFramebufferColorImageView));
+
+
+
+          memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].nodeSetState, (void*)&MXC_NODE_CONTEXT_HOT[i].globalSetState, sizeof(context.globalSetState));
+          memcpy((void*)&MXC_NODE_CONTEXT_HOT[i].globalSetState, &context.globalSetState, sizeof(context.globalSetState));
+
+          const float radius = MXC_NODE_CONTEXT_HOT[i].radius;
+
+          const vec4 ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .w = 1});
+          const vec4 ulWorld = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, ulModel);
+          const vec4 ulClip = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, ulWorld);
+          const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, ulClip));
+          const vec2 ulUV = Vec2UVFromVec3NDC(ulNDC);
+
+          const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
+          const vec4 lrWorld = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.model, lrModel);
+          const vec4 lrClip = Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.view, lrWorld);
+          const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(MXC_NODE_CONTEXT_HOT[i].nodeSetState.projection, lrClip));
+          const vec2 lrUV = Vec2UVFromVec3NDC(lrNDC);
+
+          const vec2 diff = {.simd = lrUV.simd - ulUV.simd};
+
+          MXC_NODE_CONTEXT_HOT[i].globalSetState.framebufferSize.x = diff.x * DEFAULT_WIDTH;
+          MXC_NODE_CONTEXT_HOT[i].globalSetState.framebufferSize.y = diff.y * DEFAULT_HEIGHT;
+          __atomic_thread_fence(__ATOMIC_RELEASE);
+
         }
       }
 

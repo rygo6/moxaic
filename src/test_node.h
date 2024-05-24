@@ -23,7 +23,8 @@ typedef struct MxcTestNode {
 
   VkCommandBuffer cmd;
 
-  VkDescriptorSet globalSet;
+  VkmGlobalSet globalSet;
+
   VkDescriptorSet checkerMaterialSet;
   VkDescriptorSet sphereObjectSet;
 

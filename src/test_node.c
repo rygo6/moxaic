@@ -54,6 +54,9 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   {  // Create
     vkmCreateNodeFramebufferImport(context.standardRenderPass, VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
 
+    vkmCreateGlobalSet(&pTestNode->globalSet);
+    memcpy(pTestNode->globalSet.pMapped, &context.globalSetState, sizeof(VkmGlobalSetState));
+
     vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.materialSetLayout, &pTestNode->checkerMaterialSet);
     vkmCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
@@ -91,7 +94,6 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     pTestNode->standardRenderPass = context.standardRenderPass;
     pTestNode->standardPipelineLayout = context.standardPipe.pipelineLayout;
     pTestNode->standardPipeline = context.standardPipe.pipeline;
-    pTestNode->globalSet = context.globalSet;
     pTestNode->queueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
   }
 
@@ -118,6 +120,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     VkPipelineLayout standardPipelineLayout;
     VkPipeline       standardPipeline;
 
+    VkmGlobalSetState* pGlobalSetMapped;
     VkDescriptorSet globalSet;
     VkDescriptorSet checkerMaterialSet;
     VkDescriptorSet sphereObjectSet;
@@ -146,7 +149,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     hot.handle = 0;
     hot.nodeType = pNodeContext->nodeType;
     hot.cmd = pNode->cmd;
-    hot.globalSet = pNode->globalSet;
+    hot.globalSet = pNode->globalSet.set;
+    hot.pGlobalSetMapped = pNode->globalSet.pMapped;
     hot.checkerMaterialSet = pNode->checkerMaterialSet;
     hot.sphereObjectSet = pNode->sphereObjectSet;
     hot.standardRenderPass = pNode->standardRenderPass;
@@ -183,7 +187,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
     //    hot.framebufferIndex = 0;
 
-    MXC_NODE_CONTEXT_HOT[0].nodeSetState.model = pNode->sphereObjectState.model;
+    MXC_NODE_CONTEXT_HOT[hot.handle].nodeSetState.model = pNode->sphereObjectState.model;
 
     assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal), &MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal));
     assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal), &MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal));
@@ -191,9 +195,13 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   while (isRunning) {
 
+    // WAIT IS THIS NEEDED ANYMORE IF EVERYTHING FEEDS BACK TO SUBMIT ON MAIN THREAD? maybe no on a thread node
     // wait for input cycle to finish
     hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_INPUT;
     vkmTimelineWait(hot.device, &hot.compTimeline);
+
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+    memcpy(hot.pGlobalSetMapped, &MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState, sizeof(VkmGlobalSetState));
 
     const int           framebufferIndex = hot.nodeTimeline.value % VKM_SWAP_COUNT;
     const VkFramebuffer framebuffer = hot.framebuffers[framebufferIndex];
@@ -202,12 +210,11 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     vkResetCommandBuffer(hot.cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     vkBeginCommandBuffer(hot.cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
-
     const VkViewport viewport = {
-        .x = 512,
-        .y = 512,
-        .width = 512,
-        .height = 512,
+        .x = 0,
+        .y = 0,
+        .width = MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState.framebufferSize.x,
+        .height = MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState.framebufferSize.y,
         .minDepth = 0.0f,
         .maxDepth = 1.0f,
     };

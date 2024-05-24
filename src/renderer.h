@@ -179,6 +179,13 @@ typedef struct VkmStandardPipeline {
 
 } VkmStandardPipe;
 
+typedef struct VkmGlobalSet {
+  VkmGlobalSetState* pMapped;
+  VkDeviceMemory     memory;
+  VkBuffer           buffer;
+  VkDescriptorSet    set;
+} VkmGlobalSet;
+
 typedef struct VkmContext {
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
@@ -188,13 +195,14 @@ typedef struct VkmContext {
   VkDescriptorPool descriptorPool;
   VkQueryPool      timeQueryPool;
 
+  // yua we prolly want to move this into some comp struct
   VkmTransform      globalCameraTransform;
   VkmGlobalSetState globalSetState;
-
-  VkmGlobalSetState* pGlobalSetMapped;
-  VkDeviceMemory     globalSetMemory;
-  VkBuffer           globalSetBuffer;
-  VkDescriptorSet    globalSet;
+  VkmGlobalSet globalSet;
+  //  VkmGlobalSetState* pGlobalSetMapped;
+  //  VkDeviceMemory     globalSetMemory;
+  //  VkBuffer           globalSetBuffer;
+  //  VkDescriptorSet    globalSet;
 
   // these probably should go elsewhere
   VkRenderPass    standardRenderPass;
@@ -231,17 +239,17 @@ enum VkmPipeSetStandardIndices {
   (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
 #define VKM_SET_BINDING_STD_GLOBAL_BUFFER 0
-#define VKM_SET_WRITE_STD_GLOBAL_BUFFER(globalSet, globalSetBuffer) \
-  (VkWriteDescriptorSet) {                                          \
-    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
-    .dstSet = globalSet,                                            \
-    .dstBinding = VKM_SET_BINDING_STD_GLOBAL_BUFFER,                \
-    .descriptorCount = 1,                                           \
-    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,            \
-    .pBufferInfo = &(const VkDescriptorBufferInfo){                 \
-        .buffer = globalSetBuffer,                                  \
-        .range = sizeof(VkmGlobalSetState),                         \
-    },                                                              \
+#define VKM_SET_WRITE_STD_GLOBAL_BUFFER(global_set, global_set_buffer) \
+  (VkWriteDescriptorSet) {                                             \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                   \
+    .dstSet = global_set,                                              \
+    .dstBinding = VKM_SET_BINDING_STD_GLOBAL_BUFFER,                   \
+    .descriptorCount = 1,                                              \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,               \
+    .pBufferInfo = &(const VkDescriptorBufferInfo){                    \
+        .buffer = global_set_buffer,                                   \
+        .range = sizeof(VkmGlobalSetState),                            \
+    },                                                                 \
   }
 #define VKM_SET_BINDING_STD_MATERIAL_TEXTURE 0
 #define VKM_SET_WRITE_STD_MATERIAL_IMAGE(materialSet, material_image_view) \
@@ -583,6 +591,7 @@ void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 void vkmCreateStandardPipeline(VkmStandardPipe* pStandardPipeline);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
+void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 
 typedef struct VkmInitializeDesc {
   const char* applicationName;
