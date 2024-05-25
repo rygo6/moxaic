@@ -77,29 +77,29 @@ typedef struct MxcNodeContext {
 } MxcNodeContext;
 
 typedef struct MxcNodeSetState {
-      mat4 view;
-      mat4 projection;
-      mat4 viewProjection;
+  mat4 view;
+  mat4 projection;
+  mat4 viewProjection;
 
-      mat4 inverseView;
-      mat4 inverseProjection;
-      mat4 inverseViewProjection;
+  mat4 inverseView;
+  mat4 inverseProjection;
+  mat4 inverseViewProjection;
 
-      ivec2 framebufferSize;
+  ivec2 framebufferSize;
 
-      mat4 model;
+  mat4 model;
 
 } MxcNodeSetState;
 
 
 CACHE_ALIGN typedef struct MxcNodeContextHot {
   // shared
-  uint64_t    pendingTimelineSignal;
-  uint64_t    currentTimelineSignal;
+  volatile uint64_t pendingTimelineSignal;
+  volatile uint64_t currentTimelineSignal;
 
-  VkmGlobalSetState globalSetState;
+  volatile VkmGlobalSetState globalSetState;
 
-  float radius;
+  volatile float radius;
 
   // unshared
   uint64_t    lastTimelineSwap;
@@ -108,6 +108,8 @@ CACHE_ALIGN typedef struct MxcNodeContextHot {
 
   bool        active;
   MxcNodeType type;
+
+  VkmTransform transform;
 
   // need to be some sync around node setting this and it getting read?
   MxcNodeSetState nodeSetState;
@@ -127,7 +129,7 @@ CACHE_ALIGN typedef struct MxcNodeContextHot {
 typedef uint8_t                   mxc_node_handle;
 extern size_t                     MXC_NODE_HANDLE_COUNT;
 extern MxcNodeContext             MXC_NODE_CONTEXT[MXC_NODE_CAPACITY];
-volatile extern MxcNodeContextHot MXC_NODE_CONTEXT_HOT[MXC_NODE_CAPACITY];
+extern MxcNodeContextHot MXC_NODE_CONTEXT_HOT[MXC_NODE_CAPACITY];
 
 static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
   MXC_NODE_CONTEXT_HOT[handle].active = true;
@@ -138,6 +140,7 @@ static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
   MXC_NODE_CONTEXT_HOT[handle].currentTimelineSignal = 0;
   MXC_NODE_CONTEXT_HOT[handle].radius = 0.5;
   MXC_NODE_CONTEXT_HOT[handle].nodeTimeline = MXC_NODE_CONTEXT[handle].nodeTimeline;
+  MXC_NODE_CONTEXT_HOT[handle].transform.rotation = QuatFromEuler(MXC_NODE_CONTEXT_HOT[handle].transform.euler);
   memcpy((void*)&MXC_NODE_CONTEXT_HOT[handle].globalSetState, (void*)&context.globalSetState, sizeof(VkmGlobalSetState));
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     MXC_NODE_CONTEXT_HOT[handle].framebufferColorImageViews[i] = MXC_NODE_CONTEXT[handle].framebuffers[i].color.imageView;

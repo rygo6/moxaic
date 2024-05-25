@@ -121,9 +121,9 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     VkPipeline       standardPipeline;
 
     VkmGlobalSetState* pGlobalSetMapped;
-    VkDescriptorSet globalSet;
-    VkDescriptorSet checkerMaterialSet;
-    VkDescriptorSet sphereObjectSet;
+    VkDescriptorSet    globalSet;
+    VkDescriptorSet    checkerMaterialSet;
+    VkDescriptorSet    sphereObjectSet;
 
     uint32_t     sphereIndexCount;
     VkBuffer     sphereBuffer;
@@ -181,9 +181,9 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     hot.compBaseCycleValue = hot.compTimeline.value - (hot.compTimeline.value % MXC_CYCLE_COUNT);
 
     // wait on next cycle
-    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_COUNT;
-
     hot.compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
+    vkmTimelineSync(hot.device, &hot.compTimeline);
+    hot.compTimeline.value = hot.compCyclesToSkip;
 
     //    hot.framebufferIndex = 0;
 
@@ -195,13 +195,12 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   while (isRunning) {
 
-    // WAIT IS THIS NEEDED ANYMORE IF EVERYTHING FEEDS BACK TO SUBMIT ON MAIN THREAD? maybe no on a thread node
-    // wait for input cycle to finish
-    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_INPUT;
+    // Wait for next render cycle
+    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_RENDER;
     vkmTimelineWait(hot.device, &hot.compTimeline);
 
+    memcpy(hot.pGlobalSetMapped, (void*)&MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState, sizeof(VkmGlobalSetState));
     __atomic_thread_fence(__ATOMIC_ACQUIRE);
-    memcpy(hot.pGlobalSetMapped, &MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState, sizeof(VkmGlobalSetState));
 
     const int           framebufferIndex = hot.nodeTimeline.value % VKM_SWAP_COUNT;
     const VkFramebuffer framebuffer = hot.framebuffers[framebufferIndex];
@@ -266,13 +265,14 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     vkEndCommandBuffer(hot.cmd);
 
     hot.nodeTimeline.value++;
-    __atomic_store_n(&MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal, hot.nodeTimeline.value, __ATOMIC_RELEASE);
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+    MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal = hot.nodeTimeline.value;
+
 
     vkmTimelineWait(hot.device, &hot.nodeTimeline);
-    __atomic_store_n(&MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal, hot.nodeTimeline.value, __ATOMIC_RELEASE);
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+    MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal = hot.nodeTimeline.value;
 
-    // increment past input cycle and wait on render next cycle
     hot.compBaseCycleValue += hot.compCyclesToSkip;
-    //    hot.framebufferIndex = !hot.framebufferIndex;
   }
 }

@@ -333,7 +333,7 @@ static void    VkmAllocContextMemory(const VkMemoryRequirements* pMemReqs, const
   printf("%zu allocated\n", totalAllocSize);
 }
 
-
+// so what we need to do here is make something which allows you to pre-emptively figure out all memory requirements, store that state, then have it initialize
 void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
   VkPhysicalDeviceMemoryProperties memProps;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);

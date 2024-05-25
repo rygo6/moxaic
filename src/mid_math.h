@@ -230,12 +230,12 @@ MATH_INLINE mat4 Mat4Inv(const mat4* pSrc) {
 
   out.simd *= det;
 }
-MATH_INLINE void vkmMat4FromTransform(const vec3 pos, const quat rot, mat4* pDst) {
+MATH_INLINE mat4 Mat4FromTransform(const vec3 pos, const quat rot) {
   mat4 translationMat4 = MAT4_IDENT;
   Mat4Translation(pos, &translationMat4);
   mat4 rotationMat4 = MAT4_IDENT;
   QuatToMat4(rot, &rotationMat4);
-  *pDst = Mat4Mul(translationMat4, rotationMat4);
+  return Mat4Mul(translationMat4, rotationMat4);
 }
 // Perspective matrix in Vulkan Reverse Z
 MATH_INLINE void vkmMat4Perspective(const float fov, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
@@ -264,17 +264,19 @@ MATH_INLINE vec4 Vec4Rot(const quat q, const vec4 v) {
   for (int i = 0; i < 3; ++i) out.simd[i] = v.simd[i] + ((uv.simd[i] * q.simd[VEC_W]) + uuv.simd[i]) * 2.0f;
   return out;
 }
-MATH_INLINE void vkmVec3EulerToQuat(const vec3* pEuler, quat* pDst) {
+MATH_INLINE quat QuatFromEuler(const vec3 euler) {
   vec3 c, s;
   for (int i = 0; i < 3; ++i) {
-    c.vec[i] = cos(pEuler->vec[i] * 0.5f);
-    s.vec[i] = sin(pEuler->vec[i] * 0.5f);
+    c.vec[i] = cos(euler.vec[i] * 0.5f);
+    s.vec[i] = sin(euler.vec[i] * 0.5f);
   }
   // todo SIMDIZE
-  pDst->w = c.x * c.y * c.z + s.x * s.y * s.z;
-  pDst->x = s.x * c.y * c.z - c.x * s.y * s.z;
-  pDst->y = c.x * s.y * c.z + s.x * c.y * s.z;
-  pDst->z = c.x * c.y * s.z - s.x * s.y * c.z;
+  quat out;
+  out.w = c.x * c.y * c.z + s.x * s.y * s.z;
+  out.x = s.x * c.y * c.z - c.x * s.y * s.z;
+  out.y = c.x * s.y * c.z + s.x * c.y * s.z;
+  out.z = c.x * c.y * s.z - s.x * s.y * c.z;
+  return out;
 }
 MATH_INLINE void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
   // todo SIMDIZE

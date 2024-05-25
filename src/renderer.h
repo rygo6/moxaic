@@ -198,7 +198,7 @@ typedef struct VkmContext {
   // yua we prolly want to move this into some comp struct
   VkmTransform      globalCameraTransform;
   VkmGlobalSetState globalSetState;
-  VkmGlobalSet globalSet;
+  VkmGlobalSet      globalSet;
   //  VkmGlobalSetState* pGlobalSetMapped;
   //  VkDeviceMemory     globalSetMemory;
   //  VkBuffer           globalSetBuffer;
@@ -432,7 +432,7 @@ static inline void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
-static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkmTimeline* pSignalTimeline) {
+static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkSemaphore timeline, const uint64_t timelineSignalValue) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .waitSemaphoreInfoCount = 1,
@@ -454,8 +454,8 @@ static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, cons
       .pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
           {
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-              .value = pSignalTimeline->value,
-              .semaphore = pSignalTimeline->semaphore,
+              .value = timelineSignalValue,
+              .semaphore = timeline,
               .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
           },
           {
@@ -532,31 +532,31 @@ static inline void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalS
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
   pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
   vkmMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->projection);
-  vkmVec3EulerToQuat(&pCameraTransform->euler, &pCameraTransform->rotation);
+  pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
   pState->inverseProjection = Mat4Inv(&pState->projection);
-  vkmMat4FromTransform(pCameraTransform->position, pCameraTransform->rotation, &pState->inverseView);
+  pState->inverseView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
   pState->view = Mat4Inv(&pState->inverseView);
   pState->viewProjection = Mat4Mul(pState->projection, pState->view);
   pState->inverseViewProjection = Mat4Mul(pState->inverseView, pState->inverseViewProjection);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
 static inline void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
-  vkmMat4FromTransform(pCameraTransform->position, pCameraTransform->rotation, &pState->inverseView);
+  pState->inverseView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
   pState->view = Mat4Inv(&pState->inverseView);
   pState->viewProjection = Mat4Mul(pState->projection, pState->view);
   pState->inverseViewProjection = Mat4Mul(pState->inverseView, pState->inverseViewProjection);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
 static inline void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjectSetState* pState, VkmStandardObjectSetState* pSphereObjectSetMapped) {
-  vkmVec3EulerToQuat(&pTransform->euler, &pTransform->rotation);
-  vkmMat4FromTransform(pTransform->position, pTransform->rotation, &pState->model);
+  pTransform->rotation = QuatFromEuler(pTransform->euler);
+  pState->model = Mat4FromTransform(pTransform->position, pTransform->rotation);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStandardObjectSetState));
 }
 static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
   if (input.mouseLocked) {
     pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 0.4f;
-    vkmVec3EulerToQuat(&pCameraTransform->euler, &pCameraTransform->rotation);
+    pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
     inputDirty = true;
   }
   if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {

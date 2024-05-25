@@ -24,6 +24,7 @@ extern volatile bool isRunning;
 
 typedef enum MxcCycle {
   MXC_CYCLE_INPUT,
+  MXC_CYCLE_NODE,
   MXC_CYCLE_RENDER,
   MXC_CYCLE_COUNT
 } MxcCycle;
