@@ -26,7 +26,7 @@ typedef struct MxcBasicComp {
   VkDescriptorSet checkerMaterialSet;
   VkDescriptorSet sphereObjectSet;
 
-  VkmMesh      sphereMesh;
+  VkmMesh      quadMesh;
   VkmTransform sphereTransform;
 
   VkmStandardObjectSetState  sphereObjectState;
@@ -44,4 +44,4 @@ typedef struct MxcBasicComp {
 
 
 void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp);
-void mxcRunCompNode(const MxcBasicComp* pNode);
+_Noreturn void mxcRunCompNode(const MxcBasicComp* pNode);

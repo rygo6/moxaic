@@ -38,9 +38,9 @@
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
 
-#define VKM_DEVICE_FUNC(vkFunction)                                                                 \
-  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetDeviceProcAddr(context.device, #vkFunction); \
-  REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
+#define VKM_DEVICE_FUNC(function)                                                                \
+  PFN_##vk##function function = (PFN_##vk##function)vkGetDeviceProcAddr(device, "vk" #function); \
+  REQUIRE(function != NULL, "Couldn't load " #function)
 
 
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -378,31 +378,39 @@ static const VkmImageBarrier* VKM_COLOR_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
         .layerCount = 1,                                        \
     },                                                          \
   }
-#define VKM_IMAGE_BARRIER_QUEUE_TRANSFER(src, dst, aspect_mask, barrier_image, src_queue, dst_queue) \
-  (const VkImageMemoryBarrier2) {                                                                    \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                               \
-    .srcStageMask = src->stageMask,                                                                  \
-    .srcAccessMask = src->accessMask,                                                                \
-    .dstStageMask = dst->stageMask,                                                                  \
-    .dstAccessMask = dst->accessMask,                                                                \
-    .oldLayout = src->layout,                                                                        \
-    .newLayout = dst->layout,                                                                        \
-    .srcQueueFamilyIndex = src_queue,                                                                \
-    .dstQueueFamilyIndex = dst_queue,                                                                \
-    .image = barrier_image,                                                                          \
-    .subresourceRange = (VkImageSubresourceRange){                                                   \
-        .aspectMask = aspect_mask,                                                                   \
-        .levelCount = 1,                                                                             \
-        .layerCount = 1,                                                                             \
-    },                                                                                               \
+#define VKM_IMAGE_BARRIER_TRANSFER(src, dst, aspect_mask, barrier_image, src_queue, dst_queue) \
+  (const VkImageMemoryBarrier2) {                                                              \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                         \
+    .srcStageMask = src->stageMask,                                                            \
+    .srcAccessMask = src->accessMask,                                                          \
+    .dstStageMask = dst->stageMask,                                                            \
+    .dstAccessMask = dst->accessMask,                                                          \
+    .oldLayout = src->layout,                                                                  \
+    .newLayout = dst->layout,                                                                  \
+    .srcQueueFamilyIndex = src_queue,                                                          \
+    .dstQueueFamilyIndex = dst_queue,                                                          \
+    .image = barrier_image,                                                                    \
+    .subresourceRange = (VkImageSubresourceRange){                                             \
+        .aspectMask = aspect_mask,                                                             \
+        .levelCount = 1,                                                                       \
+        .layerCount = 1,                                                                       \
+    },                                                                                         \
   }
-static inline void vkmCommandPipelineImageBarriers(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
-  vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
+
+//----------------------------------------------------------------------------------
+// Inline Methods
+//----------------------------------------------------------------------------------
+#define VKM_INLINE __attribute__((always_inline)) static inline
+
+#define CmdPipelineImageBarriers(...) PFN_CmdPipelineImageBarriers(CmdPipelineBarrier2, __VA_ARGS__)
+VKM_INLINE void PFN_CmdPipelineImageBarriers(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+  func(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-static inline void vkmCommandPipelineImageBarrier(const VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
-  vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
+#define CmdPipelineImageBarrier(...) PFN_CmdPipelineImageBarrierFunc(CmdPipelineBarrier2, __VA_ARGS__)
+VKM_INLINE void PFN_CmdPipelineImageBarrierFunc(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
+  func(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
-static inline void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
+VKM_INLINE void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
   const VkImageBlit imageBlit = {
       .srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
       .srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
@@ -411,7 +419,7 @@ static inline void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, co
   };
   vkCmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-static inline void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer) {
+VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .renderPass = renderPass,
@@ -426,13 +434,13 @@ static inline void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass
   };
   vkCmdBeginRenderPass(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
-static inline void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
+VKM_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
-static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkSemaphore timeline, const uint64_t timelineSignalValue) {
+VKM_INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkSemaphore timeline, const uint64_t timelineSignalValue) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .waitSemaphoreInfoCount = 1,
@@ -476,7 +484,7 @@ static inline void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, cons
   };
   VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
 }
-static inline void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
+VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .commandBufferInfoCount = 1,
@@ -498,7 +506,7 @@ static inline void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQue
   };
   VKM_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
-static inline void vkmTimelineWait(const VkDevice device, const VkmTimeline* pTimeline) {
+VKM_INLINE void vkmTimelineWait(const VkDevice device, const VkmTimeline* pTimeline) {
   const VkSemaphoreWaitInfo semaphoreWaitInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
       .semaphoreCount = 1,
@@ -507,7 +515,7 @@ static inline void vkmTimelineWait(const VkDevice device, const VkmTimeline* pTi
   };
   VKM_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
-static inline void vkmTimelineSignal(const VkDevice device, const VkmTimeline* pTimeline) {
+VKM_INLINE void vkmTimelineSignal(const VkDevice device, const VkmTimeline* pTimeline) {
   const VkSemaphoreSignalInfo semaphoreSignalInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
       .semaphore = pTimeline->semaphore,
@@ -515,19 +523,19 @@ static inline void vkmTimelineSignal(const VkDevice device, const VkmTimeline* p
   };
   VKM_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
-static inline void vkmTimelineSync(const VkDevice device, VkmTimeline* pTimeline) {
+VKM_INLINE void vkmTimelineSync(const VkDevice device, VkmTimeline* pTimeline) {
   VKM_REQUIRE(vkGetSemaphoreCounterValue(device, pTimeline->semaphore, &pTimeline->value));
 }
-static inline bool vkmTimelineSyncCheck(const VkDevice device, VkmTimeline* pTimeline) {
+VKM_INLINE bool vkmTimelineSyncCheck(const VkDevice device, VkmTimeline* pTimeline) {
   const uint64_t priorValue = pTimeline->value;
   VKM_REQUIRE(vkGetSemaphoreCounterValue(device, pTimeline->semaphore, &pTimeline->value));
   return priorValue != pTimeline->value;
 }
-static inline void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
+VKM_INLINE void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
   vkUpdateDescriptorSets(device, 1, pWriteSet, 0, NULL);
 }
 
-static inline void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+VKM_INLINE void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
   pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
@@ -540,19 +548,19 @@ static inline void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalS
   pState->inverseViewProjection = Mat4Mul(pState->inverseView, pState->inverseViewProjection);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-static inline void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+VKM_INLINE void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pState->inverseView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
   pState->view = Mat4Inv(&pState->inverseView);
   pState->viewProjection = Mat4Mul(pState->projection, pState->view);
   pState->inverseViewProjection = Mat4Mul(pState->inverseView, pState->inverseViewProjection);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-static inline void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjectSetState* pState, VkmStandardObjectSetState* pSphereObjectSetMapped) {
+VKM_INLINE void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjectSetState* pState, VkmStandardObjectSetState* pSphereObjectSetMapped) {
   pTransform->rotation = QuatFromEuler(pTransform->euler);
   pState->model = Mat4FromTransform(pTransform->position, pTransform->rotation);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStandardObjectSetState));
 }
-static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
+VKM_INLINE bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
   if (input.mouseLocked) {
     pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 0.4f;
@@ -567,8 +575,7 @@ static inline bool vkmProcessInput(VkmTransform* pCameraTransform) {
   }
   return inputDirty;
 }
-
-static inline void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
+VKM_INLINE void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
   const VkDebugUtilsObjectNameInfoEXT debugInfo = {
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
       .objectType = objectType,

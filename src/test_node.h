@@ -41,9 +41,8 @@ typedef struct MxcTestNode {
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
   uint32_t queueIndex;
-  VkQueue  queue;
 
 } MxcTestNode;
 
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode);
-void mxcRunTestNode(const MxcNodeContext* pNodeContext);
+_Noreturn void mxcRunTestNode(const MxcNodeContext* pNodeContext);

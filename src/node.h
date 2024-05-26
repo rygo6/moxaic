@@ -118,7 +118,7 @@ CACHE_ALIGN typedef struct MxcNodeContextHot {
 
   VkImageView framebufferColorImageViews[VKM_SWAP_COUNT];
   VkImage     framebufferColorImages[VKM_SWAP_COUNT];
-} MxcNodeContextHot;
+} MxcNodeContextShared;
 
 //typedef struct MxcNodeContextShared {
 //  uint64_t current;
@@ -126,25 +126,25 @@ CACHE_ALIGN typedef struct MxcNodeContextHot {
 //} MxcNodeContextShared;
 
 #define MXC_NODE_CAPACITY 256
-typedef uint8_t                   mxc_node_handle;
-extern size_t                     MXC_NODE_HANDLE_COUNT;
-extern MxcNodeContext             MXC_NODE_CONTEXT[MXC_NODE_CAPACITY];
-extern MxcNodeContextHot MXC_NODE_CONTEXT_HOT[MXC_NODE_CAPACITY];
+typedef uint8_t             mxc_node_handle;
+extern size_t               MXC_NODE_COUNT;
+extern MxcNodeContext       MXC_NODE[MXC_NODE_CAPACITY];
+extern MxcNodeContextShared MXC_NODE_SHARED[MXC_NODE_CAPACITY];
 
 static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
-  MXC_NODE_CONTEXT_HOT[handle].active = true;
-  MXC_NODE_CONTEXT_HOT[handle].type = MXC_NODE_TYPE_THREAD;
-  MXC_NODE_CONTEXT_HOT[handle].lastTimelineSignal = 0;
-  MXC_NODE_CONTEXT_HOT[handle].lastTimelineSwap = 0;
-  MXC_NODE_CONTEXT_HOT[handle].pendingTimelineSignal = 0;
-  MXC_NODE_CONTEXT_HOT[handle].currentTimelineSignal = 0;
-  MXC_NODE_CONTEXT_HOT[handle].radius = 0.5;
-  MXC_NODE_CONTEXT_HOT[handle].nodeTimeline = MXC_NODE_CONTEXT[handle].nodeTimeline;
-  MXC_NODE_CONTEXT_HOT[handle].transform.rotation = QuatFromEuler(MXC_NODE_CONTEXT_HOT[handle].transform.euler);
-  memcpy((void*)&MXC_NODE_CONTEXT_HOT[handle].globalSetState, (void*)&context.globalSetState, sizeof(VkmGlobalSetState));
+  MXC_NODE_SHARED[handle].active = true;
+  MXC_NODE_SHARED[handle].type = MXC_NODE_TYPE_THREAD;
+  MXC_NODE_SHARED[handle].lastTimelineSignal = 0;
+  MXC_NODE_SHARED[handle].lastTimelineSwap = 0;
+  MXC_NODE_SHARED[handle].pendingTimelineSignal = 0;
+  MXC_NODE_SHARED[handle].currentTimelineSignal = 0;
+  MXC_NODE_SHARED[handle].radius = 0.5;
+  MXC_NODE_SHARED[handle].nodeTimeline = MXC_NODE[handle].nodeTimeline;
+  MXC_NODE_SHARED[handle].transform.rotation = QuatFromEuler(MXC_NODE_SHARED[handle].transform.euler);
+  memcpy((void*)&MXC_NODE_SHARED[handle].globalSetState, (void*)&context.globalSetState, sizeof(VkmGlobalSetState));
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    MXC_NODE_CONTEXT_HOT[handle].framebufferColorImageViews[i] = MXC_NODE_CONTEXT[handle].framebuffers[i].color.imageView;
-    MXC_NODE_CONTEXT_HOT[handle].framebufferColorImages[i] = MXC_NODE_CONTEXT[handle].framebuffers[i].color.image;
+    MXC_NODE_SHARED[handle].framebufferColorImageViews[i] = MXC_NODE[handle].framebuffers[i].color.imageView;
+    MXC_NODE_SHARED[handle].framebufferColorImages[i] = MXC_NODE[handle].framebuffers[i].color.image;
   }
 }
 

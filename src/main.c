@@ -75,6 +75,9 @@ int main(void) {
   };
   vkmCreateContext(&contextCreateInfo);
 
+  VkDevice device = context.device;
+  VKM_DEVICE_FUNC(CmdPipelineBarrier2);
+  VKM_INSTANCE_FUNC(vkCmdPipelineBarrier2KHR);
 
   // these probably should go elsewhere ?
   // global samplers
@@ -96,7 +99,7 @@ int main(void) {
 
   mxc_node_handle testNodeHandle = 0;
   MxcTestNode    testNode;
-  MxcNodeContext* pTestNodeContext = &MXC_NODE_CONTEXT[testNodeHandle];
+  MxcNodeContext* pTestNodeContext = &MXC_NODE[testNodeHandle];
   *pTestNodeContext = (MxcNodeContext) {
       .nodeType = MXC_NODE_TYPE_THREAD,
       .compCycleSkip = 8,
@@ -122,9 +125,9 @@ int main(void) {
   };
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
   mxcCreateNodeContext(pTestNodeContext);
-  MXC_NODE_CONTEXT_HOT[0].cmd = testNode.cmd;
+  MXC_NODE_SHARED[0].cmd = testNode.cmd;
   mxcRegisterCompNodeThread(testNodeHandle);
-  MXC_NODE_HANDLE_COUNT = 1;
+  MXC_NODE_COUNT = 1;
 
 
   mxcRunCompNode(&basicComp);

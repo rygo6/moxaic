@@ -96,183 +96,145 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     pTestNode->standardPipeline = context.standardPipe.pipeline;
     pTestNode->queueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
   }
-
-  //  {
-  //    // should do this for all things repeatedly called...
-  //    VKM_DEVICE_FUNC(vkCmdBindPipeline);
-  //    pTestNode->vkCmdBindPipeline = vkCmdBindPipeline;
-  //  }
 }
 
-void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
+_Noreturn void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
-  struct {
-    MxcNodeType nodeType;
+  MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
 
-    VkCommandBuffer cmd;
+  MxcNodeType     nodeType = pNodeContext->nodeType;
+  mxc_node_handle handle = 0;
+  VkCommandBuffer cmd = pNode->cmd;
 
-    //    uint8_t framebufferIndex;
+  VkmGlobalSetState* pGlobalSetMapped = pNode->globalSet.pMapped;
+  VkDescriptorSet    globalSet = pNode->globalSet.set;
+  VkDescriptorSet    checkerMaterialSet = pNode->checkerMaterialSet;
+  VkDescriptorSet    sphereObjectSet = pNode->sphereObjectSet;
+  VkRenderPass       standardRenderPass = pNode->standardRenderPass;
+  VkPipelineLayout   standardPipelineLayout = pNode->standardPipelineLayout;
+  VkPipeline         standardPipeline = pNode->standardPipeline;
 
-    VkFramebuffer framebuffers[VKM_SWAP_COUNT];
-    VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
-
-    VkRenderPass     standardRenderPass;
-    VkPipelineLayout standardPipelineLayout;
-    VkPipeline       standardPipeline;
-
-    VkmGlobalSetState* pGlobalSetMapped;
-    VkDescriptorSet    globalSet;
-    VkDescriptorSet    checkerMaterialSet;
-    VkDescriptorSet    sphereObjectSet;
-
-    uint32_t     sphereIndexCount;
-    VkBuffer     sphereBuffer;
-    VkDeviceSize sphereIndexOffset;
-    VkDeviceSize sphereVertexOffset;
-
-    VkDevice device;
-
-    VkmTimeline compTimeline;
-    VkmTimeline nodeTimeline;
-
-    uint32_t queueIndex;
-    VkQueue  queue;
-
-    uint64_t compBaseCycleValue;
-    uint64_t compCyclesToSkip;
-
-    mxc_node_handle handle;
-  } hot;
-
-  {
-    MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
-    hot.handle = 0;
-    hot.nodeType = pNodeContext->nodeType;
-    hot.cmd = pNode->cmd;
-    hot.globalSet = pNode->globalSet.set;
-    hot.pGlobalSetMapped = pNode->globalSet.pMapped;
-    hot.checkerMaterialSet = pNode->checkerMaterialSet;
-    hot.sphereObjectSet = pNode->sphereObjectSet;
-    hot.standardRenderPass = pNode->standardRenderPass;
-    hot.standardPipelineLayout = pNode->standardPipelineLayout;
-    hot.standardPipeline = pNode->standardPipeline;
-    for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      hot.framebuffers[i] = pNode->framebuffers[i].framebuffer;
-      hot.frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
-    }
-    hot.sphereIndexCount = pNode->sphereMesh.indexCount;
-    //    hot.sphereIndexBuffer = pNode->sphereMesh.indexBuffer;
-    //    hot.sphereVertexBuffer = pNode->sphereMesh.vertexBuffer;
-    hot.sphereBuffer = pNode->sphereMesh.buffer;
-    hot.sphereIndexOffset = pNode->sphereMesh.indexOffset;
-    hot.sphereVertexOffset = pNode->sphereMesh.vertexOffset;
-    hot.device = pNode->device;
-    hot.device = pNode->device;
-    hot.queueIndex = pNode->queueIndex;
-    hot.queue = pNode->queue;
-    hot.compTimeline.semaphore = pNodeContext->compTimeline;
-    hot.compTimeline.value = 0;
-
-    hot.nodeTimeline.semaphore = pNodeContext->nodeTimeline;
-    hot.nodeTimeline.value = 0;
-
-    // set timeline value to start of next cycle
-    vkmTimelineSync(hot.device, &hot.compTimeline);
-    hot.compBaseCycleValue = hot.compTimeline.value - (hot.compTimeline.value % MXC_CYCLE_COUNT);
-
-    // wait on next cycle
-    hot.compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
-    vkmTimelineSync(hot.device, &hot.compTimeline);
-    hot.compTimeline.value = hot.compCyclesToSkip;
-
-    //    hot.framebufferIndex = 0;
-
-    MXC_NODE_CONTEXT_HOT[hot.handle].nodeSetState.model = pNode->sphereObjectState.model;
-
-    assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal), &MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal));
-    assert(__atomic_always_lock_free(sizeof(MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal), &MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal));
+  VkFramebuffer framebuffers[VKM_SWAP_COUNT];
+  VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
+  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
+    framebuffers[i] = pNode->framebuffers[i].framebuffer;
+    frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
   }
 
-  while (isRunning) {
+  uint32_t sphereIndexCount = pNode->sphereMesh.indexCount;
+  VkBuffer sphereBuffer = pNode->sphereMesh.buffer;
+  VkDeviceSize sphereIndexOffset = pNode->sphereMesh.indexOffset;
+  VkDeviceSize sphereVertexOffset = pNode->sphereMesh.vertexOffset;
 
-    // Wait for next render cycle
-    hot.compTimeline.value = hot.compBaseCycleValue + MXC_CYCLE_RENDER;
-    vkmTimelineWait(hot.device, &hot.compTimeline);
+  VkDevice device = pNode->device;
+  uint32_t queueIndex = pNode->queueIndex;
 
-    memcpy(hot.pGlobalSetMapped, (void*)&MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState, sizeof(VkmGlobalSetState));
-    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  VkmTimeline compTimeline = {.semaphore = pNodeContext->compTimeline};
+  VkmTimeline nodeTimeline = {.semaphore = pNodeContext->nodeTimeline};
+  uint64_t compBaseCycleValue;
+  uint64_t compCyclesToSkip;
 
-    const int           framebufferIndex = hot.nodeTimeline.value % VKM_SWAP_COUNT;
-    const VkFramebuffer framebuffer = hot.framebuffers[framebufferIndex];
-    const VkImage       framebufferColorImage = hot.frameBufferColorImages[framebufferIndex];
+  // set timeline value to start of next cycle
+  vkmTimelineSync(device, &compTimeline);
+  compBaseCycleValue = compTimeline.value - (compTimeline.value % MXC_CYCLE_COUNT);
 
-    vkResetCommandBuffer(hot.cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-    vkBeginCommandBuffer(hot.cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+  // wait on next cycle
+  compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
+  compTimeline.value = compCyclesToSkip;
 
-    const VkViewport viewport = {
-        .x = 0,
-        .y = 0,
-        .width = MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState.framebufferSize.x,
-        .height = MXC_NODE_CONTEXT_HOT[hot.handle].globalSetState.framebufferSize.y,
-        .minDepth = 0.0f,
-        .maxDepth = 1.0f,
-    };
-    vkCmdSetViewport(hot.cmd, 0, 1, &viewport);
-    const VkRect2D scissor = {
-        //        .offset = {
-        //            .x = 512,
-        //            .y = 512,
-        //        },
-        .extent = {
-            .width = DEFAULT_WIDTH,
-            .height = DEFAULT_HEIGHT,
-        },
-    };
-    vkCmdSetScissor(hot.cmd, 0, 1, &scissor);
+  assert(__atomic_always_lock_free(sizeof(MXC_NODE_SHARED[handle].pendingTimelineSignal), &MXC_NODE_SHARED[handle].pendingTimelineSignal));
+  assert(__atomic_always_lock_free(sizeof(MXC_NODE_SHARED[handle].currentTimelineSignal), &MXC_NODE_SHARED[handle].currentTimelineSignal));
 
-    switch (hot.nodeType) {
-      case MXC_NODE_TYPE_THREAD: break;
-      case MXC_NODE_TYPE_INTERPROCESS:
-        vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER_QUEUE_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage, VK_QUEUE_FAMILY_EXTERNAL, hot.queueIndex));
-        break;
-    }
+  VKM_DEVICE_FUNC(ResetCommandBuffer);
+  VKM_DEVICE_FUNC(BeginCommandBuffer);
+  VKM_DEVICE_FUNC(CmdSetViewport);
+  VKM_DEVICE_FUNC(CmdSetScissor);
+  VKM_DEVICE_FUNC(CmdBindPipeline);
+  VKM_DEVICE_FUNC(CmdBindDescriptorSets);
+  VKM_DEVICE_FUNC(CmdBindVertexBuffers);
+  VKM_DEVICE_FUNC(CmdBindIndexBuffer);
+  VKM_DEVICE_FUNC(CmdDrawIndexed);
+  VKM_DEVICE_FUNC(CmdEndRenderPass);
+  VKM_DEVICE_FUNC(EndCommandBuffer);
+  VKM_DEVICE_FUNC(CmdPipelineBarrier2);
 
+run_loop:
 
-    {  // this is really all that'd be user exposed....
-      vkmCmdBeginPass(hot.cmd, hot.standardRenderPass, (VkClearColorValue){0, 0, 0, 0}, framebuffer);
+  // Wait for next render cycle
+  compTimeline.value = compBaseCycleValue + MXC_CYCLE_RENDER;
+  vkmTimelineWait(device, &compTimeline);
 
-      vkCmdBindPipeline(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipeline);
-      vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &hot.globalSet, 0, NULL);
-      vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &hot.checkerMaterialSet, 0, NULL);
-      vkCmdBindDescriptorSets(hot.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hot.standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &hot.sphereObjectSet, 0, NULL);
+  memcpy(pGlobalSetMapped, (void*)&MXC_NODE_SHARED[handle].globalSetState, sizeof(VkmGlobalSetState));
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
 
-      vkCmdBindVertexBuffers(hot.cmd, 0, 1, (const VkBuffer[]){hot.sphereBuffer}, (const VkDeviceSize[]){hot.sphereVertexOffset});
-      vkCmdBindIndexBuffer(hot.cmd, hot.sphereBuffer, hot.sphereIndexOffset, VK_INDEX_TYPE_UINT16);
-      vkCmdDrawIndexed(hot.cmd, hot.sphereIndexCount, 1, 0, 0, 0);
+  ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+  BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
-      vkCmdEndRenderPass(hot.cmd);
-    }
+  const VkViewport viewport = {
+      .x = 0,
+      .y = 0,
+      .width = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x,
+      .height = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y,
+      .minDepth = 0.0f,
+      .maxDepth = 1.0f,
+  };
+  CmdSetViewport(cmd, 0, 1, &viewport);
+  const VkRect2D scissor = {
+      .offset = {
+          .x = 0,
+          .y = 0,
+      },
+      .extent = {
+          .width = viewport.width,
+          .height = viewport.height,
+      },
+  };
+  CmdSetScissor(cmd, 0, 1, &scissor);
 
-    switch (hot.nodeType) {
-      case MXC_NODE_TYPE_THREAD:
-        vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage));
-        break;
-      case MXC_NODE_TYPE_INTERPROCESS:
-        vkmCommandPipelineImageBarrier(hot.cmd, &VKM_IMAGE_BARRIER_QUEUE_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImage, hot.queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
-        break;
-    }
+  const int framebufferIndex = nodeTimeline.value % VKM_SWAP_COUNT;
 
-    vkEndCommandBuffer(hot.cmd);
-
-    hot.nodeTimeline.value++;
-    __atomic_thread_fence(__ATOMIC_RELEASE);
-    MXC_NODE_CONTEXT_HOT[hot.handle].pendingTimelineSignal = hot.nodeTimeline.value;
-
-
-    vkmTimelineWait(hot.device, &hot.nodeTimeline);
-    __atomic_thread_fence(__ATOMIC_RELEASE);
-    MXC_NODE_CONTEXT_HOT[hot.handle].currentTimelineSignal = hot.nodeTimeline.value;
-
-    hot.compBaseCycleValue += hot.compCyclesToSkip;
+  switch (nodeType) {
+    case MXC_NODE_TYPE_THREAD: break;
+    case MXC_NODE_TYPE_INTERPROCESS:
+      CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
+      break;
   }
+
+  {  // this is really all that'd be user exposed....
+    vkmCmdBeginPass(cmd, standardRenderPass, (VkClearColorValue){0, 0, 0, 0}, framebuffers[framebufferIndex]);
+
+    CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipeline);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
+
+    CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){sphereBuffer}, (const VkDeviceSize[]){sphereVertexOffset});
+    CmdBindIndexBuffer(cmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
+    CmdDrawIndexed(cmd, sphereIndexCount, 1, 0, 0, 0);
+
+    CmdEndRenderPass(cmd);
+  }
+
+  switch (nodeType) {
+    case MXC_NODE_TYPE_THREAD:
+      CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex]));
+      break;
+    case MXC_NODE_TYPE_INTERPROCESS:
+      CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
+      break;
+  }
+
+  EndCommandBuffer(cmd);
+
+  nodeTimeline.value++;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  MXC_NODE_SHARED[handle].pendingTimelineSignal = nodeTimeline.value;
+
+  vkmTimelineWait(device, &nodeTimeline);
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  MXC_NODE_SHARED[handle].currentTimelineSignal = nodeTimeline.value;
+
+  compBaseCycleValue += compCyclesToSkip;
+
+  goto run_loop;
 }
