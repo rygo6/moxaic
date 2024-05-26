@@ -16,9 +16,13 @@ typedef struct MxcCompNodeCreateInfo {
 typedef struct MxcBasicComp {
   VkCommandBuffer cmd;
 
-  VkRenderPass     standardRenderPass;
-  VkPipelineLayout standardPipelineLayout;
-  VkPipeline       standardPipeline;
+  VkRenderPass     stdRenderPass;
+  VkPipelineLayout stdPipeLayout;
+  VkPipeline       stdPipe;
+
+  VkDescriptorSetLayout nodeSetLayout;
+  VkPipelineLayout nodePipeLayout;
+  VkPipeline       nodePipe;
 
   VkDevice device;
 
@@ -26,11 +30,13 @@ typedef struct MxcBasicComp {
   VkDescriptorSet checkerMaterialSet;
   VkDescriptorSet sphereObjectSet;
 
+  VkDescriptorSet nodeSet;
+
   VkmMesh      quadMesh;
   VkmTransform sphereTransform;
 
-  VkmStandardObjectSetState  sphereObjectState;
-  VkmStandardObjectSetState* pSphereObjectSetMapped;
+  VkmStdObjectSetState       sphereObjectState;
+  VkmStdObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory             sphereObjectSetMemory;
   VkBuffer                   sphereObjectSetBuffer;
 

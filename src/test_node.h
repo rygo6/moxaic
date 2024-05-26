@@ -33,8 +33,8 @@ typedef struct MxcTestNode {
   VkmMesh      sphereMesh;
   VkmTransform sphereTransform;
 
-  VkmStandardObjectSetState  sphereObjectState;
-  VkmStandardObjectSetState* pSphereObjectSetMapped;
+  VkmStdObjectSetState       sphereObjectState;
+  VkmStdObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory             sphereObjectSetMemory;
   VkBuffer                   sphereObjectSetBuffer;
 

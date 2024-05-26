@@ -146,7 +146,7 @@ typedef struct VkmGlobalSetState {
 
 typedef struct VkmStandardObjectSetState {
   mat4 model;
-} VkmStandardObjectSetState;
+} VkmStdObjectSetState;
 
 typedef enum VkmQueueFamilyType {
   VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
@@ -169,7 +169,7 @@ typedef struct VkmQueue {
   VkQueue      queue;
 } VkmQueue;
 
-typedef struct VkmStandardPipeline {
+typedef struct VkmStdPipeline {
   VkPipelineLayout pipelineLayout;
   VkPipeline       pipeline;
 
@@ -177,7 +177,7 @@ typedef struct VkmStandardPipeline {
   VkDescriptorSetLayout materialSetLayout;
   VkDescriptorSetLayout objectSetLayout;
 
-} VkmStandardPipe;
+} VkmStdPipe;
 
 typedef struct VkmGlobalSet {
   VkmGlobalSetState* pMapped;
@@ -195,18 +195,14 @@ typedef struct VkmContext {
   VkDescriptorPool descriptorPool;
   VkQueryPool      timeQueryPool;
 
-  // yua we prolly want to move this into some comp struct
+  // ya we prolly want to move this into some comp struct
   VkmTransform      globalCameraTransform;
   VkmGlobalSetState globalSetState;
   VkmGlobalSet      globalSet;
-  //  VkmGlobalSetState* pGlobalSetMapped;
-  //  VkDeviceMemory     globalSetMemory;
-  //  VkBuffer           globalSetBuffer;
-  //  VkDescriptorSet    globalSet;
 
   // these probably should go elsewhere
-  VkRenderPass    standardRenderPass;
-  VkmStandardPipe standardPipe;
+  VkRenderPass    stdRenderPass;
+  VkmStdPipe      stdPipe;
   VkSampler       linearSampler;
 
 } VkmContext;
@@ -221,13 +217,13 @@ extern _Thread_local VkmContext context;
 // Render
 //----------------------------------------------------------------------------------
 
-enum VkmPassAttachmentStandardIndices {
+enum VkmPassAttachmentStdIndices {
   VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
   VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
   VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX,
   VKM_PASS_ATTACHMENT_STD_COUNT,
 };
-enum VkmPipeSetStandardIndices {
+enum VkmPipeSetStdIndices {
   VKM_PIPE_SET_STD_GLOBAL_INDEX,
   VKM_PIPE_SET_STD_MATERIAL_INDEX,
   VKM_PIPE_SET_STD_OBJECT_INDEX,
@@ -274,7 +270,7 @@ enum VkmPipeSetStandardIndices {
     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,            \
     .pBufferInfo = &(const VkDescriptorBufferInfo){                 \
         .buffer = objectSetBuffer,                                  \
-        .range = sizeof(VkmStandardObjectSetState),                 \
+        .range = sizeof(VkmStdObjectSetState),                 \
     },                                                              \
   }
 
@@ -555,10 +551,10 @@ VKM_INLINE void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobal
   pState->inverseViewProjection = Mat4Mul(pState->inverseView, pState->inverseViewProjection);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-VKM_INLINE void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStandardObjectSetState* pState, VkmStandardObjectSetState* pSphereObjectSetMapped) {
+VKM_INLINE void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
   pTransform->rotation = QuatFromEuler(pTransform->euler);
   pState->model = Mat4FromTransform(pTransform->position, pTransform->rotation);
-  memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStandardObjectSetState));
+  memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStdObjectSetState));
 }
 VKM_INLINE bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
@@ -586,7 +582,7 @@ VKM_INLINE void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, 
   vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
 }
 
-void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+void vkmCreateStdFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
@@ -596,11 +592,12 @@ void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags
 void VkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
 void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
-void vkmCreateStandardPipeline(VkmStandardPipe* pStandardPipeline);
+void vkmCreateStdPipeline(VkmStdPipe* pStdPipeline);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 
 typedef struct VkmInitializeDesc {
+  // should use this... ? but need to decide on this vs vulkan configurator
   const char* applicationName;
   uint32_t    applicationVersion;
 
@@ -657,5 +654,5 @@ typedef struct VkmSamplerDesc {
 #define VKM_SAMPLER_LINEAR_CLAMP_DESC \
   (const VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler);
-void VkmCreateStandardRenderPass();
+void VkmCreateStdRenderPass();
 void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap);

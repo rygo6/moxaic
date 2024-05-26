@@ -75,16 +75,13 @@ int main(void) {
   };
   vkmCreateContext(&contextCreateInfo);
 
-  VkDevice device = context.device;
-  VKM_DEVICE_FUNC(CmdPipelineBarrier2);
-  VKM_INSTANCE_FUNC(vkCmdPipelineBarrier2KHR);
 
   // these probably should go elsewhere ?
   // global samplers
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
   // standard/common rendering
-  VkmCreateStandardRenderPass(&context.standardRenderPass);
-  vkmCreateStandardPipeline(&context.standardPipe);
+  VkmCreateStdRenderPass(&context.stdRenderPass);
+  vkmCreateStdPipeline(&context.stdPipe);
   // global set
   vkmCreateGlobalSet(&context.globalSet);
   vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.globalSet.pMapped);

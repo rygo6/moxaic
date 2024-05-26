@@ -94,7 +94,7 @@ enum VkmPipeVertexAttributeStandardIndices {
   VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,
   VKM_PIPE_VERTEX_ATTRIBUTE_STD_COUNT,
 };
-static void CreateStandardPipelineLayout(VkmStandardPipe* pStandardPipeline) {
+static void CreateStandardPipelineLayout(VkmStdPipe* pStandardPipeline) {
   VkDescriptorSetLayout pSetLayouts[VKM_PIPE_SET_STD_INDEX_COUNT];
   pSetLayouts[VKM_PIPE_SET_STD_GLOBAL_INDEX] = pStandardPipeline->globalSetLayout;
   pSetLayouts[VKM_PIPE_SET_STD_MATERIAL_INDEX] = pStandardPipeline->materialSetLayout;
@@ -107,7 +107,7 @@ static void CreateStandardPipelineLayout(VkmStandardPipe* pStandardPipeline) {
   VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipelineLayout));
 }
 
-static void CreateStandardPipeline(VkmStandardPipe* pStandardPipeline) {
+static void CreateStandardPipeline(VkmStdPipe* pStandardPipeline) {
   const VkShaderModule vertShader = CreateShaderModule("./shaders/basic_material.vert.spv");
   const VkShaderModule fragShader = CreateShaderModule("./shaders/basic_material.frag.spv");
 
@@ -217,7 +217,7 @@ static void CreateStandardPipeline(VkmStandardPipe* pStandardPipeline) {
           },
       },
       .layout = pStandardPipeline->pipelineLayout,
-      .renderPass = context.standardRenderPass,
+      .renderPass = context.stdRenderPass,
   };
   VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, &pStandardPipeline->pipeline));
   vkDestroyShaderModule(context.device, fragShader, VKM_ALLOC);
@@ -228,7 +228,7 @@ static void CreateStandardPipeline(VkmStandardPipe* pStandardPipeline) {
 // Descriptors
 //----------------------------------------------------------------------------------
 
-static void CreateGlobalSetLayout(VkmStandardPipe* pStandardPipeline) {
+static void CreateGlobalSetLayout(VkmStdPipe* pStandardPipeline) {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
@@ -246,7 +246,7 @@ static void CreateGlobalSetLayout(VkmStandardPipe* pStandardPipeline) {
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->globalSetLayout));
 }
-static void CreateStandardMaterialSetLayout(VkmStandardPipe* pStandardPipeline) {
+static void CreateStandardMaterialSetLayout(VkmStdPipe* pStandardPipeline) {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
@@ -260,7 +260,7 @@ static void CreateStandardMaterialSetLayout(VkmStandardPipe* pStandardPipeline) 
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->materialSetLayout));
 }
-static void CreateStandardObjectSetLayout(VkmStandardPipe* pStandardPipeline) {
+static void CreateStandardObjectSetLayout(VkmStdPipe* pStandardPipeline) {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
@@ -526,7 +526,7 @@ static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 };
 
-void vkmCreateStandardFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
+void vkmCreateStdFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -938,7 +938,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
   }
 }
 
-void VkmCreateStandardRenderPass() {
+void VkmCreateStdRenderPass() {
 #define DEFAULT_ATTACHMENT_DESCRIPTION                \
   .samples = VK_SAMPLE_COUNT_1_BIT,                   \
   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
@@ -1004,7 +1004,7 @@ void VkmCreateStandardRenderPass() {
       //          },
       //      },
   };
-  VKM_REQUIRE(vkCreateRenderPass(context.device, &renderPassCreateInfo, VKM_ALLOC, &context.standardRenderPass));
+  VKM_REQUIRE(vkCreateRenderPass(context.device, &renderPassCreateInfo, VKM_ALLOC, &context.stdRenderPass));
 #undef DEFAULT_ATTACHMENT_DESCRIPTION
 }
 
@@ -1052,12 +1052,12 @@ void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap) {
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
 }
 
-void vkmCreateStandardPipeline(VkmStandardPipe* pStandardPipeline) {
-  CreateGlobalSetLayout(pStandardPipeline);
-  CreateStandardMaterialSetLayout(pStandardPipeline);
-  CreateStandardObjectSetLayout(pStandardPipeline);
-  CreateStandardPipelineLayout(pStandardPipeline);
-  CreateStandardPipeline(pStandardPipeline);
+void vkmCreateStdPipeline(VkmStdPipe* pStdPipeline) {
+  CreateGlobalSetLayout(pStdPipeline);
+  CreateStandardMaterialSetLayout(pStdPipeline);
+  CreateStandardObjectSetLayout(pStdPipeline);
+  CreateStandardPipelineLayout(pStdPipeline);
+  CreateStandardPipeline(pStdPipeline);
 }
 
 void vkmCreateTimeline(VkSemaphore* pSemaphore) {
@@ -1072,7 +1072,7 @@ void vkmCreateTimeline(VkSemaphore* pSemaphore) {
 }
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet) {
-  vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.globalSetLayout, &pSet->set);
+  vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.globalSetLayout, &pSet->set);
   vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
   //  vkmUpdateGlobalSet(&context.globalCameraTransform, &pSet->globalSetState, pSet->pGlobalSetMapped);

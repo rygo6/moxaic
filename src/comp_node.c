@@ -1,8 +1,15 @@
 #include "comp_node.h"
 
 #include <assert.h>
-#include <stdatomic.h>
 #include <vulkan/vk_enum_string_helper.h>
+
+#define SET_BINDING_NODE_GLOBAL 0
+#define SET_BINDING_NODE_NODE 1
+enum PipeSetNodeIndices {
+  PIPE_SET_GLOBAL_INDEX,
+  PIPE_SET_NODE_INDEX,
+  PIPE_SET_COUNT,
+};
 
 static void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
@@ -23,14 +30,42 @@ static void CreateQuadMesh(const float size, VkmMesh* pMesh) {
 
 void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp) {
   {  // Create
-    vkmCreateStandardFramebuffers(context.standardRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.materialSetLayout, &pComp->checkerMaterialSet);
+    vkmCreateStdFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
+
+    // node pipe
+    const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &(const VkDescriptorSetLayoutBinding){
+            .binding = SET_BINDING_NODE_NODE,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+        },
+    };
+    VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, &pComp->nodeSetLayout));
+
+    VkDescriptorSetLayout pSetLayouts[VKM_PIPE_SET_STD_INDEX_COUNT];
+    pSetLayouts[PIPE_SET_GLOBAL_INDEX] = context.stdPipe.globalSetLayout;
+    pSetLayouts[PIPE_SET_NODE_INDEX] = pComp->nodeSetLayout;
+    const VkPipelineLayoutCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = VKM_PIPE_SET_STD_INDEX_COUNT,
+        .pSetLayouts = pSetLayouts,
+    };
+    VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pComp->nodePipeLayout));
+
+    // sets
+    vkmAllocateDescriptorSet(context.descriptorPool, &pComp->nodeSetLayout, &pComp->nodeSet);
+    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->nodeSet, "NodeSet");
+
+    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.materialSetLayout, &pComp->checkerMaterialSet);
     VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->checkerMaterialSet, "CompCheckerMaterialSet");
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.standardPipe.objectSetLayout, &pComp->sphereObjectSet);
+    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.objectSetLayout, &pComp->sphereObjectSet);
     VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->sphereObjectSet, "CompSphereObjectSet");
-    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStandardObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->sphereObjectSetMemory, &pComp->sphereObjectSetBuffer, (void**)&pComp->pSphereObjectSetMapped);
+    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->sphereObjectSetMemory, &pComp->sphereObjectSetBuffer, (void**)&pComp->pSphereObjectSetMapped);
 
     vkmUpdateDescriptorSet(context.device, &VKM_SET_WRITE_STD_OBJECT_BUFFER(pComp->sphereObjectSet, pComp->sphereObjectSetBuffer));
 
@@ -76,9 +111,9 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
 
   {  // Copy needed state
     pComp->device = context.device;
-    pComp->standardRenderPass = context.standardRenderPass;
-    pComp->standardPipelineLayout = context.standardPipe.pipelineLayout;
-    pComp->standardPipeline = context.standardPipe.pipeline;
+    pComp->stdRenderPass = context.stdRenderPass;
+    pComp->stdPipeLayout = context.stdPipe.pipelineLayout;
+    pComp->stdPipe = context.stdPipe.pipeline;
     pComp->globalSet = context.globalSet.set;
   }
 }
@@ -87,9 +122,9 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
 void mxcRunCompNode(const MxcBasicComp* pNode) {
 
   VkCommandBuffer cmd = pNode->cmd;
-  VkRenderPass standardRenderPass = pNode->standardRenderPass;
-  VkPipelineLayout standardPipelineLayout = pNode->standardPipelineLayout;
-  VkPipeline standardPipeline = pNode->standardPipeline;
+  VkRenderPass standardRenderPass = pNode->stdRenderPass;
+  VkPipelineLayout standardPipelineLayout = pNode->stdPipeLayout;
+  VkPipeline standardPipeline = pNode->stdPipe;
   VkDescriptorSet globalSet = pNode->globalSet;
   VkDescriptorSet checkerMaterialSet = pNode->checkerMaterialSet;
   VkDescriptorSet sphereObjectSet = pNode->sphereObjectSet;
@@ -140,7 +175,7 @@ run_loop:
     vkmTimelineSignal(context.device, &compTimeline);
 
     for (int i = 0; i < MXC_NODE_COUNT; ++i) {
-      // only submit commands needs to be on main context
+      // only submit commands and input needs to be on main context
       {  // submit commands
         uint64_t value = MXC_NODE_SHARED[i].pendingTimelineSignal;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -150,6 +185,8 @@ run_loop:
         }
       }
 
+
+      // all below can go on other thread
       if (!MXC_NODE_SHARED[i].active || MXC_NODE_SHARED[i].currentTimelineSignal < 1)
         continue;
 
