@@ -92,13 +92,13 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   {  // Copy needed state
     pTestNode->device = context.device;
     pTestNode->standardRenderPass = context.stdRenderPass;
-    pTestNode->standardPipelineLayout = context.stdPipe.pipelineLayout;
-    pTestNode->standardPipeline = context.stdPipe.pipeline;
+    pTestNode->standardPipelineLayout = context.stdPipe.pipeLayout;
+    pTestNode->standardPipeline = context.stdPipe.pipe;
     pTestNode->queueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
   }
 }
 
-_Noreturn void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
+void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
 
@@ -121,8 +121,8 @@ _Noreturn void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
     frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
   }
 
-  uint32_t sphereIndexCount = pNode->sphereMesh.indexCount;
-  VkBuffer sphereBuffer = pNode->sphereMesh.buffer;
+  uint32_t     sphereIndexCount = pNode->sphereMesh.indexCount;
+  VkBuffer     sphereBuffer = pNode->sphereMesh.buffer;
   VkDeviceSize sphereIndexOffset = pNode->sphereMesh.indexOffset;
   VkDeviceSize sphereVertexOffset = pNode->sphereMesh.vertexOffset;
 
@@ -131,8 +131,8 @@ _Noreturn void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   VkmTimeline compTimeline = {.semaphore = pNodeContext->compTimeline};
   VkmTimeline nodeTimeline = {.semaphore = pNodeContext->nodeTimeline};
-  uint64_t compBaseCycleValue;
-  uint64_t compCyclesToSkip;
+  uint64_t    compBaseCycleValue;
+  uint64_t    compCyclesToSkip;
 
   // set timeline value to start of next cycle
   vkmTimelineSync(device, &compTimeline);
@@ -235,6 +235,8 @@ run_loop:
   MXC_NODE_SHARED[handle].currentTimelineSignal = nodeTimeline.value;
 
   compBaseCycleValue += compCyclesToSkip;
+
+  CHECK_RUNNING
 
   goto run_loop;
 }

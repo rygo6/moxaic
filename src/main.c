@@ -81,7 +81,7 @@ int main(void) {
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
   // standard/common rendering
   VkmCreateStdRenderPass(&context.stdRenderPass);
-  vkmCreateStdPipeline(&context.stdPipe);
+  vkmCreateStdPipe(&context.stdPipe);
   // global set
   vkmCreateGlobalSet(&context.globalSet);
   vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.globalSet.pMapped);
@@ -122,7 +122,8 @@ int main(void) {
   };
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
   mxcCreateNodeContext(pTestNodeContext);
-  MXC_NODE_SHARED[0].cmd = testNode.cmd;
+  MXC_NODE_SHARED[0] = (MxcNodeContextShared) {};
+  MXC_NODE_SHARED[0].cmd = testNode.cmd; // we should request node slot first
   mxcRegisterCompNodeThread(testNodeHandle);
   MXC_NODE_COUNT = 1;
 

@@ -77,22 +77,23 @@ typedef struct MxcNodeContext {
 } MxcNodeContext;
 
 typedef struct MxcNodeSetState {
-  mat4 view;
-  mat4 projection;
-  mat4 viewProjection;
-
-  mat4 inverseView;
-  mat4 inverseProjection;
-  mat4 inverseViewProjection;
-
-  ivec2 framebufferSize;
 
   mat4 model;
+
+  mat4 view;
+  mat4 proj;
+  mat4 viewProj;
+
+  mat4 invView;
+  mat4 invProj;
+  mat4 invViewProj;
+
+  ivec2 framebufferSize;
 
 } MxcNodeSetState;
 
 
-CACHE_ALIGN typedef struct MxcNodeContextHot {
+CACHE_ALIGN typedef struct MxcNodeContextShared {
   // shared
   volatile uint64_t pendingTimelineSignal;
   volatile uint64_t currentTimelineSignal;
@@ -134,10 +135,6 @@ extern MxcNodeContextShared MXC_NODE_SHARED[MXC_NODE_CAPACITY];
 static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
   MXC_NODE_SHARED[handle].active = true;
   MXC_NODE_SHARED[handle].type = MXC_NODE_TYPE_THREAD;
-  MXC_NODE_SHARED[handle].lastTimelineSignal = 0;
-  MXC_NODE_SHARED[handle].lastTimelineSwap = 0;
-  MXC_NODE_SHARED[handle].pendingTimelineSignal = 0;
-  MXC_NODE_SHARED[handle].currentTimelineSignal = 0;
   MXC_NODE_SHARED[handle].radius = 0.5;
   MXC_NODE_SHARED[handle].nodeTimeline = MXC_NODE[handle].nodeTimeline;
   MXC_NODE_SHARED[handle].transform.rotation = QuatFromEuler(MXC_NODE_SHARED[handle].transform.euler);

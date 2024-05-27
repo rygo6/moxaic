@@ -3,16 +3,19 @@
 #include <math.h>
 #include <stdint.h>
 
-// force inlining appears to produce same assembly for returning or by passing out pointer
-// https://godbolt.org/z/rzo8hEaaG
-// https://godbolt.org/z/149rjsPG3
-#define MATH_INLINE       __attribute__((always_inline)) static inline
-#define VEC_NIL           -1
-#define SHUFFLE(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
+#define VKM_PI 3.14159265358979323846f
 
-#define VKM_SIMD_TYPE(type, name, count) typedef type name##_simd __attribute__((vector_size(sizeof(type) * count)))
+#define MID_SIMD_TYPE(type, name, count) typedef type name##_simd __attribute__((vector_size(sizeof(type) * count)))
+MID_SIMD_TYPE(float, float2, 2);
+MID_SIMD_TYPE(uint32_t, int2, 2);
+MID_SIMD_TYPE(float, float3, 4);
+MID_SIMD_TYPE(uint32_t, int3, 4);
+MID_SIMD_TYPE(float, float4, 4);
+MID_SIMD_TYPE(uint32_t, int4, 4);
+MID_SIMD_TYPE(float, mat4, 16);
+#undef MID_SIMD_TYPE
 // should I rename simd to vec and get rid of vec_name?
-#define VKM_MATH_UNION(type, simd_type, name, align, count, vec_name, ...) \
+#define MID_MATH_UNION(type, simd_type, name, align, count, vec_name, ...) \
   typedef union __attribute((aligned(align))) name {                       \
     type vec_name[count];                                                  \
     struct {                                                               \
@@ -20,24 +23,18 @@
     };                                                                     \
     simd_type simd;                                                        \
   } name;
-VKM_SIMD_TYPE(float, float2, 2);
-VKM_SIMD_TYPE(uint32_t, int2, 2);
-VKM_SIMD_TYPE(float, float3, 4);
-VKM_SIMD_TYPE(uint32_t, int3, 4);
-VKM_SIMD_TYPE(float, float4, 4);
-VKM_SIMD_TYPE(uint32_t, int4, 4);
-VKM_SIMD_TYPE(float, mat4, 16);
-VKM_MATH_UNION(float, float2_simd, vec2, 8, 2, vec, x, y);
-VKM_MATH_UNION(uint32_t, int2_simd, ivec2, 16, 2, vec, x, y);
-VKM_MATH_UNION(float, float3_simd, vec3, 16, 3, vec, x, y, z);
-VKM_MATH_UNION(uint32_t, int3_simd, ivec3, 16, 3, vec, x, y, z);
-VKM_MATH_UNION(float, float4_simd, vec4, 16, 4, vec, x, y, z, w);
-VKM_MATH_UNION(uint32_t, int4_simd, ivec4, 16, 4, vec, x, y, z, w);
-VKM_MATH_UNION(float, float4_simd, mat4_row, 16, 4, row, r0, r1, r2, r3);
-VKM_MATH_UNION(mat4_row, mat4_simd, mat4, 16, 4, col, c0, c1, c2, c3);
+MID_MATH_UNION(float, float2_simd, vec2, 8, 2, vec, x, y);
+MID_MATH_UNION(uint32_t, int2_simd, ivec2, 16, 2, vec, x, y);
+MID_MATH_UNION(float, float3_simd, vec3, 16, 3, vec, x, y, z);
+MID_MATH_UNION(uint32_t, int3_simd, ivec3, 16, 3, vec, x, y, z);
+MID_MATH_UNION(float, float4_simd, vec4, 16, 4, vec, x, y, z, w);
+MID_MATH_UNION(uint32_t, int4_simd, ivec4, 16, 4, vec, x, y, z, w);
+MID_MATH_UNION(float, float4_simd, mat4_row, 16, 4, row, r0, r1, r2, r3);
+MID_MATH_UNION(mat4_row, mat4_simd, mat4, 16, 4, col, c0, c1, c2, c3);
+#undef MID_MATH_UNION
 typedef vec4 quat;
-#define VKM_PI 3.14159265358979323846f
 
+#define VEC_NIL -1
 enum VecElement {
   VEC_X,
   VEC_Y,
@@ -73,6 +70,12 @@ static const mat4 MAT4_IDENT = {
     .c2 = {0.0f, 0.0f, 1.0f, 0.0f},
     .c3 = {0.0f, 0.0f, 0.0f, 1.0f},
 };
+
+// force inlining appears to produce same assembly for returning or by passing out pointer
+// https://godbolt.org/z/rzo8hEaaG
+// https://godbolt.org/z/149rjsPG3
+#define MATH_INLINE       __attribute__((always_inline)) static inline
+#define SHUFFLE(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
 
 MATH_INLINE float Float4Sum(float4_simd float4) {
   // appears to make better SIMD assembly than a loop:
@@ -302,3 +305,6 @@ MATH_INLINE vec2 Vec2UVFromVec3NDC(const vec3 ndc) {
   out.simd = out.simd * 0.5f + 0.5f;
   return out;
 }
+
+#undef MATH_INLINE
+#undef SHUFFLE

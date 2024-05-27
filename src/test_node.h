@@ -33,10 +33,10 @@ typedef struct MxcTestNode {
   VkmMesh      sphereMesh;
   VkmTransform sphereTransform;
 
-  VkmStdObjectSetState       sphereObjectState;
+  VkmStdObjectSetState  sphereObjectState;
   VkmStdObjectSetState* pSphereObjectSetMapped;
-  VkDeviceMemory             sphereObjectSetMemory;
-  VkBuffer                   sphereObjectSetBuffer;
+  VkDeviceMemory        sphereObjectSetMemory;
+  VkBuffer              sphereObjectSetBuffer;
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
@@ -45,4 +45,4 @@ typedef struct MxcTestNode {
 } MxcTestNode;
 
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode);
-_Noreturn void mxcRunTestNode(const MxcNodeContext* pNodeContext);
+void mxcRunTestNode(const MxcNodeContext* pNodeContext);

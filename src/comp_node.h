@@ -21,24 +21,29 @@ typedef struct MxcBasicComp {
   VkPipeline       stdPipe;
 
   VkDescriptorSetLayout nodeSetLayout;
-  VkPipelineLayout nodePipeLayout;
-  VkPipeline       nodePipe;
+  VkPipelineLayout      nodePipeLayout;
+  VkPipeline            nodePipe;
 
   VkDevice device;
 
   VkDescriptorSet globalSet;
-  VkDescriptorSet checkerMaterialSet;
-  VkDescriptorSet sphereObjectSet;
+  //  VkDescriptorSet checkerMaterialSet;
+  //  VkDescriptorSet sphereObjectSet;
 
   VkDescriptorSet nodeSet;
 
-  VkmMesh      quadMesh;
-  VkmTransform sphereTransform;
+  //  VkmStdObjectSetState  nodeSetState;
+  MxcNodeSetState* pNodeSetMapped;
+  VkDeviceMemory   nodeSetMemory;
+  VkBuffer         nodeSetBuffer;
 
-  VkmStdObjectSetState       sphereObjectState;
-  VkmStdObjectSetState* pSphereObjectSetMapped;
-  VkDeviceMemory             sphereObjectSetMemory;
-  VkBuffer                   sphereObjectSetBuffer;
+  VkmMesh quadMesh;
+
+  //  VkmTransform sphereTransform;
+  //  VkmStdObjectSetState  sphereObjectState;
+  //  VkmStdObjectSetState* pSphereObjectSetMapped;
+  //  VkDeviceMemory        sphereObjectSetMemory;
+  //  VkBuffer              sphereObjectSetBuffer;
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
@@ -50,4 +55,4 @@ typedef struct MxcBasicComp {
 
 
 void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp);
-_Noreturn void mxcRunCompNode(const MxcBasicComp* pNode);
+void mxcRunCompNode(const MxcBasicComp* pNode);

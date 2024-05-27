@@ -16,11 +16,16 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_WIDTH  1024
 #define DEFAULT_HEIGHT 1024
 
-#define HOT __attribute__((hot))
+#define HOT   __attribute__((hot))
 #define LOCAL _Thread_local static
 
-extern bool isCompositor;
+extern bool          isCompositor;
 extern volatile bool isRunning;
+
+#define CHECK_RUNNING                      \
+  if (__builtin_expect(!(isRunning), 0)) { \
+    return;                                \
+  }
 
 typedef enum MxcCycle {
   MXC_CYCLE_INPUT,
@@ -28,7 +33,6 @@ typedef enum MxcCycle {
   MXC_CYCLE_RENDER,
   MXC_CYCLE_COUNT
 } MxcCycle;
-
 
 
 //typedef uint16_t arena_offset;

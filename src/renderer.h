@@ -133,15 +133,17 @@ typedef struct VkmNodeFramebuffer {
 } VkmNodeFramebuffer;
 
 typedef struct VkmGlobalSetState {
-  mat4 view;
-  mat4 projection;
-  mat4 viewProjection;
 
-  mat4 inverseView;
-  mat4 inverseProjection;
-  mat4 inverseViewProjection;
+  mat4 view;
+  mat4 proj;
+  mat4 viewProj;
+
+  mat4 invView;
+  mat4 invProj;
+  mat4 invViewProj;
 
   ivec2 framebufferSize;
+
 } VkmGlobalSetState;
 
 typedef struct VkmStandardObjectSetState {
@@ -169,9 +171,9 @@ typedef struct VkmQueue {
   VkQueue      queue;
 } VkmQueue;
 
-typedef struct VkmStdPipeline {
-  VkPipelineLayout pipelineLayout;
-  VkPipeline       pipeline;
+typedef struct VkmStdPipe {
+  VkPipelineLayout pipeLayout;
+  VkPipeline       pipe;
 
   VkDescriptorSetLayout globalSetLayout;
   VkDescriptorSetLayout materialSetLayout;
@@ -201,9 +203,9 @@ typedef struct VkmContext {
   VkmGlobalSet      globalSet;
 
   // these probably should go elsewhere
-  VkRenderPass    stdRenderPass;
-  VkmStdPipe      stdPipe;
-  VkSampler       linearSampler;
+  VkRenderPass stdRenderPass;
+  VkmStdPipe   stdPipe;
+  VkSampler    linearSampler;
 
 } VkmContext;
 
@@ -234,12 +236,12 @@ enum VkmPipeSetStdIndices {
 #define VKM_PASS_CLEAR_COLOR \
   (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
-#define VKM_SET_BINDING_STD_GLOBAL_BUFFER 0
+#define VKM_SET_BIND_STD_GLOBAL_BUFFER 0
 #define VKM_SET_WRITE_STD_GLOBAL_BUFFER(global_set, global_set_buffer) \
   (VkWriteDescriptorSet) {                                             \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                   \
     .dstSet = global_set,                                              \
-    .dstBinding = VKM_SET_BINDING_STD_GLOBAL_BUFFER,                   \
+    .dstBinding = VKM_SET_BIND_STD_GLOBAL_BUFFER,                   \
     .descriptorCount = 1,                                              \
     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,               \
     .pBufferInfo = &(const VkDescriptorBufferInfo){                    \
@@ -247,12 +249,12 @@ enum VkmPipeSetStdIndices {
         .range = sizeof(VkmGlobalSetState),                            \
     },                                                                 \
   }
-#define VKM_SET_BINDING_STD_MATERIAL_TEXTURE 0
+#define VKM_SET_BIND_STD_MATERIAL_TEXTURE 0
 #define VKM_SET_WRITE_STD_MATERIAL_IMAGE(materialSet, material_image_view) \
   (VkWriteDescriptorSet) {                                                 \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                       \
     .dstSet = materialSet,                                                 \
-    .dstBinding = VKM_SET_BINDING_STD_MATERIAL_TEXTURE,                    \
+    .dstBinding = VKM_SET_BIND_STD_MATERIAL_TEXTURE,                       \
     .descriptorCount = 1,                                                  \
     .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,           \
     .pImageInfo = &(const VkDescriptorImageInfo){                          \
@@ -260,17 +262,17 @@ enum VkmPipeSetStdIndices {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,           \
     },                                                                     \
   }
-#define VKM_SET_BINDING_STD_OBJECT_BUFFER 0
+#define VKM_SET_BIND_STD_OBJECT_BUFFER 0
 #define VKM_SET_WRITE_STD_OBJECT_BUFFER(objectSet, objectSetBuffer) \
   (VkWriteDescriptorSet) {                                          \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
     .dstSet = objectSet,                                            \
-    .dstBinding = VKM_SET_BINDING_STD_OBJECT_BUFFER,                \
+    .dstBinding = VKM_SET_BIND_STD_OBJECT_BUFFER,                \
     .descriptorCount = 1,                                           \
     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,            \
     .pBufferInfo = &(const VkDescriptorBufferInfo){                 \
         .buffer = objectSetBuffer,                                  \
-        .range = sizeof(VkmStdObjectSetState),                 \
+        .range = sizeof(VkmStdObjectSetState),                      \
     },                                                              \
   }
 
@@ -535,20 +537,20 @@ VKM_INLINE void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalSetS
   pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
   pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
-  vkmMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->projection);
+  vkmMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->proj);
   pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
-  pState->inverseProjection = Mat4Inv(&pState->projection);
-  pState->inverseView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
-  pState->view = Mat4Inv(&pState->inverseView);
-  pState->viewProjection = Mat4Mul(pState->projection, pState->view);
-  pState->inverseViewProjection = Mat4Mul(pState->inverseView, pState->inverseViewProjection);
+  pState->invProj = Mat4Inv(&pState->proj);
+  pState->invView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
+  pState->view = Mat4Inv(&pState->invView);
+  pState->viewProj = Mat4Mul(pState->proj, pState->view);
+  pState->invViewProj = Mat4Mul(pState->invView, pState->invViewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
 VKM_INLINE void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
-  pState->inverseView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
-  pState->view = Mat4Inv(&pState->inverseView);
-  pState->viewProjection = Mat4Mul(pState->projection, pState->view);
-  pState->inverseViewProjection = Mat4Mul(pState->inverseView, pState->inverseViewProjection);
+  pState->invView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
+  pState->view = Mat4Inv(&pState->invView);
+  pState->viewProj = Mat4Mul(pState->proj, pState->view);
+  pState->invViewProj = Mat4Mul(pState->invView, pState->invViewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
 VKM_INLINE void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
@@ -592,7 +594,8 @@ void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags
 void VkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
 void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
-void vkmCreateStdPipeline(VkmStdPipe* pStdPipeline);
+void vkmCreateStdVertexPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
+void vkmCreateStdPipe(VkmStdPipe* pStdPipe);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 

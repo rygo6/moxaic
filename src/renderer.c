@@ -94,7 +94,7 @@ enum VkmPipeVertexAttributeStandardIndices {
   VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,
   VKM_PIPE_VERTEX_ATTRIBUTE_STD_COUNT,
 };
-static void CreateStandardPipelineLayout(VkmStdPipe* pStandardPipeline) {
+static void CreateStdPipeLayout(VkmStdPipe* pStandardPipeline) {
   VkDescriptorSetLayout pSetLayouts[VKM_PIPE_SET_STD_INDEX_COUNT];
   pSetLayouts[VKM_PIPE_SET_STD_GLOBAL_INDEX] = pStandardPipeline->globalSetLayout;
   pSetLayouts[VKM_PIPE_SET_STD_MATERIAL_INDEX] = pStandardPipeline->materialSetLayout;
@@ -104,13 +104,12 @@ static void CreateStandardPipelineLayout(VkmStdPipe* pStandardPipeline) {
       .setLayoutCount = VKM_PIPE_SET_STD_INDEX_COUNT,
       .pSetLayouts = pSetLayouts,
   };
-  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipelineLayout));
+  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipeLayout));
 }
 
-static void CreateStandardPipeline(VkmStdPipe* pStandardPipeline) {
-  const VkShaderModule vertShader = CreateShaderModule("./shaders/basic_material.vert.spv");
-  const VkShaderModule fragShader = CreateShaderModule("./shaders/basic_material.frag.spv");
-
+void vkmCreateStdVertexPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
+  const VkShaderModule               vertShader = CreateShaderModule(vertShaderPath);
+  const VkShaderModule               fragShader = CreateShaderModule(fragShaderPath);
   const VkGraphicsPipelineCreateInfo pipelineInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &(VkPipelineRobustnessCreateInfoEXT){
@@ -216,10 +215,10 @@ static void CreateStandardPipeline(VkmStdPipe* pStandardPipeline) {
               VK_DYNAMIC_STATE_SCISSOR,
           },
       },
-      .layout = pStandardPipeline->pipelineLayout,
+      .layout = layout,
       .renderPass = context.stdRenderPass,
   };
-  VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, &pStandardPipeline->pipeline));
+  VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, pPipe));
   vkDestroyShaderModule(context.device, fragShader, VKM_ALLOC);
   vkDestroyShaderModule(context.device, vertShader, VKM_ALLOC);
 }
@@ -233,7 +232,7 @@ static void CreateGlobalSetLayout(VkmStdPipe* pStandardPipeline) {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
       .pBindings = &(const VkDescriptorSetLayoutBinding){
-          .binding = VKM_SET_BINDING_STD_GLOBAL_BUFFER,
+          .binding = VKM_SET_BIND_STD_GLOBAL_BUFFER,
           .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
           .descriptorCount = 1,
           .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
@@ -246,12 +245,12 @@ static void CreateGlobalSetLayout(VkmStdPipe* pStandardPipeline) {
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->globalSetLayout));
 }
-static void CreateStandardMaterialSetLayout(VkmStdPipe* pStandardPipeline) {
+static void CreateStdMaterialSetLayout(VkmStdPipe* pStandardPipeline) {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
       .pBindings = &(const VkDescriptorSetLayoutBinding){
-          .binding = VKM_SET_BINDING_STD_MATERIAL_TEXTURE,
+          .binding = VKM_SET_BIND_STD_MATERIAL_TEXTURE,
           .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
           .descriptorCount = 1,
           .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -260,12 +259,12 @@ static void CreateStandardMaterialSetLayout(VkmStdPipe* pStandardPipeline) {
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->materialSetLayout));
 }
-static void CreateStandardObjectSetLayout(VkmStdPipe* pStandardPipeline) {
+static void CreateStdObjectSetLayout(VkmStdPipe* pStandardPipeline) {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 1,
       .pBindings = &(const VkDescriptorSetLayoutBinding){
-          .binding = VKM_SET_BINDING_STD_OBJECT_BUFFER,
+          .binding = VKM_SET_BIND_STD_OBJECT_BUFFER,
           .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
           .descriptorCount = 1,
           .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
@@ -1052,12 +1051,12 @@ void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap) {
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
 }
 
-void vkmCreateStdPipeline(VkmStdPipe* pStdPipeline) {
-  CreateGlobalSetLayout(pStdPipeline);
-  CreateStandardMaterialSetLayout(pStdPipeline);
-  CreateStandardObjectSetLayout(pStdPipeline);
-  CreateStandardPipelineLayout(pStdPipeline);
-  CreateStandardPipeline(pStdPipeline);
+void vkmCreateStdPipe(VkmStdPipe* pStdPipe) {
+  CreateGlobalSetLayout(pStdPipe);
+  CreateStdMaterialSetLayout(pStdPipe);
+  CreateStdObjectSetLayout(pStdPipe);
+  CreateStdPipeLayout(pStdPipe);
+  vkmCreateStdVertexPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", pStdPipe->pipeLayout, &pStdPipe->pipe);
 }
 
 void vkmCreateTimeline(VkSemaphore* pSemaphore) {

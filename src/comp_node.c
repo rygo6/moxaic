@@ -3,13 +3,41 @@
 #include <assert.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-#define SET_BINDING_NODE_GLOBAL 0
-#define SET_BINDING_NODE_NODE 1
-enum PipeSetNodeIndices {
-  PIPE_SET_GLOBAL_INDEX,
-  PIPE_SET_NODE_INDEX,
-  PIPE_SET_COUNT,
+
+enum PipeSetBasicCompIndices {
+  PIPE_SET_BASIC_COMP_GLOBAL_INDEX,
+  PIPE_SET_BASIC_COMP_NODE_INDEX,
+  PIPE_SET_BASIC_COMP_COUNT,
 };
+enum SetBindBasicCompIndices {
+  SET_BIND_BASIC_COMP_BUFFER_INDEX,
+  SET_BIND_BASIC_COMP_COLOR_INDEX,
+  SET_BIND_BASIC_COMP_COUNT
+};
+#define SET_WRITE_COMP_NODE_BUFFER(node_set, node_buffer) \
+  (VkWriteDescriptorSet) {                                \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,      \
+    .dstSet = node_set,                                   \
+    .dstBinding = SET_BIND_BASIC_COMP_BUFFER_INDEX,       \
+    .descriptorCount = 1,                                 \
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,  \
+    .pBufferInfo = &(const VkDescriptorBufferInfo){       \
+        .buffer = node_buffer,                            \
+        .range = sizeof(MxcNodeSetState),                 \
+    },                                                    \
+  }
+#define SET_WRITE_COMP_NODE_COLOR(node_set, color_image_view)    \
+  (VkWriteDescriptorSet) {                                       \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
+    .dstSet = node_set,                                          \
+    .dstBinding = SET_BIND_BASIC_COMP_COLOR_INDEX,               \
+    .descriptorCount = 1,                                        \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+    .pImageInfo = &(const VkDescriptorImageInfo){                \
+        .imageView = color_image_view,                           \
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
+    },                                                           \
+  }
 
 static void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
@@ -33,44 +61,44 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
 
     vkmCreateStdFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
 
-    // node pipe
+    // node set
     const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = 1,
-        .pBindings = &(const VkDescriptorSetLayoutBinding){
-            .binding = SET_BINDING_NODE_NODE,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .descriptorCount = 1,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+        .bindingCount = SET_BIND_BASIC_COMP_COUNT,
+        .pBindings = (const VkDescriptorSetLayoutBinding[]){
+            [SET_BIND_BASIC_COMP_BUFFER_INDEX] = {
+                .binding = SET_BIND_BASIC_COMP_BUFFER_INDEX,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+            },
+            [SET_BIND_BASIC_COMP_COLOR_INDEX] = {
+                .binding = SET_BIND_BASIC_COMP_COLOR_INDEX,
+                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .descriptorCount = 1,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = (const VkSampler[]){context.linearSampler},
+            },
         },
     };
     VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, &pComp->nodeSetLayout));
-
-    VkDescriptorSetLayout pSetLayouts[VKM_PIPE_SET_STD_INDEX_COUNT];
-    pSetLayouts[PIPE_SET_GLOBAL_INDEX] = context.stdPipe.globalSetLayout;
-    pSetLayouts[PIPE_SET_NODE_INDEX] = pComp->nodeSetLayout;
-    const VkPipelineLayoutCreateInfo createInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = VKM_PIPE_SET_STD_INDEX_COUNT,
-        .pSetLayouts = pSetLayouts,
-    };
-    VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pComp->nodePipeLayout));
-
-    // sets
     vkmAllocateDescriptorSet(context.descriptorPool, &pComp->nodeSetLayout, &pComp->nodeSet);
     VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->nodeSet, "NodeSet");
+    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(MxcNodeSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->nodeSetMemory, &pComp->nodeSetBuffer, (void**)&pComp->pNodeSetMapped);
+    vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_NODE_BUFFER(pComp->nodeSet, pComp->nodeSetBuffer));
+    memcpy(&pComp->pNodeSetMapped->model, &MAT4_IDENT, sizeof(mat4));
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.materialSetLayout, &pComp->checkerMaterialSet);
-    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->checkerMaterialSet, "CompCheckerMaterialSet");
-
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.objectSetLayout, &pComp->sphereObjectSet);
-    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->sphereObjectSet, "CompSphereObjectSet");
-    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->sphereObjectSetMemory, &pComp->sphereObjectSetBuffer, (void**)&pComp->pSphereObjectSetMapped);
-
-    vkmUpdateDescriptorSet(context.device, &VKM_SET_WRITE_STD_OBJECT_BUFFER(pComp->sphereObjectSet, pComp->sphereObjectSetBuffer));
-
-    pComp->sphereTransform = (VkmTransform){.position = {0, 0, 0}};
-    vkmUpdateObjectSet(&pComp->sphereTransform, &pComp->sphereObjectState, pComp->pSphereObjectSetMapped);
+    // node pipe
+    const VkPipelineLayoutCreateInfo createInfo = {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = PIPE_SET_BASIC_COMP_COUNT,
+        .pSetLayouts = (const VkDescriptorSetLayout[]){
+            [PIPE_SET_BASIC_COMP_GLOBAL_INDEX] = context.stdPipe.globalSetLayout,
+            [PIPE_SET_BASIC_COMP_NODE_INDEX] = pComp->nodeSetLayout,
+        },
+    };
+    VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pComp->nodePipeLayout));
+    vkmCreateStdVertexPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
 
     CreateQuadMesh(0.5f, &pComp->quadMesh);
 
@@ -112,8 +140,8 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
   {  // Copy needed state
     pComp->device = context.device;
     pComp->stdRenderPass = context.stdRenderPass;
-    pComp->stdPipeLayout = context.stdPipe.pipelineLayout;
-    pComp->stdPipe = context.stdPipe.pipeline;
+    pComp->stdPipeLayout = context.stdPipe.pipeLayout;
+    pComp->stdPipe = context.stdPipe.pipe;
     pComp->globalSet = context.globalSet.set;
   }
 }
@@ -121,15 +149,19 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
 // this should run on a different thread...
 void mxcRunCompNode(const MxcBasicComp* pNode) {
 
-  VkCommandBuffer cmd = pNode->cmd;
-  VkRenderPass standardRenderPass = pNode->stdRenderPass;
-  VkPipelineLayout standardPipelineLayout = pNode->stdPipeLayout;
-  VkPipeline standardPipeline = pNode->stdPipe;
-  VkDescriptorSet globalSet = pNode->globalSet;
-  VkDescriptorSet checkerMaterialSet = pNode->checkerMaterialSet;
-  VkDescriptorSet sphereObjectSet = pNode->sphereObjectSet;
+  VkCommandBuffer  cmd = pNode->cmd;
+  VkRenderPass     stdRenderPass = pNode->stdRenderPass;
+  VkPipelineLayout stdPipelineLayout = pNode->stdPipeLayout;
+  VkPipeline       stdPipeline = pNode->stdPipe;
+  VkDescriptorSet  globalSet = pNode->globalSet;
+
+  MxcNodeSetState* pNodeSetMapped = pNode->pNodeSetMapped;
+  VkPipelineLayout nodePipeLayout = pNode->nodePipeLayout;
+  VkPipeline       nodePipe = pNode->nodePipe;
+  VkDescriptorSet  nodeSet = pNode->nodeSet;
+
   VkDevice device = pNode->device;
-  VkmSwap swap = pNode->swap;
+  VkmSwap  swap = pNode->swap;
 
   uint32_t     quadIndexCount = pNode->quadMesh.indexCount;
   VkBuffer     quadBuffer = pNode->quadMesh.buffer;
@@ -159,16 +191,16 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
 
 run_loop:
 
-  {  // Input Cycle
-    compTimeline.value = compBaseCycleValue + MXC_CYCLE_INPUT;
-    vkmTimelineWait(device, &compTimeline);
+{  // Input Cycle
+  compTimeline.value = compBaseCycleValue + MXC_CYCLE_INPUT;
+  vkmTimelineWait(device, &compTimeline);
 
-    vkmUpdateWindowInput();
+  vkmUpdateWindowInput();
 
-    if (vkmProcessInput(&context.globalCameraTransform)) {
-      vkmUpdateGlobalSetView(&context.globalCameraTransform, &context.globalSetState, context.globalSet.pMapped);  // move global to hot?
-    }
+  if (vkmProcessInput(&context.globalCameraTransform)) {
+    vkmUpdateGlobalSetView(&context.globalCameraTransform, &context.globalSetState, context.globalSet.pMapped);  // move global to hot?
   }
+}
 
   {  // Node cycle
     compTimeline.value = compBaseCycleValue + MXC_CYCLE_NODE;
@@ -202,25 +234,28 @@ run_loop:
             if (MXC_NODE_SHARED[i].type == MXC_NODE_TYPE_INTERPROCESS) {
               CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
             }
-            vkmUpdateDescriptorSet(device, &VKM_SET_WRITE_STD_MATERIAL_IMAGE(checkerMaterialSet, nodeFramebufferColorImageView));
+            vkmUpdateDescriptorSet(device, &SET_WRITE_COMP_NODE_COLOR(nodeSet, nodeFramebufferColorImageView));
           }
-          {  // update node state
+          {
             // move the global set state that was previously used to render into the node set state to use in comp
-            memcpy((void*)&MXC_NODE_SHARED[i].nodeSetState, (void*)&MXC_NODE_SHARED[i].globalSetState, sizeof(context.globalSetState));
-            // update model mat for node
+            memcpy(&MXC_NODE_SHARED[i].nodeSetState.view, (void*)&MXC_NODE_SHARED[i].globalSetState, sizeof(VkmGlobalSetState));
+            MXC_NODE_SHARED[i].transform.rotation = QuatFromEuler(MXC_NODE_SHARED[i].transform.euler);
             MXC_NODE_SHARED[i].nodeSetState.model = Mat4FromTransform(MXC_NODE_SHARED[i].transform.position, MXC_NODE_SHARED[i].transform.rotation);
+            memcpy(pNodeSetMapped, &MXC_NODE_SHARED[i].nodeSetState, sizeof(MxcNodeSetState));
 
             // calc framebuffersize
             const float radius = MXC_NODE_SHARED[i].radius;
             const vec4  ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .w = 1});
+//            const vec4  ulModel = Vec4MulMat4(context.globalSetState.view, (vec4){.x = -radius, .y = -radius, .w = 1});
             const vec4  ulWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, ulModel);
             const vec4  ulClip = Vec4MulMat4(context.globalSetState.view, ulWorld);
-            const vec3  ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.projection, ulClip));
+            const vec3  ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulClip));
             const vec2  ulUV = Vec2UVFromVec3NDC(ulNDC);
             const vec4  lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
+//            const vec4  lrModel = Vec4MulMat4(context.globalSetState.view, (vec4){.x = radius, .y = radius, .w = 1});
             const vec4  lrWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, lrModel);
             const vec4  lrClip = Vec4MulMat4(context.globalSetState.view, lrWorld);
-            const vec3  lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.projection, lrClip));
+            const vec3  lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrClip));
             const vec2  lrUV = Vec2UVFromVec3NDC(lrNDC);
             const vec2  diff = {.simd = lrUV.simd - ulUV.simd};
 
@@ -240,18 +275,17 @@ run_loop:
 
       framebufferIndex = !framebufferIndex;
       vkmCmdResetBegin(cmd);
-      vkmCmdBeginPass(cmd, standardRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
+      vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
 
       for (int i = 0; i < MXC_NODE_COUNT; ++i) {
         if (!MXC_NODE_SHARED[i].active || MXC_NODE_SHARED[i].currentTimelineSignal < 1)
           continue;
 
         // render quad
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipeline);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
         // move to array
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_BASIC_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_BASIC_COMP_NODE_INDEX, 1, &nodeSet, 0, NULL);
 
         vkCmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
         vkCmdBindIndexBuffer(cmd, quadBuffer, quadIndexOffset, VK_INDEX_TYPE_UINT16);
@@ -285,7 +319,7 @@ run_loop:
     }
   }
 
-  if (!isRunning) return;
+  CHECK_RUNNING;
 
   goto run_loop;
 }
