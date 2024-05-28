@@ -49,6 +49,19 @@ void CreateSphereMesh(const float radius, const int slicesCount, const int stack
   }
 }
 
+static INLINE float CalcViewport(const float ulUV, const float lrUV, const float framebufferSize, const float screenSize) {
+  if (framebufferSize > screenSize) {
+    if (ulUV < 0.0f && lrUV > 1.0f)
+      return 0.0f;
+    else if (lrUV < 1.0f)
+      return (1.0f - lrUV) * screenSize;
+    else
+      return -ulUV * screenSize;
+  } else {
+    return -ulUV * screenSize;
+  }
+}
+
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode) {
   {  // Create
     vkmCreateNodeFramebufferImport(context.stdRenderPass, VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
@@ -170,25 +183,18 @@ run_loop:
   ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
-  const bool xBigger = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x > DEFAULT_WIDTH;
-  const bool yBigger = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y > DEFAULT_HEIGHT;
   const VkViewport viewport = {
-      .x = xBigger ? 0 : -MXC_NODE_SHARED[handle].ulUV.x * DEFAULT_WIDTH,
-      .y = yBigger ? 0 : -MXC_NODE_SHARED[handle].ulUV.y * DEFAULT_HEIGHT,
+      .x = CalcViewport(MXC_NODE_SHARED[handle].ulUV.x, MXC_NODE_SHARED[handle].lrUV.x, MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x, DEFAULT_WIDTH),
+      .y = CalcViewport(MXC_NODE_SHARED[handle].ulUV.y, MXC_NODE_SHARED[handle].lrUV.y, MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y, DEFAULT_HEIGHT),
       .width = DEFAULT_WIDTH,
       .height = DEFAULT_HEIGHT,
-      .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
   CmdSetViewport(cmd, 0, 1, &viewport);
   const VkRect2D scissor = {
-      .offset = {
-          .x = 0,
-          .y = 0,
-      },
       .extent = {
-          .width = xBigger ? DEFAULT_WIDTH : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x,
-          .height = yBigger ? DEFAULT_HEIGHT : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y,
+          .width = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x > DEFAULT_WIDTH ? DEFAULT_WIDTH : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x,
+          .height = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y > DEFAULT_HEIGHT ? DEFAULT_HEIGHT : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y,
       },
   };
   CmdSetScissor(cmd, 0, 1, &scissor);

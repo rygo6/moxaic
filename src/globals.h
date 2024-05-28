@@ -16,8 +16,9 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_WIDTH  1024
 #define DEFAULT_HEIGHT 1024
 
-#define HOT   __attribute__((hot))
-#define LOCAL _Thread_local static
+#define HOT    __attribute__((hot))
+#define LOCAL  _Thread_local
+#define INLINE __attribute__((always_inline)) inline
 
 extern bool          isCompositor;
 extern volatile bool isRunning;
