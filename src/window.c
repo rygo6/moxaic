@@ -58,6 +58,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case 'S': input.moveBack = true; return 0;
         case 'D': input.moveRight = true; return 0;
         case 'A': input.moveLeft = true; return 0;
+        case 'Z': input.debugSwap = !input.debugSwap; return 0;
         default:  return 0;
       }
     case WM_KEYUP:

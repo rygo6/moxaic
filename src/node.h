@@ -100,6 +100,9 @@ CACHE_ALIGN typedef struct MxcNodeContextShared {
 
   volatile VkmGlobalSetState globalSetState;
 
+  volatile vec2 ulUV;
+  volatile vec2 lrUV;
+
   volatile float radius;
 
   // unshared

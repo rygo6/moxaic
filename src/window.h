@@ -15,6 +15,8 @@ typedef struct Input {
 
   double deltaTime;
 
+  bool debugSwap;
+
 } Input;
 
 extern Input input;

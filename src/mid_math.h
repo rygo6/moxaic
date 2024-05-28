@@ -300,8 +300,11 @@ MATH_INLINE vec4 Vec4MulMat4(const mat4 m, const vec4 v) {
 MATH_INLINE vec3 Vec4WDivide(const vec4 v) {
   return (vec3){.simd = v.simd / v.simd[VEC_W]};
 }
-MATH_INLINE vec2 Vec2UVFromVec3NDC(const vec3 ndc) {
-  vec2 out = {.x = ndc.x, .y = ndc.y};
+MATH_INLINE vec2 Vec2FromVec3(const vec3 ndc) {
+  return (vec2){.x = ndc.x, .y = ndc.y};
+}
+MATH_INLINE vec2 UVFromNDC(const vec3 ndc) {
+  vec2 out = Vec2FromVec3(ndc);
   out.simd = out.simd * 0.5f + 0.5f;
   return out;
 }

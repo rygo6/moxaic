@@ -99,7 +99,7 @@ int main(void) {
   MxcNodeContext* pTestNodeContext = &MXC_NODE[testNodeHandle];
   *pTestNodeContext = (MxcNodeContext) {
       .nodeType = MXC_NODE_TYPE_THREAD,
-      .compCycleSkip = 8,
+      .compCycleSkip = 16,
       .pNode = &testNode,
       .runFunc = mxcRunTestNode,
       .compTimeline = basicComp.timeline,

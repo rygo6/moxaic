@@ -9,6 +9,17 @@ enum PipeSetBasicCompIndices {
   PIPE_SET_BASIC_COMP_NODE_INDEX,
   PIPE_SET_BASIC_COMP_COUNT,
 };
+static void CreateNodePipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pNodePipeLayout) {
+  const VkPipelineLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = PIPE_SET_BASIC_COMP_COUNT,
+      .pSetLayouts = (const VkDescriptorSetLayout[]){
+          [PIPE_SET_BASIC_COMP_GLOBAL_INDEX] = context.stdPipe.globalSetLayout,
+          [PIPE_SET_BASIC_COMP_NODE_INDEX] = nodeSetLayout,
+      },
+  };
+  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pNodePipeLayout));
+}
 enum SetBindBasicCompIndices {
   SET_BIND_BASIC_COMP_BUFFER_INDEX,
   SET_BIND_BASIC_COMP_COLOR_INDEX,
@@ -38,6 +49,28 @@ enum SetBindBasicCompIndices {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
     },                                                           \
   }
+static void CreateNodeSetLayout(VkDescriptorSetLayout* pNodeLayout) {
+  const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = SET_BIND_BASIC_COMP_COUNT,
+      .pBindings = (const VkDescriptorSetLayoutBinding[]){
+          [SET_BIND_BASIC_COMP_BUFFER_INDEX] = {
+              .binding = SET_BIND_BASIC_COMP_BUFFER_INDEX,
+              .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+              .descriptorCount = 1,
+              .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+          },
+          [SET_BIND_BASIC_COMP_COLOR_INDEX] = {
+              .binding = SET_BIND_BASIC_COMP_COLOR_INDEX,
+              .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              .descriptorCount = 1,
+              .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+              .pImmutableSamplers = (const VkSampler[]){context.linearSampler},
+          },
+      },
+  };
+  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, pNodeLayout));
+}
 
 static void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
@@ -62,26 +95,10 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
     vkmCreateStdFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
 
     // node set
-    const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = SET_BIND_BASIC_COMP_COUNT,
-        .pBindings = (const VkDescriptorSetLayoutBinding[]){
-            [SET_BIND_BASIC_COMP_BUFFER_INDEX] = {
-                .binding = SET_BIND_BASIC_COMP_BUFFER_INDEX,
-                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
-            },
-            [SET_BIND_BASIC_COMP_COLOR_INDEX] = {
-                .binding = SET_BIND_BASIC_COMP_COLOR_INDEX,
-                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .descriptorCount = 1,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = (const VkSampler[]){context.linearSampler},
-            },
-        },
-    };
-    VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, &pComp->nodeSetLayout));
+    CreateNodeSetLayout(&pComp->nodeSetLayout);
+    CreateNodePipeLayout(pComp->nodeSetLayout, &pComp->nodePipeLayout);
+    vkmCreateStdVertexPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
+
     vkmAllocateDescriptorSet(context.descriptorPool, &pComp->nodeSetLayout, &pComp->nodeSet);
     VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->nodeSet, "NodeSet");
     vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(MxcNodeSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->nodeSetMemory, &pComp->nodeSetBuffer, (void**)&pComp->pNodeSetMapped);
@@ -245,24 +262,27 @@ run_loop:
 
             // calc framebuffersize
             const float radius = MXC_NODE_SHARED[i].radius;
-            const vec4  ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .w = 1});
-//            const vec4  ulModel = Vec4MulMat4(context.globalSetState.view, (vec4){.x = -radius, .y = -radius, .w = 1});
-            const vec4  ulWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, ulModel);
-            const vec4  ulClip = Vec4MulMat4(context.globalSetState.view, ulWorld);
-            const vec3  ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulClip));
-            const vec2  ulUV = Vec2UVFromVec3NDC(ulNDC);
-            const vec4  lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
-//            const vec4  lrModel = Vec4MulMat4(context.globalSetState.view, (vec4){.x = radius, .y = radius, .w = 1});
-            const vec4  lrWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, lrModel);
-            const vec4  lrClip = Vec4MulMat4(context.globalSetState.view, lrWorld);
-            const vec3  lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrClip));
-            const vec2  lrUV = Vec2UVFromVec3NDC(lrNDC);
-            const vec2  diff = {.simd = lrUV.simd - ulUV.simd};
+
+            const vec4 ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .w = 1});
+            const vec4 ulWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, ulModel);
+            const vec4 ulClip = Vec4MulMat4(context.globalSetState.view, ulWorld);
+            const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulClip));
+            const vec2 ulUV = UVFromNDC(ulNDC);
+
+            const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
+            const vec4 lrWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, lrModel);
+            const vec4 lrClip = Vec4MulMat4(context.globalSetState.view, lrWorld);
+            const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrClip));
+            const vec2 lrUV = UVFromNDC(lrNDC);
+
+            const vec2 diff = {.simd = lrUV.simd - ulUV.simd};
 
             __atomic_thread_fence(__ATOMIC_RELEASE);
             // write current global set state to node's global set state to use for next node render with new the framebuffer size
             MXC_NODE_SHARED[i].globalSetState = context.globalSetState;
             MXC_NODE_SHARED[i].globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
+            MXC_NODE_SHARED[i].ulUV = ulUV;
+            MXC_NODE_SHARED[i].lrUV = lrUV;
           }
         }
       }

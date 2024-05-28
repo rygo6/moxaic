@@ -1,6 +1,5 @@
 #include "test_node.h"
 #include <assert.h>
-#include <stdatomic.h>
 
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   VkmMeshCreateInfo info = {
@@ -72,7 +71,8 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     pTestNode->sphereTransform = pCreateInfo->transform;
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
-    CreateSphereMesh(0.5f, 32, 32, &pTestNode->sphereMesh);
+    CreateSphereMesh(0.5, 32, 32, &pTestNode->sphereMesh);
+    //    CreateQuadMesh(0.5, &pTestNode->sphereMesh);
 
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -170,11 +170,13 @@ run_loop:
   ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
+  const bool xBigger = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x > DEFAULT_WIDTH;
+  const bool yBigger = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y > DEFAULT_HEIGHT;
   const VkViewport viewport = {
-      .x = 0,
-      .y = 0,
-      .width = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x,
-      .height = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y,
+      .x = xBigger ? 0 : -MXC_NODE_SHARED[handle].ulUV.x * DEFAULT_WIDTH,
+      .y = yBigger ? 0 : -MXC_NODE_SHARED[handle].ulUV.y * DEFAULT_HEIGHT,
+      .width = DEFAULT_WIDTH,
+      .height = DEFAULT_HEIGHT,
       .minDepth = 0.0f,
       .maxDepth = 1.0f,
   };
@@ -185,8 +187,8 @@ run_loop:
           .y = 0,
       },
       .extent = {
-          .width = viewport.width,
-          .height = viewport.height,
+          .width = xBigger ? DEFAULT_WIDTH : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x,
+          .height = yBigger ? DEFAULT_HEIGHT : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y,
       },
   };
   CmdSetScissor(cmd, 0, 1, &scissor);
@@ -201,7 +203,7 @@ run_loop:
   }
 
   {  // this is really all that'd be user exposed....
-    vkmCmdBeginPass(cmd, standardRenderPass, (VkClearColorValue){0, 0, 0, 0}, framebuffers[framebufferIndex]);
+    vkmCmdBeginPass(cmd, standardRenderPass, (VkClearColorValue){0, 0, 0.1, 0}, framebuffers[framebufferIndex]);
 
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipeline);
     CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, standardPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);

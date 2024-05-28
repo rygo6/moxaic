@@ -10,21 +10,14 @@ layout(location = 2) in vec2 inUV;
 layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec2 outUV;
 
-mat4 getIdentityMatrix() {
-    return mat4(1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0);
-}
-
 void main() {
-    vec2 scale = nodeUBO.framebufferSize / 1024.0;
-
-    vec3 right = vec3(globalUBO.view[0][0], globalUBO.view[1][0], globalUBO.view[2][0]);
-    vec3 up = vec3(globalUBO.view[0][1], globalUBO.view[1][1], globalUBO.view[2][1]);
-    vec3 pos = right * inPosition.x * scale.x + up * inPosition.y * scale.y;
-
+    const vec3 right = normalize(vec3(globalUBO.view[0][0], globalUBO.view[1][0], globalUBO.view[2][0]));
+    const vec3 up = normalize(vec3(globalUBO.view[0][1], globalUBO.view[1][1], globalUBO.view[2][1]));
+    const vec3 pos = right * inPosition.x + up * inPosition.y;
     gl_Position = globalUBO.proj * globalUBO.view * nodeUBO.model * vec4(pos, 1);
+
     outNormal = inNormal;
+
+    const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), vec2(0), vec2(1));
     outUV = inUV * scale;
 }
