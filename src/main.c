@@ -41,7 +41,7 @@ int main(void) {
   VkSurfaceKHR surface;
   vkmCreateSurface(VKM_ALLOC, &surface);
 
-  VkmContextCreateInfo contextCreateInfo = {
+  const VkmContextCreateInfo contextCreateInfo = {
       .maxDescriptorCount = 30,
       .uniformDescriptorCount = 10,
       .combinedImageSamplerDescriptorCount = 10,

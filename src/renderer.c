@@ -449,6 +449,29 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkI
 }
 static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, const VkmLocality locality, VkDeviceMemory* pMemory, VkImage* pImage) {
   VKM_REQUIRE(vkCreateImage(context.device, pImageCreateInfo, VKM_ALLOC, pImage));
+
+  const VkImageMemoryRequirementsInfo2 imageMemoryRequirementsInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+      .image = *pImage,
+  };
+  VkMemoryDedicatedRequirements dedicatedRequirements = {
+    .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
+  };
+  VkMemoryRequirements2 memoryRequirements2 = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+      .pNext = &dedicatedRequirements,
+  };
+  vkGetImageMemoryRequirements2(context.device, &imageMemoryRequirementsInfo, &memoryRequirements2);
+  bool requiresDedicatedAllocation = dedicatedRequirements.requiresDedicatedAllocation;
+  bool prefersDedicatedAllocation = dedicatedRequirements.prefersDedicatedAllocation;
+  if (requiresDedicatedAllocation) {
+    printf("Dedicated allocation is required for this image.\n");
+  } else if (prefersDedicatedAllocation) {
+    printf("Dedicated allocation is preferred for this image.\n");
+  } else {
+    printf("Dedicated allocation is not necessary for this image.\n");
+  }
+
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, *pImage, &memRequirements);
   VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, pMemory);
@@ -467,6 +490,29 @@ typedef struct VkmTextureCreateInfo {
 } VkmTextureCreateInfo;
 void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture) {
   VKM_REQUIRE(vkCreateImage(context.device, &pTextureCreateInfo->imageCreateInfo, VKM_ALLOC, &pTexture->image));
+
+  const VkImageMemoryRequirementsInfo2 imageMemoryRequirementsInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
+      .image = pTexture->image,
+  };
+  VkMemoryDedicatedRequirements dedicatedRequirements = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
+  };
+  VkMemoryRequirements2 memoryRequirements2 = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
+      .pNext = &dedicatedRequirements,
+  };
+  vkGetImageMemoryRequirements2(context.device, &imageMemoryRequirementsInfo, &memoryRequirements2);
+  bool requiresDedicatedAllocation = dedicatedRequirements.requiresDedicatedAllocation;
+  bool prefersDedicatedAllocation = dedicatedRequirements.prefersDedicatedAllocation;
+  if (requiresDedicatedAllocation) {
+    printf("Dedicated allocation is required for this image.\n");
+  } else if (prefersDedicatedAllocation) {
+    printf("Dedicated allocation is preferred for this image.\n");
+  } else {
+    printf("Dedicated allocation is not necessary for this image.\n");
+  }
+
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, pTexture->image, &memRequirements);
   VkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pTextureCreateInfo->locality, &pTexture->imageMemory);
@@ -938,6 +984,11 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
 }
 
 void VkmCreateStdRenderPass() {
+
+  const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
+      .attachmentCount = 3,
+      .pAttachments = (const VkAttachmentDescription2[]){
 #define DEFAULT_ATTACHMENT_DESCRIPTION                \
   .samples = VK_SAMPLE_COUNT_1_BIT,                   \
   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
@@ -946,65 +997,53 @@ void VkmCreateStdRenderPass() {
   .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
   .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
   .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
-  const VkRenderPassCreateInfo renderPassCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-      .attachmentCount = 3,
-      .pAttachments = (const VkAttachmentDescription[]){
-          //          {
-          //              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
-          //              .samples = VK_SAMPLE_COUNT_1_BIT,
-          //              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-          //              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-          //              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-          //              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-          //              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-          //              .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-          //          },
-          {.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX], DEFAULT_ATTACHMENT_DESCRIPTION},
-          {.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX], DEFAULT_ATTACHMENT_DESCRIPTION},
-          {.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX], DEFAULT_ATTACHMENT_DESCRIPTION},
-      },
-      .subpassCount = 1,
-      .pSubpasses = &(const VkSubpassDescription){
-          .colorAttachmentCount = 2,
-          .pColorAttachments = (const VkAttachmentReference[]){
-              {
-                  .attachment = VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
-                  .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-              },
-              {
-                  .attachment = VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
-                  .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-              },
+          {
+              .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
+              DEFAULT_ATTACHMENT_DESCRIPTION,
           },
-          .pDepthStencilAttachment = &(const VkAttachmentReference){
-              .attachment = VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX,
-              .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+          {
+              .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+              DEFAULT_ATTACHMENT_DESCRIPTION,
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+              DEFAULT_ATTACHMENT_DESCRIPTION,
           },
       },
-      //      .pDependencies = (const VkSubpassDependency[]){
-      //          {
-      //              .srcSubpass = VK_SUBPASS_EXTERNAL,
-      //              .dstSubpass = 0,
-      //              .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      //              .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      //              .srcAccessMask = VK_ACCESS_NONE_KHR,
-      //              .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      //              .dependencyFlags = 0,
-      //          },
-      //          {
-      //              .srcSubpass = 0,
-      //              .dstSubpass = VK_SUBPASS_EXTERNAL,
-      //              .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-      //              .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
-      //              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,
-      //              .dstAccessMask =  VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      //              .dependencyFlags = 0,
-      //          },
-      //      },
-  };
-  VKM_REQUIRE(vkCreateRenderPass(context.device, &renderPassCreateInfo, VKM_ALLOC, &context.stdRenderPass));
 #undef DEFAULT_ATTACHMENT_DESCRIPTION
+      .subpassCount = 1,
+      .pSubpasses = (const VkSubpassDescription2[]){
+          {
+              .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
+              .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+              .colorAttachmentCount = 2,
+              .pColorAttachments = (const VkAttachmentReference2[]){
+                  {
+                      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+                      .attachment = VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
+                      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  },
+                  {
+                      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+                      .attachment = VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
+                      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  },
+              },
+              .pDepthStencilAttachment = &(const VkAttachmentReference2){
+                  .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+                  .attachment = VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX,
+                  .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                  .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+              },
+          },
+      },
+  };
+  VKM_REQUIRE(vkCreateRenderPass2(context.device, &renderPassCreateInfo2, VKM_ALLOC, &context.stdRenderPass));
 }
 
 void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler) {

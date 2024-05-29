@@ -206,6 +206,8 @@ run_loop:
     case MXC_NODE_TYPE_INTERPROCESS:
       CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
       break;
+    default:
+      PANIC("nodeType not supported");
   }
 
   {  // this is really all that'd be user exposed....
@@ -230,6 +232,8 @@ run_loop:
     case MXC_NODE_TYPE_INTERPROCESS:
       CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
       break;
+    default:
+      PANIC("nodeType not supported");
   }
 
   EndCommandBuffer(cmd);
@@ -245,6 +249,5 @@ run_loop:
   compBaseCycleValue += compCyclesToSkip;
 
   CHECK_RUNNING
-
   goto run_loop;
 }

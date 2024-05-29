@@ -17,8 +17,6 @@ typedef struct MxcBasicComp {
   VkCommandBuffer cmd;
 
   VkRenderPass     stdRenderPass;
-  VkPipelineLayout stdPipeLayout;
-  VkPipeline       stdPipe;
 
   VkDescriptorSetLayout nodeSetLayout;
   VkPipelineLayout      nodePipeLayout;

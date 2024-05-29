@@ -157,8 +157,6 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
   {  // Copy needed state
     pComp->device = context.device;
     pComp->stdRenderPass = context.stdRenderPass;
-    pComp->stdPipeLayout = context.stdPipe.pipeLayout;
-    pComp->stdPipe = context.stdPipe.pipe;
     pComp->globalSet = context.globalSet.set;
   }
 }
@@ -168,8 +166,6 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
 
   VkCommandBuffer  cmd = pNode->cmd;
   VkRenderPass     stdRenderPass = pNode->stdRenderPass;
-  VkPipelineLayout stdPipelineLayout = pNode->stdPipeLayout;
-  VkPipeline       stdPipeline = pNode->stdPipe;
   VkDescriptorSet  globalSet = pNode->globalSet;
 
   MxcNodeSetState* pNodeSetMapped = pNode->pNodeSetMapped;
@@ -234,7 +230,6 @@ run_loop:
         }
       }
 
-
       // all below can go on other thread
       if (!MXC_NODE_SHARED[i].active || MXC_NODE_SHARED[i].currentTimelineSignal < 1)
         continue;
@@ -279,7 +274,7 @@ run_loop:
 
             __atomic_thread_fence(__ATOMIC_RELEASE);
             // write current global set state to node's global set state to use for next node render with new the framebuffer size
-            MXC_NODE_SHARED[i].globalSetState = context.globalSetState;
+            memcpy((void*)&MXC_NODE_SHARED[i].globalSetState, &context.globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
             MXC_NODE_SHARED[i].globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
             MXC_NODE_SHARED[i].ulUV = ulUV;
             MXC_NODE_SHARED[i].lrUV = lrUV;
@@ -288,7 +283,7 @@ run_loop:
       }
     }
 
-    // render could go on its own thread ? no it needs to wait for the node framebuffers to flip if needed
+    // render could go on its own thread ? no it needs to wait for the node framebuffers to flip if needed... yes it can but node framebuffer flip also needs to be on render thread, input and node submit can be on main
     {  // Render Cycle
       compTimeline.value = compBaseCycleValue + MXC_CYCLE_RENDER;
       vkmTimelineSignal(context.device, &compTimeline);
@@ -297,14 +292,13 @@ run_loop:
       vkmCmdResetBegin(cmd);
       vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
 
+      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_BASIC_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
+
       for (int i = 0; i < MXC_NODE_COUNT; ++i) {
         if (!MXC_NODE_SHARED[i].active || MXC_NODE_SHARED[i].currentTimelineSignal < 1)
           continue;
 
-        // render quad
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
-        // move to array
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_BASIC_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
         vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_BASIC_COMP_NODE_INDEX, 1, &nodeSet, 0, NULL);
 
         vkCmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
