@@ -107,9 +107,7 @@ static void CreateStdPipeLayout(VkmStdPipe* pStandardPipeline) {
   VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipeLayout));
 }
 
-void vkmCreateStdVertexPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
-  const VkShaderModule               vertShader = CreateShaderModule(vertShaderPath);
-  const VkShaderModule               fragShader = CreateShaderModule(fragShaderPath);
+void vkmCreateOpaqueVertexPipe(const uint32_t stageCount, const VkPipelineShaderStageCreateInfo* pStages, const VkPipelineLayout layout, VkPipeline* pPipe) {
   const VkGraphicsPipelineCreateInfo pipelineInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &(VkPipelineRobustnessCreateInfoEXT){
@@ -123,21 +121,8 @@ void vkmCreateStdVertexPipe(const char* vertShaderPath, const char* fragShaderPa
           .images = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_DEVICE_DEFAULT_EXT,
           //            .images = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_ROBUST_IMAGE_ACCESS_2_EXT,
       },
-      .stageCount = 2,
-      .pStages = (const VkPipelineShaderStageCreateInfo[]){
-          {
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-              .stage = VK_SHADER_STAGE_VERTEX_BIT,
-              .module = vertShader,
-              .pName = "main",
-          },
-          {
-              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-              .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-              .module = fragShader,
-              .pName = "main",
-          },
-      },
+      .stageCount = stageCount,
+      .pStages = pStages,
       .pVertexInputState = &(const VkPipelineVertexInputStateCreateInfo){
           .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
           .vertexBindingDescriptionCount = 1,
@@ -219,6 +204,26 @@ void vkmCreateStdVertexPipe(const char* vertShaderPath, const char* fragShaderPa
       .renderPass = context.stdRenderPass,
   };
   VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, pPipe));
+}
+
+void vkmCreateStdVertexPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
+  const VkShaderModule                  vertShader = CreateShaderModule(vertShaderPath);
+  const VkShaderModule                  fragShader = CreateShaderModule(fragShaderPath);
+  const VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfos[] = {
+      {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .stage = VK_SHADER_STAGE_VERTEX_BIT,
+          .module = vertShader,
+          .pName = "main",
+      },
+      {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+          .module = fragShader,
+          .pName = "main",
+      },
+  };
+  vkmCreateOpaqueVertexPipe(2, pipelineShaderStageCreateInfos, layout, pPipe);
   vkDestroyShaderModule(context.device, fragShader, VKM_ALLOC);
   vkDestroyShaderModule(context.device, vertShader, VKM_ALLOC);
 }
@@ -455,7 +460,7 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, cons
       .image = *pImage,
   };
   VkMemoryDedicatedRequirements dedicatedRequirements = {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
+      .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
   };
   VkMemoryRequirements2 memoryRequirements2 = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
