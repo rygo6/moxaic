@@ -18,6 +18,8 @@
 // Globals
 //----------------------------------------------------------------------------------
 
+#define VKM_DEBUG_WIREFRAME
+
 #define VKM_ALLOC      NULL
 #define VKM_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define VKM_SWAP_COUNT 2
@@ -594,7 +596,8 @@ void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags
 void VkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
 void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
-void vkmCreateStdVertexPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
+void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
+void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
 void vkmCreateStdPipe(VkmStdPipe* pStdPipe);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);

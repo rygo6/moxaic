@@ -86,6 +86,8 @@ file(GLOB SHADER_SOURCE_FILES
         shaders/*.mesh
         shaders/*.task
         shaders/*.comp
+        shaders/*.tese
+        shaders/*.tesc
 )
 file(GLOB SHADER_INCLUDE_FILES
         shaders/*.glsl

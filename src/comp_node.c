@@ -4,25 +4,11 @@
 #include <vulkan/vk_enum_string_helper.h>
 
 
-enum PipeSetBasicCompIndices {
-  PIPE_SET_BASIC_COMP_GLOBAL_INDEX,
-  PIPE_SET_BASIC_COMP_NODE_INDEX,
-  PIPE_SET_BASIC_COMP_COUNT,
-};
-static void CreateNodePipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pNodePipeLayout) {
-  const VkPipelineLayoutCreateInfo createInfo = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = PIPE_SET_BASIC_COMP_COUNT,
-      .pSetLayouts = (const VkDescriptorSetLayout[]){
-          [PIPE_SET_BASIC_COMP_GLOBAL_INDEX] = context.stdPipe.globalSetLayout,
-          [PIPE_SET_BASIC_COMP_NODE_INDEX] = nodeSetLayout,
-      },
-  };
-  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pNodePipeLayout));
-}
 enum SetBindBasicCompIndices {
   SET_BIND_BASIC_COMP_BUFFER_INDEX,
   SET_BIND_BASIC_COMP_COLOR_INDEX,
+  SET_BIND_BASIC_COMP_NORMAL_INDEX,
+  SET_BIND_BASIC_COMP_GBUFFER_INDEX,
   SET_BIND_BASIC_COMP_COUNT
 };
 #define SET_WRITE_COMP_NODE_BUFFER(node_set, node_buffer) \
@@ -49,6 +35,31 @@ enum SetBindBasicCompIndices {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
     },                                                           \
   }
+#define SET_WRITE_COMP_NODE_NORMAL(node_set, normal_image_view)  \
+  (VkWriteDescriptorSet) {                                       \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
+    .dstSet = node_set,                                          \
+    .dstBinding = SET_BIND_BASIC_COMP_NORMAL_INDEX,              \
+    .descriptorCount = 1,                                        \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+    .pImageInfo = &(const VkDescriptorImageInfo){                \
+        .imageView = normal_image_view,                          \
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
+    },                                                           \
+  }
+#define SET_WRITE_COMP_NODE_GBUFFER(node_set, gbuffer_image_view) \
+  (VkWriteDescriptorSet) {                                        \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
+    .dstSet = node_set,                                           \
+    .dstBinding = SET_BIND_BASIC_COMP_GBUFFER_INDEX,              \
+    .descriptorCount = 1,                                         \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,  \
+    .pImageInfo = &(const VkDescriptorImageInfo){                 \
+        .imageView = gbuffer_image_view,                          \
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,  \
+    },                                                            \
+  }
+#define SHADER_STAGE_VERT_TESC_TESE_FRAG VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
 static void CreateNodeSetLayout(VkDescriptorSetLayout* pNodeLayout) {
   const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -58,22 +69,68 @@ static void CreateNodeSetLayout(VkDescriptorSetLayout* pNodeLayout) {
               .binding = SET_BIND_BASIC_COMP_BUFFER_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
               .descriptorCount = 1,
-              .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
-          },
+              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG},
           [SET_BIND_BASIC_COMP_COLOR_INDEX] = {
               .binding = SET_BIND_BASIC_COMP_COLOR_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
               .descriptorCount = 1,
-              .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-              .pImmutableSamplers = (const VkSampler[]){context.linearSampler},
+              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG,
+              .pImmutableSamplers = &context.linearSampler,
+          },
+          [SET_BIND_BASIC_COMP_NORMAL_INDEX] = {
+              .binding = SET_BIND_BASIC_COMP_NORMAL_INDEX,
+              .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              .descriptorCount = 1,
+              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG,
+              .pImmutableSamplers = &context.linearSampler,
+          },
+          [SET_BIND_BASIC_COMP_GBUFFER_INDEX] = {
+              .binding = SET_BIND_BASIC_COMP_GBUFFER_INDEX,
+              .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              .descriptorCount = 1,
+              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG,
+              .pImmutableSamplers = &context.linearSampler,
           },
       },
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, pNodeLayout));
 }
 
+enum PipeSetBasicCompIndices {
+  PIPE_SET_BASIC_COMP_GLOBAL_INDEX,
+  PIPE_SET_BASIC_COMP_NODE_INDEX,
+  PIPE_SET_BASIC_COMP_COUNT,
+};
+static void CreateNodePipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pNodePipeLayout) {
+  const VkPipelineLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = PIPE_SET_BASIC_COMP_COUNT,
+      .pSetLayouts = (const VkDescriptorSetLayout[]){
+          [PIPE_SET_BASIC_COMP_GLOBAL_INDEX] = context.stdPipe.globalSetLayout,
+          [PIPE_SET_BASIC_COMP_NODE_INDEX] = nodeSetLayout,
+      },
+  };
+  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pNodePipeLayout));
+}
+
 static void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
+  const VkmVertex vertices[] = {
+      {.position = {-size, -size, 0}, .uv = {0, 0}},
+      {.position = {size, -size, 0}, .uv = {1, 0}},
+      {.position = {-size, size, 0}, .uv = {0, 1}},
+      {.position = {size, size, 0}, .uv = {1, 1}},
+  };
+  const VkmMeshCreateInfo info = {
+      .indexCount = 6,
+      .vertexCount = 4,
+      .pIndices = indices,
+      .pVertices = vertices,
+  };
+  VkmCreateMesh(&info, pMesh);
+}
+static void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
+  const uint16_t  indices[] = {0, 1, 3, 2};
   const VkmVertex vertices[] = {
       {.position = {-size, -size, 0}, .uv = {0, 0}},
       {.position = {size, -size, 0}, .uv = {1, 0}},
@@ -97,7 +154,8 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
     // node set
     CreateNodeSetLayout(&pComp->nodeSetLayout);
     CreateNodePipeLayout(pComp->nodeSetLayout, &pComp->nodePipeLayout);
-    vkmCreateStdVertexPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
+    //        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
+    vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
 
     vkmAllocateDescriptorSet(context.descriptorPool, &pComp->nodeSetLayout, &pComp->nodeSet);
     VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->nodeSet, "NodeSet");
@@ -105,19 +163,8 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
     vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_NODE_BUFFER(pComp->nodeSet, pComp->nodeSetBuffer));
     memcpy(&pComp->pNodeSetMapped->model, &MAT4_IDENT, sizeof(mat4));
 
-    // node pipe
-    const VkPipelineLayoutCreateInfo createInfo = {
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = PIPE_SET_BASIC_COMP_COUNT,
-        .pSetLayouts = (const VkDescriptorSetLayout[]){
-            [PIPE_SET_BASIC_COMP_GLOBAL_INDEX] = context.stdPipe.globalSetLayout,
-            [PIPE_SET_BASIC_COMP_NODE_INDEX] = pComp->nodeSetLayout,
-        },
-    };
-    VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pComp->nodePipeLayout));
-    vkmCreateStdVertexPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
-
-    CreateQuadMesh(0.5f, &pComp->quadMesh);
+//    CreateQuadMesh(0.5f, &pComp->quadMesh);
+    CreateQuadPatchMesh(0.5f, &pComp->quadMesh);
 
     VkBool32 presentSupport = VK_FALSE;
     VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pInfo->surface, &presentSupport));
@@ -164,9 +211,9 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
 // this should run on a different thread...
 void mxcRunCompNode(const MxcBasicComp* pNode) {
 
-  VkCommandBuffer  cmd = pNode->cmd;
-  VkRenderPass     stdRenderPass = pNode->stdRenderPass;
-  VkDescriptorSet  globalSet = pNode->globalSet;
+  VkCommandBuffer cmd = pNode->cmd;
+  VkRenderPass    stdRenderPass = pNode->stdRenderPass;
+  VkDescriptorSet globalSet = pNode->globalSet;
 
   MxcNodeSetState* pNodeSetMapped = pNode->pNodeSetMapped;
   VkPipelineLayout nodePipeLayout = pNode->nodePipeLayout;
@@ -240,13 +287,16 @@ run_loop:
         if (value > MXC_NODE_SHARED[i].lastTimelineSwap) {
           {  // update framebuffer for comp
             MXC_NODE_SHARED[i].lastTimelineSwap = value;
-            const int         nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
-            const VkImageView nodeFramebufferColorImageView = MXC_NODE_SHARED[i].framebufferColorImageViews[nodeFramebufferIndex];
-            const VkImage     nodeFramebufferColorImage = MXC_NODE_SHARED[i].framebufferColorImages[nodeFramebufferIndex];
+            const int nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
             if (MXC_NODE_SHARED[i].type == MXC_NODE_TYPE_INTERPROCESS) {
-              CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeFramebufferColorImage));
+              CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, MXC_NODE_SHARED[i].framebufferColorImages[nodeFramebufferIndex]));
             }
-            vkmUpdateDescriptorSet(device, &SET_WRITE_COMP_NODE_COLOR(nodeSet, nodeFramebufferColorImageView));
+            const VkWriteDescriptorSet writeSets[] = {
+                SET_WRITE_COMP_NODE_COLOR(nodeSet, MXC_NODE_SHARED[i].framebufferColorImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_NODE_NORMAL(nodeSet, MXC_NODE_SHARED[i].framebufferColorImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_NODE_GBUFFER(nodeSet, MXC_NODE_SHARED[i].framebufferColorImageViews[nodeFramebufferIndex]),
+            };
+            vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
           }
           {
             // move the global set state that was previously used to render into the node set state to use in comp

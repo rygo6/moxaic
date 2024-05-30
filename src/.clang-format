@@ -53,7 +53,7 @@ IndentGotoLabels: true
 BreakAfterAttributes: Leave
 UseCRLF: false
 AllowShortLoopsOnASingleLine: true
-AlignOperands:   true
+AlignOperands: true
 BreakBeforeTernaryOperators: false
 ColumnLimit: 0
 AlwaysBreakAfterDefinitionReturnType: None

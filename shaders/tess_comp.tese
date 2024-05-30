@@ -4,10 +4,6 @@
 #include "node_binding.glsl"
 #include "common_util.glsl"
 
-layout (set = 3, binding = 2) uniform sampler2D color;
-layout (set = 3, binding = 3) uniform sampler2D normal;
-layout (set = 3, binding = 4) uniform sampler2D depth;
-
 layout(quads, equal_spacing, cw) in;
 
 layout (location = 0) in vec3 inNormal[];
@@ -51,7 +47,8 @@ void main()
 //        globalUBO.proj * globalUBO.view * worldPos :
 //        globalUBO.proj * globalUBO.view * objectUBO.model * pos;
 
-    gl_Position = globalUBO.proj * globalUBO.view * worldPos;
+//    gl_Position = globalUBO.proj * globalUBO.view * worldPos;
+    gl_Position = globalUBO.proj * globalUBO.view * nodeUBO.model * pos;
 
     outWorldPos = worldPos;
 }

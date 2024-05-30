@@ -9,6 +9,11 @@
 // but it seems so much simpler if main thread is comp thread, or node process thread
 // truth is context loading is side effort... it should be occasional thread
 
+typedef enum MxcCompMode {
+  MXC_COMP_MODE_BASIC,
+  MXC_COMP_MODE_TESS,
+} MxcCompMode;
+
 typedef struct MxcCompNodeCreateInfo {
   VkSurfaceKHR surface;
 } MxcBasicCompCreateInfo;
