@@ -71,7 +71,7 @@ static void VkmEndImmediateCommandBuffer(VkCommandBuffer commandBuffer) {
 
 #define COLOR_WRITE_MASK_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
-static VkShaderModule CreateShaderModule(const char* pShaderPath) {
+VkShaderModule vkmCreateShaderModule(const char* pShaderPath) { // todo change to take pShaderModule
   size_t codeSize;
   char*  pCode;
   VkmReadFile(pShaderPath, &codeSize, &pCode);
@@ -196,8 +196,8 @@ static void CreateStdPipeLayout(VkmStdPipe* pStandardPipeline) {
   }
 
 void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
-  const VkShaderModule               vertShader = CreateShaderModule(vertShaderPath);
-  const VkShaderModule               fragShader = CreateShaderModule(fragShaderPath);
+  const VkShaderModule               vertShader = vkmCreateShaderModule(vertShaderPath);
+  const VkShaderModule               fragShader = vkmCreateShaderModule(fragShaderPath);
   const VkGraphicsPipelineCreateInfo pipelineInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -239,10 +239,10 @@ void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, 
 }
 
 void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
-  const VkShaderModule               vertShader = CreateShaderModule(vertShaderPath);
-  const VkShaderModule               tescShader = CreateShaderModule(tescShaderPath);
-  const VkShaderModule               teseShader = CreateShaderModule(teseShaderPath);
-  const VkShaderModule               fragShader = CreateShaderModule(fragShaderPath);
+  const VkShaderModule               vertShader = vkmCreateShaderModule(vertShaderPath);
+  const VkShaderModule               tescShader = vkmCreateShaderModule(tescShaderPath);
+  const VkShaderModule               teseShader = vkmCreateShaderModule(teseShaderPath);
+  const VkShaderModule               fragShader = vkmCreateShaderModule(fragShaderPath);
   const VkGraphicsPipelineCreateInfo pipelineInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -626,13 +626,13 @@ void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture) {
   CreateStagingBuffer(pImagePixels, imageBufferSize, VKM_LOCALITY_CONTEXT, &stagingBufferMemory, &stagingBuffer);
   stbi_image_free(pImagePixels);
   const VkCommandBuffer commandBuffer = VkmBeginImmediateCommandBuffer();
-  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_TRANSFER_DST_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
+  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_TRANSFER_DST_IMAGE_BARRIER, pTexture->image));
   const VkBufferImageCopy region = {
       .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
       .imageExtent = {width, height, 1},
   };
   vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_TRANSFER_READ_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, pTexture->image));
+  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_TRANSFER_READ_IMAGE_BARRIER, pTexture->image));
   VkmEndImmediateCommandBuffer(commandBuffer);
   vkFreeMemory(context.device, stagingBufferMemory, VKM_ALLOC);
   vkDestroyBuffer(context.device, stagingBuffer, VKM_ALLOC);
@@ -646,7 +646,7 @@ static const VkFormat VKM_PASS_STD_FORMATS[] = {
 static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
     [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
     [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 };
 
 void vkmCreateStdFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {

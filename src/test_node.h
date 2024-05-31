@@ -19,6 +19,10 @@ typedef struct MxcTestNode {
   VkPipelineLayout standardPipelineLayout;
   VkPipeline       standardPipeline;
 
+  VkDescriptorSetLayout nodeProcessSetLayout;
+  VkPipelineLayout      nodeProcessPipeLayout;
+  VkPipeline            nodeProcessPipe;
+
   VkDevice device;
 
   VkCommandBuffer cmd;

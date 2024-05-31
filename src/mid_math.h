@@ -240,6 +240,14 @@ MATH_INLINE mat4 Mat4FromTransform(const vec3 pos, const quat rot) {
   QuatToMat4(rot, &rotationMat4);
   return Mat4Mul(translationMat4, rotationMat4);
 }
+// should I do this?
+typedef struct mat4_proj_packed {
+  float c0r0;
+  float c1r1;
+  float c2r2;
+  float c2r3;
+  float c3r2;
+} mat4_proj_packed;
 // Perspective matrix in Vulkan Reverse Z
 MATH_INLINE void vkmMat4Perspective(const float fov, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
   const float tanHalfFovy = tan(fov / 2.0f);

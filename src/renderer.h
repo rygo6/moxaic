@@ -234,7 +234,7 @@ enum VkmPipeSetStdIndices {
   VKM_PIPE_SET_STD_INDEX_COUNT,
 };
 #define VKM_STD_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT;
-#define VKM_STD_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+#define VKM_STD_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 #define VKM_PASS_CLEAR_COLOR \
   (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
@@ -243,7 +243,7 @@ enum VkmPipeSetStdIndices {
   (VkWriteDescriptorSet) {                                             \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                   \
     .dstSet = global_set,                                              \
-    .dstBinding = VKM_SET_BIND_STD_GLOBAL_BUFFER,                   \
+    .dstBinding = VKM_SET_BIND_STD_GLOBAL_BUFFER,                      \
     .descriptorCount = 1,                                              \
     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,               \
     .pBufferInfo = &(const VkDescriptorBufferInfo){                    \
@@ -269,7 +269,7 @@ enum VkmPipeSetStdIndices {
   (VkWriteDescriptorSet) {                                          \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                \
     .dstSet = objectSet,                                            \
-    .dstBinding = VKM_SET_BIND_STD_OBJECT_BUFFER,                \
+    .dstBinding = VKM_SET_BIND_STD_OBJECT_BUFFER,                   \
     .descriptorCount = 1,                                           \
     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,            \
     .pBufferInfo = &(const VkDescriptorBufferInfo){                 \
@@ -360,6 +360,29 @@ static const VkmImageBarrier* VKM_COLOR_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
     .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
+static const VkmImageBarrier* VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+    .accessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+};
+#define VKM_COLOR_IMAGE_BARRIER(src, dst, barrier_image) \
+  (const VkImageMemoryBarrier2) {                        \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,   \
+    .srcStageMask = src->stageMask,                      \
+    .srcAccessMask = src->accessMask,                    \
+    .dstStageMask = dst->stageMask,                      \
+    .dstAccessMask = dst->accessMask,                    \
+    .oldLayout = src->layout,                            \
+    .newLayout = dst->layout,                            \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,      \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,      \
+    .image = barrier_image,                              \
+    .subresourceRange = (VkImageSubresourceRange){       \
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,         \
+        .levelCount = 1,                                 \
+        .layerCount = 1,                                 \
+    },                                                   \
+  }
 #define VKM_IMAGE_BARRIER(src, dst, aspect_mask, barrier_image) \
   (const VkImageMemoryBarrier2) {                               \
     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,          \
@@ -601,6 +624,9 @@ void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, c
 void vkmCreateStdPipe(VkmStdPipe* pStdPipe);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
+
+VkShaderModule vkmCreateShaderModule(const char* pShaderPath);
+
 
 typedef struct VkmInitializeDesc {
   // should use this... ? but need to decide on this vs vulkan configurator

@@ -98,12 +98,12 @@ CACHE_ALIGN typedef struct MxcNodeContextShared {
   volatile uint64_t pendingTimelineSignal;
   volatile uint64_t currentTimelineSignal;
 
-  volatile VkmGlobalSetState globalSetState;
-
   volatile vec2 ulUV;
   volatile vec2 lrUV;
 
   volatile float radius;
+
+  volatile VkmGlobalSetState globalSetState;
 
   // unshared
   uint64_t    lastTimelineSwap;

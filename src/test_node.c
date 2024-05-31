@@ -1,6 +1,90 @@
 #include "test_node.h"
 #include <assert.h>
 
+
+enum SetBindNodeProcessIndices {
+  SET_BIND_NODE_PROCESS_SRC_INDEX,
+  SET_BIND_NODE_PROCESS_DST_INDEX,
+  SET_BIND_NODE_PROCESS_COUNT
+};
+#define SET_WRITE_NODE_GBUFFER_SRC(dst_set, src_image_view)      \
+  (VkWriteDescriptorSet) {                                       \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
+    .dstSet = dst_set,                                           \
+    .dstBinding = SET_BIND_NODE_GBUFFER_SRC_INDEX,               \
+    .descriptorCount = 1,                                        \
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+    .pImageInfo = &(const VkDescriptorImageInfo){                \
+        .imageView = src_image_view,                             \
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
+    },                                                           \
+  }
+#define SET_WRITE_NODE_GBUFFER_DST(dst_set, dst_image_view) \
+  (VkWriteDescriptorSet) {                                  \
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,        \
+    .dstSet = dst_set,                                      \
+    .dstBinding = SET_BIND_NODE_GBUFFER_DST_INDEX,          \
+    .descriptorCount = 1,                                   \
+    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,     \
+    .pImageInfo = &(const VkDescriptorImageInfo){           \
+        .imageView = dst_image_view,                        \
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,             \
+    },                                                      \
+  }
+static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout) {
+  const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = SET_BIND_NODE_PROCESS_COUNT,
+      .pBindings = (const VkDescriptorSetLayoutBinding[]){
+          [SET_BIND_NODE_PROCESS_SRC_INDEX] = {
+              .binding = SET_BIND_NODE_PROCESS_SRC_INDEX,
+              .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+              .descriptorCount = 1,
+              .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+              .pImmutableSamplers = &context.linearSampler,
+          },
+          [SET_BIND_NODE_PROCESS_DST_INDEX] = {
+              .binding = SET_BIND_NODE_PROCESS_DST_INDEX,
+              .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+              .descriptorCount = 1,
+              .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+          },
+      },
+  };
+  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, pLayout));
+}
+
+enum PipeSetNodeProcessIndices {
+  PIPE_SET_NODE_PROCESS_INDEX,
+  PIPE_SET_NODE_PROCESS_COUNT,
+};
+static void CreateNodeProcessPipeLayout(const VkDescriptorSetLayout nodeProcessSetLayout, VkPipelineLayout* pPipeLayout) {
+  const VkPipelineLayoutCreateInfo createInfo = {
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = 1,
+      .pSetLayouts = (const VkDescriptorSetLayout[]){
+          [PIPE_SET_NODE_PROCESS_INDEX] = nodeProcessSetLayout,
+      },
+  };
+  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pPipeLayout));
+}
+
+void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
+  const VkShaderModule              shader = vkmCreateShaderModule(shaderPath);
+  const VkComputePipelineCreateInfo pipelineInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      .stage = {
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+          .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+          .module = shader,
+          .pName = "main",
+      },
+      .layout = layout,
+  };
+  VKM_REQUIRE(vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, pPipe));
+  vkDestroyShaderModule(context.device, shader, VKM_ALLOC);
+}
+
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   VkmMeshCreateInfo info = {
       .indexCount = slicesCount * stackCount * 2 * 3,
@@ -64,6 +148,11 @@ static INLINE float CalcViewport(const float ulUV, const float lrUV, const float
 
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode) {
   {  // Create
+    CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
+    CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
+    CreateNodeProcessPipe("./shaders/node_process_blitdown.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessPipe);
+
+
     vkmCreateNodeFramebufferImport(context.stdRenderPass, VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
 
     vkmCreateGlobalSet(&pTestNode->globalSet);
@@ -129,9 +218,15 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
+  VkImage       frameBufferNormalImages[VKM_SWAP_COUNT];
+  VkImage       frameBufferDepthImages[VKM_SWAP_COUNT];
+  VkImage       frameBufferGBufferImages[VKM_SWAP_COUNT];
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     framebuffers[i] = pNode->framebuffers[i].framebuffer;
     frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
+    frameBufferNormalImages[i] = pNode->framebuffers[i].normal.image;
+    frameBufferDepthImages[i] = pNode->framebuffers[i].depth.image;
+    frameBufferGBufferImages[i] = pNode->framebuffers[i].gBuffer.image;
   }
 
   uint32_t     sphereIndexCount = pNode->sphereMesh.indexCount;
@@ -202,7 +297,9 @@ run_loop:
   const int framebufferIndex = nodeTimeline.value % VKM_SWAP_COUNT;
 
   switch (nodeType) {
-    case MXC_NODE_TYPE_THREAD: break;
+    case MXC_NODE_TYPE_THREAD:
+      CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, frameBufferGBufferImages[framebufferIndex]));
+      break;
     case MXC_NODE_TYPE_INTERPROCESS:
       CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
       break;
@@ -225,9 +322,28 @@ run_loop:
     CmdEndRenderPass(cmd);
   }
 
+  {  // Blit Framebuffer
+    const VkImageMemoryBarrier2 blitBarrier[] = {
+        VKM_IMAGE_BARRIER(VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER, VKM_TRANSFER_SRC_IMAGE_BARRIER, VK_IMAGE_ASPECT_DEPTH_BIT, frameBufferDepthImages[framebufferIndex]),
+        VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_TRANSFER_DST_IMAGE_BARRIER, frameBufferGBufferImages[framebufferIndex]),
+    };
+    CmdPipelineImageBarriers(cmd, 2, blitBarrier);
+    vkmBlit(cmd, frameBufferDepthImages[framebufferIndex], frameBufferGBufferImages[framebufferIndex]);
+    //    const VkImageMemoryBarrier2 presentBarrier[] = {
+    //        //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, framebufferColorImage),
+    //        VKM_COLOR_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_PRESENT, swapImage),
+    //    };
+    //    CmdPipelineImageBarriers(cmd, 1, presentBarrier);
+  }
+
   switch (nodeType) {
     case MXC_NODE_TYPE_THREAD:
-      CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex]));
+      const VkImageMemoryBarrier2 barriers[] = {
+          VKM_COLOR_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferColorImages[framebufferIndex]),
+          VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferNormalImages[framebufferIndex]),
+          VKM_COLOR_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferGBufferImages[framebufferIndex]),
+      };
+      CmdPipelineImageBarriers(cmd, COUNT(barriers), barriers);
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
       CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
