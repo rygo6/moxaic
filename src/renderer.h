@@ -335,6 +335,16 @@ static const VkmImageBarrier* VKM_IMAGE_BARRIER_PRESENT = &(const VkmImageBarrie
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
+    .layout = VK_IMAGE_LAYOUT_GENERAL,
+};
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_WRITE = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+    .layout = VK_IMAGE_LAYOUT_GENERAL,
+};
 static const VkmImageBarrier* VKM_TRANSFER_SRC_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,

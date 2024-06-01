@@ -15,13 +15,14 @@ typedef struct MxcTestNodeCreateInfo {
 typedef struct MxcTestNode {
   VkCommandPool pool;
 
-  VkRenderPass     standardRenderPass;
-  VkPipelineLayout standardPipelineLayout;
-  VkPipeline       standardPipeline;
+  VkRenderPass     stdRenderPass;
+  VkPipelineLayout stdPipelineLayout;
+  VkPipeline       stdPipeline;
 
   VkDescriptorSetLayout nodeProcessSetLayout;
   VkPipelineLayout      nodeProcessPipeLayout;
   VkPipeline            nodeProcessPipe;
+  VkDescriptorSet       nodeProcessSet;
 
   VkDevice device;
 

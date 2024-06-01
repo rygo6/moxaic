@@ -92,36 +92,26 @@ typedef struct MxcNodeSetState {
 
 } MxcNodeSetState;
 
-
 CACHE_ALIGN typedef struct MxcNodeContextShared {
   // shared
-  volatile uint64_t pendingTimelineSignal;
-  volatile uint64_t currentTimelineSignal;
-
-  volatile vec2 ulUV;
-  volatile vec2 lrUV;
-
-  volatile float radius;
-
+  volatile uint64_t          pendingTimelineSignal;
+  volatile uint64_t          currentTimelineSignal;
+  volatile vec2              ulUV;
+  volatile vec2              lrUV;
+  volatile float             radius;
   volatile VkmGlobalSetState globalSetState;
 
   // unshared
-  uint64_t    lastTimelineSwap;
-  uint64_t    lastTimelineSignal;
-  VkSemaphore nodeTimeline;
-
-  bool        active;
-  MxcNodeType type;
-
-  VkmTransform transform;
-
-  // need to be some sync around node setting this and it getting read?
+  uint64_t        lastTimelineSwap;
+  uint64_t        lastTimelineSignal;
+  VkSemaphore     nodeTimeline;
+  MxcNodeType     type;
+  VkmTransform    transform;
   MxcNodeSetState nodeSetState;
-
   VkCommandBuffer cmd;
-
-  VkImageView framebufferColorImageViews[VKM_SWAP_COUNT];
-  VkImage     framebufferColorImages[VKM_SWAP_COUNT];
+  VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
+  VkImage         framebufferColorImages[VKM_SWAP_COUNT];
+  bool            active;
 } MxcNodeContextShared;
 
 //typedef struct MxcNodeContextShared {
