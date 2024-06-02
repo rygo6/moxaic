@@ -15,40 +15,27 @@ layout (location = 2) out vec4 outWorldPos;
 
 void main()
 {
-    outUV = mix(
+    const vec2 uv = mix(
         mix(inUV[0], inUV[1], gl_TessCoord.x),
         mix(inUV[3], inUV[2], gl_TessCoord.x),
         gl_TessCoord.y);
 
-    outNormal = mix(
-        mix(inNormal[0], inNormal[1], gl_TessCoord.x),
-        mix(inNormal[3], inNormal[2], gl_TessCoord.x),
-        gl_TessCoord.y);
+    const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), vec2(0), vec2(1));
+    const vec2 scaledUV = uv * scale;
+    const vec2 ndcUV = mix(nodeUBO.ulUV, nodeUBO.lrUV, uv);
+//    const vec2 ndcUV = mix(vec2(0,0), vec2(1,1), uv);
 
-    vec4 pos = mix(
-        mix(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_TessCoord.x),
-        mix(gl_in[3].gl_Position, gl_in[2].gl_Position, gl_TessCoord.x),
-        gl_TessCoord.y);
+    float alphaValue = texture(nodeColor, scaledUV).a;
+    float depthValue = texture(nodeGBuffer, scaledUV).r;
 
-    float alphaValue = texture(nodeColor, outUV).a;
-    float depthValue = texture(nodeGBuffer, outUV).r;
-
-    vec2 ndc = NDCFromUV(outUV);
+    vec2 ndc = NDCFromUV(ndcUV);
     vec4 clipPos = ClipPosFromNDC(ndc, depthValue);
-
-    // Convert clip space coordinates to eye space coordinates
-    vec4 eyePos = nodeUBO.invProj * clipPos;
-    // Divide by w component to obtain normalized device coordinates
-    vec3 ndcPos = eyePos.xyz / eyePos.w;
-    // Convert NDC coordinates to world space coordinates
-    vec4 worldPos = inverse(nodeUBO.view) * vec4(ndcPos, 1.0);
-
-//    gl_Position = alphaValue > 0 ?
-//        globalUBO.proj * globalUBO.view * worldPos :
-//        globalUBO.proj * globalUBO.view * objectUBO.model * pos;
-
-//    gl_Position = globalUBO.proj * globalUBO.view * worldPos;
-    gl_Position = globalUBO.proj * globalUBO.view * nodeUBO.model * pos;
-
-    outWorldPos = worldPos;
+    vec3 worldPos = WorldPosFromNodeClipPos(clipPos);
+    gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
+//    gl_Position = globalUBO.viewProj * pos;
+    outUV = scaledUV;
+    outNormal = mix(
+    mix(inNormal[0], inNormal[1], gl_TessCoord.x),
+    mix(inNormal[3], inNormal[2], gl_TessCoord.x),
+    gl_TessCoord.y);
 }

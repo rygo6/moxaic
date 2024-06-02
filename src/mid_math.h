@@ -24,7 +24,7 @@ MID_SIMD_TYPE(float, mat4, 16);
     simd_type simd;                                                        \
   } name;
 MID_MATH_UNION(float, float2_simd, vec2, 8, 2, vec, x, y);
-MID_MATH_UNION(uint32_t, int2_simd, ivec2, 16, 2, vec, x, y);
+MID_MATH_UNION(uint32_t, int2_simd, ivec2, 8, 2, vec, x, y);
 MID_MATH_UNION(float, float3_simd, vec3, 16, 3, vec, x, y, z);
 MID_MATH_UNION(uint32_t, int3_simd, ivec3, 16, 3, vec, x, y, z);
 MID_MATH_UNION(float, float4_simd, vec4, 16, 4, vec, x, y, z, w);
@@ -61,6 +61,10 @@ enum MatElement {
   MAT_C3_R3,
   MAT_COUNT,
 };
+#define _m00 .simd[MAT_C0_R0]
+#define _m01 .simd[MAT_C0_R1]
+#define _m02 .simd[MAT_C0_R2]
+#define _m03 .simd[MAT_C0_R3]
 static const vec4 VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
 static const quat QUAT_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -177,14 +181,14 @@ MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
                                     MAT_C2_R3, MAT_C2_R3, MAT_C2_R3, MAT_C2_R3,
                                     MAT_C3_R3, MAT_C3_R3, MAT_C3_R3, MAT_C3_R3)};
 }
-MATH_INLINE mat4 Mat4Inv(const mat4* pSrc) {
+MATH_INLINE mat4 Mat4Inv(const mat4 src) {
   // todo SIMDIZE
   float t[6];
   float det;
-  float a = pSrc->c0.r0, b = pSrc->c0.r1, c = pSrc->c0.r2, d = pSrc->c0.r3,
-        e = pSrc->c1.r0, f = pSrc->c1.r1, g = pSrc->c1.r2, h = pSrc->c1.r3,
-        i = pSrc->c2.r0, j = pSrc->c2.r1, k = pSrc->c2.r2, l = pSrc->c2.r3,
-        m = pSrc->c3.r0, n = pSrc->c3.r1, o = pSrc->c3.r2, p = pSrc->c3.r3;
+  float a = src.c0.r0, b = src.c0.r1, c = src.c0.r2, d = src.c0.r3,
+        e = src.c1.r0, f = src.c1.r1, g = src.c1.r2, h = src.c1.r3,
+        i = src.c2.r0, j = src.c2.r1, k = src.c2.r2, l = src.c2.r3,
+        m = src.c3.r0, n = src.c3.r1, o = src.c3.r2, p = src.c3.r3;
 
   t[0] = k * p - o * l;
   t[1] = j * p - n * l;
@@ -232,6 +236,8 @@ MATH_INLINE mat4 Mat4Inv(const mat4* pSrc) {
   det = 1.0f / (a * out.c0.r0 + b * out.c1.r0 + c * out.c2.r0 + d * out.c3.r0);
 
   out.simd *= det;
+
+  return out;
 }
 MATH_INLINE mat4 Mat4FromTransform(const vec3 pos, const quat rot) {
   mat4 translationMat4 = MAT4_IDENT;
@@ -315,6 +321,11 @@ MATH_INLINE vec2 UVFromNDC(const vec3 ndc) {
   vec2 out = Vec2FromVec3(ndc);
   out.simd = out.simd * 0.5f + 0.5f;
   return out;
+}
+MATH_INLINE ivec2 iVec2CeiDivide(const ivec2 v, int d) {
+  vec2 fv = {.simd = {v.simd[VEC_X], v.simd[VEC_Y]}};
+  fv.simd = fv.simd / (float)d;
+  return (ivec2){.simd = {ceilf(fv.simd[VEC_X]), ceilf(fv.simd[VEC_Y])}};
 }
 
 #undef MATH_INLINE

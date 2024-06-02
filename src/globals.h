@@ -11,6 +11,7 @@ extern void Panic(const char* file, int line, const char* message);
   }
 
 #define CACHE_ALIGN  __attribute((aligned(64)))
+#define ALIGN(size)  __attribute((aligned(size)))
 #define COUNT(array) sizeof(array) / sizeof(array[0])
 
 #define DEFAULT_WIDTH  1024

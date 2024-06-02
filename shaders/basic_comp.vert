@@ -11,7 +11,7 @@ void main() {
     const vec3 right = normalize(vec3(globalUBO.view[0][0], globalUBO.view[1][0], globalUBO.view[2][0]));
     const vec3 up = normalize(vec3(globalUBO.view[0][1], globalUBO.view[1][1], globalUBO.view[2][1]));
     const vec3 pos = right * inPos.x + up * inPos.y;
-    gl_Position = globalUBO.proj * globalUBO.view * nodeUBO.model * vec4(pos, 1);
+    gl_Position = globalUBO.viewProj * nodeUBO.model * vec4(pos, 1);
 
     outNormal = inNormal;
 

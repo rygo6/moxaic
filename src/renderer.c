@@ -3,14 +3,14 @@
 #include "stb_image.h"
 #include "window.h"
 
-#include <rpcndr.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-VkInstance                      instance = VK_NULL_HANDLE;
+_Thread_local VkInstance instance = VK_NULL_HANDLE;
+_Thread_local VkmContext context;
+
 static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
-_Thread_local VkmContext        context;
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -71,7 +71,7 @@ static void VkmEndImmediateCommandBuffer(VkCommandBuffer commandBuffer) {
 
 #define COLOR_WRITE_MASK_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
-VkShaderModule vkmCreateShaderModule(const char* pShaderPath) { // todo change to take pShaderModule
+VkShaderModule vkmCreateShaderModule(const char* pShaderPath) {  // todo change to take pShaderModule
   size_t codeSize;
   char*  pCode;
   VkmReadFile(pShaderPath, &codeSize, &pCode);

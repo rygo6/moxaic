@@ -88,7 +88,9 @@ typedef struct MxcNodeSetState {
   mat4 invProj;
   mat4 invViewProj;
 
-  ivec2 framebufferSize;
+  ALIGN(16) ivec2 framebufferSize;
+  ALIGN(8) vec2 ulUV;
+  ALIGN(8) vec2 lrUV;
 
 } MxcNodeSetState;
 
@@ -110,7 +112,11 @@ CACHE_ALIGN typedef struct MxcNodeContextShared {
   MxcNodeSetState nodeSetState;
   VkCommandBuffer cmd;
   VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
+  VkImageView     framebufferNormalImageViews[VKM_SWAP_COUNT];
+  VkImageView     framebufferGBufferImageViews[VKM_SWAP_COUNT];
   VkImage         framebufferColorImages[VKM_SWAP_COUNT];
+  VkImage         framebufferNormalImages[VKM_SWAP_COUNT];
+  VkImage         framebufferGBufferImages[VKM_SWAP_COUNT];
   bool            active;
 } MxcNodeContextShared;
 
@@ -134,7 +140,11 @@ static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
   memcpy((void*)&MXC_NODE_SHARED[handle].globalSetState, (void*)&context.globalSetState, sizeof(VkmGlobalSetState));
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     MXC_NODE_SHARED[handle].framebufferColorImageViews[i] = MXC_NODE[handle].framebuffers[i].color.imageView;
+    MXC_NODE_SHARED[handle].framebufferNormalImageViews[i] = MXC_NODE[handle].framebuffers[i].normal.imageView;
+    MXC_NODE_SHARED[handle].framebufferGBufferImageViews[i] = MXC_NODE[handle].framebuffers[i].gBuffer.imageView;
     MXC_NODE_SHARED[handle].framebufferColorImages[i] = MXC_NODE[handle].framebuffers[i].color.image;
+    MXC_NODE_SHARED[handle].framebufferNormalImages[i] = MXC_NODE[handle].framebuffers[i].normal.image;
+    MXC_NODE_SHARED[handle].framebufferGBufferImages[i] = MXC_NODE[handle].framebuffers[i].gBuffer.image;
   }
 }
 

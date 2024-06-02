@@ -150,7 +150,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   {  // Create
     CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
     CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
-    CreateNodeProcessPipe("./shaders/node_process_blitdown.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessPipe);
+    CreateNodeProcessPipe("./shaders/node_process_blitup.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessPipe);
     vkmAllocateDescriptorSet(context.descriptorPool, &pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessSet);
 
 
@@ -312,8 +312,7 @@ run_loop:
     case MXC_NODE_TYPE_INTERPROCESS:
       CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
       break;
-    default:
-      PANIC("nodeType not supported");
+    default: PANIC("nodeType not supported");
   }
 
   {  // this is really all that'd be user exposed....
@@ -344,10 +343,8 @@ run_loop:
     vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipe);
     CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, 1, &nodeProcessSet, 0, NULL);
-    vkCmdDispatch(cmd,
-                  DEFAULT_WIDTH / 32,
-                  DEFAULT_HEIGHT / 32,
-                  1);
+    const ivec2 groupCount = iVec2CeiDivide(MXC_NODE_SHARED[handle].globalSetState.framebufferSize, 32);
+    vkCmdDispatch(cmd, groupCount.x, groupCount.y, 1);
   }
 
   switch (nodeType) {
@@ -362,8 +359,7 @@ run_loop:
     case MXC_NODE_TYPE_INTERPROCESS:
       CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
       break;
-    default:
-      PANIC("nodeType not supported");
+    default: PANIC("nodeType not supported");
   }
 
   EndCommandBuffer(cmd);

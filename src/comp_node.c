@@ -281,6 +281,10 @@ run_loop:
       if (!MXC_NODE_SHARED[i].active || MXC_NODE_SHARED[i].currentTimelineSignal < 1)
         continue;
 
+      // update node model mat... this should happen every frame so player can move it in comp
+      MXC_NODE_SHARED[i].transform.rotation = QuatFromEuler(MXC_NODE_SHARED[i].transform.euler);
+      MXC_NODE_SHARED[i].nodeSetState.model = Mat4FromTransform(MXC_NODE_SHARED[i].transform.position, MXC_NODE_SHARED[i].transform.rotation);
+
       {  // check frame available
         uint64_t value = MXC_NODE_SHARED[i].currentTimelineSignal;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -290,21 +294,23 @@ run_loop:
             const int nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
             if (MXC_NODE_SHARED[i].type == MXC_NODE_TYPE_INTERPROCESS) {
               CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferColorImages[nodeFramebufferIndex]));
+              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferColorImages[nodeFramebufferIndex]));
+              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferGBufferImages[nodeFramebufferIndex]));
             }
             const VkWriteDescriptorSet writeSets[] = {
                 SET_WRITE_COMP_NODE_COLOR(nodeSet, MXC_NODE_SHARED[i].framebufferColorImageViews[nodeFramebufferIndex]),
-                SET_WRITE_COMP_NODE_NORMAL(nodeSet, MXC_NODE_SHARED[i].framebufferColorImageViews[nodeFramebufferIndex]),
-                SET_WRITE_COMP_NODE_GBUFFER(nodeSet, MXC_NODE_SHARED[i].framebufferColorImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_NODE_NORMAL(nodeSet, MXC_NODE_SHARED[i].framebufferNormalImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_NODE_GBUFFER(nodeSet, MXC_NODE_SHARED[i].framebufferGBufferImageViews[nodeFramebufferIndex]),
             };
             vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
           }
           {
             // move the global set state that was previously used to render into the node set state to use in comp
             memcpy(&MXC_NODE_SHARED[i].nodeSetState.view, (void*)&MXC_NODE_SHARED[i].globalSetState, sizeof(VkmGlobalSetState));
-//            MXC_NODE_SHARED[i].transform.euler.x = 1;
-            MXC_NODE_SHARED[i].transform.rotation = QuatFromEuler(MXC_NODE_SHARED[i].transform.euler);
-//            MXC_NODE_SHARED[i].transform.position.x = 1;
-            MXC_NODE_SHARED[i].nodeSetState.model = Mat4FromTransform(MXC_NODE_SHARED[i].transform.position, MXC_NODE_SHARED[i].transform.rotation);
+            MXC_NODE_SHARED[i].nodeSetState.ulUV = MXC_NODE_SHARED[i].lrUV;
+            MXC_NODE_SHARED[i].nodeSetState.lrUV = MXC_NODE_SHARED[i].ulUV;
+//            MXC_NODE_SHARED[i].nodeSetState.ulUV = (vec2){0,0};
+//            MXC_NODE_SHARED[i].nodeSetState.lrUV = (vec2){1,1};
             memcpy(pNodeSetMapped, &MXC_NODE_SHARED[i].nodeSetState, sizeof(MxcNodeSetState));
 
             // calc framebuffersize
@@ -315,6 +321,7 @@ run_loop:
             const vec4 ulClip = Vec4MulMat4(context.globalSetState.view, ulWorld);
             const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulClip));
             const vec2 ulUV = UVFromNDC(ulNDC);
+
 
             const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
             const vec4 lrWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, lrModel);

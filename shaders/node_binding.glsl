@@ -10,6 +10,10 @@ layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 invViewProj;
 
     ivec2 framebufferSize;
+
+    vec2 ulUV;
+    vec2 lrUV;
+
 } nodeUBO;
 
 layout (set = 1, binding = 1) uniform sampler2D nodeColor;

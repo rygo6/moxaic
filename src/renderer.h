@@ -18,7 +18,7 @@
 // Globals
 //----------------------------------------------------------------------------------
 
-#define VKM_DEBUG_WIREFRAME
+//#define VKM_DEBUG_WIREFRAME
 
 #define VKM_ALLOC      NULL
 #define VKM_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
@@ -144,7 +144,7 @@ typedef struct VkmGlobalSetState {
   mat4 invProj;
   mat4 invViewProj;
 
-  ivec2 framebufferSize;
+  ALIGN(16) ivec2 framebufferSize;
 
 } VkmGlobalSetState;
 
@@ -211,10 +211,10 @@ typedef struct VkmContext {
 
 } VkmContext;
 
-// One process can only have one instance
-extern VkInstance instance;
+// Only main thread needs to access instance
+extern _Thread_local VkInstance instance;
 
-// One thread can only access one context
+// Only one thread should use a context
 extern _Thread_local VkmContext context;
 
 //----------------------------------------------------------------------------------
@@ -574,18 +574,18 @@ VKM_INLINE void vkmUpdateGlobalSet(VkmTransform* pCameraTransform, VkmGlobalSetS
   pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
   vkmMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->proj);
   pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
-  pState->invProj = Mat4Inv(&pState->proj);
+  pState->invProj = Mat4Inv(pState->proj);
   pState->invView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
-  pState->view = Mat4Inv(&pState->invView);
+  pState->view = Mat4Inv(pState->invView);
   pState->viewProj = Mat4Mul(pState->proj, pState->view);
-  pState->invViewProj = Mat4Mul(pState->invView, pState->invViewProj);
+  pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
 VKM_INLINE void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pState->invView = Mat4FromTransform(pCameraTransform->position, pCameraTransform->rotation);
-  pState->view = Mat4Inv(&pState->invView);
+  pState->view = Mat4Inv(pState->invView);
   pState->viewProj = Mat4Mul(pState->proj, pState->view);
-  pState->invViewProj = Mat4Mul(pState->invView, pState->invViewProj);
+  pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
 VKM_INLINE void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
