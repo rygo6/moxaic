@@ -22,8 +22,8 @@ void main()
 
     const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), vec2(0), vec2(1));
     const vec2 scaledUV = uv * scale;
-    const vec2 ndcUV = mix(nodeUBO.ulUV, nodeUBO.lrUV, uv);
-//    const vec2 ndcUV = mix(vec2(0,0), vec2(1,1), uv);
+    // im reversing the lr and ul from what i'd expect... why!?
+    const vec2 ndcUV = mix(nodeUBO.lrUV, nodeUBO.ulUV, uv);
 
     float alphaValue = texture(nodeColor, scaledUV).a;
     float depthValue = texture(nodeGBuffer, scaledUV).r;
@@ -32,10 +32,15 @@ void main()
     vec4 clipPos = ClipPosFromNDC(ndc, depthValue);
     vec3 worldPos = WorldPosFromNodeClipPos(clipPos);
     gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
-//    gl_Position = globalUBO.viewProj * pos;
     outUV = scaledUV;
     outNormal = mix(
     mix(inNormal[0], inNormal[1], gl_TessCoord.x),
     mix(inNormal[3], inNormal[2], gl_TessCoord.x),
     gl_TessCoord.y);
+
+
+//    gl_Position = globalUBO.viewProj * mix(
+//        mix(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_TessCoord.x),
+//        mix(gl_in[3].gl_Position, gl_in[2].gl_Position, gl_TessCoord.x),
+//        gl_TessCoord.y);
 }
