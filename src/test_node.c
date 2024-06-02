@@ -294,13 +294,13 @@ run_loop:
       .height = DEFAULT_HEIGHT,
       .maxDepth = 1.0f,
   };
-  CmdSetViewport(cmd, 0, 1, &viewport);
   const VkRect2D scissor = {
       .extent = {
           .width = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x > DEFAULT_WIDTH ? DEFAULT_WIDTH : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x,
           .height = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y > DEFAULT_HEIGHT ? DEFAULT_HEIGHT : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y,
       },
   };
+  CmdSetViewport(cmd, 0, 1, &viewport);
   CmdSetScissor(cmd, 0, 1, &scissor);
 
   const int framebufferIndex = nodeTimeline.value % VKM_SWAP_COUNT;

@@ -602,7 +602,7 @@ VKM_INLINE bool vkmProcessInput(VkmTransform* pCameraTransform) {
   }
   if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
     const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward});
-    const float moveSensitivity = input.deltaTime * 2.0f;
+    const float moveSensitivity = input.deltaTime * 0.5f;
     for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
     inputDirty = true;
   }

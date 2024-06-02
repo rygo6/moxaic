@@ -327,6 +327,16 @@ MATH_INLINE ivec2 iVec2CeiDivide(const ivec2 v, int d) {
   fv.simd = fv.simd / (float)d;
   return (ivec2){.simd = {ceilf(fv.simd[VEC_X]), ceilf(fv.simd[VEC_Y])}};
 }
+MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
+  const float2_simd minvec = {min, min};
+  const float2_simd maxvec = {max, max};
+  vec2  clamped = v;
+  for (int i = 0; i < 2; ++i) {
+    clamped.simd[i] = (v.simd[i] < minvec[i]) ? minvec[i] : v.simd[i];
+    clamped.simd[i] = (clamped.simd[i] > maxvec[i]) ? maxvec[i] : clamped.simd[i];
+  }
+  return clamped;
+}
 
 #undef MATH_INLINE
 #undef SHUFFLE

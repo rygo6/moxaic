@@ -163,7 +163,7 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
     vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_NODE_BUFFER(pComp->nodeSet, pComp->nodeSetBuffer));
     memcpy(&pComp->pNodeSetMapped->model, &MAT4_IDENT, sizeof(mat4));
 
-//    CreateQuadMesh(0.5f, &pComp->quadMesh);
+    //    CreateQuadMesh(0.5f, &pComp->quadMesh);
     CreateQuadPatchMesh(0.5f, &pComp->quadMesh);
 
     VkBool32 presentSupport = VK_FALSE;
@@ -249,6 +249,8 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
 
   VKM_DEVICE_FUNC(CmdPipelineBarrier2);
 
+  bool debugSwap;
+
 run_loop:
 
 {  // Input Cycle
@@ -305,12 +307,17 @@ run_loop:
             vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
           }
           {
+            debugSwap = input.debugSwap;
+
             // move the global set state that was previously used to render into the node set state to use in comp
             memcpy(&MXC_NODE_SHARED[i].nodeSetState.view, (void*)&MXC_NODE_SHARED[i].globalSetState, sizeof(VkmGlobalSetState));
             MXC_NODE_SHARED[i].nodeSetState.ulUV = MXC_NODE_SHARED[i].lrUV;
             MXC_NODE_SHARED[i].nodeSetState.lrUV = MXC_NODE_SHARED[i].ulUV;
-//            MXC_NODE_SHARED[i].nodeSetState.ulUV = (vec2){0,0};
-//            MXC_NODE_SHARED[i].nodeSetState.lrUV = (vec2){1,1};
+            if (debugSwap) {
+              MXC_NODE_SHARED[i].nodeSetState.ulUV = (vec2){0, 0};
+              MXC_NODE_SHARED[i].nodeSetState.lrUV = (vec2){1, 1};
+            }
+
             memcpy(pNodeSetMapped, &MXC_NODE_SHARED[i].nodeSetState, sizeof(MxcNodeSetState));
 
             // calc framebuffersize
@@ -320,14 +327,14 @@ run_loop:
             const vec4 ulWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, ulModel);
             const vec4 ulClip = Vec4MulMat4(context.globalSetState.view, ulWorld);
             const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulClip));
-            const vec2 ulUV = UVFromNDC(ulNDC);
+            const vec2 ulUV = Vec2Clamp(UVFromNDC(ulNDC), 0.0f, 1.0f);
 
 
             const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
             const vec4 lrWorld = Vec4MulMat4(MXC_NODE_SHARED[i].nodeSetState.model, lrModel);
             const vec4 lrClip = Vec4MulMat4(context.globalSetState.view, lrWorld);
             const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrClip));
-            const vec2 lrUV = UVFromNDC(lrNDC);
+            const vec2 lrUV = Vec2Clamp(UVFromNDC(lrNDC), 0.0f, 1.0f);
 
             const vec2 diff = {.simd = lrUV.simd - ulUV.simd};
 
@@ -337,12 +344,18 @@ run_loop:
             MXC_NODE_SHARED[i].globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
             MXC_NODE_SHARED[i].ulUV = ulUV;
             MXC_NODE_SHARED[i].lrUV = lrUV;
-//            mat4 m = MXC_NODE_SHARED[i].nodeSetState.proj;
-//            printf("mat4:\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n",
-//                   m.c0.r0, m.c1.r0, m.c2.r0, m.c3.r0,
-//                   m.c0.r1, m.c1.r1, m.c2.r1, m.c3.r1,
-//                   m.c0.r2, m.c1.r2, m.c2.r2, m.c3.r2,
-//                   m.c0.r3, m.c1.r3, m.c2.r3, m.c3.r3);
+            if (debugSwap) {
+              MXC_NODE_SHARED[i].globalSetState.framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
+              MXC_NODE_SHARED[i].ulUV = (vec2){0, 0};
+              MXC_NODE_SHARED[i].lrUV = (vec2){1, 1};
+            }
+
+            //            mat4 m = MXC_NODE_SHARED[i].nodeSetState.proj;
+            //            printf("mat4:\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n",
+            //                   m.c0.r0, m.c1.r0, m.c2.r0, m.c3.r0,
+            //                   m.c0.r1, m.c1.r1, m.c2.r1, m.c3.r1,
+            //                   m.c0.r2, m.c1.r2, m.c2.r2, m.c3.r2,
+            //                   m.c0.r3, m.c1.r3, m.c2.r3, m.c3.r3);
           }
         }
       }
@@ -382,7 +395,10 @@ run_loop:
             VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_PRESENT, VKM_TRANSFER_DST_IMAGE_BARRIER, swapImage),
         };
         CmdPipelineImageBarriers(cmd, 2, blitBarrier);
-        vkmBlit(cmd, framebufferColorImage, swapImage);
+        if (debugSwap)
+          vkmBlit(cmd, MXC_NODE_SHARED[0].framebufferColorImages[framebufferIndex], swapImage);
+        else
+          vkmBlit(cmd, framebufferColorImage, swapImage);
         const VkImageMemoryBarrier2 presentBarrier[] = {
             //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, framebufferColorImage),
             VKM_COLOR_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_PRESENT, swapImage),
