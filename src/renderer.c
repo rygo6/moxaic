@@ -361,6 +361,15 @@ void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDes
   };
   VKM_REQUIRE(vkAllocateDescriptorSets(context.device, &allocateInfo, pSet));
 }
+void vkmAllocateDescriptorSets(const VkDescriptorPool descriptorPool, const uint32_t descriptorSetCount, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSets) {
+  const VkDescriptorSetAllocateInfo allocateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = descriptorPool,
+      .descriptorSetCount = descriptorSetCount,
+      .pSetLayouts = pSetLayout,
+  };
+  VKM_REQUIRE(vkAllocateDescriptorSets(context.device, &allocateInfo, pSets));
+}
 
 //----------------------------------------------------------------------------------
 // Memory
@@ -568,7 +577,6 @@ typedef struct VkmTextureCreateInfo {
 } VkmTextureCreateInfo;
 void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture) {
   VKM_REQUIRE(vkCreateImage(context.device, &pTextureCreateInfo->imageCreateInfo, VKM_ALLOC, &pTexture->image));
-
   const VkImageMemoryRequirementsInfo2 imageMemoryRequirementsInfo = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
       .image = pTexture->image,
@@ -685,8 +693,8 @@ void vkmCreateStdFramebuffers(const VkRenderPass renderPass, const uint32_t fram
     VkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].depth);
 
     textureCreateInfo.debugName = "GBufferFramebuffer";
-    textureCreateInfo.imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
-    textureCreateInfo.imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
+    textureCreateInfo.imageCreateInfo.format = VKM_G_BUFFER_FORMAT;
+    textureCreateInfo.imageCreateInfo.usage = VKM_G_BUFFER_USAGE;
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     VkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].gBuffer);
 
@@ -768,6 +776,7 @@ void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuff
       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
       .locality = locality,
   };
+  textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
   switch (locality) {
     default:
     case VKM_LOCALITY_CONTEXT:          break;
@@ -775,8 +784,6 @@ void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuff
     case VKM_LOCALITY_PROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
-
     textureCreateInfo.debugName = "ExportedColorFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
@@ -788,10 +795,11 @@ void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuff
     VkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].normal);
 
     textureCreateInfo.debugName = "ExportedGBufferFramebuffer";
-    textureCreateInfo.imageCreateInfo.format = VKM_STD_G_BUFFER_FORMAT;
-    textureCreateInfo.imageCreateInfo.usage = VKM_STD_G_BUFFER_USAGE;
-    textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    textureCreateInfo.imageCreateInfo.format = VKM_G_BUFFER_FORMAT;
+    textureCreateInfo.imageCreateInfo.usage = VKM_G_BUFFER_USAGE;
+    textureCreateInfo.imageCreateInfo.mipLevels = VKM_G_BUFFER_LEVELS;
     VkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].gBuffer);
+    textureCreateInfo.imageCreateInfo.mipLevels = 1;
   }
 }
 

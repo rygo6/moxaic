@@ -144,7 +144,8 @@ typedef struct VkmGlobalSetState {
   mat4 invProj;
   mat4 invViewProj;
 
-  ALIGN(16) ivec2 framebufferSize;
+  ALIGN(16)
+  ivec2 framebufferSize;
 
 } VkmGlobalSetState;
 
@@ -233,8 +234,9 @@ enum VkmPipeSetStdIndices {
   VKM_PIPE_SET_STD_OBJECT_INDEX,
   VKM_PIPE_SET_STD_INDEX_COUNT,
 };
-#define VKM_STD_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT;
-#define VKM_STD_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+#define VKM_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT
+#define VKM_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+#define VKM_G_BUFFER_LEVELS 10
 #define VKM_PASS_CLEAR_COLOR \
   (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
@@ -392,6 +394,24 @@ static const VkmImageBarrier* VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
         .levelCount = 1,                                 \
         .layerCount = 1,                                 \
     },                                                   \
+  }
+#define VKM_COLOR_IMAGE_BARRIER_MIPS(src, dst, barrier_image, level_count) \
+  (const VkImageMemoryBarrier2) {                                          \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                     \
+    .srcStageMask = src->stageMask,                                        \
+    .srcAccessMask = src->accessMask,                                      \
+    .dstStageMask = dst->stageMask,                                        \
+    .dstAccessMask = dst->accessMask,                                      \
+    .oldLayout = src->layout,                                              \
+    .newLayout = dst->layout,                                              \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                        \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                        \
+    .image = barrier_image,                                                \
+    .subresourceRange = (VkImageSubresourceRange){                         \
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                           \
+        .levelCount = level_count,                                         \
+        .layerCount = 1,                                                   \
+    },                                                                     \
   }
 #define VKM_IMAGE_BARRIER(src, dst, aspect_mask, barrier_image) \
   (const VkImageMemoryBarrier2) {                               \

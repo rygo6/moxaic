@@ -19,10 +19,12 @@ typedef struct MxcTestNode {
   VkPipelineLayout stdPipelineLayout;
   VkPipeline       stdPipeline;
 
+  VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
+  VkImageView gBufferMipViews[VKM_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
+
   VkDescriptorSetLayout nodeProcessSetLayout;
   VkPipelineLayout      nodeProcessPipeLayout;
   VkPipeline            nodeProcessPipe;
-  VkDescriptorSet       nodeProcessSet;
 
   VkDevice device;
 
@@ -42,8 +44,6 @@ typedef struct MxcTestNode {
   VkmStdObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory        sphereObjectSetMemory;
   VkBuffer              sphereObjectSetBuffer;
-
-  VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
   uint32_t queueIndex;
 

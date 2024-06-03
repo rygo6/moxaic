@@ -52,14 +52,14 @@ enum VecComponents {
   W,
   VEC_COUNT,
 };
-#define V_X .vec[X]
-#define V_Y .vec[Y]
-#define V_Z .vec[Z]
-#define V_W .vec[W]
-#define V_0 .vec[0]
-#define V_1 .vec[1]
-#define V_2 .vec[2]
-#define V_3 .vec[3]
+#define _X .vec[X]
+#define _Y .vec[Y]
+#define _Z .vec[Z]
+#define _W .vec[W]
+#define _0 .vec[0]
+#define _1 .vec[1]
+#define _2 .vec[2]
+#define _3 .vec[3]
 enum MatComponents {
   C0_R0,
   C0_R1,
@@ -79,22 +79,22 @@ enum MatComponents {
   C3_R3,
   MAT_COUNT,
 };
-#define V_00 .vec[C0_R0]
-#define V_01 .vec[C0_R1]
-#define V_02 .vec[C0_R2]
-#define V_03 .vec[C0_R3]
-#define V_10 .vec[C1_R0]
-#define V_11 .vec[C1_R1]
-#define V_12 .vec[C1_R2]
-#define V_13 .vec[C1_R3]
-#define V_20 .vec[C2_R0]
-#define V_21 .vec[C2_R1]
-#define V_22 .vec[C2_R2]
-#define V_23 .vec[C2_R3]
-#define V_30 .vec[C3_R0]
-#define V_31 .vec[C3_R1]
-#define V_32 .vec[C3_R2]
-#define V_33 .vec[C3_R3]
+#define _00 .vec[C0_R0]
+#define _01 .vec[C0_R1]
+#define _02 .vec[C0_R2]
+#define _03 .vec[C0_R3]
+#define _10 .vec[C1_R0]
+#define _11 .vec[C1_R1]
+#define _12 .vec[C1_R2]
+#define _13 .vec[C1_R3]
+#define _20 .vec[C2_R0]
+#define _21 .vec[C2_R1]
+#define _22 .vec[C2_R2]
+#define _23 .vec[C2_R3]
+#define _30 .vec[C3_R0]
+#define _31 .vec[C3_R1]
+#define _32 .vec[C3_R2]
+#define _33 .vec[C3_R3]
 static const vec4 VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
 static const quat QUAT_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -179,37 +179,37 @@ MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
                                C0_R0, C0_R1, C0_R2, C0_R3,
                                C0_R0, C0_R1, C0_R2, C0_R3,
                                C0_R0, C0_R1, C0_R2, C0_R3) *
-                            SHUFFLE(r.vec,
+                           SHUFFLE(r.vec,
                                    C0_R0, C0_R0, C0_R0, C0_R0,
                                    C1_R0, C1_R0, C1_R0, C1_R0,
                                    C2_R0, C2_R0, C2_R0, C2_R0,
                                    C3_R0, C3_R0, C3_R0, C3_R0) +
-                        SHUFFLE(l.vec,
+                       SHUFFLE(l.vec,
                                C1_R0, C1_R1, C1_R2, C1_R3,
                                C1_R0, C1_R1, C1_R2, C1_R3,
                                C1_R0, C1_R1, C1_R2, C1_R3,
                                C1_R0, C1_R1, C1_R2, C1_R3) *
-                            SHUFFLE(r.vec,
+                           SHUFFLE(r.vec,
                                    C0_R1, C0_R1, C0_R1, C0_R1,
                                    C1_R1, C1_R1, C1_R1, C1_R1,
                                    C2_R1, C2_R1, C2_R1, C2_R1,
                                    C3_R1, C3_R1, C3_R1, C3_R1) +
-                        SHUFFLE(l.vec,
+                       SHUFFLE(l.vec,
                                C2_R0, C2_R1, C2_R2, C2_R3,
                                C2_R0, C2_R1, C2_R2, C2_R3,
                                C2_R0, C2_R1, C2_R2, C2_R3,
                                C2_R0, C2_R1, C2_R2, C2_R3) *
-                            SHUFFLE(r.vec,
+                           SHUFFLE(r.vec,
                                    C0_R2, C0_R2, C0_R2, C0_R2,
                                    C1_R2, C1_R2, C1_R2, C1_R2,
                                    C2_R2, C2_R2, C2_R2, C2_R2,
                                    C3_R2, C3_R2, C3_R2, C3_R2) +
-                        SHUFFLE(l.vec,
+                       SHUFFLE(l.vec,
                                C3_R0, C3_R1, C3_R2, C3_R3,
                                C3_R0, C3_R1, C3_R2, C3_R3,
                                C3_R0, C3_R1, C3_R2, C3_R3,
                                C3_R0, C3_R1, C3_R2, C3_R3) *
-                            SHUFFLE(r.vec,
+                           SHUFFLE(r.vec,
                                    C0_R3, C0_R3, C0_R3, C0_R3,
                                    C1_R3, C1_R3, C1_R3, C1_R3,
                                    C2_R3, C2_R3, C2_R3, C2_R3,
@@ -321,10 +321,10 @@ MATH_INLINE quat QuatFromEuler(const vec3 euler) {
   }
   // todo SIMDIZE
   quat out;
-  out V_W = c V_X * c V_Y * c V_Z + s V_X * s V_Y * s V_Z;
-  out V_X = s V_X * c V_Y * c V_Z - c V_X * s V_Y * s V_Z;
-  out V_Y = c V_X * s V_Y * c V_Z + s V_X * c V_Y * s V_Z;
-  out V_Z = c V_X * c V_Y * s V_Z - s V_X * s V_Y * c V_Z;
+  out _W = c _X * c _Y * c _Z + s _X * s _Y * s _Z;
+  out _X = s _X * c _Y * c _Z - c _X * s _Y * s _Z;
+  out _Y = c _X * s _Y * c _Z + s _X * c _Y * s _Z;
+  out _Z = c _X * c _Y * s _Z - s _X * s _Y * c _Z;
   return out;
 }
 MATH_INLINE void QuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
@@ -336,11 +336,11 @@ MATH_INLINE void QuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
 }
 MATH_INLINE vec4 Vec4MulMat4(const mat4 m, const vec4 v) {
   // todo SIMDIZE
-  vec4                       out;
-  out.vec[X] = m V_00 * v V_X + m V_10 * v V_Y + m V_20 * v V_Z + m V_30 * v V_W;
-  out.vec[Y] = m V_01 * v V_X + m V_11 * v V_Y + m V_21 * v V_Z + m V_31 * v V_W;
-  out.vec[Z] = m V_02 * v V_X + m V_12 * v V_Y + m V_22 * v V_Z + m V_32 * v V_W;
-  out.vec[W] = m V_03 * v V_X + m V_13 * v V_Y + m V_23 * v V_Z + m V_33 * v V_W;
+  vec4                   out;
+  out.vec[X] = m _00 * v _X + m _10 * v _Y + m _20 * v _Z + m _30 * v _W;
+  out.vec[Y] = m _01 * v _X + m _11 * v _Y + m _21 * v _Z + m _31 * v _W;
+  out.vec[Z] = m _02 * v _X + m _12 * v _Y + m _22 * v _Z + m _32 * v _W;
+  out.vec[W] = m _03 * v _X + m _13 * v _Y + m _23 * v _Z + m _33 * v _W;
   return out;
 }
 MATH_INLINE vec3 Vec4WDivide(const vec4 v) {
@@ -359,10 +359,14 @@ MATH_INLINE ivec2 iVec2CeiDivide(const ivec2 v, int d) {
   fv.vec = fv.vec / (float)d;
   return (ivec2){.vec = {ceilf(fv.vec[X]), ceilf(fv.vec[Y])}};
 }
+MATH_INLINE ivec2 iVec2Min(ivec2 v, const int min) {
+  for (int i = 0; i < 2; ++i) v.vec[i] = v.vec[i] < min ? min : v.vec[i];
+  return v;
+}
 MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
-  const float2_vec  minVec = {min, min};
-  const float2_vec  maxVec = {max, max};
-  vec2              clamped = v;
+  const float2_vec minVec = {min, min};
+  const float2_vec maxVec = {max, max};
+  vec2             clamped = v;
   for (int i = 0; i < 2; ++i) {
     clamped.vec[i] = (v.vec[i] < minVec[i]) ? minVec[i] : v.vec[i];
     clamped.vec[i] = (clamped.vec[i] > maxVec[i]) ? maxVec[i] : clamped.vec[i];
