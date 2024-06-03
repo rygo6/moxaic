@@ -336,7 +336,7 @@ run_loop:
             const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrClip));
             const vec2 lrUV = Vec2Clamp(UVFromNDC(lrNDC), 0.0f, 1.0f);
 
-            const vec2 diff = {.simd = lrUV.simd - ulUV.simd};
+            const vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 
             __atomic_thread_fence(__ATOMIC_RELEASE);
             // write current global set state to node's global set state to use for next node render with new the framebuffer size

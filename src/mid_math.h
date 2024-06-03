@@ -5,7 +5,7 @@
 
 #define VKM_PI 3.14159265358979323846f
 
-#define MID_SIMD_TYPE(type, name, count) typedef type name##_simd __attribute__((vector_size(sizeof(type) * count)))
+#define MID_SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
 MID_SIMD_TYPE(float, float2, 2);
 MID_SIMD_TYPE(uint32_t, int2, 2);
 MID_SIMD_TYPE(float, float3, 4);
@@ -15,56 +15,86 @@ MID_SIMD_TYPE(uint32_t, int4, 4);
 MID_SIMD_TYPE(float, mat4, 16);
 #undef MID_SIMD_TYPE
 // should I rename simd to vec and get rid of vec_name?
-#define MID_MATH_UNION(type, simd_type, name, align, count, vec_name, ...) \
-  typedef union __attribute((aligned(align))) name {                       \
-    type vec_name[count];                                                  \
-    struct {                                                               \
-      type __VA_ARGS__;                                                    \
-    };                                                                     \
-    simd_type simd;                                                        \
+#define VEC_UNION(type, simd_type, name, align, count, ...) \
+  typedef union __attribute((aligned(align))) name {        \
+    simd_type vec;                                          \
+    struct {                                                \
+      type __VA_ARGS__;                                     \
+    };                                                      \
   } name;
-MID_MATH_UNION(float, float2_simd, vec2, 8, 2, vec, x, y);
-MID_MATH_UNION(uint32_t, int2_simd, ivec2, 8, 2, vec, x, y);
-MID_MATH_UNION(float, float3_simd, vec3, 16, 3, vec, x, y, z);
-MID_MATH_UNION(uint32_t, int3_simd, ivec3, 16, 3, vec, x, y, z);
-MID_MATH_UNION(float, float4_simd, vec4, 16, 4, vec, x, y, z, w);
-MID_MATH_UNION(uint32_t, int4_simd, ivec4, 16, 4, vec, x, y, z, w);
-MID_MATH_UNION(float, float4_simd, mat4_row, 16, 4, row, r0, r1, r2, r3);
-MID_MATH_UNION(mat4_row, mat4_simd, mat4, 16, 4, col, c0, c1, c2, c3);
-#undef MID_MATH_UNION
+VEC_UNION(float, float2_vec, vec2, 8, 2, x, y);
+VEC_UNION(uint32_t, int2_vec, ivec2, 8, 2, x, y);
+VEC_UNION(float, float3_vec, vec3, 16, 3, x, y, z);
+VEC_UNION(uint32_t, int3_vec, ivec3, 16, 3, x, y, z);
+VEC_UNION(float, float4_vec, vec4, 16, 4, x, y, z, w);
+VEC_UNION(uint32_t, int4_vec, ivec4, 16, 4, x, y, z, w);
+#undef VEC_UNION
+
+#define MAT_UNION(type, simd_type, name, align, count, vec_name, ...) \
+  typedef union __attribute((aligned(align))) name {                  \
+    simd_type vec;                                                    \
+    type      vec_name[count];                                        \
+    struct {                                                          \
+      type __VA_ARGS__;                                               \
+    };                                                                \
+  } name;
+MAT_UNION(float, float4_vec, mat4_row, 16, 4, row, r0, r1, r2, r3);
+MAT_UNION(mat4_row, mat4_vec, mat4, 16, 4, col, c0, c1, c2, c3);
+#undef MAT_UNION
+
 typedef vec4 quat;
 
 #define VEC_NIL -1
-enum VecElement {
-  VEC_X,
-  VEC_Y,
-  VEC_Z,
-  VEC_W,
+enum VecComponents {
+  X,
+  Y,
+  Z,
+  W,
   VEC_COUNT,
 };
-enum MatElement {
-  MAT_C0_R0,
-  MAT_C0_R1,
-  MAT_C0_R2,
-  MAT_C0_R3,
-  MAT_C1_R0,
-  MAT_C1_R1,
-  MAT_C1_R2,
-  MAT_C1_R3,
-  MAT_C2_R0,
-  MAT_C2_R1,
-  MAT_C2_R2,
-  MAT_C2_R3,
-  MAT_C3_R0,
-  MAT_C3_R1,
-  MAT_C3_R2,
-  MAT_C3_R3,
+#define V_X .vec[X]
+#define V_Y .vec[Y]
+#define V_Z .vec[Z]
+#define V_W .vec[W]
+#define V_0 .vec[0]
+#define V_1 .vec[1]
+#define V_2 .vec[2]
+#define V_3 .vec[3]
+enum MatComponents {
+  C0_R0,
+  C0_R1,
+  C0_R2,
+  C0_R3,
+  C1_R0,
+  C1_R1,
+  C1_R2,
+  C1_R3,
+  C2_R0,
+  C2_R1,
+  C2_R2,
+  C2_R3,
+  C3_R0,
+  C3_R1,
+  C3_R2,
+  C3_R3,
   MAT_COUNT,
 };
-#define _m00 .simd[MAT_C0_R0]
-#define _m01 .simd[MAT_C0_R1]
-#define _m02 .simd[MAT_C0_R2]
-#define _m03 .simd[MAT_C0_R3]
+#define V_00 .vec[C0_R0]
+#define V_01 .vec[C0_R1]
+#define V_02 .vec[C0_R2]
+#define V_03 .vec[C0_R3]
+#define V_10 .vec[C1_R0]
+#define V_11 .vec[C1_R1]
+#define V_12 .vec[C1_R2]
+#define V_13 .vec[C1_R3]
+#define V_20 .vec[C2_R0]
+#define V_21 .vec[C2_R1]
+#define V_22 .vec[C2_R2]
+#define V_23 .vec[C2_R3]
+#define V_30 .vec[C3_R0]
+#define V_31 .vec[C3_R1]
+#define V_32 .vec[C3_R2]
+#define V_33 .vec[C3_R3]
 static const vec4 VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
 static const quat QUAT_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -81,105 +111,109 @@ static const mat4 MAT4_IDENT = {
 #define MATH_INLINE       __attribute__((always_inline)) static inline
 #define SHUFFLE(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
 
-MATH_INLINE float Float4Sum(float4_simd float4) {
+MATH_INLINE float Float4Sum(float4_vec float4) {
   // appears to make better SIMD assembly than a loop:
   // https://godbolt.org/z/6jWe4Pj5b
   // https://godbolt.org/z/M5Goq57vj
-  float4_simd shuf = SHUFFLE(float4, 2, 3, 0, 1);
-  float4_simd sums = float4 + shuf;
+  float4_vec shuf = SHUFFLE(float4, 2, 3, 0, 1);
+  float4_vec sums = float4 + shuf;
   shuf = SHUFFLE(sums, 1, 0, 3, 2);
   sums = sums + shuf;
   return sums[0];
 }
-MATH_INLINE void Mat4Translation(const vec3 v, mat4* pDst) {
-  for (int i = 0; i < 3; ++i) pDst->col[3].simd += MAT4_IDENT.col[i].simd * v.simd[i];
+MATH_INLINE mat4 Mat4Translation(const vec3 v) {
+  mat4 out = MAT4_IDENT;
+  for (int i = 0; i < 3; ++i) out.col[3].vec += MAT4_IDENT.col[i].vec * v.vec[i];
+  return out;
 }
 MATH_INLINE float Vec4Dot(const vec4 l, const vec4 r) {
-  float4_simd product = l.simd * r.simd;
+  float4_vec product = l.vec * r.vec;
   return Float4Sum(product);
 }
 MATH_INLINE float Vec4Mag(const vec4 v) {
   return sqrtf(Vec4Dot(v, v));
 }
-MATH_INLINE void QuatToMat4(const quat q, mat4* pDst) {
+MATH_INLINE mat4 QuatToMat4(const quat q) {
   const float norm = Vec4Mag(q);
   const float s = norm > 0.0f ? 2.0f / norm : 0.0f;
 
-  const float3_simd xxw = SHUFFLE(q.simd, VEC_X, VEC_X, VEC_W, VEC_NIL);
-  const float3_simd xyx = SHUFFLE(q.simd, VEC_X, VEC_Y, VEC_X, VEC_NIL);
-  const float3_simd xx_xy_wx = s * xxw * xyx;
+  const float3_vec xxw = SHUFFLE(q.vec, X, X, W, VEC_NIL);
+  const float3_vec xyx = SHUFFLE(q.vec, X, Y, X, VEC_NIL);
+  const float3_vec xx_xy_wx = s * xxw * xyx;
 
-  const float3_simd yyw = SHUFFLE(q.simd, VEC_Y, VEC_Y, VEC_W, VEC_NIL);
-  const float3_simd yzy = SHUFFLE(q.simd, VEC_Y, VEC_Z, VEC_Y, VEC_NIL);
-  const float3_simd yy_yz_wy = s * yyw * yzy;
+  const float3_vec yyw = SHUFFLE(q.vec, Y, Y, W, VEC_NIL);
+  const float3_vec yzy = SHUFFLE(q.vec, Y, Z, Y, VEC_NIL);
+  const float3_vec yy_yz_wy = s * yyw * yzy;
 
-  const float3_simd zxw = SHUFFLE(q.simd, VEC_Z, VEC_X, VEC_W, VEC_NIL);
-  const float3_simd zzz = SHUFFLE(q.simd, VEC_Z, VEC_Z, VEC_Z, VEC_NIL);
-  const float3_simd zz_xz_wz = s * zxw * zzz;
+  const float3_vec zxw = SHUFFLE(q.vec, Z, X, W, VEC_NIL);
+  const float3_vec zzz = SHUFFLE(q.vec, Z, Z, Z, VEC_NIL);
+  const float3_vec zz_xz_wz = s * zxw * zzz;
 
   // Setting to specific SIMD indices produces same SIMD assembly as long as target
   // SIMD vec is same size as source vecs https://godbolt.org/z/qqMMa4v3G
-  pDst->c0.simd[0] = 1.0f - yy_yz_wy[VEC_X] - zz_xz_wz[VEC_X];
-  pDst->c1.simd[1] = 1.0f - xx_xy_wx[VEC_X] - zz_xz_wz[VEC_X];
-  pDst->c2.simd[2] = 1.0f - xx_xy_wx[VEC_X] - yy_yz_wy[VEC_X];
+  mat4 out = MAT4_IDENT;
+  out.c0.vec[0] = 1.0f - yy_yz_wy[X] - zz_xz_wz[X];
+  out.c1.vec[1] = 1.0f - xx_xy_wx[X] - zz_xz_wz[X];
+  out.c2.vec[2] = 1.0f - xx_xy_wx[X] - yy_yz_wy[X];
 
-  pDst->c0.simd[1] = xx_xy_wx[VEC_Y] + zz_xz_wz[VEC_Z];
-  pDst->c1.simd[2] = yy_yz_wy[VEC_Y] + xx_xy_wx[VEC_Z];
-  pDst->c2.simd[0] = zz_xz_wz[VEC_Y] + yy_yz_wy[VEC_Z];
+  out.c0.vec[1] = xx_xy_wx[Y] + zz_xz_wz[Z];
+  out.c1.vec[2] = yy_yz_wy[Y] + xx_xy_wx[Z];
+  out.c2.vec[0] = zz_xz_wz[Y] + yy_yz_wy[Z];
 
-  pDst->c1.simd[0] = xx_xy_wx[VEC_Y] - zz_xz_wz[VEC_Z];
-  pDst->c2.simd[1] = yy_yz_wy[VEC_Y] - xx_xy_wx[VEC_Z];
-  pDst->c0.simd[2] = zz_xz_wz[VEC_Y] - yy_yz_wy[VEC_Z];
+  out.c1.vec[0] = xx_xy_wx[Y] - zz_xz_wz[Z];
+  out.c2.vec[1] = yy_yz_wy[Y] - xx_xy_wx[Z];
+  out.c0.vec[2] = zz_xz_wz[Y] - yy_yz_wy[Z];
 
-  pDst->c0.simd[3] = 0.0f;
-  pDst->c1.simd[3] = 0.0f;
-  pDst->c2.simd[3] = 0.0f;
-  pDst->c3.simd[0] = 0.0f;
-  pDst->c3.simd[1] = 0.0f;
-  pDst->c3.simd[2] = 0.0f;
-  pDst->c3.simd[3] = 1.0f;
+  out.c0.vec[3] = 0.0f;
+  out.c1.vec[3] = 0.0f;
+  out.c2.vec[3] = 0.0f;
+  out.c3.vec[0] = 0.0f;
+  out.c3.vec[1] = 0.0f;
+  out.c3.vec[2] = 0.0f;
+  out.c3.vec[3] = 1.0f;
+  return out;
 }
 MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
-  return (mat4){.simd = SHUFFLE(l.simd,
-                                MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
-                                MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
-                                MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3,
-                                MAT_C0_R0, MAT_C0_R1, MAT_C0_R2, MAT_C0_R3) *
-                            SHUFFLE(r.simd,
-                                    MAT_C0_R0, MAT_C0_R0, MAT_C0_R0, MAT_C0_R0,
-                                    MAT_C1_R0, MAT_C1_R0, MAT_C1_R0, MAT_C1_R0,
-                                    MAT_C2_R0, MAT_C2_R0, MAT_C2_R0, MAT_C2_R0,
-                                    MAT_C3_R0, MAT_C3_R0, MAT_C3_R0, MAT_C3_R0) +
-                        SHUFFLE(l.simd,
-                                MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
-                                MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
-                                MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3,
-                                MAT_C1_R0, MAT_C1_R1, MAT_C1_R2, MAT_C1_R3) *
-                            SHUFFLE(r.simd,
-                                    MAT_C0_R1, MAT_C0_R1, MAT_C0_R1, MAT_C0_R1,
-                                    MAT_C1_R1, MAT_C1_R1, MAT_C1_R1, MAT_C1_R1,
-                                    MAT_C2_R1, MAT_C2_R1, MAT_C2_R1, MAT_C2_R1,
-                                    MAT_C3_R1, MAT_C3_R1, MAT_C3_R1, MAT_C3_R1) +
-                        SHUFFLE(l.simd,
-                                MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
-                                MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
-                                MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3,
-                                MAT_C2_R0, MAT_C2_R1, MAT_C2_R2, MAT_C2_R3) *
-                            SHUFFLE(r.simd,
-                                    MAT_C0_R2, MAT_C0_R2, MAT_C0_R2, MAT_C0_R2,
-                                    MAT_C1_R2, MAT_C1_R2, MAT_C1_R2, MAT_C1_R2,
-                                    MAT_C2_R2, MAT_C2_R2, MAT_C2_R2, MAT_C2_R2,
-                                    MAT_C3_R2, MAT_C3_R2, MAT_C3_R2, MAT_C3_R2) +
-                        SHUFFLE(l.simd,
-                                MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
-                                MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
-                                MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3,
-                                MAT_C3_R0, MAT_C3_R1, MAT_C3_R2, MAT_C3_R3) *
-                            SHUFFLE(r.simd,
-                                    MAT_C0_R3, MAT_C0_R3, MAT_C0_R3, MAT_C0_R3,
-                                    MAT_C1_R3, MAT_C1_R3, MAT_C1_R3, MAT_C1_R3,
-                                    MAT_C2_R3, MAT_C2_R3, MAT_C2_R3, MAT_C2_R3,
-                                    MAT_C3_R3, MAT_C3_R3, MAT_C3_R3, MAT_C3_R3)};
+  return (mat4){.vec = SHUFFLE(l.vec,
+                               C0_R0, C0_R1, C0_R2, C0_R3,
+                               C0_R0, C0_R1, C0_R2, C0_R3,
+                               C0_R0, C0_R1, C0_R2, C0_R3,
+                               C0_R0, C0_R1, C0_R2, C0_R3) *
+                            SHUFFLE(r.vec,
+                                   C0_R0, C0_R0, C0_R0, C0_R0,
+                                   C1_R0, C1_R0, C1_R0, C1_R0,
+                                   C2_R0, C2_R0, C2_R0, C2_R0,
+                                   C3_R0, C3_R0, C3_R0, C3_R0) +
+                        SHUFFLE(l.vec,
+                               C1_R0, C1_R1, C1_R2, C1_R3,
+                               C1_R0, C1_R1, C1_R2, C1_R3,
+                               C1_R0, C1_R1, C1_R2, C1_R3,
+                               C1_R0, C1_R1, C1_R2, C1_R3) *
+                            SHUFFLE(r.vec,
+                                   C0_R1, C0_R1, C0_R1, C0_R1,
+                                   C1_R1, C1_R1, C1_R1, C1_R1,
+                                   C2_R1, C2_R1, C2_R1, C2_R1,
+                                   C3_R1, C3_R1, C3_R1, C3_R1) +
+                        SHUFFLE(l.vec,
+                               C2_R0, C2_R1, C2_R2, C2_R3,
+                               C2_R0, C2_R1, C2_R2, C2_R3,
+                               C2_R0, C2_R1, C2_R2, C2_R3,
+                               C2_R0, C2_R1, C2_R2, C2_R3) *
+                            SHUFFLE(r.vec,
+                                   C0_R2, C0_R2, C0_R2, C0_R2,
+                                   C1_R2, C1_R2, C1_R2, C1_R2,
+                                   C2_R2, C2_R2, C2_R2, C2_R2,
+                                   C3_R2, C3_R2, C3_R2, C3_R2) +
+                        SHUFFLE(l.vec,
+                               C3_R0, C3_R1, C3_R2, C3_R3,
+                               C3_R0, C3_R1, C3_R2, C3_R3,
+                               C3_R0, C3_R1, C3_R2, C3_R3,
+                               C3_R0, C3_R1, C3_R2, C3_R3) *
+                            SHUFFLE(r.vec,
+                                   C0_R3, C0_R3, C0_R3, C0_R3,
+                                   C1_R3, C1_R3, C1_R3, C1_R3,
+                                   C2_R3, C2_R3, C2_R3, C2_R3,
+                                   C3_R3, C3_R3, C3_R3, C3_R3)};
 }
 MATH_INLINE mat4 Mat4Inv(const mat4 src) {
   // todo SIMDIZE
@@ -235,15 +269,13 @@ MATH_INLINE mat4 Mat4Inv(const mat4 src) {
 
   det = 1.0f / (a * out.c0.r0 + b * out.c1.r0 + c * out.c2.r0 + d * out.c3.r0);
 
-  out.simd *= det;
+  out.vec *= det;
 
   return out;
 }
 MATH_INLINE mat4 Mat4FromTransform(const vec3 pos, const quat rot) {
-  mat4 translationMat4 = MAT4_IDENT;
-  Mat4Translation(pos, &translationMat4);
-  mat4 rotationMat4 = MAT4_IDENT;
-  QuatToMat4(rot, &rotationMat4);
+  const mat4 translationMat4 = Mat4Translation(pos);
+  const mat4 rotationMat4 = QuatToMat4(rot);
   return Mat4Mul(translationMat4, rotationMat4);
 }
 // should I do this?
@@ -262,23 +294,23 @@ MATH_INLINE void vkmMat4Perspective(const float fov, const float aspect, const f
                      .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
                      .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
 }
-MATH_INLINE vec3 Vec3Cross(const float3_simd l, const float3_simd r) {
-  return (vec3){l[VEC_Y] * r[VEC_Z] - r[VEC_Y] * l[VEC_Z],
-                l[VEC_Z] * r[VEC_X] - r[VEC_Z] * l[VEC_X],
-                l[VEC_X] * r[VEC_Y] - r[VEC_X] * l[VEC_Y]};
+MATH_INLINE vec3 Vec3Cross(const float3_vec l, const float3_vec r) {
+  return (vec3){l[Y] * r[Z] - r[Y] * l[Z],
+                l[Z] * r[X] - r[Z] * l[X],
+                l[X] * r[Y] - r[X] * l[Y]};
 }
 MATH_INLINE vec3 Vec3Rot(const quat q, const vec3 v) {
-  const vec3 uv = Vec3Cross(q.simd, v.simd);
-  const vec3 uuv = Vec3Cross(q.simd, uv.simd);
+  const vec3 uv = Vec3Cross(q.vec, v.vec);
+  const vec3 uuv = Vec3Cross(q.vec, uv.vec);
   vec3       out;
-  for (int i = 0; i < 3; ++i) out.simd[i] = v.simd[i] + ((uv.simd[i] * q.simd[VEC_W]) + uuv.simd[i]) * 2.0f;
+  for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
   return out;
 }
 MATH_INLINE vec4 Vec4Rot(const quat q, const vec4 v) {
-  const vec3 uv = Vec3Cross(q.simd, v.simd);
-  const vec3 uuv = Vec3Cross(q.simd, uv.simd);
+  const vec3 uv = Vec3Cross(q.vec, v.vec);
+  const vec3 uuv = Vec3Cross(q.vec, uv.vec);
   vec4       out = {.w = v.w};
-  for (int i = 0; i < 3; ++i) out.simd[i] = v.simd[i] + ((uv.simd[i] * q.simd[VEC_W]) + uuv.simd[i]) * 2.0f;
+  for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
   return out;
 }
 MATH_INLINE quat QuatFromEuler(const vec3 euler) {
@@ -289,13 +321,13 @@ MATH_INLINE quat QuatFromEuler(const vec3 euler) {
   }
   // todo SIMDIZE
   quat out;
-  out.w = c.x * c.y * c.z + s.x * s.y * s.z;
-  out.x = s.x * c.y * c.z - c.x * s.y * s.z;
-  out.y = c.x * s.y * c.z + s.x * c.y * s.z;
-  out.z = c.x * c.y * s.z - s.x * s.y * c.z;
+  out V_W = c V_X * c V_Y * c V_Z + s V_X * s V_Y * s V_Z;
+  out V_X = s V_X * c V_Y * c V_Z - c V_X * s V_Y * s V_Z;
+  out V_Y = c V_X * s V_Y * c V_Z + s V_X * c V_Y * s V_Z;
+  out V_Z = c V_X * c V_Y * s V_Z - s V_X * s V_Y * c V_Z;
   return out;
 }
-MATH_INLINE void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
+MATH_INLINE void QuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
   // todo SIMDIZE
   pDst->w = pSrc->w * pMul->w - pSrc->x * pMul->x - pSrc->y * pMul->y - pSrc->z * pMul->z;
   pDst->x = pSrc->w * pMul->x + pSrc->x * pMul->w + pSrc->y * pMul->z - pSrc->z * pMul->y;
@@ -304,36 +336,36 @@ MATH_INLINE void vkmQuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
 }
 MATH_INLINE vec4 Vec4MulMat4(const mat4 m, const vec4 v) {
   // todo SIMDIZE
-  vec4 out;
-  out.simd[0] = m.simd[MAT_C0_R0] * v.simd[0] + m.simd[MAT_C1_R0] * v.simd[1] + m.simd[MAT_C2_R0] * v.simd[2] + m.simd[MAT_C3_R0] * v.simd[3];
-  out.simd[1] = m.simd[MAT_C0_R1] * v.simd[0] + m.simd[MAT_C1_R1] * v.simd[1] + m.simd[MAT_C2_R1] * v.simd[2] + m.simd[MAT_C3_R1] * v.simd[3];
-  out.simd[2] = m.simd[MAT_C0_R2] * v.simd[0] + m.simd[MAT_C1_R2] * v.simd[1] + m.simd[MAT_C2_R2] * v.simd[2] + m.simd[MAT_C3_R2] * v.simd[3];
-  out.simd[3] = m.simd[MAT_C0_R3] * v.simd[0] + m.simd[MAT_C1_R3] * v.simd[1] + m.simd[MAT_C2_R3] * v.simd[2] + m.simd[MAT_C3_R3] * v.simd[3];
+  vec4                       out;
+  out.vec[X] = m V_00 * v V_X + m V_10 * v V_Y + m V_20 * v V_Z + m V_30 * v V_W;
+  out.vec[Y] = m V_01 * v V_X + m V_11 * v V_Y + m V_21 * v V_Z + m V_31 * v V_W;
+  out.vec[Z] = m V_02 * v V_X + m V_12 * v V_Y + m V_22 * v V_Z + m V_32 * v V_W;
+  out.vec[W] = m V_03 * v V_X + m V_13 * v V_Y + m V_23 * v V_Z + m V_33 * v V_W;
   return out;
 }
 MATH_INLINE vec3 Vec4WDivide(const vec4 v) {
-  return (vec3){.simd = v.simd / v.simd[VEC_W]};
+  return (vec3){.vec = v.vec / v.vec[W]};
 }
 MATH_INLINE vec2 Vec2FromVec3(const vec3 ndc) {
-  return (vec2){.x = ndc.x, .y = ndc.y};
+  return (vec2){x : ndc.x, .y = ndc.y};
 }
 MATH_INLINE vec2 UVFromNDC(const vec3 ndc) {
   vec2 out = Vec2FromVec3(ndc);
-  out.simd = out.simd * 0.5f + 0.5f;
+  out.vec = out.vec * 0.5f + 0.5f;
   return out;
 }
 MATH_INLINE ivec2 iVec2CeiDivide(const ivec2 v, int d) {
-  vec2 fv = {.simd = {v.simd[VEC_X], v.simd[VEC_Y]}};
-  fv.simd = fv.simd / (float)d;
-  return (ivec2){.simd = {ceilf(fv.simd[VEC_X]), ceilf(fv.simd[VEC_Y])}};
+  vec2 fv = {.vec = {v.vec[X], v.vec[Y]}};
+  fv.vec = fv.vec / (float)d;
+  return (ivec2){.vec = {ceilf(fv.vec[X]), ceilf(fv.vec[Y])}};
 }
 MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
-  const float2_simd minvec = {min, min};
-  const float2_simd maxvec = {max, max};
-  vec2  clamped = v;
+  const float2_vec  minVec = {min, min};
+  const float2_vec  maxVec = {max, max};
+  vec2              clamped = v;
   for (int i = 0; i < 2; ++i) {
-    clamped.simd[i] = (v.simd[i] < minvec[i]) ? minvec[i] : v.simd[i];
-    clamped.simd[i] = (clamped.simd[i] > maxvec[i]) ? maxvec[i] : clamped.simd[i];
+    clamped.vec[i] = (v.vec[i] < minVec[i]) ? minVec[i] : v.vec[i];
+    clamped.vec[i] = (clamped.vec[i] > maxVec[i]) ? maxVec[i] : clamped.vec[i];
   }
   return clamped;
 }
