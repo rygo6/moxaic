@@ -1,13 +1,13 @@
 #include "test_node.h"
 #include <assert.h>
 
-
 enum SetBindNodeProcessIndices {
   SET_BIND_NODE_PROCESS_SRC_INDEX,
   SET_BIND_NODE_PROCESS_DST_INDEX,
+//  SET_BIND_NODE_PROCESS_UBO_INDEX,
   SET_BIND_NODE_PROCESS_COUNT
 };
-#define SET_WRITE_NODE_GBUFFER_SRC(src_image_view)               \
+#define SET_WRITE_NODE_PROCESS_SRC(src_image_view)               \
   (VkWriteDescriptorSet) {                                       \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
     .dstBinding = SET_BIND_NODE_PROCESS_SRC_INDEX,               \
@@ -18,7 +18,7 @@ enum SetBindNodeProcessIndices {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
     },                                                           \
   }
-#define SET_WRITE_NODE_GBUFFER_DST(dst_image_view)      \
+#define SET_WRITE_NODE_PROCESS_DST(dst_image_view)      \
   (VkWriteDescriptorSet) {                              \
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,    \
     .dstBinding = SET_BIND_NODE_PROCESS_DST_INDEX,      \
@@ -29,6 +29,16 @@ enum SetBindNodeProcessIndices {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,         \
     },                                                  \
   }
+//#define SET_WRITE_NODE_PROCESS_BUFFER(ubo)               \
+//  (VkWriteDescriptorSet) {                               \
+//    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,     \
+//    .dstBinding = SET_BIND_NODE_PROCESS_UBO_INDEX,       \
+//    .descriptorCount = 1,                                \
+//    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+//    .pBufferInfo = &(const VkDescriptorBufferInfo){      \
+//        .buffer = ubo,                                   \
+//        .range = sizeof(NodeProcessUBO)},                \
+//  }
 static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout) {
   const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -48,6 +58,12 @@ static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout) {
               .descriptorCount = 1,
               .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
           },
+//          [SET_BIND_NODE_PROCESS_UBO_INDEX] = {
+//              .binding = SET_BIND_NODE_PROCESS_UBO_INDEX,
+//              .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+//              .descriptorCount = 1,
+//              .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+//          },
       },
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, pLayout));
@@ -149,7 +165,10 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   {  // Create
     CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
     CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
-    CreateNodeProcessPipe("./shaders/node_process_blitup.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessPipe);
+//    CreateNodeProcessPipe("./shaders/node_process_blit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlit);
+    CreateNodeProcessPipe("./shaders/node_process_blitup.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
+    CreateNodeProcessPipe("./shaders/node_process_blitdown.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
+//    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pTestNode->nodeProcessUBOMemory, &pTestNode->nodeProcessUBOBuffer, (void**)&pTestNode->pNodeProcessUBOMapped);
 
     vkmCreateNodeFramebufferImport(context.stdRenderPass, VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
 
@@ -231,7 +250,11 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   VkPipelineLayout   stdPipelineLayout = pNode->stdPipelineLayout;
   VkPipeline         stdPipeline = pNode->stdPipeline;
   VkPipelineLayout   nodeProcessPipeLayout = pNode->nodeProcessPipeLayout;
-  VkPipeline         nodeProcessPipe = pNode->nodeProcessPipe;
+//  VkPipeline         nodeProcessBlit = pNode->nodeProcessBlit;
+  VkPipeline         nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
+  VkPipeline         nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
+//  NodeProcessUBO*    pNodeProcessUBOMapped = pNode->pNodeProcessUBOMapped;
+//  VkBuffer           nodeProcessUBOBuffer = pNode->nodeProcessUBOBuffer;
 
   // these shoudl go into a struct so all the images from one frame are side by side
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
@@ -283,6 +306,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   VKM_DEVICE_FUNC(CmdSetViewport);
   VKM_DEVICE_FUNC(CmdSetScissor);
   VKM_DEVICE_FUNC(CmdBindPipeline);
+  VKM_DEVICE_FUNC(CmdDispatch);
   VKM_DEVICE_FUNC(CmdBindDescriptorSets);
   VKM_DEVICE_FUNC(CmdBindVertexBuffers);
   VKM_DEVICE_FUNC(CmdBindIndexBuffer);
@@ -322,15 +346,12 @@ run_loop:
 
   const int framebufferIndex = nodeTimeline.value % VKM_SWAP_COUNT;
 
-//  CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_COMPUTE_WRITE, frameBufferGBufferImages[0]));
-//  CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_COMPUTE_WRITE, frameBufferGBufferImages[1]));
-
   switch (nodeType) {
     case MXC_NODE_TYPE_THREAD:
-//      CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, frameBufferColorImages[framebufferIndex]));
+      //      CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, frameBufferColorImages[framebufferIndex]));
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
-      CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
+      CmdPipelineImageBarrier2(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
       break;
     default: PANIC("nodeType not supported");
   }
@@ -351,36 +372,46 @@ run_loop:
     CmdEndRenderPass(cmd);
   }
 
-
-
   {  // Blit Framebuffer
     const VkImageMemoryBarrier2 blitBarrier[] = {
         VKM_IMAGE_BARRIER(VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_COMPUTE_READ, VK_IMAGE_ASPECT_DEPTH_BIT, frameBufferDepthImages[framebufferIndex]),
         VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_COMPUTE_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS),
     };
-    CmdPipelineImageBarriers(cmd, COUNT(blitBarrier), blitBarrier);
-
-//    CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER(VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_COMPUTE_READ, VK_IMAGE_ASPECT_DEPTH_BIT, frameBufferDepthImages[framebufferIndex]));
-//    CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_COMPUTE_WRITE, frameBufferGBufferImages[framebufferIndex]));
-
+    CmdPipelineImageBarriers2(cmd, COUNT(blitBarrier), blitBarrier);
+    vkCmdClearColorImage(cmd, frameBufferGBufferImages[framebufferIndex], VK_IMAGE_LAYOUT_GENERAL, &(const VkClearColorValue){{0, 0, 0, 0}}, 1, &(const VkImageSubresourceRange){.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = VKM_G_BUFFER_LEVELS, .layerCount = 1});
+    CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS));
     const VkWriteDescriptorSet initialPushSet[] = {
-        SET_WRITE_NODE_GBUFFER_SRC(frameBufferDepthImageViews[framebufferIndex]),
-        SET_WRITE_NODE_GBUFFER_DST(frameBufferGBufferImageViews[framebufferIndex]),
+        SET_WRITE_NODE_PROCESS_SRC(frameBufferDepthImageViews[framebufferIndex]),
+        SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][0]),
     };
-    CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipe);
+    CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitMipAveragePipe);
     CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(initialPushSet), initialPushSet);
-    const ivec2 groupCount = iVec2CeiDivide(MXC_NODE_SHARED[handle].globalSetState.framebufferSize, 32);
-    vkCmdDispatch(cmd, groupCount.x, groupCount.y, 1);
+    const ivec2 extent = {scissor.extent.width, scissor.extent.height};
+    const ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 32), 1);
+    CmdDispatch(cmd, groupCount.x, groupCount.y, 1);
 
     for (uint32_t i = 1; i < VKM_G_BUFFER_LEVELS; ++i) {
-      CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ, VKM_IMAGE_BARRIER_COMPUTE_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS));
+      // contain these barriers to the mip level
+      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS));
       const VkWriteDescriptorSet pushSet[] = {
-          SET_WRITE_NODE_GBUFFER_SRC(gBufferMipViews[framebufferIndex][i - i]),
-          SET_WRITE_NODE_GBUFFER_DST(gBufferMipViews[framebufferIndex][i]),
+          SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i - 1]),
+          SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i]),
       };
       CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(pushSet), pushSet);
-      const ivec2 mipGroupCount = iVec2Min((ivec2)(groupCount.vec >> i), 1);
-      vkCmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
+      const ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> 1}, 32), 1);
+      CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
+    }
+
+    CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitDownPipe);
+    for (uint32_t i = VKM_G_BUFFER_LEVELS - 1; i > 0; --i) {
+      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS));
+      const VkWriteDescriptorSet pushSet[] = {
+          SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i]),
+          SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i - 1]),
+      };
+      CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(pushSet), pushSet);
+      const ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> (1 - 1)}, 32), 1);
+      CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
     }
   }
 
@@ -391,10 +422,10 @@ run_loop:
           VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferNormalImages[framebufferIndex]),
           VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS),
       };
-      CmdPipelineImageBarriers(cmd, COUNT(barriers), barriers);
+      CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
-//      CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
+      //      CmdPipelineImageBarrier(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], queueIndex, VK_QUEUE_FAMILY_EXTERNAL));
       break;
     default: PANIC("nodeType not supported");
   }

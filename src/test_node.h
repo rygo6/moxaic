@@ -3,7 +3,11 @@
 #include "node.h"
 #include "renderer.h"
 
-//#define DEBUG_TEST_NODE_SWAP
+
+//typedef struct NodeProcessUBO {
+//  ivec2 srcSize;
+//  ivec2 dstSize;
+//} NodeProcessUBO;
 
 typedef struct MxcTestNodeCreateInfo {
   //  VkmContext
@@ -20,11 +24,17 @@ typedef struct MxcTestNode {
   VkPipeline       stdPipeline;
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
-  VkImageView gBufferMipViews[VKM_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
+  VkImageView    gBufferMipViews[VKM_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
 
   VkDescriptorSetLayout nodeProcessSetLayout;
   VkPipelineLayout      nodeProcessPipeLayout;
-  VkPipeline            nodeProcessPipe;
+  VkPipeline            nodeProcessBlit;
+  VkPipeline            nodeProcessBlitMipAveragePipe;
+  VkPipeline            nodeProcessBlitDownPipe;
+
+//  NodeProcessUBO* pNodeProcessUBOMapped;
+//  VkDeviceMemory  nodeProcessUBOMemory;
+//  VkBuffer        nodeProcessUBOBuffer;
 
   VkDevice device;
 

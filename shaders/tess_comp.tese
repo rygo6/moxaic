@@ -4,7 +4,7 @@
 #include "node_binding.glsl"
 #include "common_util.glsl"
 
-//#define DEBUG_CROP
+#define DEBUG_CROP
 
 layout(quads, equal_spacing, cw) in;
 
@@ -27,16 +27,15 @@ void main()
     // im reversing the lr and ul from what i'd expect... why!?
     const vec2 ndcUV = mix(nodeUBO.lrUV, nodeUBO.ulUV, uv);
 
-    #if  DEBUG_CROP
-    const vec2 scaledUV = uv;
-    const vec2 ndcUV = uv;
-    #endif
+//    const vec2 scaledUV = uv;
+//    const vec2 ndcUV = uv;
 
     float alphaValue = texture(nodeColor, scaledUV).a;
     float depthValue = texture(nodeGBuffer, scaledUV).r;
 
     vec2 ndc = NDCFromUV(ndcUV);
     vec4 clipPos = ClipPosFromNDC(ndc, depthValue);
+//    vec4 clipPos = ClipPosFromNDC(ndc, 0.5);
     vec3 worldPos = WorldPosFromNodeClipPos(clipPos);
     gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
 

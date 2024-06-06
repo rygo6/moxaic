@@ -347,7 +347,7 @@ MATH_INLINE vec3 Vec4WDivide(const vec4 v) {
   return (vec3){.vec = v.vec / v.vec[W]};
 }
 MATH_INLINE vec2 Vec2FromVec3(const vec3 ndc) {
-  return (vec2){x : ndc.x, .y = ndc.y};
+  return (vec2){.x = ndc.x, .y = ndc.y};
 }
 MATH_INLINE vec2 UVFromNDC(const vec3 ndc) {
   vec2 out = Vec2FromVec3(ndc);
@@ -357,11 +357,16 @@ MATH_INLINE vec2 UVFromNDC(const vec3 ndc) {
 MATH_INLINE ivec2 iVec2CeiDivide(const ivec2 v, int d) {
   vec2 fv = {.vec = {v.vec[X], v.vec[Y]}};
   fv.vec = fv.vec / (float)d;
-  return (ivec2){.vec = {ceilf(fv.vec[X]), ceilf(fv.vec[Y])}};
+  return (ivec2){ceilf(fv.vec[X]), ceilf(fv.vec[Y])};
 }
-MATH_INLINE ivec2 iVec2Min(ivec2 v, const int min) {
-  for (int i = 0; i < 2; ++i) v.vec[i] = v.vec[i] < min ? min : v.vec[i];
-  return v;
+MATH_INLINE ivec2 iVec2ShiftRightCeil(const ivec2 v, const int shift) {
+  if (shift <= 0) return v;
+  return (ivec2){(v.vec >> shift) + (v.vec % 2)};
+}
+MATH_INLINE ivec2 iVec2Min(const ivec2 v, const int min) {
+  ivec2 out;
+  for (int i = 0; i < 2; ++i) out.vec[i] = v.vec[i] < min ? min : v.vec[i];
+  return out;
 }
 MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
   const float2_vec minVec = {min, min};

@@ -235,7 +235,7 @@ enum VkmPipeSetStdIndices {
   VKM_PIPE_SET_STD_INDEX_COUNT,
 };
 #define VKM_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT
-#define VKM_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+#define VKM_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
 #define VKM_G_BUFFER_LEVELS 10
 #define VKM_PASS_CLEAR_COLOR \
   (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
@@ -347,6 +347,11 @@ static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_WRITE = &(const VkmImage
     .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT,
+    .layout = VK_IMAGE_LAYOUT_GENERAL,
+};
 static const VkmImageBarrier* VKM_TRANSFER_SRC_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
@@ -455,19 +460,19 @@ static const VkmImageBarrier* VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
 //----------------------------------------------------------------------------------
 #define VKM_INLINE __attribute__((always_inline)) static inline
 
-#define CmdPipelineImageBarriers(...) PFN_CmdPipelineImageBarriers(CmdPipelineBarrier2, __VA_ARGS__)
+#define CmdPipelineImageBarriers2(...) PFN_CmdPipelineImageBarriers(CmdPipelineBarrier2, __VA_ARGS__)
 VKM_INLINE void PFN_CmdPipelineImageBarriers(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
   func(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-#define CmdPipelineImageBarrier(...) PFN_CmdPipelineImageBarrierFunc(CmdPipelineBarrier2, __VA_ARGS__)
+#define CmdPipelineImageBarrier2(...) PFN_CmdPipelineImageBarrierFunc(CmdPipelineBarrier2, __VA_ARGS__)
 VKM_INLINE void PFN_CmdPipelineImageBarrierFunc(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
   func(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
 VKM_INLINE void vkmBlit(const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
   const VkImageBlit imageBlit = {
-      .srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
+      .srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
       .srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
-      .dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
+      .dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
       .dstOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
   };
   vkCmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
