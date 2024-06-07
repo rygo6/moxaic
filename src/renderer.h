@@ -91,9 +91,9 @@ typedef struct VkmTransform {
 } VkmTransform;
 
 typedef struct VkmTexture {
-  VkImage        image;
-  VkImageView    imageView;
-  VkDeviceMemory imageMemory;
+  VkImage        img;
+  VkImageView    view;
+  VkDeviceMemory memory;
   HANDLE         externalHandle;
 } VkmTexture;
 
@@ -362,6 +362,11 @@ static const VkmImageBarrier* VKM_TRANSFER_DST_IMAGE_BARRIER = &(const VkmImageB
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
+    .layout = VK_IMAGE_LAYOUT_GENERAL,
+};
 static const VkmImageBarrier* VKM_TRANSFER_READ_IMAGE_BARRIER = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
@@ -394,29 +399,30 @@ static const VkmImageBarrier* VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
     .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,      \
     .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,      \
     .image = barrier_image,                              \
-    .subresourceRange = (VkImageSubresourceRange){       \
+    .subresourceRange = (const VkImageSubresourceRange){ \
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,         \
         .levelCount = 1,                                 \
         .layerCount = 1,                                 \
     },                                                   \
   }
-#define VKM_COLOR_IMAGE_BARRIER_MIPS(src, dst, barrier_image, level_count) \
-  (const VkImageMemoryBarrier2) {                                          \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                     \
-    .srcStageMask = src->stageMask,                                        \
-    .srcAccessMask = src->accessMask,                                      \
-    .dstStageMask = dst->stageMask,                                        \
-    .dstAccessMask = dst->accessMask,                                      \
-    .oldLayout = src->layout,                                              \
-    .newLayout = dst->layout,                                              \
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                        \
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                        \
-    .image = barrier_image,                                                \
-    .subresourceRange = (VkImageSubresourceRange){                         \
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                           \
-        .levelCount = level_count,                                         \
-        .layerCount = 1,                                                   \
-    },                                                                     \
+#define VKM_COLOR_IMAGE_BARRIER_MIP(src, dst, barrier_image, base_mip_level, level_count) \
+  (const VkImageMemoryBarrier2) {                                                         \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                    \
+    .srcStageMask = src->stageMask,                                                       \
+    .srcAccessMask = src->accessMask,                                                     \
+    .dstStageMask = dst->stageMask,                                                       \
+    .dstAccessMask = dst->accessMask,                                                     \
+    .oldLayout = src->layout,                                                             \
+    .newLayout = dst->layout,                                                             \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                       \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                       \
+    .image = barrier_image,                                                               \
+    .subresourceRange = (const VkImageSubresourceRange){                                  \
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                                          \
+        .baseMipLevel = base_mip_level,                                                   \
+        .levelCount = level_count,                                                        \
+        .layerCount = 1,                                                                  \
+    },                                                                                    \
   }
 #define VKM_IMAGE_BARRIER(src, dst, aspect_mask, barrier_image) \
   (const VkImageMemoryBarrier2) {                               \
@@ -430,7 +436,7 @@ static const VkmImageBarrier* VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
     .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,             \
     .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,             \
     .image = barrier_image,                                     \
-    .subresourceRange = (VkImageSubresourceRange){              \
+    .subresourceRange = (const VkImageSubresourceRange){        \
         .aspectMask = aspect_mask,                              \
         .levelCount = 1,                                        \
         .layerCount = 1,                                        \
@@ -622,12 +628,13 @@ VKM_INLINE bool vkmProcessInput(VkmTransform* pCameraTransform) {
   bool inputDirty = false;
   if (input.mouseLocked) {
     pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 0.4f;
+    pCameraTransform->euler.x += input.mouseDeltaY * input.mouseLocked * input.deltaTime * 0.4f;
     pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
     inputDirty = true;
   }
   if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
     const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward});
-    const float moveSensitivity = input.deltaTime * 0.5f;
+    const float moveSensitivity = input.deltaTime * 0.8f;
     for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
     inputDirty = true;
   }

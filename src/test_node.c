@@ -176,7 +176,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
       for (uint32_t mipIndex = 0; mipIndex < VKM_G_BUFFER_LEVELS; ++mipIndex) {
         const VkImageViewCreateInfo imageViewCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = pTestNode->framebuffers[bufferIndex].gBuffer.image,
+            .image = pTestNode->framebuffers[bufferIndex].gBuffer.img,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = VKM_G_BUFFER_FORMAT,
             .subresourceRange = {
@@ -200,7 +200,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
 
     const VkWriteDescriptorSet writeSets[] = {
-        VKM_SET_WRITE_STD_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.imageView),
+        VKM_SET_WRITE_STD_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.view),
         VKM_SET_WRITE_STD_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer),
     };
     vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
@@ -247,7 +247,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   VkDescriptorSet    checkerMaterialSet = pNode->checkerMaterialSet;
   VkDescriptorSet    sphereObjectSet = pNode->sphereObjectSet;
   VkRenderPass       stdRenderPass = pNode->stdRenderPass;
-  VkPipelineLayout   stdPipelineLayout = pNode->stdPipelineLayout;
+  VkPipelineLayout   stdPipeLayout = pNode->stdPipelineLayout;
   VkPipeline         stdPipeline = pNode->stdPipeline;
   VkPipelineLayout   nodeProcessPipeLayout = pNode->nodeProcessPipeLayout;
 //  VkPipeline         nodeProcessBlit = pNode->nodeProcessBlit;
@@ -258,21 +258,21 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   // these shoudl go into a struct so all the images from one frame are side by side
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
-  VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
-  VkImage       frameBufferNormalImages[VKM_SWAP_COUNT];
-  VkImage       frameBufferDepthImages[VKM_SWAP_COUNT];
-  VkImage       frameBufferGBufferImages[VKM_SWAP_COUNT];
-  VkImageView   frameBufferDepthImageViews[VKM_SWAP_COUNT];
-  VkImageView   frameBufferGBufferImageViews[VKM_SWAP_COUNT];
+  VkImage       framebufferColorImgs[VKM_SWAP_COUNT];
+  VkImage       framebufferNormalImgs[VKM_SWAP_COUNT];
+  VkImage       framebufferDepthImgs[VKM_SWAP_COUNT];
+  VkImage       framebufferGBufferImgs[VKM_SWAP_COUNT];
+  VkImageView   framebufferDepthImgViews[VKM_SWAP_COUNT];
+  VkImageView   framebufferGBufferImgViews[VKM_SWAP_COUNT];
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     framebuffers[i] = pNode->framebuffers[i].framebuffer;
-    frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
-    frameBufferNormalImages[i] = pNode->framebuffers[i].normal.image;
-    frameBufferDepthImages[i] = pNode->framebuffers[i].depth.image;
-    frameBufferGBufferImages[i] = pNode->framebuffers[i].gBuffer.image;
+    framebufferColorImgs[i] = pNode->framebuffers[i].color.img;
+    framebufferNormalImgs[i] = pNode->framebuffers[i].normal.img;
+    framebufferDepthImgs[i] = pNode->framebuffers[i].depth.img;
+    framebufferGBufferImgs[i] = pNode->framebuffers[i].gBuffer.img;
 
-    frameBufferDepthImageViews[i] = pNode->framebuffers[i].depth.imageView;
-    frameBufferGBufferImageViews[i] = pNode->framebuffers[i].gBuffer.imageView;
+    framebufferDepthImgViews[i] = pNode->framebuffers[i].depth.view;
+    framebufferGBufferImgViews[i] = pNode->framebuffers[i].gBuffer.view;
   }
   VkImageView gBufferMipViews[VKM_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
   memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -315,6 +315,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   VKM_DEVICE_FUNC(EndCommandBuffer);
   VKM_DEVICE_FUNC(CmdPipelineBarrier2);
   VKM_DEVICE_FUNC(CmdPushDescriptorSetKHR);
+  VKM_DEVICE_FUNC(CmdClearColorImage);
 
 run_loop:
 
@@ -351,7 +352,7 @@ run_loop:
       //      CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, frameBufferColorImages[framebufferIndex]));
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
-      CmdPipelineImageBarrier2(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, frameBufferColorImages[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
+      CmdPipelineImageBarrier2(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImgs[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
       break;
     default: PANIC("nodeType not supported");
   }
@@ -360,29 +361,28 @@ run_loop:
     vkmCmdBeginPass(cmd, stdRenderPass, (VkClearColorValue){0, 0, 0.1, 0}, framebuffers[framebufferIndex]);
 
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeline);
-    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipelineLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
-    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipelineLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
-    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipelineLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeLayout, VKM_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeLayout, VKM_PIPE_SET_STD_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
 
     CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){sphereBuffer}, (const VkDeviceSize[]){sphereVertexOffset});
     CmdBindIndexBuffer(cmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
     CmdDrawIndexed(cmd, sphereIndexCount, 1, 0, 0, 0);
-
 
     CmdEndRenderPass(cmd);
   }
 
   {  // Blit Framebuffer
     const VkImageMemoryBarrier2 blitBarrier[] = {
-        VKM_IMAGE_BARRIER(VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_COMPUTE_READ, VK_IMAGE_ASPECT_DEPTH_BIT, frameBufferDepthImages[framebufferIndex]),
-        VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_COMPUTE_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS),
+        VKM_IMAGE_BARRIER(VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_COMPUTE_READ, VK_IMAGE_ASPECT_DEPTH_BIT, framebufferDepthImgs[framebufferIndex]),
+        VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL, framebufferGBufferImgs[framebufferIndex], 0, VKM_G_BUFFER_LEVELS),
     };
     CmdPipelineImageBarriers2(cmd, COUNT(blitBarrier), blitBarrier);
-    vkCmdClearColorImage(cmd, frameBufferGBufferImages[framebufferIndex], VK_IMAGE_LAYOUT_GENERAL, &(const VkClearColorValue){{0, 0, 0, 0}}, 1, &(const VkImageSubresourceRange){.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = VKM_G_BUFFER_LEVELS, .layerCount = 1});
-    CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS));
+    CmdClearColorImage(cmd, framebufferGBufferImgs[framebufferIndex], VK_IMAGE_LAYOUT_GENERAL, &MXC_NODE_CLEAR_COLOR, 1, &(const VkImageSubresourceRange){.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = VKM_G_BUFFER_LEVELS, .layerCount = 1});
+    CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL, VKM_IMAGE_BARRIER_COMPUTE_WRITE, framebufferGBufferImgs[framebufferIndex], 0, VKM_G_BUFFER_LEVELS));
     const VkWriteDescriptorSet initialPushSet[] = {
-        SET_WRITE_NODE_PROCESS_SRC(frameBufferDepthImageViews[framebufferIndex]),
-        SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][0]),
+        SET_WRITE_NODE_PROCESS_SRC(framebufferDepthImgViews[framebufferIndex]),
+        SET_WRITE_NODE_PROCESS_DST(framebufferGBufferImgViews[framebufferIndex]),
     };
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitMipAveragePipe);
     CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(initialPushSet), initialPushSet);
@@ -392,7 +392,8 @@ run_loop:
 
     for (uint32_t i = 1; i < VKM_G_BUFFER_LEVELS; ++i) {
       // contain these barriers to the mip level
-      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS));
+      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ, framebufferGBufferImgs[framebufferIndex], i - 1, 1));
+      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_COMPUTE_READ, VKM_IMAGE_BARRIER_COMPUTE_WRITE, framebufferGBufferImgs[framebufferIndex], i, 1));
       const VkWriteDescriptorSet pushSet[] = {
           SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i - 1]),
           SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i]),
@@ -404,7 +405,8 @@ run_loop:
 
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitDownPipe);
     for (uint32_t i = VKM_G_BUFFER_LEVELS - 1; i > 0; --i) {
-      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS));
+      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ, framebufferGBufferImgs[framebufferIndex], i, 1));
+      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_COMPUTE_READ, VKM_IMAGE_BARRIER_COMPUTE_WRITE, framebufferGBufferImgs[framebufferIndex], i - 1, 1));
       const VkWriteDescriptorSet pushSet[] = {
           SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i]),
           SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i - 1]),
@@ -418,9 +420,9 @@ run_loop:
   switch (nodeType) {
     case MXC_NODE_TYPE_THREAD:
       const VkImageMemoryBarrier2 barriers[] = {
-          VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferColorImages[framebufferIndex]),
-          VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferNormalImages[framebufferIndex]),
-          VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, frameBufferGBufferImages[framebufferIndex], VKM_G_BUFFER_LEVELS),
+          VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, framebufferColorImgs[framebufferIndex]),
+          VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, framebufferNormalImgs[framebufferIndex]),
+          VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, framebufferGBufferImgs[framebufferIndex], 0, VKM_G_BUFFER_LEVELS),
       };
       CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
       break;
@@ -441,6 +443,10 @@ run_loop:
   MXC_NODE_SHARED[handle].currentTimelineSignal = nodeTimeline.value;
 
   compBaseCycleValue += compCyclesToSkip;
+
+//  _Thread_local static int count;
+//  if (count++ > 10)
+//    return;
 
   CHECK_RUNNING
   goto run_loop;

@@ -238,7 +238,7 @@ void mxcRunCompNode(const MxcBasicComp* pNode) {
   VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     framebuffers[i] = pNode->framebuffers[i].framebuffer;
-    frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
+    frameBufferColorImages[i] = pNode->framebuffers[i].color.img;
   }
 
   // just making sure atomics are only using barriers, not locks
