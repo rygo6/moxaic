@@ -144,8 +144,8 @@ void CreateSphereMesh(const float radius, const int slicesCount, const int stack
     }
     info.pIndices = indices;
     info.pVertices = vertices;
-    VkmCreateMesh(&info, pMesh);
   }
+  VkmCreateMesh(&info, pMesh);
 }
 
 static INLINE float CalcViewport(const float ulUV, const float lrUV, const float framebufferSize, const float screenSize) {

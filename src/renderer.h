@@ -90,6 +90,13 @@ typedef struct VkmTransform {
   vec4 rotation;
 } VkmTransform;
 
+typedef struct VkmMemoryArena {
+  VkImage        img;
+  VkImageView    view;
+  VkDeviceMemory memory;
+  HANDLE         externalHandle;
+} VkmMemoryArena;
+
 typedef struct VkmTexture {
   VkImage        img;
   VkImageView    view;
@@ -650,6 +657,13 @@ VKM_INLINE void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, 
   VKM_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
   vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
 }
+
+typedef struct VkmMemoryAllocateRequest {
+  VkMemoryPropertyFlags memoryPropertyFlags;
+  VkDeviceSize          bufferSize;
+  VkBufferUsageFlags    usage;
+  VkmLocality           locality;
+} VkmMemoryAllocateRequest;
 
 void vkmCreateStdFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);

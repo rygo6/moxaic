@@ -107,13 +107,13 @@ static void CreateStdPipeLayout(VkmStdPipe* pStandardPipeline) {
   VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, &pStandardPipeline->pipeLayout));
 }
 
-#define DEFAULT_ROBUSTNESS_STATE                                                 \
-  (const VkPipelineRobustnessCreateInfoEXT) {                                    \
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO_EXT,              \
+#define DEFAULT_ROBUSTNESS_STATE                                                         \
+  (const VkPipelineRobustnessCreateInfoEXT) {                                            \
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO_EXT,                      \
     .storageBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT, \
     .uniformBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT, \
     .vertexInputs = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT,   \
-    .images = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_ROBUST_IMAGE_ACCESS_2_EXT,          \
+    .images = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_ROBUST_IMAGE_ACCESS_2_EXT,           \
   }
 #define DEFAULT_VERTEX_INPUT_STATE                                               \
   (const VkPipelineVertexInputStateCreateInfo) {                                 \
@@ -375,55 +375,56 @@ void vkmAllocateDescriptorSets(const VkDescriptorPool descriptorPool, const uint
 // Memory
 //----------------------------------------------------------------------------------
 
-static uint32_t FindMemoryTypeIndex(const VkPhysicalDeviceMemoryProperties* pPhysicalDeviceMemoryProperties, const uint32_t memoryTypeBits, VkMemoryPropertyFlags memoryPropertyFlags) {
-  for (uint32_t i = 0; i < pPhysicalDeviceMemoryProperties->memoryTypeCount; i++) {
+static uint32_t FindMemoryTypeIndex(const uint32_t memoryTypeCount, VkMemoryType* pMemoryTypes, const uint32_t memoryTypeBits, const VkMemoryPropertyFlags memPropFlags) {
+  for (uint32_t i = 0; i < memoryTypeCount; i++) {
     bool hasTypeBits = memoryTypeBits & 1 << i;
-    bool hasPropertyFlags = (pPhysicalDeviceMemoryProperties->memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags;
+    bool hasPropertyFlags = (pMemoryTypes[i].propertyFlags & memPropFlags) == memPropFlags;
     if (hasTypeBits && hasPropertyFlags) {
       return i;
     }
   }
-  int index = 0;
-  while (memoryPropertyFlags) {
-    if (memoryPropertyFlags & 1) {
+  int                   index = 0;
+  VkMemoryPropertyFlags printFlags = memPropFlags;
+  while (printFlags) {
+    if (printFlags & 1) {
       printf(" %s ", string_VkMemoryPropertyFlagBits(1U << index));
     }
     ++index;
-    memoryPropertyFlags >>= 1;
+    printFlags >>= 1;
   }
   PANIC("Failed to find memory with properties!");
   return -1;
 }
 
 
-static size_t  totalAllocSize = 0;
-VkDeviceMemory localMemory;
-VkDeviceMemory localVisibleCoherentMemory;
-VkDeviceMemory visibleCoherentMemory;
-static void    VkmAllocContextMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMem) {
-  VkPhysicalDeviceMemoryProperties memoryProps;
-  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memoryProps);
-  const uint32_t                   memTypeIndex = FindMemoryTypeIndex(&memoryProps, pMemReqs->memoryTypeBits, memPropFlags);
-  const VkExportMemoryAllocateInfo exportMemAllocInfo = {
-         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-         .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
-  };
-  const VkMemoryAllocateInfo memAllocInfo = {
-         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-         .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : NULL,
-         .allocationSize = pMemReqs->size,
-         .memoryTypeIndex = memTypeIndex,
-  };
-  VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMem));
-  totalAllocSize += pMemReqs->size;
-  printf("%zu allocated\n", totalAllocSize);
-}
+static size_t totalAllocSize[VK_MAX_MEMORY_TYPES] = {};
+//VkDeviceMemory localMemory;
+//VkDeviceMemory localVisibleCoherentMemory;
+//VkDeviceMemory visibleCoherentMemory;
+//static void    VkmAllocContextMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMem) {
+//  VkPhysicalDeviceMemoryProperties memProps;
+//  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
+//  const uint32_t                   memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, memPropFlags);
+//  const VkExportMemoryAllocateInfo exportMemAllocInfo = {
+//         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+//         .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
+//  };
+//  const VkMemoryAllocateInfo memAllocInfo = {
+//         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+//         .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : NULL,
+//         .allocationSize = pMemReqs->size,
+//         .memoryTypeIndex = memTypeIndex,
+//  };
+//  VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMem));
+//  totalAllocSize += pMemReqs->size;
+//  printf("%zu allocated\n", totalAllocSize);
+//}
 
 // so what we need to do here is make something which allows you to pre-emptively figure out all memory requirements, store that state, then have it initialize
 void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
   VkPhysicalDeviceMemoryProperties memProps;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
-  const uint32_t memTypeIndex = FindMemoryTypeIndex(&memProps, pMemReqs->memoryTypeBits, memPropFlags);
+  const uint32_t memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, memPropFlags);
   // todo your supposed check if it wants dedicated memory
   //    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
   //            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
@@ -442,8 +443,18 @@ void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
       .memoryTypeIndex = memTypeIndex,
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
-  totalAllocSize += pMemReqs->size;
-  //  printf("%zu allocated in type %d\n", totalAllocSize, memTypeIndex);
+
+  totalAllocSize[memTypeIndex] += pMemReqs->size;
+  int index = 0;
+  VkMemoryPropertyFlags printFlags = memPropFlags;
+  while (printFlags) {
+    if (printFlags & 1) {
+      printf("%s ", string_VkMemoryPropertyFlagBits(1U << index));
+    }
+    ++index;
+    printFlags >>= 1;
+  }
+  printf("%d %zu allocated in type %d\n", memPropFlags, totalAllocSize[memTypeIndex], memTypeIndex);
 }
 void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
