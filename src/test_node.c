@@ -1,4 +1,5 @@
 #include "test_node.h"
+#include "mid_shape.h"
 #include <assert.h>
 
 enum SetBindNodeProcessIndices {
@@ -98,54 +99,6 @@ void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout layout
   };
   VKM_REQUIRE(vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, pPipe));
   vkDestroyShaderModule(context.device, shader, VKM_ALLOC);
-}
-
-void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
-  VkmMeshCreateInfo info = {
-      .indexCount = slicesCount * stackCount * 2 * 3,
-      .vertexCount = (slicesCount + 1) * (stackCount + 1),
-  };
-  uint16_t indices[info.indexCount];
-  int      index = 0;
-  for (int i = 0; i < stackCount; i++) {
-    for (int j = 0; j < slicesCount; j++) {
-      const uint16_t v1 = i * (slicesCount + 1) + j;
-      const uint16_t v2 = i * (slicesCount + 1) + j + 1;
-      const uint16_t v3 = (i + 1) * (slicesCount + 1) + j;
-      const uint16_t v4 = (i + 1) * (slicesCount + 1) + j + 1;
-      indices[index++] = v1;
-      indices[index++] = v2;
-      indices[index++] = v3;
-      indices[index++] = v2;
-      indices[index++] = v4;
-      indices[index++] = v3;
-    }
-  }
-  VkmVertex   vertices[info.vertexCount];
-  const float slices = (float)slicesCount;
-  const float stacks = (float)stackCount;
-  const float dtheta = 2.0f * VKM_PI / slices;
-  const float dphi = VKM_PI / stacks;
-  int         vertex = 0;
-  for (int i = 0; +i <= stackCount; i++) {
-    const float fi = (float)i;
-    const float phi = fi * dphi;
-    for (int j = 0; j <= slicesCount; j++) {
-      const float ji = (float)j;
-      const float theta = ji * dtheta;
-      const float x = radius * sinf(phi) * cosf(theta);
-      const float y = radius * sinf(phi) * sinf(theta);
-      const float z = radius * cosf(phi);
-      vertices[vertex++] = (VkmVertex){
-          .position = {x, y, z},
-          .normal = {x, y, z},
-          .uv = {ji / slices, fi / stacks},
-      };
-    }
-    info.pIndices = indices;
-    info.pVertices = vertices;
-  }
-  VkmCreateMesh(&info, pMesh);
 }
 
 static INLINE float CalcViewport(const float ulUV, const float lrUV, const float framebufferSize, const float screenSize) {

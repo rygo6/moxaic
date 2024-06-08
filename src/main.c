@@ -5,6 +5,9 @@
 
 #include "comp_node.h"
 
+#define MID_SHAPE_IMPLEMENTATION
+#include "mid_shape.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 

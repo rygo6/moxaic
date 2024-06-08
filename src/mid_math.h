@@ -4,17 +4,17 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define VKM_PI 3.14159265358979323846f
+#define MID_PI 3.14159265358979323846f
 
-#define MID_SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
-MID_SIMD_TYPE(float, float2, 2);
-MID_SIMD_TYPE(uint32_t, int2, 2);
-MID_SIMD_TYPE(float, float3, 4);
-MID_SIMD_TYPE(uint32_t, int3, 4);
-MID_SIMD_TYPE(float, float4, 4);
-MID_SIMD_TYPE(uint32_t, int4, 4);
-MID_SIMD_TYPE(float, mat4, 16);
-#undef MID_SIMD_TYPE
+#define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
+SIMD_TYPE(float, float2, 2);
+SIMD_TYPE(uint32_t, int2, 2);
+SIMD_TYPE(float, float3, 4);
+SIMD_TYPE(uint32_t, int3, 4);
+SIMD_TYPE(float, float4, 4);
+SIMD_TYPE(uint32_t, int4, 4);
+SIMD_TYPE(float, mat4, 16);
+#undef SIMD_TYPE
 // should I rename simd to vec and get rid of vec_name?
 #define VEC_UNION(type, simd_type, name, align, count, ...) \
   typedef union __attribute((aligned(align))) name {        \

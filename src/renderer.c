@@ -671,7 +671,7 @@ static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 };
 
-void vkmCreateStdFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
+void vkmCreateCompFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -706,6 +706,7 @@ void vkmCreateStdFramebuffers(const VkRenderPass renderPass, const uint32_t fram
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     VkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].depth);
 
+    // I may or may not need the gbuffer in the comp but lets leave it for now
     textureCreateInfo.debugName = "GBufferFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_G_BUFFER_FORMAT;
     textureCreateInfo.imageCreateInfo.usage = VKM_G_BUFFER_USAGE;
