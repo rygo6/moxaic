@@ -101,19 +101,6 @@ void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout layout
   vkDestroyShaderModule(context.device, shader, VKM_ALLOC);
 }
 
-static INLINE float CalcViewport(const float ulUV, const float lrUV, const float framebufferSize, const float screenSize) {
-  if (framebufferSize > screenSize) {
-    if (ulUV < 0.0f && lrUV > 1.0f)
-      return 0.0f;
-    else if (lrUV < 1.0f)
-      return (1.0f - lrUV) * screenSize;
-    else
-      return -ulUV * screenSize;
-  } else {
-    return -ulUV * screenSize;
-  }
-}
-
 void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode) {
   {  // Create
     CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
@@ -283,16 +270,20 @@ run_loop:
   BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
   const VkViewport viewport = {
-      .x = CalcViewport(nodesShared[handle].ulUV.x, nodesShared[handle].lrUV.x, nodesShared[handle].globalSetState.framebufferSize.x, DEFAULT_WIDTH),
-      .y = CalcViewport(nodesShared[handle].ulUV.y, nodesShared[handle].lrUV.y, nodesShared[handle].globalSetState.framebufferSize.y, DEFAULT_HEIGHT),
+      .x = -nodesShared[handle].ulUV.x * DEFAULT_WIDTH,
+      .y = -nodesShared[handle].ulUV.y * DEFAULT_HEIGHT,
       .width = DEFAULT_WIDTH,
       .height = DEFAULT_HEIGHT,
       .maxDepth = 1.0f,
   };
   const VkRect2D scissor = {
+      .offset = {
+          .x = 0,
+          .y = 0,
+      },
       .extent = {
-          .width = nodesShared[handle].globalSetState.framebufferSize.x > DEFAULT_WIDTH ? DEFAULT_WIDTH : nodesShared[handle].globalSetState.framebufferSize.x,
-          .height = nodesShared[handle].globalSetState.framebufferSize.y > DEFAULT_HEIGHT ? DEFAULT_HEIGHT : nodesShared[handle].globalSetState.framebufferSize.y,
+          .width = nodesShared[handle].globalSetState.framebufferSize.x,
+          .height = nodesShared[handle].globalSetState.framebufferSize.y,
       },
   };
   CmdSetViewport(cmd, 0, 1, &viewport);

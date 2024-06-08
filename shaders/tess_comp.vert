@@ -9,7 +9,7 @@ layout(location = 1) out vec2 outUV;
 
 void main() {
     // could remove pos and normal from pipe entirely !?
-    gl_Position = vec4(inPos.xyz, 1.0);
+//    gl_Position = vec4(inPos.xyz, 1.0);
     outNormal = inNormal;
     outUV = inUV;
 }

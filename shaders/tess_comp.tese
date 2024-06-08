@@ -18,9 +18,9 @@ layout (location = 2) out vec4 outWorldPos;
 void main()
 {
     const vec2 inUV = mix(
-    mix(inUVs[0], inUVs[1], gl_TessCoord.x),
-    mix(inUVs[3], inUVs[2], gl_TessCoord.x),
-    gl_TessCoord.y);
+        mix(inUVs[0], inUVs[1], gl_TessCoord.x),
+        mix(inUVs[3], inUVs[2], gl_TessCoord.x),
+        gl_TessCoord.y);
 
     const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
     const vec2 scaledUV = inUV * scale;
@@ -38,7 +38,7 @@ void main()
     outUV = scaledUV;
 
     outNormal = mix(
-    mix(inNormals[0], inNormals[1], gl_TessCoord.x),
-    mix(inNormals[3], inNormals[2], gl_TessCoord.x),
-    gl_TessCoord.y);
+        mix(inNormals[0], inNormals[1], gl_TessCoord.x),
+        mix(inNormals[3], inNormals[2], gl_TessCoord.x),
+        gl_TessCoord.y);
 }
