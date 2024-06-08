@@ -13,6 +13,9 @@ SIMD_TYPE(float, float3, 4);
 SIMD_TYPE(uint32_t, int3, 4);
 SIMD_TYPE(float, float4, 4);
 SIMD_TYPE(uint32_t, int4, 4);
+// basing it off a 64 byte simd type can offer small per gain
+// with no negative when accessing 16 byte rows
+// https://godbolt.org/z/Gbssve8rf
 SIMD_TYPE(float, mat4, 16);
 #undef SIMD_TYPE
 // should I rename simd to vec and get rid of vec_name?
@@ -175,6 +178,7 @@ MATH_INLINE mat4 QuatToMat4(const quat q) {
   return out;
 }
 // Turns out this is the fastest way. Write out the multiplication on the 16 byte vecs and GCC will produce the best SIMD
+// Accessing a simd through a union of a different type will apply simd optimizations
 // https://godbolt.org/z/d6PrzK4xP
 MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
   /// verify if refing these not through the simd type actually breaks the gcc simd optimization
