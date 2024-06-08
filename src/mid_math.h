@@ -2,6 +2,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #define VKM_PI 3.14159265358979323846f
 
@@ -377,6 +378,13 @@ MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
     clamped.vec[i] = (clamped.vec[i] > maxVec[i]) ? maxVec[i] : clamped.vec[i];
   }
   return clamped;
+}
+MATH_INLINE void Mat4Print(const mat4 m) {
+  printf("mat4:\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n",
+         m.c0.r0, m.c1.r0, m.c2.r0, m.c3.r0,
+         m.c0.r1, m.c1.r1, m.c2.r1, m.c3.r1,
+         m.c0.r2, m.c1.r2, m.c2.r2, m.c3.r2,
+         m.c0.r3, m.c1.r3, m.c2.r3, m.c3.r3);
 }
 
 #undef MATH_INLINE

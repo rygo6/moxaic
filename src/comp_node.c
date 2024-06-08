@@ -313,6 +313,7 @@ run_loop:
             memcpy(&MXC_NODE_SHARED[i].nodeSetState.view, (void*)&MXC_NODE_SHARED[i].globalSetState, sizeof(VkmGlobalSetState));
             MXC_NODE_SHARED[i].nodeSetState.ulUV = MXC_NODE_SHARED[i].lrUV;
             MXC_NODE_SHARED[i].nodeSetState.lrUV = MXC_NODE_SHARED[i].ulUV;
+
             if (debugSwap) {
               MXC_NODE_SHARED[i].nodeSetState.ulUV = (vec2){0, 0};
               MXC_NODE_SHARED[i].nodeSetState.lrUV = (vec2){1, 1};
@@ -344,18 +345,12 @@ run_loop:
             MXC_NODE_SHARED[i].globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
             MXC_NODE_SHARED[i].ulUV = ulUV;
             MXC_NODE_SHARED[i].lrUV = lrUV;
+
             if (debugSwap) {
               MXC_NODE_SHARED[i].globalSetState.framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
               MXC_NODE_SHARED[i].ulUV = (vec2){0, 0};
               MXC_NODE_SHARED[i].lrUV = (vec2){1, 1};
             }
-
-            //            mat4 m = MXC_NODE_SHARED[i].nodeSetState.proj;
-            //            printf("mat4:\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n",
-            //                   m.c0.r0, m.c1.r0, m.c2.r0, m.c3.r0,
-            //                   m.c0.r1, m.c1.r1, m.c2.r1, m.c3.r1,
-            //                   m.c0.r2, m.c1.r2, m.c2.r2, m.c3.r2,
-            //                   m.c0.r3, m.c1.r3, m.c2.r3, m.c3.r3);
           }
         }
       }
@@ -367,7 +362,10 @@ run_loop:
       vkmTimelineSignal(context.device, &compTimeline);
 
       framebufferIndex = !framebufferIndex;
+
       vkmCmdResetBegin(cmd);
+      vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, context.timeQueryPool, 0);
+
       vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
 
       vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
@@ -386,6 +384,9 @@ run_loop:
 
       vkCmdEndRenderPass(cmd);
 
+      vkResetQueryPool(device, context.timeQueryPool, 0, 2);
+      vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, context.timeQueryPool, 1);
+
       {  // Blit Framebuffer
         vkAcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &swap.swapIndex);
         const VkImage               swapImage = swap.images[swap.swapIndex];
@@ -395,10 +396,12 @@ run_loop:
             VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_PRESENT, VKM_TRANSFER_DST_IMAGE_BARRIER, swapImage),
         };
         CmdPipelineImageBarriers2(cmd, 2, blitBarrier);
+
         if (debugSwap)
           vkmBlit(cmd, MXC_NODE_SHARED[0].framebufferColorImages[framebufferIndex], swapImage);
         else
           vkmBlit(cmd, framebufferColorImage, swapImage);
+
         const VkImageMemoryBarrier2 presentBarrier[] = {
             //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, framebufferColorImage),
             VKM_COLOR_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_PRESENT, swapImage),
@@ -411,6 +414,15 @@ run_loop:
       // signal input cycle on complete
       compBaseCycleValue += MXC_CYCLE_COUNT;
       vkmSubmitPresentCommandBuffer(cmd, graphicsQueue, &swap, compTimeline.semaphore, compBaseCycleValue + MXC_CYCLE_INPUT);
+
+
+      uint64_t timestampsNS[2];
+      vkGetQueryPoolResults(device, context.timeQueryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+      double timestampsMS[2];
+      for (uint32_t i = 0; i < 2; ++i) {
+        timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+      }
+      timeQueryMs = timestampsMS[1] -  timestampsMS[0];
     }
   }
 

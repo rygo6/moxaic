@@ -9,26 +9,13 @@ set(TARGET_NAME moxaic)
 #set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
 
 set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.280.0")
-#set(CGLM_SDK_PATH "C:/Developer/cglm")
 
 file(GLOB SRC_FILES
         src/*.c
         src/*.h
-        src/mid/*.c
-        src/mid/*.h
         third_party/*.c
         third_party/*.h
-        src/descriptors/*.c
-        src/descriptors/*.h
-        src/pipelines/*.c
-        src/pipelines/*.h
-        src/utilities/*.c
-        src/utilities/*.h
 )
-
-#add_subdirectory(
-#        ${CGLM_SDK_PATH}
-#)
 
 add_executable(${TARGET_NAME}
         ${SRC_FILES}
@@ -37,23 +24,16 @@ add_executable(${TARGET_NAME}
 target_link_directories(${TARGET_NAME} PUBLIC
         lib
         "${VULKAN_SDK_PATH}/Lib"
-#        "${CGLM_SDK_PATH}/build"
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC
         src
-        src/descriptors
-        src/pipelines
-        src/utilities
-        src/mid
         third_party
         "${VULKAN_SDK_PATH}/Include"
-#        "${CGLM_SDK_PATH}/include"
 )
 
 target_link_libraries(${TARGET_NAME}
         vulkan-1
-#        cglm
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE

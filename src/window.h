@@ -24,3 +24,5 @@ extern Input input;
 void vkmUpdateWindowInput();
 void vkmCreateWindow();
 void vkmCreateSurface(const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+
+extern double timeQueryMs;

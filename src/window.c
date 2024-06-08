@@ -2,6 +2,8 @@
 #include "globals.h"
 #include "renderer.h"
 
+#define WIN32_LEAN_AND_MEAN
+#define NOCOMM
 #include <windows.h>
 #include <windowsx.h>
 
@@ -78,6 +80,8 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
   }
 }
 
+double timeQueryMs;
+
 void vkmUpdateWindowInput() {
   input.mouseDeltaX = 0;
   input.mouseDeltaY = 0;
@@ -96,7 +100,7 @@ void vkmUpdateWindowInput() {
   if (!--titleUpdateRate) {
     titleUpdateRate = 64;
     static char titleBuffer[32];
-    sprintf(titleBuffer, "%s | FPS=%.2f", WINDOW_NAME, 1.0f / input.deltaTime);
+    sprintf(titleBuffer, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0f / input.deltaTime, timeQueryMs);
     SetWindowText(window.hWnd, titleBuffer);
   }
 }

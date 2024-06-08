@@ -6,6 +6,9 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOCOMM
 #include <windows.h>
 
 typedef enum MxcNodeType {
