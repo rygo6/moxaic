@@ -370,6 +370,16 @@ MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
   }
   return clamped;
 }
+MATH_INLINE vec2 Vec2Min(const vec2 a, const vec2 b) {
+  vec2 out;
+  for (int i = 0; i < 2; ++i) out.vec[i] = a.vec[i] < b.vec[i] ? a.vec[i] : b.vec[i];
+  return out;
+}
+MATH_INLINE vec2 Vec2Max(const vec2 a, const vec2 b) {
+  vec2 out;
+  for (int i = 0; i < 2; ++i) out.vec[i] = a.vec[i] > b.vec[i] ? a.vec[i] : b.vec[i];
+  return out;
+}
 MATH_INLINE void Mat4Print(const mat4 m) {
   printf("mat4:\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n",
          m.c0.r0, m.c1.r0, m.c2.r0, m.c3.r0,

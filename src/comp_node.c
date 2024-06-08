@@ -293,18 +293,33 @@ run_loop:
             // calc framebuffersize
             const float radius = nodesShared[i].radius;
 
-            const vec4 ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = 0, .w = 1});
-            const vec4 ulWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, ulModel);
-            const vec4 ulClip = Vec4MulMat4(context.globalSetState.view, ulWorld);
-            const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulClip));
-            const vec2 ulUV = Vec2Clamp(UVFromNDC(ulNDC), 0.0f, 1.0f);
+            const vec4 ulbModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
+            const vec4 ulbWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, ulbModel);
+            const vec4 ulbClip = Vec4MulMat4(context.globalSetState.view, ulbWorld);
+            const vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulbClip));
+            const vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
+            const vec4 ulbfModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
+            const vec4 ulbfWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, ulbfModel);
+            const vec4 ulbfClip = Vec4MulMat4(context.globalSetState.view, ulbfWorld);
+            const vec3 ulbfNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulbfClip));
+            const vec2 ulfUV = Vec2Clamp(UVFromNDC(ulbfNDC), 0.0f, 1.0f);
 
-            const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = 0, .w = 1});
-            const vec4 lrWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, lrModel);
-            const vec4 lrClip = Vec4MulMat4(context.globalSetState.view, lrWorld);
-            const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrClip));
-            const vec2 lrUV = Vec2Clamp(UVFromNDC(lrNDC), 0.0f, 1.0f);
+            const vec2 ulUV = Vec2Min(ulfUV, ulbUV);
+
+            const vec4 lrbModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
+            const vec4 lrbWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, lrbModel);
+            const vec4 lrbClip = Vec4MulMat4(context.globalSetState.view, lrbWorld);
+            const vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrbClip));
+            const vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
+
+            const vec4 lrfModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
+            const vec4 lrfWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, lrfModel);
+            const vec4 lrfClip = Vec4MulMat4(context.globalSetState.view, lrfWorld);
+            const vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrfClip));
+            const vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);
+
+            const vec2 lrUV = Vec2Max(lrbUV, lrfUV);
 
             const vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 

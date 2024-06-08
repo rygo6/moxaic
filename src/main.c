@@ -92,8 +92,8 @@ int main(void) {
 
   MxcBasicComp           basicComp;
   MxcBasicCompCreateInfo basicCompInfo = {
-//      .compMode = MXC_COMP_MODE_TESS,
-      .compMode = MXC_COMP_MODE_BASIC,
+      .compMode = MXC_COMP_MODE_TESS,
+//      .compMode = MXC_COMP_MODE_BASIC,
       .surface = surface,
   };
   mxcCreateBasicComp(&basicCompInfo, &basicComp);
