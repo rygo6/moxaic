@@ -15,6 +15,10 @@ void main() {
 
     outNormal = inNormal;
 
-    const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), vec2(0), vec2(1));
-    outUV = inUV * scale;
+    const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
+    const vec2 scaledUV = inUV * scale;
+    // im reversing the lr and ul from what i'd expect... why!?
+    const vec2 ndcUV = mix(nodeUBO.lrUV, nodeUBO.ulUV, inUV);
+
+    outUV = scaledUV;
 }

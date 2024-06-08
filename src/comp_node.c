@@ -4,7 +4,6 @@
 #include <assert.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-
 enum SetBindCompIndices {
   SET_BIND_COMP_BUFFER_INDEX,
   SET_BIND_COMP_COLOR_INDEX,
@@ -117,28 +116,27 @@ static void CreateCompPipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPi
 
 void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp) {
   {  // Create
-
-    vkmCreateCompFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
-
-    // node set
     CreateCompSetLayout(&pComp->nodeSetLayout);
     CreateCompPipeLayout(pComp->nodeSetLayout, &pComp->nodePipeLayout);
-    //        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
-    vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
+
+    switch (pInfo->compMode) {
+      case MXC_COMP_MODE_BASIC:
+        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
+        CreateQuadMesh(0.5f, &pComp->quadMesh);
+        break;
+      case MXC_COMP_MODE_TESS:
+        vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
+        CreateQuadPatchMesh(0.5f, &pComp->quadMesh);
+        break;
+      default: PANIC("CompMode not supported!");
+    }
+
+    vkmCreateCompFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
 
     vkmAllocateDescriptorSet(context.descriptorPool, &pComp->nodeSetLayout, &pComp->nodeSet);
     VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->nodeSet, "NodeSet");
     vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(MxcNodeSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->nodeSetMemory, &pComp->nodeSetBuffer, (void**)&pComp->pNodeSetMapped);
     vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pComp->nodeSet, pComp->nodeSetBuffer));
-    memcpy(&pComp->pNodeSetMapped->model, &MAT4_IDENT, sizeof(mat4));
-
-    //    CreateQuadMesh(0.5f, &pComp->quadMesh);
-    CreateQuadPatchMesh(0.5f, &pComp->quadMesh);
-
-    VkBool32 presentSupport = VK_FALSE;
-    VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index, pInfo->surface, &presentSupport));
-    REQUIRE(presentSupport, "Queue can't present to surface!")
-    VkmCreateSwap(pInfo->surface, &pComp->swap);
 
     vkmCreateTimeline(&pComp->timeline);
 
@@ -149,6 +147,8 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
     };
     VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pComp->cmd));
     VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pComp->cmd, "CompCmd");
+
+    VkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pComp->swap);
   }
 
   {  // Initial State

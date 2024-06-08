@@ -1174,7 +1174,10 @@ void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler) {
   VKM_REQUIRE(vkCreateSampler(context.device, &minSamplerCreateInfo, VKM_ALLOC, pSampler));
 }
 
-void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap) {
+void VkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap) {
+  VkBool32 presentSupport = VK_FALSE;
+  VKM_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
+  REQUIRE(presentSupport, "Queue can't present to surface!")
   const VkSwapchainCreateInfoKHR swapchainCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
       .surface = surface,

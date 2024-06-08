@@ -10,8 +10,6 @@ layout(location = 1) in vec2 inUV;
 layout(location = 0) out vec4 outColor;
 layout(location = 1) out vec4 outNormal;
 
-
-
 void main()
 {
     outColor = texture(texSampler, inUV);

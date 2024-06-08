@@ -2,11 +2,7 @@
 
 #include "global_binding.glsl"
 #include "basic_material_binding.glsl"
-//#include "object_binding.glsl"
-
-layout(set = 2, binding = 0) uniform ObjectUBO {
-    mat4 model;
-} objectUBO;
+#include "object_binding.glsl"
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -22,17 +18,8 @@ mat4 getIdentityMatrix() {
                 0.0, 0.0, 0.0, 1.0);
 }
 
-//mat4 getIdentityMatrix() {
-//    return mat4(0.0, 0.0, 0.0, 1.0,
-//    0.0, 0.0, 1.0, 0.0,
-//    0.0, 1.0, 0.0, 0.0,
-//    1.0, 0.0, 0.0, 0.0);
-//}
-
 void main() {
     gl_Position = globalUBO.proj * globalUBO.view * objectUBO.model * vec4(inPosition, 1.0);
-//    gl_Position = objectUBO.model * vec4(inPosition, 1.0);
-
     outNormal = inNormal;
     outUV = inUV;
 }

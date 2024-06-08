@@ -8,8 +8,8 @@
 
 layout(quads, equal_spacing, cw) in;
 
-layout (location = 0) in vec3 inNormal[];
-layout (location = 1) in vec2 inUV[];
+layout (location = 0) in vec3 inNormals[];
+layout (location = 1) in vec2 inUVs[];
 
 layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec2 outUV;
@@ -17,38 +17,28 @@ layout (location = 2) out vec4 outWorldPos;
 
 void main()
 {
-    const vec2 uv = mix(
-    mix(inUV[0], inUV[1], gl_TessCoord.x),
-    mix(inUV[3], inUV[2], gl_TessCoord.x),
+    const vec2 inUV = mix(
+    mix(inUVs[0], inUVs[1], gl_TessCoord.x),
+    mix(inUVs[3], inUVs[2], gl_TessCoord.x),
     gl_TessCoord.y);
 
     const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
-    const vec2 scaledUV = uv * scale;
+    const vec2 scaledUV = inUV * scale;
     // im reversing the lr and ul from what i'd expect... why!?
-    const vec2 ndcUV = mix(nodeUBO.lrUV, nodeUBO.ulUV, uv);
-
-//    const vec2 scaledUV = uv;
-//    const vec2 ndcUV = uv;
+    const vec2 ndcUV = mix(nodeUBO.lrUV, nodeUBO.ulUV, inUV);
 
     float alphaValue = texture(nodeColor, scaledUV).a;
     float depthValue = texture(nodeGBuffer, scaledUV).r;
 
     vec2 ndc = NDCFromUV(ndcUV);
     vec4 clipPos = ClipPosFromNDC(ndc, depthValue);
-//    vec4 clipPos = ClipPosFromNDC(ndc, 0.5);
     vec3 worldPos = WorldPosFromNodeClipPos(clipPos);
     gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
 
     outUV = scaledUV;
 
     outNormal = mix(
-    mix(inNormal[0], inNormal[1], gl_TessCoord.x),
-    mix(inNormal[3], inNormal[2], gl_TessCoord.x),
+    mix(inNormals[0], inNormals[1], gl_TessCoord.x),
+    mix(inNormals[3], inNormals[2], gl_TessCoord.x),
     gl_TessCoord.y);
-
-
-//        gl_Position = globalUBO.viewProj * mix(
-//            mix(gl_in[0].gl_Position, gl_in[1].gl_Position, gl_TessCoord.x),
-//            mix(gl_in[3].gl_Position, gl_in[2].gl_Position, gl_TessCoord.x),
-//            gl_TessCoord.y);
 }

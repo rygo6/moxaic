@@ -680,9 +680,9 @@ void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, c
 void vkmCreateStdPipe(VkmStdPipe* pStdPipe);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
+void VkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
 
 VkShaderModule vkmCreateShaderModule(const char* pShaderPath);
-
 
 typedef struct VkmInitializeDesc {
   // should use this... ? but need to decide on this vs vulkan configurator
@@ -743,4 +743,3 @@ typedef struct VkmSamplerDesc {
   (const VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler);
 void VkmCreateStdRenderPass();
-void VkmCreateSwap(const VkSurfaceKHR surface, VkmSwap* pSwap);

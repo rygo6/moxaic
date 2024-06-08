@@ -15,6 +15,7 @@ typedef enum MxcCompMode {
 } MxcCompMode;
 
 typedef struct MxcCompNodeCreateInfo {
+  MxcCompMode compMode;
   VkSurfaceKHR surface;
 } MxcBasicCompCreateInfo;
 

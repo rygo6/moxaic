@@ -11,11 +11,11 @@ layout (set = 3, binding = 1) uniform NodeUBO {
 
 layout (vertices = 4) out;
 
-layout (location = 0) in vec3 inNormal[];
-layout (location = 1) in vec2 inUV[];
+layout (location = 0) in vec3 inNormals[];
+layout (location = 1) in vec2 inUVs[];
 
-layout (location = 0) out vec3 outNormal[4];
-layout (location = 1) out vec2 outUV[4];
+layout (location = 0) out vec3 outNormals[4];
+layout (location = 1) out vec2 outUVs[4];
 
 void main()
 {
@@ -32,6 +32,6 @@ void main()
     }
 
     gl_out[gl_InvocationID].gl_Position =  gl_in[gl_InvocationID].gl_Position;
-    outNormal[gl_InvocationID] = inNormal[gl_InvocationID];
-    outUV[gl_InvocationID] = inUV[gl_InvocationID];
+    outNormals[gl_InvocationID] = inNormals[gl_InvocationID];
+    outUVs[gl_InvocationID] = inUVs[gl_InvocationID];
 }
