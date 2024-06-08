@@ -118,9 +118,9 @@ int main(void) {
   mxcCreateBasicComp(&basicCompInfo, &basicComp);
 
 
-  mxc_node_handle testNodeHandle = 0;
+  NodeHandle      testNodeHandle = 0;
   MxcTestNode    testNode;
-  MxcNodeContext* pTestNodeContext = &MXC_NODE[testNodeHandle];
+  MxcNodeContext* pTestNodeContext = &nodes[testNodeHandle];
   *pTestNodeContext = (MxcNodeContext) {
       .nodeType = MXC_NODE_TYPE_THREAD,
       .compCycleSkip = 16,
@@ -146,10 +146,10 @@ int main(void) {
   };
   mxcCreateTestNode(&testNodeCreateInfo, &testNode);
   mxcCreateNodeContext(pTestNodeContext);
-  MXC_NODE_SHARED[0] = (MxcNodeContextShared) {};
-  MXC_NODE_SHARED[0].cmd = testNode.cmd; // we should request node slot first
+  nodesShared[0] = (MxcNodeContextShared) {};
+  nodesShared[0].cmd = testNode.cmd; // we should request node slot first
   mxcRegisterCompNodeThread(testNodeHandle);
-  MXC_NODE_COUNT = 1;
+  nodeCount = 1;
 
 
   mxcRunCompNode(&basicComp);

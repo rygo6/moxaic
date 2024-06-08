@@ -174,6 +174,8 @@ MATH_INLINE mat4 QuatToMat4(const quat q) {
   out.c3.vec[3] = 1.0f;
   return out;
 }
+
+// this isn't actually faster... figure out... https://godbolt.org/z/3zodnr6bj
 MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
   return (mat4){.vec = SHUFFLE(l.vec,
                                C0_R0, C0_R1, C0_R2, C0_R3,
@@ -216,6 +218,37 @@ MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
                                    C2_R3, C2_R3, C2_R3, C2_R3,
                                    C3_R3, C3_R3, C3_R3, C3_R3)};
 }
+MATH_INLINE mat4 Mat4MulNoSimd(const mat4 l, const mat4 r) {
+  float a00 = l.col[0].row[0], a01 = l.col[0].row[1], a02 = l.col[0].row[2], a03 = l.col[0].row[3],
+        a10 = l.col[1].row[0], a11 = l.col[1].row[1], a12 = l.col[1].row[2], a13 = l.col[1].row[3],
+        a20 = l.col[2].row[0], a21 = l.col[2].row[1], a22 = l.col[2].row[2], a23 = l.col[2].row[3],
+        a30 = l.col[3].row[0], a31 = l.col[3].row[1], a32 = l.col[3].row[2], a33 = l.col[3].row[3],
+
+        b00 = r.col[0].row[0], b01 = r.col[0].row[1], b02 = r.col[0].row[2], b03 = r.col[0].row[3],
+        b10 = r.col[1].row[0], b11 = r.col[1].row[1], b12 = r.col[1].row[2], b13 = r.col[1].row[3],
+        b20 = r.col[2].row[0], b21 = r.col[2].row[1], b22 = r.col[2].row[2], b23 = r.col[2].row[3],
+        b30 = r.col[3].row[0], b31 = r.col[3].row[1], b32 = r.col[3].row[2], b33 = r.col[3].row[3];
+
+  mat4 dest = MAT4_IDENT;
+  dest.col[0].row[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
+  dest.col[0].row[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
+  dest.col[0].row[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
+  dest.col[0].row[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
+  dest.col[1].row[0] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
+  dest.col[1].row[1] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
+  dest.col[1].row[2] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
+  dest.col[1].row[3] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
+  dest.col[2].row[0] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
+  dest.col[2].row[1] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
+  dest.col[2].row[2] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
+  dest.col[2].row[3] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
+  dest.col[3].row[0] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
+  dest.col[3].row[1] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
+  dest.col[3].row[2] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
+  dest.col[3].row[3] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
+  return dest;
+}
+
 MATH_INLINE mat4 Mat4Inv(const mat4 src) {
   // todo SIMDIZE
   float t[6];

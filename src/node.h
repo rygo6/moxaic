@@ -95,6 +95,7 @@ typedef struct MxcNodeSetState {
   mat4 invProj;
   mat4 invViewProj;
 
+  // subsequent vulkan ubo values must be aligned to what prior was
   ALIGN(16) ivec2 framebufferSize;
   ALIGN(8) vec2 ulUV;
   ALIGN(8) vec2 lrUV;
@@ -133,25 +134,25 @@ CACHE_ALIGN typedef struct MxcNodeContextShared {
 //} MxcNodeContextShared;
 
 #define MXC_NODE_CAPACITY 256
-typedef uint8_t             mxc_node_handle;
-extern size_t               MXC_NODE_COUNT;
-extern MxcNodeContext       MXC_NODE[MXC_NODE_CAPACITY];
-extern MxcNodeContextShared MXC_NODE_SHARED[MXC_NODE_CAPACITY];
+typedef uint8_t             NodeHandle;
+extern size_t               nodeCount;
+extern MxcNodeContext       nodes[MXC_NODE_CAPACITY];
+extern MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY];
 
-static inline void mxcRegisterCompNodeThread(mxc_node_handle handle) {
-  MXC_NODE_SHARED[handle].active = true;
-  MXC_NODE_SHARED[handle].type = MXC_NODE_TYPE_THREAD;
-  MXC_NODE_SHARED[handle].radius = 0.5;
-  MXC_NODE_SHARED[handle].nodeTimeline = MXC_NODE[handle].nodeTimeline;
-  MXC_NODE_SHARED[handle].transform.rotation = QuatFromEuler(MXC_NODE_SHARED[handle].transform.euler);
-  memcpy((void*)&MXC_NODE_SHARED[handle].globalSetState, (void*)&context.globalSetState, sizeof(VkmGlobalSetState));
+static inline void mxcRegisterCompNodeThread(NodeHandle handle) {
+  nodesShared[handle].active = true;
+  nodesShared[handle].type = MXC_NODE_TYPE_THREAD;
+  nodesShared[handle].radius = 0.5;
+  nodesShared[handle].nodeTimeline = nodes[handle].nodeTimeline;
+  nodesShared[handle].transform.rotation = QuatFromEuler(nodesShared[handle].transform.euler);
+  memcpy((void*)&nodesShared[handle].globalSetState, (void*)&context.globalSetState, sizeof(VkmGlobalSetState));
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    MXC_NODE_SHARED[handle].framebufferColorImageViews[i] = MXC_NODE[handle].framebuffers[i].color.view;
-    MXC_NODE_SHARED[handle].framebufferNormalImageViews[i] = MXC_NODE[handle].framebuffers[i].normal.view;
-    MXC_NODE_SHARED[handle].framebufferGBufferImageViews[i] = MXC_NODE[handle].framebuffers[i].gBuffer.view;
-    MXC_NODE_SHARED[handle].framebufferColorImages[i] = MXC_NODE[handle].framebuffers[i].color.img;
-    MXC_NODE_SHARED[handle].framebufferNormalImages[i] = MXC_NODE[handle].framebuffers[i].normal.img;
-    MXC_NODE_SHARED[handle].framebufferGBufferImages[i] = MXC_NODE[handle].framebuffers[i].gBuffer.img;
+    nodesShared[handle].framebufferColorImageViews[i] = nodes[handle].framebuffers[i].color.view;
+    nodesShared[handle].framebufferNormalImageViews[i] = nodes[handle].framebuffers[i].normal.view;
+    nodesShared[handle].framebufferGBufferImageViews[i] = nodes[handle].framebuffers[i].gBuffer.view;
+    nodesShared[handle].framebufferColorImages[i] = nodes[handle].framebuffers[i].color.img;
+    nodesShared[handle].framebufferNormalImages[i] = nodes[handle].framebuffers[i].normal.img;
+    nodesShared[handle].framebufferGBufferImages[i] = nodes[handle].framebuffers[i].gBuffer.img;
   }
 }
 

@@ -192,7 +192,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
 
   MxcNodeType     nodeType = pNodeContext->nodeType;
-  mxc_node_handle handle = 0;
+  NodeHandle      handle = 0;
   VkCommandBuffer cmd = pNode->cmd;
 
   VkmGlobalSetState* pGlobalSetMapped = pNode->globalSet.pMapped;
@@ -251,8 +251,8 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
   compTimeline.value = compCyclesToSkip;
 
-  assert(__atomic_always_lock_free(sizeof(MXC_NODE_SHARED[handle].pendingTimelineSignal), &MXC_NODE_SHARED[handle].pendingTimelineSignal));
-  assert(__atomic_always_lock_free(sizeof(MXC_NODE_SHARED[handle].currentTimelineSignal), &MXC_NODE_SHARED[handle].currentTimelineSignal));
+  assert(__atomic_always_lock_free(sizeof(nodesShared[handle].pendingTimelineSignal), &nodesShared[handle].pendingTimelineSignal));
+  assert(__atomic_always_lock_free(sizeof(nodesShared[handle].currentTimelineSignal), &nodesShared[handle].currentTimelineSignal));
 
   VKM_DEVICE_FUNC(ResetCommandBuffer);
   VKM_DEVICE_FUNC(BeginCommandBuffer);
@@ -276,23 +276,23 @@ run_loop:
   compTimeline.value = compBaseCycleValue + MXC_CYCLE_RENDER;
   vkmTimelineWait(device, &compTimeline);
 
-  memcpy(pGlobalSetMapped, (void*)&MXC_NODE_SHARED[handle].globalSetState, sizeof(VkmGlobalSetState));
+  memcpy(pGlobalSetMapped, (void*)&nodesShared[handle].globalSetState, sizeof(VkmGlobalSetState));
   __atomic_thread_fence(__ATOMIC_ACQUIRE);
 
   ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
   const VkViewport viewport = {
-      .x = CalcViewport(MXC_NODE_SHARED[handle].ulUV.x, MXC_NODE_SHARED[handle].lrUV.x, MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x, DEFAULT_WIDTH),
-      .y = CalcViewport(MXC_NODE_SHARED[handle].ulUV.y, MXC_NODE_SHARED[handle].lrUV.y, MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y, DEFAULT_HEIGHT),
+      .x = CalcViewport(nodesShared[handle].ulUV.x, nodesShared[handle].lrUV.x, nodesShared[handle].globalSetState.framebufferSize.x, DEFAULT_WIDTH),
+      .y = CalcViewport(nodesShared[handle].ulUV.y, nodesShared[handle].lrUV.y, nodesShared[handle].globalSetState.framebufferSize.y, DEFAULT_HEIGHT),
       .width = DEFAULT_WIDTH,
       .height = DEFAULT_HEIGHT,
       .maxDepth = 1.0f,
   };
   const VkRect2D scissor = {
       .extent = {
-          .width = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x > DEFAULT_WIDTH ? DEFAULT_WIDTH : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.x,
-          .height = MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y > DEFAULT_HEIGHT ? DEFAULT_HEIGHT : MXC_NODE_SHARED[handle].globalSetState.framebufferSize.y,
+          .width = nodesShared[handle].globalSetState.framebufferSize.x > DEFAULT_WIDTH ? DEFAULT_WIDTH : nodesShared[handle].globalSetState.framebufferSize.x,
+          .height = nodesShared[handle].globalSetState.framebufferSize.y > DEFAULT_HEIGHT ? DEFAULT_HEIGHT : nodesShared[handle].globalSetState.framebufferSize.y,
       },
   };
   CmdSetViewport(cmd, 0, 1, &viewport);
@@ -389,11 +389,11 @@ run_loop:
 
   nodeTimeline.value++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
-  MXC_NODE_SHARED[handle].pendingTimelineSignal = nodeTimeline.value;
+  nodesShared[handle].pendingTimelineSignal = nodeTimeline.value;
 
   vkmTimelineWait(device, &nodeTimeline);
   __atomic_thread_fence(__ATOMIC_RELEASE);
-  MXC_NODE_SHARED[handle].currentTimelineSignal = nodeTimeline.value;
+  nodesShared[handle].currentTimelineSignal = nodeTimeline.value;
 
   compBaseCycleValue += compCyclesToSkip;
 
