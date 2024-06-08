@@ -53,14 +53,14 @@ enum VecComponents {
   W,
   VEC_COUNT,
 };
-#define _X .vec[X]
-#define _Y .vec[Y]
-#define _Z .vec[Z]
-#define _W .vec[W]
-#define _0 .vec[0]
-#define _1 .vec[1]
-#define _2 .vec[2]
-#define _3 .vec[3]
+#define v_X vec[X]
+#define v_Y vec[Y]
+#define v_Z vec[Z]
+#define v_W vec[W]
+#define v_0 vec[0]
+#define v_1 vec[1]
+#define v_2 vec[2]
+#define v_3 vec[3]
 enum MatComponents {
   C0_R0,
   C0_R1,
@@ -80,22 +80,22 @@ enum MatComponents {
   C3_R3,
   MAT_COUNT,
 };
-#define _00 .vec[C0_R0]
-#define _01 .vec[C0_R1]
-#define _02 .vec[C0_R2]
-#define _03 .vec[C0_R3]
-#define _10 .vec[C1_R0]
-#define _11 .vec[C1_R1]
-#define _12 .vec[C1_R2]
-#define _13 .vec[C1_R3]
-#define _20 .vec[C2_R0]
-#define _21 .vec[C2_R1]
-#define _22 .vec[C2_R2]
-#define _23 .vec[C2_R3]
-#define _30 .vec[C3_R0]
-#define _31 .vec[C3_R1]
-#define _32 .vec[C3_R2]
-#define _33 .vec[C3_R3]
+#define m_00 vec[C0_R0]
+#define m_01 vec[C0_R1]
+#define m_02 vec[C0_R2]
+#define m_03 vec[C0_R3]
+#define m_10 vec[C1_R0]
+#define m_11 vec[C1_R1]
+#define m_12 vec[C1_R2]
+#define m_13 vec[C1_R3]
+#define m_20 vec[C2_R0]
+#define m_21 vec[C2_R1]
+#define m_22 vec[C2_R2]
+#define m_23 vec[C2_R3]
+#define m_30 vec[C3_R0]
+#define m_31 vec[C3_R1]
+#define m_32 vec[C3_R2]
+#define m_33 vec[C3_R3]
 static const vec4 VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
 static const quat QUAT_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -174,60 +174,19 @@ MATH_INLINE mat4 QuatToMat4(const quat q) {
   out.c3.vec[3] = 1.0f;
   return out;
 }
-
-// this isn't actually faster... figure out... https://godbolt.org/z/3zodnr6bj
+// Turns out this is the fastest way. Write out the multiplication on the 16 byte vecs and GCC will produce the best SIMD
+// https://godbolt.org/z/d6PrzK4xP
 MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
-  return (mat4){.vec = SHUFFLE(l.vec,
-                               C0_R0, C0_R1, C0_R2, C0_R3,
-                               C0_R0, C0_R1, C0_R2, C0_R3,
-                               C0_R0, C0_R1, C0_R2, C0_R3,
-                               C0_R0, C0_R1, C0_R2, C0_R3) *
-                           SHUFFLE(r.vec,
-                                   C0_R0, C0_R0, C0_R0, C0_R0,
-                                   C1_R0, C1_R0, C1_R0, C1_R0,
-                                   C2_R0, C2_R0, C2_R0, C2_R0,
-                                   C3_R0, C3_R0, C3_R0, C3_R0) +
-                       SHUFFLE(l.vec,
-                               C1_R0, C1_R1, C1_R2, C1_R3,
-                               C1_R0, C1_R1, C1_R2, C1_R3,
-                               C1_R0, C1_R1, C1_R2, C1_R3,
-                               C1_R0, C1_R1, C1_R2, C1_R3) *
-                           SHUFFLE(r.vec,
-                                   C0_R1, C0_R1, C0_R1, C0_R1,
-                                   C1_R1, C1_R1, C1_R1, C1_R1,
-                                   C2_R1, C2_R1, C2_R1, C2_R1,
-                                   C3_R1, C3_R1, C3_R1, C3_R1) +
-                       SHUFFLE(l.vec,
-                               C2_R0, C2_R1, C2_R2, C2_R3,
-                               C2_R0, C2_R1, C2_R2, C2_R3,
-                               C2_R0, C2_R1, C2_R2, C2_R3,
-                               C2_R0, C2_R1, C2_R2, C2_R3) *
-                           SHUFFLE(r.vec,
-                                   C0_R2, C0_R2, C0_R2, C0_R2,
-                                   C1_R2, C1_R2, C1_R2, C1_R2,
-                                   C2_R2, C2_R2, C2_R2, C2_R2,
-                                   C3_R2, C3_R2, C3_R2, C3_R2) +
-                       SHUFFLE(l.vec,
-                               C3_R0, C3_R1, C3_R2, C3_R3,
-                               C3_R0, C3_R1, C3_R2, C3_R3,
-                               C3_R0, C3_R1, C3_R2, C3_R3,
-                               C3_R0, C3_R1, C3_R2, C3_R3) *
-                           SHUFFLE(r.vec,
-                                   C0_R3, C0_R3, C0_R3, C0_R3,
-                                   C1_R3, C1_R3, C1_R3, C1_R3,
-                                   C2_R3, C2_R3, C2_R3, C2_R3,
-                                   C3_R3, C3_R3, C3_R3, C3_R3)};
-}
-MATH_INLINE mat4 Mat4MulNoSimd(const mat4 l, const mat4 r) {
-  float a00 = l.col[0].row[0], a01 = l.col[0].row[1], a02 = l.col[0].row[2], a03 = l.col[0].row[3],
-        a10 = l.col[1].row[0], a11 = l.col[1].row[1], a12 = l.col[1].row[2], a13 = l.col[1].row[3],
-        a20 = l.col[2].row[0], a21 = l.col[2].row[1], a22 = l.col[2].row[2], a23 = l.col[2].row[3],
-        a30 = l.col[3].row[0], a31 = l.col[3].row[1], a32 = l.col[3].row[2], a33 = l.col[3].row[3],
+  /// verify if refing these not through the simd type actually breaks the gcc simd optimization
+  const float a00 = l.col[0].row[0], a01 = l.col[0].row[1], a02 = l.col[0].row[2], a03 = l.col[0].row[3],
+              a10 = l.col[1].row[0], a11 = l.col[1].row[1], a12 = l.col[1].row[2], a13 = l.col[1].row[3],
+              a20 = l.col[2].row[0], a21 = l.col[2].row[1], a22 = l.col[2].row[2], a23 = l.col[2].row[3],
+              a30 = l.col[3].row[0], a31 = l.col[3].row[1], a32 = l.col[3].row[2], a33 = l.col[3].row[3],
 
-        b00 = r.col[0].row[0], b01 = r.col[0].row[1], b02 = r.col[0].row[2], b03 = r.col[0].row[3],
-        b10 = r.col[1].row[0], b11 = r.col[1].row[1], b12 = r.col[1].row[2], b13 = r.col[1].row[3],
-        b20 = r.col[2].row[0], b21 = r.col[2].row[1], b22 = r.col[2].row[2], b23 = r.col[2].row[3],
-        b30 = r.col[3].row[0], b31 = r.col[3].row[1], b32 = r.col[3].row[2], b33 = r.col[3].row[3];
+              b00 = r.col[0].row[0], b01 = r.col[0].row[1], b02 = r.col[0].row[2], b03 = r.col[0].row[3],
+              b10 = r.col[1].row[0], b11 = r.col[1].row[1], b12 = r.col[1].row[2], b13 = r.col[1].row[3],
+              b20 = r.col[2].row[0], b21 = r.col[2].row[1], b22 = r.col[2].row[2], b23 = r.col[2].row[3],
+              b30 = r.col[3].row[0], b31 = r.col[3].row[1], b32 = r.col[3].row[2], b33 = r.col[3].row[3];
 
   mat4 dest = MAT4_IDENT;
   dest.col[0].row[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
@@ -248,7 +207,6 @@ MATH_INLINE mat4 Mat4MulNoSimd(const mat4 l, const mat4 r) {
   dest.col[3].row[3] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
   return dest;
 }
-
 MATH_INLINE mat4 Mat4Inv(const mat4 src) {
   // todo SIMDIZE
   float t[6];
@@ -355,10 +313,10 @@ MATH_INLINE quat QuatFromEuler(const vec3 euler) {
   }
   // todo SIMDIZE
   quat out;
-  out _W = c _X * c _Y * c _Z + s _X * s _Y * s _Z;
-  out _X = s _X * c _Y * c _Z - c _X * s _Y * s _Z;
-  out _Y = c _X * s _Y * c _Z + s _X * c _Y * s _Z;
-  out _Z = c _X * c _Y * s _Z - s _X * s _Y * c _Z;
+  out.v_W = c.v_X * c.v_Y * c.v_Z + s.v_X * s.v_Y * s.v_Z;
+  out.v_X = s.v_X * c.v_Y * c.v_Z - c.v_X * s.v_Y * s.v_Z;
+  out.v_Y = c.v_X * s.v_Y * c.v_Z + s.v_X * c.v_Y * s.v_Z;
+  out.v_Z = c.v_X * c.v_Y * s.v_Z - s.v_X * s.v_Y * c.v_Z;
   return out;
 }
 MATH_INLINE void QuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
@@ -370,11 +328,11 @@ MATH_INLINE void QuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
 }
 MATH_INLINE vec4 Vec4MulMat4(const mat4 m, const vec4 v) {
   // todo SIMDIZE
-  vec4                   out;
-  out.vec[X] = m _00 * v _X + m _10 * v _Y + m _20 * v _Z + m _30 * v _W;
-  out.vec[Y] = m _01 * v _X + m _11 * v _Y + m _21 * v _Z + m _31 * v _W;
-  out.vec[Z] = m _02 * v _X + m _12 * v _Y + m _22 * v _Z + m _32 * v _W;
-  out.vec[W] = m _03 * v _X + m _13 * v _Y + m _23 * v _Z + m _33 * v _W;
+  vec4 out;
+  out.v_X = m.m_00 * v.v_X + m.m_10 * v.v_Y + m.m_20 * v.v_Z + m.m_30 * v.v_W;
+  out.v_Y = m.m_01 * v.v_X + m.m_11 * v.v_Y + m.m_21 * v.v_Z + m.m_31 * v.v_W;
+  out.v_Z = m.m_02 * v.v_X + m.m_12 * v.v_Y + m.m_22 * v.v_Z + m.m_32 * v.v_W;
+  out.v_W = m.m_03 * v.v_X + m.m_13 * v.v_Y + m.m_23 * v.v_Z + m.m_33 * v.v_W;
   return out;
 }
 MATH_INLINE vec3 Vec4WDivide(const vec4 v) {

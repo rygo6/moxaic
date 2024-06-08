@@ -293,14 +293,14 @@ run_loop:
             // calc framebuffersize
             const float radius = nodesShared[i].radius;
 
-            const vec4 ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .w = 1});
+            const vec4 ulModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = 0, .w = 1});
             const vec4 ulWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, ulModel);
             const vec4 ulClip = Vec4MulMat4(context.globalSetState.view, ulWorld);
             const vec3 ulNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, ulClip));
             const vec2 ulUV = Vec2Clamp(UVFromNDC(ulNDC), 0.0f, 1.0f);
 
 
-            const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .w = 1});
+            const vec4 lrModel = Vec4Rot(context.globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = 0, .w = 1});
             const vec4 lrWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, lrModel);
             const vec4 lrClip = Vec4MulMat4(context.globalSetState.view, lrWorld);
             const vec3 lrNDC = Vec4WDivide(Vec4MulMat4(context.globalSetState.proj, lrClip));
