@@ -623,41 +623,22 @@ VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue 
   };
   VKM_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
-VKM_INLINE void vkmTimelineWait(const VkDevice device, const VkmTimeline* pTimeline) {
+VKM_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline) {
   const VkSemaphoreWaitInfo semaphoreWaitInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
       .semaphoreCount = 1,
-      .pSemaphores = &pTimeline->semaphore,
-      .pValues = &pTimeline->value,
+      .pSemaphores = &timeline,
+      .pValues = &waitValue,
   };
   VKM_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
-VKM_INLINE void vkmTimelineWaitValue(const VkDevice device, const uint64_t waitValue, VkmTimeline* pTimeline) {
-  pTimeline->value = waitValue;
-  const VkSemaphoreWaitInfo semaphoreWaitInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-      .semaphoreCount = 1,
-      .pSemaphores = &pTimeline->semaphore,
-      .pValues = &pTimeline->value,
-  };
-  VKM_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
-}
-VKM_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, VkmTimeline* pTimeline) {
-  pTimeline->value = signalValue;
+VKM_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline) {
   const VkSemaphoreSignalInfo semaphoreSignalInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-      .semaphore = pTimeline->semaphore,
-      .value = pTimeline->value,
+      .semaphore = timeline,
+      .value = signalValue,
   };
   VKM_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
-}
-VKM_INLINE void vkmTimelineSync(const VkDevice device, VkmTimeline* pTimeline) {
-  VKM_REQUIRE(vkGetSemaphoreCounterValue(device, pTimeline->semaphore, &pTimeline->value));
-}
-VKM_INLINE bool vkmTimelineSyncCheck(const VkDevice device, VkmTimeline* pTimeline) {
-  const uint64_t priorValue = pTimeline->value;
-  VKM_REQUIRE(vkGetSemaphoreCounterValue(device, pTimeline->semaphore, &pTimeline->value));
-  return priorValue != pTimeline->value;
 }
 VKM_INLINE void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
   vkUpdateDescriptorSets(device, 1, pWriteSet, 0, NULL);

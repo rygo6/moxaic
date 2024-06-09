@@ -203,18 +203,12 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
   VkDevice device = pNode->device;
   uint32_t queueIndex = pNode->queueIndex;
 
-  VkmTimeline compTimeline = {.semaphore = pNodeContext->compTimeline};
-  VkmTimeline nodeTimeline = {.semaphore = pNodeContext->nodeTimeline};
-  uint64_t    compBaseCycleValue;
-  uint64_t    compCyclesToSkip;
-
-  // set timeline value to start of next cycle
-  vkmTimelineSync(device, &compTimeline);
-  compBaseCycleValue = compTimeline.value - (compTimeline.value % MXC_CYCLE_COUNT);
-
-  // wait on next cycle
-  compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
-  compTimeline.value = compCyclesToSkip;
+  VkSemaphore compTimeline = pNodeContext->compTimeline;
+  VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
+  uint64_t nodeTimelineValue;
+  VKM_REQUIRE(vkGetSemaphoreCounterValue(device, compTimeline, &nodeTimelineValue));
+  uint64_t    compBaseCycleValue = nodeTimelineValue - (nodeTimelineValue % MXC_CYCLE_COUNT);
+  uint64_t    compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
 
   assert(__atomic_always_lock_free(sizeof(nodesShared[handle].pendingTimelineSignal), &nodesShared[handle].pendingTimelineSignal));
   assert(__atomic_always_lock_free(sizeof(nodesShared[handle].currentTimelineSignal), &nodesShared[handle].currentTimelineSignal));
@@ -238,7 +232,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 run_loop:
 
   // Wait for next render cycle
-  vkmTimelineWaitValue(device, compBaseCycleValue + MXC_CYCLE_RECORDING, &compTimeline);
+  vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, compTimeline);
 
   memcpy(pGlobalSetMapped, (void*)&nodesShared[handle].globalSetState, sizeof(VkmGlobalSetState));
   __atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -266,7 +260,7 @@ run_loop:
   CmdSetViewport(cmd, 0, 1, &viewport);
   CmdSetScissor(cmd, 0, 1, &scissor);
 
-  const int framebufferIndex = nodeTimeline.value % VKM_SWAP_COUNT;
+  const int framebufferIndex = nodeTimelineValue % VKM_SWAP_COUNT;
 
   switch (nodeType) {
     case MXC_NODE_TYPE_THREAD: break;
@@ -352,12 +346,12 @@ run_loop:
 
   EndCommandBuffer(cmd);
 
-  nodeTimeline.value++;
+  nodeTimelineValue++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
 
-  nodesShared[handle].pendingTimelineSignal = nodeTimeline.value;
-  vkmTimelineWait(device, &nodeTimeline);
-  nodesShared[handle].currentTimelineSignal = nodeTimeline.value;
+  nodesShared[handle].pendingTimelineSignal = nodeTimelineValue;
+  vkmTimelineWait(device, nodeTimelineValue, nodeTimeline);
+  nodesShared[handle].currentTimelineSignal = nodeTimelineValue;
 
   compBaseCycleValue += compCyclesToSkip;
 

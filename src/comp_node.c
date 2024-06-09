@@ -212,7 +212,7 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
   VkDeviceSize quadIndexOffset = pNode->quadMesh.indexOffset;
   VkDeviceSize quadVertexOffset = pNode->quadMesh.vertexOffset;
 
-  VkmTimeline compTimeline = {.semaphore = pNode->timeline};
+  VkSemaphore timeline = pNode->timeline;
   uint64_t    compBaseCycleValue = 0;
 
   VkQueryPool timeQueryPool = pNode->timeQueryPool;
@@ -235,12 +235,12 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
 
 run_loop:
 
-  vkmTimelineWaitValue(device, compBaseCycleValue + MXC_CYCLE_INPUT, &compTimeline);
+  vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
 
   if (vkmProcessInput(&globalCameraTransform)) vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
   {  // Node cycle
-    vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_NODE, &compTimeline);
+    vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
 
     for (int i = 0; i < nodeCount; ++i) {
       if (!nodesShared[i].active || nodesShared[i].currentTimelineSignal < 1)
@@ -323,7 +323,7 @@ run_loop:
 
     // render could go on its own thread ? no it needs to wait for the node framebuffers to flip if needed... yes it can but node framebuffer flip also needs to be on render thread, input and node submit can be on main
     {  // Recording Cycle
-      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORDING, &compTimeline);
+      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, timeline);
 
       framebufferIndex = !framebufferIndex;
 
@@ -375,7 +375,7 @@ run_loop:
       compNodeShared.swapIndex = swap.swapIndex;
       __atomic_thread_fence(__ATOMIC_RELEASE);
 
-      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER, &compTimeline);
+      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
     }
 
     {  // update timequery

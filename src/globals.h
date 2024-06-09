@@ -30,11 +30,11 @@ extern volatile bool isRunning;
   }
 
 typedef enum MxcCycle {
-  MXC_CYCLE_WINDOW, // update window input, submit queues
-  MXC_CYCLE_INPUT, // process input for nodes/comp to read
-  MXC_CYCLE_NODE, // update state for nodes to render
-  MXC_CYCLE_RECORDING, // recording compositor commands
-  MXC_CYCLE_RENDER, // compositor render
+  MXC_CYCLE_UPDATE_WINDOW_STATE, // update window input, submit queues
+  MXC_CYCLE_PROCESS_INPUT, // process input for nodes/comp to read
+  MXC_CYCLE_UPDATE_NODE_STATES, // update state for nodes to render
+  MXC_CYCLE_RECORD_COMPOSITE, // recording compositor commands
+  MXC_CYCLE_RENDER_COMPOSITE, // compositor render
   MXC_CYCLE_COUNT
 } MxcCycle;
 

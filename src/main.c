@@ -148,7 +148,7 @@ int main(void) {
 
 
 
-  VkmTimeline compTimeline = {.semaphore = basicComp.timeline};
+  VkSemaphore compTimeline = basicComp.timeline;
   uint64_t    compBaseCycleValue = 0;
   VkDevice    device = context.device;
   VkQueue     graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
@@ -156,15 +156,15 @@ int main(void) {
   while (isRunning) {
 
     // we may not have to even wait... this could go faster
-    vkmTimelineWaitValue(device, compBaseCycleValue + MXC_CYCLE_WINDOW, &compTimeline);
+    vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compTimeline);
 
     vkmUpdateWindowInput();
     __atomic_thread_fence(__ATOMIC_RELEASE);
 
     // signal input ready to process!
-    vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_INPUT, &compTimeline);
+    vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
 
-    // this could go on itss own thread going even faster
+    // this could go on its own thread going even faster
     for (int i = 0; i < nodeCount; ++i) {
       {  // submit commands
         uint64_t value = nodesShared[i].pendingTimelineSignal;
@@ -177,7 +177,7 @@ int main(void) {
     }
 
     // wait for recording to be done
-    vkmTimelineWaitValue(device, compBaseCycleValue + MXC_CYCLE_RENDER, &compTimeline);
+    vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
 
     compBaseCycleValue += MXC_CYCLE_COUNT;
     vkmSubmitPresentCommandBuffer(compNodeShared.cmd,
@@ -186,9 +186,8 @@ int main(void) {
                                   compNodeShared.acquireSemaphore,
                                   compNodeShared.renderCompleteSemaphore,
                                   compNodeShared.swapIndex,
-                                  compTimeline.semaphore,
-                                  compBaseCycleValue + MXC_CYCLE_WINDOW);
-
+                                  compTimeline,
+                                  compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
   }
 
 
