@@ -5,7 +5,6 @@
 enum SetBindNodeProcessIndices {
   SET_BIND_NODE_PROCESS_SRC_INDEX,
   SET_BIND_NODE_PROCESS_DST_INDEX,
-//  SET_BIND_NODE_PROCESS_UBO_INDEX,
   SET_BIND_NODE_PROCESS_COUNT
 };
 #define SET_WRITE_NODE_PROCESS_SRC(src_image_view)               \
@@ -30,16 +29,6 @@ enum SetBindNodeProcessIndices {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,         \
     },                                                  \
   }
-//#define SET_WRITE_NODE_PROCESS_BUFFER(ubo)               \
-//  (VkWriteDescriptorSet) {                               \
-//    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,     \
-//    .dstBinding = SET_BIND_NODE_PROCESS_UBO_INDEX,       \
-//    .descriptorCount = 1,                                \
-//    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-//    .pBufferInfo = &(const VkDescriptorBufferInfo){      \
-//        .buffer = ubo,                                   \
-//        .range = sizeof(NodeProcessUBO)},                \
-//  }
 static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout) {
   const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -59,12 +48,6 @@ static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout) {
               .descriptorCount = 1,
               .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
           },
-//          [SET_BIND_NODE_PROCESS_UBO_INDEX] = {
-//              .binding = SET_BIND_NODE_PROCESS_UBO_INDEX,
-//              .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-//              .descriptorCount = 1,
-//              .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-//          },
       },
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, pLayout));
@@ -105,10 +88,8 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   {  // Create
     CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
     CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
-//    CreateNodeProcessPipe("./shaders/node_process_blit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlit);
     CreateNodeProcessPipe("./shaders/node_process_blitup.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
     CreateNodeProcessPipe("./shaders/node_process_blitdown.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
-//    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pTestNode->nodeProcessUBOMemory, &pTestNode->nodeProcessUBOBuffer, (void**)&pTestNode->pNodeProcessUBOMapped);
 
     vkmCreateNodeFramebufferImport(context.stdRenderPass, VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
 
@@ -131,7 +112,6 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     }
 
     vkmCreateGlobalSet(&pTestNode->globalSet);
-    memcpy(pTestNode->globalSet.pMapped, &context.globalSetState, sizeof(VkmGlobalSetState));
 
     vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.materialSetLayout, &pTestNode->checkerMaterialSet);
     vkmCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
@@ -184,17 +164,15 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 
   VkmGlobalSetState* pGlobalSetMapped = pNode->globalSet.pMapped;
   VkDescriptorSet    globalSet = pNode->globalSet.set;
+
   VkDescriptorSet    checkerMaterialSet = pNode->checkerMaterialSet;
   VkDescriptorSet    sphereObjectSet = pNode->sphereObjectSet;
   VkRenderPass       stdRenderPass = pNode->stdRenderPass;
   VkPipelineLayout   stdPipeLayout = pNode->stdPipelineLayout;
   VkPipeline         stdPipeline = pNode->stdPipeline;
   VkPipelineLayout   nodeProcessPipeLayout = pNode->nodeProcessPipeLayout;
-//  VkPipeline         nodeProcessBlit = pNode->nodeProcessBlit;
   VkPipeline         nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
   VkPipeline         nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
-//  NodeProcessUBO*    pNodeProcessUBOMapped = pNode->pNodeProcessUBOMapped;
-//  VkBuffer           nodeProcessUBOBuffer = pNode->nodeProcessUBOBuffer;
 
   // these shoudl go into a struct so all the images from one frame are side by side
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
@@ -260,8 +238,7 @@ void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
 run_loop:
 
   // Wait for next render cycle
-  compTimeline.value = compBaseCycleValue + MXC_CYCLE_RENDER;
-  vkmTimelineWait(device, &compTimeline);
+  vkmTimelineWaitValue(device, compBaseCycleValue + MXC_CYCLE_RECORDING, &compTimeline);
 
   memcpy(pGlobalSetMapped, (void*)&nodesShared[handle].globalSetState, sizeof(VkmGlobalSetState));
   __atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -292,9 +269,7 @@ run_loop:
   const int framebufferIndex = nodeTimeline.value % VKM_SWAP_COUNT;
 
   switch (nodeType) {
-    case MXC_NODE_TYPE_THREAD:
-      //      CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, frameBufferColorImages[framebufferIndex]));
-      break;
+    case MXC_NODE_TYPE_THREAD: break;
     case MXC_NODE_TYPE_INTERPROCESS:
       CmdPipelineImageBarrier2(cmd, &VKM_IMAGE_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImgs[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
       break;
@@ -316,7 +291,7 @@ run_loop:
     CmdEndRenderPass(cmd);
   }
 
-  {  // Blit Framebuffer
+  {  // Blit GBuffer
     const VkImageMemoryBarrier2 blitBarrier[] = {
         VKM_IMAGE_BARRIER(VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER, VKM_IMAGE_BARRIER_COMPUTE_READ, VK_IMAGE_ASPECT_DEPTH_BIT, framebufferDepthImgs[framebufferIndex]),
         VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL, framebufferGBufferImgs[framebufferIndex], 0, VKM_G_BUFFER_LEVELS),
@@ -335,7 +310,6 @@ run_loop:
     CmdDispatch(cmd, groupCount.x, groupCount.y, 1);
 
     for (uint32_t i = 1; i < VKM_G_BUFFER_LEVELS; ++i) {
-      // contain these barriers to the mip level
       CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ, framebufferGBufferImgs[framebufferIndex], i - 1, 1));
       CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIP(VKM_IMAGE_BARRIER_COMPUTE_READ, VKM_IMAGE_BARRIER_COMPUTE_WRITE, framebufferGBufferImgs[framebufferIndex], i, 1));
       const VkWriteDescriptorSet pushSet[] = {
@@ -380,10 +354,9 @@ run_loop:
 
   nodeTimeline.value++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
-  nodesShared[handle].pendingTimelineSignal = nodeTimeline.value;
 
+  nodesShared[handle].pendingTimelineSignal = nodeTimeline.value;
   vkmTimelineWait(device, &nodeTimeline);
-  __atomic_thread_fence(__ATOMIC_RELEASE);
   nodesShared[handle].currentTimelineSignal = nodeTimeline.value;
 
   compBaseCycleValue += compCyclesToSkip;

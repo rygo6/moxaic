@@ -3,15 +3,7 @@
 #include "node.h"
 #include "renderer.h"
 
-
-//typedef struct NodeProcessUBO {
-//  ivec2 srcSize;
-//  ivec2 dstSize;
-//} NodeProcessUBO;
-
 typedef struct MxcTestNodeCreateInfo {
-  //  VkmContext
-  VkSurfaceKHR        surface;
   VkmTransform        transform;
   VkmNodeFramebuffer* pFramebuffers;
 } MxcTestNodeCreateInfo;
@@ -28,17 +20,12 @@ typedef struct MxcTestNode {
 
   VkDescriptorSetLayout nodeProcessSetLayout;
   VkPipelineLayout      nodeProcessPipeLayout;
-  VkPipeline            nodeProcessBlit;
   VkPipeline            nodeProcessBlitMipAveragePipe;
   VkPipeline            nodeProcessBlitDownPipe;
 
-//  NodeProcessUBO* pNodeProcessUBOMapped;
-//  VkDeviceMemory  nodeProcessUBOMemory;
-//  VkBuffer        nodeProcessUBOBuffer;
-
   VkDevice device;
 
-  VkCommandBuffer cmd;
+  VkCommandBuffer cmd; // probably want to make this in node context
 
   VkmGlobalSet globalSet;
 

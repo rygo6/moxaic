@@ -59,15 +59,11 @@ typedef struct MxcNodeContext {
 
   // should just be in hot?
   VkSemaphore compTimeline;
+
+  // get rid of... can be internal to node since it uses shared mem
   VkSemaphore nodeTimeline;
 
   VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
-
-  // global set
-  VkmGlobalSetState* pGlobalSetMapped;
-  VkDeviceMemory     globalSetMemory;
-  VkBuffer           globalSetBuffer;
-  VkDescriptorSet    globalSet;
 
   MxcRingBuffer consumer;
   MxcRingBuffer producer;
@@ -83,6 +79,21 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
+CACHE_ALIGN typedef struct MxcCompNodeContextShared {
+  // shared
+  volatile uint64_t        pendingTimelineSignal;
+  volatile uint64_t        currentTimelineSignal;
+  volatile VkCommandBuffer cmd;
+  volatile uint64_t        lastTimelineSignal;
+  volatile VkSemaphore     compTimeline;
+  volatile uint32_t       swapIndex;
+  VkSwapchainKHR chain;
+  VkSemaphore    acquireSemaphore;
+  VkSemaphore    renderCompleteSemaphore;
+} MxcCompNodeContextShared;
+
+extern MxcCompNodeContextShared compNodeShared;
+
 typedef struct MxcNodeSetState {
 
   mat4 model;
@@ -96,9 +107,12 @@ typedef struct MxcNodeSetState {
   mat4 invViewProj;
 
   // subsequent vulkan ubo values must be aligned to what prior was
-  ALIGN(16) ivec2 framebufferSize;
-  ALIGN(8) vec2 ulUV;
-  ALIGN(8) vec2 lrUV;
+  ALIGN(16)
+  ivec2 framebufferSize;
+  ALIGN(8)
+  vec2 ulUV;
+  ALIGN(8)
+  vec2 lrUV;
 
 } MxcNodeSetState;
 
@@ -110,28 +124,23 @@ CACHE_ALIGN typedef struct MxcNodeContextShared {
   volatile vec2              lrUV;
   volatile float             radius;
   volatile VkmGlobalSetState globalSetState;
+  volatile VkCommandBuffer   cmd;
+  volatile uint64_t          lastTimelineSignal;
+  volatile VkSemaphore       nodeTimeline;
+  volatile bool              active;
 
   // unshared
   uint64_t        lastTimelineSwap;
-  uint64_t        lastTimelineSignal;
-  VkSemaphore     nodeTimeline;
   MxcNodeType     type;
   VkmTransform    transform;
   MxcNodeSetState nodeSetState;
-  VkCommandBuffer cmd;
   VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
   VkImageView     framebufferNormalImageViews[VKM_SWAP_COUNT];
   VkImageView     framebufferGBufferImageViews[VKM_SWAP_COUNT];
   VkImage         framebufferColorImages[VKM_SWAP_COUNT];
   VkImage         framebufferNormalImages[VKM_SWAP_COUNT];
   VkImage         framebufferGBufferImages[VKM_SWAP_COUNT];
-  bool            active;
 } MxcNodeContextShared;
-
-//typedef struct MxcNodeContextShared {
-//  uint64_t current;
-//  uint64_t signal;
-//} MxcNodeContextShared;
 
 #define MXC_NODE_CAPACITY 256
 typedef uint8_t             NodeHandle;
@@ -145,7 +154,7 @@ static inline void mxcRegisterCompNodeThread(NodeHandle handle) {
   nodesShared[handle].radius = 0.5;
   nodesShared[handle].nodeTimeline = nodes[handle].nodeTimeline;
   nodesShared[handle].transform.rotation = QuatFromEuler(nodesShared[handle].transform.euler);
-  memcpy((void*)&nodesShared[handle].globalSetState, (void*)&context.globalSetState, sizeof(VkmGlobalSetState));
+  //  memcpy((void*)&nodesShared[handle].globalSetState, (void*)&globalSetState, sizeof(VkmGlobalSetState));
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     nodesShared[handle].framebufferColorImageViews[i] = nodes[handle].framebuffers[i].color.view;
     nodesShared[handle].framebufferNormalImageViews[i] = nodes[handle].framebuffers[i].normal.view;
@@ -155,6 +164,8 @@ static inline void mxcRegisterCompNodeThread(NodeHandle handle) {
     nodesShared[handle].framebufferGBufferImages[i] = nodes[handle].framebuffers[i].gBuffer.img;
   }
 }
+
+extern MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY];
 
 static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
 

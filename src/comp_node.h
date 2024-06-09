@@ -15,14 +15,14 @@ typedef enum MxcCompMode {
 } MxcCompMode;
 
 typedef struct MxcCompNodeCreateInfo {
-  MxcCompMode compMode;
+  MxcCompMode  compMode;
   VkSurfaceKHR surface;
 } MxcBasicCompCreateInfo;
 
 typedef struct MxcBasicComp {
   VkCommandBuffer cmd;
 
-  VkRenderPass     stdRenderPass;
+  VkRenderPass stdRenderPass;
 
   VkDescriptorSetLayout nodeSetLayout;
   VkPipelineLayout      nodePipeLayout;
@@ -30,24 +30,17 @@ typedef struct MxcBasicComp {
 
   VkDevice device;
 
-  VkDescriptorSet globalSet;
-  //  VkDescriptorSet checkerMaterialSet;
-  //  VkDescriptorSet sphereObjectSet;
+  VkQueryPool timeQueryPool;
+
+  VkmGlobalSet globalSet;
 
   VkDescriptorSet nodeSet;
 
-  //  VkmStdObjectSetState  nodeSetState;
   MxcNodeSetState* pNodeSetMapped;
   VkDeviceMemory   nodeSetMemory;
   VkBuffer         nodeSetBuffer;
 
   VkmMesh quadMesh;
-
-  //  VkmTransform sphereTransform;
-  //  VkmStdObjectSetState  sphereObjectState;
-  //  VkmStdObjectSetState* pSphereObjectSetMapped;
-  //  VkDeviceMemory        sphereObjectSetMemory;
-  //  VkBuffer              sphereObjectSetBuffer;
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
 
@@ -55,8 +48,10 @@ typedef struct MxcBasicComp {
 
   VkSemaphore timeline;
 
+  VkQueue graphicsQueue;
+
 } MxcBasicComp;
 
 
 void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp);
-void mxcRunCompNode(const MxcBasicComp* pNode);
+void mxcRunCompNode(const MxcNodeContext* pNodeContext);

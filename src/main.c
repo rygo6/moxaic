@@ -85,62 +85,118 @@ int main(void) {
   // standard/common rendering
   VkmCreateStdRenderPass(&context.stdRenderPass);
   vkmCreateStdPipe(&context.stdPipe);
-  // global set
-  vkmCreateGlobalSet(&context.globalSet);
-  vkmUpdateGlobalSet(&context.globalCameraTransform, &context.globalSetState, context.globalSet.pMapped);
-
 
   MxcBasicComp           basicComp;
   MxcBasicCompCreateInfo basicCompInfo = {
       .compMode = MXC_COMP_MODE_TESS,
-//      .compMode = MXC_COMP_MODE_BASIC,
+      //      .compMode = MXC_COMP_MODE_BASIC,
       .surface = surface,
   };
   mxcCreateBasicComp(&basicCompInfo, &basicComp);
+  // more to register method like mxcRegisterCompNodeThread
+  compNodeShared = (MxcCompNodeContextShared){};
+  compNodeShared.cmd = basicComp.cmd;
+  compNodeShared.compTimeline = basicComp.timeline;
+  compNodeShared.swapIndex = basicComp.swap.swapIndex;
+  compNodeShared.chain = basicComp.swap.chain;
+  compNodeShared.acquireSemaphore = basicComp.swap.acquireSemaphore;
+  compNodeShared.renderCompleteSemaphore = basicComp.swap.renderCompleteSemaphore;
 
-
-  NodeHandle      testNodeHandle = 0;
-  MxcTestNode    testNode;
-  MxcNodeContext* pTestNodeContext = &nodes[testNodeHandle];
-  *pTestNodeContext = (MxcNodeContext) {
+  MxcNodeContext compNodeContext = {
       .nodeType = MXC_NODE_TYPE_THREAD,
-      .compCycleSkip = 16,
-      .pNode = &testNode,
-      .runFunc = mxcRunTestNode,
+      .pNode = &basicComp,
+      .runFunc = mxcRunCompNode,
       .compTimeline = basicComp.timeline,
   };
-  vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pTestNodeContext->framebuffers);
+  mxcCreateNodeContext(&compNodeContext);
+
+
   {
-    const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-    const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-        .pNext = &timelineSemaphoreTypeCreateInfo,
+    NodeHandle      testNodeHandle = 0;
+    MxcTestNode     testNode;
+    MxcNodeContext* pTestNodeContext = &nodes[testNodeHandle];
+    *pTestNodeContext = (MxcNodeContext){
+        .nodeType = MXC_NODE_TYPE_THREAD,
+        .compCycleSkip = 16,
+        .pNode = &testNode,
+        .runFunc = mxcRunTestNode,
+        .compTimeline = basicComp.timeline,
     };
-    VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &pTestNodeContext->nodeTimeline));
+    vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pTestNodeContext->framebuffers);
+    {
+      const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
+          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+          .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
+      const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
+          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+          .pNext = &timelineSemaphoreTypeCreateInfo,
+      };
+      VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &pTestNodeContext->nodeTimeline));
+    }
+    MxcTestNodeCreateInfo testNodeCreateInfo = {
+        .transform = {0, 0, 0},
+        .pFramebuffers = pTestNodeContext->framebuffers,
+    };
+    mxcCreateTestNode(&testNodeCreateInfo, &testNode);
+    mxcCreateNodeContext(pTestNodeContext);
+    nodesShared[0] = (MxcNodeContextShared){};
+    nodesShared[0].cmd = testNode.cmd;  // we should request node slot first
+    mxcRegisterCompNodeThread(testNodeHandle);
+    nodeCount = 1;
+    __atomic_thread_fence(__ATOMIC_RELEASE);
   }
-  MxcTestNodeCreateInfo testNodeCreateInfo = {
-      .surface = surface,
-      .transform = {0, 0, 0},
-      .pFramebuffers = pTestNodeContext->framebuffers,
-  };
-  mxcCreateTestNode(&testNodeCreateInfo, &testNode);
-  mxcCreateNodeContext(pTestNodeContext);
-  nodesShared[0] = (MxcNodeContextShared) {};
-  nodesShared[0].cmd = testNode.cmd; // we should request node slot first
-  mxcRegisterCompNodeThread(testNodeHandle);
-  nodeCount = 1;
 
 
-  mxcRunCompNode(&basicComp);
+
+  VkmTimeline compTimeline = {.semaphore = basicComp.timeline};
+  uint64_t    compBaseCycleValue = 0;
+  VkDevice    device = context.device;
+  VkQueue     graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+
+  while (isRunning) {
+
+    // we may not have to even wait... this could go faster
+    vkmTimelineWaitValue(device, compBaseCycleValue + MXC_CYCLE_WINDOW, &compTimeline);
+
+    vkmUpdateWindowInput();
+    __atomic_thread_fence(__ATOMIC_RELEASE);
+
+    // signal input ready to process!
+    vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_INPUT, &compTimeline);
+
+    // this could go on itss own thread going even faster
+    for (int i = 0; i < nodeCount; ++i) {
+      {  // submit commands
+        uint64_t value = nodesShared[i].pendingTimelineSignal;
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        if (value > nodesShared[i].lastTimelineSignal) {
+          nodesShared[i].lastTimelineSignal = value;
+          vkmSubmitCommandBuffer(nodesShared[i].cmd, graphicsQueue, nodesShared[i].nodeTimeline, value);
+        }
+      }
+    }
+
+    // wait for recording to be done
+    vkmTimelineWaitValue(device, compBaseCycleValue + MXC_CYCLE_RENDER, &compTimeline);
+
+    compBaseCycleValue += MXC_CYCLE_COUNT;
+    vkmSubmitPresentCommandBuffer(compNodeShared.cmd,
+                                  graphicsQueue,
+                                  compNodeShared.chain,
+                                  compNodeShared.acquireSemaphore,
+                                  compNodeShared.renderCompleteSemaphore,
+                                  compNodeShared.swapIndex,
+                                  compTimeline.semaphore,
+                                  compBaseCycleValue + MXC_CYCLE_WINDOW);
+
+  }
 
 
-//  int result = pthread_join(testNodeContext.threadId, NULL);
-//  if (result != 0) {
-//    perror("Thread join failed");
-//    return 1;
-//  }
+  //  int result = pthread_join(testNodeContext.threadId, NULL);
+  //  if (result != 0) {
+  //    perror("Thread join failed");
+  //    return 1;
+  //  }
 
   return EXIT_SUCCESS;
 }

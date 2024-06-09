@@ -205,12 +205,6 @@ typedef struct VkmContext {
   VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
 
   VkDescriptorPool descriptorPool;
-  VkQueryPool      timeQueryPool;
-
-  // ya we prolly want to move this into some comp struct
-  VkmTransform      globalCameraTransform;
-  VkmGlobalSetState globalSetState;
-  VkmGlobalSet      globalSet;
 
   // these probably should go elsewhere
   VkRenderPass stdRenderPass;
@@ -511,14 +505,66 @@ VKM_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
-VKM_INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkSemaphore timeline, const uint64_t timelineSignalValue) {
+//VKM_INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkSemaphore timeline, const uint64_t timelineSignalValue) {
+//  const VkSubmitInfo2 submitInfo2 = {
+//      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+//      .waitSemaphoreInfoCount = 1,
+//      .pWaitSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
+//          {
+//              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+//              .semaphore = pSwap->acquireSemaphore,
+//              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+//          },
+//      },
+//      .commandBufferInfoCount = 1,
+//      .pCommandBufferInfos = (VkCommandBufferSubmitInfo[]){
+//          {
+//              .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+//              .commandBuffer = cmd,
+//          },
+//      },
+//      .signalSemaphoreInfoCount = 2,
+//      .pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
+//          {
+//              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+//              .value = timelineSignalValue,
+//              .semaphore = timeline,
+//              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+//          },
+//          {
+//              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+//              .semaphore = pSwap->renderCompleteSemaphore,
+//              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+//          },
+//      },
+//  };
+//  VKM_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
+//  const VkPresentInfoKHR presentInfo = {
+//      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+//      .waitSemaphoreCount = 1,
+//      .pWaitSemaphores = &pSwap->renderCompleteSemaphore,
+//      .swapchainCount = 1,
+//      .pSwapchains = &pSwap->chain,
+//      .pImageIndices = &pSwap->swapIndex,
+//  };
+//  VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
+//}
+VKM_INLINE void vkmSubmitPresentCommandBuffer(
+    const VkCommandBuffer cmd,
+    const VkQueue         queue,
+    const VkSwapchainKHR  chain,
+    const VkSemaphore     acquireSemaphore,
+    const VkSemaphore     renderCompleteSemaphore,
+    const uint32_t        swapIndex,
+    const VkSemaphore     timeline,
+    const uint64_t        timelineSignalValue) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .waitSemaphoreInfoCount = 1,
       .pWaitSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
           {
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-              .semaphore = pSwap->acquireSemaphore,
+              .semaphore = acquireSemaphore,
               .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
           },
       },
@@ -539,7 +585,7 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const V
           },
           {
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-              .semaphore = pSwap->renderCompleteSemaphore,
+              .semaphore = renderCompleteSemaphore,
               .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
           },
       },
@@ -548,10 +594,10 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const V
   const VkPresentInfoKHR presentInfo = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
-      .pWaitSemaphores = &pSwap->renderCompleteSemaphore,
+      .pWaitSemaphores = &renderCompleteSemaphore,
       .swapchainCount = 1,
-      .pSwapchains = &pSwap->chain,
-      .pImageIndices = &pSwap->swapIndex,
+      .pSwapchains = &chain,
+      .pImageIndices = &swapIndex,
   };
   VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
 }
@@ -586,7 +632,18 @@ VKM_INLINE void vkmTimelineWait(const VkDevice device, const VkmTimeline* pTimel
   };
   VKM_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
-VKM_INLINE void vkmTimelineSignal(const VkDevice device, const VkmTimeline* pTimeline) {
+VKM_INLINE void vkmTimelineWaitValue(const VkDevice device, const uint64_t waitValue, VkmTimeline* pTimeline) {
+  pTimeline->value = waitValue;
+  const VkSemaphoreWaitInfo semaphoreWaitInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+      .semaphoreCount = 1,
+      .pSemaphores = &pTimeline->semaphore,
+      .pValues = &pTimeline->value,
+  };
+  VKM_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
+}
+VKM_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, VkmTimeline* pTimeline) {
+  pTimeline->value = signalValue;
   const VkSemaphoreSignalInfo semaphoreSignalInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
       .semaphore = pTimeline->semaphore,

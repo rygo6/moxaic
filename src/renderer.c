@@ -447,17 +447,17 @@ void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
 
-  totalAllocSize[memTypeIndex] += pMemReqs->size;
-  int index = 0;
-  VkMemoryPropertyFlags printFlags = memPropFlags;
-  while (printFlags) {
-    if (printFlags & 1) {
-      printf("%s ", string_VkMemoryPropertyFlagBits(1U << index));
-    }
-    ++index;
-    printFlags >>= 1;
-  }
-  printf("%d %zu allocated in type %d\n", memPropFlags, totalAllocSize[memTypeIndex], memTypeIndex);
+//  totalAllocSize[memTypeIndex] += pMemReqs->size;
+//  int index = 0;
+//  VkMemoryPropertyFlags printFlags = memPropFlags;
+//  while (printFlags) {
+//    if (printFlags & 1) {
+//      printf("%s ", string_VkMemoryPropertyFlagBits(1U << index));
+//    }
+//    ++index;
+//    printFlags >>= 1;
+//  }
+//  printf("%d %zu allocated in type %d\n", memPropFlags, totalAllocSize[memTypeIndex], memTypeIndex);
 }
 void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
@@ -565,13 +565,13 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, cons
   vkGetImageMemoryRequirements2(context.device, &imageMemoryRequirementsInfo, &memoryRequirements2);
   bool requiresDedicatedAllocation = dedicatedRequirements.requiresDedicatedAllocation;
   bool prefersDedicatedAllocation = dedicatedRequirements.prefersDedicatedAllocation;
-  if (requiresDedicatedAllocation) {
-    printf("Dedicated allocation is required for this image.\n");
-  } else if (prefersDedicatedAllocation) {
-    printf("Dedicated allocation is preferred for this image.\n");
-  } else {
-    printf("Dedicated allocation is not necessary for this image.\n");
-  }
+//  if (requiresDedicatedAllocation) {
+//    printf("Dedicated allocation is required for this image.\n");
+//  } else if (prefersDedicatedAllocation) {
+//    printf("Dedicated allocation is preferred for this image.\n");
+//  } else {
+//    printf("Dedicated allocation is not necessary for this image.\n");
+//  }
 
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, *pImage, &memRequirements);
@@ -605,13 +605,13 @@ void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
   vkGetImageMemoryRequirements2(context.device, &imageMemoryRequirementsInfo, &memoryRequirements2);
   bool requiresDedicatedAllocation = dedicatedRequirements.requiresDedicatedAllocation;
   bool prefersDedicatedAllocation = dedicatedRequirements.prefersDedicatedAllocation;
-  if (requiresDedicatedAllocation) {
-    printf("Dedicated allocation is required for this image.\n");
-  } else if (prefersDedicatedAllocation) {
-    printf("Dedicated allocation is preferred for this image.\n");
-  } else {
-    printf("Dedicated allocation is not necessary for this image.\n");
-  }
+//  if (requiresDedicatedAllocation) {
+//    printf("Dedicated allocation is required for this image.\n");
+//  } else if (prefersDedicatedAllocation) {
+//    printf("Dedicated allocation is preferred for this image.\n");
+//  } else {
+//    printf("Dedicated allocation is not necessary for this image.\n");
+//  }
 
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, pTexture->img, &memRequirements);
@@ -690,24 +690,24 @@ void vkmCreateCompFramebuffers(const VkRenderPass renderPass, const uint32_t fra
   for (int i = 0; i < framebufferCount; ++i) {
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
-    textureCreateInfo.debugName = "ColorFramebuffer";
+    textureCreateInfo.debugName = "CompColorFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     VkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].color);
 
-    textureCreateInfo.debugName = "NormalFramebuffer";
+    textureCreateInfo.debugName = "CompNormalFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
     textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
     VkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].normal);
 
-    textureCreateInfo.debugName = "DepthFramebuffer";
+    textureCreateInfo.debugName = "CompDepthFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     VkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].depth);
 
     // I may or may not need the gbuffer in the comp but lets leave it for now
-    textureCreateInfo.debugName = "GBufferFramebuffer";
+    textureCreateInfo.debugName = "CompGBufferFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_G_BUFFER_FORMAT;
     textureCreateInfo.imageCreateInfo.usage = VKM_G_BUFFER_USAGE;
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -1084,12 +1084,6 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
         },
     };
     VKM_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, VKM_ALLOC, &context.descriptorPool));
-    const VkQueryPoolCreateInfo queryPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-        .queryType = VK_QUERY_TYPE_TIMESTAMP,
-        .queryCount = 2,
-    };
-    VKM_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VKM_ALLOC, &context.timeQueryPool));
   }
 }
 

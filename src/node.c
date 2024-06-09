@@ -1,5 +1,7 @@
 #include "node.h"
 
+MxcCompNodeContextShared compNodeShared;
+
 size_t               nodeCount = 0;
 MxcNodeContext       nodes[MXC_NODE_CAPACITY] = {};
 MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY] = {};
