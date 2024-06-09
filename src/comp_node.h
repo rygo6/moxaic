@@ -17,7 +17,7 @@ typedef enum MxcCompMode {
 typedef struct MxcCompNodeCreateInfo {
   MxcCompMode  compMode;
   VkSurfaceKHR surface;
-} MxcBasicCompCreateInfo;
+} MxcCompNodeCreateInfo;
 
 typedef struct MxcBasicComp {
   VkCommandBuffer cmd;
@@ -50,8 +50,8 @@ typedef struct MxcBasicComp {
 
   VkQueue graphicsQueue;
 
-} MxcBasicComp;
+} MxcCompNode;
 
 
-void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp);
+void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pComp);
 void mxcRunCompNode(const MxcNodeContext* pNodeContext);

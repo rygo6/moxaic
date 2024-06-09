@@ -551,13 +551,13 @@ VKM_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
 //}
 VKM_INLINE void vkmSubmitPresentCommandBuffer(
     const VkCommandBuffer cmd,
-    const VkQueue         queue,
     const VkSwapchainKHR  chain,
     const VkSemaphore     acquireSemaphore,
     const VkSemaphore     renderCompleteSemaphore,
     const uint32_t        swapIndex,
     const VkSemaphore     timeline,
-    const uint64_t        timelineSignalValue) {
+    const uint64_t        timelineSignalValue,
+    const VkQueue         queue) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .waitSemaphoreInfoCount = 1,

@@ -114,7 +114,7 @@ static void CreateCompPipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPi
   VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pNodePipeLayout));
 }
 
-void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp) {
+void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pComp) {
   {  // Create
     CreateCompSetLayout(&pComp->nodeSetLayout);
     CreateCompPipeLayout(pComp->nodeSetLayout, &pComp->nodePipeLayout);
@@ -188,7 +188,7 @@ void mxcCreateBasicComp(const MxcBasicCompCreateInfo* pInfo, MxcBasicComp* pComp
 // this should run on a different thread...
 void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
 
-  MxcBasicComp* pNode = (MxcBasicComp*)pNodeContext->pNode;
+  MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
 
   VkCommandBuffer cmd = pNode->cmd;
   VkRenderPass    stdRenderPass = pNode->stdRenderPass;
