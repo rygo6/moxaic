@@ -19,7 +19,8 @@ typedef struct MxcCompNodeCreateInfo {
   VkSurfaceKHR surface;
 } MxcCompNodeCreateInfo;
 
-typedef struct MxcBasicComp {
+typedef struct MxcCompNode {
+  VkDevice        device;
   VkCommandBuffer cmd;
 
   VkRenderPass stdRenderPass;
@@ -28,12 +29,9 @@ typedef struct MxcBasicComp {
   VkPipelineLayout      nodePipeLayout;
   VkPipeline            nodePipe;
 
-  VkDevice device;
-
   VkQueryPool timeQueryPool;
 
-  VkmGlobalSet globalSet;
-
+  VkmGlobalSet    globalSet;
   VkDescriptorSet nodeSet;
 
   MxcNodeSetState* pNodeSetMapped;
@@ -43,12 +41,8 @@ typedef struct MxcBasicComp {
   VkmMesh quadMesh;
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
-
-  VkmSwap swap;
-
-  VkSemaphore timeline;
-
-  VkQueue graphicsQueue;
+  VkmSwap        swap;
+  VkSemaphore    timeline;
 
 } MxcCompNode;
 
