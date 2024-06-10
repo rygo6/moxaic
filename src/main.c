@@ -44,7 +44,6 @@ int main(void) {
   VkSurfaceKHR surface;
   vkmCreateSurface(VKM_ALLOC, &surface);
 
-
   {
     const VkmContextCreateInfo contextCreateInfo = {
         .maxDescriptorCount = 30,
@@ -137,6 +136,7 @@ int main(void) {
       // we may not have to even wait... this could go faster
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compNodeShared.compTimeline);
 
+      // somewhere input state needs to be copied to a need and only update when it knows the node needs it
       vkmUpdateWindowInput();
       __atomic_thread_fence(__ATOMIC_RELEASE);
 

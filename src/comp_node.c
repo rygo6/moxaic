@@ -157,7 +157,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pComp) {
     VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pComp->cmd));
     VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pComp->cmd, "CompCmd");
 
-    VkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pComp->swap);
+    vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pComp->swap);
   }
 
   {  // Initial State
@@ -165,7 +165,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pComp) {
     vkBeginCommandBuffer(pComp->cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
     VkImageMemoryBarrier2 swapBarrier[VKM_SWAP_COUNT];
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      swapBarrier[i] = VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_PRESENT, pComp->swap.images[i]);
+      swapBarrier[i] = VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT, pComp->swap.images[i]);
     }
     vkCmdPipelineBarrier2(pComp->cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = VKM_SWAP_COUNT, .pImageMemoryBarriers = swapBarrier});
     vkEndCommandBuffer(pComp->cmd);
@@ -356,8 +356,8 @@ run_loop:
         const VkImage               swapImage = swap.images[swap.swapIndex];
         const VkImage               framebufferColorImage = frameBufferColorImages[framebufferIndex];
         const VkImageMemoryBarrier2 blitBarrier[] = {
-            VKM_COLOR_IMAGE_BARRIER(VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, VKM_TRANSFER_SRC_IMAGE_BARRIER, framebufferColorImage),
-            VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_PRESENT, VKM_TRANSFER_DST_IMAGE_BARRIER, swapImage),
+            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT, VKM_IMG_BARRIER_TRANSFER_SRC, framebufferColorImage),
+            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_PRESENT, VKM_IMG_BARRIER_TRANSFER_DST, swapImage),
         };
         CmdPipelineImageBarriers2(cmd, 2, blitBarrier);
 
@@ -365,7 +365,7 @@ run_loop:
 
         const VkImageMemoryBarrier2 presentBarrier[] = {
             //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, framebufferColorImage),
-            VKM_COLOR_IMAGE_BARRIER(VKM_TRANSFER_DST_IMAGE_BARRIER, VKM_IMAGE_BARRIER_PRESENT, swapImage),
+            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_PRESENT, swapImage),
         };
         CmdPipelineImageBarriers2(cmd, 1, presentBarrier);
       }

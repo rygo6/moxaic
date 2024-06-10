@@ -53,7 +53,7 @@ void CreateSphereMesh(const float radius, const int slicesCount, const int stack
     info.pIndices = indices;
     info.pVertices = vertices;
   }
-  VkmCreateMesh(&info, pMesh);
+  vkmCreateMesh(&info, pMesh);
 }
 void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
@@ -69,7 +69,7 @@ void CreateQuadMesh(const float size, VkmMesh* pMesh) {
       .pIndices = indices,
       .pVertices = vertices,
   };
-  VkmCreateMesh(&info, pMesh);
+  vkmCreateMesh(&info, pMesh);
 }
 void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 3, 2};
@@ -85,6 +85,6 @@ void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
       .pIndices = indices,
       .pVertices = vertices,
   };
-  VkmCreateMesh(&info, pMesh);
+  vkmCreateMesh(&info, pMesh);
 }
 #endif

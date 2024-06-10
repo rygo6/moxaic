@@ -293,87 +293,82 @@ typedef struct VkmImageBarrier {
   VkImageLayout            layout;
   // QueueBarrier             queueFamily;
 } VkmImageBarrier;
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_UNDEFINED = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
 };
-//static const VkmImageBarrier* VKM_IMAGE_BARRIER_PRESENT_BLIT_SRC = &(const VkmImageBarrier){
-//    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-//    .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
-//    .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-//};
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_PRESENT = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_WRITE = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_WRITE = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ_WRITE = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ_WRITE = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_TRANSFER_SRC_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_TRANSFER_DST_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST_GENERAL = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_TRANSFER_READ_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_SHADER_READ = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_SHADER_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_COLOR_ATTACHMENT_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
     .accessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
-#define VKM_COLOR_IMAGE_BARRIER(src, dst, barrier_image) \
+#define VKM_COLOR_IMG_BARRIER(src, dst, barrier_image)   \
   (const VkImageMemoryBarrier2) {                        \
     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,   \
     .srcStageMask = src->stageMask,                      \
@@ -391,60 +386,60 @@ static const VkmImageBarrier* VKM_DEPTH_ATTACHMENT_IMAGE_BARRIER = &(const VkmIm
         .layerCount = 1,                                 \
     },                                                   \
   }
-#define VKM_COLOR_IMAGE_BARRIER_MIP(src, dst, barrier_image, base_mip_level, level_count) \
-  (const VkImageMemoryBarrier2) {                                                         \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                    \
-    .srcStageMask = src->stageMask,                                                       \
-    .srcAccessMask = src->accessMask,                                                     \
-    .dstStageMask = dst->stageMask,                                                       \
-    .dstAccessMask = dst->accessMask,                                                     \
-    .oldLayout = src->layout,                                                             \
-    .newLayout = dst->layout,                                                             \
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                       \
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                       \
-    .image = barrier_image,                                                               \
-    .subresourceRange = (const VkImageSubresourceRange){                                  \
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                                          \
-        .baseMipLevel = base_mip_level,                                                   \
-        .levelCount = level_count,                                                        \
-        .layerCount = 1,                                                                  \
-    },                                                                                    \
+#define VKM_COLOR_IMG_BARRIER_MIP(src, dst, barrier_image, base_mip_level, level_count) \
+  (const VkImageMemoryBarrier2) {                                                       \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                  \
+    .srcStageMask = src->stageMask,                                                     \
+    .srcAccessMask = src->accessMask,                                                   \
+    .dstStageMask = dst->stageMask,                                                     \
+    .dstAccessMask = dst->accessMask,                                                   \
+    .oldLayout = src->layout,                                                           \
+    .newLayout = dst->layout,                                                           \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                     \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                     \
+    .image = barrier_image,                                                             \
+    .subresourceRange = (const VkImageSubresourceRange){                                \
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                                        \
+        .baseMipLevel = base_mip_level,                                                 \
+        .levelCount = level_count,                                                      \
+        .layerCount = 1,                                                                \
+    },                                                                                  \
   }
-#define VKM_IMAGE_BARRIER(src, dst, aspect_mask, barrier_image) \
-  (const VkImageMemoryBarrier2) {                               \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,          \
-    .srcStageMask = src->stageMask,                             \
-    .srcAccessMask = src->accessMask,                           \
-    .dstStageMask = dst->stageMask,                             \
-    .dstAccessMask = dst->accessMask,                           \
-    .oldLayout = src->layout,                                   \
-    .newLayout = dst->layout,                                   \
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,             \
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,             \
-    .image = barrier_image,                                     \
-    .subresourceRange = (const VkImageSubresourceRange){        \
-        .aspectMask = aspect_mask,                              \
-        .levelCount = 1,                                        \
-        .layerCount = 1,                                        \
-    },                                                          \
+#define VKM_IMG_BARRIER(src, dst, aspect_mask, barrier_image) \
+  (const VkImageMemoryBarrier2) {                             \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,        \
+    .srcStageMask = src->stageMask,                           \
+    .srcAccessMask = src->accessMask,                         \
+    .dstStageMask = dst->stageMask,                           \
+    .dstAccessMask = dst->accessMask,                         \
+    .oldLayout = src->layout,                                 \
+    .newLayout = dst->layout,                                 \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,           \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,           \
+    .image = barrier_image,                                   \
+    .subresourceRange = (const VkImageSubresourceRange){      \
+        .aspectMask = aspect_mask,                            \
+        .levelCount = 1,                                      \
+        .layerCount = 1,                                      \
+    },                                                        \
   }
-#define VKM_IMAGE_BARRIER_TRANSFER(src, dst, aspect_mask, barrier_image, src_queue, dst_queue) \
-  (const VkImageMemoryBarrier2) {                                                              \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                         \
-    .srcStageMask = src->stageMask,                                                            \
-    .srcAccessMask = src->accessMask,                                                          \
-    .dstStageMask = dst->stageMask,                                                            \
-    .dstAccessMask = dst->accessMask,                                                          \
-    .oldLayout = src->layout,                                                                  \
-    .newLayout = dst->layout,                                                                  \
-    .srcQueueFamilyIndex = src_queue,                                                          \
-    .dstQueueFamilyIndex = dst_queue,                                                          \
-    .image = barrier_image,                                                                    \
-    .subresourceRange = (VkImageSubresourceRange){                                             \
-        .aspectMask = aspect_mask,                                                             \
-        .levelCount = 1,                                                                       \
-        .layerCount = 1,                                                                       \
-    },                                                                                         \
+#define VKM_IMG_BARRIER_TRANSFER(src, dst, aspect_mask, barrier_image, src_queue, dst_queue) \
+  (const VkImageMemoryBarrier2) {                                                            \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                       \
+    .srcStageMask = src->stageMask,                                                          \
+    .srcAccessMask = src->accessMask,                                                        \
+    .dstStageMask = dst->stageMask,                                                          \
+    .dstAccessMask = dst->accessMask,                                                        \
+    .oldLayout = src->layout,                                                                \
+    .newLayout = dst->layout,                                                                \
+    .srcQueueFamilyIndex = src_queue,                                                        \
+    .dstQueueFamilyIndex = dst_queue,                                                        \
+    .image = barrier_image,                                                                  \
+    .subresourceRange = (VkImageSubresourceRange){                                           \
+        .aspectMask = aspect_mask,                                                           \
+        .levelCount = 1,                                                                     \
+        .layerCount = 1,                                                                     \
+    },                                                                                       \
   }
 
 //----------------------------------------------------------------------------------
@@ -648,21 +643,19 @@ void vkmCreateCompFramebuffers(const VkRenderPass renderPass, const uint32_t fra
 void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void VkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory);
-void VkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer);
+void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory);
+void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer);
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
-void VkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
-void VkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+void vkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
+void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
 void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
 void vkmCreateStdPipe(VkmStdPipe* pStdPipe);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
-void VkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
-
-
-VkShaderModule vkmCreateShaderModule(const char* pShaderPath);
+void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
+void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
 
 typedef struct VkmInitializeDesc {
   // should use this... ? but need to decide on this vs vulkan configurator
