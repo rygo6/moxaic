@@ -82,25 +82,23 @@ int main(void) {
   }
 
 
+  // these probably should go elsewhere ?
+  // global samplers
+  VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
+  // standard/common rendering
+  VkmCreateStdRenderPass(&context.stdRenderPass);
+  vkmCreateStdPipe(&context.stdPipe);
+
+
+  MxcCompNode compNode;
   {
-    // these probably should go elsewhere ?
-    // global samplers
-    VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
-    // standard/common rendering
-    VkmCreateStdRenderPass(&context.stdRenderPass);
-    vkmCreateStdPipe(&context.stdPipe);
-  }
-
-
-  {  // create comp
-    MxcCompNode           compNode;
-    MxcCompNodeCreateInfo compNodeInfo = {
+    const MxcCompNodeCreateInfo compNodeInfo = {
         .compMode = MXC_COMP_MODE_TESS,
         //      .compMode = MXC_COMP_MODE_BASIC,
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
-    // more to register method like mxcRegisterCompNodeThread
+    // move to register method like mxcRegisterCompNodeThread?
     compNodeShared = (MxcCompNodeContextShared){};
     compNodeShared.cmd = compNode.cmd;
     compNodeShared.compTimeline = compNode.timeline;
@@ -108,56 +106,31 @@ int main(void) {
     compNodeShared.chain = compNode.swap.chain;
     compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
     compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
-    MxcNodeContext compNodeContext = {
+    const MxcNodeContext compNodeContext = {
         .nodeType = MXC_NODE_TYPE_THREAD,
         .pNode = &compNode,
         .runFunc = mxcRunCompNode,
         .compTimeline = compNode.timeline,
     };
-    mxcCreateNodeContext(&compNodeContext);
+    mxcRunNodeContext(&compNodeContext);
   }
 
 
-  {  // create temp test node
-    NodeHandle      testNodeHandle = 0;
-    MxcTestNode     testNode;
-    MxcNodeContext* pTestNodeContext = &nodes[testNodeHandle];
-    *pTestNodeContext = (MxcNodeContext){
-        .nodeType = MXC_NODE_TYPE_THREAD,
-        .compCycleSkip = 16,
-        .pNode = &testNode,
-        .runFunc = mxcRunTestNode,
-        // should i just read directly from compNodeShared.compTimeline in node setup?
-        .compTimeline = compNodeShared.compTimeline,
-    };
-    vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pTestNodeContext->framebuffers);
-    {
-      const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
-          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-          .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-      const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
-          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-          .pNext = &timelineSemaphoreTypeCreateInfo,
-      };
-      VKM_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, VKM_ALLOC, &pTestNodeContext->nodeTimeline));
-    }
-    MxcTestNodeCreateInfo testNodeCreateInfo = {
+  MxcTestNode testNode;
+  NodeHandle  handle = mxcRequestNodeContextThread(mxcRunTestNode, &testNode);
+  {
+    const MxcTestNodeCreateInfo createInfo = {
         .transform = {0, 0, 0},
-        .pFramebuffers = pTestNodeContext->framebuffers,
+        .pFramebuffers = nodes[handle].framebuffers,
     };
-    mxcCreateTestNode(&testNodeCreateInfo, &testNode);
-    mxcCreateNodeContext(pTestNodeContext);
-    nodesShared[0] = (MxcNodeContextShared){};
-    nodesShared[0].cmd = testNode.cmd;  // we should request node slot first
-    mxcRegisterCompNodeThread(testNodeHandle);
-    nodeCount = 1;
-    __atomic_thread_fence(__ATOMIC_RELEASE);
+    mxcCreateTestNode(&createInfo, &testNode);
+    mxcRegisterNodeContextThread(handle, testNode.cmd);
   }
 
 
   {
-    uint64_t compBaseCycleValue = 0;
     VkDevice device = context.device;
+    uint64_t compBaseCycleValue = 0;
     VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
     while (isRunning) {
 
@@ -170,17 +143,9 @@ int main(void) {
       // signal input ready to process!
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compNodeShared.compTimeline);
 
-      // this could go on its own thread going even faster
-      for (int i = 0; i < nodeCount; ++i) {
-        {  // submit commands
-          uint64_t value = nodesShared[i].pendingTimelineSignal;
-          __atomic_thread_fence(__ATOMIC_ACQUIRE);
-          if (value > nodesShared[i].lastTimelineSignal) {
-            nodesShared[i].lastTimelineSignal = value;
-            vkmSubmitCommandBuffer(nodesShared[i].cmd, graphicsQueue, nodesShared[i].nodeTimeline, value);
-          }
-        }
-      }
+      // Try submitting nodes before waiting to render composite
+      // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
+      mxcSubmitNodeQueues(graphicsQueue);
 
       // wait for recording to be done
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compNodeShared.compTimeline);
@@ -194,6 +159,10 @@ int main(void) {
                                     compNodeShared.compTimeline,
                                     compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE,
                                     graphicsQueue);
+
+      // Try submitting nodes before waiting to update window again.
+      // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
+      mxcSubmitNodeQueues(graphicsQueue);
     }
   }
 

@@ -57,10 +57,10 @@ typedef struct MxcNodeContext {
   const void* pNode;
   void (*runFunc)(const struct MxcNodeContext* pNode);
 
-  // should just be in hot?
-  VkSemaphore compTimeline;
+  VkCommandBuffer commandBuffer;
 
-  // get rid of... can be internal to node since it uses shared mem
+  // need ref to send over IPC. Can't get from compNodeShared.
+  VkSemaphore compTimeline;
   VkSemaphore nodeTimeline;
 
   VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
@@ -86,10 +86,10 @@ CACHE_ALIGN typedef struct MxcCompNodeContextShared {
   volatile VkCommandBuffer cmd;
   volatile uint64_t        lastTimelineSignal;
   volatile VkSemaphore     compTimeline;
-  volatile uint32_t       swapIndex;
-  VkSwapchainKHR chain;
-  VkSemaphore    acquireSemaphore;
-  VkSemaphore    renderCompleteSemaphore;
+  volatile uint32_t        swapIndex;
+  VkSwapchainKHR           chain;
+  VkSemaphore              acquireSemaphore;
+  VkSemaphore              renderCompleteSemaphore;
 } MxcCompNodeContextShared;
 
 extern MxcCompNodeContextShared compNodeShared;
@@ -148,47 +148,30 @@ extern size_t               nodeCount;
 extern MxcNodeContext       nodes[MXC_NODE_CAPACITY];
 extern MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY];
 
-static inline void mxcRegisterCompNodeThread(NodeHandle handle) {
-  nodesShared[handle].active = true;
-  nodesShared[handle].type = MXC_NODE_TYPE_THREAD;
-  nodesShared[handle].radius = 0.5;
-  nodesShared[handle].nodeTimeline = nodes[handle].nodeTimeline;
-  nodesShared[handle].transform.rotation = QuatFromEuler(nodesShared[handle].transform.euler);
-  //  memcpy((void*)&nodesShared[handle].globalSetState, (void*)&globalSetState, sizeof(VkmGlobalSetState));
-  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    nodesShared[handle].framebufferColorImageViews[i] = nodes[handle].framebuffers[i].color.view;
-    nodesShared[handle].framebufferNormalImageViews[i] = nodes[handle].framebuffers[i].normal.view;
-    nodesShared[handle].framebufferGBufferImageViews[i] = nodes[handle].framebuffers[i].gBuffer.view;
-    nodesShared[handle].framebufferColorImages[i] = nodes[handle].framebuffers[i].color.img;
-    nodesShared[handle].framebufferNormalImages[i] = nodes[handle].framebuffers[i].normal.img;
-    nodesShared[handle].framebufferGBufferImages[i] = nodes[handle].framebuffers[i].gBuffer.img;
-  }
-}
-
-extern MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY];
-
-static inline void mxcCreateNodeContext(MxcNodeContext* pNodeContext) {
-
-  switch (pNodeContext->nodeType) {
-    case MXC_NODE_TYPE_THREAD: {
-      int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))pNodeContext->runFunc, pNodeContext);
-      REQUIRE(result == 0, "Node thread creation failed!");
-      break;
+static inline void mxcSubmitNodeQueues(const VkQueue graphicsQueue) {
+  for (int i = 0; i < nodeCount; ++i) {
+    {  // submit commands
+      uint64_t value = nodesShared[i].pendingTimelineSignal;
+      __atomic_thread_fence(__ATOMIC_ACQUIRE);
+      if (value > nodesShared[i].lastTimelineSignal) {
+        nodesShared[i].lastTimelineSignal = value;
+        vkmSubmitCommandBuffer(nodesShared[i].cmd, graphicsQueue, nodesShared[i].nodeTimeline, value);
+      }
     }
-    case MXC_NODE_TYPE_INTERPROCESS:
-      vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
-
-      break;
   }
 }
 
+NodeHandle mxcRequestNodeContextThread(void (*runFunc)(const struct MxcNodeContext* pNode), const void* pNode);
+void       mxcRegisterNodeContextThread(NodeHandle handle, VkCommandBuffer cmd);
+void       mxcRunNodeContext(const MxcNodeContext* pNodeContext);
+
+
+// Process IPC
 void mxcCreateSharedBuffer();
 void mxcCreateProcess();
 
 typedef void (*MxcInterProcessFuncPtr)(void*);
-
 void mxcInterProcessImportNode(void* pParam);
-
 typedef enum MxcRingBufferTarget {
   MXC_INTERPROCESS_TARGET_IMPORT
 } MxcRingBufferTarget;
@@ -198,13 +181,11 @@ static const size_t MXC_INTERPROCESS_TARGET_SIZE[] = {
 static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
     [MXC_INTERPROCESS_TARGET_IMPORT] = mxcInterProcessImportNode,
 };
-
 static inline void mxcRingBufferEnqeue(MxcRingBuffer* pBuffer, uint8_t target, void* pParam) {
   pBuffer->ringBuffer[pBuffer->head] = target;
   memcpy((void*)(pBuffer->ringBuffer + pBuffer->head + MXC_RING_BUFFER_HEADER_SIZE), pParam, MXC_INTERPROCESS_TARGET_SIZE[target]);
   pBuffer->head = pBuffer->head + MXC_RING_BUFFER_HEADER_SIZE + MXC_INTERPROCESS_TARGET_SIZE[target];
 }
-
 static inline int mxcRingBufferDeque(MxcRingBuffer* pBuffer) {
   // TODO this needs to actually cycle around the ring buffer, this is only half done
 

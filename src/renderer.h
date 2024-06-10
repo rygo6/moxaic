@@ -142,7 +142,6 @@ typedef struct VkmNodeFramebuffer {
 } VkmNodeFramebuffer;
 
 typedef struct VkmGlobalSetState {
-
   mat4 view;
   mat4 proj;
   mat4 viewProj;
@@ -171,24 +170,12 @@ typedef struct VkmQueueFamily {
   VkCommandPool pool;
   uint32_t      index;
 } VkmQueueFamily;
-
-typedef enum VkmQueueMode {
-  VKM_QUEUE_MODE_DEDICATED,
-  VKM_QUEUE_MODE_SHARED,
-} VkmQueueMode;
-typedef struct VkmQueue {
-  VkmQueueMode mode;
-  VkQueue      queue;
-} VkmQueue;
-
 typedef struct VkmStdPipe {
-  VkPipelineLayout pipeLayout;
-  VkPipeline       pipe;
-
+  VkPipelineLayout      pipeLayout;
+  VkPipeline            pipe;
   VkDescriptorSetLayout globalSetLayout;
   VkDescriptorSetLayout materialSetLayout;
   VkDescriptorSetLayout objectSetLayout;
-
 } VkmStdPipe;
 
 typedef struct VkmGlobalSet {
@@ -201,9 +188,7 @@ typedef struct VkmGlobalSet {
 typedef struct VkmContext {
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
-
-  VkmQueueFamily queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
-
+  VkmQueueFamily   queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
   VkDescriptorPool descriptorPool;
 
   // these probably should go elsewhere
@@ -505,50 +490,6 @@ VKM_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
-//VKM_INLINE void vkmSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkmSwap* pSwap, const VkSemaphore timeline, const uint64_t timelineSignalValue) {
-//  const VkSubmitInfo2 submitInfo2 = {
-//      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-//      .waitSemaphoreInfoCount = 1,
-//      .pWaitSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
-//          {
-//              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-//              .semaphore = pSwap->acquireSemaphore,
-//              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-//          },
-//      },
-//      .commandBufferInfoCount = 1,
-//      .pCommandBufferInfos = (VkCommandBufferSubmitInfo[]){
-//          {
-//              .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-//              .commandBuffer = cmd,
-//          },
-//      },
-//      .signalSemaphoreInfoCount = 2,
-//      .pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
-//          {
-//              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-//              .value = timelineSignalValue,
-//              .semaphore = timeline,
-//              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-//          },
-//          {
-//              .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-//              .semaphore = pSwap->renderCompleteSemaphore,
-//              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-//          },
-//      },
-//  };
-//  VKM_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
-//  const VkPresentInfoKHR presentInfo = {
-//      .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-//      .waitSemaphoreCount = 1,
-//      .pWaitSemaphores = &pSwap->renderCompleteSemaphore,
-//      .swapchainCount = 1,
-//      .pSwapchains = &pSwap->chain,
-//      .pImageIndices = &pSwap->swapIndex,
-//  };
-//  VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
-//}
 VKM_INLINE void vkmSubmitPresentCommandBuffer(
     const VkCommandBuffer cmd,
     const VkSwapchainKHR  chain,
@@ -719,6 +660,7 @@ void vkmCreateStdPipe(VkmStdPipe* pStdPipe);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 void VkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
+
 
 VkShaderModule vkmCreateShaderModule(const char* pShaderPath);
 

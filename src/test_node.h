@@ -25,7 +25,7 @@ typedef struct MxcTestNode {
 
   VkDevice device;
 
-  VkCommandBuffer cmd; // probably want to make this in node context
+  VkCommandBuffer cmd;  // probably want to make this in node context
 
   VkmGlobalSet globalSet;
 
