@@ -427,8 +427,11 @@ static size_t totalAllocSize[VK_MAX_MEMORY_TYPES] = {};
 //  printf("%zu allocated\n", totalAllocSize);
 //}
 
+void vkmBeginMemoryAlloc(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality) {
+}
+
 // so what we need to do here is make something which allows you to pre-emptively figure out all memory requirements, store that state, then have it initialize
-void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
+void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryDedicatedRequirements* pDedicatedReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory) {
   VkPhysicalDeviceMemoryProperties memProps;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
   const uint32_t memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, memPropFlags);
@@ -451,29 +454,46 @@ void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
 
-  //  totalAllocSize[memTypeIndex] += pMemReqs->size;
-  //  int index = 0;
-  //  VkMemoryPropertyFlags printFlags = memPropFlags;
-  //  while (printFlags) {
-  //    if (printFlags & 1) {
-  //      printf("%s ", string_VkMemoryPropertyFlagBits(1U << index));
-  //    }
-  //    ++index;
-  //    printFlags >>= 1;
-  //  }
-  //  printf("%d %zu allocated in type %d\n", memPropFlags, totalAllocSize[memTypeIndex], memTypeIndex);
+  totalAllocSize[memTypeIndex] += pMemReqs->size;
+  int                   index = 0;
+  VkMemoryPropertyFlags printFlags = memPropFlags;
+  while (printFlags) {
+    if (printFlags & 1) {
+      printf("%s ", string_VkMemoryPropertyFlagBits(1U << index));
+    }
+    ++index;
+    printFlags >>= 1;
+  }
+  printf("%d %zu allocated in type %d\n", memPropFlags, totalAllocSize[memTypeIndex], memTypeIndex);
 }
-void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer) {
+static void CreateAllocBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .size = bufferSize,
       .usage = usage,
   };
   VKM_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, VKM_ALLOC, pBuffer));
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(context.device, *pBuffer, &memRequirements);
-  vkmAllocMemory(&memRequirements, memoryPropertyFlags, locality, pDeviceMemory);
-  VKM_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMemory, 0));
+
+  const VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = *pBuffer};
+  VkMemoryDedicatedRequirements         dedicatedReqs = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
+  VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
+  vkGetBufferMemoryRequirements2(context.device, &bufMemReqInfo2, &memReqs2);
+
+  bool requiresDedicatedAllocation = dedicatedReqs.requiresDedicatedAllocation;
+  bool prefersDedicatedAllocation = dedicatedReqs.prefersDedicatedAllocation;
+  if (requiresDedicatedAllocation) {
+    printf("Dedicated allocation is required for this image.\n");
+  } else if (prefersDedicatedAllocation) {
+    printf("Dedicated allocation is preferred for this image.\n");
+  } else {
+    printf("Dedicated allocation is not necessary for this image.\n");
+  }
+
+  vkmAllocMemory(&memReqs2.memoryRequirements, &dedicatedReqs, memPropFlags, locality, pDeviceMem);
+}
+void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer) {
+  CreateAllocBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
+  VKM_REQUIRE(vkBindBufferMemory(context.device, *pBuffer, *pDeviceMem, 0));
 }
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped) {
   vkmCreateAllocBindBuffer(memoryPropertyFlags, bufferSize, usage, locality, pDeviceMemory, pBuffer);
@@ -503,16 +523,7 @@ void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
   uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
   pMesh->indexOffset = 0;
   pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(VkmVertex));
-  const VkBufferCreateInfo bufferCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .size = pMesh->vertexOffset + vertexBufferSize,
-      .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-  };
-  VKM_REQUIRE(vkCreateBuffer(context.device, &bufferCreateInfo, VKM_ALLOC, &pMesh->buffer));
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(context.device, pMesh->buffer, &memRequirements);
-  vkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VKM_LOCALITY_CONTEXT, &pMesh->memory);
-  VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->buffer, pMesh->memory, 0));
+  vkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
   vkmPopulateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
   vkmPopulateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
 }
@@ -554,32 +565,28 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkI
 }
 static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, const VkmLocality locality, VkDeviceMemory* pMemory, VkImage* pImage) {
   VKM_REQUIRE(vkCreateImage(context.device, pImageCreateInfo, VKM_ALLOC, pImage));
-
-  const VkImageMemoryRequirementsInfo2 imageMemoryRequirementsInfo = {
+  const VkImageMemoryRequirementsInfo2 imgMemReqInfo2 = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
       .image = *pImage,
   };
-  VkMemoryDedicatedRequirements dedicatedRequirements = {
+  VkMemoryDedicatedRequirements dedicatedReqs = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
   };
-  VkMemoryRequirements2 memoryRequirements2 = {
+  VkMemoryRequirements2 memReqs2 = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
-      .pNext = &dedicatedRequirements,
+      .pNext = &dedicatedReqs,
   };
-  vkGetImageMemoryRequirements2(context.device, &imageMemoryRequirementsInfo, &memoryRequirements2);
-  bool requiresDedicatedAllocation = dedicatedRequirements.requiresDedicatedAllocation;
-  bool prefersDedicatedAllocation = dedicatedRequirements.prefersDedicatedAllocation;
-  //  if (requiresDedicatedAllocation) {
-  //    printf("Dedicated allocation is required for this image.\n");
-  //  } else if (prefersDedicatedAllocation) {
-  //    printf("Dedicated allocation is preferred for this image.\n");
-  //  } else {
-  //    printf("Dedicated allocation is not necessary for this image.\n");
-  //  }
-
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(context.device, *pImage, &memRequirements);
-  vkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, pMemory);
+  vkGetImageMemoryRequirements2(context.device, &imgMemReqInfo2, &memReqs2);
+  bool requiresDedicatedAllocation = dedicatedReqs.requiresDedicatedAllocation;
+  bool prefersDedicatedAllocation = dedicatedReqs.prefersDedicatedAllocation;
+  if (requiresDedicatedAllocation) {
+    printf("Dedicated allocation is required for this image.\n");
+  } else if (prefersDedicatedAllocation) {
+    printf("Dedicated allocation is preferred for this image.\n");
+  } else {
+    printf("Dedicated allocation is not necessary for this image.\n");
+  }
+  vkmAllocMemory(&memReqs2.memoryRequirements, &dedicatedReqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, pMemory);
   VKM_REQUIRE(vkBindImageMemory(context.device, *pImage, *pMemory, 0));
 }
 static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImageAspectFlags aspectMask, const VkmLocality locality, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView) {
@@ -594,34 +601,7 @@ typedef struct VkmTextureCreateInfo {
   VkmLocality        locality;
 } VkmTextureCreateInfo;
 void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture) {
-  VKM_REQUIRE(vkCreateImage(context.device, &pTextureCreateInfo->imageCreateInfo, VKM_ALLOC, &pTexture->img));
-  const VkImageMemoryRequirementsInfo2 imageMemoryRequirementsInfo = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
-      .image = pTexture->img,
-  };
-  VkMemoryDedicatedRequirements dedicatedRequirements = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS,
-  };
-  VkMemoryRequirements2 memoryRequirements2 = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
-      .pNext = &dedicatedRequirements,
-  };
-  vkGetImageMemoryRequirements2(context.device, &imageMemoryRequirementsInfo, &memoryRequirements2);
-  bool requiresDedicatedAllocation = dedicatedRequirements.requiresDedicatedAllocation;
-  bool prefersDedicatedAllocation = dedicatedRequirements.prefersDedicatedAllocation;
-  //  if (requiresDedicatedAllocation) {
-  //    printf("Dedicated allocation is required for this image.\n");
-  //  } else if (prefersDedicatedAllocation) {
-  //    printf("Dedicated allocation is preferred for this image.\n");
-  //  } else {
-  //    printf("Dedicated allocation is not necessary for this image.\n");
-  //  }
-
-  VkMemoryRequirements memRequirements;
-  vkGetImageMemoryRequirements(context.device, pTexture->img, &memRequirements);
-  vkmAllocMemory(&memRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pTextureCreateInfo->locality, &pTexture->memory);
-  VKM_REQUIRE(vkBindImageMemory(context.device, pTexture->img, pTexture->memory, 0));
-  CreateImageView(&pTextureCreateInfo->imageCreateInfo, pTexture->img, pTextureCreateInfo->aspectMask, &pTexture->view);
+  CreateAllocateBindImageView(&pTextureCreateInfo->imageCreateInfo, pTextureCreateInfo->aspectMask, pTextureCreateInfo->locality, &pTexture->memory, &pTexture->img, &pTexture->view);
   switch (pTextureCreateInfo->locality) {
     default:
     case VKM_LOCALITY_CONTEXT:          break;
