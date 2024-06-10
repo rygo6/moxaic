@@ -88,44 +88,43 @@ int main(void) {
   VkmCreateStdRenderPass(&context.stdRenderPass);
   vkmCreateStdPipe(&context.stdPipe);
 
-
   MxcCompNode compNode;
+  MxcTestNode testNode;
+  NodeHandle  testNodeHandle;
   {
+    vkmBeginMemoryAllocRequest();
     const MxcCompNodeCreateInfo compNodeInfo = {
         .compMode = MXC_COMP_MODE_TESS,
         //      .compMode = MXC_COMP_MODE_BASIC,
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
-    // move to register method like mxcRegisterCompNodeThread?
-    compNodeShared = (MxcCompNodeContextShared){};
-    compNodeShared.cmd = compNode.cmd;
-    compNodeShared.compTimeline = compNode.timeline;
-    compNodeShared.swapIndex = compNode.swap.swapIndex;
-    compNodeShared.chain = compNode.swap.chain;
-    compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
-    compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
-    const MxcNodeContext compNodeContext = {
-        .nodeType = MXC_NODE_TYPE_THREAD,
-        .pNode = &compNode,
-        .runFunc = mxcRunCompNode,
-        .compTimeline = compNode.timeline,
-    };
-    mxcRunNodeContext(&compNodeContext);
-  }
-
-
-  MxcTestNode testNode;
-  NodeHandle  handle = mxcRequestNodeContextThread(mxcRunTestNode, &testNode);
-  {
+    mxcRequestNodeContextThread(compNode.timeline, mxcRunTestNode, &testNode, &testNodeHandle);
     const MxcTestNodeCreateInfo createInfo = {
         .transform = {0, 0, 0},
-        .pFramebuffers = nodes[handle].framebuffers,
+        .pFramebuffers = nodes[testNodeHandle].framebuffers,
     };
     mxcCreateTestNode(&createInfo, &testNode);
-    mxcRegisterNodeContextThread(handle, testNode.cmd);
+    vkmEndMemoryAllocRequest();
   }
 
+  // move to register method like mxcRegisterCompNodeThread?
+  compNodeShared = (MxcCompNodeContextShared){};
+  compNodeShared.cmd = compNode.cmd;
+  compNodeShared.compTimeline = compNode.timeline;
+  compNodeShared.swapIndex = compNode.swap.swapIndex;
+  compNodeShared.chain = compNode.swap.chain;
+  compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
+  compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
+  const MxcNodeContext compNodeContext = {
+      .nodeType = MXC_NODE_TYPE_THREAD,
+      .pNode = &compNode,
+      .runFunc = mxcRunCompNode,
+      .compTimeline = compNode.timeline,
+  };
+  mxcRunNodeContext(&compNodeContext);
+
+  mxcRegisterNodeContextThread(testNodeHandle, testNode.cmd);
 
   {
     VkDevice device = context.device;

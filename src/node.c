@@ -30,20 +30,20 @@ void mxcRegisterNodeContextThread(const NodeHandle handle, const VkCommandBuffer
   mxcRunNodeContext(&nodes[handle]);
 }
 
-NodeHandle mxcRequestNodeContextThread(void (*runFunc)(const struct MxcNodeContext*), const void* pNode) {
+void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle) {
   NodeHandle      nodeHandle = 0;
   MxcNodeContext* pNodeContext = &nodes[nodeHandle];
 
   // create every time? or recycle? recycle probnably better to free resource
   vkmCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
   vkmCreateTimeline(&pNodeContext->nodeTimeline);
-  pNodeContext->compTimeline = compNodeShared.compTimeline;
+  pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
   pNodeContext->pNode = pNode;
   pNodeContext->compCycleSkip = 16;
   pNodeContext->runFunc = runFunc;
 
-  return 0;
+  *pNodeHandle = nodeHandle;
 }
 
 void mxcRunNodeContext(const MxcNodeContext* pNodeContext) {

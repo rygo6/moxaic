@@ -161,9 +161,9 @@ static inline void mxcSubmitNodeQueues(const VkQueue graphicsQueue) {
   }
 }
 
-NodeHandle mxcRequestNodeContextThread(void (*runFunc)(const struct MxcNodeContext* pNode), const void* pNode);
-void       mxcRegisterNodeContextThread(NodeHandle handle, VkCommandBuffer cmd);
-void       mxcRunNodeContext(const MxcNodeContext* pNodeContext);
+void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle);
+void mxcRegisterNodeContextThread(NodeHandle handle, VkCommandBuffer cmd);
+void mxcRunNodeContext(const MxcNodeContext* pNodeContext);
 
 
 // Process IPC

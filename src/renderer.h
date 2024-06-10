@@ -45,6 +45,7 @@
   REQUIRE(function != NULL, "Couldn't load " #function)
 
 
+#define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
@@ -656,6 +657,8 @@ void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
 void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
+void vkmBeginMemoryAllocRequest();
+void vkmEndMemoryAllocRequest();
 
 typedef struct VkmInitializeDesc {
   // should use this... ? but need to decide on this vs vulkan configurator
