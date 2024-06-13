@@ -91,18 +91,19 @@ typedef struct VkmTransform {
   vec4 rotation;
 } VkmTransform;
 
-typedef struct VkmMemoryArena {
-  VkImage        img;
-  VkImageView    view;
-  VkDeviceMemory memory;
-  HANDLE         externalHandle;
-} VkmMemoryArena;
+typedef byte VkmMemoryType;
+typedef struct VkmSharedMemory {
+  VkDeviceSize  offset;
+  VkDeviceSize  size;
+  VkmMemoryType type;
+} VkmSharedMemory;
 
 typedef struct VkmTexture {
-  VkImage        img;
-  VkImageView    view;
-  VkDeviceMemory memory;
-  HANDLE         externalHandle;
+  VkImage         img;
+  VkImageView     view;
+  VkmSharedMemory sharedMemory;
+  VkDeviceMemory  memory;
+  HANDLE          externalHandle;
 } VkmTexture;
 
 typedef struct VkmVertex {
@@ -119,12 +120,13 @@ typedef struct VkmMeshCreateInfo {
 } VkmMeshCreateInfo;
 
 typedef struct VkmMesh {
-  VkDeviceMemory memory;
-  VkBuffer       buffer;
-  uint32_t       indexCount;
-  VkDeviceSize   indexOffset;
-  uint32_t       vertexCount;
-  VkDeviceSize   vertexOffset;
+  VkDeviceMemory  memory;
+  VkmSharedMemory sharedMemory;
+  VkBuffer        buffer;
+  uint32_t        indexCount;
+  VkDeviceSize    indexOffset;
+  uint32_t        vertexCount;
+  VkDeviceSize    vertexOffset;
 } VkmMesh;
 
 typedef struct VkmFramebuffer {
@@ -204,6 +206,8 @@ extern _Thread_local VkInstance instance;
 
 // Only one thread should use a context
 extern _Thread_local VkmContext context;
+
+extern VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 
 //----------------------------------------------------------------------------------
 // Render
@@ -633,21 +637,31 @@ VKM_INLINE void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, 
   vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
 }
 
-typedef struct VkmMemoryAllocateRequest {
+typedef enum VkmDedicatedMemory {
+  VKM_DEDICATED_MEMORY_FALSE,
+  VKM_DEDICATED_MEMORY_IF_PREFERRED,
+  VKM_DEDICATED_MEMORY_FORCE_TRUE,
+  VKM_DEDICATED_MEMORY_COUNT,
+} VkmDedicatedMemory;
+typedef struct VkmRequestAllocationInfo {
   VkMemoryPropertyFlags memoryPropertyFlags;
-  VkDeviceSize          bufferSize;
+  VkDeviceSize          size;
   VkBufferUsageFlags    usage;
   VkmLocality           locality;
-} VkmMemoryAllocateRequest;
+  VkmDedicatedMemory    dedicated;
+} VkmRequestAllocationInfo;
 
 void vkmCreateCompFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryDedicatedRequirements* pDedicatedReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMemory);
+void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
 void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
-void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memoryPropertyFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMemory, VkBuffer* pBuffer, void** ppMapped);
+void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
 void vkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
+void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkmSharedMemory* pMemory);
+void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+void vkmBindPopulateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
@@ -657,8 +671,8 @@ void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
 void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
-void vkmBeginMemoryAllocRequest();
-void vkmEndMemoryAllocRequest();
+void vkmBeginAllocationRequests();
+void vkmEndAllocationRequests();
 
 typedef struct VkmInitializeDesc {
   // should use this... ? but need to decide on this vs vulkan configurator

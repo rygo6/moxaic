@@ -3,11 +3,22 @@
 #include "mid_math.h"
 #include "renderer.h"
 
+void RequestSphereMeshAllocation(const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void CreateQuadMesh(const float size, VkmMesh* pMesh);
-void CreateQuadPatchMesh(const float size, VkmMesh* pMesh);
+void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh);
+void BindPopulateQuadPatchMesh(const float size, VkmMesh* pMesh);
+//void CreateQuadPatchMesh(const float size, VkmMesh* pMesh);
 
+//#define MID_SHAPE_IMPLEMENTATION
 #ifdef MID_SHAPE_IMPLEMENTATION
+void RequestSphereMeshAllocation(const int slicesCount, const int stackCount, VkmMesh* pMesh) {
+  VkmMeshCreateInfo info = {
+      .indexCount = slicesCount * stackCount * 2 * 3,
+      .vertexCount = (slicesCount + 1) * (stackCount + 1),
+  };
+  vkmCreateMeshSharedMemory(&info, pMesh);
+}
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   VkmMeshCreateInfo info = {
       .indexCount = slicesCount * stackCount * 2 * 3,
@@ -71,7 +82,14 @@ void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   };
   vkmCreateMesh(&info, pMesh);
 }
-void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
+void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh) {
+  const VkmMeshCreateInfo info = {
+      .indexCount = 6,
+      .vertexCount = 4,
+  };
+  vkmCreateMeshSharedMemory(&info, pMesh);
+}
+void BindPopulateQuadPatchMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 3, 2};
   const VkmVertex vertices[] = {
       {.position = {-size, -size, 0}, .uv = {0, 0}},
@@ -85,6 +103,22 @@ void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
       .pIndices = indices,
       .pVertices = vertices,
   };
-  vkmCreateMesh(&info, pMesh);
+  vkmBindPopulateMeshSharedMemory(&info, pMesh);
 }
+//void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
+//  const uint16_t  indices[] = {0, 1, 3, 2};
+//  const VkmVertex vertices[] = {
+//      {.position = {-size, -size, 0}, .uv = {0, 0}},
+//      {.position = {size, -size, 0}, .uv = {1, 0}},
+//      {.position = {-size, size, 0}, .uv = {0, 1}},
+//      {.position = {size, size, 0}, .uv = {1, 1}},
+//  };
+//  const VkmMeshCreateInfo info = {
+//      .indexCount = 6,
+//      .vertexCount = 4,
+//      .pIndices = indices,
+//      .pVertices = vertices,
+//  };
+//  vkmCreateMesh(&info, pMesh);
+//}
 #endif

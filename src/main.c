@@ -92,7 +92,7 @@ int main(void) {
   MxcTestNode testNode;
   NodeHandle  testNodeHandle;
   {
-    vkmBeginMemoryAllocRequest();
+    vkmBeginAllocationRequests();
     const MxcCompNodeCreateInfo compNodeInfo = {
         .compMode = MXC_COMP_MODE_TESS,
         //      .compMode = MXC_COMP_MODE_BASIC,
@@ -105,7 +105,9 @@ int main(void) {
         .pFramebuffers = nodes[testNodeHandle].framebuffers,
     };
     mxcCreateTestNode(&createInfo, &testNode);
-    vkmEndMemoryAllocRequest();
+    vkmEndAllocationRequests();
+
+    mxcBindPopulateCompNode(&compNodeInfo, &compNode);
   }
 
   // move to register method like mxcRegisterCompNodeThread?

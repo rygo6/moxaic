@@ -114,65 +114,77 @@ static void CreateCompPipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPi
   VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pNodePipeLayout));
 }
 
-void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pComp) {
+void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   {  // Create
-    CreateCompSetLayout(&pComp->nodeSetLayout);
-    CreateCompPipeLayout(pComp->nodeSetLayout, &pComp->nodePipeLayout);
 
+     // layouts
+    CreateCompSetLayout(&pNode->nodeSetLayout);
+    CreateCompPipeLayout(pNode->nodeSetLayout, &pNode->nodePipeLayout);
+
+    // meshes
     switch (pInfo->compMode) {
       case MXC_COMP_MODE_BASIC:
-        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
-        CreateQuadMesh(0.5f, &pComp->quadMesh);
+        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", pNode->nodePipeLayout, &pNode->nodePipe);
+        CreateQuadMesh(0.5f, &pNode->quadMesh);
         break;
       case MXC_COMP_MODE_TESS:
-        vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", pComp->nodePipeLayout, &pComp->nodePipe);
-        CreateQuadPatchMesh(0.5f, &pComp->quadMesh);
+        vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", pNode->nodePipeLayout, &pNode->nodePipe);
+//        CreateQuadPatchMesh(0.5f, &pComp->quadMesh);
+        CreateQuadPatchMeshSharedMemory(&pNode->quadMesh);
         break;
       default: PANIC("CompMode not supported!");
     }
 
+    // sets
     const VkQueryPoolCreateInfo queryPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
     };
-    VKM_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VKM_ALLOC, &pComp->timeQueryPool));
+    VKM_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VKM_ALLOC, &pNode->timeQueryPool));
+    // global set
+    vkmCreateGlobalSet(&pNode->globalSet);
+    // node set
+    vkmAllocateDescriptorSet(context.descriptorPool, &pNode->nodeSetLayout, &pNode->nodeSet);
+    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pNode->nodeSet, "NodeSet");
+    const VkmRequestAllocationInfo nodeSetAllocRequest = {
+        .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+        .size = sizeof(MxcNodeSetState),
+        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        .locality = VKM_LOCALITY_CONTEXT,
+        .dedicated = VKM_DEDICATED_MEMORY_FALSE,
+    };
+    vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->nodeSetBuffer, &pNode->nodeSetMemory);
+    //    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(MxcNodeSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->nodeSetMemory, &pComp->nodeSetBuffer, (void**)&pComp->pNodeSetMapped);
+    //    vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pComp->nodeSet, pComp->nodeSetBuffer));
 
-    vkmCreateGlobalSet(&pComp->globalSet);
-
-    vkmCreateCompFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pComp->framebuffers);
-
-    vkmAllocateDescriptorSet(context.descriptorPool, &pComp->nodeSetLayout, &pComp->nodeSet);
-    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pComp->nodeSet, "NodeSet");
-    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(MxcNodeSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->nodeSetMemory, &pComp->nodeSetBuffer, (void**)&pComp->pNodeSetMapped);
-    vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pComp->nodeSet, pComp->nodeSetBuffer));
-
-    vkmCreateTimeline(&pComp->timeline);
-
+    // cmd
     const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .commandPool = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool,  // so we may want to get rid of global pools
         .commandBufferCount = 1,
     };
-    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pComp->cmd));
-    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pComp->cmd, "CompCmd");
+    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNode->cmd));
+    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNode->cmd, "CompCmd");
 
-    vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pComp->swap);
+    vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pNode->swap);
+    vkmCreateCompFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
+    vkmCreateTimeline(&pNode->timeline);
   }
 
   {  // Initial State
-    vkResetCommandBuffer(pComp->cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-    vkBeginCommandBuffer(pComp->cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+    vkResetCommandBuffer(pNode->cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    vkBeginCommandBuffer(pNode->cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
     VkImageMemoryBarrier2 swapBarrier[VKM_SWAP_COUNT];
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      swapBarrier[i] = VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT, pComp->swap.images[i]);
+      swapBarrier[i] = VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT, pNode->swap.images[i]);
     }
-    vkCmdPipelineBarrier2(pComp->cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = VKM_SWAP_COUNT, .pImageMemoryBarriers = swapBarrier});
-    vkEndCommandBuffer(pComp->cmd);
+    vkCmdPipelineBarrier2(pNode->cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = VKM_SWAP_COUNT, .pImageMemoryBarriers = swapBarrier});
+    vkEndCommandBuffer(pNode->cmd);
     const VkSubmitInfo submitInfo = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1,
-        .pCommandBuffers = &pComp->cmd,
+        .pCommandBuffers = &pNode->cmd,
     };
     VKM_REQUIRE(vkQueueSubmit(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo, VK_NULL_HANDLE));
     // WE PROBABLY DON'T WANT TO DO THIS HERE, GET IT IN THE COMP THREAD
@@ -180,9 +192,27 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pComp) {
   }
 
   {  // Copy needed state
-    pComp->device = context.device;
-    pComp->stdRenderPass = context.stdRenderPass;
+    pNode->device = context.device;
+    pNode->stdRenderPass = context.stdRenderPass;
   }
+}
+
+void mxcBindPopulateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
+
+  switch (pInfo->compMode) {
+    case MXC_COMP_MODE_BASIC:
+      break;
+    case MXC_COMP_MODE_TESS:
+      // should be BindUpdate?
+      BindPopulateQuadPatchMesh(0.5f, &pNode->quadMesh);
+      break;
+    default: PANIC("CompMode not supported!");
+  }
+
+  VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->nodeSetBuffer, deviceMemory[pNode->nodeSetMemory.type], pNode->nodeSetMemory.offset));
+  VKM_REQUIRE(vkMapMemory(context.device, deviceMemory[pNode->nodeSetMemory.type], 0, pNode->nodeSetMemory.size, 0, &pNode->pNodeSetMapped));
+  vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pNode->nodeSet, pNode->nodeSetBuffer));
+
 }
 
 // this should run on a different thread...

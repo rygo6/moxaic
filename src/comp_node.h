@@ -35,7 +35,7 @@ typedef struct MxcCompNode {
   VkDescriptorSet nodeSet;
 
   MxcNodeSetState* pNodeSetMapped;
-  VkDeviceMemory   nodeSetMemory;
+  VkmSharedMemory  nodeSetMemory;
   VkBuffer         nodeSetBuffer;
 
   VkmMesh quadMesh;
@@ -47,5 +47,6 @@ typedef struct MxcCompNode {
 } MxcCompNode;
 
 
-void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pComp);
+void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
 void mxcRunCompNode(const MxcNodeContext* pNodeContext);
+void mxcBindPopulateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
