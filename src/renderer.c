@@ -588,15 +588,15 @@ void vkmPopulateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffs
   vkDestroyBuffer(context.device, stagingBuffer, VKM_ALLOC);
 }
 void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
-  pMesh->indexCount = pCreateInfo->indexCount;
   pMesh->vertexCount = pCreateInfo->vertexCount;
-  uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
   uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
-  pMesh->indexOffset = 0;
-  pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(VkmVertex));
+  pMesh->vertexOffset = 0;
+  pMesh->indexCount = pCreateInfo->indexCount;
+  uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
+  pMesh->indexOffset = vertexBufferSize;
   const VkmRequestAllocationInfo AllocRequest = {
       .memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-      .size = pMesh->vertexOffset + vertexBufferSize,
+      .size = pMesh->indexOffset + indexBufferSize,
       .usage = VKM_BUFFER_USAGE_MESH,
       .locality = VKM_LOCALITY_CONTEXT,
       .dedicated = VKM_DEDICATED_MEMORY_FALSE,
@@ -604,21 +604,15 @@ void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pM
   vkmCreateBufferSharedMemory(&AllocRequest, &pMesh->buffer, &pMesh->sharedMemory);
 }
 void vkmBindPopulateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
-  pMesh->indexCount = pCreateInfo->indexCount;
-  pMesh->vertexCount = pCreateInfo->vertexCount;
-  uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-  uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
-  pMesh->indexOffset = 0;
-  pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(VkmVertex));
   // Ensure size is same
   const VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->buffer};
   VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
   vkGetBufferMemoryRequirements2(context.device, &bufMemReqInfo2, &memReqs2);
   REQUIRE(pMesh->sharedMemory.size == memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
-  // bind popualte
+  // bind populate
   VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
-  vkmPopulateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
-  vkmPopulateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
+  vkmPopulateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset,  sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
+  vkmPopulateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(VkmVertex) * pMesh->vertexCount, pMesh->buffer);
 }
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
   pMesh->indexCount = pCreateInfo->indexCount;
