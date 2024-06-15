@@ -407,6 +407,7 @@ static uint32_t FindMemoryTypeIndex(const uint32_t memoryTypeCount, VkMemoryType
 static size_t  requestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
 static size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
 VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
+void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {NULL};
 //VkDeviceMemory localMemory;
 //VkDeviceMemory localVisibleCoherentMemory;
 //VkDeviceMemory visibleCoherentMemory;
@@ -435,6 +436,8 @@ void vkmBeginAllocationRequests() {
   }
 }
 void vkmEndAllocationRequests() {
+  VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
+  vkGetPhysicalDeviceMemoryProperties2(context.physicalDevice, &memProps2);
   for (int memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
     if (requestedMemoryAllocSize[memTypeIndex] == 0) continue;
     // todo your supposed check if it wants dedicated memory
@@ -455,7 +458,23 @@ void vkmEndAllocationRequests() {
         .memoryTypeIndex = memTypeIndex,
     };
     VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, &deviceMemory[memTypeIndex]));
-    printf("%zu allocated in type %d\n", requestedMemoryAllocSize[memTypeIndex], memTypeIndex);
+
+    VkMemoryPropertyFlags propFlags = memProps2.memoryProperties.memoryTypes[memTypeIndex].propertyFlags;
+    const bool hasDeviceLocal = (propFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    const bool hasHostVisible = (propFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    const bool hasHostCoherent = (propFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    if (hasDeviceLocal && hasHostVisible && hasHostCoherent)
+      VKM_REQUIRE(vkMapMemory(context.device, deviceMemory[memTypeIndex], 0, requestedMemoryAllocSize[memTypeIndex], 0, &pMappedMemory[memTypeIndex]));
+
+    int                   index = 0;
+    while (propFlags) {
+      if (propFlags & 1) {
+        printf("%s ", strlen("VK_MEMORY_PROPERTY_") + string_VkMemoryPropertyFlagBits(1U << index));
+      }
+      ++index;
+      propFlags >>= 1;
+    }
+    printf("MemoryType: %d  Allocated: %zu  Mapped %d\n", memTypeIndex, requestedMemoryAllocSize[memTypeIndex], pMappedMemory[memTypeIndex] != NULL);
   }
 }
 
@@ -611,7 +630,7 @@ void vkmBindPopulateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMe
   REQUIRE(pMesh->sharedMemory.size == memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
   // bind populate
   VKM_REQUIRE(vkBindBufferMemory(context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
-  vkmPopulateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset,  sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
+  vkmPopulateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
   vkmPopulateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(VkmVertex) * pMesh->vertexCount, pMesh->buffer);
 }
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
@@ -1302,5 +1321,4 @@ void vkmCreateGlobalSet(VkmGlobalSet* pSet) {
   vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.globalSetLayout, &pSet->set);
   vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
-  //  vkmUpdateGlobalSet(&context.globalCameraTransform, &pSet->globalSetState, pSet->pGlobalSetMapped);
 }

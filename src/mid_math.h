@@ -243,7 +243,7 @@ MATH_INLINE mat4 Mat4Inv(const mat4 src) {
 
   return out;
 }
-MATH_INLINE mat4 Mat4FromTransform(const vec3 pos, const quat rot) {
+MATH_INLINE mat4 Mat4FromPosRot(const vec3 pos, const quat rot) {
   const mat4 translationMat4 = Mat4Translation(pos);
   const mat4 rotationMat4 = QuatToMat4(rot);
   return Mat4Mul(translationMat4, rotationMat4);

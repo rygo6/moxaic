@@ -129,7 +129,6 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         break;
       case MXC_COMP_MODE_TESS:
         vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", pNode->nodePipeLayout, &pNode->nodePipe);
-//        CreateQuadPatchMesh(0.5f, &pComp->quadMesh);
         CreateQuadPatchMeshSharedMemory(&pNode->quadMesh);
         break;
       default: PANIC("CompMode not supported!");
@@ -142,8 +141,17 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .queryCount = 2,
     };
     VKM_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VKM_ALLOC, &pNode->timeQueryPool));
+
     // global set
-    vkmCreateGlobalSet(&pNode->globalSet);
+    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipe.globalSetLayout, &pNode->globalSet.set);
+    const VkmRequestAllocationInfo globalSetAllocRequest = {
+        .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+        .size = sizeof(VkmGlobalSetState),
+        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    };
+    vkmCreateBufferSharedMemory(&globalSetAllocRequest, &pNode->globalSet.buffer, &pNode->globalSet.sharedMemory);
+//    vkmCreateGlobalSet(&pNode->globalSet);
+
     // node set
     vkmAllocateDescriptorSet(context.descriptorPool, &pNode->nodeSetLayout, &pNode->nodeSet);
     VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pNode->nodeSet, "NodeSet");
@@ -151,12 +159,8 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
         .size = sizeof(MxcNodeSetState),
         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        .locality = VKM_LOCALITY_CONTEXT,
-        .dedicated = VKM_DEDICATED_MEMORY_FALSE,
     };
     vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->nodeSetBuffer, &pNode->nodeSetMemory);
-    //    vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(MxcNodeSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pComp->nodeSetMemory, &pComp->nodeSetBuffer, (void**)&pComp->pNodeSetMapped);
-    //    vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pComp->nodeSet, pComp->nodeSetBuffer));
 
     // cmd
     const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
@@ -209,10 +213,11 @@ void mxcBindPopulateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pN
     default: PANIC("CompMode not supported!");
   }
 
-  VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->nodeSetBuffer, deviceMemory[pNode->nodeSetMemory.type], pNode->nodeSetMemory.offset));
-  VKM_REQUIRE(vkMapMemory(context.device, deviceMemory[pNode->nodeSetMemory.type], 0, pNode->nodeSetMemory.size, 0, &pNode->pNodeSetMapped));
-  vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pNode->nodeSet, pNode->nodeSetBuffer));
+  VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
+  vkmUpdateDescriptorSet(context.device, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer));
 
+  VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->nodeSetBuffer, deviceMemory[pNode->nodeSetMemory.type], pNode->nodeSetMemory.offset));
+  vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pNode->nodeSet, pNode->nodeSetBuffer));
 }
 
 // this should run on a different thread...
@@ -226,10 +231,10 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
   VkmTransform       globalCameraTransform = {};
   VkmGlobalSetState  globalSetState = {};
   VkDescriptorSet    globalSet = pNode->globalSet.set;
-  VkmGlobalSetState* pGlobalSetMapped = pNode->globalSet.pMapped;
-  vkmUpdateGlobalSet(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
+  VkmGlobalSetState* pGlobalSetMapped = pMappedMemory[pNode->globalSet.sharedMemory.type] + pNode->globalSet.sharedMemory.offset;
+  vkmUpdateGlobalSetViewProj(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
-  MxcNodeSetState* pNodeSetMapped = pNode->pNodeSetMapped;
+  MxcNodeSetState* pNodeSetMapped = pMappedMemory[pNode->nodeSetMemory.type] + pNode->nodeSetMemory.offset;
   VkPipelineLayout nodePipeLayout = pNode->nodePipeLayout;
   VkPipeline       nodePipe = pNode->nodePipe;
   VkDescriptorSet  nodeSet = pNode->nodeSet;
@@ -278,7 +283,7 @@ run_loop:
 
       // update node model mat... this should happen every frame so player can move it in comp
       nodesShared[i].transform.rotation = QuatFromEuler(nodesShared[i].transform.euler);
-      nodesShared[i].nodeSetState.model = Mat4FromTransform(nodesShared[i].transform.position, nodesShared[i].transform.rotation);
+      nodesShared[i].nodeSetState.model = Mat4FromPosRot(nodesShared[i].transform.position, nodesShared[i].transform.rotation);
 
       {  // check frame available
         uint64_t value = nodesShared[i].currentTimelineSignal;

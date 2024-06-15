@@ -93,6 +93,7 @@ int main(void) {
   NodeHandle  testNodeHandle;
   {
     vkmBeginAllocationRequests();
+
     const MxcCompNodeCreateInfo compNodeInfo = {
         .compMode = MXC_COMP_MODE_TESS,
         //      .compMode = MXC_COMP_MODE_BASIC,
@@ -105,6 +106,7 @@ int main(void) {
         .pFramebuffers = nodes[testNodeHandle].framebuffers,
     };
     mxcCreateTestNode(&createInfo, &testNode);
+
     vkmEndAllocationRequests();
 
     mxcBindPopulateCompNode(&compNodeInfo, &compNode);

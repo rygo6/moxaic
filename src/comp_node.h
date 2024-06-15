@@ -34,7 +34,6 @@ typedef struct MxcCompNode {
   VkmGlobalSet    globalSet;
   VkDescriptorSet nodeSet;
 
-  MxcNodeSetState* pNodeSetMapped;
   VkmSharedMemory  nodeSetMemory;
   VkBuffer         nodeSetBuffer;
 
