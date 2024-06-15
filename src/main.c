@@ -109,7 +109,7 @@ int main(void) {
 
     vkmEndAllocationRequests();
 
-    mxcBindPopulateCompNode(&compNodeInfo, &compNode);
+    mxcBindUpdateCompNode(&compNodeInfo, &compNode);
   }
 
   // move to register method like mxcRegisterCompNodeThread?

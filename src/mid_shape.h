@@ -7,8 +7,8 @@ void RequestSphereMeshAllocation(const int slicesCount, const int stackCount, Vk
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void CreateQuadMesh(const float size, VkmMesh* pMesh);
 void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh);
-void BindPopulateQuadPatchMesh(const float size, VkmMesh* pMesh);
-//void CreateQuadPatchMesh(const float size, VkmMesh* pMesh);
+void BindUpdateQuadPatchMesh(const float size, VkmMesh* pMesh);
+void CreateQuadPatchMesh(const float size, VkmMesh* pMesh);
 
 //#define MID_SHAPE_IMPLEMENTATION
 #ifdef MID_SHAPE_IMPLEMENTATION
@@ -82,43 +82,32 @@ void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   };
   vkmCreateMesh(&info, pMesh);
 }
+
+  #define QUAD_PATCH_MESH_INFO \
+    VkmMeshCreateInfo info = { \
+        .indexCount = 6,       \
+        .vertexCount = 4,      \
+    };
+  #define QUAD_PATCH_MESH_VERTICES_INDICES             \
+    info.pIndices = (const uint16_t[]){0, 1, 3, 2};    \
+    info.pVertices = (const VkmVertex[]){              \
+        {.position = {-size, -size, 0}, .uv = {0, 0}}, \
+        {.position = {size, -size, 0}, .uv = {1, 0}},  \
+        {.position = {-size, size, 0}, .uv = {0, 1}},  \
+        {.position = {size, size, 0}, .uv = {1, 1}},   \
+    };
 void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh) {
-  const VkmMeshCreateInfo info = {
-      .indexCount = 6,
-      .vertexCount = 4,
-  };
+  QUAD_PATCH_MESH_INFO
   vkmCreateMeshSharedMemory(&info, pMesh);
 }
-void BindPopulateQuadPatchMesh(const float size, VkmMesh* pMesh) {
-  const uint16_t  indices[] = {0, 1, 3, 2};
-  const VkmVertex vertices[] = {
-      {.position = {-size, -size, 0}, .uv = {0, 0}},
-      {.position = {size, -size, 0}, .uv = {1, 0}},
-      {.position = {-size, size, 0}, .uv = {0, 1}},
-      {.position = {size, size, 0}, .uv = {1, 1}},
-  };
-  const VkmMeshCreateInfo info = {
-      .indexCount = 6,
-      .vertexCount = 4,
-      .pIndices = indices,
-      .pVertices = vertices,
-  };
-  vkmBindPopulateMeshSharedMemory(&info, pMesh);
+void BindUpdateQuadPatchMesh(const float size, VkmMesh* pMesh) {
+  QUAD_PATCH_MESH_INFO
+  QUAD_PATCH_MESH_VERTICES_INDICES
+  vkmBindUpdateMeshSharedMemory(&info, pMesh);
 }
-//void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
-//  const uint16_t  indices[] = {0, 1, 3, 2};
-//  const VkmVertex vertices[] = {
-//      {.position = {-size, -size, 0}, .uv = {0, 0}},
-//      {.position = {size, -size, 0}, .uv = {1, 0}},
-//      {.position = {-size, size, 0}, .uv = {0, 1}},
-//      {.position = {size, size, 0}, .uv = {1, 1}},
-//  };
-//  const VkmMeshCreateInfo info = {
-//      .indexCount = 6,
-//      .vertexCount = 4,
-//      .pIndices = indices,
-//      .pVertices = vertices,
-//  };
-//  vkmCreateMesh(&info, pMesh);
-//}
+void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
+  QUAD_PATCH_MESH_INFO
+  QUAD_PATCH_MESH_VERTICES_INDICES
+  vkmCreateMesh(&info, pMesh);
+}
 #endif

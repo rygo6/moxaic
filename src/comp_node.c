@@ -150,7 +150,6 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
     };
     vkmCreateBufferSharedMemory(&globalSetAllocRequest, &pNode->globalSet.buffer, &pNode->globalSet.sharedMemory);
-//    vkmCreateGlobalSet(&pNode->globalSet);
 
     // node set
     vkmAllocateDescriptorSet(context.descriptorPool, &pNode->nodeSetLayout, &pNode->nodeSet);
@@ -201,14 +200,13 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   }
 }
 
-void mxcBindPopulateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
+void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 
   switch (pInfo->compMode) {
     case MXC_COMP_MODE_BASIC:
       break;
     case MXC_COMP_MODE_TESS:
-      // should be BindUpdate?
-      BindPopulateQuadPatchMesh(0.5f, &pNode->quadMesh);
+      BindUpdateQuadPatchMesh(0.5f, &pNode->quadMesh);
       break;
     default: PANIC("CompMode not supported!");
   }
