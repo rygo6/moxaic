@@ -47,5 +47,5 @@ typedef struct MxcCompNode {
 
 
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
-void mxcRunCompNode(const MxcNodeContext* pNodeContext);
+void mxcCompNodeThread(const MxcNodeContext* pNodeContext);
 void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);

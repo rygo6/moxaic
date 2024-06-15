@@ -155,7 +155,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   }
 }
 
-void mxcRunTestNode(const MxcNodeContext* pNodeContext) {
+void mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
 
   MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
 
@@ -356,9 +356,9 @@ run_loop:
 
   compBaseCycleValue += compCyclesToSkip;
 
-  //  _Thread_local static int count;
-  //  if (count++ > 10)
-  //    return;
+    _Thread_local static int count;
+    if (count++ > 10)
+      return;
 
   CHECK_RUNNING
   goto run_loop;

@@ -190,7 +190,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .pCommandBuffers = &pNode->cmd,
     };
     VKM_REQUIRE(vkQueueSubmit(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo, VK_NULL_HANDLE));
-    // WE PROBABLY DON'T WANT TO DO THIS HERE, GET IT IN THE COMP THREAD
+    // WE PROBABLY DON'T WANT TO DO THIS HERE, GET IT IN THE COMP THREAD... really we can't wait at all on queue when it shared, this needs to be a fence
     VKM_REQUIRE(vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue));
   }
 
@@ -218,8 +218,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
   vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pNode->nodeSet, pNode->nodeSetBuffer));
 }
 
-// this should run on a different thread...
-void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
+void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
 
   MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
 
@@ -264,7 +263,20 @@ void mxcRunCompNode(const MxcNodeContext* pNodeContext) {
     assert(__atomic_always_lock_free(sizeof(nodesShared[i].currentTimelineSignal), &nodesShared[i].currentTimelineSignal));
   }
 
+  // very common ones should be global to potentially share higher level cache
   VKM_DEVICE_FUNC(CmdPipelineBarrier2);
+  VKM_DEVICE_FUNC(ResetQueryPool);
+  VKM_DEVICE_FUNC(GetQueryPoolResults);
+  VKM_DEVICE_FUNC(CmdWriteTimestamp2);
+  VKM_DEVICE_FUNC(CmdBindPipeline);
+  VKM_DEVICE_FUNC(CmdBlitImage);
+  VKM_DEVICE_FUNC(CmdBindDescriptorSets);
+  VKM_DEVICE_FUNC(CmdBindVertexBuffers);
+  VKM_DEVICE_FUNC(CmdBindIndexBuffer);
+  VKM_DEVICE_FUNC(CmdDrawIndexed);
+  VKM_DEVICE_FUNC(CmdEndRenderPass);
+  VKM_DEVICE_FUNC(EndCommandBuffer);
+  VKM_DEVICE_FUNC(AcquireNextImageKHR);
 
 run_loop:
 
@@ -361,49 +373,45 @@ run_loop:
       framebufferIndex = !framebufferIndex;
 
       vkmCmdResetBegin(cmd);
-      vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
+      CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
       vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
 
-      vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
-      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
+      CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
+      CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
 
       for (int i = 0; i < nodeCount; ++i) {
         if (!nodesShared[i].active || nodesShared[i].currentTimelineSignal < 1)
           continue;
 
-        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &nodeSet, 0, NULL);
+        CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &nodeSet, 0, NULL);
 
-        vkCmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
-        vkCmdBindIndexBuffer(cmd, quadBuffer, quadIndexOffset, VK_INDEX_TYPE_UINT16);
-        vkCmdDrawIndexed(cmd, quadIndexCount, 1, 0, 0, 0);
+        CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
+        CmdBindIndexBuffer(cmd, quadBuffer, quadIndexOffset, VK_INDEX_TYPE_UINT16);
+        CmdDrawIndexed(cmd, quadIndexCount, 1, 0, 0, 0);
       }
 
-      vkCmdEndRenderPass(cmd);
+      CmdEndRenderPass(cmd);
 
-      vkResetQueryPool(device, timeQueryPool, 0, 2);
-      vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
+      ResetQueryPool(device, timeQueryPool, 0, 2);
+      CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
       {  // Blit Framebuffer
-        vkAcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &swap.swapIndex);
-        const VkImage               swapImage = swap.images[swap.swapIndex];
-        const VkImage               framebufferColorImage = frameBufferColorImages[framebufferIndex];
+        AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &swap.swapIndex);
         const VkImageMemoryBarrier2 blitBarrier[] = {
-            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT, VKM_IMG_BARRIER_TRANSFER_SRC, framebufferColorImage),
-            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_PRESENT, VKM_IMG_BARRIER_TRANSFER_DST, swapImage),
+            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT, VKM_IMG_BARRIER_TRANSFER_SRC, frameBufferColorImages[framebufferIndex]),
+            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_PRESENT, VKM_IMG_BARRIER_TRANSFER_DST, swap.images[swap.swapIndex]),
         };
         CmdPipelineImageBarriers2(cmd, 2, blitBarrier);
-
-        vkmBlit(cmd, framebufferColorImage, swapImage);
-
+        CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swap.images[swap.swapIndex]);
         const VkImageMemoryBarrier2 presentBarrier[] = {
             //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, framebufferColorImage),
-            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_PRESENT, swapImage),
+            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_PRESENT, swap.images[swap.swapIndex]),
         };
         CmdPipelineImageBarriers2(cmd, 1, presentBarrier);
       }
 
-      vkEndCommandBuffer(cmd);
+      EndCommandBuffer(cmd);
 
       compNodeShared.swapIndex = swap.swapIndex;
       __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -413,7 +421,7 @@ run_loop:
 
     {  // update timequery
       uint64_t timestampsNS[2];
-      vkGetQueryPoolResults(device, timeQueryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+      GetQueryPoolResults(device, timeQueryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
       double timestampsMS[2];
       for (uint32_t i = 0; i < 2; ++i) {
         timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms

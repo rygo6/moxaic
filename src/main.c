@@ -100,7 +100,7 @@ int main(void) {
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
-    mxcRequestNodeContextThread(compNode.timeline, mxcRunTestNode, &testNode, &testNodeHandle);
+    mxcRequestNodeContextThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
     const MxcTestNodeCreateInfo createInfo = {
         .transform = {0, 0, 0},
         .pFramebuffers = nodes[testNodeHandle].framebuffers,
@@ -123,7 +123,7 @@ int main(void) {
   const MxcNodeContext compNodeContext = {
       .nodeType = MXC_NODE_TYPE_THREAD,
       .pNode = &compNode,
-      .runFunc = mxcRunCompNode,
+      .runFunc = mxcCompNodeThread,
       .compTimeline = compNode.timeline,
   };
   mxcRunNodeContext(&compNodeContext);
