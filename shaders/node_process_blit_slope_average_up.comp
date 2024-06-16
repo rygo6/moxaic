@@ -1,0 +1,51 @@
+#version 450
+#extension GL_EXT_debug_printf : require
+
+#define LOCAL_SIZE 32
+layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
+
+layout (set = 0, binding = 0) uniform sampler2D srcTexture;
+layout (set = 0, binding = 1, r32f) uniform writeonly image2D dstTexture;
+layout(set = 0, binding = 2) uniform UBO {
+    ivec2 srcSize;
+    ivec2 dstSize;
+} ubo;
+
+void main()
+{
+    const ivec2 srcSize = textureSize(srcTexture, 0);
+    const ivec2 dstSize = imageSize(dstTexture);
+
+    const ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
+    const vec2 dstUV = vec2(dstCoord) / vec2(dstSize);
+    const ivec2 srcCoord = ivec2(dstUV * srcSize);
+    const vec2 srcHalfOffsetUV = vec2(srcCoord + 1.0) / vec2(srcSize);
+
+    const vec4 gatheredDepth = textureGather(srcTexture, srcHalfOffsetUV, 0);
+
+    float count = 0.0;
+    for (int i = 0; i < 4; ++i) count += gatheredDepth[i] > 0.0 ? 1.0 : 0.0;
+
+    float depthSum = 0.0;
+    for (int i = 0; i < 4; ++i) depthSum += gatheredDepth[i];
+    const float averageDepth = count > 0.0 ? depthSum / count : 0.0;
+
+    vec4 sortedDepth;
+    sortedDepth.xy = gatheredDepth.x > gatheredDepth.y ? gatheredDepth.yx : gatheredDepth.xy;
+    sortedDepth.zw = gatheredDepth.z > gatheredDepth.w ? gatheredDepth.wz : gatheredDepth.zw;
+    sortedDepth.xz = sortedDepth.x > sortedDepth.z ? sortedDepth.zx : sortedDepth.xz;
+    sortedDepth.yw = sortedDepth.y > sortedDepth.w ? sortedDepth.wy : sortedDepth.yw;
+    sortedDepth.yz = sortedDepth.y > sortedDepth.z ? sortedDepth.zy : sortedDepth.yz;
+
+    float diffSum = 0.0;
+    for (int i = 3; i > 4 - int(count); --i) diffSum += sortedDepth[i] - sortedDepth[i - 1];
+    const float averageDiff = count > 1.0 ? diffSum / (count - 1) : 0.0;
+
+    // if averageDiff = 0 and count == 1 I should probably sample out one step wider in the direction of the filled in sample
+
+    imageStore(dstTexture, dstCoord, vec4(averageDepth - averageDiff));
+
+//    if (gl_GlobalInvocationID.x == 512 && gl_GlobalInvocationID.y == 512) {
+//        debugPrintfEXT("%d\n", int(count));
+//    }
+}

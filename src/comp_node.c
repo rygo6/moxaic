@@ -201,7 +201,6 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 }
 
 void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
-
   switch (pInfo->compMode) {
     case MXC_COMP_MODE_BASIC:
       break;
@@ -210,12 +209,10 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
       break;
     default: PANIC("CompMode not supported!");
   }
-
   VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
-  vkmUpdateDescriptorSet(context.device, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer));
-
+  vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
   VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->nodeSetBuffer, deviceMemory[pNode->nodeSetMemory.type], pNode->nodeSetMemory.offset));
-  vkmUpdateDescriptorSet(context.device, &SET_WRITE_COMP_BUFFER(pNode->nodeSet, pNode->nodeSetBuffer));
+  vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->nodeSet, pNode->nodeSetBuffer), 0, NULL);
 }
 
 void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {

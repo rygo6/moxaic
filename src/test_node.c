@@ -89,8 +89,8 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   {  // Create
     CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
     CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
-    CreateNodeProcessPipe("./shaders/node_process_blitup.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
-    CreateNodeProcessPipe("./shaders/node_process_blitdown.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
+    CreateNodeProcessPipe("./shaders/node_process_blit_slope_average_up.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
+    CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
 
     vkmCreateNodeFramebufferImport(context.stdRenderPass, VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
 
@@ -356,9 +356,9 @@ run_loop:
 
   compBaseCycleValue += compCyclesToSkip;
 
-    _Thread_local static int count;
-    if (count++ > 10)
-      return;
+  _Thread_local static int count;
+  if (count++ > 10)
+    return;
 
   CHECK_RUNNING
   goto run_loop;
