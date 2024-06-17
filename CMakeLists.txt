@@ -36,7 +36,7 @@ add_executable(${TARGET_NAME}
         ${SRC_FILES}
 )
 
-set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.261.1")
+set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.283.0")
 
 target_link_directories(${TARGET_NAME} PUBLIC
         lib
@@ -62,6 +62,7 @@ target_link_libraries(${TARGET_NAME}
 target_compile_definitions(${TARGET_NAME} PRIVATE
         -DSDL_ASSERT_LEVEL=3
         -DGLM_FORCE_DEPTH_ZERO_TO_ONE
+        -DGLM_ENABLE_EXPERIMENTAL
         -DVKB_VALIDATION_LAYERS=ON
 )
 

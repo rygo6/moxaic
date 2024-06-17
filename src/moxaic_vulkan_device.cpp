@@ -255,7 +255,7 @@ MXC_RESULT Device::CreateDevice()
     };
     VkPhysicalDeviceVulkan13Features enabledFeatures13 = {
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
-      .pNext = &physicalDeviceGlobalPriorityQueryFeatures,
+      .pNext = &physicalDeviceRobustness2Features,
       // .robustImageAccess = VK_TRUE,
       // .shaderDemoteToHelperInvocation = VK_TRUE,
       // .shaderTerminateInvocation = VK_TRUE,
@@ -280,7 +280,7 @@ MXC_RESULT Device::CreateDevice()
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR,
       .pNext = &enabledFeatures11,
       .features = {
-        // .robustBufferAccess = VK_TRUE,
+        .robustBufferAccess = VK_TRUE,
         // .tessellationShader = VK_TRUE,
         // .fillModeNonSolid = VK_TRUE,
         // .samplerAnisotropy = VK_TRUE,
@@ -305,6 +305,10 @@ MXC_RESULT Device::CreateDevice()
       VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME,
       VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
       VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME,
+      VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME,
+      VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
+      VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME,
+      VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
     };
 
     for (auto requiredDeviceExtension: requiredDeviceExtensions) {
@@ -1097,11 +1101,10 @@ VkCommandBuffer Device::BeginGraphicsCommandBuffer() const
 void Device::BeginRenderPass(const Framebuffer& framebuffer,
                              const VkClearColorValue& backgroundColor) const
 {
-    StaticArray<VkClearValue, 4> clearValues;
+    StaticArray<VkClearValue, 3> clearValues;
     clearValues[0].color = backgroundColor;
     clearValues[1].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
-    clearValues[2].color = (VkClearColorValue){{0.0f, 0.0f, 0.0f, 0.0f}};
-    clearValues[3].depthStencil = (VkClearDepthStencilValue){0.0f, 0};
+    clearValues[2].depthStencil = (VkClearDepthStencilValue){0.0f, 0};
     const VkRenderPassBeginInfo renderPassBeginInfo{
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = nullptr,

@@ -26,7 +26,7 @@ namespace Moxaic::Vulkan
         fseek(file, 0, SEEK_END);
         *length = ftell(file);
         rewind(file);
-        *ppContents = (char*)calloc(1 + *length, sizeof(char));
+        *ppContents = (char*)calloc(*length, sizeof(char));
         const size_t readCount = fread(*ppContents, *length, 1, file);
         if (readCount == 0) {
             printf("Failed to read file! %s\n", filename);

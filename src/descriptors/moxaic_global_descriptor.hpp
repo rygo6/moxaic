@@ -48,7 +48,7 @@ namespace Moxaic::Vulkan
         {
             name = "Global";
             // MXC_LOG("Init GlobalDescriptor");
-            MXC_CHK(uniform.Init(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            MXC_CHK(uniform.Init( VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                                  VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                  Vulkan::Locality::Local));
             localBuffer.screenSize.x = dimensions.width;
