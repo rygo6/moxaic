@@ -288,7 +288,7 @@ run_loop:
       if (!nodesShared[i].active || nodesShared[i].currentTimelineSignal < 1)
         continue;
 
-      // update node model mat... this should happen every frame so player can move it in comp
+      // update node model mat... this should happen every frame so user can move it in comp
       nodesShared[i].transform.rotation = QuatFromEuler(nodesShared[i].transform.euler);
       nodesShared[i].nodeSetState.model = Mat4FromPosRot(nodesShared[i].transform.position, nodesShared[i].transform.rotation);
 
@@ -363,7 +363,6 @@ run_loop:
       }
     }
 
-    // render could go on its own thread ? no it needs to wait for the node framebuffers to flip if needed... yes it can but node framebuffer flip also needs to be on render thread, input and node submit can be on main
     {  // Recording Cycle
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, timeline);
 

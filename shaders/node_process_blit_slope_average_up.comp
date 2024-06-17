@@ -11,6 +11,12 @@ layout(set = 0, binding = 2) uniform UBO {
     ivec2 dstSize;
 } ubo;
 
+vec3 intersectRayPlane(const vec3 rayOrigin, const vec3 rayDir, const vec3 planePoint, const vec3 planeNormal) {
+    const float facingRatio = dot(planeNormal, rayDir);
+    const float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
+    return rayOrigin + t * rayDir;
+}
+
 void main()
 {
     const ivec2 srcSize = textureSize(srcTexture, 0);
@@ -21,31 +27,57 @@ void main()
     const ivec2 srcCoord = ivec2(dstUV * srcSize);
     const vec2 srcHalfOffsetUV = vec2(srcCoord + 1.0) / vec2(srcSize);
 
-    const vec4 gatheredDepth = textureGather(srcTexture, srcHalfOffsetUV, 0);
+    vec4 gatheredDepth = textureGather(srcTexture, srcHalfOffsetUV, 0);
 
-    float count = 0.0;
-    for (int i = 0; i < 4; ++i) count += gatheredDepth[i] > 0.0 ? 1.0 : 0.0;
+    float count = 0.0f;
+    for (int i = 0; i < 4; ++i) count += gatheredDepth[i] > 0.0f ? 1.0f : 0.0f;
+    int iCount = int(count);
 
-    float depthSum = 0.0;
+    float depthSum = 0.0f;
     for (int i = 0; i < 4; ++i) depthSum += gatheredDepth[i];
-    const float averageDepth = count > 0.0 ? depthSum / count : 0.0;
+    const float averageDepth = iCount > 0 ? depthSum / count : 0.0f;
 
-    vec4 sortedDepth;
-    sortedDepth.xy = gatheredDepth.x > gatheredDepth.y ? gatheredDepth.yx : gatheredDepth.xy;
-    sortedDepth.zw = gatheredDepth.z > gatheredDepth.w ? gatheredDepth.wz : gatheredDepth.zw;
-    sortedDepth.xz = sortedDepth.x > sortedDepth.z ? sortedDepth.zx : sortedDepth.xz;
-    sortedDepth.yw = sortedDepth.y > sortedDepth.w ? sortedDepth.wy : sortedDepth.yw;
-    sortedDepth.yz = sortedDepth.y > sortedDepth.z ? sortedDepth.zy : sortedDepth.yz;
+    imageStore(dstTexture, dstCoord, vec4(averageDepth));
 
-    float diffSum = 0.0;
-    for (int i = 3; i > 4 - int(count); --i) diffSum += sortedDepth[i] - sortedDepth[i - 1];
-    const float averageDiff = count > 1.0 ? diffSum / (count - 1) : 0.0;
+//    const vec2 offsets[] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 }, };
+//    vec3 points[3];
+//    int index = 0;
+//    int foundSampleIndex = -1;
+//    for (int i = 0; i < 4 && index < 3; ++i) {
+//        if (gatheredDepth[i] > 0.0) {
+//            foundSampleIndex = index;
+//            points[index++] = vec3(dstCoord .x + offsets[i].x, dstCoord.y + offsets[i].y, gatheredDepth[i]);
+//        }
+//    }
+//    if (index == 3) {
+//        const vec3 diff0 = points[0] - points[1];
+//        const vec3 diff1 = points[1] - points[2];
+//        const vec3 planeNormal = normalize(cross(diff0, diff1));
+//        vec3 estimatedPoint = intersectRayPlane(vec3(dstCoord.x, dstCoord.y, 1), vec3(0, 0, -1), points[2], planeNormal);
+//        imageStore(dstTexture, dstCoord, vec4(estimatedPoint.z));
+//        return;
+//    }
+
+    //    ivec4 indices = { 0, 1, 2, 3 };
+    //    vec4 sortedDepth;
+    //    sortedDepth.xy = gatheredDepth.x > gatheredDepth.y ? gatheredDepth.yx : gatheredDepth.xy;
+    //    sortedDepth.zw = gatheredDepth.z > gatheredDepth.w ? gatheredDepth.wz : gatheredDepth.zw;
+    //    sortedDepth.xz = sortedDepth.x > sortedDepth.z ? sortedDepth.zx : sortedDepth.xz;
+    //    sortedDepth.yw = sortedDepth.y > sortedDepth.w ? sortedDepth.wy : sortedDepth.yw;
+    //    sortedDepth.yz = sortedDepth.y > sortedDepth.z ? sortedDepth.zy : sortedDepth.yz;
+
+    //    float diffSum = 0.0f;
+    //    for (int i = 3; i > 4 - iCount; --i) diffSum += sortedDepth[i] - sortedDepth[i - 1];
+    //    const float averageDiff = iCount > 1 ? diffSum / (count - 1.0f) : 0.0f;
+
+    //    const float largestDiff = iCount > 1 ? sortedDepth[3] - sortedDepth[4 - iCount] : 0.0f;
+    //    const float lastDiff = iCount > 1 ? sortedDepth[3] - sortedDepth[2] : 0.0f;
 
     // if averageDiff = 0 and count == 1 I should probably sample out one step wider in the direction of the filled in sample
 
-    imageStore(dstTexture, dstCoord, vec4(averageDepth - averageDiff));
+    //    imageStore(dstTexture, dstCoord, vec4(averageDepth - averageDiff));
 
-//    if (gl_GlobalInvocationID.x == 512 && gl_GlobalInvocationID.y == 512) {
-//        debugPrintfEXT("%d\n", int(count));
-//    }
+    //    if (gl_GlobalInvocationID.x == 512 && gl_GlobalInvocationID.y == 512) {
+    //        debugPrintfEXT("%d\n", int(count));
+    //    }
 }
