@@ -18,26 +18,6 @@ const vec2 ndcCorners[] = {
 { 1, 1 },
 };
 
-float CalcNodeZPlane(){
-
-    vec2 uvs[ndcCorners.length()];
-    for (int i = 0; i < ndcCorners.length(); ++i){
-        const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 0));
-        uvs[i] = UVFromNDC(ndc);
-    }
-    const float frontMax = min(abs(uvs[1].x - uvs[0].x), abs(uvs[1].y - uvs[0].y));
-
-    for (int i = 0; i < ndcCorners.length(); ++i){
-        const vec3 ndc = GlobalNDCFromNodeNDC(vec3(ndcCorners[i].xy, 1));
-        uvs[i] = UVFromNDC(ndc);
-    }
-    const float backMax = min(abs(uvs[1].x - uvs[0].x), abs(uvs[1].y - uvs[0].y));
-
-    const float nodeZPlane = frontMax > backMax ? -1 : 1;
-
-    return nodeZPlane;
-}
-
 vec2 IntersectNodeUV(const vec2 globalUV)
 {
     const vec2 globalNDC = NDCFromUV(globalUV);
@@ -104,13 +84,6 @@ const ivec2 outerSampleOffsets[] = {
 { 2, 2 },
 };
 
-//const ivec2 outerSampleOffsets[] = {
-//{ -2, -2 },
-//{ 3, -2 },
-//{ -2, 3 },
-//{ 3, 3 },
-//};
-
 void main()
 {
     const ivec2 iScreenSize = globalUBO.screenSize;
@@ -171,87 +144,3 @@ void main()
 //        debugPrintfEXT("%d %d", depthProjectGlobalCoord.x, depthProjectGlobalCoord.y);
 //    }
 }
-
-//void mainTiled()
-//{
-//    const vec2 uvSize = vec2(1.0, 1.0) / globalUBO.screenSize;
-//    const vec2 halfUVSize = vec2(0.5, 0.5) / globalUBO.screenSize;
-//    const ivec2 iFullScreenSize = globalUBO.screenSize;
-//    const vec2 fullScreenSize = vec2(iFullScreenSize);
-//    const ivec2 iScreenSize = globalUBO.screenSize / LOCAL_SIZE;
-//    const vec2 screenSize = vec2(iScreenSize);
-//    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-//
-//    vec3 intersectNodeNDCs[innerSampleOffsets.length()];
-//    float depthSamples[innerSampleOffsets.length()];
-//    float minDepthSample = 1;
-//    float maxDepthSample = 0;
-//    int validSampleCount = 0;
-//    for (int i = 0; i < innerSampleOffsets.length(); ++i){
-//        const vec2 sampleUV = UVFromCoordCenter((coord * LOCAL_SIZE) + (innerSampleOffsets[i] * (LOCAL_SIZE - 1)), fullScreenSize);
-//        if (NodeIntersectUV(sampleUV, intersectNodeNDCs[i], depthSamples[i])) {
-//            minDepthSample = min(depthSamples[i], minDepthSample);
-//            maxDepthSample = max(depthSamples[i], maxDepthSample);
-//            validSampleCount++;
-//
-//            //            if (gl_GlobalInvocationID.x == 16 && gl_GlobalInvocationID.y == 16) {
-//            //                debugPrintfEXT("16 16 %d %f", i, sampleUV.x, sampleUV.y);
-//            //            }
-//            //            if (gl_GlobalInvocationID.x == 17 && gl_GlobalInvocationID.y == 16) {
-//            //                debugPrintfEXT("17 16 %d %f", i, sampleUV.x, sampleUV.y);
-//            //            }
-//        }
-//    }
-//
-//    if (validSampleCount == 0){
-//        return;
-//    }
-//
-//    //    for (int i = 0; i < outerSampleOffsets.length(); ++i){
-//    //        const vec2 sampleUV = UVFromCoord(coord + outerSampleOffsets[i], screenSize);
-//    //        float depthSample;
-//    //        NodeIntersectUV(sampleUV, depthSample);
-//    //        minDepthSample = min(depthSample, minDepthSample);
-//    //    }
-//
-//    //    const vec3 depthProjectedGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
-//    //    vec2 depthProjectGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
-//
-//
-//
-//    const vec3 ulDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[0].xy, minDepthSample));
-//    const vec2 ulDepthProjectGlobalUV = UVFromNDC(ulDepthProjectGlobalNDC);
-//    const ivec2 ulDepthProjectGlobalCoord = CoordFromUV(ulDepthProjectGlobalUV, fullScreenSize);
-//    const vec3 lrDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[3].xy, minDepthSample));
-//    const vec2 lrDepthProjectGlobalUV = UVFromNDC(lrDepthProjectGlobalNDC);
-//    const ivec2 lrDepthProjectGlobalCoord = CoordFromUV(lrDepthProjectGlobalUV, fullScreenSize);
-//    //    const vec3 urDepthProjectGlobalNDC = GlobalNDCFromNodeNDC(vec3(intersectNodeNDCs[2].xy, minDepthSample));
-//    //    const vec2 urDepthProjectGlobalUV = UVFromNDC(urDepthProjectGlobalNDC);
-//    //    const uvec2 urDepthProjectGlobalCoord = uCoordFromUV(urDepthProjectGlobalUV, fullScreenSize);
-//
-//
-//    //    const ivec2 depthProjectGlobalCoord = CoordFromUVRound(depthProjectGlobalUV, screenSize);
-//    //    const uint data = PackFloat32ToUint32(depthProjectedGlobalNDC.z);
-//    //    imageAtomicMin(outputAveragedAtomic, depthProjectGlobalCoord, data);
-//
-//    //    const vec2 uvSize = vec2(1.0, 1.0) / 32.0;
-//    //    vec2 uvSize = vec2(1.0, 1.0) / vec2(64.0, 64.0);
-//    //    const vec2 uvDiff = abs(lrDepthProjectGlobalUV - urDepthProjectGlobalUV);
-//    //    const bool squashed = uvDiff.x > uvSize.x;
-//    //    vec2 squashedUVDiff = vec2(uvDiff.x > uvSize.x ? uvSize.x * 0.5 : uvSize.x, uvSize.y);
-//
-//    uint upperLeftData = PackU32FromU16U16(ulDepthProjectGlobalCoord.x, ulDepthProjectGlobalCoord.y);
-//    uint lowerLeftData = PackU32FromU16U16(lrDepthProjectGlobalCoord.x, lrDepthProjectGlobalCoord.y);
-//    const uint depthData = PackUint32FromFloat24Uint8(ulDepthProjectGlobalNDC.z, 0);
-//
-//    const uint tileIndex = atomicAdd(tileBuffer.command.x, 1);
-//    tileBuffer.tiles[tileIndex] =  Tile(upperLeftData, lowerLeftData, depthData);
-//
-//    //    if (squashed) {
-//    //        depthProjectGlobalUV.x += uvSize.x * 0.5;
-//    //        upperLeftData = PackUint32FromFloat16Float16(depthProjectGlobalUV.x, depthProjectGlobalUV.y);
-//    //        const uint tileIndex = atomicAdd(tileBuffer.command.x, 1);
-//    //        tileBuffer.tiles[tileIndex] =  Tile(upperLeftData, sizeData, depthData);
-//    //    }
-//
-//}

@@ -114,6 +114,12 @@ static void CreateCompPipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPi
   VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pNodePipeLayout));
 }
 
+static const VkmImageBarrier* VKM_IMG_BARRIER_COMP_SHADER_READ = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+};
+
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   {  // Create
 
@@ -153,7 +159,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 
     // node set
     vkmAllocateDescriptorSet(context.descriptorPool, &pNode->nodeSetLayout, &pNode->nodeSet);
-    VkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pNode->nodeSet, "NodeSet");
+    vkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pNode->nodeSet, "NodeSet");
     const VkmRequestAllocationInfo nodeSetAllocRequest = {
         .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
         .size = sizeof(MxcNodeSetState),
@@ -168,7 +174,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .commandBufferCount = 1,
     };
     VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNode->cmd));
-    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNode->cmd, "CompCmd");
+    vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNode->cmd, "CompCmd");
 
     vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pNode->swap);
     vkmCreateCompFramebuffers(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
@@ -178,17 +184,13 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   {  // Initial State
     vkResetCommandBuffer(pNode->cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     vkBeginCommandBuffer(pNode->cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
-    VkImageMemoryBarrier2 swapBarrier[VKM_SWAP_COUNT];
+    VkImageMemoryBarrier2 barriers[VKM_SWAP_COUNT];
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      swapBarrier[i] = VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT, pNode->swap.images[i]);
+      barriers[i] = VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT_ACQUIRE, pNode->swap.images[i]);
     }
-    vkCmdPipelineBarrier2(pNode->cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = VKM_SWAP_COUNT, .pImageMemoryBarriers = swapBarrier});
+    vkCmdPipelineBarrier2(pNode->cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = COUNT(barriers), .pImageMemoryBarriers = barriers});
     vkEndCommandBuffer(pNode->cmd);
-    const VkSubmitInfo submitInfo = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &pNode->cmd,
-    };
+    const VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &pNode->cmd};
     VKM_REQUIRE(vkQueueSubmit(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo, VK_NULL_HANDLE));
     // WE PROBABLY DON'T WANT TO DO THIS HERE, GET IT IN THE COMP THREAD... really we can't wait at all on queue when it shared, this needs to be a fence
     VKM_REQUIRE(vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue));
@@ -249,6 +251,8 @@ void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
   int           framebufferIndex = 0;
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
+  //  VkImage       frameBufferNormalImages[VKM_SWAP_COUNT];
+  //  VkImage       frameBufferDepthImages[VKM_SWAP_COUNT];
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     framebuffers[i] = pNode->framebuffers[i].framebuffer;
     frameBufferColorImages[i] = pNode->framebuffers[i].color.img;
@@ -278,11 +282,13 @@ void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
 run_loop:
 
   vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
-
-  if (vkmProcessInput(&globalCameraTransform)) vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
+  if (vkmProcessInput(&globalCameraTransform))
+    vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
   {  // Node cycle
     vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
+
+    vkmCmdResetBegin(cmd);
 
     for (int i = 0; i < nodeCount; ++i) {
       if (!nodesShared[i].active || nodesShared[i].currentTimelineSignal < 1)
@@ -298,18 +304,29 @@ run_loop:
         if (value > nodesShared[i].lastTimelineSwap) {
           {  // update framebuffer for comp
             nodesShared[i].lastTimelineSwap = value;
-            const int nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
-            if (nodesShared[i].type == MXC_NODE_TYPE_INTERPROCESS) {
-              //              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferColorImages[nodeFramebufferIndex]));
-              //              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferNormalImages[nodeFramebufferIndex]));
-              //              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferGBufferImages[nodeFramebufferIndex]));
-            }
+            const int                  nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
             const VkWriteDescriptorSet writeSets[] = {
                 SET_WRITE_COMP_COLOR(nodeSet, nodesShared[i].framebufferColorImageViews[nodeFramebufferIndex]),
                 SET_WRITE_COMP_NORMAL(nodeSet, nodesShared[i].framebufferNormalImageViews[nodeFramebufferIndex]),
                 SET_WRITE_COMP_GBUFFER(nodeSet, nodesShared[i].framebufferGBufferImageViews[nodeFramebufferIndex]),
             };
             vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
+            switch (nodesShared[i].type) {
+              case MXC_NODE_TYPE_THREAD:
+                const VkImageMemoryBarrier2 barriers[] = {
+                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferColorImages[nodeFramebufferIndex]),
+                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferNormalImages[nodeFramebufferIndex]),
+                    VKM_COLOR_IMG_BARRIER_MIP(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferGBufferImages[nodeFramebufferIndex], 0, VKM_G_BUFFER_LEVELS),
+                };
+                CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
+                break;
+              case MXC_NODE_TYPE_INTERPROCESS:
+                //              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferColorImages[nodeFramebufferIndex]));
+                //              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferNormalImages[nodeFramebufferIndex]));
+                //              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferGBufferImages[nodeFramebufferIndex]));
+                break;
+              default: PANIC("nodeType not supported");
+            }
           }
           {
             // move the global set state that was previously used to render into the node set state to use in comp
@@ -368,7 +385,12 @@ run_loop:
 
       framebufferIndex = !framebufferIndex;
 
-      vkmCmdResetBegin(cmd);
+      const VkImage colorImage = frameBufferColorImages[framebufferIndex];
+      //      const VkImageMemoryBarrier2 barrier[] = {
+      //          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_SRC, frameBufferColorImages[framebufferIndex]),
+      //      };
+      //      CmdPipelineImageBarriers2(cmd, COUNT(barrier), barrier);
+
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
       vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
@@ -393,25 +415,16 @@ run_loop:
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
       {  // Blit Framebuffer
-        AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &swap.swapIndex);
-        const VkImageMemoryBarrier2 blitBarrier[] = {
-            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT, VKM_IMG_BARRIER_TRANSFER_SRC, frameBufferColorImages[framebufferIndex]),
-            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_PRESENT, VKM_IMG_BARRIER_TRANSFER_DST, swap.images[swap.swapIndex]),
-        };
-        CmdPipelineImageBarriers2(cmd, 2, blitBarrier);
-        CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swap.images[swap.swapIndex]);
-        const VkImageMemoryBarrier2 presentBarrier[] = {
-            //        VKM_IMAGE_BARRIER(VKM_TRANSFER_SRC_IMAGE_BARRIER, VKM_COLOR_ATTACHMENT_IMAGE_BARRIER, framebufferColorImage),
-            VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_PRESENT, swap.images[swap.swapIndex]),
-        };
-        CmdPipelineImageBarriers2(cmd, 1, presentBarrier);
+        AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeShared.swapIndex);
+        const VkImage swapImage = swap.images[compNodeShared.swapIndex];
+        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
+        CmdBlitImageFullScreen(cmd, colorImage, swapImage);
+        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_RELEASE, swapImage));
       }
 
       EndCommandBuffer(cmd);
 
-      compNodeShared.swapIndex = swap.swapIndex;
       __atomic_thread_fence(__ATOMIC_RELEASE);
-
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
     }
 

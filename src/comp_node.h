@@ -3,15 +3,11 @@
 #include "node.h"
 #include "renderer.h"
 
-// we probably want to keep the comp node on its own thread so the main
-// thread/context can be used for loading in content
-// but the comp node can't make new things from context, main thread has to do that
-// but it seems so much simpler if main thread is comp thread, or node process thread
-// truth is context loading is side effort... it should be occasional thread
-
 typedef enum MxcCompMode {
   MXC_COMP_MODE_BASIC,
   MXC_COMP_MODE_TESS,
+  MXC_COMP_MODE_COMPUTE,
+  MXC_COMP_MODE_COUNT,
 } MxcCompMode;
 
 typedef struct MxcCompNodeCreateInfo {

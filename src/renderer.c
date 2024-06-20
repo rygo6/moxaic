@@ -460,13 +460,13 @@ void vkmEndAllocationRequests() {
     VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, &deviceMemory[memTypeIndex]));
 
     VkMemoryPropertyFlags propFlags = memProps2.memoryProperties.memoryTypes[memTypeIndex].propertyFlags;
-    const bool hasDeviceLocal = (propFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    const bool hasHostVisible = (propFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    const bool hasHostCoherent = (propFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    const bool            hasDeviceLocal = (propFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    const bool            hasHostVisible = (propFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    const bool            hasHostCoherent = (propFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     if (hasDeviceLocal && hasHostVisible && hasHostCoherent)
       VKM_REQUIRE(vkMapMemory(context.device, deviceMemory[memTypeIndex], 0, requestedMemoryAllocSize[memTypeIndex], 0, &pMappedMemory[memTypeIndex]));
 
-    int                   index = 0;
+    int index = 0;
     while (propFlags) {
       if (propFlags & 1) {
         printf("%s ", strlen("VK_MEMORY_PROPERTY_") + string_VkMemoryPropertyFlagBits(1U << index));
@@ -733,7 +733,7 @@ void VkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
       break;
     }
   }
-  VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->img, pTextureCreateInfo->debugName);
+  vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->img, pTextureCreateInfo->debugName);
 }
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture) {
   int      texChannels, width, height;
@@ -851,11 +851,11 @@ void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLoca
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
 
     pFrameBuffers[i].color = pNodeFramebuffers[i].color;
-    VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.img, "ImportedColorFramebuffer");
+    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.img, "ImportedColorFramebuffer");
     pFrameBuffers[i].normal = pNodeFramebuffers[i].normal;
-    VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.img, "ImportedNormalFramebuffer");
+    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.img, "ImportedNormalFramebuffer");
     pFrameBuffers[i].gBuffer = pNodeFramebuffers[i].gBuffer;
-    VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gBuffer.img, "ImportedGBufferFramebuffer");
+    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gBuffer.img, "ImportedGBufferFramebuffer");
 
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
@@ -1164,6 +1164,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
       continue;
 
     vkGetDeviceQueue(context.device, context.queueFamilies[i].index, 0, &context.queueFamilies[i].queue);
+    vkmSetDebugName(VK_OBJECT_TYPE_QUEUE, (uint64_t)context.queueFamilies[i].queue, string_QueueFamilyType[i]);
     const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -1189,36 +1190,44 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
 }
 
 void VkmCreateStdRenderPass() {
-
   const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
       .attachmentCount = 3,
       .pAttachments = (const VkAttachmentDescription2[]){
-#define DEFAULT_ATTACHMENT_DESCRIPTION                \
-  .samples = VK_SAMPLE_COUNT_1_BIT,                   \
-  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,              \
-  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,            \
-  .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,   \
-  .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, \
-  .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,         \
-  .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
-          {
+          [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
               .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
-              DEFAULT_ATTACHMENT_DESCRIPTION,
+              .samples = VK_SAMPLE_COUNT_1_BIT,
+              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
           },
-          {
+          [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
               .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX],
-              DEFAULT_ATTACHMENT_DESCRIPTION,
+              .samples = VK_SAMPLE_COUNT_1_BIT,
+              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
           },
-          {
+          [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
               .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX],
-              DEFAULT_ATTACHMENT_DESCRIPTION,
+              .samples = VK_SAMPLE_COUNT_1_BIT,
+              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
           },
       },
-#undef DEFAULT_ATTACHMENT_DESCRIPTION
       .subpassCount = 1,
       .pSubpasses = (const VkSubpassDescription2[]){
           {
@@ -1226,13 +1235,13 @@ void VkmCreateStdRenderPass() {
               .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
               .colorAttachmentCount = 2,
               .pColorAttachments = (const VkAttachmentReference2[]){
-                  {
+                  [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
                       .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
                       .attachment = VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
                       .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                   },
-                  {
+                  [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
                       .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
                       .attachment = VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
                       .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
@@ -1245,6 +1254,126 @@ void VkmCreateStdRenderPass() {
                   .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                   .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
               },
+          },
+      },
+      .dependencyCount = 2,
+      .pDependencies = (const VkSubpassDependency2[]){
+          // from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
+          {
+              .sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+              .srcSubpass = VK_SUBPASS_EXTERNAL,
+              .dstSubpass = 0,
+              .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+              .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+              .srcAccessMask = VK_ACCESS_NONE_KHR,
+              .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+              .dependencyFlags = 0,
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+              .srcSubpass = 0,
+              .dstSubpass = VK_SUBPASS_EXTERNAL,
+              .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+              .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+              .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+              .dependencyFlags = 0,
+          },
+      },
+  };
+  VKM_REQUIRE(vkCreateRenderPass2(context.device, &renderPassCreateInfo2, VKM_ALLOC, &context.stdRenderPass));
+}
+
+
+void VkmCreateNodeRenderPass() { // should get node using this
+  const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
+      .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
+      .attachmentCount = 3,
+      .pAttachments = (const VkAttachmentDescription2[]){
+          [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
+              .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
+              .samples = VK_SAMPLE_COUNT_1_BIT,
+              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          },
+          [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
+              .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+              .samples = VK_SAMPLE_COUNT_1_BIT,
+              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          },
+          [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {
+              .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+              .samples = VK_SAMPLE_COUNT_1_BIT,
+              .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+              .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+              .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+              .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+              .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          },
+      },
+      .subpassCount = 1,
+      .pSubpasses = (const VkSubpassDescription2[]){
+          {
+              .sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
+              .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+              .colorAttachmentCount = 2,
+              .pColorAttachments = (const VkAttachmentReference2[]){
+                  [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
+                      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+                      .attachment = VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
+                      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  },
+                  [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
+                      .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+                      .attachment = VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
+                      .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                  },
+              },
+              .pDepthStencilAttachment = &(const VkAttachmentReference2){
+                  .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+                  .attachment = VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX,
+                  .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+                  .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+              },
+          },
+      },
+      .dependencyCount = 2,
+      .pDependencies = (const VkSubpassDependency2[]){
+          // from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
+          {
+              .sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+              .srcSubpass = VK_SUBPASS_EXTERNAL,
+              .dstSubpass = 0,
+              .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+              .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+              .srcAccessMask = VK_ACCESS_NONE_KHR,
+              .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+              .dependencyFlags = 0,
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+              .srcSubpass = 0,
+              .dstSubpass = VK_SUBPASS_EXTERNAL,
+              .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+              .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+              .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+              .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+              .dependencyFlags = 0,
           },
       },
   };
@@ -1295,7 +1424,7 @@ void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQ
   const VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
   VKM_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VKM_ALLOC, &pSwap->acquireSemaphore));
   VKM_REQUIRE(vkCreateSemaphore(context.device, &acquireSwapSemaphoreCreateInfo, VKM_ALLOC, &pSwap->renderCompleteSemaphore));
-  for (int i = 0; i < VKM_SWAP_COUNT; ++i) VkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
+  for (int i = 0; i < VKM_SWAP_COUNT; ++i) vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
 }
 
 void vkmCreateStdPipe(VkmStdPipe* pStdPipe) {

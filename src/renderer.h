@@ -81,7 +81,6 @@ typedef struct VkmSwap {
   VkSwapchainKHR chain;
   VkSemaphore    acquireSemaphore;
   VkSemaphore    renderCompleteSemaphore;
-  uint32_t       swapIndex;
   VkImage        images[VKM_SWAP_COUNT];
 } VkmSwap;
 
@@ -168,6 +167,11 @@ typedef enum VkmQueueFamilyType {
   VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER,
   VKM_QUEUE_FAMILY_TYPE_COUNT
 } VkmQueueFamilyType;
+static const char* string_QueueFamilyType[] = {
+    [VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = "VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS",
+    [VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = "VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE",
+    [VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = "VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER",
+};
 typedef struct VkmQueueFamily {
   VkQueue       queue;
   VkCommandPool pool;
@@ -310,20 +314,30 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE = &(const VkmImag
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
+static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_ACQUIRE = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+    .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+};
+static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_RELEASE = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+};
+static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_SHADER_READ_ONLY = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -345,8 +359,18 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC = &(const VkmImageBar
     .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 };
+static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC_WRITE = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
+    .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+};
 static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
+    .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+};
+static const VkmImageBarrier* VKM_IMG_BARRIER_BLIT_DST = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
@@ -365,9 +389,14 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_SHADER_READ = &(const VkmImageBarr
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+};
+static const VkmImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_READ = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImageBarrier){
@@ -500,8 +529,7 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(
     const VkSemaphore     renderCompleteSemaphore,
     const uint32_t        swapIndex,
     const VkSemaphore     timeline,
-    const uint64_t        timelineSignalValue,
-    const VkQueue         queue) {
+    const uint64_t        timelineSignalValue) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .waitSemaphoreInfoCount = 1,
@@ -530,11 +558,11 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(
           {
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
               .semaphore = renderCompleteSemaphore,
-              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
           },
       },
   };
-  VKM_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
+  VKM_REQUIRE(vkQueueSubmit2(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
   const VkPresentInfoKHR presentInfo = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
@@ -543,7 +571,8 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(
       .pSwapchains = &chain,
       .pImageIndices = &swapIndex,
   };
-  VKM_REQUIRE(vkQueuePresentKHR(queue, &presentInfo));
+  VKM_REQUIRE(vkQueuePresentKHR(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
+//  vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
 }
 VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
   const VkSubmitInfo2 submitInfo2 = {
@@ -629,7 +658,7 @@ VKM_INLINE bool vkmProcessInput(VkmTransform* pCameraTransform) {
   }
   return inputDirty;
 }
-VKM_INLINE void VkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
+VKM_INLINE void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
   const VkDebugUtilsObjectNameInfoEXT debugInfo = {
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
       .objectType = objectType,

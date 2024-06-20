@@ -143,7 +143,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
         .commandBufferCount = 1,
     };
     VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pTestNode->cmd));
-    VkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "TestNode");
+    vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "TestNode");
   }
 
   {  // Copy needed state
@@ -264,9 +264,16 @@ run_loop:
   const int framebufferIndex = nodeTimelineValue % VKM_SWAP_COUNT;
 
   switch (nodeType) {
-    case MXC_NODE_TYPE_THREAD: break;
+    case MXC_NODE_TYPE_THREAD:
+//      const VkImageMemoryBarrier2 barrier[] = {
+//          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE, framebufferColorImgs[framebufferIndex]),
+//          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE, framebufferNormalImgs[framebufferIndex]),
+//          VKM_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_DEPTH_ATTACHMENT, VK_IMAGE_ASPECT_DEPTH_BIT, framebufferDepthImgs[framebufferIndex]),
+//      };
+//      CmdPipelineImageBarriers2(cmd, COUNT(barrier), barrier);
+      break;
     case MXC_NODE_TYPE_INTERPROCESS:
-      CmdPipelineImageBarrier2(cmd, &VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_COLOR_ATTACHMENT, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImgs[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
+      //      CmdPipelineImageBarrier2(cmd, &VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_COLOR_ATTACHMENT, VK_IMAGE_ASPECT_COLOR_BIT, framebufferColorImgs[framebufferIndex], VK_QUEUE_FAMILY_EXTERNAL, queueIndex));
       break;
     default: PANIC("nodeType not supported");
   }
@@ -332,10 +339,11 @@ run_loop:
 
   switch (nodeType) {
     case MXC_NODE_TYPE_THREAD:
+      // not 100% sure I should do this here or if aquire/transition on comp is sufficient
       const VkImageMemoryBarrier2 barriers[] = {
-          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT, VKM_IMG_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, framebufferColorImgs[framebufferIndex]),
-          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT, VKM_IMG_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, framebufferNormalImgs[framebufferIndex]),
-          VKM_COLOR_IMG_BARRIER_MIP(VKM_IMG_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_EXTERNAL_RELEASE_GRAPHICS_READ, framebufferGBufferImgs[framebufferIndex], 0, VKM_G_BUFFER_LEVELS),
+          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_TRANSFER_SRC, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, framebufferColorImgs[framebufferIndex]),
+          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, framebufferNormalImgs[framebufferIndex]),
+          VKM_COLOR_IMG_BARRIER_MIP(VKM_IMG_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, framebufferGBufferImgs[framebufferIndex], 0, VKM_G_BUFFER_LEVELS),
       };
       CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
       break;
@@ -356,9 +364,9 @@ run_loop:
 
   compBaseCycleValue += compCyclesToSkip;
 
-//  _Thread_local static int count;
-//  if (count++ > 10)
-//    return;
+  //  _Thread_local static int count;
+  //  if (count++ > 10)
+  //    return;
 
   CHECK_RUNNING
   goto run_loop;

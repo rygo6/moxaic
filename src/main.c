@@ -116,7 +116,6 @@ int main(void) {
   compNodeShared = (MxcCompNodeContextShared){};
   compNodeShared.cmd = compNode.cmd;
   compNodeShared.compTimeline = compNode.timeline;
-  compNodeShared.swapIndex = compNode.swap.swapIndex;
   compNodeShared.chain = compNode.swap.chain;
   compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
   compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
@@ -160,8 +159,7 @@ int main(void) {
                                     compNodeShared.renderCompleteSemaphore,
                                     compNodeShared.swapIndex,
                                     compNodeShared.compTimeline,
-                                    compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE,
-                                    graphicsQueue);
+                                    compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
       // Try submitting nodes before waiting to update window again.
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.

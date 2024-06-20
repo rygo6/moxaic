@@ -186,18 +186,6 @@ void main()
     const vec3 bottomWorldDir = subgroupBroadcastFirst(sharedNodeOrigin.bottomTriWorldDir);
     nodeOrigin.worldDir = topTriangle ? topWorldDir : bottomWorldDir;
 
-    //    if (sharedNodeOrigin.inValid) {
-    //        return;
-    //    }
-    //    nodeOrigin.worldPos = sharedNodeOrigin.worldPos;
-    //    const vec3 topWorldDir = sharedNodeOrigin.topTriWorldDir;
-    //    const vec3 bottomWorldDir = sharedNodeOrigin.bottomTriWorldDir;
-    //    nodeOrigin.worldDir = topTriangle ? topWorldDir : bottomWorldDir;
-
-    //    if (gl_GlobalInvocationID.x == 520 && gl_GlobalInvocationID.y == 520) {
-    //        debugPrintfEXT("%.4f %.4f %.4f", nodeOriginWorldPos.x, nodeOriginWorldPos.y, nodeOriginWorldPos.z);
-    //    }
-
     // source pixel
     vec3 intersectNodeNDC;
     vec3 depthProjectedGlobalNDC;
@@ -205,21 +193,6 @@ void main()
         return;
     }
     const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-
-//    vec3 nodeWorldDir = vec3(0, 0, 1);
-//    vec3 normal = texture(nodeNormalTexture, intersectNodeUV).xyz;
-//    //    vec3 worldNormal = normalize((nodeUBO.invView * vec4(normal, 1)).xyz);
-//    vec2 globalNDC = NDCFromUV(screenUV);
-//    vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
-//    //    vec4 worldDir = globalUBO.invView * vec4(0,0,1,0);
-//    float dotProd = -dot(normal, worldRay);
-//    float edgeFade = smoothstep(.2, 1, dotProd);
-//
-//    vec2 absNorm = abs(normal.xy);
-//    float mag = dot(absNorm, absNorm);
-//    float magMapped = smoothstep(0.06, 0, mag);
-//    //    vec3 color = vec3(magMapped);
-
 
     const vec2 depthProjectedGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
     const vec2 depthProjectedGlobalCoord = round(depthProjectedGlobalUV * screenSize);
@@ -234,101 +207,5 @@ void main()
     const vec2 stepBackDir = depthProjectedGlobalUV - intersectGlobalUV;
     const vec2 normalizedStepBackDir = XYCoordNormalizedDir(stepBackDir);
     const ivec2 stepBackCoord = ivec2(round(depthProjectedGlobalCoord + normalizedStepBackDir));
-//    writeAtomicData(stepBackCoord, packedData);
-}
-
-void mainTiled()
-{
-    const uint tileIndex = gl_WorkGroupID.x;
-
-    const ivec2 iScreenSize = globalUBO.screenSize;
-    const vec2 screenSize = vec2(iScreenSize);
-
-    const vec2 uvSize = 1.0 / screenSize;
-    const vec2 uvHalfSize = 0.5 / screenSize;
-    //    const float uvHalfSize = 0.0;
-
-    uvec2 ulTileCoord;
-    UnpackU16U16FromU32(tileBuffer.tiles[tileIndex].upperLeftXU16YU16, ulTileCoord.x, ulTileCoord.y);
-    uvec2 lrTileCoord;
-    UnpackU16U16FromU32(tileBuffer.tiles[tileIndex].lowerRightXU16YU16, lrTileCoord.x, lrTileCoord.y);
-    float tileGlobalNDCZ;
-    uint tileId;
-    UnpackFloat24Uint8FromUint32(tileBuffer.tiles[tileIndex].depthF24IDU8, tileGlobalNDCZ, tileId);
-
-    const vec2 lrTileUV = UVFromCoord(ulTileCoord, iScreenSize);
-    const vec2 ulTileUV = UVFromCoord(lrTileCoord, iScreenSize);
-    const vec2 ulTileNDC = NDCFromUV(ulTileUV);
-    const vec4 ulClipPos = ClipPosFromNDC(ulTileNDC, tileGlobalNDCZ);
-    const vec3 ulTileWorldPos = WorldPosFromGlobalClipPos(ulClipPos);
-
-    nodeOrigin.worldPos = ulTileWorldPos;
-
-    const uvec2 screenCoord = ulTileCoord + ivec2(gl_LocalInvocationID.xy);
-    if (screenCoord.x >= lrTileCoord.x || screenCoord.y >= lrTileCoord.y) {
-        return;
-    }
-
-    const vec2 screenUV = UVFromCoord(screenCoord, screenSize);
-    const vec2 screenNDC = NDCFromUV(screenUV);
-
-    //    WriteDebugWorldPos(vec3(.5, .5, -.5), screenCoord);
-    //    WriteDebugWorldPos(vec3(-.5, .5, -.5), screenCoord);
-    //    WriteDebugWorldPos(vec3(-.5, -.5, -.5), screenCoord);
-    //    WriteDebugWorldPos(vec3(.5, -.5, -.5), screenCoord);
-
-    //    WriteDebugUV(ulTileUV, screenCoord);
-    //    WriteDebugUV(lrTileUV, screenCoord);
-
-    // calc source pixel
-    vec3 intersectNodeNDC;
-    vec3 depthProjectedGlobalNDC;
-    if (!NodeIntersect(screenUV, intersectNodeNDC, depthProjectedGlobalNDC)) {
-        return;
-    }
-    const vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-    const vec2 depthProjectedGlobalUV = UVFromNDC(depthProjectedGlobalNDC);
-    const ivec2 depthProjectedGlobalCoord = CoordFromUV(depthProjectedGlobalUV, screenSize);
-
-    // write source pixel
-    const vec4 color = texture(nodeColorTexture, intersectNodeUV);
-    const uint packedData = packFloatAnd565Color(depthProjectedGlobalNDC.z, color.xyz);
-    const uint packedDatar = packFloatAnd565Color(depthProjectedGlobalNDC.z, vec3(1, 0, 1));
-    const uint packedDatag = packFloatAnd565Color(depthProjectedGlobalNDC.z, vec3(0, 1, 0));
-    //    if (gl_LocalInvocationID.x == 31 && gl_GlobalInvocationID.y % 2 == 0) {
-    //        writeAtomicData(depthProjectedGlobalCoord, packedDatar);
-    //    } else if (gl_LocalInvocationID.x == 0 && gl_GlobalInvocationID.y % 2 == 1) {
-    //        writeAtomicData(depthProjectedGlobalCoord, packedDatag);
-    //    } else {
-    writeAtomicData(depthProjectedGlobalCoord, packedData);
-    //    }
-
-    //            writeAtomicData(screenCoord, packedData);
-
-    // Stepback
-    //    const vec3 intersectGlobalNDC = GlobalNDCFromNodeNDC(intersectNodeNDC);
-    //    const vec2 intersectGlobalUV = UVFromNDC(intersectGlobalNDC);
-    //    const vec2 stepBackDir = depthProjectedGlobalUV - intersectGlobalUV;
-    //    vec2 normalizedStepBackDir;
-    //    bool stepBackDirIsX;
-    //    XYCoordNormalizedDir(stepBackDir, stepBackDirIsX, normalizedStepBackDir);
-    //    const ivec2 stepBackCoord = iRound(normalizedStepBackDir + vec2(screenCoord));
-    //    const vec2 stepBackUV = UVFromCoord(stepBackCoord, screenSize);
-    //    vec3 stepbackIntersectNodeNDC;
-    //    vec3 stepbackDepthProjectedGlobalNDC;
-    //    if (!NodeIntersect(stepBackUV, stepbackIntersectNodeNDC, stepbackDepthProjectedGlobalNDC)) {
-    //        return;
-    //    }
-    //
-    //    const vec2 stepbackDepthProjectedGlobalUV = UVFromNDC(stepbackDepthProjectedGlobalNDC);
-    //    const ivec2 stepbackDepthProjectedGlobalCoord = CoordFromUV(stepbackDepthProjectedGlobalUV, screenSize);
-    //    const ivec2 stepBackCoordDiff = abs(stepbackDepthProjectedGlobalCoord - depthProjectedGlobalCoord) - 1;
-    //    const int stepbackCount = clamp((stepBackDirIsX ? stepBackCoordDiff.x : stepBackCoordDiff.y), 1, 10);
-    //    vec2 currentCoord = depthProjectedGlobalCoord;
-    //    ivec2 roundedCoord = depthProjectedGlobalCoord;
-    //    for (int step = 0; step < stepbackCount; ++step){
-    //        currentCoord += normalizedStepBackDir;
-    //        roundedCoord = iRound(currentCoord);
-    //        writeAtomicData(roundedCoord, packedData);
-    //    }
+    writeAtomicData(stepBackCoord, packedData);
 }

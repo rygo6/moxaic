@@ -75,22 +75,9 @@ void main()
     const vec3 colorSRGB = pow(color.rgb, vec3(1.0 / 2.2));
     imageStore(outputColor, coord, vec4(colorSRGB, 1));
 
-//    float nodeDepthSample = textureLod(nodeGBufferTexture, uv, 9).r;
-    //    float nodeDepthSample = textureGrad(nodeGBufferTexture, uv, vec2(.01,.01), vec2(.00,.00)).r;
-//    float nodeDepthSample2 = textureLod(nodeGBufferTexture, uv, 0).r;
-//    float layered = nodeDepthSample2 > 0 ? nodeDepthSample2 : nodeDepthSample;
-//    float layered = nodeDepthSample2;
-//    imageStore(outputColor, coord, vec4(layered, layered, layered, 1));
-
     // reset for next frame, is there a better way to do this?
     imageStore(outputAtomic, coord, uvec4(0, 0, 0, 0));
     if (gl_LocalInvocationIndex == 0) {
         imageStore(outputAveragedAtomic, averagedCoord, uvec4(0, 0, 0, 0));
     }
-
-    //    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
-    //        tileBuffer.command.x = 0;
-    //        tileBuffer.command.y = 1;
-    //        tileBuffer.command.z = 1;
-    //    }
 }
