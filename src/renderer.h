@@ -177,13 +177,12 @@ typedef struct VkmQueueFamily {
   VkCommandPool pool;
   uint32_t      index;
 } VkmQueueFamily;
-typedef struct VkmStdPipe {
+typedef struct VkmStdPipeLayout {
   VkPipelineLayout      pipeLayout;
-  VkPipeline            pipe;
   VkDescriptorSetLayout globalSetLayout;
   VkDescriptorSetLayout materialSetLayout;
   VkDescriptorSetLayout objectSetLayout;
-} VkmStdPipe;
+} VkmStdPipeLayout;
 
 typedef struct VkmGlobalSet {
   VkmGlobalSetState* pMapped;
@@ -198,11 +197,16 @@ typedef struct VkmContext {
   VkDevice         device;
   VkmQueueFamily   queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
   VkDescriptorPool descriptorPool;
+  VkmStdPipeLayout stdPipeLayout;
+
+  //this maybe go elsewhere?
+  VkSampler        linearSampler;
 
   // these probably should go elsewhere
-  VkRenderPass stdRenderPass;
-  VkmStdPipe   stdPipe;
-  VkSampler    linearSampler;
+  VkRenderPass     compRenderPass;
+
+  VkRenderPass     nodeRenderPass;
+  VkPipeline       basicPipe;
 
 } VkmContext;
 
@@ -315,22 +319,27 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE = &(const VkmImag
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_ACQUIRE = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-    .accessMask = VK_ACCESS_2_MEMORY_WRITE_BIT_KHR,
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_RELEASE = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+};
+static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
@@ -357,11 +366,6 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ_WRITE = &(const VkmIm
 static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
-    .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-};
-static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC_WRITE = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-    .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST = &(const VkmImageBarrier){
@@ -572,7 +576,7 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(
       .pImageIndices = &swapIndex,
   };
   VKM_REQUIRE(vkQueuePresentKHR(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
-//  vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
+  //  vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
 }
 VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
   const VkSubmitInfo2 submitInfo2 = {
@@ -590,7 +594,7 @@ VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue 
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
               .value = signal,
               .semaphore = timeline,
-              .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+              .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
           },
       },
   };
@@ -683,8 +687,9 @@ typedef struct VkmRequestAllocationInfo {
   VkmDedicatedMemory    dedicated;
 } VkmRequestAllocationInfo;
 
-void vkmCreateCompFramebuffers(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
-void vkmCreateNodeFramebufferImport(const VkRenderPass renderPass, const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
+void vkmCreateCompFramebuffersSwap(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, const VkmSwap* pSwap, VkmFramebuffer* pFrameBuffers);
+void vkmCreateCompFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+void vkmCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
 void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
@@ -696,9 +701,9 @@ void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pM
 void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
-void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
+void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, VkPipeline* pPipe);
 void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
-void vkmCreateStdPipe(VkmStdPipe* pStdPipe);
+void vkmCreateStdPipeLayout();
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
@@ -764,4 +769,5 @@ typedef struct VkmSamplerDesc {
 #define VKM_SAMPLER_LINEAR_CLAMP_DESC \
   (const VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler);
-void VkmCreateStdRenderPass();
+void vkmCreateStdRenderPass();
+void vkmCreateNodeRenderPass();

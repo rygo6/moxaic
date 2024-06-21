@@ -85,8 +85,10 @@ int main(void) {
   // global samplers
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
   // standard/common rendering
-  VkmCreateStdRenderPass(&context.stdRenderPass);
-  vkmCreateStdPipe(&context.stdPipe);
+  vkmCreateStdRenderPass();
+  vkmCreateNodeRenderPass();
+  vkmCreateStdPipeLayout();
+  vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, &context.basicPipe);
 
   MxcCompNode compNode;
   MxcTestNode testNode;

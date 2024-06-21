@@ -19,19 +19,19 @@ typedef struct MxcCompNode {
   VkDevice        device;
   VkCommandBuffer cmd;
 
-  VkRenderPass stdRenderPass;
+  VkRenderPass compRenderPass;
 
-  VkDescriptorSetLayout nodeSetLayout;
-  VkPipelineLayout      nodePipeLayout;
-  VkPipeline            nodePipe;
+  VkDescriptorSetLayout compNodeSetLayout;
+  VkPipelineLayout      compNodePipeLayout;
+  VkPipeline            compNodePipe;
 
   VkQueryPool timeQueryPool;
 
   VkmGlobalSet    globalSet;
-  VkDescriptorSet nodeSet;
+  VkDescriptorSet compNodeSet;
 
-  VkmSharedMemory  nodeSetMemory;
-  VkBuffer         nodeSetBuffer;
+  VkmSharedMemory  compNodeSetMemory;
+  VkBuffer         compNodeSetBuffer;
 
   VkmMesh quadMesh;
 

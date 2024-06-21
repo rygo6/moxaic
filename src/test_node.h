@@ -11,9 +11,9 @@ typedef struct MxcTestNodeCreateInfo {
 typedef struct MxcTestNode {
   VkCommandPool pool;
 
-  VkRenderPass     stdRenderPass;
-  VkPipelineLayout stdPipelineLayout;
-  VkPipeline       stdPipeline;
+  VkRenderPass     nodeRenderPass;
+  VkPipelineLayout stdPipeLayout;
+  VkPipeline       basicPipe;
 
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkImageView    gBufferMipViews[VKM_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
