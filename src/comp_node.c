@@ -177,7 +177,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNode->cmd, "CompCmd");
 
     vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pNode->swap);
-    vkmCreateCompFramebuffers(VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
+    vkmCreateStdFramebuffers(VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
     //    vkmCreateCompFramebuffersSwap(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, &pNode->swap, pNode->framebuffers);
     vkmCreateTimeline(&pNode->timeline);
   }

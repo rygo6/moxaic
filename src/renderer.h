@@ -674,6 +674,10 @@ VKM_INLINE void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, 
   vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
 }
 
+//----------------------------------------------------------------------------------
+// Methods
+//----------------------------------------------------------------------------------
+
 typedef enum VkmDedicatedMemory {
   VKM_DEDICATED_MEMORY_FALSE,
   VKM_DEDICATED_MEMORY_IF_PREFERRED,
@@ -687,9 +691,6 @@ typedef struct VkmRequestAllocationInfo {
   VkmLocality           locality;
   VkmDedicatedMemory    dedicated;
 } VkmRequestAllocationInfo;
-
-void vkmCreateCompFramebuffersSwap(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, const VkmSwap* pSwap, VkmFramebuffer* pFrameBuffers);
-void vkmCreateCompFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const VkmLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
 void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
@@ -698,14 +699,7 @@ void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset
 void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkmSharedMemory* pMemory);
 void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
-void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
-void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
-void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
-void vkmCreateStdPipeLayout();
-void vkmCreateTimeline(VkSemaphore* pSemaphore);
-void vkmCreateGlobalSet(VkmGlobalSet* pSet);
-void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
-void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
+
 void vkmBeginAllocationRequests();
 void vkmEndAllocationRequests();
 
@@ -759,6 +753,18 @@ typedef struct VkmContextCreateInfo {
 } VkmContextCreateInfo;
 void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo);
 
+void vkmCreateGlobalSet(VkmGlobalSet* pSet);
+
+void vkmCreateStdRenderPass();
+void vkmCreateStdPipeLayout();
+void vkmCreateStdFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+
+void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
+
+void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
+void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
+void vkmCreateMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
+
 typedef struct VkmSamplerCreateInfo {
   VkFilter               filter;
   VkSamplerAddressMode   addressMode;
@@ -767,7 +773,7 @@ typedef struct VkmSamplerCreateInfo {
 #define VKM_SAMPLER_LINEAR_CLAMP_DESC (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
-void vkmCreateRenderPass();
+void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
 
 typedef struct VkmTextureCreateInfo {
   const char*        debugName;
@@ -787,3 +793,7 @@ typedef struct VkmTextureCreateInfo {
   }
 void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture);
 void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
+
+void vkmCreateTimeline(VkSemaphore* pSemaphore);
+
+void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);

@@ -194,10 +194,8 @@ static void CreateStdPipeLayout() {
   }
 
 void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
-  VkShaderModule vertShader;
-  vkmCreateShaderModule(vertShaderPath, &vertShader);
-  VkShaderModule fragShader;
-  vkmCreateShaderModule(fragShaderPath, &fragShader);
+  VkShaderModule vertShader; vkmCreateShaderModule(vertShaderPath, &vertShader);
+  VkShaderModule fragShader; vkmCreateShaderModule(fragShaderPath, &fragShader);
   const VkGraphicsPipelineCreateInfo pipelineInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -239,14 +237,10 @@ void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, 
 }
 
 void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
-  VkShaderModule vertShader;
-  vkmCreateShaderModule(vertShaderPath, &vertShader);
-  VkShaderModule tescShader;
-  vkmCreateShaderModule(tescShaderPath, &tescShader);
-  VkShaderModule teseShader;
-  vkmCreateShaderModule(teseShaderPath, &teseShader);
-  VkShaderModule fragShader;
-  vkmCreateShaderModule(fragShaderPath, &fragShader);
+  VkShaderModule vertShader; vkmCreateShaderModule(vertShaderPath, &vertShader);
+  VkShaderModule tescShader; vkmCreateShaderModule(tescShaderPath, &tescShader);
+  VkShaderModule teseShader; vkmCreateShaderModule(teseShaderPath, &teseShader);
+  VkShaderModule fragShader; vkmCreateShaderModule(fragShaderPath, &fragShader);
   const VkGraphicsPipelineCreateInfo pipelineInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -296,13 +290,60 @@ void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, c
       .pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
       .pDynamicState = &DEFAULT_DYNAMIC_STATE,
       .layout = layout,
-      .renderPass = context.renderPass,
+      .renderPass = renderPass,
   };
   VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, pPipe));
   vkDestroyShaderModule(context.device, fragShader, VKM_ALLOC);
   vkDestroyShaderModule(context.device, tescShader, VKM_ALLOC);
   vkDestroyShaderModule(context.device, teseShader, VKM_ALLOC);
   vkDestroyShaderModule(context.device, vertShader, VKM_ALLOC);
+}
+
+
+void vkmCreateMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
+  VkShaderModule taskShader; vkmCreateShaderModule(taskShaderPath, &taskShader);
+  VkShaderModule meshShader; vkmCreateShaderModule(meshShaderPath, &meshShader);
+  VkShaderModule fragShader; vkmCreateShaderModule(fragShaderPath, &fragShader);
+  const VkGraphicsPipelineCreateInfo pipelineInfo = {
+      .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+      .pNext = &DEFAULT_ROBUSTNESS_STATE,
+      .stageCount = 4,
+      .pStages = (const VkPipelineShaderStageCreateInfo[]){
+          {
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_TASK_BIT_EXT,
+              .module = taskShader,
+              .pName = "main",
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_MESH_BIT_EXT,
+              .module = meshShader,
+              .pName = "main",
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+              .module = fragShader,
+              .pName = "main",
+          },
+      },
+      .pViewportState = &DEFAULT_VIEWPORT_STATE,
+      .pRasterizationState = &DEFAULT_RASTERIZATION_STATE,
+      .pMultisampleState = &(const VkPipelineMultisampleStateCreateInfo){
+          .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+          .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+      },
+      .pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
+      .pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
+      .pDynamicState = &DEFAULT_DYNAMIC_STATE,
+      .layout = layout,
+      .renderPass = renderPass,
+  };
+  VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, pPipe));
+  vkDestroyShaderModule(context.device, fragShader, VKM_ALLOC);
+  vkDestroyShaderModule(context.device, taskShader, VKM_ALLOC);
+  vkDestroyShaderModule(context.device, meshShader, VKM_ALLOC);
 }
 
 //----------------------------------------------------------------------------------
@@ -692,7 +733,7 @@ void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture) {
   vkDestroyBuffer(context.device, stagingBuffer, VKM_ALLOC);
 }
 
-void vkmCreateCompFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
+void vkmCreateStdFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -1022,7 +1063,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
   }
 }
 
-void vkmCreateRenderPass() {
+void vkmCreateStdRenderPass() {
   const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
       .attachmentCount = 3,
