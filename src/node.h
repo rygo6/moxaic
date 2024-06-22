@@ -149,7 +149,7 @@ extern MxcNodeContext       nodes[MXC_NODE_CAPACITY];
 extern MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY];
 
 static inline void mxcSubmitNodeQueues(const VkQueue graphicsQueue) {
-  for (int i = 0; i < nodeCount; ++i) {s
+  for (int i = 0; i < nodeCount; ++i) {
     {  // submit commands
       uint64_t value = nodesShared[i].pendingTimelineSignal;
       __atomic_thread_fence(__ATOMIC_ACQUIRE);
