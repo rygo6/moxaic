@@ -328,7 +328,7 @@ static void CreateGlobalSetLayout() {
                         VK_SHADER_STAGE_TASK_BIT_EXT,
       },
   };
-  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &context.stdPipeLayout.globalSetLayout));
+  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &context.stdPipeLayout.globalSetLayout))
 }
 static void CreateStdMaterialSetLayout() {
   const VkDescriptorSetLayoutCreateInfo createInfo = {
@@ -431,6 +431,7 @@ void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {NULL};
 //}
 
 void vkmBeginAllocationRequests() {
+  // what do I do here? should I enable a mechanic to do this twice? or on pass in memory?
   for (int memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
     requestedMemoryAllocSize[memTypeIndex] = 0;
   }
@@ -440,6 +441,7 @@ void vkmEndAllocationRequests() {
   vkGetPhysicalDeviceMemoryProperties2(context.physicalDevice, &memProps2);
   for (int memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
     if (requestedMemoryAllocSize[memTypeIndex] == 0) continue;
+    // its unlikely I would make a whole multipurpose chunk shared....
     // todo your supposed check if it wants dedicated memory
     //    VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {
     //            .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
@@ -497,17 +499,16 @@ void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   };
   VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMemory));
 
-  //  requestedMemoryAllocSize[memTypeIndex] += pMemReqs->size;
-  //  int                   index = 0;
-  //  VkMemoryPropertyFlags printFlags = memPropFlags;
-  //  while (printFlags) {
-  //    if (printFlags & 1) {
-  //      printf("%s ", string_VkMemoryPropertyFlagBits(1U << index));
-  //    }
-  //    ++index;
-  //    printFlags >>= 1;
-  //  }
-  //  printf("%d %zu allocated in type %d\n", memPropFlags, requestedMemoryAllocSize[memTypeIndex], memTypeIndex);
+  int                   index = 0;
+  VkMemoryPropertyFlags printFlags = memPropFlags;
+  while (printFlags) {
+    if (printFlags & 1) {
+      printf("%s ", string_VkMemoryPropertyFlagBits(1U << index));
+    }
+    ++index;
+    printFlags >>= 1;
+  }
+  printf("%d %zu allocated in type %d\n", memPropFlags, pMemReqs->size, memTypeIndex);
 }
 static void CreateAllocBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer) {
   const VkBufferCreateInfo bufferCreateInfo = {

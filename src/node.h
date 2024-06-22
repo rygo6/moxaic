@@ -32,9 +32,7 @@ typedef struct MxcImportParam {
   HANDLE   nodeSemaphoreExternalHandle;
 } MxcImportParam;
 
-#define MXC_NODE_CLEAR_COLOR \
-  (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
-
+#define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 
 #define MXC_RING_BUFFER_COUNT       256
 #define MXC_RING_BUFFER_SIZE        MXC_RING_BUFFER_COUNT * sizeof(uint8_t)
@@ -57,9 +55,7 @@ typedef struct MxcNodeContext {
   const void* pNode;
   void (*runFunc)(const struct MxcNodeContext* pNode);
 
-  VkCommandBuffer commandBuffer;
-
-  // need ref to send over IPC. Can't get from compNodeShared.
+  // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array...
   VkSemaphore compTimeline;
   VkSemaphore nodeTimeline;
 
