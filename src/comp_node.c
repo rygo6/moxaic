@@ -130,11 +130,11 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     // meshes
     switch (pInfo->compMode) {
       case MXC_COMP_MODE_BASIC:
-        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", context.renderPass, &pNode->compNodePipe);
+        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
         CreateQuadMesh(0.5f, &pNode->quadMesh);
         break;
       case MXC_COMP_MODE_TESS:
-        vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", pNode->compNodePipeLayout, &pNode->compNodePipe);
+        vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
         CreateQuadPatchMeshSharedMemory(&pNode->quadMesh);
         break;
       default: PANIC("CompMode not supported!");

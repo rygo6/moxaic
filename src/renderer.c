@@ -193,7 +193,7 @@ static void CreateStdPipeLayout() {
     },                                                                 \
   }
 
-void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, VkPipeline* pPipe) {
+void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
   VkShaderModule vertShader;
   vkmCreateShaderModule(vertShaderPath, &vertShader);
   VkShaderModule fragShader;
@@ -230,7 +230,7 @@ void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, 
       .pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
       .pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
       .pDynamicState = &DEFAULT_DYNAMIC_STATE,
-      .layout = context.stdPipeLayout.pipeLayout,
+      .layout = layout,
       .renderPass = renderPass,
   };
   VKM_REQUIRE(vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VKM_ALLOC, pPipe));
@@ -238,7 +238,7 @@ void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, 
   vkDestroyShaderModule(context.device, vertShader, VKM_ALLOC);
 }
 
-void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
+void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
   VkShaderModule vertShader;
   vkmCreateShaderModule(vertShaderPath, &vertShader);
   VkShaderModule tescShader;
@@ -349,8 +349,7 @@ static void CreateStdObjectSetLayout() {
           .binding = VKM_SET_BIND_STD_OBJECT_BUFFER,
           .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
           .descriptorCount = 1,
-          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
-                        VK_SHADER_STAGE_FRAGMENT_BIT,
+          .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
       },
   };
   VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &createInfo, VKM_ALLOC, &context.stdPipeLayout.objectSetLayout));

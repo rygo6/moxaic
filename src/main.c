@@ -88,7 +88,7 @@ int main(void) {
   vkmCreateRenderPass();
   mxcCreateNodeRenderPass();
   vkmCreateStdPipeLayout();
-  vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, &context.basicPipe);
+  vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
   MxcCompNode compNode;
   MxcTestNode testNode;
@@ -97,8 +97,8 @@ int main(void) {
     vkmBeginAllocationRequests();
 
     const MxcCompNodeCreateInfo compNodeInfo = {
-        .compMode = MXC_COMP_MODE_TESS,
-        //      .compMode = MXC_COMP_MODE_BASIC,
+        .compMode = MXC_COMP_MODE_BASIC,
+//        .compMode = MXC_COMP_MODE_TESS,
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
