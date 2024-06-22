@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOCOMM
 #include <windows.h>
 
 #include <vulkan/vk_enum_string_helper.h>
@@ -80,7 +82,7 @@ typedef struct VkmTransform {
   vec4 rotation;
 } VkmTransform;
 
-typedef byte VkmMemoryType;
+typedef uint8_t VkmMemoryType;
 typedef struct VkmSharedMemory {
   VkDeviceSize  offset;
   VkDeviceSize  size;

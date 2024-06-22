@@ -1,9 +1,6 @@
 #include "renderer.h"
 #include "globals.h"
 #include "stb_image.h"
-
-#define WIN32_LEAN_AND_MEAN
-#define NOCOMM
 #include "window.h"
 
 #include <stdio.h>
