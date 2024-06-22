@@ -130,7 +130,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     // meshes
     switch (pInfo->compMode) {
       case MXC_COMP_MODE_BASIC:
-        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", context.compRenderPass, &pNode->compNodePipe);
+        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", context.renderPass, &pNode->compNodePipe);
         CreateQuadMesh(0.5f, &pNode->quadMesh);
         break;
       case MXC_COMP_MODE_TESS:
@@ -187,7 +187,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     vkBeginCommandBuffer(pNode->cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
     VkImageMemoryBarrier2 barriers[VKM_SWAP_COUNT];
     for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      barriers[i] = VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT_ACQUIRE, pNode->swap.images[i]);
+      barriers[i] = VKM_COLOR_IMG_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT_ACQUIRE, pNode->swap.images[i]);
     }
     vkCmdPipelineBarrier2(pNode->cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = COUNT(barriers), .pImageMemoryBarriers = barriers});
     vkEndCommandBuffer(pNode->cmd);
@@ -199,7 +199,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 
   {  // Copy needed state
     pNode->device = context.device;
-    pNode->compRenderPass = context.compRenderPass;
+    pNode->compRenderPass = context.renderPass;
   }
 }
 
@@ -317,7 +317,7 @@ run_loop:
                 const VkImageMemoryBarrier2 barriers[] = {
                     VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferColorImages[nodeFramebufferIndex]),
                     VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferNormalImages[nodeFramebufferIndex]),
-                    VKM_COLOR_IMG_BARRIER_MIP(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferGBufferImages[nodeFramebufferIndex], 0, VKM_G_BUFFER_LEVELS),
+                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferGBufferImages[nodeFramebufferIndex], 0, VKM_G_BUFFER_LEVELS),
                 };
                 CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
                 break;

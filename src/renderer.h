@@ -29,21 +29,12 @@
     REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
   }
 
-#define CLEANUP_RESULT(command, cleanup_goto)      \
-  result = command;                                \
-  if (__builtin_expect(result != VK_SUCCESS, 0)) { \
-    LOG_ERROR(command, string_VkResult(result));   \
-    goto cleanup_goto;                             \
-  }
-
 #define VKM_INSTANCE_FUNC(vkFunction)                                                           \
   PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
-
 #define VKM_DEVICE_FUNC(function)                                                                \
   PFN_##vk##function function = (PFN_##vk##function)vkGetDeviceProcAddr(device, "vk" #function); \
   REQUIRE(function != NULL, "Couldn't load " #function)
-
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -54,7 +45,6 @@ extern const char*                              VKM_EXTERNAL_MEMORY_EXTENSION_NA
 extern const char*                              VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME;
 extern const char*                              VKM_EXTERNAL_FENCE_EXTENSION_NAME;
 extern const VkExternalMemoryHandleTypeFlagBits VKM_EXTERNAL_HANDLE_TYPE;
-
 
 //----------------------------------------------------------------------------------
 // Types
@@ -199,14 +189,13 @@ typedef struct VkmContext {
   VkDescriptorPool descriptorPool;
   VkmStdPipeLayout stdPipeLayout;
 
-  //this maybe go elsewhere?
-  VkSampler        linearSampler;
+  VkSampler    linearSampler;
+  VkRenderPass renderPass;
 
-  // these probably should go elsewhere
-  VkRenderPass     compRenderPass;
-
-  VkRenderPass     nodeRenderPass;
-  VkPipeline       basicPipe;
+  // these should go elsewhere
+  VkRenderPass nodeRenderPass;
+  // basic pipe could stay here
+  VkPipeline basicPipe;
 
 } VkmContext;
 
@@ -235,11 +224,20 @@ enum VkmPipeSetStdIndices {
   VKM_PIPE_SET_STD_OBJECT_INDEX,
   VKM_PIPE_SET_STD_INDEX_COUNT,
 };
-#define VKM_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT
-#define VKM_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-#define VKM_G_BUFFER_LEVELS 10
-#define VKM_PASS_CLEAR_COLOR \
-  (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
+static const VkFormat VKM_PASS_STD_FORMATS[] = {
+    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
+    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
+    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
+};
+static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
+    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+};
+#define VKM_G_BUFFER_FORMAT  VK_FORMAT_R32_SFLOAT
+#define VKM_G_BUFFER_USAGE   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+#define VKM_G_BUFFER_LEVELS  10
+#define VKM_PASS_CLEAR_COLOR (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
 #define VKM_SET_BIND_STD_GLOBAL_BUFFER 0
 #define VKM_SET_WRITE_STD_GLOBAL_BUFFER(global_set, global_set_buffer) \
@@ -308,7 +306,8 @@ typedef struct VkmImageBarrier {
   VkImageLayout            layout;
   // QueueBarrier             queueFamily;
 } VkmImageBarrier;
-static const VkmImageBarrier* VKM_IMG_BARRIER_UNDEFINED = &(const VkmImageBarrier){
+// I wonder if its bad to have these stored static? stack wont let them go
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -348,12 +347,12 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_SHADER_READ_ONLY = &(const
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_WRITE = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_WRITE = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
@@ -378,7 +377,7 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_BLIT_DST = &(const VkmImageBarrier
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST_GENERAL = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
@@ -426,24 +425,24 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImag
         .layerCount = 1,                                 \
     },                                                   \
   }
-#define VKM_COLOR_IMG_BARRIER_MIP(src, dst, barrier_image, base_mip_level, level_count) \
-  (const VkImageMemoryBarrier2) {                                                       \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                  \
-    .srcStageMask = src->stageMask,                                                     \
-    .srcAccessMask = src->accessMask,                                                   \
-    .dstStageMask = dst->stageMask,                                                     \
-    .dstAccessMask = dst->accessMask,                                                   \
-    .oldLayout = src->layout,                                                           \
-    .newLayout = dst->layout,                                                           \
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                     \
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                     \
-    .image = barrier_image,                                                             \
-    .subresourceRange = (const VkImageSubresourceRange){                                \
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                                        \
-        .baseMipLevel = base_mip_level,                                                 \
-        .levelCount = level_count,                                                      \
-        .layerCount = 1,                                                                \
-    },                                                                                  \
+#define VKM_COLOR_IMAGE_BARRIER_MIPS(src, dst, barrier_image, base_mip_level, level_count) \
+  (const VkImageMemoryBarrier2) {                                                          \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                     \
+    .srcStageMask = src->stageMask,                                                        \
+    .srcAccessMask = src->accessMask,                                                      \
+    .dstStageMask = dst->stageMask,                                                        \
+    .dstAccessMask = dst->accessMask,                                                      \
+    .oldLayout = src->layout,                                                              \
+    .newLayout = dst->layout,                                                              \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                        \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                        \
+    .image = barrier_image,                                                                \
+    .subresourceRange = (const VkImageSubresourceRange){                                   \
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                                           \
+        .baseMipLevel = base_mip_level,                                                    \
+        .levelCount = level_count,                                                         \
+        .layerCount = 1,                                                                   \
+    },                                                                                     \
   }
 #define VKM_IMG_BARRIER(src, dst, aspect_mask, barrier_image) \
   (const VkImageMemoryBarrier2) {                             \
@@ -594,7 +593,7 @@ VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue 
               .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
               .value = signal,
               .semaphore = timeline,
-              .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+              .stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
           },
       },
   };
@@ -689,8 +688,6 @@ typedef struct VkmRequestAllocationInfo {
 
 void vkmCreateCompFramebuffersSwap(const VkRenderPass renderPass, const uint32_t framebufferCount, const VkmLocality locality, const VkmSwap* pSwap, VkmFramebuffer* pFrameBuffers);
 void vkmCreateCompFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
-void vkmCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
-void vkmCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
 void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
@@ -700,7 +697,6 @@ void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuf
 void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
-void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, VkPipeline* pPipe);
 void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkPipelineLayout layout, VkPipeline* pPipe);
 void vkmCreateStdPipeLayout();
@@ -761,13 +757,31 @@ typedef struct VkmContextCreateInfo {
 } VkmContextCreateInfo;
 void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo);
 
-typedef struct VkmSamplerDesc {
+typedef struct VkmSamplerCreateInfo {
   VkFilter               filter;
   VkSamplerAddressMode   addressMode;
   VkSamplerReductionMode reductionMode;
-} VkmSamplerDesc;
-#define VKM_SAMPLER_LINEAR_CLAMP_DESC \
-  (const VkmSamplerDesc) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
-void VkmCreateSampler(const VkmSamplerDesc* pDesc, VkSampler* pSampler);
-void vkmCreateStdRenderPass();
-void vkmCreateNodeRenderPass();
+} VkmSamplerCreateInfo;
+#define VKM_SAMPLER_LINEAR_CLAMP_DESC (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
+void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
+
+void vkmCreateRenderPass();
+
+typedef struct VkmTextureCreateInfo {
+  const char*        debugName;
+  VkImageCreateInfo  imageCreateInfo;
+  VkImageAspectFlags aspectMask;
+  VkmLocality        locality;
+} VkmTextureCreateInfo;
+#define VKM_DEFAULT_TEXTURE_IMAGE_CREATE_INFO     \
+  (VkImageCreateInfo) {                           \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, \
+    .imageType = VK_IMAGE_TYPE_2D,                \
+    .format = VK_FORMAT_B8G8R8A8_SRGB,            \
+    .mipLevels = 1,                               \
+    .arrayLayers = 1,                             \
+    .samples = VK_SAMPLE_COUNT_1_BIT,             \
+    .usage = VK_IMAGE_USAGE_SAMPLED_BIT           \
+  }
+void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture);
+void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);

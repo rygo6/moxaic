@@ -149,7 +149,7 @@ extern MxcNodeContext       nodes[MXC_NODE_CAPACITY];
 extern MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY];
 
 static inline void mxcSubmitNodeQueues(const VkQueue graphicsQueue) {
-  for (int i = 0; i < nodeCount; ++i) {
+  for (int i = 0; i < nodeCount; ++i) {s
     {  // submit commands
       uint64_t value = nodesShared[i].pendingTimelineSignal;
       __atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -165,6 +165,10 @@ void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void (*runFunc)
 void mxcRegisterNodeContextThread(NodeHandle handle, VkCommandBuffer cmd);
 void mxcRunNodeContext(const MxcNodeContext* pNodeContext);
 
+// Renderpass with layout transitions setup for use in node
+void mxcCreateNodeRenderPass();
+void mxcCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
+void mxcCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 
 // Process IPC
 void mxcCreateSharedBuffer();
