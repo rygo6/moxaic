@@ -20,12 +20,12 @@ vec4 GlobalClipPosFromViewPos(vec4 view)
 
 vec4 GlobalViewPosFromWorldPos(vec3 worldPos)
 {
-    return globalUBO.view * vec4(worldPos, 1);
+    return globalUBO.view * vec4(worldPos, 1.0f);
 }
 
 vec4 GlobalClipPosFromWorldPos(vec3 worldPos)
 {
-    return globalUBO.viewProj * vec4(worldPos, 1);
+    return globalUBO.viewProj * vec4(worldPos, 1.0f);
 }
 
 vec3 WorldPosFromNodeClipPos(vec4 clipPos)
@@ -36,22 +36,22 @@ vec3 WorldPosFromNodeClipPos(vec4 clipPos)
 
 vec4 NodeClipPosFromWorldPos(vec3 worldPos)
 {
-    return nodeUBO.viewProj * vec4(worldPos, 1);
+    return nodeUBO.viewProj * vec4(worldPos, 1.0f);
 }
 
 vec4 ClipPosFromNDC(vec2 ndc)
 {
-    return vec4(ndc, 0, 1);
+    return vec4(ndc, 0.0f, 1.0f);
 }
 
 vec4 ClipPosFromNDC(vec3 ndc)
 {
-    return vec4(ndc, 1);
+    return vec4(ndc, 1.0f);
 }
 
 vec4 ClipPosFromNDC(vec2 ndc, float depth)
 {
-    return vec4(ndc, depth, 1);
+    return vec4(ndc, depth, 1.0f);
 }
 
 vec3 NDCFromClipPos(vec4 clipPos)
@@ -61,12 +61,12 @@ vec3 NDCFromClipPos(vec4 clipPos)
 
 vec2 NDCFromUV(vec2 uv)
 {
-    return uv * 2.0 - 1.0;
+    return uv * 2.0f - 1.0f;
 }
 
 vec2 UVFromNDC(vec3 ndc)
 {
-    return (ndc.xy + 1.0) * 0.5;
+    return (ndc.xy + 1.0f) * 0.5f;
 }
 
 ivec2 CoordFromUV(vec2 uv, vec2 screenSize)
@@ -106,7 +106,7 @@ vec2 UVFromCoord(vec2 coord, vec2 screenSize)
 
 vec2 UVFromCoordCenter(ivec2 coord, vec2 screenSize)
 {
-    return (vec2(coord) + 0.5) / screenSize;
+    return (vec2(coord) + 0.5f) / screenSize;
 }
 
 vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){

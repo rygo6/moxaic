@@ -194,6 +194,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   }
 
   {  // Copy needed state
+    pNode->compMode = pInfo->compMode;
     pNode->device = context.device;
     pNode->compRenderPass = context.renderPass;
   }
@@ -220,6 +221,7 @@ void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
 
   MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
 
+  MxcCompMode  compMode = pNode->compMode;
   VkCommandBuffer cmd = pNode->cmd;
   VkRenderPass    stdRenderPass = pNode->compRenderPass;
 
@@ -250,8 +252,6 @@ void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
   int           framebufferIndex = 0;
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
-  //  VkImage       frameBufferNormalImages[VKM_SWAP_COUNT];
-  //  VkImage       frameBufferDepthImages[VKM_SWAP_COUNT];
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     framebuffers[i] = pNode->framebuffers[i].framebuffer;
     frameBufferColorImages[i] = pNode->framebuffers[i].color.img;
@@ -399,7 +399,7 @@ run_loop:
 
         CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &compNodeSet, 0, NULL);
 
-        switch (nodesShared[i].type) {
+        switch (compMode) {
           case MXC_COMP_MODE_BASIC:
           case MXC_COMP_MODE_TESS:
             CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
@@ -420,9 +420,8 @@ run_loop:
       {  // Blit Framebuffer
         AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeShared.swapIndex);
         const VkImage swapImage = swap.images[compNodeShared.swapIndex];
-        const VkImage colorImage = frameBufferColorImages[framebufferIndex];
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
-        CmdBlitImageFullScreen(cmd, colorImage, swapImage);
+        CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swapImage);
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));
       }
 

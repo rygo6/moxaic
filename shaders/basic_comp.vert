@@ -9,11 +9,6 @@ layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec2 outUV;
 
 void main() {
-//    const vec3 right = normalize(vec3(globalUBO.view[0][0], globalUBO.view[1][0], globalUBO.view[2][0]));
-//    const vec3 up = normalize(vec3(globalUBO.view[0][1], globalUBO.view[1][1], globalUBO.view[2][1]));
-//    const vec3 pos = right * inPos.x + up * inPos.y;
-//    const vec4 clipPos = globalUBO.viewProj * nodeUBO.model * vec4(pos, 1);
-
     const vec4 originClipPos = nodeUBO.viewProj * nodeUBO.model * vec4(0,0,0,1);
 
     const vec2 scale = vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize);

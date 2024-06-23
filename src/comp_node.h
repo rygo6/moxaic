@@ -17,6 +17,8 @@ typedef struct MxcCompNodeCreateInfo {
 } MxcCompNodeCreateInfo;
 
 typedef struct MxcCompNode {
+  MxcCompMode  compMode;
+
   VkDevice        device;
   VkCommandBuffer cmd;
 
