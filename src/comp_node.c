@@ -64,15 +64,9 @@ enum SetBindCompIndices {
 static void CreateCompSetLayout(const MxcCompMode compMode, VkDescriptorSetLayout* pLayout) {
   VkShaderStageFlags stageFlags;
   switch (compMode) {
-    case MXC_COMP_MODE_BASIC:
-      stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-      break;
-    case MXC_COMP_MODE_TESS:
-      stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-      break;
-    case MXC_COMP_MODE_TASK_MESH:
-      stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
-      break;
+    case MXC_COMP_MODE_BASIC: stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; break;
+    case MXC_COMP_MODE_TESS: stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; break;
+    case MXC_COMP_MODE_TASK_MESH: stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT; break;
     default: PANIC("CompMode not supported!");
   }
   const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
@@ -196,7 +190,6 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 
     vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pNode->swap);
     vkmCreateStdFramebuffers(VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
-    //    vkmCreateCompFramebuffersSwap(context.stdRenderPass, VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, &pNode->swap, pNode->framebuffers);
     vkmCreateTimeline(&pNode->timeline);
   }
 
@@ -392,6 +385,7 @@ run_loop:
 
       framebufferIndex = !framebufferIndex;
 
+      ResetQueryPool(device, timeQueryPool, 0, 2);
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
       vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
@@ -421,7 +415,6 @@ run_loop:
 
       CmdEndRenderPass(cmd);
 
-      ResetQueryPool(device, timeQueryPool, 0, 2);
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
       {  // Blit Framebuffer
