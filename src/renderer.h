@@ -314,8 +314,8 @@ static const VkmImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const VkmImageBarr
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+static const VkmImageBarrier* VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
@@ -334,7 +334,7 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_ACQUIRE = &(const VkmImage
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_RELEASE = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -763,7 +763,7 @@ void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModul
 
 void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
 void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
-void vkmCreateMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
+void vkmCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
 
 typedef struct VkmSamplerCreateInfo {
   VkFilter               filter;

@@ -5,8 +5,8 @@
 	"We recommend using up to 64 vertices and 126 primitives"
 */
 #include "global_binding.glsl"
-#include "mesh_node_binding.glsl"
-#include "mesh_node_constants.glsl"
+#include "node_binding.glsl"
+#include "mesh_comp_constants.glsl"
 
 layout(local_size_x = VERTEX_DIMENSION_COUNT, local_size_y = VERTEX_DIMENSION_COUNT, local_size_z = 1) in;
 layout(triangles, max_vertices = VERTEX_COUNT, max_primitives = PRIMITIVE_COUNT) out;

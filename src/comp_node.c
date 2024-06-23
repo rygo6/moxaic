@@ -60,7 +60,21 @@ enum SetBindCompIndices {
     },                                                           \
   }
 #define SHADER_STAGE_VERT_TESC_TESE_FRAG VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
-static void CreateCompSetLayout(VkDescriptorSetLayout* pLayout) {
+#define SHADER_STAGE_TASK_MESH_FRAG VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT
+static void CreateCompSetLayout(const MxcCompMode compMode, VkDescriptorSetLayout* pLayout) {
+  VkShaderStageFlags stageFlags;
+  switch (compMode) {
+    case MXC_COMP_MODE_BASIC:
+      stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+      break;
+    case MXC_COMP_MODE_TESS:
+      stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+      break;
+    case MXC_COMP_MODE_TASK_MESH:
+      stageFlags = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT;
+      break;
+    default: PANIC("CompMode not supported!");
+  }
   const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = SET_BIND_COMP_COUNT,
@@ -69,27 +83,27 @@ static void CreateCompSetLayout(VkDescriptorSetLayout* pLayout) {
               .binding = SET_BIND_COMP_BUFFER_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
               .descriptorCount = 1,
-              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG,
+              .stageFlags = stageFlags,
           },
           [SET_BIND_COMP_COLOR_INDEX] = {
               .binding = SET_BIND_COMP_COLOR_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
               .descriptorCount = 1,
-              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG,
+              .stageFlags = stageFlags,
               .pImmutableSamplers = &context.linearSampler,
           },
           [SET_BIND_COMP_NORMAL_INDEX] = {
               .binding = SET_BIND_COMP_NORMAL_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
               .descriptorCount = 1,
-              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG,
+              .stageFlags = stageFlags,
               .pImmutableSamplers = &context.linearSampler,
           },
           [SET_BIND_COMP_GBUFFER_INDEX] = {
               .binding = SET_BIND_COMP_GBUFFER_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
               .descriptorCount = 1,
-              .stageFlags = SHADER_STAGE_VERT_TESC_TESE_FRAG,
+              .stageFlags = stageFlags,
               .pImmutableSamplers = &context.linearSampler,
           },
       },
@@ -124,7 +138,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   {  // Create
 
      // layouts
-    CreateCompSetLayout(&pNode->compNodeSetLayout);
+    CreateCompSetLayout(pInfo->compMode, &pNode->compNodeSetLayout);
     CreateCompPipeLayout(pNode->compNodeSetLayout, &pNode->compNodePipeLayout);
 
     // meshes
@@ -136,6 +150,10 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
       case MXC_COMP_MODE_TESS:
         vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
         CreateQuadPatchMeshSharedMemory(&pNode->quadMesh);
+        break;
+      case MXC_COMP_MODE_TASK_MESH:
+        vkmCreateTaskMeshPipe("./shaders/mesh_comp.task.spv", "./shaders/mesh_comp.mesh.spv", "./shaders/mesh_comp.frag.spv", context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
+        CreateQuadMesh(0.5f, &pNode->quadMesh);
         break;
       default: PANIC("CompMode not supported!");
     }
@@ -182,21 +200,6 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     vkmCreateTimeline(&pNode->timeline);
   }
 
-  {  // Initial State
-    vkResetCommandBuffer(pNode->cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-    vkBeginCommandBuffer(pNode->cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
-    VkImageMemoryBarrier2 barriers[VKM_SWAP_COUNT];
-    for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-      barriers[i] = VKM_COLOR_IMG_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_PRESENT_ACQUIRE, pNode->swap.images[i]);
-    }
-    vkCmdPipelineBarrier2(pNode->cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = COUNT(barriers), .pImageMemoryBarriers = barriers});
-    vkEndCommandBuffer(pNode->cmd);
-    const VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &pNode->cmd};
-    VKM_REQUIRE(vkQueueSubmit(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo, VK_NULL_HANDLE));
-    // WE PROBABLY DON'T WANT TO DO THIS HERE, GET IT IN THE COMP THREAD... really we can't wait at all on queue when it shared, this needs to be a fence
-    VKM_REQUIRE(vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue));
-  }
-
   {  // Copy needed state
     pNode->device = context.device;
     pNode->compRenderPass = context.renderPass;
@@ -209,6 +212,8 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
       break;
     case MXC_COMP_MODE_TESS:
       BindUpdateQuadPatchMesh(0.5f, &pNode->quadMesh);
+      break;
+    case MXC_COMP_MODE_TASK_MESH:
       break;
     default: PANIC("CompMode not supported!");
   }
@@ -279,6 +284,7 @@ void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
   VKM_DEVICE_FUNC(CmdEndRenderPass);
   VKM_DEVICE_FUNC(EndCommandBuffer);
   VKM_DEVICE_FUNC(AcquireNextImageKHR);
+  VKM_DEVICE_FUNC(CmdDrawMeshTasksEXT);
 
 run_loop:
 
@@ -385,14 +391,6 @@ run_loop:
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, timeline);
 
       framebufferIndex = !framebufferIndex;
-      //      AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeShared.swapIndex);
-      //      framebufferIndex = compNodeShared.swapIndex;
-
-
-      //      const VkImageMemoryBarrier2 barrier[] = {
-      //          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_SRC, frameBufferColorImages[framebufferIndex]),
-      //      };
-      //      CmdPipelineImageBarriers2(cmd, COUNT(barrier), barrier);
 
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
@@ -407,9 +405,18 @@ run_loop:
 
         CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &compNodeSet, 0, NULL);
 
-        CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
-        CmdBindIndexBuffer(cmd, quadBuffer, quadIndexOffset, VK_INDEX_TYPE_UINT16);
-        CmdDrawIndexed(cmd, quadIndexCount, 1, 0, 0, 0);
+        switch (nodesShared[i].type) {
+          case MXC_COMP_MODE_BASIC:
+          case MXC_COMP_MODE_TESS:
+            CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
+            CmdBindIndexBuffer(cmd, quadBuffer, quadIndexOffset, VK_INDEX_TYPE_UINT16);
+            CmdDrawIndexed(cmd, quadIndexCount, 1, 0, 0, 0);
+            break;
+          case MXC_COMP_MODE_TASK_MESH:
+            CmdDrawMeshTasksEXT(cmd, 1, 1, 1);
+            break;
+          default: PANIC("CompMode not supported!");
+        }
       }
 
       CmdEndRenderPass(cmd);
@@ -417,19 +424,13 @@ run_loop:
       ResetQueryPool(device, timeQueryPool, 0, 2);
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
-      //      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_PRESENT_ACQUIRE, VKM_IMG_BARRIER_BLIT_DST, swap.images[compNodeShared.swapIndex]));
-      //      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT, swap.images[compNodeShared.swapIndex]));
-
-//              CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE, VKM_IMG_BARRIER_TRANSFER_SRC, colorImage));
-
       {  // Blit Framebuffer
         AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeShared.swapIndex);
         const VkImage swapImage = swap.images[compNodeShared.swapIndex];
         const VkImage colorImage = frameBufferColorImages[framebufferIndex];
-        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_PRESENT_ACQUIRE, VKM_IMG_BARRIER_BLIT_DST, swapImage));
-//        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE, VKM_IMG_BARRIER_TRANSFER_SRC, colorImage));
+        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
         CmdBlitImageFullScreen(cmd, colorImage, swapImage);
-        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_RELEASE, swapImage));
+        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));
       }
 
       EndCommandBuffer(cmd);

@@ -97,8 +97,7 @@ int main(void) {
     vkmBeginAllocationRequests();
 
     const MxcCompNodeCreateInfo compNodeInfo = {
-        .compMode = MXC_COMP_MODE_BASIC,
-//        .compMode = MXC_COMP_MODE_TESS,
+        .compMode = MXC_COMP_MODE_TESS,
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);

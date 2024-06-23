@@ -2,8 +2,8 @@
 #extension GL_EXT_mesh_shader : require
 
 #include "global_binding.glsl"
-#include "mesh_node_binding.glsl"
-#include "mesh_node_constants.glsl"
+#include "node_binding.glsl"
+#include "mesh_comp_constants.glsl"
 
 taskPayloadSharedEXT MeshTaskPayload payload;
 

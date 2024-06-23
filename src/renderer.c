@@ -300,14 +300,14 @@ void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, c
 }
 
 
-void vkmCreateMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
+void vkmCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
   VkShaderModule taskShader; vkmCreateShaderModule(taskShaderPath, &taskShader);
   VkShaderModule meshShader; vkmCreateShaderModule(meshShaderPath, &meshShader);
   VkShaderModule fragShader; vkmCreateShaderModule(fragShaderPath, &fragShader);
   const VkGraphicsPipelineCreateInfo pipelineInfo = {
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
       .pNext = &DEFAULT_ROBUSTNESS_STATE,
-      .stageCount = 4,
+      .stageCount = 3,
       .pStages = (const VkPipelineShaderStageCreateInfo[]){
           {
               .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
