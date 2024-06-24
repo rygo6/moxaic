@@ -1,9 +1,6 @@
 #version 450
 #extension GL_EXT_mesh_shader : require
 
-/* https://developer.nvidia.com/blog/introduction-turing-mesh-shaders/
-	"We recommend using up to 64 vertices and 126 primitives"
-*/
 #include "global_binding.glsl"
 #include "node_binding.glsl"
 #include "mesh_comp_constants.glsl"
@@ -16,48 +13,12 @@ layout(location = 0) out VertexOutput {
     vec2 uv;
 } vertexOutput[];
 
-taskPayloadSharedEXT MeshTaskPayload payload;
-
-vec4 ulClipPos, urClipPos, lrClipPos, llClipPos;
-vec3 ulNDC, urNDC, lrNDC, llNDC;
-
-// https://jcgt.org/published/0011/03/04/paper-lowres.pdf
-float area(vec2 a, vec2 b) { return (a.x*b.y)-(a.y*b.x); }
-vec2 barycentricQuadUV(vec2 ndc) {
-    const float w[4] = { payload.ulClipPos.w, payload.urClipPos.w, payload.lrClipPos.w, payload.llClipPos.w };
-    const vec2 v[4] = { payload.ulNDC.xy, payload.urNDC.xy, payload.lrNDC.xy, payload.llNDC.xy };
-    float r[4], t[4], u[4], f[4];
-    vec2 s[4];
-    for (int i = 0; i < 4; i++) {
-        s[i] = v[i] - ndc;
-        r[i] = length(s[i]) * sign(w[i]);
-    }
-    for (int i = 0; i < 4; i++) {
-        float A = area(s[i], s[(i + 1) % 4]);
-        float D = dot(s[i], s[(i + 1) % 4]);
-        t[i] = (r[i] * r[(i + 1) % 4] - D) / A;
-    }
-    for (int i = 0; i < 4; i++) {
-        u[i] = (t[(i + 3) % 4] + t[i]) / r[i];
-    }
-    const vec4 wt = vec4(u[0], u[1], u[2], u[3]) / (u[0] + u[1] + u[2] + u[3]);
-    for (int i = 0; i < 4; i++) {
-        f[i] =  wt[i] / w[i];
-    }
-    const vec2 ulUV = vec2(0, 1), urUV = vec2(1, 1), lrUV = vec2(1, 0), llUV = vec2(0, 0);
-    return (f[0] * ulUV + f[1] * urUV + f[2] * lrUV + f[3] * llUV) / (f[0] + f[1] + f[2] + f[3]);
-}
-
 void main()
 {
     SetMeshOutputsEXT(VERTEX_COUNT, PRIMITIVE_COUNT);
 
     const vec2 screenSize = globalUBO.screenSize;
     const vec2 inUV = ((gl_GlobalInvocationID.xy - gl_WorkGroupID.xy) * SCALE) / screenSize;
-//    const vec2 invUv = vec2(uv.x, 1 - uv.y);
-//    const vec2 ndc = vec2((1, -1) * (uv * 2 - 1));
-//    const vec2 inQuadUv = barycentricQuadUV(ndc);
-//    const vec4 gbufferValue = texture(nodeGBuffer, inQuadUv);
 
     const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
     const vec2 scaledUV = inUV * scale;
@@ -74,27 +35,6 @@ void main()
 
     vertexOutput[gl_LocalInvocationIndex].uv = inUV;
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = globalClipPos;
-
-    //	vec2 UL = payload.ulNDC.xy - ndc;
-    //	if (dot(UL, UL) < .001){
-    //		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
-    //		return;
-    //	}
-    //	vec2 UR = payload.urNDC.xy - ndc;
-    //	if (dot(UR, UR) < .001){
-    //		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
-    //		return;
-    //	}
-    //	vec2 LL = payload.llNDC.xy - ndc;
-    //	if (dot(LL, LL) < .001){
-    //		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
-    //		return;
-    //	}
-    //	vec2 LR = payload.lrNDC.xy - ndc;
-    //	if (dot(LR, LR) < .001){
-    //		gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(0,0,0,0);
-    //		return;
-    //	}
 
     if (gl_LocalInvocationID.x < VERTEX_DIMENSION_COUNT - 1 && gl_LocalInvocationID.y < VERTEX_DIMENSION_COUNT - 1) {
         const uint yOffset = gl_LocalInvocationID.y * VERTEX_DIMENSION_COUNT;
