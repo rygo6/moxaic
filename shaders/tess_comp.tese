@@ -4,8 +4,6 @@
 #include "node_binding.glsl"
 #include "common_util.glsl"
 
-#define DEBUG_CROP
-
 layout(quads, equal_spacing, cw) in;
 
 layout (location = 0) in vec3 inNormals[];

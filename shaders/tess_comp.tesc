@@ -1,13 +1,7 @@
 #version 450
 
-layout(set = 3, binding = 0) uniform ObjectUBO {
-    mat4 model;
-} objectUBO;
-
-layout (set = 3, binding = 1) uniform NodeUBO {
-    mat4 view;
-    mat4 proj;
-} nodeUBO;
+#include "global_binding.glsl"
+#include "node_binding.glsl"
 
 layout (vertices = 4) out;
 
@@ -21,14 +15,16 @@ void main()
 {
     if (gl_InvocationID == 0)
     {
-        float tessellationFactor = 64;
-        gl_TessLevelOuter[0] = tessellationFactor;
-        gl_TessLevelOuter[1] = tessellationFactor;
-        gl_TessLevelOuter[2] = tessellationFactor;
-        gl_TessLevelOuter[3] = tessellationFactor;
+        vec2 uvDiff =  abs(nodeUBO.lrUV - nodeUBO.ulUV);
 
-        gl_TessLevelInner[0] = tessellationFactor;
-        gl_TessLevelInner[1] = tessellationFactor;
+        vec2 tessellationFactor = uvDiff * 64;
+        gl_TessLevelOuter[0] = tessellationFactor.y;
+        gl_TessLevelOuter[1] = tessellationFactor.x;
+        gl_TessLevelOuter[2] = tessellationFactor.y;
+        gl_TessLevelOuter[3] = tessellationFactor.x;
+
+        gl_TessLevelInner[0] = tessellationFactor.x;
+        gl_TessLevelInner[1] = tessellationFactor.y;
     }
 
     gl_out[gl_InvocationID].gl_Position =  gl_in[gl_InvocationID].gl_Position;

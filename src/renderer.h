@@ -20,7 +20,7 @@
 // Globals
 //----------------------------------------------------------------------------------
 
-//#define VKM_DEBUG_WIREFRAME
+#define VKM_DEBUG_WIREFRAME
 
 #define VKM_ALLOC      NULL
 #define VKM_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
