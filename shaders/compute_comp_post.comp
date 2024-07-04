@@ -4,7 +4,9 @@
 //#extension GL_KHR_shader_subgroup_ballot : require
 
 #include "global_binding.glsl"
-#include "compute_node_binding.glsl"
+#include "node_binding.glsl"
+#include "compute_comp_binding.glsl"
+#include "common_util.glsl"
 
 layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
 
@@ -64,11 +66,11 @@ void main()
     const ivec2 averagedCoord = CoordFromUV(uv, averagedScreenSize);
 
     // debug pre
-    //        const uint atomicSample = imageLoad(outputAveragedAtomic, averagedCoord).r;
-    //        const float averageDepth = UnpackFloatFromUint(atomicSample);
-    //        imageStore(outputColor, coord, vec4(averageDepth, 0, 0, 1));
-    //        imageStore(outputAveragedAtomic, averagedCoord, uvec4(0, 0, 0, 0));
-    //        return;
+    //    const uint atomicSample = imageLoad(outputAveragedAtomic, averagedCoord).r;
+    //    const float averageDepth = UnpackFloatFromUint(atomicSample);
+    //    imageStore(outputColor, coord, vec4(averageDepth, 0, 0, 1));
+    //    imageStore(outputAveragedAtomic, averagedCoord, uvec4(0, 0, 0, 0));
+    //    return;
 
     const uint data = imageLoad(outputAtomic, coord).r;
     const vec3 color = Unpack565ColorFromUint(data);

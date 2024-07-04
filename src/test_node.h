@@ -1,7 +1,7 @@
 #pragma once
 
+#include "mid_vulkan.h"
 #include "node.h"
-#include "renderer.h"
 
 typedef struct MxcTestNodeCreateInfo {
   VkmTransform        transform;

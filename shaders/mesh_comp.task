@@ -5,12 +5,6 @@
 #include "node_binding.glsl"
 #include "mesh_comp_constants.glsl"
 
-vec4 nodeQuadWorldPoint(vec4 clipPos)
-{
-	vec4 worldPos = nodeUBO.invView * nodeUBO.invProj * clipPos;
-	return worldPos;
-}
-
 void main()
 {
 	uint xGroups = globalUBO.screenSize.x / (QUAD_DIMENSION_COUNT * SCALE);

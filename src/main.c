@@ -1,7 +1,7 @@
 #include "comp_node.h"
 #include "globals.h"
+#include "mid_vulkan.h"
 #include "node.h"
-#include "renderer.h"
 #include "test_node.h"
 
 #define MID_SHAPE_IMPLEMENTATION

@@ -1,6 +1,6 @@
 #include "window.h"
 #include "globals.h"
-#include "renderer.h"
+#include "mid_vulkan.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM

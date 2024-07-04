@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 project(moxaic C)
 
-set(CMAKE_C_STANDARD 17)
+set(CMAKE_C_STANDARD 99)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TARGET_NAME moxaic)
 
@@ -22,7 +22,6 @@ add_executable(${TARGET_NAME}
 )
 
 target_link_directories(${TARGET_NAME} PUBLIC
-        lib
         "${VULKAN_SDK_PATH}/Lib"
 )
 

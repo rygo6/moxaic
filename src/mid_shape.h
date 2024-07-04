@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mid_math.h"
-#include "renderer.h"
+#include "mid_vulkan.h"
 
 void RequestSphereMeshAllocation(const int slicesCount, const int stackCount, VkmMesh* pMesh);
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh);

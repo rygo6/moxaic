@@ -1,7 +1,7 @@
 #pragma once
 
 #include "globals.h"
-#include "renderer.h"
+#include "mid_vulkan.h"
 
 #include <pthread.h>
 #include <stdint.h>
