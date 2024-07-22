@@ -872,9 +872,9 @@ void vkmInitialize() {
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
             .apiVersion = VKM_VERSION,
         },
-        .enabledLayerCount = COUNT(ppEnabledLayerNames),
+        .enabledLayerCount = _countof(ppEnabledLayerNames),
         .ppEnabledLayerNames = ppEnabledLayerNames,
-        .enabledExtensionCount = COUNT(ppEnabledInstanceExtensionNames),
+        .enabledExtensionCount = _countof(ppEnabledInstanceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
     };
     VKM_REQUIRE(vkCreateInstance(&instanceCreationInfo, VKM_ALLOC, &instance));
@@ -1027,7 +1027,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
         .pNext = &physicalDeviceFeatures,
         .queueCreateInfoCount = activeQueueCount,
         .pQueueCreateInfos = activeQueueCreateInfos,
-        .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
+        .enabledExtensionCount = _countof(ppEnabledDeviceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
     VKM_REQUIRE(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, VKM_ALLOC, &context.device));

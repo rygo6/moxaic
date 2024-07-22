@@ -20,8 +20,6 @@
 // Globals
 //----------------------------------------------------------------------------------
 
-#define VKM_DEBUG_WIREFRAME
-
 #define VKM_ALLOC      NULL
 #define VKM_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define VKM_SWAP_COUNT 2
@@ -236,10 +234,11 @@ static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
     [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 };
-#define VKM_G_BUFFER_FORMAT  VK_FORMAT_R32_SFLOAT
-#define VKM_G_BUFFER_USAGE   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-#define VKM_G_BUFFER_LEVELS  10
-#define VKM_PASS_CLEAR_COLOR (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
+#define VKM_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT
+#define VKM_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+#define VKM_G_BUFFER_LEVELS 10
+#define VKM_PASS_CLEAR_COLOR \
+  (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
 #define VKM_SET_BIND_STD_GLOBAL_BUFFER 0
 #define VKM_SET_WRITE_STD_GLOBAL_BUFFER(global_set, global_set_buffer) \
@@ -647,21 +646,16 @@ VKM_INLINE void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStdObjectSetStat
   pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStdObjectSetState));
 }
-VKM_INLINE bool vkmProcessInput(VkmTransform* pCameraTransform) {
-  bool inputDirty = false;
-  if (input.mouseLocked) {
-    pCameraTransform->euler.y -= input.mouseDeltaX * input.mouseLocked * input.deltaTime * 0.4f;
-    pCameraTransform->euler.x += input.mouseDeltaY * input.mouseLocked * input.deltaTime * 0.4f;
-    pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
-    inputDirty = true;
-  }
-  if (input.moveForward || input.moveBack || input.moveLeft || input.moveRight) {
-    const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = input.moveRight - input.moveLeft, .z = input.moveBack - input.moveForward});
-    const float moveSensitivity = input.deltaTime * 0.8f;
-    for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
-    inputDirty = true;
-  }
-  return inputDirty;
+VKM_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, VkmTransform* pCameraTransform) {
+  pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
+  pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
+  pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
+}
+// move[] = Forward, Back, Left, Right
+VKM_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], VkmTransform* pCameraTransform) {
+  const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
+  const float moveSensitivity = deltaTime * 0.8f;
+  for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }
 VKM_INLINE void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
   const VkDebugUtilsObjectNameInfoEXT debugInfo = {
@@ -770,7 +764,8 @@ typedef struct VkmSamplerCreateInfo {
   VkSamplerAddressMode   addressMode;
   VkSamplerReductionMode reductionMode;
 } VkmSamplerCreateInfo;
-#define VKM_SAMPLER_LINEAR_CLAMP_DESC (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
+#define VKM_SAMPLER_LINEAR_CLAMP_DESC \
+  (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
 void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);

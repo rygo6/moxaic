@@ -1,28 +1,13 @@
 #pragma once
-
 #include <stdbool.h>
-#include <vulkan/vulkan.h>
+#include "mid_math.h"
 
-typedef struct Input {
-  float mouseDeltaX;
-  float mouseDeltaY;
-  bool  mouseLocked;
+typedef struct MxcInput {
+  vec2 mouseDelta;
+  // forward, back, left, right
+  bool move[4];
+} MxcInput;
 
-  bool moveForward;
-  bool moveBack;
-  bool moveRight;
-  bool moveLeft;
+extern MxcInput mxcInput;
 
-  double deltaTime;
-
-  bool debugSwap;
-
-} Input;
-
-extern Input input;
-
-void vkmUpdateWindowInput();
-void vkmCreateWindow();
-void vkmCreateSurface(const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
-
-extern double timeQueryMs;
+void mxcUpdateWindowInput();

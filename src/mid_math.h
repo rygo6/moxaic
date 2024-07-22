@@ -74,6 +74,7 @@ enum MatComponents {
   C3_R3,
   MAT_COUNT,
 };
+static const float3_vec VEC3_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
 static const quat QUAT_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};

@@ -1,5 +1,6 @@
 #include "comp_node.h"
 #include "mid_shape.h"
+#include "mid_window.h"
 
 #include <assert.h>
 #include <vulkan/vk_enum_string_helper.h>
@@ -282,8 +283,9 @@ void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
 run_loop:
 
   vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
-  if (vkmProcessInput(&globalCameraTransform))
-    vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
+  vkmProcessCameraMouseInput(midWindowInput.deltaTime, mxcInput.mouseDelta, &globalCameraTransform);
+  vkmProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globalCameraTransform);
+  vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
   {  // Node cycle
     vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
@@ -310,7 +312,7 @@ run_loop:
                 SET_WRITE_COMP_NORMAL(compNodeSet, nodesShared[i].framebufferNormalImageViews[nodeFramebufferIndex]),
                 SET_WRITE_COMP_GBUFFER(compNodeSet, nodesShared[i].framebufferGBufferImageViews[nodeFramebufferIndex]),
             };
-            vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
+            vkUpdateDescriptorSets(device, _countof(writeSets), writeSets, 0, NULL);
             switch (nodesShared[i].type) {
               case MXC_NODE_TYPE_THREAD:
                 const VkImageMemoryBarrier2 barriers[] = {
@@ -318,7 +320,7 @@ run_loop:
                     VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferNormalImages[nodeFramebufferIndex]),
                     VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferGBufferImages[nodeFramebufferIndex], 0, VKM_G_BUFFER_LEVELS),
                 };
-                CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
+                CmdPipelineImageBarriers2(cmd, _countof(barriers), barriers);
                 break;
               case MXC_NODE_TYPE_INTERPROCESS:
                 //              CmdPipelineImageBarrier(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_EXTERNAL_ACQUIRE_GRAPHICS_ATTACH, VKM_IMAGE_BARRIER_SHADER_READ, MXC_NODE_SHARED[i].framebufferColorImages[nodeFramebufferIndex]));

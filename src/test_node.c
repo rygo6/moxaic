@@ -124,7 +124,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
         VKM_SET_WRITE_STD_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.view),
         VKM_SET_WRITE_STD_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer),
     };
-    vkUpdateDescriptorSets(context.device, COUNT(writeSets), writeSets, 0, NULL);
+    vkUpdateDescriptorSets(context.device, _countof(writeSets), writeSets, 0, NULL);
 
     pTestNode->sphereTransform = pCreateInfo->transform;  // pcreateinfo->transform should go to some kind of node transform
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
@@ -302,7 +302,7 @@ run_loop:
         SET_WRITE_NODE_PROCESS_DST(framebufferGBufferImgViews[framebufferIndex]),
     };
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitMipAveragePipe);
-    CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(initialPushSet), initialPushSet);
+    CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, _countof(initialPushSet), initialPushSet);
     const ivec2 extent = {scissor.extent.width, scissor.extent.height};
     const ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 32), 1);
     CmdDispatch(cmd, groupCount.x, groupCount.y, 1);
@@ -312,12 +312,12 @@ run_loop:
           VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMAGE_BARRIER_COMPUTE_READ, framebufferGBufferImgs[framebufferIndex], i - 1, 1),
           VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_READ, VKM_IMAGE_BARRIER_COMPUTE_WRITE, framebufferGBufferImgs[framebufferIndex], i, 1),
       };
-      CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
+      CmdPipelineImageBarriers2(cmd, _countof(barriers), barriers);
       const VkWriteDescriptorSet pushSet[] = {
           SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i - 1]),
           SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i]),
       };
-      CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(pushSet), pushSet);
+      CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, _countof(pushSet), pushSet);
       const ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> 1}, 32), 1);
       CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
     }
@@ -330,7 +330,7 @@ run_loop:
           SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i]),
           SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i - 1]),
       };
-      CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(pushSet), pushSet);
+      CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, _countof(pushSet), pushSet);
       const ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> (1 - 1)}, 32), 1);
       CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
     }

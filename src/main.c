@@ -1,11 +1,23 @@
 #include "comp_node.h"
 #include "globals.h"
-#include "mid_vulkan.h"
 #include "node.h"
 #include "test_node.h"
+#include "window.h"
+
+#define MID_DEBUG
+[[noreturn]] void Panic(const char* file, const int line, const char* message) {
+  fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
+  __builtin_trap();
+}
+
+#include "mid_vulkan.h"
 
 #define MID_SHAPE_IMPLEMENTATION
 #include "mid_shape.h"
+
+#define MID_WINDOW_IMPLEMENTATION
+#define MID_WINDOW_VULKAN
+#include "mid_window.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -13,14 +25,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-bool          isCompositor = true;
+bool isCompositor = true;
 volatile bool isRunning = true;
-
-[[noreturn]] void Panic(const char* file, const int line, const char* message) {
-  fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
-  __builtin_trap();
-}
-
 //typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 
 int main(void) {
@@ -38,11 +44,11 @@ int main(void) {
   //    return EXIT_FAILURE;
   //  }
 
-  vkmCreateWindow();
+  midCreateWindow();
   vkmInitialize();
 
   VkSurfaceKHR surface;
-  vkmCreateSurface(VKM_ALLOC, &surface);
+  midCreateVulkanSurface(VKM_ALLOC, &surface);
 
   {
     const VkmContextCreateInfo contextCreateInfo = {
@@ -97,7 +103,7 @@ int main(void) {
     vkmBeginAllocationRequests();
 
     const MxcCompNodeCreateInfo compNodeInfo = {
-        .compMode = MXC_COMP_MODE_TASK_MESH,
+        .compMode = MXC_COMP_MODE_TESS,
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
@@ -134,13 +140,15 @@ int main(void) {
     VkDevice device = context.device;
     uint64_t compBaseCycleValue = 0;
     VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-    while (isRunning) {
+    while (midWindow.running) {
 
       // we may not have to even wait... this could go faster
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compNodeShared.compTimeline);
 
       // somewhere input state needs to be copied to a need and only update when it knows the node needs it
-      vkmUpdateWindowInput();
+      midUpdateWindowInput();
+      isRunning = midWindow.running;
+      mxcUpdateWindowInput();
       __atomic_thread_fence(__ATOMIC_RELEASE);
 
       // signal input ready to process!

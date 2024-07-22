@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define MID_DEBUG
 extern void Panic(const char* file, int line, const char* message);
 #define PANIC(message) Panic(__FILE__, __LINE__, message)
 #define REQUIRE(condition, message)        \
@@ -12,7 +13,6 @@ extern void Panic(const char* file, int line, const char* message);
 
 #define CACHE_ALIGN  __attribute((aligned(64)))
 #define ALIGN(size)  __attribute((aligned(size)))
-#define COUNT(array) sizeof(array) / sizeof(array[0])
 
 #define DEFAULT_WIDTH  1024
 #define DEFAULT_HEIGHT 1024
@@ -22,8 +22,8 @@ extern void Panic(const char* file, int line, const char* message);
 #define INLINE __attribute__((always_inline)) inline
 
 extern bool          isCompositor;
-extern volatile bool isRunning;
 
+extern volatile bool isRunning;
 #define CHECK_RUNNING                      \
   if (__builtin_expect(!(isRunning), 0)) { \
     return;                                \
@@ -37,6 +37,22 @@ typedef enum MxcCycle {
   MXC_CYCLE_RENDER_COMPOSITE, // compositor render
   MXC_CYCLE_COUNT
 } MxcCycle;
+
+typedef struct Input {
+  float mouseDeltaX;
+  float mouseDeltaY;
+  bool  mouseLocked;
+
+  bool moveForward;
+  bool moveBack;
+  bool moveRight;
+  bool moveLeft;
+
+  double deltaTime;
+
+  bool debugSwap;
+
+} Input;
 
 
 //typedef uint16_t arena_offset;
