@@ -12,9 +12,6 @@ void mxcUpdateWindowInput() {
   mxcInput.mouseDelta.x = midWindowInput.mouseDeltaX;
   mxcInput.mouseDelta.y = midWindowInput.mouseDeltaY;
 
-  if (midWindowInput.leftMouse != MID_PHASE_NONE)
-    printf("midWindowInput.leftMouse %d\n", midWindowInput.leftMouse);
-
   if (midWindowInput.leftMouse == MID_PHASE_PRESS) {
     midWindowLockCursor();
   } else if (midWindowInput.leftMouse == MID_PHASE_RELEASE) {
