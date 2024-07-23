@@ -17,22 +17,8 @@ typedef enum MxcNodeType {
   MXC_NODE_TYPE_COUNT
 } MxcNodeType;
 
-typedef struct MxcImportParam {
-  uint32_t framebufferWidth;
-  uint32_t framebufferHeight;
-  HANDLE   colorFramebuffer0ExternalHandle;
-  HANDLE   colorFramebuffer1ExternalHandle;
-  HANDLE   normalFramebuffer0ExternalHandle;
-  HANDLE   normalFramebuffer1ExternalHandle;
-  HANDLE   gBufferFramebuffer0ExternalHandle;
-  HANDLE   gBufferFramebuffer1ExternalHandle;
-  HANDLE   depthFramebuffer0ExternalHandle;
-  HANDLE   depthFramebuffer1ExternalHandle;
-  HANDLE   compositorSemaphoreExternalHandle;
-  HANDLE   nodeSemaphoreExternalHandle;
-} MxcImportParam;
-
-#define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
+#define MXC_NODE_CLEAR_COLOR \
+  (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 
 #define MXC_RING_BUFFER_COUNT       256
 #define MXC_RING_BUFFER_SIZE        MXC_RING_BUFFER_COUNT * sizeof(uint8_t)
@@ -53,7 +39,7 @@ typedef struct MxcNodeContext {
   int         compCycleSkip;
 
   const void* pNode;
-  void (*runFunc)(const struct MxcNodeContext* pNode);
+  void* (*runFunc)(const struct MxcNodeContext* pNode);
 
   // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array...
   VkSemaphore compTimeline;
@@ -157,7 +143,7 @@ static inline void mxcSubmitNodeQueues(const VkQueue graphicsQueue) {
   }
 }
 
-void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle);
+void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle);
 void mxcRegisterNodeContextThread(NodeHandle handle, VkCommandBuffer cmd);
 void mxcRunNodeContext(const MxcNodeContext* pNodeContext);
 
@@ -167,8 +153,30 @@ void mxcCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFra
 void mxcCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
 
 // Process IPC
+
+
+void mxcInitializeIPCServer();
+void mxcShutdownIPCServer();
+void mxcConnectIPCNode();
+void mxcShutdownIPCNode();
+
 void mxcCreateSharedBuffer();
 void mxcCreateProcess();
+
+typedef struct MxcImportParam {
+  uint32_t framebufferWidth;
+  uint32_t framebufferHeight;
+  HANDLE   colorFramebuffer0ExternalHandle;
+  HANDLE   colorFramebuffer1ExternalHandle;
+  HANDLE   normalFramebuffer0ExternalHandle;
+  HANDLE   normalFramebuffer1ExternalHandle;
+  HANDLE   gBufferFramebuffer0ExternalHandle;
+  HANDLE   gBufferFramebuffer1ExternalHandle;
+  HANDLE   depthFramebuffer0ExternalHandle;
+  HANDLE   depthFramebuffer1ExternalHandle;
+  HANDLE   compositorSemaphoreExternalHandle;
+  HANDLE   nodeSemaphoreExternalHandle;
+} MxcImportParam;
 
 typedef void (*MxcInterProcessFuncPtr)(void*);
 void mxcInterProcessImportNode(void* pParam);

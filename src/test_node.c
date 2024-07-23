@@ -155,7 +155,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   }
 }
 
-void mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
+void* mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
 
   MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
 
@@ -369,4 +369,6 @@ run_loop:
 
   CHECK_RUNNING
   goto run_loop;
+
+  return NULL;
 }

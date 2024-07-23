@@ -17,7 +17,7 @@ typedef struct MxcCompNodeCreateInfo {
 } MxcCompNodeCreateInfo;
 
 typedef struct MxcCompNode {
-  MxcCompMode  compMode;
+  MxcCompMode compMode;
 
   VkDevice        device;
   VkCommandBuffer cmd;
@@ -33,8 +33,8 @@ typedef struct MxcCompNode {
   VkmGlobalSet    globalSet;
   VkDescriptorSet compNodeSet;
 
-  VkmSharedMemory  compNodeSetMemory;
-  VkBuffer         compNodeSetBuffer;
+  VkmSharedMemory compNodeSetMemory;
+  VkBuffer        compNodeSetBuffer;
 
   VkmMesh quadMesh;
 
@@ -45,6 +45,6 @@ typedef struct MxcCompNode {
 } MxcCompNode;
 
 
-void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
-void mxcCompNodeThread(const MxcNodeContext* pNodeContext);
-void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
+void  mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
+void* mxcCompNodeThread(const MxcNodeContext* pNodeContext);
+void  mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);

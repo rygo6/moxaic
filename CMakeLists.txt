@@ -36,7 +36,7 @@ target_link_libraries(${TARGET_NAME}
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE
-
+    MOXAIC_COMPOSITOR
 )
 
 target_compile_options(${TARGET_NAME} PRIVATE

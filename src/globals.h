@@ -11,8 +11,8 @@ extern void Panic(const char* file, int line, const char* message);
     PANIC(message);                        \
   }
 
-#define CACHE_ALIGN  __attribute((aligned(64)))
-#define ALIGN(size)  __attribute((aligned(size)))
+#define CACHE_ALIGN __attribute((aligned(64)))
+#define ALIGN(size) __attribute((aligned(size)))
 
 #define DEFAULT_WIDTH  1024
 #define DEFAULT_HEIGHT 1024
@@ -21,7 +21,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define LOCAL  _Thread_local
 #define INLINE __attribute__((always_inline)) inline
 
-extern bool          isCompositor;
+extern volatile bool isCompositor;
 
 extern volatile bool isRunning;
 #define CHECK_RUNNING                      \
@@ -30,11 +30,11 @@ extern volatile bool isRunning;
   }
 
 typedef enum MxcCycle {
-  MXC_CYCLE_UPDATE_WINDOW_STATE, // update window input, submit queues
-  MXC_CYCLE_PROCESS_INPUT, // process input for nodes/comp to read
-  MXC_CYCLE_UPDATE_NODE_STATES, // update state for nodes to render
-  MXC_CYCLE_RECORD_COMPOSITE, // recording compositor commands
-  MXC_CYCLE_RENDER_COMPOSITE, // compositor render
+  MXC_CYCLE_UPDATE_WINDOW_STATE,  // update window input, submit queues
+  MXC_CYCLE_PROCESS_INPUT,        // process input for nodes/comp to read
+  MXC_CYCLE_UPDATE_NODE_STATES,   // update state for nodes to render
+  MXC_CYCLE_RECORD_COMPOSITE,     // recording compositor commands
+  MXC_CYCLE_RENDER_COMPOSITE,     // compositor render
   MXC_CYCLE_COUNT
 } MxcCycle;
 

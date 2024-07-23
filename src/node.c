@@ -1,5 +1,88 @@
 #include "node.h"
 
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#define BUFSIZE 512
+static pthread_t serverThreadId;
+static HANDLE    hServerPipe;
+static int       serverConnectionCount;
+const static LPCTSTR   lpszPipeName = TEXT("\\\\.\\pipe\\moxaic");
+
+static void* runIPCServer(void* arg) {
+  while (isRunning) {
+    hServerPipe = CreateNamedPipe(
+        lpszPipeName,                // pipe name
+        PIPE_ACCESS_DUPLEX,          // read/write access
+        PIPE_TYPE_MESSAGE |          // message type pipe
+            PIPE_READMODE_MESSAGE |  // message-read mode
+            PIPE_WAIT,               // blocking mode
+        PIPE_UNLIMITED_INSTANCES,    // max. instances
+        BUFSIZE,                     // output buffer size
+        BUFSIZE,                     // input buffer size
+        0,                           // client time-out
+        NULL);                       // default security attribute
+    bool connected = ConnectNamedPipe(hServerPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+    serverConnectionCount += connected;
+    printf("Named Pipe Connection: %s Current Count: %d\n", connected ? "Success" : "Fail", serverConnectionCount);
+  }
+  return NULL;
+}
+
+void mxcInitializeIPCServer() {
+  int result = pthread_create(&serverThreadId, NULL, runIPCServer, NULL);
+  REQUIRE(result == 0, "IPC server pipe creation Fail!");
+}
+
+void mxcShutdownIPCServer() {
+  int cancelResult = pthread_cancel(serverThreadId);
+  if (cancelResult != 0) perror("IPC server thread cancel Fail!");
+  FlushFileBuffers(hServerPipe);
+  DisconnectNamedPipe(hServerPipe);
+  CloseHandle(hServerPipe);
+}
+
+static HANDLE hNodePipe;
+static BOOL   nodePipeConnected;
+static DWORD  cbRead, cbToWrite, cbWritten, dwMode;
+void          mxcConnectIPCNode() {
+  while (true) {
+    hNodePipe = CreateFile(
+        lpszPipeName,   // pipe name
+        GENERIC_READ |  // read and write access
+            GENERIC_WRITE,
+        0,              // no sharing
+        NULL,           // default security attributes
+        OPEN_EXISTING,  // opens existing pipe
+        0,              // default attributes
+        NULL);          // no template file
+    if (hNodePipe != INVALID_HANDLE_VALUE)
+      break;
+
+    REQUIRE(GetLastError() != ERROR_PIPE_BUSY, "IPC node pipe error!");
+    if (!WaitNamedPipe(lpszPipeName, 20000)) {
+      PANIC("Could not open pipe: 20 second wait timed out.");
+    }
+  }
+
+  printf("Node pipe opened!\n");
+
+  dwMode = PIPE_READMODE_MESSAGE;
+  nodePipeConnected = SetNamedPipeHandleState(
+      hNodePipe,  // pipe handle
+      &dwMode,    // new pipe mode
+      NULL,       // don't set maximum bytes
+      NULL);      // don't set maximum time
+  if (!nodePipeConnected) {
+    printf("SetNamedPipeHandleState failed. GLE=%d\n", GetLastError());
+    PANIC("Node pipe open fail!");
+  }
+}
+
+void mxcShutdownIPCNode()  {
+  CloseHandle(hNodePipe);
+}
+
 MxcCompNodeContextShared compNodeShared;
 
 size_t               nodeCount = 0;
@@ -30,7 +113,7 @@ void mxcRegisterNodeContextThread(const NodeHandle handle, const VkCommandBuffer
   mxcRunNodeContext(&nodes[handle]);
 }
 
-void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle) {
+void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle) {
   NodeHandle      nodeHandle = 0;
   MxcNodeContext* pNodeContext = &nodes[nodeHandle];
 

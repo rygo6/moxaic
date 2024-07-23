@@ -218,7 +218,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
   vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
 }
 
-void mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
+void* mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
 
   MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
 
@@ -449,4 +449,6 @@ run_loop:
   CHECK_RUNNING;
 
   goto run_loop;
+
+  return NULL;
 }

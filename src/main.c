@@ -25,7 +25,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-bool isCompositor = true;
+volatile bool isCompositor = true;
 volatile bool isRunning = true;
 //typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 
@@ -43,6 +43,15 @@ int main(void) {
   //    fprintf(stderr, "Failed to retrieve function pointer to vkGetInstanceProcAddr.\n");
   //    return EXIT_FAILURE;
   //  }
+#if defined(MOXAIC_COMPOSITOR)
+  printf("Moxaic Compositor\n");
+  isCompositor = true;
+  mxcInitializeIPCServer();
+#elif defined(MOXAIC_NODE)
+  printf("Moxaic node\n");
+  isCompositor = false;
+  mxcConnectIPCNode();
+#endif
 
   midCreateWindow();
   vkmInitialize();
@@ -101,22 +110,20 @@ int main(void) {
   NodeHandle  testNodeHandle;
   {
     vkmBeginAllocationRequests();
-
     const MxcCompNodeCreateInfo compNodeInfo = {
         .compMode = MXC_COMP_MODE_TESS,
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
     mxcRequestNodeContextThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
+    vkmEndAllocationRequests();
+    mxcBindUpdateCompNode(&compNodeInfo, &compNode);
+
     const MxcTestNodeCreateInfo createInfo = {
         .transform = {0, 0, 0},
         .pFramebuffers = nodes[testNodeHandle].framebuffers,
     };
     mxcCreateTestNode(&createInfo, &testNode);
-
-    vkmEndAllocationRequests();
-
-    mxcBindUpdateCompNode(&compNodeInfo, &compNode);
   }
 
   // move to register method like mxcRegisterCompNodeThread?
@@ -140,7 +147,7 @@ int main(void) {
     VkDevice device = context.device;
     uint64_t compBaseCycleValue = 0;
     VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-    while (midWindow.running) {
+    while (isRunning) {
 
       // we may not have to even wait... this could go faster
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compNodeShared.compTimeline);
@@ -181,6 +188,12 @@ int main(void) {
   //    perror("Thread join failed");
   //    return 1;
   //  }
+
+#if defined(MOXAIC_COMPOSITOR)
+  mxcShutdownIPCServer();
+#elif defined(MOXAIC_NODE)
+  mxcShutdownIPCNode();
+#endif
 
   return EXIT_SUCCESS;
 }
