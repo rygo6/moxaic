@@ -33,6 +33,7 @@ target_include_directories(${TARGET_NAME} PUBLIC
 
 target_link_libraries(${TARGET_NAME}
         vulkan-1
+        ws2_32
 )
 
 target_compile_definitions(${TARGET_NAME} PRIVATE

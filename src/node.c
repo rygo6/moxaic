@@ -1,120 +1,105 @@
 #include "node.h"
 
 #define WIN32_LEAN_AND_MEAN
-#include <strsafe.h>
-#include <windows.h>
+#undef UNICODE
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <afunix.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-#define BUFSIZE 512
-static pthread_t     serverThreadId;
-static HANDLE        hServerPipe;
-static int           serverConnectionCount;
-const static LPCTSTR lpszPipeName = TEXT("\\\\.\\pipe\\moxaic");
+//#define SOCKET_PATH "moxaic.server.socket"
+#define SOCKET_PATH "C:\\temp\\moxaic_socket"
+#define BUFFER_SIZE 128
 
-static void GetAnswerToRequest( LPTSTR pchRequest,
-                        LPTSTR pchReply,
-                        LPDWORD pchBytes )
-// This routine is a simple function to print the client request to the console
-// and populate the reply buffer with a default data string. This is where you
-// would put the actual client request processing code that runs in the context
-// of an instance thread. Keep in mind the main thread will continue to wait for
-// and receive other client connections while the instance thread is working.
-{
-  printf( TEXT("Client Request String:\"%s\"\n"), pchRequest );
-
-  // Check the outgoing message to make sure it's not too long for the buffer.
-  if (FAILED(StringCchCopy( pchReply, BUFSIZE, TEXT("default answer from server") )))
-  {
-    *pchBytes = 0;
-    pchReply[0] = 0;
-    printf("StringCchCopy failed, no outgoing message.\n");
-    return;
-  }
-  *pchBytes = (lstrlen(pchReply)+1)*sizeof(TCHAR);
-}
+static pthread_t serverThreadId;
+static int       serverConnectionCount;
 
 static void* runIPCServerConnection(void* arg) {
   printf("IPC Server Connection Thread Started\n");
 
-  HANDLE hPipe = *(HANDLE*)arg;
-  HANDLE hHeap      = GetProcessHeap();
-  TCHAR* pchRequest = (TCHAR*)HeapAlloc(hHeap, 0, BUFSIZE*sizeof(TCHAR));
-  TCHAR* pchReply   = (TCHAR*)HeapAlloc(hHeap, 0, BUFSIZE*sizeof(TCHAR));
-
-  DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0;
-  BOOL fSuccess = FALSE;
-
-  while (isRunning) {
-    fSuccess = ReadFile(
-        hPipe,        // handle to pipe
-        pchRequest,    // buffer to receive data
-        BUFSIZE*sizeof(TCHAR), // size of buffer
-        &cbBytesRead, // number of bytes read
-        NULL);        // not overlapped I/O
-
-    if (!fSuccess || cbBytesRead == 0)
-    {
-      if (GetLastError() == ERROR_BROKEN_PIPE)
-      {
-        printf(TEXT("InstanceThread: client disconnected.\n"));
-      }
-      else
-      {
-        printf(TEXT("InstanceThread ReadFile failed, GLE=%d.\n"), GetLastError());
-      }
-      break;
-    }
-
-    // Process the incoming message.
-    GetAnswerToRequest(pchRequest, pchReply, &cbReplyBytes);
-
-    // Write the reply to the pipe.
-    fSuccess = WriteFile(
-        hPipe,        // handle to pipe
-        pchReply,     // buffer to write from
-        cbReplyBytes, // number of bytes to write
-        &cbWritten,   // number of bytes written
-        NULL);        // not overlapped I/O
-
-    if (!fSuccess || cbReplyBytes != cbWritten)
-    {
-      printf(TEXT("InstanceThread WriteFile failed, GLE=%d.\n"), GetLastError());
-      break;
-    }
-  }
-  FlushFileBuffers(hPipe);
-  DisconnectNamedPipe(hPipe);
-  CloseHandle(hPipe);
   return NULL;
 }
 
-static void* runIPCServer(void* arg) {
-  while (isRunning) {
-    // this really needs to go to overly to wait two objects
-    hServerPipe = CreateNamedPipe(
-        lpszPipeName,                // pipe name
-        PIPE_ACCESS_DUPLEX,          // read/write access
-        PIPE_TYPE_MESSAGE |          // message type pipe
-            PIPE_READMODE_MESSAGE |  // message-read mode
-            PIPE_WAIT,               // blocking mode
-        PIPE_UNLIMITED_INSTANCES,    // max. instances
-        BUFSIZE,                     // output buffer size
-        BUFSIZE,                     // input buffer size
-        0,                           // client time-out
-        NULL);                       // default security attribute
-    BOOL connected = ConnectNamedPipe(hServerPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-    serverConnectionCount += connected;
-    printf("Named Pipe Connection: %s Current Count: %d\n", connected ? "Success" : "Fail", serverConnectionCount);
+SOCKET clientSocket = INVALID_SOCKET;
+SOCKET listenSocket = INVALID_SOCKET;
 
-    if (connected) {
-      pthread_t serverConnectionThreadId;
-      int       result = pthread_create(&serverConnectionThreadId, NULL, runIPCServerConnection, &hServerPipe);
-      if (result != 0) {
-        printf("Named Pipe Connection thread Fail!\n");
-      }
-    } else {
-      CloseHandle(hServerPipe);
-    }
+static void* runIPCServer(void* arg) {
+  int         result = 0;
+  char        sendBuffer[] = "af_unix from Windows to WSL!";
+  int         sendResult = 0;
+  SOCKADDR_UN address = {};
+  WSADATA     wsaData = {};
+
+  // Initialize Winsock
+  result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+  if (result != 0) {
+    printf("WSAStartup failed with error: %d\n", result);
+    goto Exit;
   }
+
+  // Create a AF_UNIX stream server socket.
+  listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (listenSocket == INVALID_SOCKET) {
+    printf("socket failed with error: %d\n", WSAGetLastError());
+    goto Exit;
+  }
+
+  address.sun_family = AF_UNIX;
+  strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1);
+
+  // Bind the socket to the path.
+  result = bind(listenSocket, (struct sockaddr*)&address, sizeof(address));
+  if (result == SOCKET_ERROR) {
+    printf("bind failed with error: %d\n", WSAGetLastError());
+    goto Exit;
+  }
+
+  // Listen to start accepting connections.
+  result = listen(listenSocket, SOMAXCONN);
+  if (result == SOCKET_ERROR) {
+    printf("listen failed with error: %d\n", WSAGetLastError());
+    goto Exit;
+  }
+
+  printf("Accepting connections on: '%s'\n", SOCKET_PATH);
+  // Accept a connection.
+  clientSocket = accept(listenSocket, NULL, NULL);
+  if (clientSocket == INVALID_SOCKET) {
+    printf("accept failed with error: %d\n", WSAGetLastError());
+    goto Exit;
+  }
+  printf("Accepted a connection.\n");
+
+  // Send some data.
+  sendResult = send(clientSocket, sendBuffer, (int)strlen(sendBuffer), 0);
+  if (sendResult == SOCKET_ERROR) {
+    printf("send failed with error: %d\n", WSAGetLastError());
+    goto Exit;
+  }
+  printf("Relayed %zu bytes: '%s'\n", strlen(sendBuffer), sendBuffer);
+
+  // shutdown the connection.
+  printf("Shutting down\n");
+  result = shutdown(clientSocket, 0);
+  if (result == SOCKET_ERROR) {
+    printf("shutdown failed with error: %d\n", WSAGetLastError());
+    goto Exit;
+  }
+
+Exit:
+  // cleanup
+  if (listenSocket != INVALID_SOCKET) {
+    closesocket(listenSocket);
+  }
+
+  if (clientSocket != INVALID_SOCKET) {
+    closesocket(clientSocket);
+  }
+
+  // Analogous to `unlink`
+  DeleteFileA(SOCKET_PATH);
+  WSACleanup();
   return NULL;
 }
 
@@ -126,66 +111,71 @@ void mxcInitializeIPCServer() {
 void mxcShutdownIPCServer() {
   int cancelResult = pthread_cancel(serverThreadId);
   if (cancelResult != 0) perror("IPC server thread cancel Fail!");
-  CloseHandle(hServerPipe);
+  if (listenSocket != INVALID_SOCKET) {
+    closesocket(listenSocket);
+  }
+  if (clientSocket != INVALID_SOCKET) {
+    closesocket(clientSocket);
+  }
+  DeleteFileA(SOCKET_PATH);
+  WSACleanup();
 }
 
-static HANDLE hNodePipe;
-static BOOL   nodePipeConnected;
-static DWORD  cbRead, cbToWrite, cbWritten, dwMode;
-void          mxcConnectIPCNode() {
-  while (true) {
-    hNodePipe = CreateFile(
-        lpszPipeName,   // pipe name
-        GENERIC_READ |  // read and write access
-            GENERIC_WRITE,
-        0,              // no sharing
-        NULL,           // default security attributes
-        OPEN_EXISTING,  // opens existing pipe
-        0,              // default attributes
-        NULL);          // no template file
-    if (hNodePipe != INVALID_HANDLE_VALUE)
-      break;
+void mxcConnectIPCNode() {
 
-    REQUIRE(GetLastError() != ERROR_PIPE_BUSY, "IPC node pipe error!");
-    if (!WaitNamedPipe(lpszPipeName, 20000)) {
-      PANIC("Could not open pipe: 20 second wait timed out.");
-    }
+  int         result, len;
+  char*       message = "Hello from client!";
+  char buffer[BUFFER_SIZE];
+  SOCKADDR_UN address = {};
+  WSADATA     wsaData = {};
+
+  // Initialize Winsock
+  result = WSAStartup(MAKEWORD(2, 2), &wsaData);
+  if (result != 0) {
+    perror("WSAStartup failed");
+    goto ErrorExit;
   }
 
-  printf("Node pipe opened!\n");
-
-  dwMode = PIPE_READMODE_MESSAGE;
-  nodePipeConnected = SetNamedPipeHandleState(
-      hNodePipe,  // pipe handle
-      &dwMode,    // new pipe mode
-      NULL,       // don't set maximum bytes
-      NULL);      // don't set maximum time
-  if (!nodePipeConnected) {
-    printf("SetNamedPipeHandleState failed. GLE=%d\n", GetLastError());
-    PANIC("Node pipe open fail!");
+  // Create a UNIX domain socket
+  clientSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (clientSocket == INVALID_SOCKET) {
+    perror("Socket creation failed");
+    goto ErrorExit;
   }
 
-  LPTSTR lpvMessage=TEXT("Default message from client.");
-  cbToWrite = (lstrlen(lpvMessage)+1)*sizeof(TCHAR);
-  printf( TEXT("Sending %d byte message: \"%s\"\n"), cbToWrite, lpvMessage);
+  address.sun_family = AF_UNIX;
+  strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
 
-  BOOL fSuccess = WriteFile(
-      hNodePipe,                  // pipe handle
-      lpvMessage,             // message
-      cbToWrite,              // message length
-      &cbWritten,             // bytes written
-      NULL);                  // not overlapped
-
-  if ( ! fSuccess)
-  {
-    printf( TEXT("WriteFile to pipe failed. GLE=%d\n"), GetLastError() );
-    return;
+  result = connect(clientSocket, (struct sockaddr*)&address, sizeof(address));
+  if (result == SOCKET_ERROR) {
+    perror("Connect failed");
+    goto ErrorExit;
   }
 
+  printf("Connected to server.\n");
+
+  len = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
+  if (len == SOCKET_ERROR) {
+    perror("Recv failed");
+    goto ErrorExit;
+  }
+
+  buffer[len] = '\0'; // Null-terminate the string
+  printf("Received from server: %s\n", buffer);
+
+//  result = send(clientSocket, message, (int)strlen(message), 0);
+//  if (result == SOCKET_ERROR) {
+//    perror("Send failed");
+//    goto ErrorExit;
+//  }
+
+ErrorExit:
+  closesocket(clientSocket);
+  WSACleanup();
 }
+
 
 void mxcShutdownIPCNode() {
-  CloseHandle(hNodePipe);
 }
 
 MxcCompNodeContextShared compNodeShared;
