@@ -1,16 +1,95 @@
 #include "node.h"
 
 #define WIN32_LEAN_AND_MEAN
+#include <strsafe.h>
 #include <windows.h>
 
 #define BUFSIZE 512
-static pthread_t serverThreadId;
-static HANDLE    hServerPipe;
-static int       serverConnectionCount;
-const static LPCTSTR   lpszPipeName = TEXT("\\\\.\\pipe\\moxaic");
+static pthread_t     serverThreadId;
+static HANDLE        hServerPipe;
+static int           serverConnectionCount;
+const static LPCTSTR lpszPipeName = TEXT("\\\\.\\pipe\\moxaic");
+
+static void GetAnswerToRequest( LPTSTR pchRequest,
+                        LPTSTR pchReply,
+                        LPDWORD pchBytes )
+// This routine is a simple function to print the client request to the console
+// and populate the reply buffer with a default data string. This is where you
+// would put the actual client request processing code that runs in the context
+// of an instance thread. Keep in mind the main thread will continue to wait for
+// and receive other client connections while the instance thread is working.
+{
+  printf( TEXT("Client Request String:\"%s\"\n"), pchRequest );
+
+  // Check the outgoing message to make sure it's not too long for the buffer.
+  if (FAILED(StringCchCopy( pchReply, BUFSIZE, TEXT("default answer from server") )))
+  {
+    *pchBytes = 0;
+    pchReply[0] = 0;
+    printf("StringCchCopy failed, no outgoing message.\n");
+    return;
+  }
+  *pchBytes = (lstrlen(pchReply)+1)*sizeof(TCHAR);
+}
+
+static void* runIPCServerConnection(void* arg) {
+  printf("IPC Server Connection Thread Started\n");
+
+  HANDLE hPipe = *(HANDLE*)arg;
+  HANDLE hHeap      = GetProcessHeap();
+  TCHAR* pchRequest = (TCHAR*)HeapAlloc(hHeap, 0, BUFSIZE*sizeof(TCHAR));
+  TCHAR* pchReply   = (TCHAR*)HeapAlloc(hHeap, 0, BUFSIZE*sizeof(TCHAR));
+
+  DWORD cbBytesRead = 0, cbReplyBytes = 0, cbWritten = 0;
+  BOOL fSuccess = FALSE;
+
+  while (isRunning) {
+    fSuccess = ReadFile(
+        hPipe,        // handle to pipe
+        pchRequest,    // buffer to receive data
+        BUFSIZE*sizeof(TCHAR), // size of buffer
+        &cbBytesRead, // number of bytes read
+        NULL);        // not overlapped I/O
+
+    if (!fSuccess || cbBytesRead == 0)
+    {
+      if (GetLastError() == ERROR_BROKEN_PIPE)
+      {
+        printf(TEXT("InstanceThread: client disconnected.\n"));
+      }
+      else
+      {
+        printf(TEXT("InstanceThread ReadFile failed, GLE=%d.\n"), GetLastError());
+      }
+      break;
+    }
+
+    // Process the incoming message.
+    GetAnswerToRequest(pchRequest, pchReply, &cbReplyBytes);
+
+    // Write the reply to the pipe.
+    fSuccess = WriteFile(
+        hPipe,        // handle to pipe
+        pchReply,     // buffer to write from
+        cbReplyBytes, // number of bytes to write
+        &cbWritten,   // number of bytes written
+        NULL);        // not overlapped I/O
+
+    if (!fSuccess || cbReplyBytes != cbWritten)
+    {
+      printf(TEXT("InstanceThread WriteFile failed, GLE=%d.\n"), GetLastError());
+      break;
+    }
+  }
+  FlushFileBuffers(hPipe);
+  DisconnectNamedPipe(hPipe);
+  CloseHandle(hPipe);
+  return NULL;
+}
 
 static void* runIPCServer(void* arg) {
   while (isRunning) {
+    // this really needs to go to overly to wait two objects
     hServerPipe = CreateNamedPipe(
         lpszPipeName,                // pipe name
         PIPE_ACCESS_DUPLEX,          // read/write access
@@ -22,9 +101,19 @@ static void* runIPCServer(void* arg) {
         BUFSIZE,                     // input buffer size
         0,                           // client time-out
         NULL);                       // default security attribute
-    bool connected = ConnectNamedPipe(hServerPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+    BOOL connected = ConnectNamedPipe(hServerPipe, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
     serverConnectionCount += connected;
     printf("Named Pipe Connection: %s Current Count: %d\n", connected ? "Success" : "Fail", serverConnectionCount);
+
+    if (connected) {
+      pthread_t serverConnectionThreadId;
+      int       result = pthread_create(&serverConnectionThreadId, NULL, runIPCServerConnection, &hServerPipe);
+      if (result != 0) {
+        printf("Named Pipe Connection thread Fail!\n");
+      }
+    } else {
+      CloseHandle(hServerPipe);
+    }
   }
   return NULL;
 }
@@ -37,8 +126,6 @@ void mxcInitializeIPCServer() {
 void mxcShutdownIPCServer() {
   int cancelResult = pthread_cancel(serverThreadId);
   if (cancelResult != 0) perror("IPC server thread cancel Fail!");
-  FlushFileBuffers(hServerPipe);
-  DisconnectNamedPipe(hServerPipe);
   CloseHandle(hServerPipe);
 }
 
@@ -77,9 +164,27 @@ void          mxcConnectIPCNode() {
     printf("SetNamedPipeHandleState failed. GLE=%d\n", GetLastError());
     PANIC("Node pipe open fail!");
   }
+
+  LPTSTR lpvMessage=TEXT("Default message from client.");
+  cbToWrite = (lstrlen(lpvMessage)+1)*sizeof(TCHAR);
+  printf( TEXT("Sending %d byte message: \"%s\"\n"), cbToWrite, lpvMessage);
+
+  BOOL fSuccess = WriteFile(
+      hNodePipe,                  // pipe handle
+      lpvMessage,             // message
+      cbToWrite,              // message length
+      &cbWritten,             // bytes written
+      NULL);                  // not overlapped
+
+  if ( ! fSuccess)
+  {
+    printf( TEXT("WriteFile to pipe failed. GLE=%d\n"), GetLastError() );
+    return;
+  }
+
 }
 
-void mxcShutdownIPCNode()  {
+void mxcShutdownIPCNode() {
   CloseHandle(hNodePipe);
 }
 
