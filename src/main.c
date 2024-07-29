@@ -142,7 +142,7 @@ int main(void) {
   };
   mxcRunNode(&compNodeContext);
 
-  mxcRegisterNodeThread(testNodeHandle, testNode.cmd);
+  mxcRegisterNodeThread(testNodeHandle);
 
   {
     VkDevice device = context.device;

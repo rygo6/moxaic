@@ -1,6 +1,7 @@
 #include "comp_node.h"
 #include "mid_shape.h"
 #include "mid_window.h"
+#include "window.h"
 
 #include <assert.h>
 #include <vulkan/vk_enum_string_helper.h>
@@ -297,28 +298,28 @@ run_loop:
         continue;
 
       // update node model mat... this should happen every frame so user can move it in comp
-      nodesShared[i].transform.rotation = QuatFromEuler(nodesShared[i].transform.euler);
-      nodesShared[i].nodeSetState.model = Mat4FromPosRot(nodesShared[i].transform.position, nodesShared[i].transform.rotation);
+      nodesHot[i].transform.rotation = QuatFromEuler(nodesHot[i].transform.euler);
+      nodesHot[i].nodeSetState.model = Mat4FromPosRot(nodesHot[i].transform.position, nodesHot[i].transform.rotation);
 
       {  // check frame available
         uint64_t value = nodesShared[i].currentTimelineSignal;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
-        if (value > nodesShared[i].lastTimelineSwap) {
+        if (value > nodesHot[i].lastTimelineSwap) {
           {  // update framebuffer for comp
-            nodesShared[i].lastTimelineSwap = value;
+            nodesHot[i].lastTimelineSwap = value;
             const int                  nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
             const VkWriteDescriptorSet writeSets[] = {
-                SET_WRITE_COMP_COLOR(compNodeSet, nodesShared[i].framebufferColorImageViews[nodeFramebufferIndex]),
-                SET_WRITE_COMP_NORMAL(compNodeSet, nodesShared[i].framebufferNormalImageViews[nodeFramebufferIndex]),
-                SET_WRITE_COMP_GBUFFER(compNodeSet, nodesShared[i].framebufferGBufferImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_COLOR(compNodeSet, nodesHot[i].framebufferColorImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_NORMAL(compNodeSet, nodesHot[i].framebufferNormalImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_GBUFFER(compNodeSet, nodesHot[i].framebufferGBufferImageViews[nodeFramebufferIndex]),
             };
             vkUpdateDescriptorSets(device, _countof(writeSets), writeSets, 0, NULL);
-            switch (nodesShared[i].type) {
+            switch (nodesHot[i].type) {
               case MXC_NODE_TYPE_THREAD:
                 const VkImageMemoryBarrier2 barriers[] = {
-                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferColorImages[nodeFramebufferIndex]),
-                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferNormalImages[nodeFramebufferIndex]),
-                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesShared[i].framebufferGBufferImages[nodeFramebufferIndex], 0, VKM_G_BUFFER_LEVELS),
+                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebufferColorImages[nodeFramebufferIndex]),
+                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebufferNormalImages[nodeFramebufferIndex]),
+                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebufferGBufferImages[nodeFramebufferIndex], 0, VKM_G_BUFFER_LEVELS),
                 };
                 CmdPipelineImageBarriers2(cmd, _countof(barriers), barriers);
                 break;
@@ -332,23 +333,23 @@ run_loop:
           }
           {
             // move the global set state that was previously used to render into the node set state to use in comp
-            memcpy(&nodesShared[i].nodeSetState.view, (void*)&nodesShared[i].globalSetState, sizeof(VkmGlobalSetState));
-            nodesShared[i].nodeSetState.ulUV = nodesShared[i].lrUV;
-            nodesShared[i].nodeSetState.lrUV = nodesShared[i].ulUV;
+            memcpy(&nodesHot[i].nodeSetState.view, (void*)&nodesShared[i].globalSetState, sizeof(VkmGlobalSetState));
+            nodesHot[i].nodeSetState.ulUV = nodesShared[i].lrUV;
+            nodesHot[i].nodeSetState.lrUV = nodesShared[i].ulUV;
 
-            memcpy(pCompNodeSetMapped, &nodesShared[i].nodeSetState, sizeof(MxcNodeSetState));
+            memcpy(pCompNodeSetMapped, &nodesHot[i].nodeSetState, sizeof(MxcNodeSetState));
 
             // calc framebuffersize
             const float radius = nodesShared[i].radius;
 
             const vec4 ulbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
-            const vec4 ulbWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, ulbModel);
+            const vec4 ulbWorld = Vec4MulMat4(nodesHot[i].nodeSetState.model, ulbModel);
             const vec4 ulbClip = Vec4MulMat4(globalSetState.view, ulbWorld);
             const vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
             const vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
             const vec4 ulbfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-            const vec4 ulbfWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, ulbfModel);
+            const vec4 ulbfWorld = Vec4MulMat4(nodesHot[i].nodeSetState.model, ulbfModel);
             const vec4 ulbfClip = Vec4MulMat4(globalSetState.view, ulbfWorld);
             const vec3 ulbfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbfClip));
             const vec2 ulfUV = Vec2Clamp(UVFromNDC(ulbfNDC), 0.0f, 1.0f);
@@ -356,13 +357,13 @@ run_loop:
             const vec2 ulUV = Vec2Min(ulfUV, ulbUV);
 
             const vec4 lrbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
-            const vec4 lrbWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, lrbModel);
+            const vec4 lrbWorld = Vec4MulMat4(nodesHot[i].nodeSetState.model, lrbModel);
             const vec4 lrbClip = Vec4MulMat4(globalSetState.view, lrbWorld);
             const vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrbClip));
             const vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
 
             const vec4 lrfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
-            const vec4 lrfWorld = Vec4MulMat4(nodesShared[i].nodeSetState.model, lrfModel);
+            const vec4 lrfWorld = Vec4MulMat4(nodesHot[i].nodeSetState.model, lrfModel);
             const vec4 lrfClip = Vec4MulMat4(globalSetState.view, lrfWorld);
             const vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrfClip));
             const vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);

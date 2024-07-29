@@ -130,20 +130,6 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
     CreateSphereMesh(0.5, 32, 32, &pTestNode->sphereMesh);
-
-    const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-    };
-    VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pTestNode->pool));
-    const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = pTestNode->pool,
-        .commandBufferCount = 1,
-    };
-    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pTestNode->cmd));
-    vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pTestNode->cmd, "TestNode");
   }
 
   {  // Copy needed state
@@ -161,7 +147,7 @@ void* mxcTestNodeThread(const MxcNode* pNodeContext) {
 
   MxcNodeType     nodeType = pNodeContext->nodeType;
   NodeHandle      handle = 0;
-  VkCommandBuffer cmd = pNode->cmd;
+  VkCommandBuffer cmd = pNodeContext->cmd;
 
   VkmGlobalSetState* pGlobalSetMapped = pNode->globalSet.pMapped;
   VkDescriptorSet    globalSet = pNode->globalSet.set;
@@ -175,7 +161,7 @@ void* mxcTestNodeThread(const MxcNode* pNodeContext) {
   VkPipeline       nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
   VkPipeline       nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
 
-  // these shoudl go into a struct so all the images from one frame are side by side
+  // these should go into a struct so all the images from one frame are side by side
   VkFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkImage       framebufferColorImgs[VKM_SWAP_COUNT];
   VkImage       framebufferNormalImgs[VKM_SWAP_COUNT];

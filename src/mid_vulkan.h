@@ -1,8 +1,6 @@
 #pragma once
 
-#include "globals.h"
 #include "mid_math.h"
-#include "window.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -18,9 +16,35 @@
 #include <vulkan/vulkan_win32.h>
 #endif
 
-//----------------------------------------------------------------------------------
-// Globals
-//----------------------------------------------------------------------------------
+//
+/// Debug
+#ifndef MID_DEBUG
+#define MID_DEBUG
+extern void Panic(const char* file, int line, const char* message);
+#define PANIC(message) Panic(__FILE__, __LINE__, message)
+#define REQUIRE(condition, message)        \
+  if (__builtin_expect(!(condition), 0)) { \
+    PANIC(message);                        \
+  }
+#ifdef MID_VULKAN_IMPLEMENTATION
+[[noreturn]] void Panic(const char* file, const int line, const char* message) {
+  fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
+  __builtin_trap();
+}
+#endif
+#endif
+
+//
+/// Globals
+#define VKM_DEBUG_MEMORY_ALLOC
+
+// these values shouldnt be macros
+#ifndef DEFAULT_WIDTH
+#define DEFAULT_WIDTH  1024
+#endif
+#ifndef DEFAULT_HEIGHT
+#define DEFAULT_HEIGHT 1024
+#endif
 
 #define VKM_ALLOC      NULL
 #define VKM_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
@@ -144,7 +168,7 @@ typedef struct VkmGlobalSetState {
   mat4 invProj;
   mat4 invViewProj;
 
-  ALIGN(16)
+  __attribute((aligned(16)))
   ivec2 framebufferSize;
 
 } VkmGlobalSetState;
@@ -801,18 +825,18 @@ void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocation
 
 //
 //// MidVulkan Implementation
-#if defined(MID_VULKAN_IMPLEMENTATION)// || defined(__CLION_IDE__)
+#ifdef MID_VULKAN_IMPLEMENTATION
 
-//#ifdef WIN32
-//void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface) {
-//  const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
-//      .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-//      .hinstance = hInstance,
-//      .hwnd = hWnd,
-//  };
-//  VKM_INSTANCE_FUNC(vkCreateWin32SurfaceKHR);
-//  VKM_REQUIRE(vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
-//}
-//#endif
+#ifdef WIN32
+void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface) {
+  const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+      .hinstance = hInstance,
+      .hwnd = hWnd,
+  };
+  VKM_INSTANCE_FUNC(vkCreateWin32SurfaceKHR);
+  VKM_REQUIRE(vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
+}
+#endif
 
 #endif

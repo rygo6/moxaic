@@ -9,8 +9,6 @@ typedef struct MxcTestNodeCreateInfo {
 } MxcTestNodeCreateInfo;
 
 typedef struct MxcTestNode {
-  VkCommandPool pool;
-
   VkRenderPass     nodeRenderPass;
   VkPipelineLayout stdPipeLayout;
   VkPipeline       basicPipe;
@@ -24,8 +22,6 @@ typedef struct MxcTestNode {
   VkPipeline            nodeProcessBlitDownPipe;
 
   VkDevice device;
-
-  VkCommandBuffer cmd;  // probably want to make this in node context
 
   VkmGlobalSet globalSet;
 

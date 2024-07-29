@@ -34,12 +34,15 @@ typedef struct MxcInterProcessBuffer {
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
-typedef struct MxcNode {
+typedef struct MxcNode { // should be NodeThread and NodeProcess? probably
   MxcNodeType nodeType;
   int         compCycleSkip;
 
   const void* pNode;
   void* (*runFunc)(const struct MxcNode* pNode);
+
+  VkCommandPool pool;
+  VkCommandBuffer cmd;
 
   // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array...
   VkSemaphore compTimeline;
@@ -85,7 +88,7 @@ typedef struct CACHE_ALIGN MxcNodeSetState {
   mat4 invProj;
   mat4 invViewProj;
 
-  // subsequent vulkan ubo values must be aligned to what prior was
+  // subsequent vulkan ubo values must be aligned to what prior was. this needs to be laid out better
   ALIGN(16)
   ivec2 framebufferSize;
   ALIGN(8)
@@ -96,56 +99,53 @@ typedef struct CACHE_ALIGN MxcNodeSetState {
 } MxcNodeSetState;
 
 typedef struct CACHE_ALIGN MxcNodeShared {
-  // shared
-  volatile uint64_t          pendingTimelineSignal;
-  volatile uint64_t          currentTimelineSignal;
+  volatile VkmGlobalSetState globalSetState;
   volatile vec2              ulUV;
   volatile vec2              lrUV;
+  volatile uint64_t          pendingTimelineSignal;
+  volatile uint64_t          currentTimelineSignal;
   volatile float             radius;
-  volatile VkmGlobalSetState globalSetState;
-
-  volatile bool              active;
-
-  // shared!?
-  volatile VkCommandBuffer   cmd;
-  volatile VkSemaphore       nodeTimeline;
-
-  // unshared
+  volatile bool active;
+} MxcNodeShared;
+typedef struct CACHE_ALIGN MxcNodeHot{
+  VkCommandBuffer cmd;
+  VkSemaphore     nodeTimeline;
   uint64_t        lastTimelineSignal;
   uint64_t        lastTimelineSwap;
-  MxcNodeType     type;
   VkmTransform    transform;
   MxcNodeSetState nodeSetState;
+  MxcNodeType     type;
+
   VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
   VkImageView     framebufferNormalImageViews[VKM_SWAP_COUNT];
   VkImageView     framebufferGBufferImageViews[VKM_SWAP_COUNT];
   VkImage         framebufferColorImages[VKM_SWAP_COUNT];
   VkImage         framebufferNormalImages[VKM_SWAP_COUNT];
   VkImage         framebufferGBufferImages[VKM_SWAP_COUNT];
-} MxcNodeShared;
+} MxcNodeHot;
 
 #define MXC_NODE_CAPACITY 256
 typedef uint8_t NodeHandle;
 
-extern NodeHandle           nodesAvailable[MXC_NODE_CAPACITY];
-extern size_t               nodeCount;
-extern MxcNode              nodes[MXC_NODE_CAPACITY];
-extern MxcNodeShared        nodesShared[MXC_NODE_CAPACITY];
-//extern MxcNodeHot        nodesHot[MXC_NODE_CAPACITY];
+extern NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
+extern size_t        nodeCount;
+extern MxcNode       nodes[MXC_NODE_CAPACITY];
+extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
+extern MxcNodeHot    nodesHot[MXC_NODE_CAPACITY];
 
 static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
   for (int i = 0; i < nodeCount; ++i) {
     uint64_t value = nodesShared[i].pendingTimelineSignal;
     __atomic_thread_fence(__ATOMIC_ACQUIRE);
-    if (value > nodesShared[i].lastTimelineSignal) {
-      nodesShared[i].lastTimelineSignal = value;
-      vkmSubmitCommandBuffer(nodesShared[i].cmd, graphicsQueue, nodesShared[i].nodeTimeline, value);
+    if (value > nodesHot[i].lastTimelineSignal) {
+      nodesHot[i].lastTimelineSignal = value;
+      vkmSubmitCommandBuffer(nodesHot[i].cmd, graphicsQueue, nodesHot[i].nodeTimeline, value);
     }
   }
 }
 
 void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle);
-void mxcRegisterNodeThread(NodeHandle handle, VkCommandBuffer cmd);
+void mxcRegisterNodeThread(NodeHandle handle);
 void mxcRunNode(const MxcNode* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
@@ -158,8 +158,8 @@ void mxcCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuff
 
 void mxcInitializeIPCServer();
 void mxcShutdownIPCServer();
-void mxcConnectIPCNode();
-void mxcShutdownIPCNode();
+void mxcConnectNodeIPC();
+void mxcShutdownNodeIPC();
 
 void mxcCreateSharedBuffer();
 void mxcCreateProcess();

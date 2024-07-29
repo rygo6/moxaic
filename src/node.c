@@ -121,7 +121,7 @@ void mxcShutdownIPCServer() {
   WSACleanup();
 }
 
-void mxcConnectIPCNode() {
+void mxcConnectNodeIPC() {
 
   int         result, len;
   char*       message = "Hello from client!";
@@ -174,35 +174,36 @@ ErrorExit:
   WSACleanup();
 }
 
-
-void mxcShutdownIPCNode() {
+void mxcShutdownNodeIPC() {
 }
 
 MxcCompNodeShared compNodeShared;
 
-NodeHandle           nodesAvailable[MXC_NODE_CAPACITY];
-size_t               nodeCount = 0;
-MxcNode              nodes[MXC_NODE_CAPACITY] = {};
-MxcNodeShared        nodesShared[MXC_NODE_CAPACITY] = {};
+NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
+size_t        nodeCount = 0;
+MxcNode       nodes[MXC_NODE_CAPACITY] = {};
+MxcNodeShared nodesShared[MXC_NODE_CAPACITY] = {};
+MxcNodeHot    nodesHot[MXC_NODE_CAPACITY] = {};
 
 void mxcInterProcessImportNode(void* pParam) {
 }
 
-void mxcRegisterNodeThread(NodeHandle handle, VkCommandBuffer cmd) {
+void mxcRegisterNodeThread(NodeHandle handle) {
   nodesShared[handle] = (MxcNodeShared){};
-  nodesShared[handle].cmd = cmd;
   nodesShared[handle].active = true;
   nodesShared[handle].radius = 0.5;
-  nodesShared[handle].type = nodes[handle].nodeType;
-  nodesShared[handle].nodeTimeline = nodes[handle].nodeTimeline;
-  nodesShared[handle].transform.rotation = QuatFromEuler(nodesShared[handle].transform.euler);
+
+  nodesHot[handle].cmd = nodes[handle].cmd;
+  nodesHot[handle].type = nodes[handle].nodeType;
+  nodesHot[handle].nodeTimeline = nodes[handle].nodeTimeline;
+  nodesHot[handle].transform.rotation = QuatFromEuler(nodesHot[handle].transform.euler);
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    nodesShared[handle].framebufferColorImageViews[i] = nodes[handle].framebuffers[i].color.view;
-    nodesShared[handle].framebufferNormalImageViews[i] = nodes[handle].framebuffers[i].normal.view;
-    nodesShared[handle].framebufferGBufferImageViews[i] = nodes[handle].framebuffers[i].gBuffer.view;
-    nodesShared[handle].framebufferColorImages[i] = nodes[handle].framebuffers[i].color.img;
-    nodesShared[handle].framebufferNormalImages[i] = nodes[handle].framebuffers[i].normal.img;
-    nodesShared[handle].framebufferGBufferImages[i] = nodes[handle].framebuffers[i].gBuffer.img;
+    nodesHot[handle].framebufferColorImageViews[i] = nodes[handle].framebuffers[i].color.view;
+    nodesHot[handle].framebufferNormalImageViews[i] = nodes[handle].framebuffers[i].normal.view;
+    nodesHot[handle].framebufferGBufferImageViews[i] = nodes[handle].framebuffers[i].gBuffer.view;
+    nodesHot[handle].framebufferColorImages[i] = nodes[handle].framebuffers[i].color.img;
+    nodesHot[handle].framebufferNormalImages[i] = nodes[handle].framebuffers[i].normal.img;
+    nodesHot[handle].framebufferGBufferImages[i] = nodes[handle].framebuffers[i].gBuffer.img;
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -213,9 +214,23 @@ void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const
   NodeHandle      nodeHandle = 0;
   MxcNode* pNodeContext = &nodes[nodeHandle];
 
-  // create every time? or recycle? recycle probnably better to free resource
+  // Should I create every time? No. Should probably release so it doesn't take up memory
+  const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+      .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+  };
+  VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pNodeContext->pool));
+  const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = pNodeContext->pool,
+      .commandBufferCount = 1,
+  };
+  VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
+  vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
   mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
   vkmCreateTimeline(&pNodeContext->nodeTimeline);
+
 
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;

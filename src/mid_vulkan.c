@@ -1,13 +1,9 @@
-#include "globals.h"
 #include "mid_vulkan.h"
 #include "stb_image.h"
-#include "window.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define VKM_DEBUG_MEMORY_ALLOC
 
 _Thread_local VkInstance instance = VK_NULL_HANDLE;
 _Thread_local VkmContext context;

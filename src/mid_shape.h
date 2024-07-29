@@ -10,7 +10,6 @@ void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh);
 void BindUpdateQuadPatchMesh(const float size, VkmMesh* pMesh);
 void CreateQuadPatchMesh(const float size, VkmMesh* pMesh);
 
-//#define MID_SHAPE_IMPLEMENTATION
 #ifdef MID_SHAPE_IMPLEMENTATION
 void RequestSphereMeshAllocation(const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   VkmMeshCreateInfo info = {

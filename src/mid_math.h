@@ -49,29 +49,14 @@ typedef vec4 quat;
 
 #define VEC_NIL -1
 enum VecComponents {
-  X,
-  Y,
-  Z,
-  W,
+  X,  Y,  Z,  W,
   VEC_COUNT,
 };
 enum MatComponents {
-  C0_R0,
-  C0_R1,
-  C0_R2,
-  C0_R3,
-  C1_R0,
-  C1_R1,
-  C1_R2,
-  C1_R3,
-  C2_R0,
-  C2_R1,
-  C2_R2,
-  C2_R3,
-  C3_R0,
-  C3_R1,
-  C3_R2,
-  C3_R3,
+  C0_R0,  C0_R1,  C0_R2,  C0_R3,
+  C1_R0,  C1_R1,  C1_R2,  C1_R3,
+  C2_R0,  C2_R1,  C2_R2,  C2_R3,
+  C3_R0,  C3_R1,  C3_R2,  C3_R3,
   MAT_COUNT,
 };
 static const float3_vec VEC3_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
