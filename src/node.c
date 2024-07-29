@@ -8,12 +8,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-//#define SOCKET_PATH "moxaic.server.socket"
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
 #define BUFFER_SIZE 128
 
 static pthread_t serverThreadId;
-static int       serverConnectionCount;
+static SOCKET listenSocket = INVALID_SOCKET;
+const static char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
+const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
 static void* runIPCServerConnection(void* arg) {
   printf("IPC Server Connection Thread Started\n");
@@ -21,82 +22,80 @@ static void* runIPCServerConnection(void* arg) {
   return NULL;
 }
 
-SOCKET clientSocket = INVALID_SOCKET;
-SOCKET listenSocket = INVALID_SOCKET;
-
 static void* runIPCServer(void* arg) {
-  int         result = 0;
-  int         sendResult = 0;
+  int         result;
+  char        buffer[BUFFER_SIZE];
   SOCKADDR_UN address = {};
   WSADATA     wsaData = {};
 
   result = WSAStartup(MAKEWORD(2, 2), &wsaData);
   if (result != 0) {
-    printf("WSAStartup failed with error: %d\n", result);
+    printf("WSAStartup failed: %d\n", result);
     goto Exit;
   }
 
   listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
   if (listenSocket == INVALID_SOCKET) {
-    printf("socket failed with error: %d\n", WSAGetLastError());
+    printf("Socket failed: %d\n", WSAGetLastError());
     goto Exit;
   }
 
   address.sun_family = AF_UNIX;
   result = strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1);
   if (result != 0) {
-    printf("address copy failed: %d\n", result);
+    printf("Address copy failed: %d\n", result);
     goto Exit;
   }
 
   result = bind(listenSocket, (struct sockaddr*)&address, sizeof(address));
   if (result == SOCKET_ERROR) {
-    printf("bind failed with error: %d\n", WSAGetLastError());
+    printf("Bind failed: %d\n", WSAGetLastError());
     goto Exit;
   }
 
   result = listen(listenSocket, SOMAXCONN);
   if (result == SOCKET_ERROR) {
-    printf("listen failed with error: %d\n", WSAGetLastError());
+    printf("Listen failed: %d\n", WSAGetLastError());
     goto Exit;
   }
 
   while (isRunning) {
     printf("Accepting connections on: '%s'\n", SOCKET_PATH);
-    clientSocket = accept(listenSocket, NULL, NULL);
+    SOCKET clientSocket = accept(listenSocket, NULL, NULL);
     if (clientSocket == INVALID_SOCKET) {
-      printf("accept failed with error: %d\n", WSAGetLastError());
-      goto Exit;
+      printf("Accept failed: %d\n", WSAGetLastError());
+      continue;
     }
-    printf("Accepted a connection.\n");
+    printf("Accepted Connection.\n");
 
-    char sendBuffer[] = "moxaic compositor connection received";
-    sendResult = send(clientSocket, sendBuffer, (int)strlen(sendBuffer), 0);
+    int len = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
+    if (len == SOCKET_ERROR) {
+      printf("Recv failed: %d", WSAGetLastError());
+      goto ClientExit;
+    }
+
+    buffer[len] = '\0';
+    printf("Received from node: %s\n", buffer);
+    if (strcmp(buffer, nodeIPCAckMessage)) {
+      printf("Unexpected node message.\n");
+      goto ClientExit;
+    }
+
+    int sendResult = send(clientSocket, serverIPCAckMessage, (int)strlen(serverIPCAckMessage), 0);
     if (sendResult == SOCKET_ERROR) {
-      printf("send failed with error: %d\n", WSAGetLastError());
-      goto Exit;
+      printf("Send failed: %d\n", WSAGetLastError());
+      goto ClientExit;
     }
-    printf("Relayed %zu bytes: '%s'\n", strlen(sendBuffer), sendBuffer);
-  }
+    printf("Sent ack message %zu bytes: '%s'\n", strlen(serverIPCAckMessage), serverIPCAckMessage);
 
-  // shutdown the connection.
-  printf("Shutting down\n");
-  result = shutdown(clientSocket, 0);
-  if (result == SOCKET_ERROR) {
-    printf("shutdown failed with error: %d\n", WSAGetLastError());
-    goto Exit;
-  }
-
-Exit:
-  // cleanup
-  if (listenSocket != INVALID_SOCKET) {
-    closesocket(listenSocket);
-  }
-
-  if (clientSocket != INVALID_SOCKET) {
+  ClientExit:
     closesocket(clientSocket);
   }
 
+Exit:
+  if (listenSocket != INVALID_SOCKET) {
+    closesocket(listenSocket);
+  }
   // Analogous to `unlink`
   DeleteFileA(SOCKET_PATH);
   WSACleanup();
@@ -114,33 +113,27 @@ void mxcShutdownIPCServer() {
   if (listenSocket != INVALID_SOCKET) {
     closesocket(listenSocket);
   }
-  if (clientSocket != INVALID_SOCKET) {
-    closesocket(clientSocket);
-  }
   DeleteFileA(SOCKET_PATH);
   WSACleanup();
 }
 
 void mxcConnectNodeIPC() {
-
   int         result, len;
-  char*       message = "Hello from client!";
   char        buffer[BUFFER_SIZE];
+  SOCKET clientSocket = INVALID_SOCKET;
   SOCKADDR_UN address = {};
   WSADATA     wsaData = {};
 
-  // Initialize Winsock
   result = WSAStartup(MAKEWORD(2, 2), &wsaData);
   if (result != 0) {
-    perror("WSAStartup failed");
-    goto ErrorExit;
+    printf("WSAStartup failed with error: %d\n", result);
+    goto Exit;
   }
 
-  // Create a UNIX domain socket
   clientSocket = socket(AF_UNIX, SOCK_STREAM, 0);
   if (clientSocket == INVALID_SOCKET) {
-    perror("Socket creation failed");
-    goto ErrorExit;
+    printf("Socket creation failed: %d\n", WSAGetLastError());
+    goto Exit;
   }
 
   address.sun_family = AF_UNIX;
@@ -148,29 +141,40 @@ void mxcConnectNodeIPC() {
 
   result = connect(clientSocket, (struct sockaddr*)&address, sizeof(address));
   if (result == SOCKET_ERROR) {
-    perror("Connect failed");
-    goto ErrorExit;
+    printf("Connect failed: %d", WSAGetLastError());
+    goto Exit;
   }
-
   printf("Connected to server.\n");
+
+  result = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
+  if (result == SOCKET_ERROR) {
+    printf("Send failed: %d\n", WSAGetLastError());
+    goto Exit;
+  }
 
   len = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
   if (len == SOCKET_ERROR) {
-    perror("Recv failed");
-    goto ErrorExit;
+    printf("Recv failed: %d\n", WSAGetLastError());
+    goto Exit;
   }
 
-  buffer[len] = '\0';  // Null-terminate the string
+  buffer[len] = '\0';
   printf("Received from server: %s\n", buffer);
+  if (strcmp(buffer, serverIPCAckMessage)) {
+    printf("Unexpected server message.\n");
+    goto Exit;
+  }
 
-  //  result = send(clientSocket, message, (int)strlen(message), 0);
-  //  if (result == SOCKET_ERROR) {
-  //    perror("Send failed");
-  //    goto ErrorExit;
-  //  }
+  printf("Waiting to receive node import data.\n");
+  len = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
+  if (len == SOCKET_ERROR) {
+    printf("Recv failed: %d\n", WSAGetLastError());
+    goto Exit;
+  }
 
-ErrorExit:
-  closesocket(clientSocket);
+Exit:
+  if (clientSocket != INVALID_SOCKET)
+    closesocket(clientSocket);
   WSACleanup();
 }
 

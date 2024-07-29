@@ -36,7 +36,7 @@ extern void Panic(const char* file, int line, const char* message);
 
 //
 /// Globals
-#define VKM_DEBUG_MEMORY_ALLOC
+//#define VKM_DEBUG_MEMORY_ALLOC
 
 // these values shouldnt be macros
 #ifndef DEFAULT_WIDTH

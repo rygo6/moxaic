@@ -51,7 +51,7 @@ int main(void) {
 #elif defined(MOXAIC_NODE)
   printf("Moxaic node\n");
   isCompositor = false;
-  mxcConnectIPCNode();
+  mxcConnectNodeIPC();
 #endif
 
   midCreateWindow();
@@ -193,7 +193,7 @@ int main(void) {
 #if defined(MOXAIC_COMPOSITOR)
   mxcShutdownIPCServer();
 #elif defined(MOXAIC_NODE)
-  mxcShutdownIPCNode();
+  mxcShutdownNodeIPC();
 #endif
 
   return EXIT_SUCCESS;
