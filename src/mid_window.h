@@ -7,10 +7,6 @@
 #define NOCOMM
 #include <windows.h>
 
-#ifdef MID_WINDOW_VULKAN
-#include <vulkan/vulkan.h>
-#endif
-
 //
 //// Debug
 #ifndef MID_DEBUG
@@ -91,10 +87,6 @@ void midCreateWindow();
 
 void midWindowLockCursor();
 void midWindowReleaseCursor();
-
-#ifdef MID_WINDOW_VULKAN
-void midCreateVulkanSurface(const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
-#endif
 
 extern double timeQueryMs;
 
@@ -256,17 +248,5 @@ void midWindowReleaseCursor() {
   ReleaseCapture();
   midWindowInput.cursorLocked = false;
 }
-
-#ifdef MID_WINDOW_VULKAN
-void midCreateVulkanSurface(const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface) {
-  const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-      .hinstance = midWindow.hInstance,
-      .hwnd = midWindow.hWnd,
-  };
-  VKM_INSTANCE_FUNC(vkCreateWin32SurfaceKHR);
-  VKM_REQUIRE(vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
-}
-#endif
 
 #endif

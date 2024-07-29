@@ -34,12 +34,12 @@ typedef struct MxcInterProcessBuffer {
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
-typedef struct MxcNodeContext {
+typedef struct MxcNode {
   MxcNodeType nodeType;
   int         compCycleSkip;
 
   const void* pNode;
-  void* (*runFunc)(const struct MxcNodeContext* pNode);
+  void* (*runFunc)(const struct MxcNode* pNode);
 
   // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array...
   VkSemaphore compTimeline;
@@ -59,24 +59,21 @@ typedef struct MxcNodeContext {
   MxcInterProcessBuffer interProcessConsumer;
   MxcInterProcessBuffer interProcessProducer;
 
-} MxcNodeContext;
+} MxcNode;
 
-CACHE_ALIGN typedef struct MxcCompNodeContextShared {
+typedef struct CACHE_ALIGN MxcCompNodeShared {
   // shared
-  volatile uint64_t        pendingTimelineSignal;
-  volatile uint64_t        currentTimelineSignal;
-  volatile VkCommandBuffer cmd;
-  volatile uint64_t        lastTimelineSignal;
-  volatile VkSemaphore     compTimeline;
-  volatile uint32_t        swapIndex;
-  VkSwapchainKHR           chain;
-  VkSemaphore              acquireSemaphore;
-  VkSemaphore              renderCompleteSemaphore;
-} MxcCompNodeContextShared;
+  volatile uint32_t swapIndex;
+  VkCommandBuffer   cmd;
+  VkSemaphore       compTimeline;
+  VkSwapchainKHR    chain;
+  VkSemaphore       acquireSemaphore;
+  VkSemaphore       renderCompleteSemaphore;
+} MxcCompNodeShared;
 
-extern MxcCompNodeContextShared compNodeShared;
+extern MxcCompNodeShared compNodeShared;
 
-typedef struct MxcNodeSetState {
+typedef struct CACHE_ALIGN MxcNodeSetState {
 
   mat4 model;
 
@@ -98,7 +95,7 @@ typedef struct MxcNodeSetState {
 
 } MxcNodeSetState;
 
-CACHE_ALIGN typedef struct MxcNodeContextShared {
+typedef struct CACHE_ALIGN MxcNodeShared {
   // shared
   volatile uint64_t          pendingTimelineSignal;
   volatile uint64_t          currentTimelineSignal;
@@ -106,12 +103,15 @@ CACHE_ALIGN typedef struct MxcNodeContextShared {
   volatile vec2              lrUV;
   volatile float             radius;
   volatile VkmGlobalSetState globalSetState;
-  volatile VkCommandBuffer   cmd;
-  volatile uint64_t          lastTimelineSignal;
-  volatile VkSemaphore       nodeTimeline;
+
   volatile bool              active;
 
+  // shared!?
+  volatile VkCommandBuffer   cmd;
+  volatile VkSemaphore       nodeTimeline;
+
   // unshared
+  uint64_t        lastTimelineSignal;
   uint64_t        lastTimelineSwap;
   MxcNodeType     type;
   VkmTransform    transform;
@@ -122,30 +122,31 @@ CACHE_ALIGN typedef struct MxcNodeContextShared {
   VkImage         framebufferColorImages[VKM_SWAP_COUNT];
   VkImage         framebufferNormalImages[VKM_SWAP_COUNT];
   VkImage         framebufferGBufferImages[VKM_SWAP_COUNT];
-} MxcNodeContextShared;
+} MxcNodeShared;
 
 #define MXC_NODE_CAPACITY 256
-typedef uint8_t             NodeHandle;
-extern size_t               nodeCount;
-extern MxcNodeContext       nodes[MXC_NODE_CAPACITY];
-extern MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY];
+typedef uint8_t NodeHandle;
 
-static inline void mxcSubmitNodeQueues(const VkQueue graphicsQueue) {
+extern NodeHandle           nodesAvailable[MXC_NODE_CAPACITY];
+extern size_t               nodeCount;
+extern MxcNode              nodes[MXC_NODE_CAPACITY];
+extern MxcNodeShared        nodesShared[MXC_NODE_CAPACITY];
+//extern MxcNodeHot        nodesHot[MXC_NODE_CAPACITY];
+
+static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
   for (int i = 0; i < nodeCount; ++i) {
-    {  // submit commands
-      uint64_t value = nodesShared[i].pendingTimelineSignal;
-      __atomic_thread_fence(__ATOMIC_ACQUIRE);
-      if (value > nodesShared[i].lastTimelineSignal) {
-        nodesShared[i].lastTimelineSignal = value;
-        vkmSubmitCommandBuffer(nodesShared[i].cmd, graphicsQueue, nodesShared[i].nodeTimeline, value);
-      }
+    uint64_t value = nodesShared[i].pendingTimelineSignal;
+    __atomic_thread_fence(__ATOMIC_ACQUIRE);
+    if (value > nodesShared[i].lastTimelineSignal) {
+      nodesShared[i].lastTimelineSignal = value;
+      vkmSubmitCommandBuffer(nodesShared[i].cmd, graphicsQueue, nodesShared[i].nodeTimeline, value);
     }
   }
 }
 
-void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle);
-void mxcRegisterNodeContextThread(NodeHandle handle, VkCommandBuffer cmd);
-void mxcRunNodeContext(const MxcNodeContext* pNodeContext);
+void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle);
+void mxcRegisterNodeThread(NodeHandle handle, VkCommandBuffer cmd);
+void mxcRunNode(const MxcNode* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
 void mxcCreateNodeRenderPass();
@@ -164,18 +165,16 @@ void mxcCreateSharedBuffer();
 void mxcCreateProcess();
 
 typedef struct MxcImportParam {
-  uint32_t framebufferWidth;
-  uint32_t framebufferHeight;
-  HANDLE   colorFramebuffer0ExternalHandle;
-  HANDLE   colorFramebuffer1ExternalHandle;
-  HANDLE   normalFramebuffer0ExternalHandle;
-  HANDLE   normalFramebuffer1ExternalHandle;
-  HANDLE   gBufferFramebuffer0ExternalHandle;
-  HANDLE   gBufferFramebuffer1ExternalHandle;
-  HANDLE   depthFramebuffer0ExternalHandle;
-  HANDLE   depthFramebuffer1ExternalHandle;
-  HANDLE   compositorSemaphoreExternalHandle;
-  HANDLE   nodeSemaphoreExternalHandle;
+  HANDLE colorFramebuffer0ExternalHandle;
+  HANDLE colorFramebuffer1ExternalHandle;
+  HANDLE normalFramebuffer0ExternalHandle;
+  HANDLE normalFramebuffer1ExternalHandle;
+  HANDLE gBufferFramebuffer0ExternalHandle;
+  HANDLE gBufferFramebuffer1ExternalHandle;
+  HANDLE depthFramebuffer0ExternalHandle;
+  HANDLE depthFramebuffer1ExternalHandle;
+  HANDLE compositorSemaphoreExternalHandle;
+  HANDLE nodeSemaphoreExternalHandle;
 } MxcImportParam;
 
 typedef void (*MxcInterProcessFuncPtr)(void*);
@@ -189,6 +188,9 @@ static const size_t MXC_INTERPROCESS_TARGET_SIZE[] = {
 static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
     [MXC_INTERPROCESS_TARGET_IMPORT] = mxcInterProcessImportNode,
 };
+
+
+// to use ring buffer?
 static inline void mxcRingBufferEnqeue(MxcRingBuffer* pBuffer, uint8_t target, void* pParam) {
   pBuffer->ringBuffer[pBuffer->head] = target;
   memcpy((void*)(pBuffer->ringBuffer + pBuffer->head + MXC_RING_BUFFER_HEADER_SIZE), pParam, MXC_INTERPROCESS_TARGET_SIZE[target]);

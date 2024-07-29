@@ -26,19 +26,16 @@ SOCKET listenSocket = INVALID_SOCKET;
 
 static void* runIPCServer(void* arg) {
   int         result = 0;
-  char        sendBuffer[] = "af_unix from Windows to WSL!";
   int         sendResult = 0;
   SOCKADDR_UN address = {};
   WSADATA     wsaData = {};
 
-  // Initialize Winsock
   result = WSAStartup(MAKEWORD(2, 2), &wsaData);
   if (result != 0) {
     printf("WSAStartup failed with error: %d\n", result);
     goto Exit;
   }
 
-  // Create a AF_UNIX stream server socket.
   listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
   if (listenSocket == INVALID_SOCKET) {
     printf("socket failed with error: %d\n", WSAGetLastError());
@@ -46,38 +43,41 @@ static void* runIPCServer(void* arg) {
   }
 
   address.sun_family = AF_UNIX;
-  strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1);
+  result = strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1);
+  if (result != 0) {
+    printf("address copy failed: %d\n", result);
+    goto Exit;
+  }
 
-  // Bind the socket to the path.
   result = bind(listenSocket, (struct sockaddr*)&address, sizeof(address));
   if (result == SOCKET_ERROR) {
     printf("bind failed with error: %d\n", WSAGetLastError());
     goto Exit;
   }
 
-  // Listen to start accepting connections.
   result = listen(listenSocket, SOMAXCONN);
   if (result == SOCKET_ERROR) {
     printf("listen failed with error: %d\n", WSAGetLastError());
     goto Exit;
   }
 
-  printf("Accepting connections on: '%s'\n", SOCKET_PATH);
-  // Accept a connection.
-  clientSocket = accept(listenSocket, NULL, NULL);
-  if (clientSocket == INVALID_SOCKET) {
-    printf("accept failed with error: %d\n", WSAGetLastError());
-    goto Exit;
-  }
-  printf("Accepted a connection.\n");
+  while (isRunning) {
+    printf("Accepting connections on: '%s'\n", SOCKET_PATH);
+    clientSocket = accept(listenSocket, NULL, NULL);
+    if (clientSocket == INVALID_SOCKET) {
+      printf("accept failed with error: %d\n", WSAGetLastError());
+      goto Exit;
+    }
+    printf("Accepted a connection.\n");
 
-  // Send some data.
-  sendResult = send(clientSocket, sendBuffer, (int)strlen(sendBuffer), 0);
-  if (sendResult == SOCKET_ERROR) {
-    printf("send failed with error: %d\n", WSAGetLastError());
-    goto Exit;
+    char sendBuffer[] = "moxaic compositor connection received";
+    sendResult = send(clientSocket, sendBuffer, (int)strlen(sendBuffer), 0);
+    if (sendResult == SOCKET_ERROR) {
+      printf("send failed with error: %d\n", WSAGetLastError());
+      goto Exit;
+    }
+    printf("Relayed %zu bytes: '%s'\n", strlen(sendBuffer), sendBuffer);
   }
-  printf("Relayed %zu bytes: '%s'\n", strlen(sendBuffer), sendBuffer);
 
   // shutdown the connection.
   printf("Shutting down\n");
@@ -125,7 +125,7 @@ void mxcConnectIPCNode() {
 
   int         result, len;
   char*       message = "Hello from client!";
-  char buffer[BUFFER_SIZE];
+  char        buffer[BUFFER_SIZE];
   SOCKADDR_UN address = {};
   WSADATA     wsaData = {};
 
@@ -160,14 +160,14 @@ void mxcConnectIPCNode() {
     goto ErrorExit;
   }
 
-  buffer[len] = '\0'; // Null-terminate the string
+  buffer[len] = '\0';  // Null-terminate the string
   printf("Received from server: %s\n", buffer);
 
-//  result = send(clientSocket, message, (int)strlen(message), 0);
-//  if (result == SOCKET_ERROR) {
-//    perror("Send failed");
-//    goto ErrorExit;
-//  }
+  //  result = send(clientSocket, message, (int)strlen(message), 0);
+  //  if (result == SOCKET_ERROR) {
+  //    perror("Send failed");
+  //    goto ErrorExit;
+  //  }
 
 ErrorExit:
   closesocket(clientSocket);
@@ -178,17 +178,18 @@ ErrorExit:
 void mxcShutdownIPCNode() {
 }
 
-MxcCompNodeContextShared compNodeShared;
+MxcCompNodeShared compNodeShared;
 
+NodeHandle           nodesAvailable[MXC_NODE_CAPACITY];
 size_t               nodeCount = 0;
-MxcNodeContext       nodes[MXC_NODE_CAPACITY] = {};
-MxcNodeContextShared nodesShared[MXC_NODE_CAPACITY] = {};
+MxcNode              nodes[MXC_NODE_CAPACITY] = {};
+MxcNodeShared        nodesShared[MXC_NODE_CAPACITY] = {};
 
 void mxcInterProcessImportNode(void* pParam) {
 }
 
-void mxcRegisterNodeContextThread(const NodeHandle handle, const VkCommandBuffer cmd) {
-  nodesShared[handle] = (MxcNodeContextShared){};
+void mxcRegisterNodeThread(NodeHandle handle, VkCommandBuffer cmd) {
+  nodesShared[handle] = (MxcNodeShared){};
   nodesShared[handle].cmd = cmd;
   nodesShared[handle].active = true;
   nodesShared[handle].radius = 0.5;
@@ -205,16 +206,17 @@ void mxcRegisterNodeContextThread(const NodeHandle handle, const VkCommandBuffer
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
-  mxcRunNodeContext(&nodes[handle]);
+  mxcRunNode(&nodes[handle]);
 }
 
-void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle) {
+void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle) {
   NodeHandle      nodeHandle = 0;
-  MxcNodeContext* pNodeContext = &nodes[nodeHandle];
+  MxcNode* pNodeContext = &nodes[nodeHandle];
 
   // create every time? or recycle? recycle probnably better to free resource
   mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
   vkmCreateTimeline(&pNodeContext->nodeTimeline);
+
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
   pNodeContext->pNode = pNode;
@@ -224,7 +226,7 @@ void mxcRequestNodeContextThread(const VkSemaphore compTimeline, void* (*runFunc
   *pNodeHandle = nodeHandle;
 }
 
-void mxcRunNodeContext(const MxcNodeContext* pNodeContext) {
+void mxcRunNode(const MxcNode* pNodeContext) {
   switch (pNodeContext->nodeType) {
     case MXC_NODE_TYPE_THREAD:
       int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))pNodeContext->runFunc, pNodeContext);

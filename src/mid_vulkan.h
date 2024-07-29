@@ -8,13 +8,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <vulkan/vk_enum_string_helper.h>
+#include <vulkan/vulkan.h>
+
+#ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
 #include <windows.h>
-
-#include <vulkan/vk_enum_string_helper.h>
-#include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
+#endif
 
 //----------------------------------------------------------------------------------
 // Globals
@@ -792,3 +794,25 @@ void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+
+#ifdef WIN32
+void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+#endif
+
+//
+//// MidVulkan Implementation
+#if defined(MID_VULKAN_IMPLEMENTATION)// || defined(__CLION_IDE__)
+
+//#ifdef WIN32
+//void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface) {
+//  const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
+//      .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+//      .hinstance = hInstance,
+//      .hwnd = hWnd,
+//  };
+//  VKM_INSTANCE_FUNC(vkCreateWin32SurfaceKHR);
+//  VKM_REQUIRE(vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
+//}
+//#endif
+
+#endif

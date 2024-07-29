@@ -218,7 +218,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
   vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
 }
 
-void* mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
+void* mxcCompNodeThread(const MxcNode* pNodeContext) {
 
   MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
 
@@ -429,7 +429,7 @@ run_loop:
 
       EndCommandBuffer(cmd);
 
-      __atomic_thread_fence(__ATOMIC_RELEASE);
+      __atomic_thread_fence(__ATOMIC_RELEASE); // mainly to release swap index
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
     }
 

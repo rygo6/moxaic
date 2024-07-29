@@ -12,6 +12,7 @@ extern void Panic(const char* file, int line, const char* message);
   }
 
 #define CACHE_ALIGN __attribute((aligned(64)))
+#define PACKED __attribute__((packed))
 #define ALIGN(size) __attribute((aligned(size)))
 
 #define DEFAULT_WIDTH  1024
@@ -26,7 +27,7 @@ extern volatile bool isCompositor;
 extern volatile bool isRunning;
 #define CHECK_RUNNING                      \
   if (__builtin_expect(!(isRunning), 0)) { \
-    return;                                \
+    return NULL;                           \
   }
 
 typedef enum MxcCycle {

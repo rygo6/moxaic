@@ -10,6 +10,7 @@
   __builtin_trap();
 }
 
+#define MID_VULKAN_IMPLEMENTATION
 #include "mid_vulkan.h"
 
 #define MID_SHAPE_IMPLEMENTATION
@@ -57,7 +58,7 @@ int main(void) {
   vkmInitialize();
 
   VkSurfaceKHR surface;
-  midCreateVulkanSurface(VKM_ALLOC, &surface);
+  midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VKM_ALLOC, &surface);
 
   {
     const VkmContextCreateInfo contextCreateInfo = {
@@ -115,7 +116,7 @@ int main(void) {
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
-    mxcRequestNodeContextThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
+    mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
     vkmEndAllocationRequests();
     mxcBindUpdateCompNode(&compNodeInfo, &compNode);
 
@@ -127,21 +128,21 @@ int main(void) {
   }
 
   // move to register method like mxcRegisterCompNodeThread?
-  compNodeShared = (MxcCompNodeContextShared){};
+  compNodeShared = (MxcCompNodeShared){};
   compNodeShared.cmd = compNode.cmd;
   compNodeShared.compTimeline = compNode.timeline;
   compNodeShared.chain = compNode.swap.chain;
   compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
   compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
-  const MxcNodeContext compNodeContext = {
+  const MxcNode compNodeContext = {
       .nodeType = MXC_NODE_TYPE_THREAD,
       .pNode = &compNode,
       .runFunc = mxcCompNodeThread,
       .compTimeline = compNode.timeline,
   };
-  mxcRunNodeContext(&compNodeContext);
+  mxcRunNode(&compNodeContext);
 
-  mxcRegisterNodeContextThread(testNodeHandle, testNode.cmd);
+  mxcRegisterNodeThread(testNodeHandle, testNode.cmd);
 
   {
     VkDevice device = context.device;
@@ -163,7 +164,7 @@ int main(void) {
 
       // Try submitting nodes before waiting to render composite
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-      mxcSubmitNodeQueues(graphicsQueue);
+      mxcSubmitNodeThreadQueues(graphicsQueue);
 
       // wait for recording to be done
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compNodeShared.compTimeline);
@@ -179,7 +180,7 @@ int main(void) {
 
       // Try submitting nodes before waiting to update window again.
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-      mxcSubmitNodeQueues(graphicsQueue);
+      mxcSubmitNodeThreadQueues(graphicsQueue);
     }
   }
 
