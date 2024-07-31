@@ -107,8 +107,6 @@ int main(void) {
   vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
   MxcCompNode compNode;
-  MxcTestNode testNode;
-  NodeHandle  testNodeHandle;
   {
     vkmBeginAllocationRequests();
     const MxcCompNodeCreateInfo compNodeInfo = {
@@ -116,10 +114,14 @@ int main(void) {
         .surface = surface,
     };
     mxcCreateCompNode(&compNodeInfo, &compNode);
-    mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
     vkmEndAllocationRequests();
     mxcBindUpdateCompNode(&compNodeInfo, &compNode);
+  }
 
+  NodeHandle  testNodeHandle;
+  MxcTestNode testNode;
+  {
+    mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
     const MxcTestNodeCreateInfo createInfo = {
         .transform = {0, 0, 0},
         .pFramebuffers = nodes[testNodeHandle].framebuffers,

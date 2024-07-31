@@ -88,6 +88,10 @@ static void* runIPCServer(void* arg) {
     }
     printf("Sent ack message %zu bytes: '%s'\n", strlen(serverIPCAckMessage), serverIPCAckMessage);
 
+    MxcImportParam importParam = {
+
+    };
+
   ClientExit:
     closesocket(clientSocket);
   }
@@ -245,6 +249,22 @@ void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const
   *pNodeHandle = nodeHandle;
 }
 
+void mxcRequestNodeProcess(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle) {
+  NodeHandle      nodeHandle = 0;
+  MxcNode* pNodeContext = &nodes[nodeHandle];
+
+  mxcCreateNodeFramebufferExport(VKM_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebuffers);
+  vkmCreateTimeline(&pNodeContext->nodeTimeline);
+
+  pNodeContext->compTimeline = compTimeline;
+  pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
+  pNodeContext->pNode = pNode;
+  pNodeContext->compCycleSkip = 16;
+  pNodeContext->runFunc = runFunc;
+
+  *pNodeHandle = nodeHandle;
+}
+
 void mxcRunNode(const MxcNode* pNodeContext) {
   switch (pNodeContext->nodeType) {
     case MXC_NODE_TYPE_THREAD:
@@ -372,7 +392,7 @@ void mxcCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFra
     default:
     case VKM_LOCALITY_CONTEXT:          break;
     case VKM_LOCALITY_PROCESS:          break;
-    case VKM_LOCALITY_PROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
+    case VKM_LOCALITY_INTERPROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
 
@@ -423,7 +443,7 @@ void mxcCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuff
     default:
     case VKM_LOCALITY_CONTEXT:          break;
     case VKM_LOCALITY_PROCESS:          break;
-    case VKM_LOCALITY_PROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
+    case VKM_LOCALITY_INTERPROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     textureCreateInfo.debugName = "ExportedColorFramebuffer";

@@ -82,9 +82,9 @@ typedef enum VkmLocality {
   // Used by multiple contexts, but in the same process
   VKM_LOCALITY_PROCESS,
   // Used by nodes external to this context, device and process.
-  VKM_LOCALITY_PROCESS_EXPORTED,
+  VKM_LOCALITY_INTERPROCESS_EXPORTED,
   // Used by nodes external to this context, device and process.
-  VKM_LOCALITY_PROCESS_IMPORTED,
+  VKM_LOCALITY_INTERPROCESS_IMPORTED,
   VKM_LOCALITY_COUNT,
 } VkmLocality;
 
@@ -116,8 +116,14 @@ typedef struct VkmSharedMemory {
 typedef struct VkmTexture {
   VkImage         img;
   VkImageView     view;
+
+  // need to implement texture shared memory
+  // should there be different structs for external, shared, or dedicate?
+  // this is the 'cold' storage so maybe it doesn't matter
   VkmSharedMemory sharedMemory;
+
   VkDeviceMemory  memory;
+
   HANDLE          externalHandle;
 } VkmTexture;
 
@@ -135,9 +141,13 @@ typedef struct VkmMeshCreateInfo {
 } VkmMeshCreateInfo;
 
 typedef struct VkmMesh {
+  // get rid of this? I don't think I have a use for non-shared memory meshes
+  // maybe in an IPC shared mesh? But I cant think of a use for that
   VkDeviceMemory  memory;
-  VkmSharedMemory sharedMemory;
   VkBuffer        buffer;
+
+  VkmSharedMemory sharedMemory;
+
   uint32_t        indexCount;
   VkDeviceSize    indexOffset;
   uint32_t        vertexCount;

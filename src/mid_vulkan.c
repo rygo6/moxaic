@@ -522,7 +522,7 @@ void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   };
   const VkMemoryAllocateInfo memAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : pDedicatedAllocInfo,
+      .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &exportMemAllocInfo : pDedicatedAllocInfo,
       .allocationSize = pMemReqs->size,
       .memoryTypeIndex = memTypeIndex,
   };
@@ -704,7 +704,7 @@ void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture
     default:
     case VKM_LOCALITY_CONTEXT:          break;
     case VKM_LOCALITY_PROCESS:          break;
-    case VKM_LOCALITY_PROCESS_EXPORTED: {
+    case VKM_LOCALITY_INTERPROCESS_EXPORTED: {
       const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .memory = pTexture->memory,
@@ -756,7 +756,7 @@ void vkmCreateStdFramebuffers(const uint32_t framebufferCount, const VkmLocality
     default:
     case VKM_LOCALITY_CONTEXT:          break;
     case VKM_LOCALITY_PROCESS:          break;
-    case VKM_LOCALITY_PROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
+    case VKM_LOCALITY_INTERPROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
   for (int i = 0; i < framebufferCount; ++i) {
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};

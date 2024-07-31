@@ -36,6 +36,7 @@ typedef struct MxcInterProcessBuffer {
 
 typedef struct MxcNode { // should be NodeThread and NodeProcess? probably
   MxcNodeType nodeType;
+
   int         compCycleSkip;
 
   const void* pNode;
@@ -50,19 +51,26 @@ typedef struct MxcNode { // should be NodeThread and NodeProcess? probably
 
   VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
 
-  MxcRingBuffer consumer;
-  MxcRingBuffer producer;
-
   // local thread
   pthread_t threadId;
 
-  // interprocess
-  STARTUPINFO           startupInfo;
-  PROCESS_INFORMATION   processInformation;
-  MxcInterProcessBuffer interProcessConsumer;
-  MxcInterProcessBuffer interProcessProducer;
-
 } MxcNode;
+
+typedef struct MxcNodeProcess {
+  MxcNodeType nodeType;
+
+  int         compCycleSkip;
+
+  // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array...
+  VkSemaphore compTimeline;
+  VkSemaphore nodeTimeline;
+
+  VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
+
+  // interprocess
+  HANDLE processHandle;
+
+} MxcNodeProcess;
 
 typedef struct CACHE_ALIGN MxcCompNodeShared {
   // shared
