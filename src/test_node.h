@@ -5,7 +5,7 @@
 
 typedef struct MxcTestNodeCreateInfo {
   VkmTransform        transform;
-  VkmNodeFramebuffer* pFramebuffers;
+  MxcNodeFramebuffer* pFramebuffers;
 } MxcTestNodeCreateInfo;
 
 typedef struct MxcTestNode {
@@ -13,6 +13,7 @@ typedef struct MxcTestNode {
   VkPipelineLayout stdPipeLayout;
   VkPipeline       basicPipe;
 
+  VkFramebuffer framebuffer;
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkImageView    gBufferMipViews[VKM_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
 

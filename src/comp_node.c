@@ -192,6 +192,8 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 
     vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pNode->swap);
     vkmCreateStdFramebuffers(VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
+    vkmCreateFramebuffer(context.renderPass, &pNode->framebuffer);
+    vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
     vkmCreateTimeline(&pNode->timeline);
   }
 
@@ -251,12 +253,15 @@ void* mxcCompNodeThread(const MxcNode* pNodeContext) {
 
   VkQueryPool timeQueryPool = pNode->timeQueryPool;
 
-  int           framebufferIndex = 0;
-  VkFramebuffer framebuffers[VKM_SWAP_COUNT];
-  VkImage       frameBufferColorImages[VKM_SWAP_COUNT];
+  int                framebufferIndex = 0;
+  VkFramebuffer      framebuffer = pNode->framebuffer;
+  VkmFramebufferView framebufferViews[VKM_SWAP_COUNT];
+  VkImage            frameBufferColorImages[VKM_SWAP_COUNT];
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    framebuffers[i] = pNode->framebuffers[i].framebuffer;
-    frameBufferColorImages[i] = pNode->framebuffers[i].color.img;
+    framebufferViews[i].color = pNode->framebuffers[i].color.view;
+    framebufferViews[i].normal = pNode->framebuffers[i].normal.view;
+    framebufferViews[i].depth = pNode->framebuffers[i].depth.view;
+    frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
   }
 
   // just making sure atomics are only using barriers, not locks
@@ -309,17 +314,17 @@ run_loop:
             nodesHot[i].lastTimelineSwap = value;
             const int                  nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
             const VkWriteDescriptorSet writeSets[] = {
-                SET_WRITE_COMP_COLOR(compNodeSet, nodesHot[i].framebufferColorImageViews[nodeFramebufferIndex]),
-                SET_WRITE_COMP_NORMAL(compNodeSet, nodesHot[i].framebufferNormalImageViews[nodeFramebufferIndex]),
-                SET_WRITE_COMP_GBUFFER(compNodeSet, nodesHot[i].framebufferGBufferImageViews[nodeFramebufferIndex]),
+                SET_WRITE_COMP_COLOR(compNodeSet, nodesHot[i].framebuffers[nodeFramebufferIndex].colorView),
+                SET_WRITE_COMP_NORMAL(compNodeSet, nodesHot[i].framebuffers[nodeFramebufferIndex].normalView),
+                SET_WRITE_COMP_GBUFFER(compNodeSet, nodesHot[i].framebuffers[nodeFramebufferIndex].gBufferView),
             };
             vkUpdateDescriptorSets(device, _countof(writeSets), writeSets, 0, NULL);
             switch (nodesHot[i].type) {
               case MXC_NODE_TYPE_THREAD:
                 const VkImageMemoryBarrier2 barriers[] = {
-                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebufferColorImages[nodeFramebufferIndex]),
-                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebufferNormalImages[nodeFramebufferIndex]),
-                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebufferGBufferImages[nodeFramebufferIndex], 0, VKM_G_BUFFER_LEVELS),
+                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebuffers[nodeFramebufferIndex].colorImage),
+                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebuffers[nodeFramebufferIndex].normalImage),
+                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebuffers[nodeFramebufferIndex].gBufferImage, 0, VKM_G_BUFFER_LEVELS),
                 };
                 CmdPipelineImageBarriers2(cmd, _countof(barriers), barriers);
                 break;
@@ -391,7 +396,7 @@ run_loop:
       ResetQueryPool(device, timeQueryPool, 0, 2);
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-      vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffers[framebufferIndex]);
+      vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffer, framebufferViews[framebufferIndex]);
 
       CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipe);
       CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);

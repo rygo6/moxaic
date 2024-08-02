@@ -93,12 +93,14 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
 
     mxcCreateNodeFramebufferImport(VKM_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebuffers);
+    vkmCreateFramebuffer(context.nodeRenderPass, &pTestNode->framebuffer);
+    vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
 
     for (uint32_t bufferIndex = 0; bufferIndex < VKM_SWAP_COUNT; ++bufferIndex) {
       for (uint32_t mipIndex = 0; mipIndex < VKM_G_BUFFER_LEVELS; ++mipIndex) {
         const VkImageViewCreateInfo imageViewCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = pTestNode->framebuffers[bufferIndex].gBuffer.img,
+            .image = pTestNode->framebuffers[bufferIndex].gBuffer.image,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = VKM_G_BUFFER_FORMAT,
             .subresourceRange = {
@@ -162,7 +164,8 @@ void* mxcTestNodeThread(const MxcNode* pNodeContext) {
   VkPipeline       nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
 
   // these should go into a struct so all the images from one frame are side by side
-  VkFramebuffer framebuffers[VKM_SWAP_COUNT];
+  VkFramebuffer framebuffer = pNode->framebuffer;
+  VkmFramebufferView framebufferViews[VKM_SWAP_COUNT];
   VkImage       framebufferColorImgs[VKM_SWAP_COUNT];
   VkImage       framebufferNormalImgs[VKM_SWAP_COUNT];
   VkImage       framebufferDepthImgs[VKM_SWAP_COUNT];
@@ -170,11 +173,14 @@ void* mxcTestNodeThread(const MxcNode* pNodeContext) {
   VkImageView   framebufferDepthImgViews[VKM_SWAP_COUNT];
   VkImageView   framebufferGBufferImgViews[VKM_SWAP_COUNT];
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    framebuffers[i] = pNode->framebuffers[i].framebuffer;
-    framebufferColorImgs[i] = pNode->framebuffers[i].color.img;
-    framebufferNormalImgs[i] = pNode->framebuffers[i].normal.img;
-    framebufferDepthImgs[i] = pNode->framebuffers[i].depth.img;
-    framebufferGBufferImgs[i] = pNode->framebuffers[i].gBuffer.img;
+    framebufferViews[i].color = pNode->framebuffers[i].color.view;
+    framebufferViews[i].normal = pNode->framebuffers[i].normal.view;
+    framebufferViews[i].depth = pNode->framebuffers[i].depth.view;
+
+    framebufferColorImgs[i] = pNode->framebuffers[i].color.image;
+    framebufferNormalImgs[i] = pNode->framebuffers[i].normal.image;
+    framebufferDepthImgs[i] = pNode->framebuffers[i].depth.image;
+    framebufferGBufferImgs[i] = pNode->framebuffers[i].gBuffer.image;
 
     framebufferDepthImgViews[i] = pNode->framebuffers[i].depth.view;
     framebufferGBufferImgViews[i] = pNode->framebuffers[i].gBuffer.view;
@@ -265,7 +271,7 @@ run_loop:
   }
 
   {  // this is really all that'd be user exposed....
-    vkmCmdBeginPass(cmd, nodeRenderPass, (VkClearColorValue){0, 0, 0.1, 0}, framebuffers[framebufferIndex]);
+    vkmCmdBeginPass(cmd, nodeRenderPass, (VkClearColorValue){0, 0, 0.1, 0}, framebuffer, framebufferViews[framebufferIndex]);
 
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, basicPipe);
     CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeLayout, VKM_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);

@@ -34,43 +34,34 @@ typedef struct MxcInterProcessBuffer {
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
-typedef struct MxcNode { // should be NodeThread and NodeProcess? probably
+typedef struct MxcNodeFramebuffer {
+  VkmTexture color;
+  //I should probably write normal in gbuffer
+  VkmTexture normal;
+  VkmTexture gBuffer;
+} MxcNodeFramebuffer;
+
+typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
   MxcNodeType nodeType;
 
-  int         compCycleSkip;
+  int compCycleSkip;
 
   const void* pNode;
   void* (*runFunc)(const struct MxcNode* pNode);
 
-  VkCommandPool pool;
+  VkCommandPool   pool;
   VkCommandBuffer cmd;
 
-  // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array...
+  // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array... no it will have different handle in diff process
   VkSemaphore compTimeline;
   VkSemaphore nodeTimeline;
 
-  VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
+  MxcNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
 
-  // local thread
   pthread_t threadId;
+  HANDLE    processHandle;
 
 } MxcNode;
-
-typedef struct MxcNodeProcess {
-  MxcNodeType nodeType;
-
-  int         compCycleSkip;
-
-  // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array...
-  VkSemaphore compTimeline;
-  VkSemaphore nodeTimeline;
-
-  VkmNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
-
-  // interprocess
-  HANDLE processHandle;
-
-} MxcNodeProcess;
 
 typedef struct CACHE_ALIGN MxcCompNodeShared {
   // shared
@@ -113,23 +104,34 @@ typedef struct CACHE_ALIGN MxcNodeShared {
   volatile uint64_t          pendingTimelineSignal;
   volatile uint64_t          currentTimelineSignal;
   volatile float             radius;
-  volatile bool active;
+  volatile bool              active;
 } MxcNodeShared;
-typedef struct CACHE_ALIGN MxcNodeHot{
-  VkCommandBuffer cmd;
-  VkSemaphore     nodeTimeline;
-  uint64_t        lastTimelineSignal;
-  uint64_t        lastTimelineSwap;
-  VkmTransform    transform;
-  MxcNodeSetState nodeSetState;
-  MxcNodeType     type;
 
-  VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
-  VkImageView     framebufferNormalImageViews[VKM_SWAP_COUNT];
-  VkImageView     framebufferGBufferImageViews[VKM_SWAP_COUNT];
-  VkImage         framebufferColorImages[VKM_SWAP_COUNT];
-  VkImage         framebufferNormalImages[VKM_SWAP_COUNT];
-  VkImage         framebufferGBufferImages[VKM_SWAP_COUNT];
+typedef struct MxcNodeFramebufferHot {
+  VkImage     colorImage;
+  VkImage     normalImage;
+  VkImage     gBufferImage;
+  VkImageView colorView;
+  VkImageView normalView;
+  VkImageView gBufferView;
+} MxcNodeFramebufferHot;
+typedef struct CACHE_ALIGN MxcNodeHot {
+  VkCommandBuffer       cmd;
+  VkSemaphore           nodeTimeline;
+  uint64_t              lastTimelineSignal;
+  uint64_t              lastTimelineSwap;
+  VkmTransform          transform;
+  MxcNodeSetState       nodeSetState;
+  MxcNodeFramebufferHot framebuffers[VKM_SWAP_COUNT];
+  MxcNodeType           type;
+
+
+  //  VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
+  //  VkImageView     framebufferNormalImageViews[VKM_SWAP_COUNT];
+  //  VkImageView     framebufferGBufferImageViews[VKM_SWAP_COUNT];
+  //  VkImage         framebufferColorImages[VKM_SWAP_COUNT];
+  //  VkImage         framebufferNormalImages[VKM_SWAP_COUNT];
+  //  VkImage         framebufferGBufferImages[VKM_SWAP_COUNT];
 } MxcNodeHot;
 
 #define MXC_NODE_CAPACITY 256
@@ -158,8 +160,8 @@ void mxcRunNode(const MxcNode* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
 void mxcCreateNodeRenderPass();
-void mxcCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
-void mxcCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers);
+void mxcCreateNodeFramebufferImport(const VkmLocality locality, const MxcNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
+void mxcCreateNodeFramebufferExport(const VkmLocality locality, MxcNodeFramebuffer* pNodeFramebuffers);
 
 // Process IPC
 

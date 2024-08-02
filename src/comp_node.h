@@ -38,6 +38,7 @@ typedef struct MxcCompNode {
 
   VkmMesh quadMesh;
 
+  VkFramebuffer framebuffer;
   VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
   VkmSwap        swap;
   VkSemaphore    timeline;

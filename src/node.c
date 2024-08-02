@@ -206,12 +206,12 @@ void mxcRegisterNodeThread(NodeHandle handle) {
   nodesHot[handle].nodeTimeline = nodes[handle].nodeTimeline;
   nodesHot[handle].transform.rotation = QuatFromEuler(nodesHot[handle].transform.euler);
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    nodesHot[handle].framebufferColorImageViews[i] = nodes[handle].framebuffers[i].color.view;
-    nodesHot[handle].framebufferNormalImageViews[i] = nodes[handle].framebuffers[i].normal.view;
-    nodesHot[handle].framebufferGBufferImageViews[i] = nodes[handle].framebuffers[i].gBuffer.view;
-    nodesHot[handle].framebufferColorImages[i] = nodes[handle].framebuffers[i].color.img;
-    nodesHot[handle].framebufferNormalImages[i] = nodes[handle].framebuffers[i].normal.img;
-    nodesHot[handle].framebufferGBufferImages[i] = nodes[handle].framebuffers[i].gBuffer.img;
+    nodesHot[handle].framebuffers[i].colorImage = nodes[handle].framebuffers[i].color.image;
+    nodesHot[handle].framebuffers[i].normalImage = nodes[handle].framebuffers[i].normal.image;
+    nodesHot[handle].framebuffers[i].gBufferImage = nodes[handle].framebuffers[i].gBuffer.image;
+    nodesHot[handle].framebuffers[i].colorView = nodes[handle].framebuffers[i].color.view;
+    nodesHot[handle].framebuffers[i].normalView = nodes[handle].framebuffers[i].normal.view;
+    nodesHot[handle].framebuffers[i].gBufferView = nodes[handle].framebuffers[i].gBuffer.view;
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -290,7 +290,7 @@ void mxcCreateNodeRenderPass() {
       .pAttachments = (const VkAttachmentDescription2[]){
           [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
+              .format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
               .samples = VK_SAMPLE_COUNT_1_BIT,
               .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
               .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -301,7 +301,7 @@ void mxcCreateNodeRenderPass() {
           },
           [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+              .format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX],
               .samples = VK_SAMPLE_COUNT_1_BIT,
               .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
               .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -312,7 +312,7 @@ void mxcCreateNodeRenderPass() {
           },
           [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-              .format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+              .format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX],
               .samples = VK_SAMPLE_COUNT_1_BIT,
               .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
               .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -376,9 +376,10 @@ void mxcCreateNodeRenderPass() {
       },
   };
   VKM_REQUIRE(vkCreateRenderPass2(context.device, &renderPassCreateInfo2, VKM_ALLOC, &context.nodeRenderPass));
+  vkmSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)context.nodeRenderPass, "NodeRenderPass");
 }
 
-void mxcCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers) {
+void mxcCreateNodeFramebufferImport(const VkmLocality locality, const MxcNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -397,38 +398,38 @@ void mxcCreateNodeFramebufferImport(const VkmLocality locality, const VkmNodeFra
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
 
     pFrameBuffers[i].color = pNodeFramebuffers[i].color;
-    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.img, "ImportedColorFramebuffer");
+    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.image, "ImportedColorFramebuffer");
     pFrameBuffers[i].normal = pNodeFramebuffers[i].normal;
-    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.img, "ImportedNormalFramebuffer");
+    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.image, "ImportedNormalFramebuffer");
     pFrameBuffers[i].gBuffer = pNodeFramebuffers[i].gBuffer;
-    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gBuffer.img, "ImportedGBufferFramebuffer");
+    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gBuffer.image, "ImportedGBufferFramebuffer");
 
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
     textureCreateInfo.debugName = "ImportedDepthFramebuffer";
-    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
-    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    textureCreateInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     vkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].depth);
 
-    const VkFramebufferCreateInfo framebufferCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .renderPass = context.nodeRenderPass,
-        .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
-        .pAttachments = (const VkImageView[]){
-            [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = pFrameBuffers[i].color.view,
-            [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = pFrameBuffers[i].normal.view,
-            [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = pFrameBuffers[i].depth.view,
-        },
-        .width = DEFAULT_WIDTH,
-        .height = DEFAULT_HEIGHT,
-        .layers = 1,
-    };
-    VKM_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
-    VKM_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
+//    const VkFramebufferCreateInfo framebufferCreateInfo = {
+//        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+//        .renderPass = context.nodeRenderPass,
+//        .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+//        .pAttachments = (const VkImageView[]){
+//            [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = pFrameBuffers[i].color.view,
+//            [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = pFrameBuffers[i].normal.view,
+//            [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = pFrameBuffers[i].depth.view,
+//        },
+//        .width = DEFAULT_WIDTH,
+//        .height = DEFAULT_HEIGHT,
+//        .layers = 1,
+//    };
+//    VKM_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
+//    VKM_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
   }
 }
-void mxcCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuffer* pNodeFramebuffers) {
+void mxcCreateNodeFramebufferExport(const VkmLocality locality, MxcNodeFramebuffer* pNodeFramebuffers) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -447,13 +448,13 @@ void mxcCreateNodeFramebufferExport(const VkmLocality locality, VkmNodeFramebuff
   }
   for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
     textureCreateInfo.debugName = "ExportedColorFramebuffer";
-    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    textureCreateInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     vkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].color);
 
     textureCreateInfo.debugName = "ExportedNormalFramebuffer";
-    textureCreateInfo.imageCreateInfo.format = VKM_PASS_STD_FORMATS[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    textureCreateInfo.imageCreateInfo.usage = VKM_PASS_STD_USAGES[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    textureCreateInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
+    textureCreateInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
     vkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].normal);
 
     textureCreateInfo.debugName = "ExportedGBufferFramebuffer";

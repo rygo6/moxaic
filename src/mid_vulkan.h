@@ -114,8 +114,10 @@ typedef struct VkmSharedMemory {
 } VkmSharedMemory;
 
 typedef struct VkmTexture {
-  VkImage         img;
+  VkImage         image;
   VkImageView     view;
+
+  // store more info? probably...
 
   // need to implement texture shared memory
   // should there be different structs for external, shared, or dedicate?
@@ -123,7 +125,6 @@ typedef struct VkmTexture {
   VkmSharedMemory sharedMemory;
 
   VkDeviceMemory  memory;
-
   HANDLE          externalHandle;
 } VkmTexture;
 
@@ -158,16 +159,28 @@ typedef struct VkmFramebuffer {
   VkmTexture    color;
   VkmTexture    normal;
   VkmTexture    depth;
-  VkmTexture    gBuffer;
-  VkFramebuffer framebuffer;
-  VkSemaphore   renderCompleteSemaphore;
+  // store some more data here
+  VkmTexture    gBuffer; // get rid of this
 } VkmFramebuffer;
+typedef struct VkmFramebufferImage {
+  VkImage    color;
+  VkImage    normal;
+  VkImage    depth;
+} VkmFramebufferImage;
+typedef struct VkmFramebufferView {
+  VkImageView    color;
+  VkImageView    normal;
+  VkImageView    depth;
+} VkmFramebufferView;
 
-typedef struct VkmNodeFramebuffer {
-  VkmTexture color;
-  VkmTexture normal;
-  VkmTexture gBuffer;
-} VkmNodeFramebuffer;
+//typedef struct VkmFramebufferHot {
+//  VkmTexture    color;
+//  VkmTexture    normal;
+//  VkmTexture    depth;
+//  VkmTexture    gBuffer;
+//  VkFramebuffer framebuffer;
+//  VkSemaphore   renderCompleteSemaphore;
+//} VkmFramebufferHot;
 
 typedef struct VkmGlobalSetState {
   mat4 view;
@@ -260,12 +273,12 @@ enum VkmPipeSetStdIndices {
   VKM_PIPE_SET_STD_OBJECT_INDEX,
   VKM_PIPE_SET_STD_INDEX_COUNT,
 };
-static const VkFormat VKM_PASS_STD_FORMATS[] = {
+static const VkFormat vkmPassFormats[] = {
     [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
     [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
 };
-static const VkImageUsageFlags VKM_PASS_STD_USAGES[] = {
+static const VkImageUsageFlags vkmPassUsages[] = {
     [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
     [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
@@ -541,9 +554,18 @@ VKM_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const 
   };
   func(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer) {
+VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer, const VkmFramebufferView framebufferView) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+      .pNext = &(VkRenderPassAttachmentBeginInfo){
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
+          .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+          .pAttachments = (const VkImageView[]){
+              [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = framebufferView.color,
+              [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = framebufferView.normal,
+              [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = framebufferView.depth,
+          },
+      },
       .renderPass = renderPass,
       .framebuffer = framebuffer,
       .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
@@ -701,7 +723,7 @@ VKM_INLINE void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, 
       .pObjectName = pDebugName,
   };
   VKM_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
-  vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo);
+  VKM_REQUIRE(vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo));
 }
 
 //----------------------------------------------------------------------------------
@@ -788,6 +810,7 @@ void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 void vkmCreateStdRenderPass();
 void vkmCreateStdPipeLayout();
 void vkmCreateStdFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
 
 void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
 
