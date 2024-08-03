@@ -5,7 +5,7 @@
 
 typedef struct MxcTestNodeCreateInfo {
   VkmTransform        transform;
-  MxcNodeFramebuffer* pFramebuffers;
+  MxcNodeFramebufferTexture* pFramebuffers;
 } MxcTestNodeCreateInfo;
 
 typedef struct MxcTestNode {
@@ -13,9 +13,9 @@ typedef struct MxcTestNode {
   VkPipelineLayout stdPipeLayout;
   VkPipeline       basicPipe;
 
-  VkFramebuffer framebuffer;
-  VkmFramebuffer framebuffers[VKM_SWAP_COUNT];
-  VkImageView    gBufferMipViews[VKM_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
+  VkFramebuffer             framebuffer;
+  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+  VkImageView               gBufferMipViews[MIDVK_SWAP_COUNT][VKM_G_BUFFER_LEVELS];
 
   VkDescriptorSetLayout nodeProcessSetLayout;
   VkPipelineLayout      nodeProcessPipeLayout;
@@ -29,7 +29,7 @@ typedef struct MxcTestNode {
   VkDescriptorSet checkerMaterialSet;
   VkDescriptorSet sphereObjectSet;
 
-  VkmTexture checkerTexture;
+  MidVkTexture checkerTexture;
 
   VkmMesh      sphereMesh;
   VkmTransform sphereTransform;

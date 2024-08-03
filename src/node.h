@@ -34,12 +34,26 @@ typedef struct MxcInterProcessBuffer {
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
-typedef struct MxcNodeFramebuffer {
-  VkmTexture color;
+typedef struct MxcNodeFramebufferTexture {
+  MidVkTexture color;
   //I should probably write normal in gbuffer
-  VkmTexture normal;
-  VkmTexture gBuffer;
-} MxcNodeFramebuffer;
+  MidVkTexture normal;
+  MidVkTexture depth;
+
+  MidVkTexture gBuffer;
+} MxcNodeFramebufferTexture;
+typedef struct MxcFramebufferImage {
+  VkImage    color;
+  VkImage    normal;
+  VkImage    depth;
+  VkImage    gBuffer;
+} MxcFramebufferImage;
+typedef struct MxcFramebufferView {
+  VkImageView    color;
+  VkImageView    normal;
+  VkImageView    depth;
+  VkImageView    gBuffer;
+} MxcFramebufferView;
 
 typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
   MxcNodeType nodeType;
@@ -56,7 +70,7 @@ typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but
   VkSemaphore compTimeline;
   VkSemaphore nodeTimeline;
 
-  MxcNodeFramebuffer framebuffers[VKM_SWAP_COUNT];
+  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
 
   pthread_t threadId;
   HANDLE    processHandle;
@@ -122,7 +136,7 @@ typedef struct CACHE_ALIGN MxcNodeHot {
   uint64_t              lastTimelineSwap;
   VkmTransform          transform;
   MxcNodeSetState       nodeSetState;
-  MxcNodeFramebufferHot framebuffers[VKM_SWAP_COUNT];
+  MxcNodeFramebufferHot framebuffers[MIDVK_SWAP_COUNT];
   MxcNodeType           type;
 
 
@@ -160,12 +174,10 @@ void mxcRunNode(const MxcNode* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
 void mxcCreateNodeRenderPass();
-void mxcCreateNodeFramebufferImport(const VkmLocality locality, const MxcNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers);
-void mxcCreateNodeFramebufferExport(const VkmLocality locality, MxcNodeFramebuffer* pNodeFramebuffers);
+void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures);
+void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures);
 
 // Process IPC
-
-
 void mxcInitializeIPCServer();
 void mxcShutdownIPCServer();
 void mxcConnectNodeIPC();

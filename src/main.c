@@ -58,7 +58,7 @@ int main(void) {
   vkmInitialize();
 
   VkSurfaceKHR surface;
-  midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VKM_ALLOC, &surface);
+  midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &surface);
 
   {
     const VkmContextCreateInfo contextCreateInfo = {
@@ -124,7 +124,7 @@ int main(void) {
     mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
     const MxcTestNodeCreateInfo createInfo = {
         .transform = {0, 0, 0},
-        .pFramebuffers = nodes[testNodeHandle].framebuffers,
+        .pFramebuffers = nodes[testNodeHandle].framebufferTextures,
     };
     mxcCreateTestNode(&createInfo, &testNode);
   }

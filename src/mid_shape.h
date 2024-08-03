@@ -8,7 +8,7 @@ void CreateSphereMesh(const float radius, const int slicesCount, const int stack
 void CreateQuadMesh(const float size, VkmMesh* pMesh);
 void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh);
 void BindUpdateQuadPatchMesh(const float size, VkmMesh* pMesh);
-void CreateQuadPatchMesh(const float size, VkmMesh* pMesh);
+void midCreateQuadPatchMesh(const float size, VkmMesh* pMesh);
 
 #ifdef MID_SHAPE_IMPLEMENTATION
 void RequestSphereMeshAllocation(const int slicesCount, const int stackCount, VkmMesh* pMesh) {
@@ -104,7 +104,7 @@ void BindUpdateQuadPatchMesh(const float size, VkmMesh* pMesh) {
   QUAD_PATCH_MESH_VERTICES_INDICES
   vkmBindUpdateMeshSharedMemory(&info, pMesh);
 }
-void CreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
+void midCreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
   QUAD_PATCH_MESH_INFO
   QUAD_PATCH_MESH_VERTICES_INDICES
   vkmCreateMesh(&info, pMesh);

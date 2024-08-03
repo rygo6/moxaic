@@ -104,7 +104,7 @@ static void CreateCompSetLayout(const MxcCompMode compMode, VkDescriptorSetLayou
           },
       },
   };
-  VKM_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, VKM_ALLOC, pLayout));
+  MIDVK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
 }
 
 enum PipeSetCompIndices {
@@ -121,7 +121,7 @@ static void CreateCompPipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPi
           [PIPE_SET_COMP_NODE_INDEX] = nodeSetLayout,
       },
   };
-  VKM_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, VKM_ALLOC, pNodePipeLayout));
+  MIDVK_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, MIDVK_ALLOC, pNodePipeLayout));
 }
 
 static const VkmImageBarrier* VKM_IMG_BARRIER_COMP_SHADER_READ = &(const VkmImageBarrier){
@@ -160,7 +160,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
     };
-    VKM_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, VKM_ALLOC, &pNode->timeQueryPool));
+    MIDVK_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
 
     // global set
     vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipeLayout.globalSetLayout, &pNode->globalSet.set);
@@ -187,11 +187,11 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .commandPool = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool,  // so we may want to get rid of global pools
         .commandBufferCount = 1,
     };
-    VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNode->cmd));
+    MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNode->cmd));
     vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNode->cmd, "CompCmd");
 
     vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pNode->swap);
-    vkmCreateStdFramebuffers(VKM_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
+    midVkCreateFramebufferTexture(MIDVK_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
     vkmCreateFramebuffer(context.renderPass, &pNode->framebuffer);
     vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
     vkmCreateTimeline(&pNode->timeline);
@@ -215,9 +215,9 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
       break;
     default: PANIC("CompMode not supported!");
   }
-  VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
+  MIDVK_REQUIRE(vkBindBufferMemory(context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
-  VKM_REQUIRE(vkBindBufferMemory(context.device, pNode->compNodeSetBuffer, deviceMemory[pNode->compNodeSetMemory.type], pNode->compNodeSetMemory.offset));
+  MIDVK_REQUIRE(vkBindBufferMemory(context.device, pNode->compNodeSetBuffer, deviceMemory[pNode->compNodeSetMemory.type], pNode->compNodeSetMemory.offset));
   vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
 }
 
@@ -255,9 +255,9 @@ void* mxcCompNodeThread(const MxcNode* pNodeContext) {
 
   int                framebufferIndex = 0;
   VkFramebuffer      framebuffer = pNode->framebuffer;
-  VkmFramebufferView framebufferViews[VKM_SWAP_COUNT];
-  VkImage            frameBufferColorImages[VKM_SWAP_COUNT];
-  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
+  MidVkFramebufferView framebufferViews[MIDVK_SWAP_COUNT];
+  VkImage            frameBufferColorImages[MIDVK_SWAP_COUNT];
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     framebufferViews[i].color = pNode->framebuffers[i].color.view;
     framebufferViews[i].normal = pNode->framebuffers[i].normal.view;
     framebufferViews[i].depth = pNode->framebuffers[i].depth.view;
@@ -271,20 +271,20 @@ void* mxcCompNodeThread(const MxcNode* pNodeContext) {
   }
 
   // very common ones should be global to potentially share higher level cache
-  VKM_DEVICE_FUNC(CmdPipelineBarrier2);
-  VKM_DEVICE_FUNC(ResetQueryPool);
-  VKM_DEVICE_FUNC(GetQueryPoolResults);
-  VKM_DEVICE_FUNC(CmdWriteTimestamp2);
-  VKM_DEVICE_FUNC(CmdBindPipeline);
-  VKM_DEVICE_FUNC(CmdBlitImage);
-  VKM_DEVICE_FUNC(CmdBindDescriptorSets);
-  VKM_DEVICE_FUNC(CmdBindVertexBuffers);
-  VKM_DEVICE_FUNC(CmdBindIndexBuffer);
-  VKM_DEVICE_FUNC(CmdDrawIndexed);
-  VKM_DEVICE_FUNC(CmdEndRenderPass);
-  VKM_DEVICE_FUNC(EndCommandBuffer);
-  VKM_DEVICE_FUNC(AcquireNextImageKHR);
-  VKM_DEVICE_FUNC(CmdDrawMeshTasksEXT);
+  MIDVK_DEVICE_FUNC(CmdPipelineBarrier2);
+  MIDVK_DEVICE_FUNC(ResetQueryPool);
+  MIDVK_DEVICE_FUNC(GetQueryPoolResults);
+  MIDVK_DEVICE_FUNC(CmdWriteTimestamp2);
+  MIDVK_DEVICE_FUNC(CmdBindPipeline);
+  MIDVK_DEVICE_FUNC(CmdBlitImage);
+  MIDVK_DEVICE_FUNC(CmdBindDescriptorSets);
+  MIDVK_DEVICE_FUNC(CmdBindVertexBuffers);
+  MIDVK_DEVICE_FUNC(CmdBindIndexBuffer);
+  MIDVK_DEVICE_FUNC(CmdDrawIndexed);
+  MIDVK_DEVICE_FUNC(CmdEndRenderPass);
+  MIDVK_DEVICE_FUNC(EndCommandBuffer);
+  MIDVK_DEVICE_FUNC(AcquireNextImageKHR);
+  MIDVK_DEVICE_FUNC(CmdDrawMeshTasksEXT);
 
 run_loop:
 
@@ -312,7 +312,7 @@ run_loop:
         if (value > nodesHot[i].lastTimelineSwap) {
           {  // update framebuffer for comp
             nodesHot[i].lastTimelineSwap = value;
-            const int                  nodeFramebufferIndex = !(value % VKM_SWAP_COUNT);
+            const int                  nodeFramebufferIndex = !(value % MIDVK_SWAP_COUNT);
             const VkWriteDescriptorSet writeSets[] = {
                 SET_WRITE_COMP_COLOR(compNodeSet, nodesHot[i].framebuffers[nodeFramebufferIndex].colorView),
                 SET_WRITE_COMP_NORMAL(compNodeSet, nodesHot[i].framebuffers[nodeFramebufferIndex].normalView),

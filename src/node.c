@@ -205,13 +205,13 @@ void mxcRegisterNodeThread(NodeHandle handle) {
   nodesHot[handle].type = nodes[handle].nodeType;
   nodesHot[handle].nodeTimeline = nodes[handle].nodeTimeline;
   nodesHot[handle].transform.rotation = QuatFromEuler(nodesHot[handle].transform.euler);
-  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
-    nodesHot[handle].framebuffers[i].colorImage = nodes[handle].framebuffers[i].color.image;
-    nodesHot[handle].framebuffers[i].normalImage = nodes[handle].framebuffers[i].normal.image;
-    nodesHot[handle].framebuffers[i].gBufferImage = nodes[handle].framebuffers[i].gBuffer.image;
-    nodesHot[handle].framebuffers[i].colorView = nodes[handle].framebuffers[i].color.view;
-    nodesHot[handle].framebuffers[i].normalView = nodes[handle].framebuffers[i].normal.view;
-    nodesHot[handle].framebuffers[i].gBufferView = nodes[handle].framebuffers[i].gBuffer.view;
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+    nodesHot[handle].framebuffers[i].colorImage = nodes[handle].framebufferTextures[i].color.image;
+    nodesHot[handle].framebuffers[i].normalImage = nodes[handle].framebufferTextures[i].normal.image;
+    nodesHot[handle].framebuffers[i].gBufferImage = nodes[handle].framebufferTextures[i].gBuffer.image;
+    nodesHot[handle].framebuffers[i].colorView = nodes[handle].framebufferTextures[i].color.view;
+    nodesHot[handle].framebuffers[i].normalView = nodes[handle].framebufferTextures[i].normal.view;
+    nodesHot[handle].framebuffers[i].gBufferView = nodes[handle].framebufferTextures[i].gBuffer.view;
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -228,15 +228,15 @@ void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
       .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
   };
-  VKM_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, VKM_ALLOC, &pNodeContext->pool));
+  MIDVK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
   const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = pNodeContext->pool,
       .commandBufferCount = 1,
   };
-  VKM_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
+  MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
-  mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
+  mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
   vkmCreateTimeline(&pNodeContext->nodeTimeline);
 
 
@@ -253,7 +253,7 @@ void mxcRequestNodeProcess(const VkSemaphore compTimeline, void* (*runFunc)(cons
   NodeHandle      nodeHandle = 0;
   MxcNode* pNodeContext = &nodes[nodeHandle];
 
-  mxcCreateNodeFramebufferExport(VKM_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebuffers);
+  mxcCreateNodeFramebufferExport(VKM_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebufferTextures);
   vkmCreateTimeline(&pNodeContext->nodeTimeline);
 
   pNodeContext->compTimeline = compTimeline;
@@ -272,7 +272,7 @@ void mxcRunNode(const MxcNode* pNodeContext) {
       REQUIRE(result == 0, "Node thread creation failed!");
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
-      mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebuffers);
+      mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
       break;
     default: PANIC("Node type not available!");
   }
@@ -375,11 +375,11 @@ void mxcCreateNodeRenderPass() {
           },
       },
   };
-  VKM_REQUIRE(vkCreateRenderPass2(context.device, &renderPassCreateInfo2, VKM_ALLOC, &context.nodeRenderPass));
+  MIDVK_REQUIRE(vkCreateRenderPass2(context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &context.nodeRenderPass));
   vkmSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)context.nodeRenderPass, "NodeRenderPass");
 }
 
-void mxcCreateNodeFramebufferImport(const VkmLocality locality, const MxcNodeFramebuffer* pNodeFramebuffers, VkmFramebuffer* pFrameBuffers) {
+void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -395,41 +395,26 @@ void mxcCreateNodeFramebufferImport(const VkmLocality locality, const MxcNodeFra
     case VKM_LOCALITY_PROCESS:          break;
     case VKM_LOCALITY_INTERPROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
-  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 
-    pFrameBuffers[i].color = pNodeFramebuffers[i].color;
+    pFramebufferTextures[i].color = pNodeFramebuffers[i].color;
     vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.image, "ImportedColorFramebuffer");
-    pFrameBuffers[i].normal = pNodeFramebuffers[i].normal;
+    pFramebufferTextures[i].normal = pNodeFramebuffers[i].normal;
     vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.image, "ImportedNormalFramebuffer");
-    pFrameBuffers[i].gBuffer = pNodeFramebuffers[i].gBuffer;
+    pFramebufferTextures[i].gBuffer = pNodeFramebuffers[i].gBuffer;
     vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gBuffer.image, "ImportedGBufferFramebuffer");
 
     textureCreateInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
 
+    // Depth is not shared over IPC. It goes in Gbuffer if needed.
     textureCreateInfo.debugName = "ImportedDepthFramebuffer";
     textureCreateInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     textureCreateInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    vkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].depth);
-
-//    const VkFramebufferCreateInfo framebufferCreateInfo = {
-//        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-//        .renderPass = context.nodeRenderPass,
-//        .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
-//        .pAttachments = (const VkImageView[]){
-//            [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = pFrameBuffers[i].color.view,
-//            [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = pFrameBuffers[i].normal.view,
-//            [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = pFrameBuffers[i].depth.view,
-//        },
-//        .width = DEFAULT_WIDTH,
-//        .height = DEFAULT_HEIGHT,
-//        .layers = 1,
-//    };
-//    VKM_REQUIRE(vkCreateFramebuffer(context.device, &framebufferCreateInfo, VKM_ALLOC, &pFrameBuffers[i].framebuffer));
-//    VKM_REQUIRE(vkCreateSemaphore(context.device, &(VkSemaphoreCreateInfo){.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO}, VKM_ALLOC, &pFrameBuffers[i].renderCompleteSemaphore));
+    vkmCreateTexture(&textureCreateInfo, &pFramebufferTextures[i].depth);
   }
 }
-void mxcCreateNodeFramebufferExport(const VkmLocality locality, MxcNodeFramebuffer* pNodeFramebuffers) {
+void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures) {
   const VkExternalMemoryImageCreateInfo externalImageInfo = {
       .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
       .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
@@ -446,22 +431,22 @@ void mxcCreateNodeFramebufferExport(const VkmLocality locality, MxcNodeFramebuff
     case VKM_LOCALITY_PROCESS:          break;
     case VKM_LOCALITY_INTERPROCESS_EXPORTED: textureCreateInfo.imageCreateInfo.pNext = &externalImageInfo; break;
   }
-  for (int i = 0; i < VKM_SWAP_COUNT; ++i) {
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     textureCreateInfo.debugName = "ExportedColorFramebuffer";
     textureCreateInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     textureCreateInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    vkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].color);
+    vkmCreateTexture(&textureCreateInfo, &pNodeFramebufferTextures[i].color);
 
     textureCreateInfo.debugName = "ExportedNormalFramebuffer";
     textureCreateInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
     textureCreateInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    vkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].normal);
+    vkmCreateTexture(&textureCreateInfo, &pNodeFramebufferTextures[i].normal);
 
     textureCreateInfo.debugName = "ExportedGBufferFramebuffer";
     textureCreateInfo.imageCreateInfo.format = VKM_G_BUFFER_FORMAT;
     textureCreateInfo.imageCreateInfo.usage = VKM_G_BUFFER_USAGE;
     textureCreateInfo.imageCreateInfo.mipLevels = VKM_G_BUFFER_LEVELS;
-    vkmCreateTexture(&textureCreateInfo, &pNodeFramebuffers[i].gBuffer);
+    vkmCreateTexture(&textureCreateInfo, &pNodeFramebufferTextures[i].gBuffer);
     textureCreateInfo.imageCreateInfo.mipLevels = 1;
   }
 }

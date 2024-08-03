@@ -46,20 +46,20 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 #endif
 
-#define VKM_ALLOC      NULL
-#define VKM_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
-#define VKM_SWAP_COUNT 2
-#define VKM_REQUIRE(command)                                \
+#define MIDVK_ALLOC      NULL
+#define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
+#define MIDVK_SWAP_COUNT 2
+#define MIDVK_REQUIRE(command)                              \
   {                                                         \
     VkResult result = command;                              \
     REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
   }
 
-#define VKM_INSTANCE_FUNC(vkFunction)                                                           \
-  PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
+#define MIDVK_INSTANCE_FUNC(vkFunction)                                                               \
+  const PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
   REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
-#define VKM_DEVICE_FUNC(function)                                                                \
-  PFN_##vk##function function = (PFN_##vk##function)vkGetDeviceProcAddr(device, "vk" #function); \
+#define MIDVK_DEVICE_FUNC(function)                                                                    \
+  const PFN_##vk##function function = (PFN_##vk##function)vkGetDeviceProcAddr(device, "vk" #function); \
   REQUIRE(function != NULL, "Couldn't load " #function)
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -86,7 +86,7 @@ typedef enum VkmLocality {
   // Used by nodes external to this context, device and process.
   VKM_LOCALITY_INTERPROCESS_IMPORTED,
   VKM_LOCALITY_COUNT,
-} VkmLocality;
+} MidLocality;
 
 typedef struct VkmTimeline {
   VkSemaphore semaphore;
@@ -97,7 +97,7 @@ typedef struct VkmSwap {
   VkSwapchainKHR chain;
   VkSemaphore    acquireSemaphore;
   VkSemaphore    renderCompleteSemaphore;
-  VkImage        images[VKM_SWAP_COUNT];
+  VkImage        images[MIDVK_SWAP_COUNT];
 } VkmSwap;
 
 typedef struct VkmTransform {
@@ -113,7 +113,7 @@ typedef struct VkmSharedMemory {
   VkmMemoryType type;
 } VkmSharedMemory;
 
-typedef struct VkmTexture {
+typedef struct MidVkTexture {
   VkImage         image;
   VkImageView     view;
 
@@ -126,7 +126,7 @@ typedef struct VkmTexture {
 
   VkDeviceMemory  memory;
   HANDLE          externalHandle;
-} VkmTexture;
+} MidVkTexture;
 
 typedef struct VkmVertex {
   vec3 position;
@@ -155,23 +155,21 @@ typedef struct VkmMesh {
   VkDeviceSize    vertexOffset;
 } VkmMesh;
 
-typedef struct VkmFramebuffer {
-  VkmTexture    color;
-  VkmTexture    normal;
-  VkmTexture    depth;
-  // store some more data here
-  VkmTexture    gBuffer; // get rid of this
-} VkmFramebuffer;
-typedef struct VkmFramebufferImage {
+typedef struct MidVkFramebufferTexture {
+  MidVkTexture    color;
+  MidVkTexture    normal;
+  MidVkTexture    depth;
+} MidVkFramebufferTexture;
+typedef struct MidVkFramebufferImage {
   VkImage    color;
   VkImage    normal;
   VkImage    depth;
-} VkmFramebufferImage;
-typedef struct VkmFramebufferView {
+} MidVkFramebufferImage;
+typedef struct MidVkFramebufferView {
   VkImageView    color;
   VkImageView    normal;
   VkImageView    depth;
-} VkmFramebufferView;
+} MidVkFramebufferView;
 
 //typedef struct VkmFramebufferHot {
 //  VkmTexture    color;
@@ -554,7 +552,7 @@ VKM_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const 
   };
   func(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer, const VkmFramebufferView framebufferView) {
+VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer, const MidVkFramebufferView framebufferView) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = &(VkRenderPassAttachmentBeginInfo){
@@ -624,7 +622,7 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(
           },
       },
   };
-  VKM_REQUIRE(vkQueueSubmit2(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
+  MIDVK_REQUIRE(vkQueueSubmit2(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
   const VkPresentInfoKHR presentInfo = {
       .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
       .waitSemaphoreCount = 1,
@@ -633,7 +631,7 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(
       .pSwapchains = &chain,
       .pImageIndices = &swapIndex,
   };
-  VKM_REQUIRE(vkQueuePresentKHR(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
+  MIDVK_REQUIRE(vkQueuePresentKHR(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
   //  vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
 }
 VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
@@ -656,7 +654,7 @@ VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue 
           },
       },
   };
-  VKM_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
+  MIDVK_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
 VKM_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline) {
   const VkSemaphoreWaitInfo semaphoreWaitInfo = {
@@ -665,7 +663,7 @@ VKM_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue,
       .pSemaphores = &timeline,
       .pValues = &waitValue,
   };
-  VKM_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
+  MIDVK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 VKM_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline) {
   const VkSemaphoreSignalInfo semaphoreSignalInfo = {
@@ -673,7 +671,7 @@ VKM_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalVa
       .semaphore = timeline,
       .value = signalValue,
   };
-  VKM_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
+  MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 VKM_INLINE void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
   vkUpdateDescriptorSets(device, 1, pWriteSet, 0, NULL);
@@ -722,8 +720,8 @@ VKM_INLINE void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, 
       .objectHandle = objectHandle,
       .pObjectName = pDebugName,
   };
-  VKM_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
-  VKM_REQUIRE(vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo));
+  MIDVK_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
+  MIDVK_REQUIRE(vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo));
 }
 
 //----------------------------------------------------------------------------------
@@ -740,13 +738,13 @@ typedef struct VkmRequestAllocationInfo {
   VkMemoryPropertyFlags memoryPropertyFlags;
   VkDeviceSize          size;
   VkBufferUsageFlags    usage;
-  VkmLocality           locality;
+  MidLocality           locality;
   VkmDedicatedMemory    dedicated;
 } VkmRequestAllocationInfo;
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const VkmLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
-void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
-void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const VkmLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
+void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
+void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
+void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
 void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
 void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkmSharedMemory* pMemory);
 void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
@@ -809,7 +807,7 @@ void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 
 void vkmCreateStdRenderPass();
 void vkmCreateStdPipeLayout();
-void vkmCreateStdFramebuffers(const uint32_t framebufferCount, const VkmLocality locality, VkmFramebuffer* pFrameBuffers);
+void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers);
 void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
 
 void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
@@ -833,7 +831,7 @@ typedef struct VkmTextureCreateInfo {
   const char*        debugName;
   VkImageCreateInfo  imageCreateInfo;
   VkImageAspectFlags aspectMask;
-  VkmLocality        locality;
+  MidLocality        locality;
 } VkmTextureCreateInfo;
 #define VKM_DEFAULT_TEXTURE_IMAGE_CREATE_INFO     \
   (VkImageCreateInfo) {                           \
@@ -845,8 +843,8 @@ typedef struct VkmTextureCreateInfo {
     .samples = VK_SAMPLE_COUNT_1_BIT,             \
     .usage = VK_IMAGE_USAGE_SAMPLED_BIT           \
   }
-void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, VkmTexture* pTexture);
-void vkmCreateTextureFromFile(const char* pPath, VkmTexture* pTexture);
+void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, MidVkTexture* pTexture);
+void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
 
 void vkmCreateTimeline(VkSemaphore* pSemaphore);
 
