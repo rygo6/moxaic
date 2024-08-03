@@ -795,7 +795,6 @@ void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLoc
   };
   VkmTextureCreateInfo createInfo = {
       .imageCreateInfo = VKM_DEFAULT_TEXTURE_IMAGE_CREATE_INFO,
-      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
       .locality = locality,
   };
   switch (locality) {
@@ -810,6 +809,7 @@ void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLoc
     createInfo.debugName = "CompColorFramebuffer";
     createInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
     createInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
+    createInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     vkmCreateTexture(&createInfo, &pFrameBuffers[i].color);
 
     createInfo.debugName = "CompNormalFramebuffer";
@@ -822,13 +822,6 @@ void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLoc
     createInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
     createInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     vkmCreateTexture(&createInfo, &pFrameBuffers[i].depth);
-
-//    // I may or may not need the gbuffer in the comp but lets leave it for now... no lets get rid of this and turn it into a node construct
-//    textureCreateInfo.debugName = "CompGBufferFramebuffer";
-//    textureCreateInfo.imageCreateInfo.format = VKM_G_BUFFER_FORMAT;
-//    textureCreateInfo.imageCreateInfo.usage = VKM_G_BUFFER_USAGE;
-//    textureCreateInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-//    vkmCreateTexture(&textureCreateInfo, &pFrameBuffers[i].gBuffer);
   }
 }
 
