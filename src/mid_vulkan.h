@@ -158,16 +158,6 @@ typedef struct MidVkFramebufferTexture {
   MidVkTexture    normal;
   MidVkTexture    depth;
 } MidVkFramebufferTexture;
-typedef struct MidVkFramebufferImage {
-  VkImage    color;
-  VkImage    normal;
-  VkImage    depth;
-} MidVkFramebufferImage;
-typedef struct MidVkFramebufferView {
-  VkImageView    color;
-  VkImageView    normal;
-  VkImageView    depth;
-} MidVkFramebufferView;
 
 typedef struct VkmGlobalSetState {
   mat4 view;
@@ -537,16 +527,26 @@ VKM_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const 
   };
   func(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass renderPass, const VkClearColorValue clearColor, const VkFramebuffer framebuffer, const MidVkFramebufferView framebufferView) {
+#define CmdBeginRenderPass(_cmd, _render_pass, _framebuffer, _clear_color, _color_view, _normal_view, _depth_view) \
+  PFN_CmdBeginRenderPass(CmdBeginRenderPass, _cmd, _render_pass, _framebuffer, _clear_color, _color_view, _normal_view, _depth_view)
+VKM_INLINE void PFN_CmdBeginRenderPass(
+    const PFN_vkCmdBeginRenderPass func,
+    const VkCommandBuffer          cmd,
+    const VkRenderPass             renderPass,
+    const VkFramebuffer            framebuffer,
+    const VkClearColorValue        clearColor,
+    const VkImageView              colorView,
+    const VkImageView              normalView,
+    const VkImageView              depthView) {
   const VkRenderPassBeginInfo renderPassBeginInfo = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = &(VkRenderPassAttachmentBeginInfo){
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
+          .sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
           .attachmentCount = MIDVK_PASS_ATTACHMENT_STD_COUNT,
           .pAttachments = (const VkImageView[]){
-              [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = framebufferView.color,
-              [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = framebufferView.normal,
-              [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = framebufferView.depth,
+              [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = colorView,
+              [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = normalView,
+              [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = depthView,
           },
       },
       .renderPass = renderPass,
@@ -559,7 +559,7 @@ VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass re
           [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {.depthStencil = {0.0f}},
       },
   };
-  vkCmdBeginRenderPass(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+  func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 VKM_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);

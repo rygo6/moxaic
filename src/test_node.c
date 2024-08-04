@@ -137,7 +137,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   {  // Copy needed state
     pTestNode->device = context.device;
     pTestNode->nodeRenderPass = context.nodeRenderPass;
-    pTestNode->stdPipeLayout = context.stdPipeLayout.pipeLayout;
+    pTestNode->pipeLayout = context.stdPipeLayout.pipeLayout;
     pTestNode->basicPipe = context.basicPipe;
     pTestNode->queueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
   }
@@ -149,32 +149,39 @@ void* mxcTestNodeThread(const MxcNode* pNodeContext) {
 
   const MxcNodeType     nodeType = pNodeContext->nodeType;
   const NodeHandle      handle = 0;
+
   const VkCommandBuffer cmd = pNodeContext->cmd;
+  const VkRenderPass    nodeRenderPass = pNode->nodeRenderPass;
+  const VkFramebuffer   framebuffer = pNode->framebuffer;
 
   const VkmGlobalSetState* pGlobalSetMapped = pNode->globalSet.pMapped;
   const VkDescriptorSet    globalSet = pNode->globalSet.set;
 
   const VkDescriptorSet  checkerMaterialSet = pNode->checkerMaterialSet;
   const VkDescriptorSet  sphereObjectSet = pNode->sphereObjectSet;
-  const VkRenderPass     nodeRenderPass = pNode->nodeRenderPass;
-  const VkPipelineLayout stdPipeLayout = pNode->stdPipeLayout;
-  const VkPipeline       basicPipe = pNode->basicPipe;
+  const VkPipelineLayout pipeLayout = pNode->pipeLayout;
+  const VkPipeline       pipe = pNode->basicPipe;
   const VkPipelineLayout nodeProcessPipeLayout = pNode->nodeProcessPipeLayout;
   const VkPipeline       nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
   const VkPipeline       nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
 
   // these should go into a struct so all the images from one frame are side by side
-  const VkFramebuffer framebuffer = pNode->framebuffer;
-  MxcFramebufferView framebufferViews[MIDVK_SWAP_COUNT];
-  MxcFramebufferImage framebufferImages[MIDVK_SWAP_COUNT];
+  struct {
+    VkImage    color;
+    VkImage    gBuffer;
+  } framebufferImages[MIDVK_SWAP_COUNT];
+  struct {
+    VkImageView    color;
+    VkImageView    normal;
+    VkImageView    depth;
+    VkImageView    gBuffer;
+  } framebufferViews[MIDVK_SWAP_COUNT];
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     framebufferViews[i].color = pNode->framebufferTextures[i].color.view;
     framebufferViews[i].normal = pNode->framebufferTextures[i].normal.view;
     framebufferViews[i].depth = pNode->framebufferTextures[i].depth.view;
     framebufferViews[i].gBuffer = pNode->framebufferTextures[i].gBuffer.view;
     framebufferImages[i].color = pNode->framebufferTextures[i].color.image;
-    framebufferImages[i].normal = pNode->framebufferTextures[i].normal.image;
-    framebufferImages[i].depth = pNode->framebufferTextures[i].depth.image;
     framebufferImages[i].gBuffer = pNode->framebufferTextures[i].gBuffer.image;
   }
   VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
@@ -201,6 +208,7 @@ void* mxcTestNodeThread(const MxcNode* pNodeContext) {
   MIDVK_DEVICE_FUNC(ResetCommandBuffer);
   MIDVK_DEVICE_FUNC(BeginCommandBuffer);
   MIDVK_DEVICE_FUNC(CmdSetViewport);
+  MIDVK_DEVICE_FUNC(CmdBeginRenderPass);
   MIDVK_DEVICE_FUNC(CmdSetScissor);
   MIDVK_DEVICE_FUNC(CmdBindPipeline);
   MIDVK_DEVICE_FUNC(CmdDispatch);
@@ -263,12 +271,13 @@ run_loop:
   }
 
   {  // this is really all that'd be user exposed....
-    vkmCmdBeginPass(cmd, nodeRenderPass, (VkClearColorValue){0, 0, 0.1, 0}, framebuffer, *(MidVkFramebufferView*)&framebufferViews[framebufferIndex]);
+    const VkClearColorValue clearColor = (VkClearColorValue){0, 0, 0.1, 0};
+    CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, framebufferViews[framebufferIndex].color, framebufferViews[framebufferIndex].normal, framebufferViews[framebufferIndex].depth);
 
-    CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, basicPipe);
-    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeLayout, MIDVK_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
-    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeLayout, MIDVK_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
-    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, stdPipeLayout, MIDVK_PIPE_SET_STD_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
+    CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
+    CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
 
     CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){sphereBuffer}, (const VkDeviceSize[]){sphereVertexOffset});
     CmdBindIndexBuffer(cmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);

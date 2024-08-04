@@ -44,18 +44,7 @@ typedef struct MxcNodeFramebufferTexture {
 
   MidVkTexture gBuffer;
 } MxcNodeFramebufferTexture;
-typedef struct MxcFramebufferImage {
-  VkImage    color;
-  VkImage    normal;
-  VkImage    depth;
-  VkImage    gBuffer;
-} MxcFramebufferImage;
-typedef struct MxcFramebufferView {
-  VkImageView    color;
-  VkImageView    normal;
-  VkImageView    depth;
-  VkImageView    gBuffer;
-} MxcFramebufferView;
+
 
 typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
   MxcNodeType nodeType;

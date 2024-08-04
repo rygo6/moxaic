@@ -10,7 +10,7 @@ typedef struct MxcTestNodeCreateInfo {
 
 typedef struct MxcTestNode {
   VkRenderPass     nodeRenderPass;
-  VkPipelineLayout stdPipeLayout;
+  VkPipelineLayout pipeLayout;
   VkPipeline       basicPipe;
 
   VkFramebuffer             framebuffer;

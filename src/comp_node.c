@@ -226,8 +226,10 @@ void* mxcCompNodeThread(const MxcNode* pNodeContext) {
   MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
 
   MxcCompMode  compMode = pNode->compMode;
+
   VkCommandBuffer cmd = pNode->cmd;
-  VkRenderPass    stdRenderPass = pNode->compRenderPass;
+  VkRenderPass    renderPass = pNode->compRenderPass;
+  VkFramebuffer      framebuffer = pNode->framebuffer;
 
   VkmTransform       globalCameraTransform = {};
   VkmGlobalSetState  globalSetState = {};
@@ -253,16 +255,19 @@ void* mxcCompNodeThread(const MxcNode* pNodeContext) {
 
   VkQueryPool timeQueryPool = pNode->timeQueryPool;
 
-  int                framebufferIndex = 0;
-  VkFramebuffer      framebuffer = pNode->framebuffer;
-  MidVkFramebufferView framebufferViews[MIDVK_SWAP_COUNT];
-  VkImage            frameBufferColorImages[MIDVK_SWAP_COUNT];
+  struct {
+    VkImageView color;
+    VkImageView normal;
+    VkImageView depth;
+  } framebufferViews[MIDVK_SWAP_COUNT];
+  VkImage frameBufferColorImages[MIDVK_SWAP_COUNT];
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     framebufferViews[i].color = pNode->framebuffers[i].color.view;
     framebufferViews[i].normal = pNode->framebuffers[i].normal.view;
     framebufferViews[i].depth = pNode->framebuffers[i].depth.view;
     frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
   }
+  int framebufferIndex = 0;
 
   // just making sure atomics are only using barriers, not locks
   for (int i = 0; i < nodeCount; ++i) {
@@ -271,10 +276,12 @@ void* mxcCompNodeThread(const MxcNode* pNodeContext) {
   }
 
   // very common ones should be global to potentially share higher level cache
+  // but maybe do it anyways because it'd just be better? each func pointer is 8 bytes. 8 can fit on a cache line
   MIDVK_DEVICE_FUNC(CmdPipelineBarrier2);
   MIDVK_DEVICE_FUNC(ResetQueryPool);
   MIDVK_DEVICE_FUNC(GetQueryPoolResults);
   MIDVK_DEVICE_FUNC(CmdWriteTimestamp2);
+  MIDVK_DEVICE_FUNC(CmdBeginRenderPass);
   MIDVK_DEVICE_FUNC(CmdBindPipeline);
   MIDVK_DEVICE_FUNC(CmdBlitImage);
   MIDVK_DEVICE_FUNC(CmdBindDescriptorSets);
@@ -396,7 +403,7 @@ run_loop:
       ResetQueryPool(device, timeQueryPool, 0, 2);
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-      vkmCmdBeginPass(cmd, stdRenderPass, MIDVK_PASS_CLEAR_COLOR, framebuffer, framebufferViews[framebufferIndex]);
+      CmdBeginRenderPass(cmd, renderPass, framebuffer, MIDVK_PASS_CLEAR_COLOR, framebufferViews[framebufferIndex].color, framebufferViews[framebufferIndex].normal, framebufferViews[framebufferIndex].depth);
 
       CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipe);
       CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
@@ -453,8 +460,5 @@ run_loop:
   }
 
   CHECK_RUNNING;
-
   goto run_loop;
-
-  return NULL;
 }
