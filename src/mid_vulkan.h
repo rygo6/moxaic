@@ -60,12 +60,12 @@ extern void Panic(const char* file, int line, const char* message);
     REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
   }
 
-#define MIDVK_INSTANCE_FUNC(vkFunction)                                                               \
-  const PFN_##vkFunction vkFunction = (PFN_##vkFunction)vkGetInstanceProcAddr(instance, #vkFunction); \
-  REQUIRE(vkFunction != NULL, "Couldn't load " #vkFunction)
-#define MIDVK_DEVICE_FUNC(function)                                                                    \
-  const PFN_##vk##function function = (PFN_##vk##function)vkGetDeviceProcAddr(device, "vk" #function); \
-  REQUIRE(function != NULL, "Couldn't load " #function)
+#define MIDVK_INSTANCE_FUNC(_func)                                                \
+  const PFN_##_func _func = (PFN_##_func)vkGetInstanceProcAddr(instance, #_func); \
+  REQUIRE(_func != NULL, "Couldn't load " #_func)
+#define MIDVK_DEVICE_FUNC(_func)                                                           \
+  const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(device, "vk" #_func); \
+  REQUIRE(_func != NULL, "Couldn't load " #_func)
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -163,14 +163,10 @@ typedef struct VkmGlobalSetState {
   mat4 view;
   mat4 proj;
   mat4 viewProj;
-
   mat4 invView;
   mat4 invProj;
   mat4 invViewProj;
-
-  __attribute((aligned(16)))
   ivec2 framebufferSize;
-
 } VkmGlobalSetState;
 
 typedef struct VkmStandardObjectSetState {

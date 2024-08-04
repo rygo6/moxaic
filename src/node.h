@@ -38,35 +38,10 @@ typedef struct MxcInterProcessBuffer {
 
 typedef struct MxcNodeFramebufferTexture {
   MidVkTexture color;
-  //I should probably write normal in gbuffer
   MidVkTexture normal;
   MidVkTexture depth;
-
   MidVkTexture gBuffer;
 } MxcNodeFramebufferTexture;
-
-
-typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
-  MxcNodeType nodeType;
-
-  int compCycleSkip;
-
-  const void* pNode;
-  void* (*runFunc)(const struct MxcNode* pNode);
-
-  VkCommandPool   pool;
-  VkCommandBuffer cmd;
-
-  // need ref to send over IPC. Can't get from compNodeShared. Or can I? I can map parts of array... no it will have different handle in diff process
-  VkSemaphore compTimeline;
-  VkSemaphore nodeTimeline;
-
-  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
-
-  pthread_t threadId;
-  HANDLE    processHandle;
-
-} MxcNode;
 
 typedef struct CACHE_ALIGN MxcCompNodeShared {
   // shared
@@ -80,28 +55,35 @@ typedef struct CACHE_ALIGN MxcCompNodeShared {
 
 extern MxcCompNodeShared compNodeShared;
 
-typedef struct CACHE_ALIGN MxcNodeSetState {
+#define MXC_NODE_CAPACITY 256
+typedef uint8_t NodeHandle;
 
-  mat4 model;
+extern NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
+extern size_t        nodeCount;
 
-  mat4 view;
-  mat4 proj;
-  mat4 viewProj;
+// Full data of a node
+typedef struct PACKED MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
+  MxcNodeType nodeType;
 
-  mat4 invView;
-  mat4 invProj;
-  mat4 invViewProj;
+  int compCycleSkip;
 
-  // subsequent vulkan ubo values must be aligned to what prior was. this needs to be laid out better
-  ALIGN(16)
-  ivec2 framebufferSize;
-  ALIGN(8)
-  vec2 ulUV;
-  ALIGN(8)
-  vec2 lrUV;
+  const void* pNode;
+  void* (*runFunc)(const struct MxcNode* pNode);
 
-} MxcNodeSetState;
+  VkCommandPool   pool;
+  VkCommandBuffer cmd;
+  VkSemaphore compTimeline;
+  VkSemaphore nodeTimeline;
 
+  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+
+  pthread_t threadId;
+  HANDLE    processHandle;
+
+} MxcNode;
+extern MxcNode       nodes[MXC_NODE_CAPACITY];
+
+// Node data shared across thread or IPC
 typedef struct CACHE_ALIGN MxcNodeShared {
   volatile VkmGlobalSetState globalSetState;
   volatile vec2              ulUV;
@@ -111,50 +93,54 @@ typedef struct CACHE_ALIGN MxcNodeShared {
   volatile float             radius;
   volatile bool              active;
 } MxcNodeShared;
+extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
 
-typedef struct MxcNodeFramebufferHot {
-  VkImage     colorImage;
-  VkImage     normalImage;
-  VkImage     gBufferImage;
-  VkImageView colorView;
-  VkImageView normalView;
-  VkImageView gBufferView;
-} MxcNodeFramebufferHot;
-typedef struct CACHE_ALIGN MxcNodeHot {
+// Node Data needed by compositor
+typedef struct MxcNodeSetState {
+  mat4 model;
+
+  // Laid out same as VkmGlobalSetState for memcpy
+  mat4 view;
+  mat4 proj;
+  mat4 viewProj;
+  mat4 invView;
+  mat4 invProj;
+  mat4 invViewProj;
+  ivec2 framebufferSize;
+
+  vec2 ulUV;
+  vec2 lrUV;
+} MxcNodeSetState;
+typedef struct MxcNodeFramebufferImage {
+  VkImage     color;
+  VkImage     normal;
+  VkImage     gBuffer;
+} MxcNodeFramebufferImage;
+typedef struct MxcNodeFramebufferView {
+  VkImageView color;
+  VkImageView normal;
+  VkImageView gBuffer;
+} MxcNodeFramebufferView;
+typedef struct CACHE_ALIGN MxcNodeCompData {
   VkCommandBuffer       cmd;
   VkSemaphore           nodeTimeline;
   uint64_t              lastTimelineSignal;
   uint64_t              lastTimelineSwap;
   VkmTransform          transform;
   MxcNodeSetState       nodeSetState;
-  MxcNodeFramebufferHot framebuffers[MIDVK_SWAP_COUNT];
+  MxcNodeFramebufferImage framebufferImages[MIDVK_SWAP_COUNT];
+  MxcNodeFramebufferView framebufferViews[MIDVK_SWAP_COUNT];
   MxcNodeType           type;
-
-
-  //  VkImageView     framebufferColorImageViews[VKM_SWAP_COUNT];
-  //  VkImageView     framebufferNormalImageViews[VKM_SWAP_COUNT];
-  //  VkImageView     framebufferGBufferImageViews[VKM_SWAP_COUNT];
-  //  VkImage         framebufferColorImages[VKM_SWAP_COUNT];
-  //  VkImage         framebufferNormalImages[VKM_SWAP_COUNT];
-  //  VkImage         framebufferGBufferImages[VKM_SWAP_COUNT];
-} MxcNodeHot;
-
-#define MXC_NODE_CAPACITY 256
-typedef uint8_t NodeHandle;
-
-extern NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
-extern size_t        nodeCount;
-extern MxcNode       nodes[MXC_NODE_CAPACITY];
-extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
-extern MxcNodeHot    nodesHot[MXC_NODE_CAPACITY];
+} MxcNodeCompData;
+extern MxcNodeCompData nodeCompData[MXC_NODE_CAPACITY];
 
 static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
   for (int i = 0; i < nodeCount; ++i) {
     uint64_t value = nodesShared[i].pendingTimelineSignal;
     __atomic_thread_fence(__ATOMIC_ACQUIRE);
-    if (value > nodesHot[i].lastTimelineSignal) {
-      nodesHot[i].lastTimelineSignal = value;
-      vkmSubmitCommandBuffer(nodesHot[i].cmd, graphicsQueue, nodesHot[i].nodeTimeline, value);
+    if (value > nodeCompData[i].lastTimelineSignal) {
+      nodeCompData[i].lastTimelineSignal = value;
+      vkmSubmitCommandBuffer(nodeCompData[i].cmd, graphicsQueue, nodeCompData[i].nodeTimeline, value);
     }
   }
 }

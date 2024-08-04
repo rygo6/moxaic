@@ -191,7 +191,7 @@ NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
 size_t        nodeCount = 0;
 MxcNode       nodes[MXC_NODE_CAPACITY] = {};
 MxcNodeShared nodesShared[MXC_NODE_CAPACITY] = {};
-MxcNodeHot    nodesHot[MXC_NODE_CAPACITY] = {};
+MxcNodeCompData nodeCompData[MXC_NODE_CAPACITY] = {};
 
 void mxcInterProcessImportNode(void* pParam) {
 }
@@ -201,17 +201,17 @@ void mxcRegisterNodeThread(NodeHandle handle) {
   nodesShared[handle].active = true;
   nodesShared[handle].radius = 0.5;
 
-  nodesHot[handle].cmd = nodes[handle].cmd;
-  nodesHot[handle].type = nodes[handle].nodeType;
-  nodesHot[handle].nodeTimeline = nodes[handle].nodeTimeline;
-  nodesHot[handle].transform.rotation = QuatFromEuler(nodesHot[handle].transform.euler);
+  nodeCompData[handle].cmd = nodes[handle].cmd;
+  nodeCompData[handle].type = nodes[handle].nodeType;
+  nodeCompData[handle].nodeTimeline = nodes[handle].nodeTimeline;
+  nodeCompData[handle].transform.rotation = QuatFromEuler(nodeCompData[handle].transform.euler);
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    nodesHot[handle].framebuffers[i].colorImage = nodes[handle].framebufferTextures[i].color.image;
-    nodesHot[handle].framebuffers[i].normalImage = nodes[handle].framebufferTextures[i].normal.image;
-    nodesHot[handle].framebuffers[i].gBufferImage = nodes[handle].framebufferTextures[i].gBuffer.image;
-    nodesHot[handle].framebuffers[i].colorView = nodes[handle].framebufferTextures[i].color.view;
-    nodesHot[handle].framebuffers[i].normalView = nodes[handle].framebufferTextures[i].normal.view;
-    nodesHot[handle].framebuffers[i].gBufferView = nodes[handle].framebufferTextures[i].gBuffer.view;
+    nodeCompData[handle].framebufferImages[i].color = nodes[handle].framebufferTextures[i].color.image;
+    nodeCompData[handle].framebufferImages[i].normal = nodes[handle].framebufferTextures[i].normal.image;
+    nodeCompData[handle].framebufferImages[i].gBuffer = nodes[handle].framebufferTextures[i].gBuffer.image;
+    nodeCompData[handle].framebufferViews[i].color = nodes[handle].framebufferTextures[i].color.view;
+    nodeCompData[handle].framebufferViews[i].normal = nodes[handle].framebufferTextures[i].normal.view;
+    nodeCompData[handle].framebufferViews[i].gBuffer = nodes[handle].framebufferTextures[i].gBuffer.view;
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
