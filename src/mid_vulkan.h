@@ -14,6 +14,11 @@
 #define NOCOMM
 #include <windows.h>
 #include <vulkan/vulkan_win32.h>
+#define MIDVK_PLATFORM_SURFACE_EXTENSION_NAME   VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+#define MIDVK_EXTERNAL_MEMORY_EXTENSION_NAME    VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME
+#define MIDVK_EXTERNAL_SEMAPHORE_EXTENSION_NAME VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
+#define MIDVK_EXTERNAL_FENCE_EXTENSION_NAME     VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
+#define MIDVK_EXTERNAL_HANDLE_TYPE              VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #endif
 
 //
@@ -66,17 +71,17 @@ extern void Panic(const char* file, int line, const char* message);
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
-extern const char*                              VKM_PLATFORM_SURFACE_EXTENSION_NAME;
-extern const char*                              VKM_EXTERNAL_MEMORY_EXTENSION_NAME;
-extern const char*                              VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME;
-extern const char*                              VKM_EXTERNAL_FENCE_EXTENSION_NAME;
-extern const VkExternalMemoryHandleTypeFlagBits VKM_EXTERNAL_HANDLE_TYPE;
+#define VKM_EXTERNAL_IMAGE_CREATE_INFO                            \
+  (VkExternalMemoryImageCreateInfo) {                             \
+    .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO, \
+    .handleTypes = MIDVK_EXTERNAL_HANDLE_TYPE,                    \
+  }
 
 //----------------------------------------------------------------------------------
-// Types
+// Mid Types
 //----------------------------------------------------------------------------------
 
-typedef enum VkmLocality {
+typedef enum MidLocality {
   // Used within the context it was made
   VKM_LOCALITY_CONTEXT,
   // Used by multiple contexts, but in the same process
@@ -87,11 +92,20 @@ typedef enum VkmLocality {
   VKM_LOCALITY_INTERPROCESS_IMPORTED,
   VKM_LOCALITY_COUNT,
 } MidLocality;
+typedef struct VkmTransform {
+  vec3 position;
+  vec3 euler;
+  vec4 rotation;
+} VkmTransform;
+typedef struct VkmVertex {
+  vec3 position;
+  vec3 normal;
+  vec2 uv;
+} VkmVertex;
 
-typedef struct VkmTimeline {
-  VkSemaphore semaphore;
-  uint64_t    value;
-} VkmTimeline;
+//----------------------------------------------------------------------------------
+// Vulkan Types
+//----------------------------------------------------------------------------------
 
 typedef struct VkmSwap {
   VkSwapchainKHR chain;
@@ -99,20 +113,12 @@ typedef struct VkmSwap {
   VkSemaphore    renderCompleteSemaphore;
   VkImage        images[MIDVK_SWAP_COUNT];
 } VkmSwap;
-
-typedef struct VkmTransform {
-  vec3 position;
-  vec3 euler;
-  vec4 rotation;
-} VkmTransform;
-
 typedef uint8_t VkmMemoryType;
 typedef struct VkmSharedMemory {
   VkDeviceSize  offset;
   VkDeviceSize  size;
   VkmMemoryType type;
 } VkmSharedMemory;
-
 typedef struct MidVkTexture {
   VkImage         image;
   VkImageView     view;
@@ -127,20 +133,12 @@ typedef struct MidVkTexture {
   VkDeviceMemory  memory;
   HANDLE          externalHandle;
 } MidVkTexture;
-
-typedef struct VkmVertex {
-  vec3 position;
-  vec3 normal;
-  vec2 uv;
-} VkmVertex;
-
 typedef struct VkmMeshCreateInfo {
   uint32_t         indexCount;
-  const uint16_t*  pIndices;
   uint32_t         vertexCount;
+  const uint16_t*  pIndices;
   const VkmVertex* pVertices;
 } VkmMeshCreateInfo;
-
 typedef struct VkmMesh {
   // get rid of this? I don't think I have a use for non-shared memory meshes
   // maybe in an IPC shared mesh? But I cant think of a use for that
@@ -150,8 +148,8 @@ typedef struct VkmMesh {
   VkmSharedMemory sharedMemory;
 
   uint32_t        indexCount;
-  VkDeviceSize    indexOffset;
   uint32_t        vertexCount;
+  VkDeviceSize    indexOffset;
   VkDeviceSize    vertexOffset;
 } VkmMesh;
 
@@ -170,15 +168,6 @@ typedef struct MidVkFramebufferView {
   VkImageView    normal;
   VkImageView    depth;
 } MidVkFramebufferView;
-
-//typedef struct VkmFramebufferHot {
-//  VkmTexture    color;
-//  VkmTexture    normal;
-//  VkmTexture    depth;
-//  VkmTexture    gBuffer;
-//  VkFramebuffer framebuffer;
-//  VkSemaphore   renderCompleteSemaphore;
-//} VkmFramebufferHot;
 
 typedef struct VkmGlobalSetState {
   mat4 view;
@@ -239,7 +228,7 @@ typedef struct VkmContext {
   VkSampler    linearSampler;
   VkRenderPass renderPass;
 
-  // these should go elsewhere
+  // this should go elsewhere
   VkRenderPass nodeRenderPass;
   // basic pipe could stay here
   VkPipeline basicPipe;
@@ -259,33 +248,29 @@ extern void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 // Render
 //----------------------------------------------------------------------------------
 
-enum VkmPassAttachmentStdIndices {
-  VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
-  VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
-  VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX,
-  VKM_PASS_ATTACHMENT_STD_COUNT,
+typedef enum MidVkPassAttachmentStdIndices {
+  MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX,
+  MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX,
+  MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX,
+  MIDVK_PASS_ATTACHMENT_STD_COUNT,
+} MidVkPassAttachmentStdIndices;
+typedef enum MidVkPipeSetStdIndices {
+  MIDVK_PIPE_SET_STD_GLOBAL_INDEX,
+  MIDVK_PIPE_SET_STD_MATERIAL_INDEX,
+  MIDVK_PIPE_SET_STD_OBJECT_INDEX,
+  MIDVK_PIPE_SET_STD_INDEX_COUNT,
+} MidVkPipeSetStdIndices;
+static const VkFormat MIDVK_PASS_FORMATS[] = {
+    [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
+    [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
+    [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
 };
-enum VkmPipeSetStdIndices {
-  VKM_PIPE_SET_STD_GLOBAL_INDEX,
-  VKM_PIPE_SET_STD_MATERIAL_INDEX,
-  VKM_PIPE_SET_STD_OBJECT_INDEX,
-  VKM_PIPE_SET_STD_INDEX_COUNT,
+static const VkImageUsageFlags MIDVK_PASS_USAGES[] = {
+    [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+    [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+    [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 };
-static const VkFormat vkmPassFormats[] = {
-    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
-    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
-    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
-};
-static const VkImageUsageFlags vkmPassUsages[] = {
-    [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-    [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-};
-#define VKM_G_BUFFER_FORMAT VK_FORMAT_R32_SFLOAT
-#define VKM_G_BUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-#define VKM_G_BUFFER_LEVELS 10
-#define VKM_PASS_CLEAR_COLOR \
-  (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
+#define MIDVK_PASS_CLEAR_COLOR (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
 #define VKM_SET_BIND_STD_GLOBAL_BUFFER 0
 #define VKM_SET_WRITE_STD_GLOBAL_BUFFER(global_set, global_set_buffer) \
@@ -557,21 +542,21 @@ VKM_INLINE void vkmCmdBeginPass(const VkCommandBuffer cmd, const VkRenderPass re
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
       .pNext = &(VkRenderPassAttachmentBeginInfo){
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
-          .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+          .attachmentCount = MIDVK_PASS_ATTACHMENT_STD_COUNT,
           .pAttachments = (const VkImageView[]){
-              [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = framebufferView.color,
-              [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = framebufferView.normal,
-              [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = framebufferView.depth,
+              [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = framebufferView.color,
+              [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = framebufferView.normal,
+              [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = framebufferView.depth,
           },
       },
       .renderPass = renderPass,
       .framebuffer = framebuffer,
       .renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
-      .clearValueCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+      .clearValueCount = MIDVK_PASS_ATTACHMENT_STD_COUNT,
       .pClearValues = (const VkClearValue[]){
-          [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {.color = clearColor},
-          [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
-          [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {.depthStencil = {0.0f}},
+          [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = {.color = clearColor},
+          [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
+          [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {.depthStencil = {0.0f}},
       },
   };
   vkCmdBeginRenderPass(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -833,16 +818,6 @@ typedef struct VkmTextureCreateInfo {
   VkImageAspectFlags aspectMask;
   MidLocality        locality;
 } VkmTextureCreateInfo;
-#define VKM_DEFAULT_TEXTURE_IMAGE_CREATE_INFO     \
-  (VkImageCreateInfo) {                           \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, \
-    .imageType = VK_IMAGE_TYPE_2D,                \
-    .format = VK_FORMAT_B8G8R8A8_SRGB,            \
-    .mipLevels = 1,                               \
-    .arrayLayers = 1,                             \
-    .samples = VK_SAMPLE_COUNT_1_BIT,             \
-    .usage = VK_IMAGE_USAGE_SAMPLED_BIT           \
-  }
 void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, MidVkTexture* pTexture);
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
 

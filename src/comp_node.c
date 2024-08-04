@@ -324,7 +324,7 @@ run_loop:
                 const VkImageMemoryBarrier2 barriers[] = {
                     VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebuffers[nodeFramebufferIndex].colorImage),
                     VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebuffers[nodeFramebufferIndex].normalImage),
-                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebuffers[nodeFramebufferIndex].gBufferImage, 0, VKM_G_BUFFER_LEVELS),
+                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodesHot[i].framebuffers[nodeFramebufferIndex].gBufferImage, 0, MXC_NODE_GBUFFER_LEVELS),
                 };
                 CmdPipelineImageBarriers2(cmd, _countof(barriers), barriers);
                 break;
@@ -396,7 +396,7 @@ run_loop:
       ResetQueryPool(device, timeQueryPool, 0, 2);
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-      vkmCmdBeginPass(cmd, stdRenderPass, VKM_PASS_CLEAR_COLOR, framebuffer, framebufferViews[framebufferIndex]);
+      vkmCmdBeginPass(cmd, stdRenderPass, MIDVK_PASS_CLEAR_COLOR, framebuffer, framebufferViews[framebufferIndex]);
 
       CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipe);
       CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);

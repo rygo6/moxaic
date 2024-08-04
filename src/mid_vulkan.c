@@ -91,13 +91,13 @@ enum VkmPipeVertexAttributeStandardIndices {
   VKM_PIPE_VERTEX_ATTRIBUTE_STD_COUNT,
 };
 static void CreateStdPipeLayout() {
-  VkDescriptorSetLayout pSetLayouts[VKM_PIPE_SET_STD_INDEX_COUNT];
-  pSetLayouts[VKM_PIPE_SET_STD_GLOBAL_INDEX] = context.stdPipeLayout.globalSetLayout;
-  pSetLayouts[VKM_PIPE_SET_STD_MATERIAL_INDEX] = context.stdPipeLayout.materialSetLayout;
-  pSetLayouts[VKM_PIPE_SET_STD_OBJECT_INDEX] = context.stdPipeLayout.objectSetLayout;
+  VkDescriptorSetLayout pSetLayouts[MIDVK_PIPE_SET_STD_INDEX_COUNT];
+  pSetLayouts[MIDVK_PIPE_SET_STD_GLOBAL_INDEX] = context.stdPipeLayout.globalSetLayout;
+  pSetLayouts[MIDVK_PIPE_SET_STD_MATERIAL_INDEX] = context.stdPipeLayout.materialSetLayout;
+  pSetLayouts[MIDVK_PIPE_SET_STD_OBJECT_INDEX] = context.stdPipeLayout.objectSetLayout;
   const VkPipelineLayoutCreateInfo createInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-      .setLayoutCount = VKM_PIPE_SET_STD_INDEX_COUNT,
+      .setLayoutCount = MIDVK_PIPE_SET_STD_INDEX_COUNT,
       .pSetLayouts = pSetLayouts,
   };
   MIDVK_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, MIDVK_ALLOC, &context.stdPipeLayout.pipeLayout));
@@ -518,7 +518,7 @@ void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   const VkExportMemoryAllocateInfo exportMemAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
       .pNext = pDedicatedAllocInfo,
-      .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
+      .handleTypes = MIDVK_EXTERNAL_HANDLE_TYPE,
   };
   const VkMemoryAllocateInfo memAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -708,7 +708,7 @@ void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, MidVkTextu
       const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .memory = pTexture->memory,
-          .handleType = VKM_EXTERNAL_HANDLE_TYPE};
+          .handleType = MIDVK_EXTERNAL_HANDLE_TYPE};
       MIDVK_INSTANCE_FUNC(vkGetMemoryWin32HandleKHR);
       MIDVK_REQUIRE(vkGetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &pTexture->externalHandle));
       break;
@@ -721,9 +721,16 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
   stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
   REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
   const VkDeviceSize imageBufferSize = width * height * 4;
-  VkImageCreateInfo  imageCreateInfo = VKM_DEFAULT_TEXTURE_IMAGE_CREATE_INFO;
-  imageCreateInfo.extent = (VkExtent3D){width, height, 1};
-  imageCreateInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  const VkImageCreateInfo imageCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = VK_FORMAT_B8G8R8A8_SRGB,
+      .extent = (VkExtent3D){width, height, 1},
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
   CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, VKM_LOCALITY_CONTEXT, &pTexture->memory, &pTexture->image, &pTexture->view);
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
@@ -747,40 +754,40 @@ void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebu
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
       .pNext = &(const VkFramebufferAttachmentsCreateInfo){
           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO,
-          .attachmentImageInfoCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+          .attachmentImageInfoCount = MIDVK_PASS_ATTACHMENT_STD_COUNT,
           .pAttachmentImageInfos = (const VkFramebufferAttachmentImageInfo[]){
               {
                   .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-                  .usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
+                  .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
                   .width = DEFAULT_WIDTH,
                   .height = DEFAULT_HEIGHT,
                   .layerCount = 1,
                   .viewFormatCount = 1,
-                  .pViewFormats = &vkmPassFormats[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX]
+                  .pViewFormats = &MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX]
               },
               {
                   .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-                  .usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+                  .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
                   .width = DEFAULT_WIDTH,
                   .height = DEFAULT_HEIGHT,
                   .layerCount = 1,
                   .viewFormatCount = 1,
-                  .pViewFormats = &vkmPassFormats[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX]
+                  .pViewFormats = &MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX]
               },
               {
                   .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-                  .usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+                  .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
                   .width = DEFAULT_WIDTH,
                   .height = DEFAULT_HEIGHT,
                   .layerCount = 1,
                   .viewFormatCount = 1,
-                  .pViewFormats = &vkmPassFormats[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX]
+                  .pViewFormats = &MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX]
               },
           },
       },
       .flags = VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT,
       .renderPass = renderPass,
-      .attachmentCount = VKM_PASS_ATTACHMENT_STD_COUNT,
+      .attachmentCount = MIDVK_PASS_ATTACHMENT_STD_COUNT,
       .width = DEFAULT_WIDTH,
       .height = DEFAULT_HEIGHT,
       .layers = 1,
@@ -789,39 +796,58 @@ void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebu
 }
 
 void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers) {
-  const VkExternalMemoryImageCreateInfo externalImageInfo = {
-      .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-      .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
-  };
-  VkmTextureCreateInfo createInfo = {
-      .imageCreateInfo = VKM_DEFAULT_TEXTURE_IMAGE_CREATE_INFO,
-      .locality = locality,
-  };
-  switch (locality) {
-    default:
-    case VKM_LOCALITY_CONTEXT:          break;
-    case VKM_LOCALITY_PROCESS:          break;
-    case VKM_LOCALITY_INTERPROCESS_EXPORTED: createInfo.imageCreateInfo.pNext = &externalImageInfo; break;
-  }
   for (int i = 0; i < framebufferCount; ++i) {
-    createInfo.imageCreateInfo.extent = (VkExtent3D){DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f};
-
-    createInfo.debugName = "CompColorFramebuffer";
-    createInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    createInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX];
-    createInfo.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    vkmCreateTexture(&createInfo, &pFrameBuffers[i].color);
-
-    createInfo.debugName = "CompNormalFramebuffer";
-    createInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    createInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX];
-    vkmCreateTexture(&createInfo, &pFrameBuffers[i].normal);
-
-    createInfo.debugName = "CompDepthFramebuffer";
-    createInfo.imageCreateInfo.format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
-    createInfo.imageCreateInfo.usage = vkmPassUsages[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX];
-    createInfo.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    vkmCreateTexture(&createInfo, &pFrameBuffers[i].depth);
+    const VkmTextureCreateInfo colorCreateInfo = {
+        .debugName = "CompColorFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+        },
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .locality = locality,
+    };
+    vkmCreateTexture(&colorCreateInfo, &pFrameBuffers[i].color);
+    const VkmTextureCreateInfo normalCreateInfo = {
+        .debugName = "CompNormalFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+        },
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .locality = locality,
+    };
+    vkmCreateTexture(&normalCreateInfo, &pFrameBuffers[i].normal);
+    const VkmTextureCreateInfo depthCreateInfo = {
+        .debugName = "CompDepthFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+        },
+        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+        .locality = locality,
+    };
+    vkmCreateTexture(&depthCreateInfo, &pFrameBuffers[i].depth);
   }
 }
 
@@ -892,7 +918,7 @@ void vkmInitialize() {
         //        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VKM_PLATFORM_SURFACE_EXTENSION_NAME,
+        MIDVK_PLATFORM_SURFACE_EXTENSION_NAME,
     };
     const VkInstanceCreateInfo instanceCreationInfo = {
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -1031,9 +1057,9 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
         VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
         VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
         VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
-        VKM_EXTERNAL_MEMORY_EXTENSION_NAME,
-        VKM_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-        VKM_EXTERNAL_FENCE_EXTENSION_NAME,
+        MIDVK_EXTERNAL_MEMORY_EXTENSION_NAME,
+        MIDVK_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+        MIDVK_EXTERNAL_FENCE_EXTENSION_NAME,
     };
     uint32_t activeQueueIndex = 0;
     uint32_t activeQueueCount = 0;
@@ -1101,9 +1127,9 @@ void vkmCreateStdRenderPass() {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
       .attachmentCount = 3,
       .pAttachments = (const VkAttachmentDescription2[]){
-          [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
+          [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-              .format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_COLOR_INDEX],
+              .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
               .samples = VK_SAMPLE_COUNT_1_BIT,
               .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
               .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -1112,9 +1138,9 @@ void vkmCreateStdRenderPass() {
               .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
               .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
           },
-          [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
+          [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-              .format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+              .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
               .samples = VK_SAMPLE_COUNT_1_BIT,
               .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
               .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -1123,9 +1149,9 @@ void vkmCreateStdRenderPass() {
               .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
               .finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
           },
-          [VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {
+          [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {
               .sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-              .format = vkmPassFormats[VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+              .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
               .samples = VK_SAMPLE_COUNT_1_BIT,
               .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
               .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -1142,22 +1168,22 @@ void vkmCreateStdRenderPass() {
               .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
               .colorAttachmentCount = 2,
               .pColorAttachments = (const VkAttachmentReference2[]){
-                  [VKM_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
+                  [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
                       .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-                      .attachment = VKM_PASS_ATTACHMENT_STD_COLOR_INDEX,
+                      .attachment = MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX,
                       .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                   },
-                  [VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
+                  [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
                       .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-                      .attachment = VKM_PASS_ATTACHMENT_STD_NORMAL_INDEX,
+                      .attachment = MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX,
                       .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                       .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                   },
               },
               .pDepthStencilAttachment = &(const VkAttachmentReference2){
                   .sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-                  .attachment = VKM_PASS_ATTACHMENT_STD_DEPTH_INDEX,
+                  .attachment = MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX,
                   .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
                   .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
               },
