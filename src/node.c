@@ -68,11 +68,11 @@ static void acceptIPCServer() {
   WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
 
   // Receive Node Process Handle
-  HANDLE nodeProcessHandle = INVALID_HANDLE_VALUE;
-  receiveLength = recv(clientSocket, &nodeProcessHandle, sizeof(HANDLE), 0);
-  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv node process handle failed");
-  printf("Received node process handle: %p size: %d\n", nodeProcessHandle, receiveLength);
-  ERR_CHECK(nodeProcessHandle == INVALID_HANDLE_VALUE, "Invalid node process handle");
+  DWORD nodeProcessId = 0;
+  receiveLength = recv(clientSocket, &nodeProcessId, sizeof(DWORD), 0);
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv node process id failed");
+  printf("Received node process id: %p size: %d\n", nodeProcessId, receiveLength);
+  ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
 
     // wait for creation
   ipcServerShared.requestNodeCreate = true;
@@ -80,15 +80,15 @@ static void acceptIPCServer() {
   sem_wait(&ipcServerShared.createNodeWaitSemaphore);
 
   MxcNode* pNode = &nodes[ipcServerShared.createdNodeHandle];
-  pNode->processHandle = nodeProcessHandle;
+  pNode->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);;
 
   const HANDLE currentHandle = GetCurrentProcess();
   MxcImportParam importParam;
 
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, nodeProcessHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, nodeProcessHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, nodeProcessHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
   }
   // need to export timelines
   //    DuplicateHandle(currentHandle, pNode->compTimeline, nodeProcessHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
@@ -169,10 +169,10 @@ void mxcConnectNodeIPC() {
   printf("Received from server: %s size: %d\n", buffer, receiveLength);
   WSA_ERR_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
 
-  const HANDLE currentHandle = GetCurrentProcess();
-  printf("Sending process handle: %p size: %llu\n", currentHandle, sizeof(HANDLE));
-  sendResult = send(clientSocket, &currentHandle, sizeof(HANDLE), 0);
-  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process handle failed");
+  const DWORD currentProcessId = GetCurrentProcessId();
+  printf("Sending process handle: %p size: %llu\n", currentProcessId, sizeof(DWORD));
+  sendResult = send(clientSocket, &currentProcessId, sizeof(DWORD), 0);
+  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
 
   printf("Waiting to receive node import data.\n");
   MxcImportParam importParam;
