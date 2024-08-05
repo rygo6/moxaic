@@ -51,40 +51,47 @@ static void* runIPCServerConnection(void* arg) {
 
 static void acceptIPCServer() {
   printf("Accepting connections on: '%s'\n", SOCKET_PATH);
+  int  receiveLength, sendResult;
+
   SOCKET clientSocket = accept(ipcServer.listenSocket, NULL, NULL);
   WSA_ERR_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
   printf("Accepted Connection.\n");
 
   // Receive Node Ack Message
-  char buffer[BUFFER_SIZE];
-  int  receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
-  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv nodeIPCAckMessage failed");
-  printf("Received node ack: %s size: %d\n", buffer, receiveLength);
-  ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
+  {
+    char buffer[sizeof(nodeIPCAckMessage)] = {};
+    receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
+    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv nodeIPCAckMessage failed");
+    printf("Received node ack: %s size: %d\n", buffer, receiveLength);
+    ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
+  }
 
   // Send Server Ack message
   printf("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
-  int sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
+  sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
   WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
 
   // Receive Node Process Handle
   DWORD nodeProcessId = 0;
   receiveLength = recv(clientSocket, &nodeProcessId, sizeof(DWORD), 0);
   WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv node process id failed");
-  printf("Received node process id: %p size: %d\n", nodeProcessId, receiveLength);
+  printf("Received node process id: %lu size: %d\n", nodeProcessId, receiveLength);
   ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
 
     // wait for creation
   ipcServerShared.requestNodeCreate = true;
   __atomic_thread_fence(__ATOMIC_RELEASE);
+
   sem_wait(&ipcServerShared.createNodeWaitSemaphore);
 
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
   MxcNodeContext* pNode = &nodeContexts[ipcServerShared.createdNodeHandle];
-  pNode->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);;
+  pNode->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
+  printf("Node process hand duplicated: %p\n", pNode->processHandle);
+  ERR_CHECK(pNode->processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
 
   const HANDLE currentHandle = GetCurrentProcess();
   MxcImportParam importParam;
-
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
     DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
@@ -145,6 +152,8 @@ void mxcShutdownIPCServer() {
 }
 
 void mxcConnectNodeIPC() {
+  printf("Connecting on: '%s'\n", SOCKET_PATH);
+  int  receiveLength, sendResult;
   SOCKET clientSocket = INVALID_SOCKET;
 
   SOCKADDR_UN address = {.sun_family = AF_UNIX};
@@ -160,17 +169,19 @@ void mxcConnectNodeIPC() {
   printf("Connected to server.\n");
 
   printf("Sending node ack: %s size: %llu\n", nodeIPCAckMessage, strlen(nodeIPCAckMessage));
-  int sendResult = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
+  sendResult = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
   WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send node ack failed");
 
-  char buffer[BUFFER_SIZE];
-  int  receiveLength = recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
-  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv compositor ack failed");
-  printf("Received from server: %s size: %d\n", buffer, receiveLength);
-  WSA_ERR_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
+  {
+    char buffer[sizeof(serverIPCAckMessage)] = {};
+    receiveLength = recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
+    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv compositor ack failed");
+    printf("Received from server: %s size: %d\n", buffer, receiveLength);
+    WSA_ERR_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
+  }
 
   const DWORD currentProcessId = GetCurrentProcessId();
-  printf("Sending process handle: %p size: %llu\n", currentProcessId, sizeof(DWORD));
+  printf("Sending process handle: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
   sendResult = send(clientSocket, &currentProcessId, sizeof(DWORD), 0);
   WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
 
@@ -266,6 +277,7 @@ void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, No
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
   pNodeContext->pNode = pNode;
   pNodeContext->compCycleSkip = 16;
+  pNodeContext->processHandle = INVALID_HANDLE_VALUE;
 
   *pNodeHandle = nodeHandle;
 
