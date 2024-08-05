@@ -143,7 +143,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   }
 }
 
-void* mxcTestNodeThread(const MxcNode* pNodeContext) {
+void* mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
 
   const MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
 

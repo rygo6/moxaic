@@ -79,7 +79,7 @@ static void acceptIPCServer() {
   __atomic_thread_fence(__ATOMIC_RELEASE);
   sem_wait(&ipcServerShared.createNodeWaitSemaphore);
 
-  MxcNode* pNode = &nodes[ipcServerShared.createdNodeHandle];
+  MxcNodeContext* pNode = &nodeContexts[ipcServerShared.createdNodeHandle];
   pNode->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);;
 
   const HANDLE currentHandle = GetCurrentProcess();
@@ -193,7 +193,7 @@ MxcCompNodeShared compNodeShared;
 
 NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
 size_t        nodeCount = 0;
-MxcNode       nodes[MXC_NODE_CAPACITY] = {};
+MxcNodeContext  nodeContexts[MXC_NODE_CAPACITY] = {};
 MxcNodeShared nodesShared[MXC_NODE_CAPACITY] = {};
 MxcNodeCompData nodeCompData[MXC_NODE_CAPACITY] = {};
 
@@ -205,26 +205,26 @@ void mxcRegisterNodeThread(NodeHandle handle) {
   nodesShared[handle].active = true;
   nodesShared[handle].radius = 0.5;
 
-  nodeCompData[handle].cmd = nodes[handle].cmd;
-  nodeCompData[handle].type = nodes[handle].nodeType;
-  nodeCompData[handle].nodeTimeline = nodes[handle].nodeTimeline;
+  nodeCompData[handle].cmd = nodeContexts[handle].cmd;
+  nodeCompData[handle].type = nodeContexts[handle].nodeType;
+  nodeCompData[handle].nodeTimeline = nodeContexts[handle].nodeTimeline;
   nodeCompData[handle].transform.rotation = QuatFromEuler(nodeCompData[handle].transform.euler);
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    nodeCompData[handle].framebufferImages[i].color = nodes[handle].framebufferTextures[i].color.image;
-    nodeCompData[handle].framebufferImages[i].normal = nodes[handle].framebufferTextures[i].normal.image;
-    nodeCompData[handle].framebufferImages[i].gBuffer = nodes[handle].framebufferTextures[i].gBuffer.image;
-    nodeCompData[handle].framebufferViews[i].color = nodes[handle].framebufferTextures[i].color.view;
-    nodeCompData[handle].framebufferViews[i].normal = nodes[handle].framebufferTextures[i].normal.view;
-    nodeCompData[handle].framebufferViews[i].gBuffer = nodes[handle].framebufferTextures[i].gBuffer.view;
+    nodeCompData[handle].framebufferImages[i].color = nodeContexts[handle].framebufferTextures[i].color.image;
+    nodeCompData[handle].framebufferImages[i].normal = nodeContexts[handle].framebufferTextures[i].normal.image;
+    nodeCompData[handle].framebufferImages[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.image;
+    nodeCompData[handle].framebufferViews[i].color = nodeContexts[handle].framebufferTextures[i].color.view;
+    nodeCompData[handle].framebufferViews[i].normal = nodeContexts[handle].framebufferTextures[i].normal.view;
+    nodeCompData[handle].framebufferViews[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.view;
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
-  mxcRunNode(&nodes[handle]);
+  mxcRunNode(&nodeContexts[handle]);
 }
 
-void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle) {
+void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle) {
   NodeHandle      nodeHandle = 0;
-  MxcNode* pNodeContext = &nodes[nodeHandle];
+  MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
 
   // Should I create every time? No. Should probably release so it doesn't take up memory
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -257,7 +257,7 @@ void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const
 
 void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle) {
   NodeHandle      nodeHandle = 1;
-  MxcNode* pNodeContext = &nodes[nodeHandle];
+  MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
 
   mxcCreateNodeFramebufferExport(VKM_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebufferTextures);
   vkmCreateTimeline(VKM_LOCALITY_INTERPROCESS_EXPORTED, &pNodeContext->nodeTimeline);
@@ -272,7 +272,7 @@ void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, No
   printf("Node Request Process Success. Handle: %d\n", nodeHandle);
 }
 
-void mxcRunNode(const MxcNode* pNodeContext) {
+void mxcRunNode(const MxcNodeContext* pNodeContext) {
   switch (pNodeContext->nodeType) {
     case MXC_NODE_TYPE_THREAD:
       int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))pNodeContext->runFunc, pNodeContext);

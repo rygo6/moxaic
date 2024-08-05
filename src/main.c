@@ -125,7 +125,7 @@ int main(void) {
   compNodeShared.chain = compNode.swap.chain;
   compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
   compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
-  const MxcNode compNodeContext = {
+  const MxcNodeContext compNodeContext = {
       .nodeType = MXC_NODE_TYPE_THREAD,
       .pNode = &compNode,
       .runFunc = mxcCompNodeThread,
@@ -140,7 +140,7 @@ int main(void) {
     mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
     const MxcTestNodeCreateInfo createInfo = {
         .transform = {0, 0, 0},
-        .pFramebuffers = nodes[testNodeHandle].framebufferTextures,
+        .pFramebuffers = nodeContexts[testNodeHandle].framebufferTextures,
     };
     mxcCreateTestNode(&createInfo, &testNode);
   }

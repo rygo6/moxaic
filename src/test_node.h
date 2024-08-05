@@ -44,4 +44,4 @@ typedef struct MxcTestNode {
 } MxcTestNode;
 
 void  mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode);
-void* mxcTestNodeThread(const MxcNode* pNodeContext);
+void* mxcTestNodeThread(const MxcNodeContext* pNodeContext);

@@ -62,13 +62,13 @@ extern NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
 extern size_t        nodeCount;
 
 // Full data of a node
-typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
+typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
   MxcNodeType nodeType;
 
   int compCycleSkip;
 
   const void* pNode;
-  void* (*runFunc)(const struct MxcNode* pNode);
+  void* (*runFunc)(const struct MxcNodeContext* pNode);
 
   VkCommandPool   pool;
   VkCommandBuffer cmd;
@@ -80,8 +80,8 @@ typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but
   pthread_t threadId;
   HANDLE    processHandle;
 
-} MxcNode;
-extern MxcNode       nodes[MXC_NODE_CAPACITY];
+} MxcNodeContext;
+extern MxcNodeContext nodeContexts[MXC_NODE_CAPACITY];
 
 // Node data shared across thread or IPC
 typedef struct CACHE_ALIGN MxcNodeShared {
@@ -145,10 +145,10 @@ static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
   }
 }
 
-void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle);
+void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle);
 void mxcRegisterNodeThread(NodeHandle handle);
 void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle);
-void mxcRunNode(const MxcNode* pNodeContext);
+void mxcRunNode(const MxcNodeContext* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
 void mxcCreateNodeRenderPass();
