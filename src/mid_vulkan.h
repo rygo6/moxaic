@@ -817,7 +817,7 @@ typedef struct VkmTextureCreateInfo {
 void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, MidVkTexture* pTexture);
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
 
-void vkmCreateTimeline(VkSemaphore* pSemaphore);
+void vkmCreateTimeline(const MidLocality locality, VkSemaphore* pSemaphore);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 

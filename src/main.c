@@ -106,6 +106,7 @@ int main(void) {
   vkmCreateStdPipeLayout();
   vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
+
   MxcCompNode compNode;
   {
     vkmBeginAllocationRequests();
@@ -117,18 +118,6 @@ int main(void) {
     vkmEndAllocationRequests();
     mxcBindUpdateCompNode(&compNodeInfo, &compNode);
   }
-
-  NodeHandle  testNodeHandle;
-  MxcTestNode testNode;
-  {
-    mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
-    const MxcTestNodeCreateInfo createInfo = {
-        .transform = {0, 0, 0},
-        .pFramebuffers = nodes[testNodeHandle].framebufferTextures,
-    };
-    mxcCreateTestNode(&createInfo, &testNode);
-  }
-
   // move to register method like mxcRegisterCompNodeThread?
   compNodeShared = (MxcCompNodeShared){};
   compNodeShared.cmd = compNode.cmd;
@@ -144,7 +133,19 @@ int main(void) {
   };
   mxcRunNode(&compNodeContext);
 
+
+  NodeHandle  testNodeHandle;
+  MxcTestNode testNode;
+  {
+    mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
+    const MxcTestNodeCreateInfo createInfo = {
+        .transform = {0, 0, 0},
+        .pFramebuffers = nodes[testNodeHandle].framebufferTextures,
+    };
+    mxcCreateTestNode(&createInfo, &testNode);
+  }
   mxcRegisterNodeThread(testNodeHandle);
+
 
   {
     VkDevice device = context.device;
@@ -183,6 +184,19 @@ int main(void) {
       // Try submitting nodes before waiting to update window again.
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
       mxcSubmitNodeThreadQueues(graphicsQueue);
+
+      __atomic_thread_fence(__ATOMIC_ACQUIRE);
+      if (ipcServerShared.requestNodeCreate) {
+        NodeHandle  processNodeHandle;
+        MxcTestNode processNode;
+        mxcRequestNodeProcess(compNode.timeline, &processNode, &processNodeHandle);
+
+        ipcServerShared.requestNodeCreate = false;
+        ipcServerShared.createdNodeHandle = processNodeHandle;
+        __atomic_thread_fence(__ATOMIC_RELEASE);
+
+        sem_post(&ipcServerShared.createNodeWaitSemaphore);
+      }
     }
   }
 

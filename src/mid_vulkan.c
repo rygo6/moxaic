@@ -1272,7 +1272,7 @@ void vkmCreateStdPipeLayout() {
   CreateStdPipeLayout();
 }
 
-void vkmCreateTimeline(VkSemaphore* pSemaphore) {
+void vkmCreateTimeline(const MidLocality locality, VkSemaphore* pSemaphore) {
   const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
@@ -1280,6 +1280,7 @@ void vkmCreateTimeline(VkSemaphore* pSemaphore) {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
       .pNext = &timelineSemaphoreTypeCreateInfo,
   };
+  // EXPORT TIMELINE
   MIDVK_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, MIDVK_ALLOC, pSemaphore));
 }
 

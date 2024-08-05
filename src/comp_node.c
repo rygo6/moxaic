@@ -194,7 +194,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     midVkCreateFramebufferTexture(MIDVK_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
     vkmCreateFramebuffer(context.renderPass, &pNode->framebuffer);
     vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
-    vkmCreateTimeline(&pNode->timeline);
+    vkmCreateTimeline(VKM_LOCALITY_INTERPROCESS_EXPORTED, &pNode->timeline);
   }
 
   {  // Copy needed state

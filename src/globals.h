@@ -5,10 +5,15 @@
 
 #define MID_DEBUG
 extern void Panic(const char* file, int line, const char* message);
-#define PANIC(message) Panic(__FILE__, __LINE__, message)
-#define REQUIRE(condition, message)        \
-  if (__builtin_expect(!(condition), 0)) { \
-    PANIC(message);                        \
+#define PANIC(_message) Panic(__FILE__, __LINE__, _message)
+#define REQUIRE(_condition, _message)       \
+  if (__builtin_expect(!(_condition), 0)) { \
+    PANIC(_message);                        \
+  }
+#define REQUIRE_ERR(_err, _message)            \
+  if (__builtin_expect(!!(_err), 0)) {         \
+    fprintf(stderr, "Error Code: %d\n", _err); \
+    PANIC(_message);                           \
   }
 
 #define CACHE_ALIGN __attribute((aligned(64)))

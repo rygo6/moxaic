@@ -62,7 +62,7 @@ extern NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
 extern size_t        nodeCount;
 
 // Full data of a node
-typedef struct PACKED MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
+typedef struct MxcNode {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
   MxcNodeType nodeType;
 
   int compCycleSkip;
@@ -147,6 +147,7 @@ static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
 
 void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle);
 void mxcRegisterNodeThread(NodeHandle handle);
+void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle);
 void mxcRunNode(const MxcNode* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
@@ -155,25 +156,36 @@ void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFra
 void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures);
 
 // Process IPC
+#include <pthread.h>
+#include <semaphore.h>
+typedef struct IPCServerShared {
+  // Wait on this semaphore for node to be created
+  sem_t createNodeWaitSemaphore;
+  // Handle of the created node
+  NodeHandle createdNodeHandle;
+  // Set true for main thread to create node
+  volatile bool requestNodeCreate;
+} IPCServerShared;
+extern IPCServerShared ipcServerShared;
+
 void mxcInitializeIPCServer();
 void mxcShutdownIPCServer();
 void mxcConnectNodeIPC();
 void mxcShutdownNodeIPC();
 
+
+
 void mxcCreateSharedBuffer();
 void mxcCreateProcess();
 
 typedef struct MxcImportParam {
-  HANDLE colorFramebuffer0ExternalHandle;
-  HANDLE colorFramebuffer1ExternalHandle;
-  HANDLE normalFramebuffer0ExternalHandle;
-  HANDLE normalFramebuffer1ExternalHandle;
-  HANDLE gBufferFramebuffer0ExternalHandle;
-  HANDLE gBufferFramebuffer1ExternalHandle;
-  HANDLE depthFramebuffer0ExternalHandle;
-  HANDLE depthFramebuffer1ExternalHandle;
-  HANDLE compositorSemaphoreExternalHandle;
-  HANDLE nodeSemaphoreExternalHandle;
+  struct {
+    HANDLE color;
+    HANDLE normal;
+    HANDLE gbuffer;
+  } framebufferHandles[MIDVK_SWAP_COUNT];
+  HANDLE compTimelineHandle;
+  HANDLE nodeTimelineHandle;
 } MxcImportParam;
 
 typedef void (*MxcInterProcessFuncPtr)(void*);

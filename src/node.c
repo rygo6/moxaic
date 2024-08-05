@@ -8,11 +8,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <pthread.h>
+#include <semaphore.h>
+
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
 #define BUFFER_SIZE 128
 
-static pthread_t serverThreadId;
-static SOCKET listenSocket = INVALID_SOCKET;
+static struct {
+  SOCKET          listenSocket;
+  pthread_t       thread;
+} ipcServer;
+IPCServerShared ipcServerShared;
+
+//static pthread_t serverThreadId;
+//static pthread_mutex_t serverCreateNodeMutex = PTHREAD_MUTEX_INITIALIZER;
+//static SOCKET listenSocket = INVALID_SOCKET;
 const static char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
 const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
@@ -22,83 +32,94 @@ static void* runIPCServerConnection(void* arg) {
   return NULL;
 }
 
+#define ERR_CHECK(_command, _message)                 \
+  {                                                   \
+    int _result = _command;                           \
+    if (__builtin_expect(!!(_result), 0)) {           \
+      fprintf(stderr, "%s: %d\n", _message, _result); \
+      goto Exit;                                      \
+    }                                                 \
+  }
+#define WSA_ERR_CHECK(_command, _message)                       \
+  {                                                             \
+    int _result = _command;                                     \
+    if (__builtin_expect(!!(_result), 0)) {                     \
+      fprintf(stderr, "%s: %d\n", _message, WSAGetLastError()); \
+      goto Exit;                                                \
+    }                                                           \
+  }
+
+static void acceptIPCServer() {
+  printf("Accepting connections on: '%s'\n", SOCKET_PATH);
+  SOCKET clientSocket = accept(ipcServer.listenSocket, NULL, NULL);
+  WSA_ERR_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
+  printf("Accepted Connection.\n");
+
+  // Receive Node Ack Message
+  char buffer[BUFFER_SIZE];
+  int  receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv nodeIPCAckMessage failed");
+  printf("Received node ack: %s size: %d\n", buffer, receiveLength);
+  ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
+
+  // Send Server Ack message
+  printf("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
+  int sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
+  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
+
+  // Receive Node Process Handle
+  HANDLE nodeProcessHandle = INVALID_HANDLE_VALUE;
+  receiveLength = recv(clientSocket, &nodeProcessHandle, sizeof(HANDLE), 0);
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv node process handle failed");
+  printf("Received node process handle: %p size: %d\n", nodeProcessHandle, receiveLength);
+  ERR_CHECK(nodeProcessHandle == INVALID_HANDLE_VALUE, "Invalid node process handle");
+
+    // wait for creation
+  ipcServerShared.requestNodeCreate = true;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  sem_wait(&ipcServerShared.createNodeWaitSemaphore);
+
+  MxcNode* pNode = &nodes[ipcServerShared.createdNodeHandle];
+  pNode->processHandle = nodeProcessHandle;
+
+  const HANDLE currentHandle = GetCurrentProcess();
+  MxcImportParam importParam;
+
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, nodeProcessHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, nodeProcessHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, nodeProcessHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
+  }
+  // need to export timelines
+  //    DuplicateHandle(currentHandle, pNode->compTimeline, nodeProcessHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+  //    DuplicateHandle(currentHandle, pNode->nodeTimeline, nodeProcessHandle, &importParam.nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+
+  nodesShared[ipcServerShared.createdNodeHandle].active = true;
+
+ Exit:
+   if (clientSocket != INVALID_SOCKET)
+    closesocket(clientSocket);
+}
+
 static void* runIPCServer(void* arg) {
-  int         result;
-  char        buffer[BUFFER_SIZE];
-  SOCKADDR_UN address = {};
+  SOCKADDR_UN address = {.sun_family = AF_UNIX};
   WSADATA     wsaData = {};
 
-  result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-  if (result != 0) {
-    printf("WSAStartup failed: %d\n", result);
-    goto Exit;
-  }
+  ERR_CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
+  ERR_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
 
-  listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (listenSocket == INVALID_SOCKET) {
-    printf("Socket failed: %d\n", WSAGetLastError());
-    goto Exit;
-  }
-
-  address.sun_family = AF_UNIX;
-  result = strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1);
-  if (result != 0) {
-    printf("Address copy failed: %d\n", result);
-    goto Exit;
-  }
-
-  result = bind(listenSocket, (struct sockaddr*)&address, sizeof(address));
-  if (result == SOCKET_ERROR) {
-    printf("Bind failed: %d\n", WSAGetLastError());
-    goto Exit;
-  }
-
-  result = listen(listenSocket, SOMAXCONN);
-  if (result == SOCKET_ERROR) {
-    printf("Listen failed: %d\n", WSAGetLastError());
-    goto Exit;
-  }
+  ipcServer.listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
+  WSA_ERR_CHECK(ipcServer.listenSocket == INVALID_SOCKET, "Socket failed");
+  WSA_ERR_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Bind failed");
+  WSA_ERR_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
 
   while (isRunning) {
-    printf("Accepting connections on: '%s'\n", SOCKET_PATH);
-    SOCKET clientSocket = accept(listenSocket, NULL, NULL);
-    if (clientSocket == INVALID_SOCKET) {
-      printf("Accept failed: %d\n", WSAGetLastError());
-      continue;
-    }
-    printf("Accepted Connection.\n");
-
-    int len = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
-    if (len == SOCKET_ERROR) {
-      printf("Recv failed: %d", WSAGetLastError());
-      goto ClientExit;
-    }
-
-    buffer[len] = '\0';
-    printf("Received from node: %s\n", buffer);
-    if (strcmp(buffer, nodeIPCAckMessage)) {
-      printf("Unexpected node message.\n");
-      goto ClientExit;
-    }
-
-    int sendResult = send(clientSocket, serverIPCAckMessage, (int)strlen(serverIPCAckMessage), 0);
-    if (sendResult == SOCKET_ERROR) {
-      printf("Send failed: %d\n", WSAGetLastError());
-      goto ClientExit;
-    }
-    printf("Sent ack message %zu bytes: '%s'\n", strlen(serverIPCAckMessage), serverIPCAckMessage);
-
-    MxcImportParam importParam = {
-
-    };
-
-  ClientExit:
-    closesocket(clientSocket);
+    acceptIPCServer();
   }
 
 Exit:
-  if (listenSocket != INVALID_SOCKET) {
-    closesocket(listenSocket);
+  if (ipcServer.listenSocket != INVALID_SOCKET) {
+    closesocket(ipcServer.listenSocket);
   }
   // Analogous to `unlink`
   DeleteFileA(SOCKET_PATH);
@@ -107,74 +128,56 @@ Exit:
 }
 
 void mxcInitializeIPCServer() {
-  int result = pthread_create(&serverThreadId, NULL, runIPCServer, NULL);
-  REQUIRE(result == 0, "IPC server pipe creation Fail!");
+  ipcServer.listenSocket = INVALID_SOCKET;
+  sem_init(&ipcServerShared.createNodeWaitSemaphore, 0, 0);
+  REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, runIPCServer, NULL), "IPC server pipe creation Fail!");
 }
 
 void mxcShutdownIPCServer() {
-  int cancelResult = pthread_cancel(serverThreadId);
+  int cancelResult = pthread_cancel(ipcServer.thread);
   if (cancelResult != 0) perror("IPC server thread cancel Fail!");
-  if (listenSocket != INVALID_SOCKET) {
-    closesocket(listenSocket);
+  if (ipcServer.listenSocket != INVALID_SOCKET) {
+    closesocket(ipcServer.listenSocket);
   }
   DeleteFileA(SOCKET_PATH);
   WSACleanup();
+  sem_destroy(&ipcServerShared.createNodeWaitSemaphore);
 }
 
 void mxcConnectNodeIPC() {
-  int         result, len;
-  char        buffer[BUFFER_SIZE];
   SOCKET clientSocket = INVALID_SOCKET;
-  SOCKADDR_UN address = {};
-  WSADATA     wsaData = {};
 
-  result = WSAStartup(MAKEWORD(2, 2), &wsaData);
-  if (result != 0) {
-    printf("WSAStartup failed with error: %d\n", result);
-    goto Exit;
-  }
+  SOCKADDR_UN address = {.sun_family = AF_UNIX};
+  ERR_CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
+
+  WSADATA wsaData = {};
+  ERR_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
 
   clientSocket = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (clientSocket == INVALID_SOCKET) {
-    printf("Socket creation failed: %d\n", WSAGetLastError());
-    goto Exit;
-  }
+  WSA_ERR_CHECK(clientSocket == INVALID_SOCKET, "Socket creation failed");
 
-  address.sun_family = AF_UNIX;
-  strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
-
-  result = connect(clientSocket, (struct sockaddr*)&address, sizeof(address));
-  if (result == SOCKET_ERROR) {
-    printf("Connect failed: %d", WSAGetLastError());
-    goto Exit;
-  }
+  WSA_ERR_CHECK(connect(clientSocket, (struct sockaddr*)&address, sizeof(address)), "Connect failed");
   printf("Connected to server.\n");
 
-  result = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
-  if (result == SOCKET_ERROR) {
-    printf("Send failed: %d\n", WSAGetLastError());
-    goto Exit;
-  }
+  printf("Sending node ack: %s size: %llu\n", nodeIPCAckMessage, strlen(nodeIPCAckMessage));
+  int sendResult = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
+  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send node ack failed");
 
-  len = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
-  if (len == SOCKET_ERROR) {
-    printf("Recv failed: %d\n", WSAGetLastError());
-    goto Exit;
-  }
+  char buffer[BUFFER_SIZE];
+  int  receiveLength = recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv compositor ack failed");
+  printf("Received from server: %s size: %d\n", buffer, receiveLength);
+  WSA_ERR_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
 
-  buffer[len] = '\0';
-  printf("Received from server: %s\n", buffer);
-  if (strcmp(buffer, serverIPCAckMessage)) {
-    printf("Unexpected server message.\n");
-    goto Exit;
-  }
+  const HANDLE currentHandle = GetCurrentProcess();
+  printf("Sending process handle: %p size: %llu\n", currentHandle, sizeof(HANDLE));
+  sendResult = send(clientSocket, &currentHandle, sizeof(HANDLE), 0);
+  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process handle failed");
 
   printf("Waiting to receive node import data.\n");
-  len = recv(clientSocket, buffer, BUFFER_SIZE - 1, 0);
-  if (len == SOCKET_ERROR) {
-    printf("Recv failed: %d\n", WSAGetLastError());
-    goto Exit;
-  }
+  MxcImportParam importParam;
+  receiveLength = recv(clientSocket, &importParam, sizeof(MxcImportParam), 0);
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv import data failed");
 
 Exit:
   if (clientSocket != INVALID_SOCKET)
@@ -183,6 +186,7 @@ Exit:
 }
 
 void mxcShutdownNodeIPC() {
+
 }
 
 MxcCompNodeShared compNodeShared;
@@ -237,7 +241,7 @@ void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const
   MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
   mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
-  vkmCreateTimeline(&pNodeContext->nodeTimeline);
+  vkmCreateTimeline(VKM_LOCALITY_CONTEXT, &pNodeContext->nodeTimeline);
 
 
   pNodeContext->compTimeline = compTimeline;
@@ -247,22 +251,25 @@ void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const
   pNodeContext->runFunc = runFunc;
 
   *pNodeHandle = nodeHandle;
+
+  printf("Node Request Thread Success. Handle: %d\n", nodeHandle);
 }
 
-void mxcRequestNodeProcess(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNode*), const void* pNode, NodeHandle* pNodeHandle) {
-  NodeHandle      nodeHandle = 0;
+void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle) {
+  NodeHandle      nodeHandle = 1;
   MxcNode* pNodeContext = &nodes[nodeHandle];
 
   mxcCreateNodeFramebufferExport(VKM_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebufferTextures);
-  vkmCreateTimeline(&pNodeContext->nodeTimeline);
+  vkmCreateTimeline(VKM_LOCALITY_INTERPROCESS_EXPORTED, &pNodeContext->nodeTimeline);
 
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
   pNodeContext->pNode = pNode;
   pNodeContext->compCycleSkip = 16;
-  pNodeContext->runFunc = runFunc;
 
   *pNodeHandle = nodeHandle;
+
+  printf("Node Request Process Success. Handle: %d\n", nodeHandle);
 }
 
 void mxcRunNode(const MxcNode* pNodeContext) {
