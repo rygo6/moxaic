@@ -107,44 +107,37 @@ int main(void) {
   vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
 
-  MxcCompNode compNode;
-  {
-    vkmBeginAllocationRequests();
-    const MxcCompNodeCreateInfo compNodeInfo = {
-        .compMode = MXC_COMP_MODE_TESS,
-        .surface = surface,
-    };
-    mxcCreateCompNode(&compNodeInfo, &compNode);
-    vkmEndAllocationRequests();
-    mxcBindUpdateCompNode(&compNodeInfo, &compNode);
-  }
+//  MxcCompNode compNode;
+//  {
+//    vkmBeginAllocationRequests();
+//    const MxcCompNodeCreateInfo compNodeInfo = {
+//        .compMode = MXC_COMP_MODE_TESS,
+//        .surface = surface,
+//    };
+//    mxcCreateCompNode(&compNodeInfo, &compNode);
+//    vkmEndAllocationRequests();
+//    mxcBindUpdateCompNode(&compNodeInfo, &compNode);
+//  }
   // move to register method like mxcRegisterCompNodeThread?
-  compNodeShared = (MxcCompNodeShared){};
-  compNodeShared.cmd = compNode.cmd;
-  compNodeShared.compTimeline = compNode.timeline;
-  compNodeShared.chain = compNode.swap.chain;
-  compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
-  compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
-  const MxcNodeContext compNodeContext = {
-      .nodeType = MXC_NODE_TYPE_THREAD,
-      .pNode = &compNode,
-      .runFunc = mxcCompNodeThread,
-      .compTimeline = compNode.timeline,
-  };
-  mxcRunNode(&compNodeContext);
+//  compNodeShared = (MxcCompNodeShared){};
+//  compNodeShared.cmd = compNode.cmd;
+//  compNodeShared.compTimeline = compNode.timeline;
+//  compNodeShared.chain = compNode.swap.chain;
+//  compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
+//  compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
+//  const MxcNodeContext compNodeContext = {
+//      .nodeType = MXC_NODE_TYPE_THREAD,
+//      .pNode = &compNode,
+//      .runFunc = mxcCompNodeThread,
+//      .compTimeline = compNode.timeline,
+//  };
+//  mxcRunNode(&compNodeContext);
+  mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
 
 
-  NodeHandle  testNodeHandle;
-  MxcTestNode testNode;
-  {
-    mxcRequestNodeThread(compNode.timeline, mxcTestNodeThread, &testNode, &testNodeHandle);
-    const MxcTestNodeCreateInfo createInfo = {
-        .transform = {0, 0, 0},
-        .pFramebuffers = nodeContexts[testNodeHandle].framebufferTextures,
-    };
-    mxcCreateTestNode(&createInfo, &testNode);
-  }
-  mxcRegisterNodeThread(testNodeHandle);
+  NodeHandle testNodeHandle;
+  mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
+  mxcRunNodeThread(testNodeHandle);
 
 
   {
@@ -185,18 +178,18 @@ int main(void) {
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
       mxcSubmitNodeThreadQueues(graphicsQueue);
 
-      __atomic_thread_fence(__ATOMIC_ACQUIRE);
-      if (ipcServerShared.requestNodeCreate) {
-        NodeHandle  processNodeHandle;
-        MxcTestNode processNode;
-        mxcRequestNodeProcess(compNode.timeline, &processNode, &processNodeHandle);
-
-        ipcServerShared.requestNodeCreate = false;
-        ipcServerShared.createdNodeHandle = processNodeHandle;
-        __atomic_thread_fence(__ATOMIC_RELEASE);
-
-        sem_post(&ipcServerShared.createNodeWaitSemaphore);
-      }
+//      __atomic_thread_fence(__ATOMIC_ACQUIRE);
+//      if (ipcServerShared.requestNodeCreate) {
+//        NodeHandle  processNodeHandle;
+//        MxcTestNode processNode;
+//        mxcRequestNodeProcess(compNode.timeline, &processNode, &processNodeHandle);
+//
+//        ipcServerShared.requestNodeCreate = false;
+//        ipcServerShared.createdNodeHandle = processNodeHandle;
+//        __atomic_thread_fence(__ATOMIC_RELEASE);
+//
+//        sem_post(&ipcServerShared.createNodeWaitSemaphore);
+//      }
     }
   }
 

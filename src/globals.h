@@ -24,7 +24,6 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 
 #define HOT    __attribute__((hot))
-#define LOCAL  _Thread_local
 #define INLINE __attribute__((always_inline)) inline
 
 extern volatile bool isCompositor;
@@ -32,7 +31,7 @@ extern volatile bool isCompositor;
 extern volatile bool isRunning;
 #define CHECK_RUNNING                      \
   if (__builtin_expect(!(isRunning), 0)) { \
-    return NULL;                           \
+    return;                                \
   }
 
 typedef enum MxcCycle {

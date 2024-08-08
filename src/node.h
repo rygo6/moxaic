@@ -43,16 +43,25 @@ typedef struct MxcNodeFramebufferTexture {
   MidVkTexture gBuffer;
 } MxcNodeFramebufferTexture;
 
+typedef struct MxcCompNodeContext {
+  void* (*runFunc)(const struct MxcCompNodeContext* pNode);
+  VkCommandPool   pool;
+  VkCommandBuffer cmd;
+  VkSemaphore     compTimeline;
+  VkmSwap         swap;
+  pthread_t       threadId;
+} MxcCompNodeContext;
 typedef struct CACHE_ALIGN MxcCompNodeShared {
   // shared
   volatile uint32_t swapIndex;
+
+  // I don't need any of this here do I ? Just get it from context on main thread
   VkCommandBuffer   cmd;
   VkSemaphore       compTimeline;
   VkSwapchainKHR    chain;
   VkSemaphore       acquireSemaphore;
   VkSemaphore       renderCompleteSemaphore;
 } MxcCompNodeShared;
-
 extern MxcCompNodeShared compNodeShared;
 
 #define MXC_NODE_CAPACITY 256
@@ -145,8 +154,9 @@ static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
   }
 }
 
-void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle);
-void mxcRegisterNodeThread(NodeHandle handle);
+void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*));
+void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pHandle);
+void mxcRunNodeThread(NodeHandle handle);
 void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle);
 void mxcRunNode(const MxcNodeContext* pNodeContext);
 

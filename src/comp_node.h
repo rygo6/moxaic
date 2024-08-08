@@ -13,14 +13,13 @@ typedef enum MxcCompMode {
 
 typedef struct MxcCompNodeCreateInfo {
   MxcCompMode  compMode;
-  VkSurfaceKHR surface;
 } MxcCompNodeCreateInfo;
 
 typedef struct MxcCompNode {
   MxcCompMode compMode;
 
+  // device should go in context
   VkDevice        device;
-  VkCommandBuffer cmd;
 
   VkRenderPass compRenderPass;
 
@@ -40,12 +39,10 @@ typedef struct MxcCompNode {
 
   VkFramebuffer framebuffer;
   MidVkFramebufferTexture framebuffers[MIDVK_SWAP_COUNT];
-  VkmSwap        swap;
-  VkSemaphore    timeline;
 
 } MxcCompNode;
 
 
 void  mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
-void* mxcCompNodeThread(const MxcNodeContext* pNodeContext);
+void* mxcCompNodeThread(const MxcCompNodeContext* pNodeContext);
 void  mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);

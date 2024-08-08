@@ -1,4 +1,5 @@
 #include "node.h"
+#include "test_node.h"
 
 #define WIN32_LEAN_AND_MEAN
 #undef UNICODE
@@ -79,12 +80,17 @@ static void acceptIPCServer() {
   ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
 
     // wait for creation
-  ipcServerShared.requestNodeCreate = true;
-  __atomic_thread_fence(__ATOMIC_RELEASE);
+//  ipcServerShared.requestNodeCreate = true;
+//  __atomic_thread_fence(__ATOMIC_RELEASE);
+//
+//  sem_wait(&ipcServerShared.createNodeWaitSemaphore);
+//
+//  __atomic_thread_fence(__ATOMIC_ACQUIRE);
 
-  sem_wait(&ipcServerShared.createNodeWaitSemaphore);
+  NodeHandle  processNodeHandle;
+  MxcTestNode processNode;
+  mxcRequestNodeProcess(NULL, &processNode, &processNodeHandle);
 
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
   MxcNodeContext* pNode = &nodeContexts[ipcServerShared.createdNodeHandle];
   pNode->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
   printf("Node process hand duplicated: %p\n", pNode->processHandle);
@@ -112,6 +118,9 @@ static void* runIPCServer(void* arg) {
   SOCKADDR_UN address = {.sun_family = AF_UNIX};
   WSADATA     wsaData = {};
 
+  // Unlink/delete sock file in case it was left from before
+  unlink(SOCKET_PATH);
+
   ERR_CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
   ERR_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
 
@@ -128,8 +137,7 @@ Exit:
   if (ipcServer.listenSocket != INVALID_SOCKET) {
     closesocket(ipcServer.listenSocket);
   }
-  // Analogous to `unlink`
-  DeleteFileA(SOCKET_PATH);
+  unlink(SOCKET_PATH);
   WSACleanup();
   return NULL;
 }
@@ -141,14 +149,12 @@ void mxcInitializeIPCServer() {
 }
 
 void mxcShutdownIPCServer() {
-  int cancelResult = pthread_cancel(ipcServer.thread);
-  if (cancelResult != 0) perror("IPC server thread cancel Fail!");
   if (ipcServer.listenSocket != INVALID_SOCKET) {
     closesocket(ipcServer.listenSocket);
   }
-  DeleteFileA(SOCKET_PATH);
+  unlink(SOCKET_PATH);
   WSACleanup();
-  sem_destroy(&ipcServerShared.createNodeWaitSemaphore);
+//  sem_destroy(&ipcServerShared.createNodeWaitSemaphore);
 }
 
 void mxcConnectNodeIPC() {
@@ -195,11 +201,11 @@ Exit:
     closesocket(clientSocket);
   WSACleanup();
 }
-
 void mxcShutdownNodeIPC() {
 
 }
 
+MxcCompNodeContext compNodeContext;
 MxcCompNodeShared compNodeShared;
 
 NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
@@ -211,33 +217,39 @@ MxcNodeCompData nodeCompData[MXC_NODE_CAPACITY] = {};
 void mxcInterProcessImportNode(void* pParam) {
 }
 
-void mxcRegisterNodeThread(NodeHandle handle) {
-  nodesShared[handle] = (MxcNodeShared){};
-  nodesShared[handle].active = true;
-  nodesShared[handle].radius = 0.5;
+void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*)) {
+  const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+      .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+  };
+  MIDVK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &compNodeContext.pool));
+  const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = compNodeContext.pool,
+      .commandBufferCount = 1,
+  };
+  MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &compNodeContext.cmd));
+  vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compNodeContext.cmd, "CompCmd");
+  vkmCreateTimeline(VKM_LOCALITY_CONTEXT, &compNodeContext.compTimeline);
+  vkmCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compNodeContext.swap);
 
-  nodeCompData[handle].cmd = nodeContexts[handle].cmd;
-  nodeCompData[handle].type = nodeContexts[handle].nodeType;
-  nodeCompData[handle].nodeTimeline = nodeContexts[handle].nodeTimeline;
-  nodeCompData[handle].transform.rotation = QuatFromEuler(nodeCompData[handle].transform.euler);
-  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    nodeCompData[handle].framebufferImages[i].color = nodeContexts[handle].framebufferTextures[i].color.image;
-    nodeCompData[handle].framebufferImages[i].normal = nodeContexts[handle].framebufferTextures[i].normal.image;
-    nodeCompData[handle].framebufferImages[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.image;
-    nodeCompData[handle].framebufferViews[i].color = nodeContexts[handle].framebufferTextures[i].color.view;
-    nodeCompData[handle].framebufferViews[i].normal = nodeContexts[handle].framebufferTextures[i].normal.view;
-    nodeCompData[handle].framebufferViews[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.view;
-  }
-  nodeCount++;
-  __atomic_thread_fence(__ATOMIC_RELEASE);
-  mxcRunNode(&nodeContexts[handle]);
+  compNodeShared = (MxcCompNodeShared){};
+  compNodeShared.cmd = compNodeContext.cmd;
+  compNodeShared.compTimeline = compNodeContext.compTimeline;
+  compNodeShared.chain = compNodeContext.swap.chain;
+  compNodeShared.acquireSemaphore = compNodeContext.swap.acquireSemaphore;
+  compNodeShared.renderCompleteSemaphore = compNodeContext.swap.renderCompleteSemaphore;
+
+  int result = pthread_create(&compNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compNodeContext);
+  REQUIRE(result == 0, "Comp Node thread creation failed!");
+  printf("Request and Run CompNode Thread Success.");
 }
 
-void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const struct MxcNodeContext*), const void* pNode, NodeHandle* pNodeHandle) {
-  NodeHandle      nodeHandle = 0;
-  MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
+void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pHandle) {
+  NodeHandle      handle = 0;
+  MxcNodeContext* pNodeContext = &nodeContexts[handle];
 
-  // Should I create every time? No. Should probably release so it doesn't take up memory
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -254,16 +266,39 @@ void mxcRequestNodeThread(const VkSemaphore compTimeline, void* (*runFunc)(const
   mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
   vkmCreateTimeline(VKM_LOCALITY_CONTEXT, &pNodeContext->nodeTimeline);
 
-
-  pNodeContext->compTimeline = compTimeline;
+  pNodeContext->compTimeline = compNodeShared.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
-  pNodeContext->pNode = pNode;
   pNodeContext->compCycleSkip = 16;
   pNodeContext->runFunc = runFunc;
 
-  *pNodeHandle = nodeHandle;
+  *pHandle = handle;
 
-  printf("Node Request Thread Success. Handle: %d\n", nodeHandle);
+  printf("Request Node Thread Success. Handle: %d\n", handle);
+}
+void mxcRunNodeThread(NodeHandle handle) {
+  nodesShared[handle] = (MxcNodeShared){};
+  nodesShared[handle].active = true;
+  nodesShared[handle].radius = 0.5;
+  nodeCompData[handle].cmd = nodeContexts[handle].cmd;
+  nodeCompData[handle].type = nodeContexts[handle].nodeType;
+  nodeCompData[handle].nodeTimeline = nodeContexts[handle].nodeTimeline;
+  nodeCompData[handle].transform.rotation = QuatFromEuler(nodeCompData[handle].transform.euler);
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+    nodeCompData[handle].framebufferImages[i].color = nodeContexts[handle].framebufferTextures[i].color.image;
+    nodeCompData[handle].framebufferImages[i].normal = nodeContexts[handle].framebufferTextures[i].normal.image;
+    nodeCompData[handle].framebufferImages[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.image;
+    nodeCompData[handle].framebufferViews[i].color = nodeContexts[handle].framebufferTextures[i].color.view;
+    nodeCompData[handle].framebufferViews[i].normal = nodeContexts[handle].framebufferTextures[i].normal.view;
+    nodeCompData[handle].framebufferViews[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.view;
+  }
+  nodeCount++;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  mxcRunNode(&nodeContexts[handle]);
+  printf("Run Node Thread Success. Handle: %d\n", handle);
+}
+void mxcReleaseNodeThread(NodeHandle handle) {
+  PANIC("Not Implemented");
+  printf("Release Node Thread Success. Handle: %d\n", handle);
 }
 
 void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle) {

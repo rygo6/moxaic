@@ -162,8 +162,22 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     };
     MIDVK_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
 
+    // This is way too many descriptors... optimize this
+    const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets = 30,
+        .poolSizeCount = 3,
+        .pPoolSizes = (const VkDescriptorPoolSize[]){
+            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 10},
+            {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 10},
+            {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
+        },
+    };
+    MIDVK_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+
     // global set
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipeLayout.globalSetLayout, &pNode->globalSet.set);
+    vkmAllocateDescriptorSet(threadContext.descriptorPool, &context.stdPipeLayout.globalSetLayout, &pNode->globalSet.set);
     const VkmRequestAllocationInfo globalSetAllocRequest = {
         .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
         .size = sizeof(VkmGlobalSetState),
@@ -172,7 +186,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     vkmCreateBufferSharedMemory(&globalSetAllocRequest, &pNode->globalSet.buffer, &pNode->globalSet.sharedMemory);
 
     // node set
-    vkmAllocateDescriptorSet(context.descriptorPool, &pNode->compNodeSetLayout, &pNode->compNodeSet);
+    vkmAllocateDescriptorSet(threadContext.descriptorPool, &pNode->compNodeSetLayout, &pNode->compNodeSet);
     vkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pNode->compNodeSet, "NodeSet");
     const VkmRequestAllocationInfo nodeSetAllocRequest = {
         .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
@@ -181,20 +195,9 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     };
     vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->compNodeSetBuffer, &pNode->compNodeSetMemory);
 
-    // cmd
-    const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool,  // so we may want to get rid of global pools
-        .commandBufferCount = 1,
-    };
-    MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNode->cmd));
-    vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNode->cmd, "CompCmd");
-
-    vkmCreateSwap(pInfo->surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &pNode->swap);
     midVkCreateFramebufferTexture(MIDVK_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
     vkmCreateFramebuffer(context.renderPass, &pNode->framebuffer);
     vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
-    vkmCreateTimeline(VKM_LOCALITY_INTERPROCESS_EXPORTED, &pNode->timeline);
   }
 
   {  // Copy needed state
@@ -221,13 +224,11 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
   vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
 }
 
-void* mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
-
-  MxcCompNode* pNode = (MxcCompNode*)pNodeContext->pNode;
+void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* pNode) {
 
   MxcCompMode  compMode = pNode->compMode;
 
-  VkCommandBuffer cmd = pNode->cmd;
+  VkCommandBuffer cmd = pNodeContext->cmd;
   VkRenderPass    renderPass = pNode->compRenderPass;
   VkFramebuffer      framebuffer = pNode->framebuffer;
 
@@ -243,14 +244,14 @@ void* mxcCompNodeThread(const MxcNodeContext* pNodeContext) {
   VkDescriptorSet  compNodeSet = pNode->compNodeSet;
 
   VkDevice device = pNode->device;
-  VkmSwap  swap = pNode->swap;
+  VkmSwap  swap = pNodeContext->swap;
 
   uint32_t     quadIndexCount = pNode->quadMesh.indexCount;
   VkBuffer     quadBuffer = pNode->quadMesh.buffer;
   VkDeviceSize quadIndexOffset = pNode->quadMesh.indexOffset;
   VkDeviceSize quadVertexOffset = pNode->quadMesh.vertexOffset;
 
-  VkSemaphore timeline = pNode->timeline;
+  VkSemaphore timeline = pNodeContext->compTimeline;
   uint64_t    compBaseCycleValue = 0;
 
   VkQueryPool timeQueryPool = pNode->timeQueryPool;
@@ -461,4 +462,21 @@ run_loop:
 
   CHECK_RUNNING;
   goto run_loop;
+}
+
+void* mxcCompNodeThread(const MxcCompNodeContext* pNodeContext) {
+  MxcCompNode compNode;
+  vkmBeginAllocationRequests();
+  const MxcCompNodeCreateInfo compNodeInfo = {
+      .compMode = MXC_COMP_MODE_TESS,
+  };
+  mxcCreateCompNode(&compNodeInfo, &compNode);
+  vkmEndAllocationRequests();
+  mxcBindUpdateCompNode(&compNodeInfo, &compNode);
+
+  mxcCompNodeRun(pNodeContext, &compNode);
+
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+
+  return NULL;
 }

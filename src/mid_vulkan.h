@@ -204,11 +204,11 @@ typedef struct VkmGlobalSet {
   VkDescriptorSet    set;
 } VkmGlobalSet;
 
-typedef struct VkmContext {
+typedef struct __attribute((aligned(64))) MidVkContext {
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
   VkmQueueFamily   queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
-  VkDescriptorPool descriptorPool;
+//  VkDescriptorPool descriptorPool;
   VkmStdPipeLayout stdPipeLayout;
 
   VkSampler    linearSampler;
@@ -219,13 +219,15 @@ typedef struct VkmContext {
   // basic pipe could stay here
   VkPipeline basicPipe;
 
-} VkmContext;
+} MidVkContext;
 
-// Only main thread needs to access instance
-extern _Thread_local VkInstance instance;
+typedef struct __attribute((aligned(64))) MidVkThreadContext {
+    VkDescriptorPool descriptorPool;
+} MidVkThreadContext;
 
-// Only one thread should use a context
-extern _Thread_local VkmContext context;
+extern VkInstance instance;
+extern MidVkContext context;
+extern __thread MidVkThreadContext threadContext;
 
 extern VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 extern void*          pMappedMemory[VK_MAX_MEMORY_TYPES];

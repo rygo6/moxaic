@@ -5,8 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-_Thread_local VkInstance instance = VK_NULL_HANDLE;
-_Thread_local VkmContext context;
+VkInstance instance = VK_NULL_HANDLE;
+MidVkContext context = {};
+__thread MidVkThreadContext threadContext = {};
 
 static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
 
@@ -442,7 +443,7 @@ static uint32_t FindMemoryTypeIndex(const uint32_t memoryTypeCount, VkMemoryType
 static size_t  requestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
 static size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
 VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
-void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {NULL};
+void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {};
 //VkDeviceMemory localMemory;
 //VkDeviceMemory localVisibleCoherentMemory;
 //VkDeviceMemory visibleCoherentMemory;
@@ -670,6 +671,7 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkI
   MIDVK_REQUIRE(vkCreateImageView(context.device, &imageViewCreateInfo, MIDVK_ALLOC, pImageView));
 }
 static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, const MidLocality locality, VkDeviceMemory* pMemory, VkImage* pImage) {
+//  printf("device %p instage %p\n", context.device, instance);
   MIDVK_REQUIRE(vkCreateImage(context.device, pImageCreateInfo, MIDVK_ALLOC, pImage));
   const VkImageMemoryRequirementsInfo2 imgMemReqInfo2 = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
@@ -749,6 +751,7 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
   vkDestroyBuffer(context.device, stagingBuffer, MIDVK_ALLOC);
 }
 
+// add createinfo
 void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer) {
   const VkFramebufferCreateInfo framebufferCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -1106,20 +1109,20 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
     MIDVK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &context.queueFamilies[i].pool));
   }
 
-  {  // Pools
-    const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-        .maxSets = 30,
-        .poolSizeCount = 3,
-        .pPoolSizes = (const VkDescriptorPoolSize[]){
-            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 10},
-            {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 10},
-            {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
-        },
-    };
-    MIDVK_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &context.descriptorPool));
-  }
+//  {  // Pools
+//    const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+//        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+//        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+//        .maxSets = 30,
+//        .poolSizeCount = 3,
+//        .pPoolSizes = (const VkDescriptorPoolSize[]){
+//            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 10},
+//            {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 10},
+//            {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
+//        },
+//    };
+//    MIDVK_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &context.descriptorPool));
+//  }
 }
 
 void vkmCreateStdRenderPass() {
@@ -1285,7 +1288,7 @@ void vkmCreateTimeline(const MidLocality locality, VkSemaphore* pSemaphore) {
 }
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet) {
-  vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipeLayout.globalSetLayout, &pSet->set);
+  vkmAllocateDescriptorSet(threadContext.descriptorPool, &context.stdPipeLayout.globalSetLayout, &pSet->set);
   vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }

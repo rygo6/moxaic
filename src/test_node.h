@@ -5,7 +5,7 @@
 
 typedef struct MxcTestNodeCreateInfo {
   VkmTransform        transform;
-  MxcNodeFramebufferTexture* pFramebuffers;
+  const MxcNodeFramebufferTexture* pFramebuffers;
 } MxcTestNodeCreateInfo;
 
 typedef struct MxcTestNode {
@@ -23,6 +23,8 @@ typedef struct MxcTestNode {
   VkPipeline            nodeProcessBlitDownPipe;
 
   VkDevice device;
+
+//  VkDescriptorPool descriptorPool;
 
   VkmGlobalSet globalSet;
 

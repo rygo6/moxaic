@@ -114,12 +114,26 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
       }
     }
 
+    // This is way too many descriptors... optimize this
+    const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+        .maxSets = 30,
+        .poolSizeCount = 3,
+        .pPoolSizes = (const VkDescriptorPoolSize[]){
+            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 10},
+            {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 10},
+            {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
+        },
+    };
+    MIDVK_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+
     vkmCreateGlobalSet(&pTestNode->globalSet);
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
+    vkmAllocateDescriptorSet(threadContext.descriptorPool, &context.stdPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
     vkmCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
-    vkmAllocateDescriptorSet(context.descriptorPool, &context.stdPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
+    vkmAllocateDescriptorSet(threadContext.descriptorPool, &context.stdPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
     vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
 
     const VkWriteDescriptorSet writeSets[] = {
@@ -143,9 +157,9 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
   }
 }
 
-void* mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
+void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode) {
 
-  const MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
+//  const MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
 
   const MxcNodeType     nodeType = pNodeContext->nodeType;
   const NodeHandle      handle = 0;
@@ -362,4 +376,15 @@ run_loop:
 
   CHECK_RUNNING
   goto run_loop;
+}
+
+void* mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
+  MxcTestNode testNode;
+  const MxcTestNodeCreateInfo createInfo = {
+      .transform = {0, 0, 0},
+      .pFramebuffers = pNodeContext->framebufferTextures,
+  };
+  mxcCreateTestNode(&createInfo, &testNode);
+  mxcTestNodeRun(pNodeContext, &testNode);
+  return NULL;
 }
