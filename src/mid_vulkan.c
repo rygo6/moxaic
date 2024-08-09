@@ -439,32 +439,11 @@ static uint32_t FindMemoryTypeIndex(const uint32_t memoryTypeCount, VkMemoryType
   return -1;
 }
 
-
-static size_t  requestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
-static size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
-VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
-void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {};
-//VkDeviceMemory localMemory;
-//VkDeviceMemory localVisibleCoherentMemory;
-//VkDeviceMemory visibleCoherentMemory;
-//static void    VkmAllocContextMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags memPropFlags, const VkmLocality locality, VkDeviceMemory* pDeviceMem) {
-//  VkPhysicalDeviceMemoryProperties memProps;
-//  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
-//  const uint32_t                   memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, memPropFlags);
-//  const VkExportMemoryAllocateInfo exportMemAllocInfo = {
-//         .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-//         .handleTypes = VKM_EXTERNAL_HANDLE_TYPE,
-//  };
-//  const VkMemoryAllocateInfo memAllocInfo = {
-//         .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-//         .pNext = locality == VKM_LOCALITY_PROCESS_EXPORTED ? &exportMemAllocInfo : NULL,
-//         .allocationSize = pMemReqs->size,
-//         .memoryTypeIndex = memTypeIndex,
-//  };
-//  VKM_REQUIRE(vkAllocateMemory(context.device, &memAllocInfo, VKM_ALLOC, pDeviceMem));
-//  totalAllocSize += pMemReqs->size;
-//  printf("%zu allocated\n", totalAllocSize);
-//}
+// could go in thread context
+static __thread size_t  requestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
+static __thread size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
+__thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
+__thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {};
 
 static void PrintMemoryPropertyFlags(VkMemoryPropertyFlags propFlags) {
   int index = 0;

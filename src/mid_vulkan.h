@@ -229,8 +229,8 @@ extern VkInstance instance;
 extern MidVkContext context;
 extern __thread MidVkThreadContext threadContext;
 
-extern VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
-extern void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
+extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
+extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 
 //----------------------------------------------------------------------------------
 // Render

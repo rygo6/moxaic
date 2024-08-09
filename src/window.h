@@ -10,4 +10,4 @@ typedef struct MxcInput {
 
 extern MxcInput mxcInput;
 
-void mxcUpdateWindowInput();
+void mxcProcessWindowInput();

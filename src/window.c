@@ -3,7 +3,7 @@
 
 MxcInput mxcInput;
 
-void mxcUpdateWindowInput() {
+void mxcProcessWindowInput() {
   mxcInput.move[0] = midWindowInput.MID_KEY_W == MID_PHASE_PRESS;
   mxcInput.move[1] = midWindowInput.MID_KEY_S == MID_PHASE_PRESS;
   mxcInput.move[2] = midWindowInput.MID_KEY_A == MID_PHASE_PRESS;

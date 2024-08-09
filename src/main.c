@@ -141,55 +141,49 @@ int main(void) {
 
 
   {
-    VkDevice device = context.device;
+    const VkDevice        device = context.device;
+    const VkCommandBuffer compCmd = compNodeContext.cmd;
+    const VkSwapchainKHR  compChain = compNodeContext.swap.chain;
+    const VkSemaphore compAcquireSemaphore =compNodeContext.swap.acquireSemaphore;
+    const VkSemaphore compRenderCompleteSemaphore = compNodeContext.swap.renderCompleteSemaphore;
+    const VkSemaphore compTimeline = compNodeContext.compTimeline;
+    const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
     uint64_t compBaseCycleValue = 0;
-    VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
     while (isRunning) {
 
       // we may not have to even wait... this could go faster
-      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compNodeShared.compTimeline);
+      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compTimeline);
 
-      // somewhere input state needs to be copied to a need and only update when it knows the node needs it
+      // somewhere input state needs to be copied to a node and only update when it knows the node needs it
       midUpdateWindowInput();
       isRunning = midWindow.running;
-      mxcUpdateWindowInput();
+      mxcProcessWindowInput();
       __atomic_thread_fence(__ATOMIC_RELEASE);
 
       // signal input ready to process!
-      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compNodeShared.compTimeline);
+      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
 
       // Try submitting nodes before waiting to render composite
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
       mxcSubmitNodeThreadQueues(graphicsQueue);
 
       // wait for recording to be done
-      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compNodeShared.compTimeline);
+      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
 
       compBaseCycleValue += MXC_CYCLE_COUNT;
-      vkmSubmitPresentCommandBuffer(compNodeShared.cmd,
-                                    compNodeShared.chain,
-                                    compNodeShared.acquireSemaphore,
-                                    compNodeShared.renderCompleteSemaphore,
-                                    compNodeShared.swapIndex,
-                                    compNodeShared.compTimeline,
+      __atomic_thread_fence(__ATOMIC_ACQUIRE);
+      const int swapIndex = compNodeShared.swapIndex;
+      vkmSubmitPresentCommandBuffer(compCmd,
+                                    compChain,
+                                    compAcquireSemaphore,
+                                    compRenderCompleteSemaphore,
+                                    swapIndex,
+                                    compTimeline,
                                     compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
       // Try submitting nodes before waiting to update window again.
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
       mxcSubmitNodeThreadQueues(graphicsQueue);
-
-//      __atomic_thread_fence(__ATOMIC_ACQUIRE);
-//      if (ipcServerShared.requestNodeCreate) {
-//        NodeHandle  processNodeHandle;
-//        MxcTestNode processNode;
-//        mxcRequestNodeProcess(compNode.timeline, &processNode, &processNodeHandle);
-//
-//        ipcServerShared.requestNodeCreate = false;
-//        ipcServerShared.createdNodeHandle = processNodeHandle;
-//        __atomic_thread_fence(__ATOMIC_RELEASE);
-//
-//        sem_post(&ipcServerShared.createNodeWaitSemaphore);
-//      }
     }
   }
 

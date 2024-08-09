@@ -19,19 +19,9 @@ static struct {
   SOCKET          listenSocket;
   pthread_t       thread;
 } ipcServer;
-IPCServerShared ipcServerShared;
 
-//static pthread_t serverThreadId;
-//static pthread_mutex_t serverCreateNodeMutex = PTHREAD_MUTEX_INITIALIZER;
-//static SOCKET listenSocket = INVALID_SOCKET;
 const static char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
 const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
-
-static void* runIPCServerConnection(void* arg) {
-  printf("IPC Server Connection Thread Started\n");
-
-  return NULL;
-}
 
 #define ERR_CHECK(_command, _message)                 \
   {                                                   \
@@ -79,35 +69,26 @@ static void acceptIPCServer() {
   printf("Received node process id: %lu size: %d\n", nodeProcessId, receiveLength);
   ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
 
-    // wait for creation
-//  ipcServerShared.requestNodeCreate = true;
-//  __atomic_thread_fence(__ATOMIC_RELEASE);
-//
-//  sem_wait(&ipcServerShared.createNodeWaitSemaphore);
-//
-//  __atomic_thread_fence(__ATOMIC_ACQUIRE);
-
   NodeHandle  processNodeHandle;
-  MxcTestNode processNode;
-  mxcRequestNodeProcess(NULL, &processNode, &processNodeHandle);
+  mxcRequestNodeProcess(compNodeContext.compTimeline, &processNodeHandle);
 
-  MxcNodeContext* pNode = &nodeContexts[ipcServerShared.createdNodeHandle];
-  pNode->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
-  printf("Node process hand duplicated: %p\n", pNode->processHandle);
-  ERR_CHECK(pNode->processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
+  MxcNodeContext* pNodeContext = &nodeContexts[processNodeHandle];
+  pNodeContext->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
+  printf("Node process hand duplicated: %p\n", pNodeContext->processHandle);
+  ERR_CHECK(pNodeContext->processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
 
   const HANDLE currentHandle = GetCurrentProcess();
   MxcImportParam importParam;
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, pNode->framebufferTextures[i].color.externalHandle, pNode->processHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
   }
   // need to export timelines
   //    DuplicateHandle(currentHandle, pNode->compTimeline, nodeProcessHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
   //    DuplicateHandle(currentHandle, pNode->nodeTimeline, nodeProcessHandle, &importParam.nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
 
-  nodesShared[ipcServerShared.createdNodeHandle].active = true;
+  nodesShared[processNodeHandle].active = true;
 
  Exit:
    if (clientSocket != INVALID_SOCKET)
@@ -144,7 +125,6 @@ Exit:
 
 void mxcInitializeIPCServer() {
   ipcServer.listenSocket = INVALID_SOCKET;
-  sem_init(&ipcServerShared.createNodeWaitSemaphore, 0, 0);
   REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, runIPCServer, NULL), "IPC server pipe creation Fail!");
 }
 
@@ -154,7 +134,6 @@ void mxcShutdownIPCServer() {
   }
   unlink(SOCKET_PATH);
   WSACleanup();
-//  sem_destroy(&ipcServerShared.createNodeWaitSemaphore);
 }
 
 void mxcConnectNodeIPC() {
@@ -235,11 +214,6 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
   vkmCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compNodeContext.swap);
 
   compNodeShared = (MxcCompNodeShared){};
-  compNodeShared.cmd = compNodeContext.cmd;
-  compNodeShared.compTimeline = compNodeContext.compTimeline;
-  compNodeShared.chain = compNodeContext.swap.chain;
-  compNodeShared.acquireSemaphore = compNodeContext.swap.acquireSemaphore;
-  compNodeShared.renderCompleteSemaphore = compNodeContext.swap.renderCompleteSemaphore;
 
   int result = pthread_create(&compNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compNodeContext);
   REQUIRE(result == 0, "Comp Node thread creation failed!");
@@ -266,7 +240,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
   mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
   vkmCreateTimeline(VKM_LOCALITY_CONTEXT, &pNodeContext->nodeTimeline);
 
-  pNodeContext->compTimeline = compNodeShared.compTimeline;
+  pNodeContext->compTimeline = compNodeContext.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
   pNodeContext->compCycleSkip = 16;
   pNodeContext->runFunc = runFunc;
@@ -301,7 +275,7 @@ void mxcReleaseNodeThread(NodeHandle handle) {
   printf("Release Node Thread Success. Handle: %d\n", handle);
 }
 
-void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle) {
+void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHandle) {
   NodeHandle      nodeHandle = 1;
   MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
 
@@ -310,7 +284,6 @@ void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, No
 
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
-  pNodeContext->pNode = pNode;
   pNodeContext->compCycleSkip = 16;
   pNodeContext->processHandle = INVALID_HANDLE_VALUE;
 

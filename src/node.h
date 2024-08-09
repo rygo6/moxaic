@@ -36,15 +36,7 @@ typedef struct MxcInterProcessBuffer {
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
-typedef struct MxcNodeFramebufferTexture {
-  MidVkTexture color;
-  MidVkTexture normal;
-  MidVkTexture depth;
-  MidVkTexture gBuffer;
-} MxcNodeFramebufferTexture;
-
 typedef struct MxcCompNodeContext {
-  void* (*runFunc)(const struct MxcCompNodeContext* pNode);
   VkCommandPool   pool;
   VkCommandBuffer cmd;
   VkSemaphore     compTimeline;
@@ -52,23 +44,22 @@ typedef struct MxcCompNodeContext {
   pthread_t       threadId;
 } MxcCompNodeContext;
 typedef struct CACHE_ALIGN MxcCompNodeShared {
-  // shared
   volatile uint32_t swapIndex;
-
-  // I don't need any of this here do I ? Just get it from context on main thread
-  VkCommandBuffer   cmd;
-  VkSemaphore       compTimeline;
-  VkSwapchainKHR    chain;
-  VkSemaphore       acquireSemaphore;
-  VkSemaphore       renderCompleteSemaphore;
 } MxcCompNodeShared;
+extern MxcCompNodeContext compNodeContext;
 extern MxcCompNodeShared compNodeShared;
 
 #define MXC_NODE_CAPACITY 256
 typedef uint8_t NodeHandle;
-
 extern NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
 extern size_t        nodeCount;
+
+typedef struct MxcNodeFramebufferTexture {
+  MidVkTexture color;
+  MidVkTexture normal;
+  MidVkTexture depth;
+  MidVkTexture gBuffer;
+} MxcNodeFramebufferTexture;
 
 // Full data of a node
 typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
@@ -77,6 +68,7 @@ typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probab
   int compCycleSkip;
 
   const void* pNode;
+  // probable get rid of runfunc and just pass it to node run
   void* (*runFunc)(const struct MxcNodeContext* pNode);
 
   VkCommandPool   pool;
@@ -157,7 +149,7 @@ static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*));
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pHandle);
 void mxcRunNodeThread(NodeHandle handle);
-void mxcRequestNodeProcess(const VkSemaphore compTimeline, const void* pNode, NodeHandle* pNodeHandle);
+void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHandle);
 void mxcRunNode(const MxcNodeContext* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
@@ -167,23 +159,10 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
 
 // Process IPC
 #include <pthread.h>
-#include <semaphore.h>
-typedef struct IPCServerShared {
-  // Wait on this semaphore for node to be created
-  sem_t createNodeWaitSemaphore;
-  // Handle of the created node
-  NodeHandle createdNodeHandle;
-  // Set true for main thread to create node
-  volatile bool requestNodeCreate;
-} IPCServerShared;
-extern IPCServerShared ipcServerShared;
-
 void mxcInitializeIPCServer();
 void mxcShutdownIPCServer();
 void mxcConnectNodeIPC();
 void mxcShutdownNodeIPC();
-
-
 
 void mxcCreateSharedBuffer();
 void mxcCreateProcess();
