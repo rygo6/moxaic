@@ -195,7 +195,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     };
     vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->compNodeSetBuffer, &pNode->compNodeSetMemory);
 
-    midVkCreateFramebufferTexture(MIDVK_SWAP_COUNT, VKM_LOCALITY_CONTEXT, pNode->framebuffers);
+    midVkCreateFramebufferTexture(MIDVK_SWAP_COUNT, MID_LOCALITY_CONTEXT, pNode->framebuffers);
     vkmCreateFramebuffer(context.renderPass, &pNode->framebuffer);
     vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
   }
@@ -226,11 +226,11 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
 
 void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* pNode) {
 
-  MxcCompMode  compMode = pNode->compMode;
+  MxcCompMode compMode = pNode->compMode;
 
   VkCommandBuffer cmd = pNodeContext->cmd;
   VkRenderPass    renderPass = pNode->compRenderPass;
-  VkFramebuffer      framebuffer = pNode->framebuffer;
+  VkFramebuffer   framebuffer = pNode->framebuffer;
 
   VkmTransform       globalCameraTransform = {};
   VkmGlobalSetState  globalSetState = {};

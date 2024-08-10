@@ -18,7 +18,8 @@
 #define MIDVK_EXTERNAL_MEMORY_EXTENSION_NAME    VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME
 #define MIDVK_EXTERNAL_SEMAPHORE_EXTENSION_NAME VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
 #define MIDVK_EXTERNAL_FENCE_EXTENSION_NAME     VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
-#define MIDVK_EXTERNAL_HANDLE_TYPE              VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
+#define MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE       VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
+#define MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE    VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #endif
 
 //
@@ -60,8 +61,8 @@ extern void Panic(const char* file, int line, const char* message);
     REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
   }
 
-#define MIDVK_INSTANCE_FUNC(_func)                                                \
-  const PFN_##_func _func = (PFN_##_func)vkGetInstanceProcAddr(instance, #_func); \
+#define MIDVK_INSTANCE_FUNC(_func)                                                             \
+  const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
   REQUIRE(_func != NULL, "Couldn't load " #_func)
 #define MIDVK_DEVICE_FUNC(_func)                                                           \
   const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(device, "vk" #_func); \
@@ -74,7 +75,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define VKM_EXTERNAL_IMAGE_CREATE_INFO                            \
   (VkExternalMemoryImageCreateInfo) {                             \
     .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO, \
-    .handleTypes = MIDVK_EXTERNAL_HANDLE_TYPE,                    \
+    .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,                    \
   }
 
 //----------------------------------------------------------------------------------
@@ -83,15 +84,21 @@ extern void Panic(const char* file, int line, const char* message);
 
 typedef enum MidLocality {
   // Used within the context it was made
-  VKM_LOCALITY_CONTEXT,
+  MID_LOCALITY_CONTEXT,
   // Used by multiple contexts, but in the same process
-  VKM_LOCALITY_PROCESS,
+  MID_LOCALITY_PROCESS,
   // Used by nodes external to this context, device and process.
-  VKM_LOCALITY_INTERPROCESS_EXPORTED,
+  MID_LOCALITY_INTERPROCESS_EXPORTED,
+  MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
   // Used by nodes external to this context, device and process.
-  VKM_LOCALITY_INTERPROCESS_IMPORTED,
-  VKM_LOCALITY_COUNT,
+  MID_LOCALITY_INTERPROCESS_IMPORTED,
+  MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+  MID_LOCALITY_COUNT,
 } MidLocality;
+#define MID_INTERPROCESS_LOCALITY(_locality) (_locality == MID_LOCALITY_INTERPROCESS_EXPORTED ||          \
+                                              _locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY || \
+                                              _locality == MID_LOCALITY_INTERPROCESS_IMPORTED ||          \
+                                              _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
 typedef struct VkmTransform {
   vec3 position;
   vec3 euler;
@@ -696,16 +703,6 @@ VKM_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], VkmTran
   const float moveSensitivity = deltaTime * 0.8f;
   for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }
-VKM_INLINE void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
-  const VkDebugUtilsObjectNameInfoEXT debugInfo = {
-      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-      .objectType = objectType,
-      .objectHandle = objectHandle,
-      .pObjectName = pDebugName,
-  };
-  MIDVK_INSTANCE_FUNC(vkSetDebugUtilsObjectNameEXT);
-  MIDVK_REQUIRE(vkSetDebugUtilsObjectNameEXT(context.device, &debugInfo));
-}
 
 //----------------------------------------------------------------------------------
 // Methods
@@ -816,12 +813,20 @@ typedef struct VkmTextureCreateInfo {
   VkImageAspectFlags aspectMask;
   MidLocality        locality;
 } VkmTextureCreateInfo;
-void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, MidVkTexture* pTexture);
+void vkmCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture);
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
 
-void vkmCreateTimeline(const MidLocality locality, VkSemaphore* pSemaphore);
+
+typedef struct MidVkSemaphoreCreateInfo {
+  const char*     debugName;
+  VkSemaphoreType semaphoreType;
+  MidLocality     locality;
+} MidVkSemaphoreCreateInfo;
+void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, HANDLE* pExternalHandle, VkSemaphore* pSemaphore);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+
+void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
 #ifdef WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);

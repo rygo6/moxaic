@@ -143,7 +143,9 @@ int main(void) {
   {
     const VkDevice device = context.device;
     const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+    // we need to signal base value higher than 1 for external semaphore because vulkan may not know initial value!?
     uint64_t compBaseCycleValue = 0;
+//    vkmTimelineSignal(device, compBaseCycleValue, compNodeContext.compTimeline);
     while (isRunning) {
 
       // we may not have to even wait... this could go faster
@@ -172,7 +174,7 @@ int main(void) {
                                     compNodeContext.swap.chain,
                                     compNodeContext.swap.acquireSemaphore,
                                     compNodeContext.swap.renderCompleteSemaphore,
-                                    compNodeContext.swapIndex,
+                                    swapIndex,
                                     compNodeContext.compTimeline,
                                     compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 

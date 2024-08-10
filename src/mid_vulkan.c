@@ -498,11 +498,11 @@ void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryProperty
   const VkExportMemoryAllocateInfo exportMemAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
       .pNext = pDedicatedAllocInfo,
-      .handleTypes = MIDVK_EXTERNAL_HANDLE_TYPE,
+      .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
   };
   const VkMemoryAllocateInfo memAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-      .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &exportMemAllocInfo : pDedicatedAllocInfo,
+      .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &exportMemAllocInfo : pDedicatedAllocInfo,
       .allocationSize = pMemReqs->size,
       .memoryTypeIndex = memTypeIndex,
   };
@@ -571,7 +571,7 @@ void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuf
 
 static void CreateStagingBuffer(const void* srcData, const VkDeviceSize bufferSize, VkDeviceMemory* pStagingMemory, VkBuffer* pStagingBuffer) {
   void* dstData;
-  vkmCreateAllocBindBuffer(VKM_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VKM_LOCALITY_CONTEXT, pStagingMemory, pStagingBuffer);
+  vkmCreateAllocBindBuffer(VKM_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MID_LOCALITY_CONTEXT, pStagingMemory, pStagingBuffer);
   MIDVK_REQUIRE(vkMapMemory(context.device, *pStagingMemory, 0, bufferSize, 0, &dstData));
   memcpy(dstData, srcData, bufferSize);
   vkUnmapMemory(context.device, *pStagingMemory);
@@ -597,7 +597,7 @@ void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pM
       .memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
       .size = pMesh->indexOffset + indexBufferSize,
       .usage = VKM_BUFFER_USAGE_MESH,
-      .locality = VKM_LOCALITY_CONTEXT,
+      .locality = MID_LOCALITY_CONTEXT,
       .dedicated = VKM_DEDICATED_MEMORY_FALSE,
   };
   vkmCreateBufferSharedMemory(&AllocRequest, &pMesh->buffer, &pMesh->sharedMemory);
@@ -620,7 +620,7 @@ void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
   uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
   pMesh->indexOffset = 0;
   pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(VkmVertex));
-  vkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VKM_BUFFER_USAGE_MESH, VKM_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
+  vkmCreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VKM_BUFFER_USAGE_MESH, MID_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
   vkmUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
   vkmUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
 }
@@ -679,23 +679,23 @@ static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInf
   CreateImageView(pImageCreateInfo, *pImage, aspectMask, pImageView);
 }
 
-void vkmCreateTexture(const VkmTextureCreateInfo* pTextureCreateInfo, MidVkTexture* pTexture) {
-  CreateAllocateBindImageView(&pTextureCreateInfo->imageCreateInfo, pTextureCreateInfo->aspectMask, pTextureCreateInfo->locality, &pTexture->memory, &pTexture->image, &pTexture->view);
-  switch (pTextureCreateInfo->locality) {
+void vkmCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture) {
+  CreateAllocateBindImageView(&pCreateInfo->imageCreateInfo, pCreateInfo->aspectMask, pCreateInfo->locality, &pTexture->memory, &pTexture->image, &pTexture->view);
+  switch (pCreateInfo->locality) {
     default:
-    case VKM_LOCALITY_CONTEXT:          break;
-    case VKM_LOCALITY_PROCESS:          break;
-    case VKM_LOCALITY_INTERPROCESS_EXPORTED: {
+    case MID_LOCALITY_CONTEXT:
+    case MID_LOCALITY_PROCESS: break;
+    case MID_LOCALITY_INTERPROCESS_EXPORTED:
+    case MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY:
       const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
           .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
           .memory = pTexture->memory,
-          .handleType = MIDVK_EXTERNAL_HANDLE_TYPE};
-      MIDVK_INSTANCE_FUNC(vkGetMemoryWin32HandleKHR);
-      MIDVK_REQUIRE(vkGetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &pTexture->externalHandle));
+          .handleType = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE};
+      MIDVK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
+      MIDVK_REQUIRE(GetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &pTexture->externalHandle));
       break;
-    }
   }
-  vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pTextureCreateInfo->debugName);
+  vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
   int      texChannels, width, height;
@@ -712,7 +712,7 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
-  CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, VKM_LOCALITY_CONTEXT, &pTexture->memory, &pTexture->image, &pTexture->view);
+  CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, MID_LOCALITY_CONTEXT, &pTexture->memory, &pTexture->image, &pTexture->view);
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
   CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
@@ -783,7 +783,7 @@ void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLoc
         .debugName = "CompColorFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -800,7 +800,7 @@ void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLoc
         .debugName = "CompNormalFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -817,7 +817,7 @@ void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLoc
         .debugName = "CompDepthFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -1254,22 +1254,66 @@ void vkmCreateStdPipeLayout() {
   CreateStdPipeLayout();
 }
 
-void vkmCreateTimeline(const MidLocality locality, VkSemaphore* pSemaphore) {
-  const VkSemaphoreTypeCreateInfo timelineSemaphoreTypeCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-  const VkSemaphoreCreateInfo timelineSemaphoreCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = &timelineSemaphoreTypeCreateInfo,
+void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, HANDLE* pExternalHandle, VkSemaphore* pSemaphore) {
+#if WIN32
+  const VkExportSemaphoreWin32HandleInfoKHR exportSemaphorePlatformHandleInfo = {
+      .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
+      // TODO are these the best security options? Read seems to affect it and solves issue of child corrupting semaphore on crash... but not 100%
+      .dwAccess = pCreateInfo->locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY ? GENERIC_READ : GENERIC_ALL,
   };
-  // EXPORT TIMELINE
-  MIDVK_REQUIRE(vkCreateSemaphore(context.device, &timelineSemaphoreCreateInfo, MIDVK_ALLOC, pSemaphore));
+#endif
+  const VkExportSemaphoreCreateInfo exportSemaphoreCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
+      .pNext = &exportSemaphorePlatformHandleInfo,
+      .handleTypes = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
+  };
+  const VkSemaphoreTypeCreateInfo semaphoreTypeCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+      .pNext = MID_INTERPROCESS_LOCALITY(pCreateInfo->locality) ? &exportSemaphoreCreateInfo : NULL,
+      .semaphoreType = pCreateInfo->semaphoreType,
+  };
+  const VkSemaphoreCreateInfo semaphoreCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+      .pNext = &semaphoreTypeCreateInfo,
+  };
+  MIDVK_REQUIRE(vkCreateSemaphore(context.device, &semaphoreCreateInfo, MIDVK_ALLOC, pSemaphore));
+  vkmSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
+  switch (pCreateInfo->locality) {
+    default:
+    case MID_LOCALITY_CONTEXT: break;
+    case MID_LOCALITY_PROCESS: break;
+    case MID_LOCALITY_INTERPROCESS_EXPORTED:
+    case MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY:
+      REQUIRE(pExternalHandle != NULL, "Trying to create interprocess semaphore with NULL externalHandle");
+#if WIN32
+      // why break validation!?
+//      const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
+//          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
+//          .semaphore = *pSemaphore,
+//          .handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
+//      };
+//      MIDVK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
+//      MIDVK_REQUIRE(GetSemaphoreWin32HandleKHR(context.device, &getWin32HandleInfo, pExternalHandle));
+#endif
+      break;
+  }
 }
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet) {
   vkmAllocateDescriptorSet(threadContext.descriptorPool, &context.stdPipeLayout.globalSetLayout, &pSet->set);
-  vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VKM_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
+  vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
+}
+
+void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
+  const VkDebugUtilsObjectNameInfoEXT debugInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+      .objectType = objectType,
+      .objectHandle = objectHandle,
+      .pObjectName = pDebugName,
+  };
+  MIDVK_INSTANCE_FUNC(SetDebugUtilsObjectNameEXT);
+  MIDVK_REQUIRE(SetDebugUtilsObjectNameEXT(context.device, &debugInfo));
 }
 
 #ifdef WIN32
@@ -1279,7 +1323,7 @@ void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocation
       .hinstance = hInstance,
       .hwnd = hWnd,
   };
-  MIDVK_INSTANCE_FUNC(vkCreateWin32SurfaceKHR);
-  MIDVK_REQUIRE(vkCreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
+  MIDVK_INSTANCE_FUNC(CreateWin32SurfaceKHR);
+  MIDVK_REQUIRE(CreateWin32SurfaceKHR(instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
 }
 #endif

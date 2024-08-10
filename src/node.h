@@ -44,8 +44,10 @@ typedef struct CACHE_ALIGN MxcCompNodeContext {
   VkSemaphore     compTimeline;
   VkmSwap         swap;
 
-  VkCommandPool   pool;
-  pthread_t       threadId;
+  VkCommandPool pool;
+
+  pthread_t threadId;
+  HANDLE    compTimelineHandle;
 } MxcCompNodeContext;
 extern MxcCompNodeContext compNodeContext;
 
@@ -79,7 +81,10 @@ typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probab
   MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
 
   pthread_t threadId;
+
   HANDLE    processHandle;
+  HANDLE    compTimelineHandle;
+  HANDLE    nodeTimelineHandle;
 
 } MxcNodeContext;
 extern MxcNodeContext nodeContexts[MXC_NODE_CAPACITY];

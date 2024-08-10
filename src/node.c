@@ -77,16 +77,15 @@ static void acceptIPCServer() {
   printf("Node process hand duplicated: %p\n", pNodeContext->processHandle);
   ERR_CHECK(pNodeContext->processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
 
-  const HANDLE currentHandle = GetCurrentProcess();
+  const HANDLE   currentHandle = GetCurrentProcess();
   MxcImportParam importParam;
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
     DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
     DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
   }
-  // need to export timelines
-  //    DuplicateHandle(currentHandle, pNode->compTimeline, nodeProcessHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
-  //    DuplicateHandle(currentHandle, pNode->nodeTimeline, nodeProcessHandle, &importParam.nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+  DuplicateHandle(currentHandle, pNodeContext->compTimeline, pNodeContext->processHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+  DuplicateHandle(currentHandle, pNodeContext->nodeTimeline, pNodeContext->processHandle, &importParam.nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
 
   nodesShared[processNodeHandle].active = true;
 
@@ -209,7 +208,12 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
   };
   MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &compNodeContext.cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compNodeContext.cmd, "CompCmd");
-  vkmCreateTimeline(VKM_LOCALITY_CONTEXT, &compNodeContext.compTimeline);
+  const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
+      .debugName = "CompTimelineSemaphore",
+      .locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
+      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
+  };
+  midvkCreateSemaphore(&semaphoreCreateInfo, &compNodeContext.compTimelineHandle, &compNodeContext.compTimeline);
   vkmCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compNodeContext.swap);
 
   int result = pthread_create(&compNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compNodeContext);
@@ -234,8 +238,13 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
   };
   MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
-  mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
-  vkmCreateTimeline(VKM_LOCALITY_CONTEXT, &pNodeContext->nodeTimeline);
+  mxcCreateNodeFramebufferExport(MID_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
+  const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
+      .debugName = "NodeTimelineSemaphore",
+      .locality = MID_LOCALITY_CONTEXT,
+      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
+  };
+  midvkCreateSemaphore(&semaphoreCreateInfo, NULL, &pNodeContext->nodeTimeline);
 
   pNodeContext->compTimeline = compNodeContext.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
@@ -276,8 +285,13 @@ void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHand
   NodeHandle      nodeHandle = 1;
   MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
 
-  mxcCreateNodeFramebufferExport(VKM_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebufferTextures);
-  vkmCreateTimeline(VKM_LOCALITY_INTERPROCESS_EXPORTED, &pNodeContext->nodeTimeline);
+  mxcCreateNodeFramebufferExport(MID_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebufferTextures);
+  const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
+      .debugName = "NodeTimelineSemaphore",
+      .locality = MID_LOCALITY_INTERPROCESS_EXPORTED,
+      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
+  };
+  midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimelineHandle, &pNodeContext->nodeTimeline);
 
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
@@ -296,7 +310,7 @@ void mxcRunNode(const MxcNodeContext* pNodeContext) {
       REQUIRE(result == 0, "Node thread creation failed!");
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
-      mxcCreateNodeFramebufferExport(VKM_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
+      mxcCreateNodeFramebufferExport(MID_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
       break;
     default: PANIC("Node type not available!");
   }
@@ -416,7 +430,7 @@ void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFra
         .debugName = "ImportedDepthFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -437,7 +451,7 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
         .debugName = "ExportedColorFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -454,7 +468,7 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
         .debugName = "ExportedNormalFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -471,7 +485,7 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
         .debugName = "ExportedGBufferFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == VKM_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MXC_NODE_GBUFFER_FORMAT,
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
