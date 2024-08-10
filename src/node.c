@@ -184,8 +184,7 @@ void mxcShutdownNodeIPC() {
 
 }
 
-MxcCompNodeContext compNodeContext;
-MxcCompNodeShared compNodeShared;
+MxcCompNodeContext compNodeContext = {};
 
 NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
 size_t        nodeCount = 0;
@@ -212,8 +211,6 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compNodeContext.cmd, "CompCmd");
   vkmCreateTimeline(VKM_LOCALITY_CONTEXT, &compNodeContext.compTimeline);
   vkmCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compNodeContext.swap);
-
-  compNodeShared = (MxcCompNodeShared){};
 
   int result = pthread_create(&compNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compNodeContext);
   REQUIRE(result == 0, "Comp Node thread creation failed!");

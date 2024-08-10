@@ -434,8 +434,8 @@ run_loop:
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
       {  // Blit Framebuffer
-        AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeShared.swapIndex);
-        const VkImage swapImage = swap.images[compNodeShared.swapIndex];
+        AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeContext.swapIndex);
+        const VkImage swapImage = swap.images[compNodeContext.swapIndex];
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
         CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swapImage);
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));

@@ -36,18 +36,18 @@ typedef struct MxcInterProcessBuffer {
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
-typedef struct MxcCompNodeContext {
-  VkCommandPool   pool;
+typedef struct CACHE_ALIGN MxcCompNodeContext {
+  volatile uint32_t swapIndex;
+
+  // read by multiple threads
   VkCommandBuffer cmd;
   VkSemaphore     compTimeline;
   VkmSwap         swap;
+
+  VkCommandPool   pool;
   pthread_t       threadId;
 } MxcCompNodeContext;
-typedef struct CACHE_ALIGN MxcCompNodeShared {
-  volatile uint32_t swapIndex;
-} MxcCompNodeShared;
 extern MxcCompNodeContext compNodeContext;
-extern MxcCompNodeShared compNodeShared;
 
 #define MXC_NODE_CAPACITY 256
 typedef uint8_t NodeHandle;
