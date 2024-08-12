@@ -24,13 +24,14 @@ static struct {
 const static char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
 const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
-#define ERR_CHECK(_command, _message)                 \
-  {                                                   \
-    int _result = _command;                           \
-    if (__builtin_expect(!!(_result), 0)) {           \
-      fprintf(stderr, "%s: %d\n", _message, _result); \
-      goto Exit;                                      \
-    }                                                 \
+// Checks error code. Expects 0 for success.
+#define ERR_CHECK(_command, _message)                        \
+  {                                                          \
+    int _result = _command;                                  \
+    if (__builtin_expect(!!(_result), 0)) {                  \
+      fprintf(stderr, "%s: %d\n", _message, GetLastError()); \
+      goto Exit;                                             \
+    }                                                        \
   }
 #define WSA_ERR_CHECK(_command, _message)                       \
   {                                                             \
@@ -68,6 +69,8 @@ HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore) {
 static void acceptIPCServer() {
   printf("Accepting connections on: '%s'\n", SOCKET_PATH);
   int  receiveLength, sendResult;
+  MxcNodeContext* pProcessNodeContext = NULL;
+  MxcNodeShared* pProcessNodeShared = NULL;
 
   SOCKET clientSocket = accept(ipcServer.listenSocket, NULL, NULL);
   WSA_ERR_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
@@ -77,48 +80,68 @@ static void acceptIPCServer() {
   {
     char buffer[sizeof(nodeIPCAckMessage)] = {};
     receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
-    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv nodeIPCAckMessage failed.");
+    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv nodeIPCAckMessage failed");
     printf("Received node ack: %s Size: %d\n", buffer, receiveLength);
-    ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message.");
+    ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
   }
 
   // Send Server Ack message
   printf("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
   sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
-  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed.");
+  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
 
   // Receive Node Process Handle
   DWORD nodeProcessId = 0;
   receiveLength = recv(clientSocket, &nodeProcessId, sizeof(DWORD), 0);
-  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv node process id failed.");
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node process id failed");
   printf("Received node process id: %lu Size: %d\n", nodeProcessId, receiveLength);
-  ERR_CHECK(nodeProcessId == 0, "Invalid node process id.");
+  ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
 
+  // Create external handles
+  HANDLE processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
+  ERR_CHECK(processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
+  HANDLE externalNodeMemoryHandle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(MxcExternalNodeMemory), NULL);
+  ERR_CHECK(externalNodeMemoryHandle == NULL, "Could not create file mapping object");
+  MxcExternalNodeMemory* pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+  ERR_CHECK(pExternalNodeMemory == NULL, "Could not map view of file");
+
+  // Retrieve node handles
   NodeHandle  processNodeHandle;
   mxcRequestNodeProcess(compNodeContext.compTimeline, &processNodeHandle);
+  pProcessNodeContext = &nodeContexts[processNodeHandle];
+  pProcessNodeShared = &nodesShared[processNodeHandle];
+  pProcessNodeContext->processHandle = processHandle;
+  pProcessNodeContext->externalNodeMemoryHandle = externalNodeMemoryHandle;
+  pProcessNodeContext->pExternalNodeMemory = pExternalNodeMemory;
 
-  MxcNodeContext* pProcessNodeContext = &nodeContexts[processNodeHandle];
-  pProcessNodeContext->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
-  ERR_CHECK(pProcessNodeContext->processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
 
-  MxcImportParam importParam;
-  const HANDLE   currentHandle = GetCurrentProcess();
-  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].color.memory), pProcessNodeContext->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].normal.memory), pProcessNodeContext->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].gbuffer.memory), pProcessNodeContext->processHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
+  { // Send Import Params
+    const HANDLE currentHandle = GetCurrentProcess();
+    MxcImportParam* pImportParam = &pExternalNodeMemory->importParam;
+    for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].color.memory), processHandle, pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
+      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].normal.memory), processHandle, pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
+      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].gbuffer.memory), processHandle, pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
+    }
+    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pProcessNodeContext->nodeTimeline), processHandle, pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compNodeContext.compTimeline), processHandle, pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+
+    HANDLE duplicatedExternalNodeMemoryHandle;
+    DuplicateHandle(currentHandle, pProcessNodeContext->externalNodeMemoryHandle , processHandle, &duplicatedExternalNodeMemoryHandle, 0, false, DUPLICATE_SAME_ACCESS);
+
+    printf("Sending duplicatedExternalNodeMemoryHandle: %p Size: %llu\n", duplicatedExternalNodeMemoryHandle, sizeof(HANDLE));
+    sendResult = send(clientSocket, &duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0);
+    WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
   }
-  DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compNodeContext.compTimeline), pProcessNodeContext->processHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
-  DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pProcessNodeContext->nodeTimeline), pProcessNodeContext->processHandle, &importParam.nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
-
-  printf("Sending import params. Size: %llu\n", sizeof(MxcImportParam));
-  sendResult = send(clientSocket, &importParam, sizeof(MxcImportParam), 0);
-  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
 
   nodesShared[processNodeHandle].active = true;
 
  Exit:
-   if (clientSocket != INVALID_SOCKET)
+  if (pProcessNodeContext != NULL && pProcessNodeContext->pExternalNodeMemory != NULL)
+    UnmapViewOfFile(pExternalNodeMemory);
+  if (pProcessNodeContext != NULL && pProcessNodeContext->externalNodeMemoryHandle != NULL)
+    CloseHandle(pProcessNodeContext->externalNodeMemoryHandle);
+  if (clientSocket != INVALID_SOCKET)
     closesocket(clientSocket);
 }
 
@@ -151,6 +174,10 @@ Exit:
 }
 
 void mxcInitializeIPCServer() {
+  SYSTEM_INFO systemInfo;
+  GetSystemInfo(&systemInfo);
+  printf("Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
+
   ipcServer.listenSocket = INVALID_SOCKET;
   REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, runIPCServer, NULL), "IPC server pipe creation Fail!");
 }
@@ -187,7 +214,7 @@ void mxcConnectNodeIPC() {
   {
     char buffer[sizeof(serverIPCAckMessage)] = {};
     receiveLength = recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
-    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv compositor ack failed");
+    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv compositor ack failed");
     printf("Received from server: %s size: %d\n", buffer, receiveLength);
     WSA_ERR_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
   }
@@ -197,11 +224,11 @@ void mxcConnectNodeIPC() {
   sendResult = send(clientSocket, &currentProcessId, sizeof(DWORD), 0);
   WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
 
-  printf("Waiting to receive node import params.\n");
-  MxcImportParam importParam;
-  receiveLength = recv(clientSocket, &importParam, sizeof(MxcImportParam), 0);
-  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv import data failed");
-  printf("Received node import params server. Size: %d\n", receiveLength);
+  printf("Waiting to receive externalNodeMemoryHandle.\n");
+  HANDLE externalNodeMemoryHandle;
+  receiveLength = recv(clientSocket, &externalNodeMemoryHandle, sizeof(HANDLE), 0);
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv externalNodeMemoryHandle failed");
+  printf("Received externalNodeMemoryHandle: %p Size: %d\n", externalNodeMemoryHandle, receiveLength);
 
 Exit:
   if (clientSocket != INVALID_SOCKET)

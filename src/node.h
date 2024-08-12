@@ -11,6 +11,8 @@
 #define NOCOMM
 #include <windows.h>
 
+//
+/// Constants
 typedef enum MxcNodeType {
   MXC_NODE_TYPE_THREAD,
   MXC_NODE_TYPE_INTERPROCESS,
@@ -22,6 +24,8 @@ typedef enum MxcNodeType {
 #define MXC_NODE_GBUFFER_LEVELS  10
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 
+//
+/// IPC Types
 #define MXC_RING_BUFFER_COUNT       256
 #define MXC_RING_BUFFER_SIZE        MXC_RING_BUFFER_COUNT * sizeof(uint8_t)
 #define MXC_RING_BUFFER_HEADER_SIZE 1
@@ -36,6 +40,32 @@ typedef struct MxcInterProcessBuffer {
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
+typedef struct CACHE_ALIGN MxcNodeShared {
+  volatile VkmGlobalSetState globalSetState;
+  volatile vec2              ulUV;
+  volatile vec2              lrUV;
+  volatile uint64_t          pendingTimelineSignal;
+  volatile uint64_t          currentTimelineSignal;
+  volatile float             radius;
+  volatile int               compCycleSkip;
+  volatile bool              active;
+} MxcNodeShared;
+typedef struct MxcImportParam {
+  struct {
+    HANDLE color;
+    HANDLE normal;
+    HANDLE gbuffer;
+  } framebufferHandles[MIDVK_SWAP_COUNT];
+  HANDLE compTimelineHandle;
+  HANDLE nodeTimelineHandle;
+} MxcImportParam;
+typedef struct MxcExternalNodeMemory {
+  volatile MxcNodeShared nodeShared;
+  volatile MxcImportParam importParam;
+} MxcExternalNodeMemory;
+
+//
+/// Node Comp Types
 typedef struct CACHE_ALIGN MxcCompNodeContext {
   volatile uint32_t swapIndex;
 
@@ -49,56 +79,6 @@ typedef struct CACHE_ALIGN MxcCompNodeContext {
   pthread_t threadId;
   HANDLE    compTimelineHandle;
 } MxcCompNodeContext;
-extern MxcCompNodeContext compNodeContext;
-
-#define MXC_NODE_CAPACITY 256
-typedef uint8_t NodeHandle;
-extern NodeHandle    nodesAvailable[MXC_NODE_CAPACITY];
-extern size_t        nodeCount;
-
-typedef struct MxcNodeFramebufferTexture {
-  MidVkTexture color;
-  MidVkTexture normal;
-  MidVkTexture depth;
-  MidVkTexture gbuffer;
-} MxcNodeFramebufferTexture;
-
-// Full data of a node
-typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
-  MxcNodeType nodeType;
-
-  VkCommandPool   pool;
-  VkCommandBuffer cmd;
-  VkSemaphore compTimeline;
-  VkSemaphore nodeTimeline;
-
-  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
-
-  // MXC_NODE_TYPE_THREAD
-  pthread_t threadId;
-
-  // MXC_NODE_TYPE_INTERPROCESS
-  HANDLE    processHandle;
-  HANDLE    compTimelineHandle;
-  HANDLE    nodeTimelineHandle;
-
-} MxcNodeContext;
-extern MxcNodeContext nodeContexts[MXC_NODE_CAPACITY];
-
-// Node data shared across thread or IPC
-typedef struct CACHE_ALIGN MxcNodeShared {
-  volatile VkmGlobalSetState globalSetState;
-  volatile vec2              ulUV;
-  volatile vec2              lrUV;
-  volatile uint64_t          pendingTimelineSignal;
-  volatile uint64_t          currentTimelineSignal;
-  volatile float             radius;
-  volatile int               compCycleSkip;
-  volatile bool              active;
-} MxcNodeShared;
-extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
-
-// Node Data needed by compositor
 typedef struct MxcNodeSetState {
   mat4 model;
 
@@ -135,7 +115,51 @@ typedef struct CACHE_ALIGN MxcNodeCompData {
   MxcNodeFramebufferView framebufferViews[MIDVK_SWAP_COUNT];
   MxcNodeType           type;
 } MxcNodeCompData;
-extern MxcNodeCompData nodeCompData[MXC_NODE_CAPACITY];
+
+//
+/// Node Types
+typedef struct MxcNodeFramebufferTexture {
+  MidVkTexture color;
+  MidVkTexture normal;
+  MidVkTexture depth;
+  MidVkTexture gbuffer;
+} MxcNodeFramebufferTexture;
+typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
+  MxcNodeType nodeType;
+
+  VkCommandPool   pool;
+  VkCommandBuffer cmd;
+  VkSemaphore nodeTimeline;
+  VkSemaphore compTimeline;
+
+  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+
+  // MXC_NODE_TYPE_THREAD
+  pthread_t threadId;
+
+  // MXC_NODE_TYPE_INTERPROCESS
+  HANDLE processHandle;
+  HANDLE compTimelineHandle;
+  HANDLE nodeTimelineHandle;
+  HANDLE externalNodeMemoryHandle;
+
+  MxcExternalNodeMemory* pExternalNodeMemory;
+
+} MxcNodeContext;
+
+//
+/// Global state
+#define MXC_NODE_CAPACITY 256
+typedef uint8_t           NodeHandle;
+extern size_t             nodeCount;
+extern NodeHandle         nodesAvailable[MXC_NODE_CAPACITY];
+extern MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY];
+extern MxcNodeShared      nodesShared[MXC_NODE_CAPACITY];
+extern MxcNodeCompData    nodeCompData[MXC_NODE_CAPACITY];
+extern MxcCompNodeContext compNodeContext;
+
+//
+/// Methods
 
 static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
   for (int i = 0; i < nodeCount; ++i) {
@@ -167,16 +191,6 @@ void mxcShutdownNodeIPC();
 
 void mxcCreateSharedBuffer();
 void mxcCreateProcess();
-
-typedef struct MxcImportParam {
-  struct {
-    HANDLE color;
-    HANDLE normal;
-    HANDLE gbuffer;
-  } framebufferHandles[MIDVK_SWAP_COUNT];
-  HANDLE compTimelineHandle;
-  HANDLE nodeTimelineHandle;
-} MxcImportParam;
 
 typedef void (*MxcInterProcessFuncPtr)(void*);
 void mxcInterProcessImportNode(void* pParam);
