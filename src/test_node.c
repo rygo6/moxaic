@@ -100,7 +100,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
       for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
         const VkImageViewCreateInfo imageViewCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = pTestNode->framebufferTextures[bufferIndex].gBuffer.image,
+            .image = pTestNode->framebufferTextures[bufferIndex].gbuffer.image,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = MXC_NODE_GBUFFER_FORMAT,
             .subresourceRange = {
@@ -194,9 +194,9 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
     framebufferViews[i].color = pNode->framebufferTextures[i].color.view;
     framebufferViews[i].normal = pNode->framebufferTextures[i].normal.view;
     framebufferViews[i].depth = pNode->framebufferTextures[i].depth.view;
-    framebufferViews[i].gBuffer = pNode->framebufferTextures[i].gBuffer.view;
+    framebufferViews[i].gBuffer = pNode->framebufferTextures[i].gbuffer.view;
     framebufferImages[i].color = pNode->framebufferTextures[i].color.image;
-    framebufferImages[i].gBuffer = pNode->framebufferTextures[i].gBuffer.image;
+    framebufferImages[i].gBuffer = pNode->framebufferTextures[i].gbuffer.image;
   }
   VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
   memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -214,7 +214,6 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
   uint64_t    nodeTimelineValue;
   MIDVK_REQUIRE(vkGetSemaphoreCounterValue(device, compTimeline, &nodeTimelineValue));
   uint64_t compBaseCycleValue = nodeTimelineValue - (nodeTimelineValue % MXC_CYCLE_COUNT);
-  const uint64_t compCyclesToSkip = MXC_CYCLE_COUNT * pNodeContext->compCycleSkip;
 
   assert(__atomic_always_lock_free(sizeof(nodesShared[handle].pendingTimelineSignal), &nodesShared[handle].pendingTimelineSignal));
   assert(__atomic_always_lock_free(sizeof(nodesShared[handle].currentTimelineSignal), &nodesShared[handle].currentTimelineSignal));
@@ -368,7 +367,8 @@ run_loop:
   vkmTimelineWait(device, nodeTimelineValue, nodeTimeline);
   nodesShared[handle].currentTimelineSignal = nodeTimelineValue;
 
-  compBaseCycleValue += compCyclesToSkip;
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  compBaseCycleValue += MXC_CYCLE_COUNT * nodesShared[handle].compCycleSkip;
 
   //  _Thread_local static int count;
   //  if (count++ > 10)

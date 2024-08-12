@@ -11,6 +11,7 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <assert.h>
 
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
 #define BUFFER_SIZE 128
@@ -40,6 +41,30 @@ const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
     }                                                           \
   }
 
+HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory) {
+  MIDVK_INSTANCE_STATIC_FUNC(GetMemoryWin32HandleKHR);
+  const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+      .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+      .memory = memory,
+      .handleType = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
+  };
+  HANDLE handle;
+  MIDVK_REQUIRE(GetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &handle));
+  return handle;
+}
+
+HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore) {
+  MIDVK_INSTANCE_STATIC_FUNC(GetSemaphoreWin32HandleKHR);
+  const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
+      .semaphore = semaphore,
+      .handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
+  };
+  HANDLE handle;
+  MIDVK_REQUIRE(GetSemaphoreWin32HandleKHR(context.device, &getWin32HandleInfo, &handle));
+  return handle;
+}
+
 static void acceptIPCServer() {
   printf("Accepting connections on: '%s'\n", SOCKET_PATH);
   int  receiveLength, sendResult;
@@ -52,40 +77,43 @@ static void acceptIPCServer() {
   {
     char buffer[sizeof(nodeIPCAckMessage)] = {};
     receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
-    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv nodeIPCAckMessage failed");
-    printf("Received node ack: %s size: %d\n", buffer, receiveLength);
-    ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
+    WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv nodeIPCAckMessage failed.");
+    printf("Received node ack: %s Size: %d\n", buffer, receiveLength);
+    ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message.");
   }
 
   // Send Server Ack message
   printf("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
   sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
-  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
+  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed.");
 
   // Receive Node Process Handle
   DWORD nodeProcessId = 0;
   receiveLength = recv(clientSocket, &nodeProcessId, sizeof(DWORD), 0);
-  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv node process id failed");
-  printf("Received node process id: %lu size: %d\n", nodeProcessId, receiveLength);
-  ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
+  WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv node process id failed.");
+  printf("Received node process id: %lu Size: %d\n", nodeProcessId, receiveLength);
+  ERR_CHECK(nodeProcessId == 0, "Invalid node process id.");
 
   NodeHandle  processNodeHandle;
   mxcRequestNodeProcess(compNodeContext.compTimeline, &processNodeHandle);
 
-  MxcNodeContext* pNodeContext = &nodeContexts[processNodeHandle];
-  pNodeContext->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
-  printf("Node process hand duplicated: %p\n", pNodeContext->processHandle);
-  ERR_CHECK(pNodeContext->processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
+  MxcNodeContext* pProcessNodeContext = &nodeContexts[processNodeHandle];
+  pProcessNodeContext->processHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
+  ERR_CHECK(pProcessNodeContext->processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
 
-  const HANDLE   currentHandle = GetCurrentProcess();
   MxcImportParam importParam;
+  const HANDLE   currentHandle = GetCurrentProcess();
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, pNodeContext->framebufferTextures[i].color.externalHandle, pNodeContext->processHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].color.memory), pProcessNodeContext->processHandle, &importParam.framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].normal.memory), pProcessNodeContext->processHandle, &importParam.framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].gbuffer.memory), pProcessNodeContext->processHandle, &importParam.framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
   }
-  DuplicateHandle(currentHandle, pNodeContext->compTimeline, pNodeContext->processHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
-  DuplicateHandle(currentHandle, pNodeContext->nodeTimeline, pNodeContext->processHandle, &importParam.nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+  DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compNodeContext.compTimeline), pProcessNodeContext->processHandle, &importParam.compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+  DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pProcessNodeContext->nodeTimeline), pProcessNodeContext->processHandle, &importParam.nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+
+  printf("Sending import params. Size: %llu\n", sizeof(MxcImportParam));
+  sendResult = send(clientSocket, &importParam, sizeof(MxcImportParam), 0);
+  WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
 
   nodesShared[processNodeHandle].active = true;
 
@@ -169,10 +197,11 @@ void mxcConnectNodeIPC() {
   sendResult = send(clientSocket, &currentProcessId, sizeof(DWORD), 0);
   WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
 
-  printf("Waiting to receive node import data.\n");
+  printf("Waiting to receive node import params.\n");
   MxcImportParam importParam;
   receiveLength = recv(clientSocket, &importParam, sizeof(MxcImportParam), 0);
   WSA_ERR_CHECK(receiveLength == SOCKET_ERROR, "Recv import data failed");
+  printf("Received node import params server. Size: %d\n", receiveLength);
 
 Exit:
   if (clientSocket != INVALID_SOCKET)
@@ -221,7 +250,7 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
   printf("Request and Run CompNode Thread Success.");
 }
 
-void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pHandle) {
+void mxcRequestNodeThread(NodeHandle* pHandle) {
   NodeHandle      handle = 0;
   MxcNodeContext* pNodeContext = &nodeContexts[handle];
 
@@ -248,17 +277,17 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
   pNodeContext->compTimeline = compNodeContext.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
-  pNodeContext->compCycleSkip = 16;
-  pNodeContext->runFunc = runFunc;
 
   *pHandle = handle;
 
   printf("Request Node Thread Success. Handle: %d\n", handle);
 }
-void mxcRunNodeThread(NodeHandle handle) {
+void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle) {
+  assert(nodeContexts[handle].nodeType == MXC_NODE_TYPE_THREAD);
   nodesShared[handle] = (MxcNodeShared){};
   nodesShared[handle].active = true;
   nodesShared[handle].radius = 0.5;
+  nodesShared[handle].compCycleSkip = 16;
   nodeCompData[handle].cmd = nodeContexts[handle].cmd;
   nodeCompData[handle].type = nodeContexts[handle].nodeType;
   nodeCompData[handle].nodeTimeline = nodeContexts[handle].nodeTimeline;
@@ -266,14 +295,15 @@ void mxcRunNodeThread(NodeHandle handle) {
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     nodeCompData[handle].framebufferImages[i].color = nodeContexts[handle].framebufferTextures[i].color.image;
     nodeCompData[handle].framebufferImages[i].normal = nodeContexts[handle].framebufferTextures[i].normal.image;
-    nodeCompData[handle].framebufferImages[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.image;
+    nodeCompData[handle].framebufferImages[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gbuffer.image;
     nodeCompData[handle].framebufferViews[i].color = nodeContexts[handle].framebufferTextures[i].color.view;
     nodeCompData[handle].framebufferViews[i].normal = nodeContexts[handle].framebufferTextures[i].normal.view;
-    nodeCompData[handle].framebufferViews[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gBuffer.view;
+    nodeCompData[handle].framebufferViews[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gbuffer.view;
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
-  mxcRunNode(&nodeContexts[handle]);
+  int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, &nodeContexts[handle]);
+  REQUIRE(result == 0, "Node thread creation failed!");
   printf("Run Node Thread Success. Handle: %d\n", handle);
 }
 void mxcReleaseNodeThread(NodeHandle handle) {
@@ -295,25 +325,11 @@ void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHand
 
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
-  pNodeContext->compCycleSkip = 16;
   pNodeContext->processHandle = INVALID_HANDLE_VALUE;
 
   *pNodeHandle = nodeHandle;
 
   printf("Node Request Process Success. Handle: %d\n", nodeHandle);
-}
-
-void mxcRunNode(const MxcNodeContext* pNodeContext) {
-  switch (pNodeContext->nodeType) {
-    case MXC_NODE_TYPE_THREAD:
-      int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))pNodeContext->runFunc, pNodeContext);
-      REQUIRE(result == 0, "Node thread creation failed!");
-      break;
-    case MXC_NODE_TYPE_INTERPROCESS:
-      mxcCreateNodeFramebufferExport(MID_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
-      break;
-    default: PANIC("Node type not available!");
-  }
 }
 
 static const VkImageUsageFlags VKM_PASS_NODE_USAGES[] = {
@@ -423,8 +439,8 @@ void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFra
     vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.image, "ImportedColorFramebuffer");
     pFramebufferTextures[i].normal = pNodeFramebuffers[i].normal;
     vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.image, "ImportedNormalFramebuffer");
-    pFramebufferTextures[i].gBuffer = pNodeFramebuffers[i].gBuffer;
-    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gBuffer.image, "ImportedGBufferFramebuffer");
+    pFramebufferTextures[i].gbuffer = pNodeFramebuffers[i].gbuffer;
+    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gbuffer.image, "ImportedGBufferFramebuffer");
     // Depth is not shared over IPC. It goes in Gbuffer if needed.
     const VkmTextureCreateInfo depthCreateInfo = {
         .debugName = "ImportedDepthFramebuffer",
@@ -497,6 +513,6 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .locality = locality,
     };
-    vkmCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].gBuffer);
+    vkmCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
   }
 }

@@ -681,20 +681,20 @@ static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInf
 
 void vkmCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture) {
   CreateAllocateBindImageView(&pCreateInfo->imageCreateInfo, pCreateInfo->aspectMask, pCreateInfo->locality, &pTexture->memory, &pTexture->image, &pTexture->view);
-  switch (pCreateInfo->locality) {
-    default:
-    case MID_LOCALITY_CONTEXT:
-    case MID_LOCALITY_PROCESS: break;
-    case MID_LOCALITY_INTERPROCESS_EXPORTED:
-    case MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY:
-      const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
-          .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
-          .memory = pTexture->memory,
-          .handleType = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE};
-      MIDVK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
-      MIDVK_REQUIRE(GetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &pTexture->externalHandle));
-      break;
-  }
+//  switch (pCreateInfo->locality) {
+//    default:
+//    case MID_LOCALITY_CONTEXT:
+//    case MID_LOCALITY_PROCESS: break;
+//    case MID_LOCALITY_INTERPROCESS_EXPORTED:
+//    case MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY:
+//      const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+//          .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
+//          .memory = pTexture->memory,
+//          .handleType = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE};
+//      MIDVK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
+//      MIDVK_REQUIRE(GetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &pTexture->externalHandle));
+//      break;
+//  }
   vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
@@ -1278,25 +1278,6 @@ void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, HANDLE* p
   };
   MIDVK_REQUIRE(vkCreateSemaphore(context.device, &semaphoreCreateInfo, MIDVK_ALLOC, pSemaphore));
   vkmSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
-  switch (pCreateInfo->locality) {
-    default:
-    case MID_LOCALITY_CONTEXT: break;
-    case MID_LOCALITY_PROCESS: break;
-    case MID_LOCALITY_INTERPROCESS_EXPORTED:
-    case MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY:
-      REQUIRE(pExternalHandle != NULL, "Trying to create interprocess semaphore with NULL externalHandle");
-#if WIN32
-      // why break validation!?
-//      const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
-//          .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
-//          .semaphore = *pSemaphore,
-//          .handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
-//      };
-//      MIDVK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
-//      MIDVK_REQUIRE(GetSemaphoreWin32HandleKHR(context.device, &getWin32HandleInfo, pExternalHandle));
-#endif
-      break;
-  }
 }
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet) {

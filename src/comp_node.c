@@ -251,7 +251,7 @@ void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* p
   VkDeviceSize quadIndexOffset = pNode->quadMesh.indexOffset;
   VkDeviceSize quadVertexOffset = pNode->quadMesh.vertexOffset;
 
-  VkSemaphore timeline = pNodeContext->compTimeline;
+  VkSemaphore compTimeline = pNodeContext->compTimeline;
   uint64_t    compBaseCycleValue = 0;
 
   VkQueryPool timeQueryPool = pNode->timeQueryPool;
@@ -296,13 +296,13 @@ void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* p
 
 run_loop:
 
-  vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
+  vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
   vkmProcessCameraMouseInput(midWindowInput.deltaTime, mxcInput.mouseDelta, &globalCameraTransform);
   vkmProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globalCameraTransform);
   vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
   {  // Node cycle
-    vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
+    vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 
     vkmCmdResetBegin(cmd);
 
@@ -397,7 +397,7 @@ run_loop:
     }
 
     {  // Recording Cycle
-      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, timeline);
+      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, compTimeline);
 
       framebufferIndex = !framebufferIndex;
 
@@ -444,7 +444,7 @@ run_loop:
       EndCommandBuffer(cmd);
 
       __atomic_thread_fence(__ATOMIC_RELEASE); // mainly to release swap index
-      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
+      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
     }
 
     {  // update timequery

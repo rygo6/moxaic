@@ -106,46 +106,19 @@ int main(void) {
   vkmCreateStdPipeLayout();
   vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
-
-//  MxcCompNode compNode;
-//  {
-//    vkmBeginAllocationRequests();
-//    const MxcCompNodeCreateInfo compNodeInfo = {
-//        .compMode = MXC_COMP_MODE_TESS,
-//        .surface = surface,
-//    };
-//    mxcCreateCompNode(&compNodeInfo, &compNode);
-//    vkmEndAllocationRequests();
-//    mxcBindUpdateCompNode(&compNodeInfo, &compNode);
-//  }
-  // move to register method like mxcRegisterCompNodeThread?
-//  compNodeShared = (MxcCompNodeShared){};
-//  compNodeShared.cmd = compNode.cmd;
-//  compNodeShared.compTimeline = compNode.timeline;
-//  compNodeShared.chain = compNode.swap.chain;
-//  compNodeShared.acquireSemaphore = compNode.swap.acquireSemaphore;
-//  compNodeShared.renderCompleteSemaphore = compNode.swap.renderCompleteSemaphore;
-//  const MxcNodeContext compNodeContext = {
-//      .nodeType = MXC_NODE_TYPE_THREAD,
-//      .pNode = &compNode,
-//      .runFunc = mxcCompNodeThread,
-//      .compTimeline = compNode.timeline,
-//  };
-//  mxcRunNode(&compNodeContext);
+  // Comp
   mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
 
-
+  // Test Nodes
   NodeHandle testNodeHandle;
-  mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
-  mxcRunNodeThread(testNodeHandle);
+  mxcRequestNodeThread(&testNodeHandle);
+  mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
 
 
   {
     const VkDevice device = context.device;
     const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-    // we need to signal base value higher than 1 for external semaphore because vulkan may not know initial value!?
     uint64_t compBaseCycleValue = 0;
-//    vkmTimelineSignal(device, compBaseCycleValue, compNodeContext.compTimeline);
     while (isRunning) {
 
       // we may not have to even wait... this could go faster

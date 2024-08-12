@@ -8,7 +8,7 @@ set(TARGET_NAME moxaic)
 #set(THREADS_PREFER_PTHREAD_FLAG ON)
 #set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
 
-set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.280.0")
+set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.290.0")
 
 file(GLOB SRC_FILES
         src/*.c

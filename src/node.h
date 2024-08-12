@@ -60,18 +60,12 @@ typedef struct MxcNodeFramebufferTexture {
   MidVkTexture color;
   MidVkTexture normal;
   MidVkTexture depth;
-  MidVkTexture gBuffer;
+  MidVkTexture gbuffer;
 } MxcNodeFramebufferTexture;
 
 // Full data of a node
 typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
   MxcNodeType nodeType;
-
-  int compCycleSkip;
-
-  const void* pNode;
-  // probable get rid of runfunc and just pass it to node run
-  void* (*runFunc)(const struct MxcNodeContext* pNode);
 
   VkCommandPool   pool;
   VkCommandBuffer cmd;
@@ -80,8 +74,10 @@ typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probab
 
   MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
 
+  // MXC_NODE_TYPE_THREAD
   pthread_t threadId;
 
+  // MXC_NODE_TYPE_INTERPROCESS
   HANDLE    processHandle;
   HANDLE    compTimelineHandle;
   HANDLE    nodeTimelineHandle;
@@ -97,6 +93,7 @@ typedef struct CACHE_ALIGN MxcNodeShared {
   volatile uint64_t          pendingTimelineSignal;
   volatile uint64_t          currentTimelineSignal;
   volatile float             radius;
+  volatile int               compCycleSkip;
   volatile bool              active;
 } MxcNodeShared;
 extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
@@ -152,10 +149,9 @@ static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
 }
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*));
-void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pHandle);
-void mxcRunNodeThread(NodeHandle handle);
+void mxcRequestNodeThread(NodeHandle* pHandle);
+void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle);
 void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHandle);
-void mxcRunNode(const MxcNodeContext* pNodeContext);
 
 // Renderpass with layout transitions setup for use in node
 void mxcCreateNodeRenderPass();

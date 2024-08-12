@@ -64,6 +64,12 @@ extern void Panic(const char* file, int line, const char* message);
 #define MIDVK_INSTANCE_FUNC(_func)                                                             \
   const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
   REQUIRE(_func != NULL, "Couldn't load " #_func)
+#define MIDVK_INSTANCE_STATIC_FUNC(_func)                                  \
+  static PFN_##vk##_func _func = NULL;                                     \
+  if (_func == NULL) {                                                     \
+    _func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
+    REQUIRE(_func != NULL, "Couldn't load " #_func)                        \
+  }
 #define MIDVK_DEVICE_FUNC(_func)                                                           \
   const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(device, "vk" #_func); \
   REQUIRE(_func != NULL, "Couldn't load " #_func)
@@ -138,7 +144,7 @@ typedef struct MidVkTexture {
   VkmSharedMemory sharedMemory;
 
   VkDeviceMemory  memory;
-  HANDLE          externalHandle;
+//  HANDLE          externalHandle;
 } MidVkTexture;
 typedef struct VkmMeshCreateInfo {
   uint32_t         indexCount;
