@@ -34,21 +34,24 @@ typedef struct MxcRingBuffer {
   volatile uint8_t tail;
   volatile uint8_t ringBuffer[MXC_RING_BUFFER_SIZE];
 } MxcRingBuffer;
-
 typedef struct MxcInterProcessBuffer {
   volatile LPVOID sharedBuffer;
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
 typedef struct CACHE_ALIGN MxcNodeShared {
+  // read/write every cycle
   volatile VkmGlobalSetState globalSetState;
   volatile vec2              ulUV;
   volatile vec2              lrUV;
   volatile uint64_t          pendingTimelineSignal;
   volatile uint64_t          currentTimelineSignal;
-  volatile float             radius;
+
+  // read every cycle, occasional write
   volatile int               compCycleSkip;
+  volatile float             radius;
   volatile bool              active;
+
 } MxcNodeShared;
 typedef struct MxcImportParam {
   struct {
@@ -56,8 +59,8 @@ typedef struct MxcImportParam {
     HANDLE normal;
     HANDLE gbuffer;
   } framebufferHandles[MIDVK_SWAP_COUNT];
-  HANDLE compTimelineHandle;
   HANDLE nodeTimelineHandle;
+  HANDLE compTimelineHandle;
 } MxcImportParam;
 typedef struct MxcExternalNodeMemory {
   volatile MxcNodeShared nodeShared;
@@ -67,6 +70,7 @@ typedef struct MxcExternalNodeMemory {
 //
 /// Node Comp Types
 typedef struct CACHE_ALIGN MxcCompNodeContext {
+  // read/write multiple threads
   volatile uint32_t swapIndex;
 
   // read by multiple threads
@@ -74,10 +78,10 @@ typedef struct CACHE_ALIGN MxcCompNodeContext {
   VkSemaphore     compTimeline;
   VkmSwap         swap;
 
+  // read by comp thread
   VkCommandPool pool;
-
   pthread_t threadId;
-  HANDLE    compTimelineHandle;
+
 } MxcCompNodeContext;
 typedef struct MxcNodeSetState {
   mat4 model;
@@ -94,26 +98,23 @@ typedef struct MxcNodeSetState {
   vec2 ulUV;
   vec2 lrUV;
 } MxcNodeSetState;
-typedef struct MxcNodeFramebufferImage {
-  VkImage     color;
-  VkImage     normal;
-  VkImage     gBuffer;
-} MxcNodeFramebufferImage;
-typedef struct MxcNodeFramebufferView {
-  VkImageView color;
-  VkImageView normal;
-  VkImageView gBuffer;
-} MxcNodeFramebufferView;
+// node hot data for compositor
 typedef struct CACHE_ALIGN MxcNodeCompData {
-  VkCommandBuffer       cmd;
-  VkSemaphore           nodeTimeline;
-  uint64_t              lastTimelineSignal;
-  uint64_t              lastTimelineSwap;
-  VkmTransform          transform;
-  MxcNodeSetState       nodeSetState;
-  MxcNodeFramebufferImage framebufferImages[MIDVK_SWAP_COUNT];
-  MxcNodeFramebufferView framebufferViews[MIDVK_SWAP_COUNT];
-  MxcNodeType           type;
+  MxcNodeType             type;
+  VkCommandBuffer         cmd;
+  VkSemaphore             nodeTimeline;
+  uint64_t                lastTimelineSignal;
+  uint64_t                lastTimelineSwap;
+  MxcNodeSetState         nodeSetState;
+  VkmTransform            transform;
+  struct {
+    VkImage     color;
+    VkImage     normal;
+    VkImage     gBuffer;
+    VkImageView colorView;
+    VkImageView normalView;
+    VkImageView gBufferView;
+  } framebufferImages[MIDVK_SWAP_COUNT];
 } MxcNodeCompData;
 
 //
@@ -124,7 +125,7 @@ typedef struct MxcNodeFramebufferTexture {
   MidVkTexture depth;
   MidVkTexture gbuffer;
 } MxcNodeFramebufferTexture;
-typedef struct MxcNodeContext {  // should be NodeThread and NodeProcess? probably, but may be better for switching back n forth if not?
+typedef struct MxcNodeContext {
   MxcNodeType nodeType;
 
   VkCommandPool   pool;

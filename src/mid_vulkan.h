@@ -828,7 +828,7 @@ typedef struct MidVkSemaphoreCreateInfo {
   VkSemaphoreType semaphoreType;
   MidLocality     locality;
 } MidVkSemaphoreCreateInfo;
-void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, HANDLE* pExternalHandle, VkSemaphore* pSemaphore);
+void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 

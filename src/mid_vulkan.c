@@ -1254,7 +1254,7 @@ void vkmCreateStdPipeLayout() {
   CreateStdPipeLayout();
 }
 
-void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, HANDLE* pExternalHandle, VkSemaphore* pSemaphore) {
+void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore) {
 #if WIN32
   const VkExportSemaphoreWin32HandleInfoKHR exportSemaphorePlatformHandleInfo = {
       .sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,

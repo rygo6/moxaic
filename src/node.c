@@ -269,7 +269,7 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
       .locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
-  midvkCreateSemaphore(&semaphoreCreateInfo, &compNodeContext.compTimelineHandle, &compNodeContext.compTimeline);
+  midvkCreateSemaphore(&semaphoreCreateInfo, &compNodeContext.compTimeline);
   vkmCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compNodeContext.swap);
 
   int result = pthread_create(&compNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compNodeContext);
@@ -300,7 +300,7 @@ void mxcRequestNodeThread(NodeHandle* pHandle) {
       .locality = MID_LOCALITY_CONTEXT,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
-  midvkCreateSemaphore(&semaphoreCreateInfo, NULL, &pNodeContext->nodeTimeline);
+  midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
 
   pNodeContext->compTimeline = compNodeContext.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
@@ -323,9 +323,9 @@ void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle
     nodeCompData[handle].framebufferImages[i].color = nodeContexts[handle].framebufferTextures[i].color.image;
     nodeCompData[handle].framebufferImages[i].normal = nodeContexts[handle].framebufferTextures[i].normal.image;
     nodeCompData[handle].framebufferImages[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gbuffer.image;
-    nodeCompData[handle].framebufferViews[i].color = nodeContexts[handle].framebufferTextures[i].color.view;
-    nodeCompData[handle].framebufferViews[i].normal = nodeContexts[handle].framebufferTextures[i].normal.view;
-    nodeCompData[handle].framebufferViews[i].gBuffer = nodeContexts[handle].framebufferTextures[i].gbuffer.view;
+    nodeCompData[handle].framebufferImages[i].colorView = nodeContexts[handle].framebufferTextures[i].color.view;
+    nodeCompData[handle].framebufferImages[i].normalView = nodeContexts[handle].framebufferTextures[i].normal.view;
+    nodeCompData[handle].framebufferImages[i].gBufferView = nodeContexts[handle].framebufferTextures[i].gbuffer.view;
   }
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -348,7 +348,7 @@ void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHand
       .locality = MID_LOCALITY_INTERPROCESS_EXPORTED,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
-  midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimelineHandle, &pNodeContext->nodeTimeline);
+  midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
 
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;

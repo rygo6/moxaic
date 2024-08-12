@@ -322,9 +322,9 @@ run_loop:
             nodeCompData[i].lastTimelineSwap = value;
             const int                  nodeFramebufferIndex = !(value % MIDVK_SWAP_COUNT);
             const VkWriteDescriptorSet writeSets[] = {
-                SET_WRITE_COMP_COLOR(compNodeSet, nodeCompData[i].framebufferViews[nodeFramebufferIndex].color),
-                SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompData[i].framebufferViews[nodeFramebufferIndex].normal),
-                SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompData[i].framebufferViews[nodeFramebufferIndex].gBuffer),
+                SET_WRITE_COMP_COLOR(compNodeSet, nodeCompData[i].framebufferImages[nodeFramebufferIndex].colorView),
+                SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompData[i].framebufferImages[nodeFramebufferIndex].normalView),
+                SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompData[i].framebufferImages[nodeFramebufferIndex].gBufferView),
             };
             vkUpdateDescriptorSets(device, _countof(writeSets), writeSets, 0, NULL);
             switch (nodeCompData[i].type) {

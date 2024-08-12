@@ -158,9 +158,6 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
 }
 
 void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode) {
-
-//  const MxcTestNode* pNode = (MxcTestNode*)pNodeContext->pNode;
-
   const MxcNodeType     nodeType = pNodeContext->nodeType;
   const NodeHandle      handle = 0;
 
@@ -181,22 +178,20 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
   // these should go into a struct so all the images from one frame are side by side
   struct {
-    VkImage    color;
-    VkImage    gBuffer;
+    VkImage     color;
+    VkImage     gBuffer;
+    VkImageView colorView;
+    VkImageView normalView;
+    VkImageView depthView;
+    VkImageView gBufferView;
   } framebufferImages[MIDVK_SWAP_COUNT];
-  struct {
-    VkImageView    color;
-    VkImageView    normal;
-    VkImageView    depth;
-    VkImageView    gBuffer;
-  } framebufferViews[MIDVK_SWAP_COUNT];
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    framebufferViews[i].color = pNode->framebufferTextures[i].color.view;
-    framebufferViews[i].normal = pNode->framebufferTextures[i].normal.view;
-    framebufferViews[i].depth = pNode->framebufferTextures[i].depth.view;
-    framebufferViews[i].gBuffer = pNode->framebufferTextures[i].gbuffer.view;
     framebufferImages[i].color = pNode->framebufferTextures[i].color.image;
     framebufferImages[i].gBuffer = pNode->framebufferTextures[i].gbuffer.image;
+    framebufferImages[i].colorView = pNode->framebufferTextures[i].color.view;
+    framebufferImages[i].normalView = pNode->framebufferTextures[i].normal.view;
+    framebufferImages[i].depthView = pNode->framebufferTextures[i].depth.view;
+    framebufferImages[i].gBufferView = pNode->framebufferTextures[i].gbuffer.view;
   }
   VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
   memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -285,7 +280,7 @@ run_loop:
 
   {  // this is really all that'd be user exposed....
     const VkClearColorValue clearColor = (VkClearColorValue){0, 0, 0.1, 0};
-    CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, framebufferViews[framebufferIndex].color, framebufferViews[framebufferIndex].normal, framebufferViews[framebufferIndex].depth);
+    CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, framebufferImages[framebufferIndex].colorView, framebufferImages[framebufferIndex].normalView, framebufferImages[framebufferIndex].depthView);
 
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
     CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
@@ -304,8 +299,8 @@ run_loop:
     CmdClearColorImage(cmd, framebufferImages[framebufferIndex].gBuffer, VK_IMAGE_LAYOUT_GENERAL, &MXC_NODE_CLEAR_COLOR, 1, &(const VkImageSubresourceRange){.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = MXC_NODE_GBUFFER_LEVELS, .layerCount = 1});
     CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL, VKM_IMAGE_BARRIER_COMPUTE_WRITE, framebufferImages[framebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS));
     const VkWriteDescriptorSet initialPushSet[] = {
-        SET_WRITE_NODE_PROCESS_SRC(framebufferViews[framebufferIndex].depth),
-        SET_WRITE_NODE_PROCESS_DST(framebufferViews[framebufferIndex].gBuffer),
+        SET_WRITE_NODE_PROCESS_SRC(framebufferImages[framebufferIndex].depthView),
+        SET_WRITE_NODE_PROCESS_DST(framebufferImages[framebufferIndex].gBufferView),
     };
     CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitMipAveragePipe);
     CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, _countof(initialPushSet), initialPushSet);
