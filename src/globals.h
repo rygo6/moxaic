@@ -26,9 +26,9 @@ extern void Panic(const char* file, int line, const char* message);
 #define HOT    __attribute__((hot))
 #define INLINE __attribute__((always_inline)) inline
 
-extern volatile bool isCompositor;
+extern bool isCompositor;
 
-extern volatile bool isRunning;
+extern bool isRunning;
 #define CHECK_RUNNING                      \
   if (__builtin_expect(!(isRunning), 0)) { \
     return;                                \

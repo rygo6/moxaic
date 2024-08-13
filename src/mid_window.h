@@ -31,7 +31,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 
 typedef struct MidWindow {
-  volatile bool running;
+  bool running;
   HINSTANCE     hInstance;
   HWND          hWnd;
   int           width, height;

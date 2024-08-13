@@ -27,44 +27,20 @@ const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 // Checks error code. Expects 0 for success.
 #define ERR_CHECK(_command, _message)                        \
   {                                                          \
-    int _result = _command;                                  \
+    int _result = (_command);                                \
     if (__builtin_expect(!!(_result), 0)) {                  \
-      fprintf(stderr, "%s: %d\n", _message, GetLastError()); \
+      fprintf(stderr, "%s: %ld\n", _message, GetLastError()); \
       goto Exit;                                             \
     }                                                        \
   }
 #define WSA_ERR_CHECK(_command, _message)                       \
   {                                                             \
-    int _result = _command;                                     \
+    int _result = (_command);                                   \
     if (__builtin_expect(!!(_result), 0)) {                     \
       fprintf(stderr, "%s: %d\n", _message, WSAGetLastError()); \
       goto Exit;                                                \
     }                                                           \
   }
-
-HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory) {
-  MIDVK_INSTANCE_STATIC_FUNC(GetMemoryWin32HandleKHR);
-  const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
-      .sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
-      .memory = memory,
-      .handleType = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
-  };
-  HANDLE handle;
-  MIDVK_REQUIRE(GetMemoryWin32HandleKHR(context.device, &getWin32HandleInfo, &handle));
-  return handle;
-}
-
-HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore) {
-  MIDVK_INSTANCE_STATIC_FUNC(GetSemaphoreWin32HandleKHR);
-  const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
-      .semaphore = semaphore,
-      .handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
-  };
-  HANDLE handle;
-  MIDVK_REQUIRE(GetSemaphoreWin32HandleKHR(context.device, &getWin32HandleInfo, &handle));
-  return handle;
-}
 
 static void acceptIPCServer() {
   printf("Accepting connections on: '%s'\n", SOCKET_PATH);
@@ -102,29 +78,28 @@ static void acceptIPCServer() {
   ERR_CHECK(processHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
   HANDLE externalNodeMemoryHandle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(MxcExternalNodeMemory), NULL);
   ERR_CHECK(externalNodeMemoryHandle == NULL, "Could not create file mapping object");
-  MxcExternalNodeMemory* pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, 0);
+  MxcExternalNodeMemory* pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
   ERR_CHECK(pExternalNodeMemory == NULL, "Could not map view of file");
 
   // Retrieve node handles
   NodeHandle  processNodeHandle;
-  mxcRequestNodeProcess(compNodeContext.compTimeline, &processNodeHandle);
+  mxcRequestNodeProcessExport(compNodeContext.compTimeline, &processNodeHandle);
   pProcessNodeContext = &nodeContexts[processNodeHandle];
   pProcessNodeShared = &nodesShared[processNodeHandle];
   pProcessNodeContext->processHandle = processHandle;
   pProcessNodeContext->externalNodeMemoryHandle = externalNodeMemoryHandle;
   pProcessNodeContext->pExternalNodeMemory = pExternalNodeMemory;
 
-
   { // Send Import Params
     const HANDLE currentHandle = GetCurrentProcess();
     MxcImportParam* pImportParam = &pExternalNodeMemory->importParam;
     for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].color.memory), processHandle, pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
-      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].normal.memory), processHandle, pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
-      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].gbuffer.memory), processHandle, pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
+      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].color.memory), processHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS);
+      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].normal.memory), processHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS);
+      DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].gbuffer.memory), processHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
     }
-    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pProcessNodeContext->nodeTimeline), processHandle, pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compNodeContext.compTimeline), processHandle, pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pProcessNodeContext->nodeTimeline), processHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compNodeContext.compTimeline), processHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
 
     HANDLE duplicatedExternalNodeMemoryHandle;
     DuplicateHandle(currentHandle, pProcessNodeContext->externalNodeMemoryHandle , processHandle, &duplicatedExternalNodeMemoryHandle, 0, false, DUPLICATE_SAME_ACCESS);
@@ -172,7 +147,6 @@ Exit:
   WSACleanup();
   return NULL;
 }
-
 void mxcInitializeIPCServer() {
   SYSTEM_INFO systemInfo;
   GetSystemInfo(&systemInfo);
@@ -181,7 +155,6 @@ void mxcInitializeIPCServer() {
   ipcServer.listenSocket = INVALID_SOCKET;
   REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, runIPCServer, NULL), "IPC server pipe creation Fail!");
 }
-
 void mxcShutdownIPCServer() {
   if (ipcServer.listenSocket != INVALID_SOCKET) {
     closesocket(ipcServer.listenSocket);
@@ -230,6 +203,11 @@ void mxcConnectNodeIPC() {
   WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv externalNodeMemoryHandle failed");
   printf("Received externalNodeMemoryHandle: %p Size: %d\n", externalNodeMemoryHandle, receiveLength);
 
+  MxcExternalNodeMemory* pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
+  ERR_CHECK(pExternalNodeMemory == NULL, "Map pExternalNodeMemory failed");
+
+  mxcRequestNodeProcessImport(&pExternalNodeMemory->importParam);
+
 Exit:
   if (clientSocket != INVALID_SOCKET)
     closesocket(clientSocket);
@@ -246,9 +224,6 @@ size_t        nodeCount = 0;
 MxcNodeContext  nodeContexts[MXC_NODE_CAPACITY] = {};
 MxcNodeShared nodesShared[MXC_NODE_CAPACITY] = {};
 MxcNodeCompData nodeCompData[MXC_NODE_CAPACITY] = {};
-
-void mxcInterProcessImportNode(void* pParam) {
-}
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*)) {
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -280,7 +255,6 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
 void mxcRequestNodeThread(NodeHandle* pHandle) {
   NodeHandle      handle = 0;
   MxcNodeContext* pNodeContext = &nodeContexts[handle];
-
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -294,19 +268,16 @@ void mxcRequestNodeThread(NodeHandle* pHandle) {
   };
   MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
-  mxcCreateNodeFramebufferExport(MID_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
+  mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
   const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
       .debugName = "NodeTimelineSemaphore",
       .locality = MID_LOCALITY_CONTEXT,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
-
   pNodeContext->compTimeline = compNodeContext.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
-
   *pHandle = handle;
-
   printf("Request Node Thread Success. Handle: %d\n", handle);
 }
 void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle) {
@@ -338,25 +309,99 @@ void mxcReleaseNodeThread(NodeHandle handle) {
   printf("Release Node Thread Success. Handle: %d\n", handle);
 }
 
-void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHandle) {
+void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle) {
   NodeHandle      nodeHandle = 1;
   MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
-
-  mxcCreateNodeFramebufferExport(MID_LOCALITY_INTERPROCESS_EXPORTED, pNodeContext->framebufferTextures);
+  mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->framebufferTextures);
   const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
       .debugName = "NodeTimelineSemaphore",
-      .locality = MID_LOCALITY_INTERPROCESS_EXPORTED,
+      .locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
-
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
   pNodeContext->processHandle = INVALID_HANDLE_VALUE;
-
   *pNodeHandle = nodeHandle;
-
   printf("Node Request Process Success. Handle: %d\n", nodeHandle);
+}
+void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam) {
+  NodeHandle      nodeHandle = 2;
+  MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
+  MxcNodeFramebufferTexture* pFramebufferTextures = pNodeContext->framebufferTextures;
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+    const VkmTextureCreateInfo colorCreateInfo = {
+        .debugName = "ImportedColorFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext =  MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+        },
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+        .externalHandle = pImportParam->framebufferHandles[i].color,
+    };
+    midvkCreateTexture(&colorCreateInfo, &pFramebufferTextures[i].color);
+    const VkmTextureCreateInfo normalCreateInfo = {
+        .debugName = "ImportedNormalFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+        },
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+        .externalHandle = pImportParam->framebufferHandles[i].normal,
+    };
+    midvkCreateTexture(&normalCreateInfo, &pFramebufferTextures[i].normal);
+    const VkmTextureCreateInfo gbufferCreateInfo = {
+        .debugName = "ImportedGBufferFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MXC_NODE_GBUFFER_FORMAT,
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = MXC_NODE_GBUFFER_LEVELS,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MXC_NODE_GBUFFER_USAGE,
+        },
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+        .externalHandle = pImportParam->framebufferHandles[i].gbuffer,
+    };
+    midvkCreateTexture(&gbufferCreateInfo, &pFramebufferTextures[i].gbuffer);
+    // Depth is not shared over IPC.
+    const VkmTextureCreateInfo depthCreateInfo = {
+        .debugName = "ImportedDepthFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+        },
+        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+        .locality = MID_LOCALITY_CONTEXT,
+    };
+    midvkCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
+  }
 }
 
 static const VkImageUsageFlags VKM_PASS_NODE_USAGES[] = {
@@ -460,41 +505,40 @@ void mxcCreateNodeRenderPass() {
   vkmSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)context.nodeRenderPass, "NodeRenderPass");
 }
 
-void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures) {
-  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    pFramebufferTextures[i].color = pNodeFramebuffers[i].color;
-    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.image, "ImportedColorFramebuffer");
-    pFramebufferTextures[i].normal = pNodeFramebuffers[i].normal;
-    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.image, "ImportedNormalFramebuffer");
-    pFramebufferTextures[i].gbuffer = pNodeFramebuffers[i].gbuffer;
-    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gbuffer.image, "ImportedGBufferFramebuffer");
-    // Depth is not shared over IPC. It goes in Gbuffer if needed.
-    const VkmTextureCreateInfo depthCreateInfo = {
-        .debugName = "ImportedDepthFramebuffer",
-        .imageCreateInfo = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
-            .imageType = VK_IMAGE_TYPE_2D,
-            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
-            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-            .mipLevels = 1,
-            .arrayLayers = 1,
-            .samples = VK_SAMPLE_COUNT_1_BIT,
-            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
-        },
-        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-        .locality = locality,
-    };
-    vkmCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
-  }
-}
-void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures) {
+//void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures) {
+//  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+//    pFramebufferTextures[i].color = pNodeFramebuffers[i].color;
+//    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].color.image, "ImportedColorFramebuffer");
+//    pFramebufferTextures[i].normal = pNodeFramebuffers[i].normal;
+//    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].normal.image, "ImportedNormalFramebuffer");
+//    pFramebufferTextures[i].gbuffer = pNodeFramebuffers[i].gbuffer;
+//    vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pNodeFramebuffers[i].gbuffer.image, "ImportedGBufferFramebuffer");
+//    // Depth is not shared over IPC. It goes in Gbuffer if needed.
+//    const VkmTextureCreateInfo depthCreateInfo = {
+//        .debugName = "ImportedDepthFramebuffer",
+//        .imageCreateInfo = {
+//            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//            .imageType = VK_IMAGE_TYPE_2D,
+//            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+//            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//            .mipLevels = 1,
+//            .arrayLayers = 1,
+//            .samples = VK_SAMPLE_COUNT_1_BIT,
+//            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+//        },
+//        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+//        .locality = locality,
+//    };
+//    vkmCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
+//  }
+//}
+void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures) {
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     const VkmTextureCreateInfo colorCreateInfo = {
         .debugName = "ExportedColorFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -506,12 +550,12 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .locality = locality,
     };
-    vkmCreateTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].color);
+    midvkCreateTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].color);
     const VkmTextureCreateInfo normalCreateInfo = {
         .debugName = "ExportedNormalFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -523,12 +567,12 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .locality = locality,
     };
-    vkmCreateTexture(&normalCreateInfo, &pNodeFramebufferTextures[i].normal);
-    const VkmTextureCreateInfo depthCreateInfo = {
+    midvkCreateTexture(&normalCreateInfo, &pNodeFramebufferTextures[i].normal);
+    const VkmTextureCreateInfo gbufferCreateInfo = {
         .debugName = "ExportedGBufferFramebuffer",
         .imageCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-            .pNext = locality == MID_LOCALITY_INTERPROCESS_EXPORTED ? &VKM_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+            .pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
             .imageType = VK_IMAGE_TYPE_2D,
             .format = MXC_NODE_GBUFFER_FORMAT,
             .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -540,6 +584,26 @@ void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebuff
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .locality = locality,
     };
-    vkmCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
+    midvkCreateTexture(&gbufferCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
+
+    // Depth is not shared over IPC.
+    if (locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY)
+      continue;
+    const VkmTextureCreateInfo depthCreateInfo = {
+        .debugName = "ImportedDepthFramebuffer",
+        .imageCreateInfo = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+            .extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+        },
+        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+        .locality = locality,
+    };
+    midvkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].depth);
   }
 }

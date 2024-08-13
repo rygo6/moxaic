@@ -30,27 +30,27 @@ typedef enum MxcNodeType {
 #define MXC_RING_BUFFER_SIZE        MXC_RING_BUFFER_COUNT * sizeof(uint8_t)
 #define MXC_RING_BUFFER_HEADER_SIZE 1
 typedef struct MxcRingBuffer {
-  volatile uint8_t head;
-  volatile uint8_t tail;
-  volatile uint8_t ringBuffer[MXC_RING_BUFFER_SIZE];
+  uint8_t head;
+  uint8_t tail;
+  uint8_t ringBuffer[MXC_RING_BUFFER_SIZE];
 } MxcRingBuffer;
 typedef struct MxcInterProcessBuffer {
-  volatile LPVOID sharedBuffer;
+  LPVOID sharedBuffer;
   HANDLE          mapFileHandle;
 } MxcInterProcessBuffer;
 
 typedef struct CACHE_ALIGN MxcNodeShared {
   // read/write every cycle
-  volatile VkmGlobalSetState globalSetState;
-  volatile vec2              ulUV;
-  volatile vec2              lrUV;
-  volatile uint64_t          pendingTimelineSignal;
-  volatile uint64_t          currentTimelineSignal;
+  VkmGlobalSetState globalSetState;
+  vec2              ulUV;
+  vec2              lrUV;
+  uint64_t          pendingTimelineSignal;
+  uint64_t          currentTimelineSignal;
 
   // read every cycle, occasional write
-  volatile int               compCycleSkip;
-  volatile float             radius;
-  volatile bool              active;
+  int               compCycleSkip;
+  float             radius;
+  bool              active;
 
 } MxcNodeShared;
 typedef struct MxcImportParam {
@@ -63,22 +63,22 @@ typedef struct MxcImportParam {
   HANDLE compTimelineHandle;
 } MxcImportParam;
 typedef struct MxcExternalNodeMemory {
-  volatile MxcNodeShared nodeShared;
-  volatile MxcImportParam importParam;
+  MxcNodeShared nodeShared;
+  MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
 //
 /// Node Comp Types
 typedef struct CACHE_ALIGN MxcCompNodeContext {
   // read/write multiple threads
-  volatile uint32_t swapIndex;
+  uint32_t swapIndex;
 
   // read by multiple threads
   VkCommandBuffer cmd;
   VkSemaphore     compTimeline;
   VkmSwap         swap;
 
-  // read by comp thread
+  // cold data
   VkCommandPool pool;
   pthread_t threadId;
 
@@ -98,8 +98,8 @@ typedef struct MxcNodeSetState {
   vec2 ulUV;
   vec2 lrUV;
 } MxcNodeSetState;
-// node hot data for compositor
 typedef struct CACHE_ALIGN MxcNodeCompData {
+  // node hot data for compositor
   MxcNodeType             type;
   VkCommandBuffer         cmd;
   VkSemaphore             nodeTimeline;
@@ -126,13 +126,12 @@ typedef struct MxcNodeFramebufferTexture {
   MidVkTexture gbuffer;
 } MxcNodeFramebufferTexture;
 typedef struct MxcNodeContext {
+  // cold data
   MxcNodeType nodeType;
-
   VkCommandPool   pool;
   VkCommandBuffer cmd;
   VkSemaphore nodeTimeline;
   VkSemaphore compTimeline;
-
   MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
 
   // MXC_NODE_TYPE_THREAD
@@ -176,12 +175,10 @@ static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*));
 void mxcRequestNodeThread(NodeHandle* pHandle);
 void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle);
-void mxcRequestNodeProcess(const VkSemaphore compTimeline, NodeHandle* pNodeHandle);
+void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle);
 
-// Renderpass with layout transitions setup for use in node
 void mxcCreateNodeRenderPass();
-void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures);
-void mxcCreateNodeFramebufferExport(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures);
+void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures);
 
 // Process IPC
 #include <pthread.h>
@@ -190,11 +187,10 @@ void mxcShutdownIPCServer();
 void mxcConnectNodeIPC();
 void mxcShutdownNodeIPC();
 
-void mxcCreateSharedBuffer();
-void mxcCreateProcess();
+void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam);
+void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures);
 
-typedef void (*MxcInterProcessFuncPtr)(void*);
-void mxcInterProcessImportNode(void* pParam);
+typedef void (*MxcInterProcessFuncPtr)(const void*);
 typedef enum MxcRingBufferTarget {
   MXC_INTERPROCESS_TARGET_IMPORT
 } MxcRingBufferTarget;
@@ -202,7 +198,7 @@ static const size_t MXC_INTERPROCESS_TARGET_SIZE[] = {
     [MXC_INTERPROCESS_TARGET_IMPORT] = sizeof(MxcImportParam),
 };
 static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
-    [MXC_INTERPROCESS_TARGET_IMPORT] = mxcInterProcessImportNode,
+    [MXC_INTERPROCESS_TARGET_IMPORT] = (MxcInterProcessFuncPtr const)mxcRequestNodeProcessImport,
 };
 
 

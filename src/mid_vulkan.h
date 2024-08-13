@@ -78,10 +78,10 @@ extern void Panic(const char* file, int line, const char* message);
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
-#define VKM_EXTERNAL_IMAGE_CREATE_INFO                            \
-  (VkExternalMemoryImageCreateInfo) {                             \
+#define MIDVK_EXTERNAL_IMAGE_CREATE_INFO                          \
+  &(const VkExternalMemoryImageCreateInfo) {                      \
     .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO, \
-    .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,                    \
+    .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,             \
   }
 
 //----------------------------------------------------------------------------------
@@ -94,17 +94,22 @@ typedef enum MidLocality {
   // Used by multiple contexts, but in the same process
   MID_LOCALITY_PROCESS,
   // Used by nodes external to this context, device and process.
-  MID_LOCALITY_INTERPROCESS_EXPORTED,
+  MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
   MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
   // Used by nodes external to this context, device and process.
-  MID_LOCALITY_INTERPROCESS_IMPORTED,
+  MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
   MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
   MID_LOCALITY_COUNT,
 } MidLocality;
-#define MID_INTERPROCESS_LOCALITY(_locality) (_locality == MID_LOCALITY_INTERPROCESS_EXPORTED ||          \
-                                              _locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY || \
-                                              _locality == MID_LOCALITY_INTERPROCESS_IMPORTED ||          \
+#define MID_LOCALITY_INTERPROCESS(_locality) (_locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
+                                              _locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY ||  \
+                                              _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
                                               _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
+#define MID_LOCALITY_INTERPROCESS_EXPORTED(_locality) (_locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
+                                                       _locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY)
+#define MID_LOCALITY_INTERPROCESS_IMPORTED(_locality) (_locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
+                                                       _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
+
 typedef struct VkmTransform {
   vec3 position;
   vec3 euler;
@@ -728,8 +733,8 @@ typedef struct VkmRequestAllocationInfo {
   VkmDedicatedMemory    dedicated;
 } VkmRequestAllocationInfo;
 void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
-void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
+//void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
+//void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
 void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
 void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkmSharedMemory* pMemory);
@@ -793,7 +798,7 @@ void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 
 void vkmCreateStdRenderPass();
 void vkmCreateStdPipeLayout();
-void midVkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers);
+void midvkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers);
 void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
 
 void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
@@ -818,8 +823,9 @@ typedef struct VkmTextureCreateInfo {
   VkImageCreateInfo  imageCreateInfo;
   VkImageAspectFlags aspectMask;
   MidLocality        locality;
+  HANDLE             externalHandle;
 } VkmTextureCreateInfo;
-void vkmCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture);
+void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture);
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
 
 
@@ -831,6 +837,9 @@ typedef struct MidVkSemaphoreCreateInfo {
 void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+
+HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory);
+HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore);
 
 void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 

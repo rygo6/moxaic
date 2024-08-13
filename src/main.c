@@ -26,8 +26,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-volatile bool isCompositor = true;
-volatile bool isRunning = true;
+bool isCompositor = true;
+bool isRunning = true;
 //typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 
 int main(void) {
@@ -44,15 +44,6 @@ int main(void) {
   //    fprintf(stderr, "Failed to retrieve function pointer to vkGetInstanceProcAddr.\n");
   //    return EXIT_FAILURE;
   //  }
-#if defined(MOXAIC_COMPOSITOR)
-  printf("Moxaic Compositor\n");
-  isCompositor = true;
-  mxcInitializeIPCServer();
-#elif defined(MOXAIC_NODE)
-  printf("Moxaic node\n");
-  isCompositor = false;
-  mxcConnectNodeIPC();
-#endif
 
   midCreateWindow();
   vkmInitialize();
@@ -96,6 +87,15 @@ int main(void) {
     vkmCreateContext(&contextCreateInfo);
   }
 
+#if defined(MOXAIC_COMPOSITOR)
+  printf("Moxaic Compositor\n");
+  isCompositor = true;
+  mxcInitializeIPCServer();
+#elif defined(MOXAIC_NODE)
+  printf("Moxaic node\n");
+  isCompositor = false;
+  mxcConnectNodeIPC();
+#endif
 
   // these probably should go elsewhere ?
   // global samplers

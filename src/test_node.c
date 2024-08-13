@@ -85,14 +85,13 @@ void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout layout
   vkDestroyShaderModule(context.device, shader, MIDVK_ALLOC);
 }
 
-void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode) {
+static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNode* pTestNode) {
   {  // Create
     CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
     CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
     CreateNodeProcessPipe("./shaders/node_process_blit_slope_average_up.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
     CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
 
-    mxcCreateNodeFramebufferImport(MID_LOCALITY_CONTEXT, pCreateInfo->pFramebuffers, pTestNode->framebufferTextures);
     vkmCreateFramebuffer(context.nodeRenderPass, &pTestNode->framebuffer);
     vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
 
@@ -100,7 +99,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
       for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
         const VkImageViewCreateInfo imageViewCreateInfo = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = pTestNode->framebufferTextures[bufferIndex].gbuffer.image,
+            .image = pTestNodeContext->framebufferTextures[bufferIndex].gbuffer.image,
             .viewType = VK_IMAGE_VIEW_TYPE_2D,
             .format = MXC_NODE_GBUFFER_FORMAT,
             .subresourceRange = {
@@ -142,7 +141,7 @@ void mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pT
     };
     vkUpdateDescriptorSets(context.device, _countof(writeSets), writeSets, 0, NULL);
 
-    pTestNode->sphereTransform = pCreateInfo->transform;  // pcreateinfo->transform should go to some kind of node transform
+    pTestNode->sphereTransform = (VkmTransform){.position = {0,0,0}};
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
     CreateSphereMesh(0.5, 32, 32, &pTestNode->sphereMesh);
@@ -176,7 +175,6 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
   const VkPipeline       nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
   const VkPipeline       nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
 
-  // these should go into a struct so all the images from one frame are side by side
   struct {
     VkImage     color;
     VkImage     gBuffer;
@@ -186,12 +184,12 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
     VkImageView gBufferView;
   } framebufferImages[MIDVK_SWAP_COUNT];
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    framebufferImages[i].color = pNode->framebufferTextures[i].color.image;
-    framebufferImages[i].gBuffer = pNode->framebufferTextures[i].gbuffer.image;
-    framebufferImages[i].colorView = pNode->framebufferTextures[i].color.view;
-    framebufferImages[i].normalView = pNode->framebufferTextures[i].normal.view;
-    framebufferImages[i].depthView = pNode->framebufferTextures[i].depth.view;
-    framebufferImages[i].gBufferView = pNode->framebufferTextures[i].gbuffer.view;
+    framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
+    framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
+    framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
+    framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
+    framebufferImages[i].depthView = pNodeContext->framebufferTextures[i].depth.view;
+    framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
   }
   VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
   memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -202,10 +200,10 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
   const VkDeviceSize sphereVertexOffset = pNode->sphereMesh.vertexOffset;
 
   const VkDevice device = pNode->device;
-  const uint32_t queueIndex = pNode->queueIndex;
 
   const VkSemaphore compTimeline = pNodeContext->compTimeline;
   const VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
+
   uint64_t    nodeTimelineValue;
   MIDVK_REQUIRE(vkGetSemaphoreCounterValue(device, compTimeline, &nodeTimelineValue));
   uint64_t compBaseCycleValue = nodeTimelineValue - (nodeTimelineValue % MXC_CYCLE_COUNT);
@@ -375,11 +373,7 @@ run_loop:
 
 void* mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
   MxcTestNode testNode;
-  const MxcTestNodeCreateInfo createInfo = {
-      .transform = {0, 0, 0},
-      .pFramebuffers = pNodeContext->framebufferTextures,
-  };
-  mxcCreateTestNode(&createInfo, &testNode);
+  mxcCreateTestNode(pNodeContext, &testNode);
   mxcTestNodeRun(pNodeContext, &testNode);
   return NULL;
 }

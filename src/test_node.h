@@ -3,18 +3,12 @@
 #include "mid_vulkan.h"
 #include "node.h"
 
-typedef struct MxcTestNodeCreateInfo {
-  VkmTransform        transform;
-  const MxcNodeFramebufferTexture* pFramebuffers;
-} MxcTestNodeCreateInfo;
-
 typedef struct MxcTestNode {
   VkRenderPass     nodeRenderPass;
   VkPipelineLayout pipeLayout;
   VkPipeline       basicPipe;
 
   VkFramebuffer             framebuffer;
-  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
   VkImageView               gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 
   VkDescriptorSetLayout nodeProcessSetLayout;
@@ -23,8 +17,6 @@ typedef struct MxcTestNode {
   VkPipeline            nodeProcessBlitDownPipe;
 
   VkDevice device;
-
-//  VkDescriptorPool descriptorPool;
 
   VkmGlobalSet globalSet;
 
@@ -45,5 +37,4 @@ typedef struct MxcTestNode {
 
 } MxcTestNode;
 
-void  mxcCreateTestNode(const MxcTestNodeCreateInfo* pCreateInfo, MxcTestNode* pTestNode);
 void* mxcTestNodeThread(const MxcNodeContext* pNodeContext);
