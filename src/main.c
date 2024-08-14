@@ -87,16 +87,6 @@ int main(void) {
     vkmCreateContext(&contextCreateInfo);
   }
 
-#if defined(MOXAIC_COMPOSITOR)
-  printf("Moxaic Compositor\n");
-  isCompositor = true;
-  mxcInitializeIPCServer();
-#elif defined(MOXAIC_NODE)
-  printf("Moxaic node\n");
-  isCompositor = false;
-  mxcConnectNodeIPC();
-#endif
-
   // these probably should go elsewhere ?
   // global samplers
   VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
@@ -109,10 +99,22 @@ int main(void) {
   // Comp
   mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
 
+
+
+#if defined(MOXAIC_COMPOSITOR)
+  printf("Moxaic Compositor\n");
+  isCompositor = true;
+  mxcInitializeIPCServer();
+#elif defined(MOXAIC_NODE)
+  printf("Moxaic node\n");
+  isCompositor = false;
+  mxcConnectNodeIPC();
+#endif
+
   // Test Nodes
-  NodeHandle testNodeHandle;
-  mxcRequestNodeThread(&testNodeHandle);
-  mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
+//  NodeHandle testNodeHandle;
+//  mxcRequestNodeThread(&testNodeHandle);
+//  mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
 
 
   {

@@ -147,9 +147,7 @@ typedef struct MidVkTexture {
   // should there be different structs for external, shared, or dedicate?
   // this is the 'cold' storage so maybe it doesn't matter
   VkmSharedMemory sharedMemory;
-
   VkDeviceMemory  memory;
-//  HANDLE          externalHandle;
 } MidVkTexture;
 typedef struct VkmMeshCreateInfo {
   uint32_t         indexCount;
@@ -833,6 +831,7 @@ typedef struct MidVkSemaphoreCreateInfo {
   const char*     debugName;
   VkSemaphoreType semaphoreType;
   MidLocality     locality;
+  HANDLE          externalHandle;
 } MidVkSemaphoreCreateInfo;
 void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
 

@@ -1295,6 +1295,22 @@ void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
   };
   MIDVK_REQUIRE(vkCreateSemaphore(context.device, &semaphoreCreateInfo, MIDVK_ALLOC, pSemaphore));
   vkmSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
+  switch (pCreateInfo->locality){
+    default: break;
+    case MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
+    case MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY:
+#if WIN32
+      const VkImportSemaphoreWin32HandleInfoKHR importSemaphoreWin32HandleInfo = {
+          .sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
+          .semaphore = *pSemaphore,
+          .handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
+          .handle = pCreateInfo->externalHandle,
+      };
+      MIDVK_INSTANCE_STATIC_FUNC(ImportSemaphoreWin32HandleKHR);
+      MIDVK_REQUIRE(ImportSemaphoreWin32HandleKHR(context.device, &importSemaphoreWin32HandleInfo));
+#endif
+      break;
+  }
 }
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet) {
@@ -1310,7 +1326,7 @@ void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char*
       .objectHandle = objectHandle,
       .pObjectName = pDebugName,
   };
-  MIDVK_INSTANCE_FUNC(SetDebugUtilsObjectNameEXT);
+  MIDVK_INSTANCE_STATIC_FUNC(SetDebugUtilsObjectNameEXT);
   MIDVK_REQUIRE(SetDebugUtilsObjectNameEXT(context.device, &debugInfo));
 }
 

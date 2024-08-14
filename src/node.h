@@ -131,19 +131,17 @@ typedef struct MxcNodeContext {
   VkCommandPool   pool;
   VkCommandBuffer cmd;
   VkSemaphore nodeTimeline;
-  VkSemaphore compTimeline;
+  VkSemaphore compTimeline; // not convinced I need these...
   MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
 
   // MXC_NODE_TYPE_THREAD
   pthread_t threadId;
 
   // MXC_NODE_TYPE_INTERPROCESS
+  DWORD processId;
   HANDLE processHandle;
-  HANDLE compTimelineHandle;
-  HANDLE nodeTimelineHandle;
-  HANDLE externalNodeMemoryHandle;
-
-  MxcExternalNodeMemory* pExternalNodeMemory;
+  HANDLE                 externalMemoryHandle;
+  MxcExternalNodeMemory* pExternalMemory;
 
 } MxcNodeContext;
 
@@ -187,7 +185,7 @@ void mxcShutdownIPCServer();
 void mxcConnectNodeIPC();
 void mxcShutdownNodeIPC();
 
-void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam);
+void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam, NodeHandle* pHandle);
 void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures);
 
 typedef void (*MxcInterProcessFuncPtr)(const void*);
