@@ -307,7 +307,7 @@ run_loop:
     vkmCmdResetBegin(cmd);
 
     for (int i = 0; i < nodeCount; ++i) {
-      if (!nodesShared[i].active || nodesShared[i].currentTimelineSignal < 1)
+      if (nodesShared[i].currentTimelineSignal < 1)
         continue;
 
       // update node model mat... this should happen every frame so user can move it in comp
@@ -410,7 +410,7 @@ run_loop:
       CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
 
       for (int i = 0; i < nodeCount; ++i) {
-        if (!nodesShared[i].active || nodesShared[i].currentTimelineSignal < 1)
+        if (nodesShared[i].currentTimelineSignal < 1)
           continue;
 
         CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &compNodeSet, 0, NULL);

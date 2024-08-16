@@ -45,13 +45,13 @@ int main(void) {
   //    return EXIT_FAILURE;
   //  }
 
-  midCreateWindow();
-  vkmInitialize();
+  { // Initialize
+    midCreateWindow();
+    vkmInitialize();
 
-  VkSurfaceKHR surface;
-  midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &surface);
+    VkSurfaceKHR surface;
+    midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &surface);
 
-  {
     const VkmContextCreateInfo contextCreateInfo = {
         .maxDescriptorCount = 30,
         .uniformDescriptorCount = 10,
@@ -85,42 +85,39 @@ int main(void) {
         },
     };
     vkmCreateContext(&contextCreateInfo);
-  }
 
-  // these probably should go elsewhere ?
-  // global samplers
-  VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
-  // standard/common rendering
-  vkmCreateStdRenderPass();
-  mxcCreateNodeRenderPass();
-  vkmCreateStdPipeLayout();
-  vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
+    // these probably should go elsewhere ?
+    // global samplers
+    VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
+    // standard/common rendering
+    vkmCreateStdRenderPass();
+    mxcCreateNodeRenderPass();
+    vkmCreateStdPipeLayout();
+    vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
-  // Comp
-  mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
-
-
+    // Comp
+    mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
 
 #if defined(MOXAIC_COMPOSITOR)
-  printf("Moxaic Compositor\n");
-  isCompositor = true;
-  mxcInitializeIPCServer();
+    printf("Moxaic Compositor\n");
+    isCompositor = true;
+    mxcInitializeIPCServer();
 #elif defined(MOXAIC_NODE)
-  printf("Moxaic node\n");
-  isCompositor = false;
-  mxcConnectNodeIPC();
+    printf("Moxaic node\n");
+    isCompositor = false;
+    mxcConnectNodeIPC();
 #endif
 
-  // Test Nodes
-//  NodeHandle testNodeHandle;
-//  mxcRequestNodeThread(&testNodeHandle);
-//  mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
+    //     Test Nodes
+//    NodeHandle testNodeHandle;
+//    mxcRequestNodeThread(&testNodeHandle);
+//    mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
+  }
 
-
-  {
+  { // Compositor Loop
     const VkDevice device = context.device;
     const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-    uint64_t compBaseCycleValue = 0;
+    uint64_t       compBaseCycleValue = 0;
     while (isRunning) {
 
       // we may not have to even wait... this could go faster

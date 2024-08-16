@@ -109,7 +109,7 @@ static void acceptIPCServer() {
     WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
   }
 
-  nodesShared[processNodeHandle].active = true;
+//  nodesShared[processNodeHandle].active = true;
 
  Exit:
   if (pProcessNodeContext != NULL && pProcessNodeContext->pExternalMemory != NULL)
@@ -220,7 +220,7 @@ void mxcShutdownNodeIPC() {
 }
 
 MxcCompNodeContext compNodeContext = {};
-NodeHandle         nodesAvailable[MXC_NODE_CAPACITY];
+//NodeHandle         nodesAvailable[MXC_NODE_CAPACITY];
 size_t             nodeCount = 0;
 MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY] = {};
 MxcNodeShared      nodesShared[MXC_NODE_CAPACITY] = {};
@@ -254,7 +254,7 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
 }
 
 void mxcRequestNodeThread(NodeHandle* pHandle) {
-  NodeHandle      handle = 0;
+  NodeHandle      handle = nodeCount++;
   MxcNodeContext* pNodeContext = &nodeContexts[handle];
   pNodeContext->compTimeline = compNodeContext.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
@@ -281,10 +281,11 @@ void mxcRequestNodeThread(NodeHandle* pHandle) {
   *pHandle = handle;
   printf("Request Node Thread Success. Handle: %d\n", handle);
 }
+// this is really run node thread on current comp node
 void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle) {
   assert(nodeContexts[handle].nodeType == MXC_NODE_TYPE_THREAD);
   nodesShared[handle] = (MxcNodeShared){};
-  nodesShared[handle].active = true;
+//  nodesShared[handle].active = true;
   nodesShared[handle].radius = 0.5;
   nodesShared[handle].compCycleSkip = 16;
   nodeCompData[handle].cmd = nodeContexts[handle].cmd;
@@ -299,7 +300,7 @@ void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle
     nodeCompData[handle].framebufferImages[i].normalView = nodeContexts[handle].framebufferTextures[i].normal.view;
     nodeCompData[handle].framebufferImages[i].gBufferView = nodeContexts[handle].framebufferTextures[i].gbuffer.view;
   }
-  nodeCount++;
+//  nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
   int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, &nodeContexts[handle]);
   REQUIRE(result == 0, "Node thread creation failed!");
@@ -311,7 +312,7 @@ void mxcReleaseNodeThread(NodeHandle handle) {
 }
 
 void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle) {
-  NodeHandle      nodeHandle = 1;
+  NodeHandle      nodeHandle = nodeCount++;
   MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
@@ -327,7 +328,7 @@ void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNo
   printf("Node Request Process Export Success. Handle: %d\n", nodeHandle);
 }
 void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam, NodeHandle* pHandle) {
-  NodeHandle                    nodeHandle = 0; // TODO IMPLEMENT DYNAMIC HANDLE AQCUIRE
+  NodeHandle                    nodeHandle = nodeCount++;
   MxcNodeContext*               pNodeContext = &nodeContexts[nodeHandle];
   MxcNodeFramebufferTexture*    pFramebufferTextures = pNodeContext->framebufferTextures;
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {

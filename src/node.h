@@ -50,7 +50,7 @@ typedef struct CACHE_ALIGN MxcNodeShared {
   // read every cycle, occasional write
   int               compCycleSkip;
   float             radius;
-  bool              active;
+//  bool              active;
 
 } MxcNodeShared;
 typedef struct MxcImportParam {
