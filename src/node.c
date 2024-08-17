@@ -84,6 +84,7 @@ static void acceptIPCServer() {
   // Retrieve node handles
   NodeHandle  processNodeHandle;
   mxcRequestNodeProcessExport(compNodeContext.compTimeline, &processNodeHandle);
+  // todo this all needs to go in mxcRequestNodeProcessExport so that it increments nodeCount after allis created
   pProcessNodeContext = &nodeContexts[processNodeHandle];
   pProcessNodeContext->processId = nodeProcessId;
   pProcessNodeContext->processHandle = nodeProcessHandle;
@@ -109,13 +110,17 @@ static void acceptIPCServer() {
     WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
   }
 
-//  nodesShared[processNodeHandle].active = true;
+  nodeCount++;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  printf("Process Node Export Success.\n");
+  goto ExitSuccess;
 
  Exit:
   if (pProcessNodeContext != NULL && pProcessNodeContext->pExternalMemory != NULL)
     UnmapViewOfFile(pExternalNodeMemory);
   if (pProcessNodeContext != NULL && pProcessNodeContext->externalMemoryHandle != NULL)
     CloseHandle(pProcessNodeContext->externalMemoryHandle);
+ ExitSuccess:
   if (clientSocket != INVALID_SOCKET)
     closesocket(clientSocket);
 }
@@ -207,8 +212,8 @@ void mxcConnectNodeIPC() {
   ERR_CHECK(pExternalNodeMemory == NULL, "Map pExternalNodeMemory failed");
 
   NodeHandle nodeHandle;
-  mxcRequestNodeProcessImport(&pExternalNodeMemory->importParam, &nodeHandle);
-  mxcRunNodeThread(mxcTestNodeThread, nodeHandle);
+  // dont need to pass import param separately
+  mxcRequestNodeProcessImport(externalNodeMemoryHandle, pExternalNodeMemory, &pExternalNodeMemory->importParam, &nodeHandle);
 
 Exit:
   if (clientSocket != INVALID_SOCKET)
@@ -224,7 +229,7 @@ MxcCompNodeContext compNodeContext = {};
 size_t             nodeCount = 0;
 MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY] = {};
 MxcNodeShared      nodesShared[MXC_NODE_CAPACITY] = {};
-MxcNodeCompData    nodeCompData[MXC_NODE_CAPACITY] = {};
+MxcNodeThreadCompData nodeCompData[MXC_NODE_CAPACITY] = {};
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*)) {
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -253,9 +258,9 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
   printf("Request and Run CompNode Thread Success.");
 }
 
-void mxcRequestNodeThread(NodeHandle* pHandle) {
-  NodeHandle      handle = nodeCount++;
-  MxcNodeContext* pNodeContext = &nodeContexts[handle];
+void mxcRequestNodeThread(NodeHandle* pNodeHandle) {
+  *pNodeHandle = nodeCount;
+  MxcNodeContext* pNodeContext = &nodeContexts[*pNodeHandle];
   pNodeContext->compTimeline = compNodeContext.compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_THREAD;
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -278,14 +283,14 @@ void mxcRequestNodeThread(NodeHandle* pHandle) {
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
-  *pHandle = handle;
-  printf("Request Node Thread Success. Handle: %d\n", handle);
+  nodeCount++;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  printf("Request Node Thread Success. Handle: %d\n", *pNodeHandle);
 }
-// this is really run node thread on current comp node
+// this is really run node thread on current comp node but do I need this? could I just request?
 void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle) {
   assert(nodeContexts[handle].nodeType == MXC_NODE_TYPE_THREAD);
   nodesShared[handle] = (MxcNodeShared){};
-//  nodesShared[handle].active = true;
   nodesShared[handle].radius = 0.5;
   nodesShared[handle].compCycleSkip = 16;
   nodeCompData[handle].cmd = nodeContexts[handle].cmd;
@@ -300,7 +305,6 @@ void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle
     nodeCompData[handle].framebufferImages[i].normalView = nodeContexts[handle].framebufferTextures[i].normal.view;
     nodeCompData[handle].framebufferImages[i].gBufferView = nodeContexts[handle].framebufferTextures[i].gbuffer.view;
   }
-//  nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
   int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, &nodeContexts[handle]);
   REQUIRE(result == 0, "Node thread creation failed!");
@@ -312,8 +316,9 @@ void mxcReleaseNodeThread(NodeHandle handle) {
 }
 
 void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle) {
-  NodeHandle      nodeHandle = nodeCount++;
-  MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
+  *pNodeHandle = nodeCount;
+  MxcNodeContext* pNodeContext = &nodeContexts[*pNodeHandle];
+  *pNodeContext = (MxcNodeContext){};
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
   pNodeContext->processHandle = INVALID_HANDLE_VALUE;
@@ -324,12 +329,37 @@ void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNo
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
-  *pNodeHandle = nodeHandle;
-  printf("Node Request Process Export Success. Handle: %d\n", nodeHandle);
+  MxcNodeShared* pNodeShared = &nodesShared[*pNodeHandle]; // use this
+  nodesShared[*pNodeHandle] = (MxcNodeShared){};
+  nodesShared[*pNodeHandle].radius = 0.5;
+  nodesShared[*pNodeHandle].compCycleSkip = 16;
+  nodeCompData[*pNodeHandle] = (MxcNodeThreadCompData){};
+  nodeCompData[*pNodeHandle].cmd = pNodeContext->cmd;
+  nodeCompData[*pNodeHandle].type = pNodeContext->nodeType;
+  nodeCompData[*pNodeHandle].nodeTimeline = pNodeContext->nodeTimeline;
+  nodeCompData[*pNodeHandle].transform.rotation = QuatFromEuler(nodeCompData[*pNodeHandle].transform.euler);
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+    nodeCompData[*pNodeHandle].framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
+    nodeCompData[*pNodeHandle].framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
+    nodeCompData[*pNodeHandle].framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
+    nodeCompData[*pNodeHandle].framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
+    nodeCompData[*pNodeHandle].framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
+    nodeCompData[*pNodeHandle].framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
+  }
+//  nodeCount++;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  printf("Node Request Process Export Success. Handle: %d\n", *pNodeHandle);
 }
-void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam, NodeHandle* pHandle) {
-  NodeHandle                    nodeHandle = nodeCount++;
-  MxcNodeContext*               pNodeContext = &nodeContexts[nodeHandle];
+void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalNodeMemory* pExternalMemory, const MxcImportParam* pImportParam, NodeHandle* pNodeHandle) {
+  *pNodeHandle = nodeCount;
+
+  // switch to MxcNodeProcessImportContext? maybe not
+  MxcNodeContext* pNodeContext = &nodeContexts[*pNodeHandle];
+  *pNodeContext = (MxcNodeContext){};
+  pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
+  pNodeContext->externalMemoryHandle = externalMemoryHandle;
+  pNodeContext->pExternalMemory = pExternalMemory;
+
   MxcNodeFramebufferTexture*    pFramebufferTextures = pNodeContext->framebufferTextures;
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -431,8 +461,18 @@ void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam, NodeHandle*
       .externalHandle = pImportParam->nodeTimelineHandle,
   };
   midvkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->nodeTimeline);
-  *pHandle = nodeHandle;
-  printf("Node Request Process Import Success. Handle: %d\n", nodeHandle);
+
+  // do I want this on an imported node? Maybe would be nice to keep the ability for something to run it's own compositor for debug
+  MxcNodeThreadCompData* pNodeCompData = &nodeCompData[*pNodeHandle];
+  *pNodeCompData = (MxcNodeThreadCompData){};
+  pNodeCompData->cmd = pNodeContext->cmd;
+  pNodeCompData->nodeTimeline = pNodeContext->nodeTimeline;
+
+  nodeCount++;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext);
+  REQUIRE(result == 0, "Node Process Import thread creation failed!");
+  printf("Node Request Process Import Success. Handle: %d\n", *pNodeHandle);
 }
 
 static const VkImageUsageFlags VKM_PASS_NODE_USAGES[] = {

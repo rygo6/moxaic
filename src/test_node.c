@@ -141,7 +141,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
     };
     vkUpdateDescriptorSets(context.device, _countof(writeSets), writeSets, 0, NULL);
 
-    pTestNode->sphereTransform = (VkmTransform){.position = {0,0,0}};
+    pTestNode->sphereTransform = (MidTransform){.position = {0,0,0}};
     vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
     CreateSphereMesh(0.5, 32, 32, &pTestNode->sphereMesh);
@@ -157,8 +157,10 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 }
 
 void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode) {
-  const MxcNodeType     nodeType = pNodeContext->nodeType;
-  const NodeHandle      handle = 0;
+
+  const MxcNodeType     nodeType = pNodeContext->nodeType;   // figure out how to get rid of this
+
+  const NodeHandle      handle = 0; // need to actually set this handle? or should just pass pointer? pasisng in pointer might be better for switching between process/thread
 
   const VkCommandBuffer cmd = pNodeContext->cmd;
   const VkRenderPass    nodeRenderPass = pNode->nodeRenderPass;
@@ -204,9 +206,11 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
   const VkSemaphore compTimeline = pNodeContext->compTimeline;
   const VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
 
-  uint64_t    nodeTimelineValue;
+  uint64_t nodeTimelineValue;
+  uint64_t compBaseCycleValue ;
   MIDVK_REQUIRE(vkGetSemaphoreCounterValue(device, compTimeline, &nodeTimelineValue));
-  uint64_t compBaseCycleValue = nodeTimelineValue - (nodeTimelineValue % MXC_CYCLE_COUNT);
+  REQUIRE(nodeTimelineValue != 0xffffffffffffffff, "NodeTimeline imported as max value!");
+  compBaseCycleValue = nodeTimelineValue - (nodeTimelineValue % MXC_CYCLE_COUNT);
 
   assert(__atomic_always_lock_free(sizeof(nodesShared[handle].pendingTimelineSignal), &nodesShared[handle].pendingTimelineSignal));
   assert(__atomic_always_lock_free(sizeof(nodesShared[handle].currentTimelineSignal), &nodesShared[handle].currentTimelineSignal));
@@ -233,8 +237,15 @@ run_loop:
   // Wait for next render cycle
   vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, compTimeline);
 
-  memcpy(pGlobalSetMapped, (void*)&nodesShared[handle].globalSetState, sizeof(VkmGlobalSetState));
   __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  switch (nodeType) {
+    case MXC_NODE_TYPE_INTERPROCESS:
+      //should make pointer to memory directly
+      memcpy(&nodesShared[handle], (void*)&pNodeContext->pExternalMemory->nodeShared, sizeof(MxcNodeShared));
+      break;
+    default: PANIC("nodeType not supported");
+  }
+  memcpy(pGlobalSetMapped, (void*)&nodesShared[handle].globalSetState, sizeof(VkmGlobalSetState));
 
   ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
@@ -354,13 +365,20 @@ run_loop:
   EndCommandBuffer(cmd);
 
   nodeTimelineValue++;
-  __atomic_thread_fence(__ATOMIC_RELEASE);
 
   nodesShared[handle].pendingTimelineSignal = nodeTimelineValue;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
   vkmTimelineWait(device, nodeTimelineValue, nodeTimeline);
   nodesShared[handle].currentTimelineSignal = nodeTimelineValue;
+  switch (nodeType) {
+    case MXC_NODE_TYPE_INTERPROCESS:
+      //should make pointer to memory directly
+      pNodeContext->pExternalMemory->nodeShared.currentTimelineSignal = nodeTimelineValue;
+      break;
+    default: PANIC("nodeType not supported");
+  }
+  __atomic_thread_fence(__ATOMIC_RELEASE);
 
-  __atomic_thread_fence(__ATOMIC_ACQUIRE);
   compBaseCycleValue += MXC_CYCLE_COUNT * nodesShared[handle].compCycleSkip;
 
   //  _Thread_local static int count;

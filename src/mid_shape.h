@@ -39,7 +39,7 @@ void CreateSphereMesh(const float radius, const int slicesCount, const int stack
       indices[index++] = v3;
     }
   }
-  VkmVertex   vertices[info.vertexCount];
+  MidVertex   vertices[info.vertexCount];
   const float slices = (float)slicesCount;
   const float stacks = (float)stackCount;
   const float dtheta = 2.0f * MID_PI / slices;
@@ -54,7 +54,7 @@ void CreateSphereMesh(const float radius, const int slicesCount, const int stack
       const float x = radius * sinf(phi) * cosf(theta);
       const float y = radius * sinf(phi) * sinf(theta);
       const float z = radius * cosf(phi);
-      vertices[vertex++] = (VkmVertex){
+      vertices[vertex++] = (MidVertex){
           .position = {x, y, z},
           .normal = {x, y, z},
           .uv = {ji / slices, fi / stacks},
@@ -67,7 +67,7 @@ void CreateSphereMesh(const float radius, const int slicesCount, const int stack
 }
 void CreateQuadMesh(const float size, VkmMesh* pMesh) {
   const uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
-  const VkmVertex vertices[] = {
+  const MidVertex vertices[] = {
       {.position = {-size, -size, 0}, .uv = {0, 0}},
       {.position = {size, -size, 0}, .uv = {1, 0}},
       {.position = {-size, size, 0}, .uv = {0, 1}},
@@ -89,7 +89,7 @@ void CreateQuadMesh(const float size, VkmMesh* pMesh) {
     };
   #define QUAD_PATCH_MESH_VERTICES_INDICES             \
     info.pIndices = (const uint16_t[]){0, 1, 3, 2};    \
-    info.pVertices = (const VkmVertex[]){              \
+    info.pVertices = (const MidVertex[]){              \
         {.position = {-size, -size, 0}, .uv = {0, 0}}, \
         {.position = {size, -size, 0}, .uv = {1, 0}},  \
         {.position = {-size, size, 0}, .uv = {0, 1}},  \

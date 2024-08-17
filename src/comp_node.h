@@ -32,7 +32,7 @@ typedef struct MxcCompNode {
   VkmGlobalSet    globalSet;
   VkDescriptorSet compNodeSet;
 
-  VkmSharedMemory compNodeSetMemory;
+  MidVkSharedMemory compNodeSetMemory;
   VkBuffer        compNodeSetBuffer;
 
   VkmMesh quadMesh;

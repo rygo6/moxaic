@@ -110,33 +110,34 @@ typedef enum MidLocality {
 #define MID_LOCALITY_INTERPROCESS_IMPORTED(_locality) (_locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
                                                        _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
 
-typedef struct VkmTransform {
+// these should go in math. Can I make MidVk not depend on specific math lib?
+typedef struct MidTransform {
   vec3 position;
   vec3 euler;
   vec4 rotation;
-} VkmTransform;
-typedef struct VkmVertex {
+} MidTransform;
+typedef struct MidVertex {
   vec3 position;
   vec3 normal;
   vec2 uv;
-} VkmVertex;
+} MidVertex;
 
 //----------------------------------------------------------------------------------
 // Vulkan Types
 //----------------------------------------------------------------------------------
 
-typedef struct VkmSwap {
+typedef struct MidVkSwap {
   VkSwapchainKHR chain;
   VkSemaphore    acquireSemaphore;
   VkSemaphore    renderCompleteSemaphore;
   VkImage        images[MIDVK_SWAP_COUNT];
-} VkmSwap;
-typedef uint8_t VkmMemoryType;
-typedef struct VkmSharedMemory {
+} MidVkSwap;
+typedef uint8_t MidVkMemoryType;
+typedef struct MidVkSharedMemory {
   VkDeviceSize  offset;
   VkDeviceSize  size;
-  VkmMemoryType type;
-} VkmSharedMemory;
+  MidVkMemoryType type;
+} MidVkSharedMemory;
 typedef struct MidVkTexture {
   VkImage         image;
   VkImageView     view;
@@ -146,14 +147,14 @@ typedef struct MidVkTexture {
   // need to implement texture shared memory
   // should there be different structs for external, shared, or dedicate?
   // this is the 'cold' storage so maybe it doesn't matter
-  VkmSharedMemory sharedMemory;
+//  MidVkSharedMemory sharedMemory;
   VkDeviceMemory  memory;
 } MidVkTexture;
 typedef struct VkmMeshCreateInfo {
   uint32_t         indexCount;
   uint32_t         vertexCount;
   const uint16_t*  pIndices;
-  const VkmVertex* pVertices;
+  const MidVertex* pVertices;
 } VkmMeshCreateInfo;
 typedef struct VkmMesh {
   // get rid of this? I don't think I have a use for non-shared memory meshes
@@ -161,7 +162,7 @@ typedef struct VkmMesh {
   VkDeviceMemory  memory;
   VkBuffer        buffer;
 
-  VkmSharedMemory sharedMemory;
+  MidVkSharedMemory sharedMemory;
 
   uint32_t        indexCount;
   uint32_t        vertexCount;
@@ -215,7 +216,7 @@ typedef struct VkmStdPipeLayout {
 typedef struct VkmGlobalSet {
   VkmGlobalSetState* pMapped;
   VkDeviceMemory     memory;
-  VkmSharedMemory    sharedMemory;
+  MidVkSharedMemory  sharedMemory;
   VkBuffer           buffer;
   VkDescriptorSet    set;
 } VkmGlobalSet;
@@ -676,7 +677,7 @@ VKM_INLINE void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescr
   vkUpdateDescriptorSets(device, 1, pWriteSet, 0, NULL);
 }
 
-VKM_INLINE void vkmUpdateGlobalSetViewProj(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+VKM_INLINE void vkmUpdateGlobalSetViewProj(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
   pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
@@ -689,25 +690,25 @@ VKM_INLINE void vkmUpdateGlobalSetViewProj(VkmTransform* pCameraTransform, VkmGl
   pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-VKM_INLINE void vkmUpdateGlobalSetView(VkmTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+VKM_INLINE void vkmUpdateGlobalSetView(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pState->invView = Mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
   pState->view = Mat4Inv(pState->invView);
   pState->viewProj = Mat4Mul(pState->proj, pState->view);
   pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-VKM_INLINE void vkmUpdateObjectSet(VkmTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
+VKM_INLINE void vkmUpdateObjectSet(MidTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
   pTransform->rotation = QuatFromEuler(pTransform->euler);
   pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStdObjectSetState));
 }
-VKM_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, VkmTransform* pCameraTransform) {
+VKM_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidTransform* pCameraTransform) {
   pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
   pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
   pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
 }
 // move[] = Forward, Back, Left, Right
-VKM_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], VkmTransform* pCameraTransform) {
+VKM_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidTransform* pCameraTransform) {
   const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
   const float moveSensitivity = deltaTime * 0.8f;
   for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
@@ -735,7 +736,7 @@ void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDes
 //void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
 void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
-void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkmSharedMemory* pMemory);
+void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory);
 void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 
@@ -814,7 +815,7 @@ typedef struct VkmSamplerCreateInfo {
   (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
-void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap);
+void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
 
 typedef struct VkmTextureCreateInfo {
   const char*        debugName;

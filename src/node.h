@@ -76,7 +76,7 @@ typedef struct CACHE_ALIGN MxcCompNodeContext {
   // read by multiple threads
   VkCommandBuffer cmd;
   VkSemaphore     compTimeline;
-  VkmSwap         swap;
+  MidVkSwap       swap;
 
   // cold data
   VkCommandPool pool;
@@ -98,15 +98,11 @@ typedef struct MxcNodeSetState {
   vec2 ulUV;
   vec2 lrUV;
 } MxcNodeSetState;
-typedef struct CACHE_ALIGN MxcNodeCompData {
-  // node hot data for compositor
-  MxcNodeType             type;
-  VkCommandBuffer         cmd;
-  VkSemaphore             nodeTimeline;
-  uint64_t                lastTimelineSignal;
-  uint64_t                lastTimelineSwap;
-  MxcNodeSetState         nodeSetState;
-  VkmTransform            transform;
+typedef struct CACHE_ALIGN MxcNodeProcessCompData { // pretty sure we want this
+  MxcNodeSetState nodeSetState;
+  MidTransform    transform;
+  VkSemaphore     nodeTimeline;
+  uint64_t        lastTimelineSwap;
   struct {
     VkImage     color;
     VkImage     normal;
@@ -115,7 +111,25 @@ typedef struct CACHE_ALIGN MxcNodeCompData {
     VkImageView normalView;
     VkImageView gBufferView;
   } framebufferImages[MIDVK_SWAP_COUNT];
-} MxcNodeCompData;
+} MxcNodeProcessCompData;
+typedef struct CACHE_ALIGN MxcNodeThreadCompData {
+  // node hot data for compositor
+  MxcNodeType             type; // get rid of this, we need thread and process arrays
+  MxcNodeSetState         nodeSetState;
+  MidTransform            transform;
+  VkCommandBuffer         cmd;
+  VkSemaphore             nodeTimeline;
+  uint64_t                lastTimelineSignal;
+  uint64_t                lastTimelineSwap;
+  struct {
+    VkImage     color;
+    VkImage     normal;
+    VkImage     gBuffer;
+    VkImageView colorView;
+    VkImageView normalView;
+    VkImageView gBufferView;
+  } framebufferImages[MIDVK_SWAP_COUNT];
+} MxcNodeThreadCompData;
 
 //
 /// Node Types
@@ -131,30 +145,59 @@ typedef struct MxcNodeContext {
   VkCommandPool   pool;
   VkCommandBuffer cmd;
   VkSemaphore nodeTimeline;
-  VkSemaphore compTimeline; // not convinced I need these...
+  VkSemaphore compTimeline; // not convinced I need this...
   MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
 
   // MXC_NODE_TYPE_THREAD
   pthread_t threadId;
 
   // MXC_NODE_TYPE_INTERPROCESS
-  DWORD processId;
-  HANDLE processHandle;
+  DWORD                  processId;
+  HANDLE                 processHandle;
   HANDLE                 externalMemoryHandle;
   MxcExternalNodeMemory* pExternalMemory;
 
 } MxcNodeContext;
 
+// probably going to want to do this.. although it could make it harder to pass this to the node thread
+// mayube dont want this? it is cold data
+typedef struct MxcNodeProcessExportContext {
+  VkSemaphore nodeTimeline;
+  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+  DWORD                  processId;
+  HANDLE                 processHandle;
+  HANDLE                 externalMemoryHandle;
+  MxcExternalNodeMemory* pExternalMemory;
+} MxcNodeProcessContext;
+typedef struct MxcNodeProcessImportContext {
+  VkCommandPool             pool;
+  VkCommandBuffer           cmd;
+  VkSemaphore               nodeTimeline;
+  VkSemaphore               compTimeline;  // probably need this
+  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+  pthread_t                 threadId;
+  HANDLE                    externalMemoryHandle;
+  MxcExternalNodeMemory*    pExternalMemory;
+} MxcNodeProcessImportContext;
+
 //
 /// Global state
+extern MxcCompNodeContext compNodeContext;
+
 #define MXC_NODE_CAPACITY 256
 typedef uint8_t           NodeHandle;
+
 extern size_t             nodeCount;
 extern NodeHandle         nodesAvailable[MXC_NODE_CAPACITY];
 extern MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY];
 extern MxcNodeShared      nodesShared[MXC_NODE_CAPACITY];
-extern MxcNodeCompData    nodeCompData[MXC_NODE_CAPACITY];
-extern MxcCompNodeContext compNodeContext;
+extern MxcNodeThreadCompData nodeCompData[MXC_NODE_CAPACITY];
+
+extern size_t             nodeProcessCount;
+extern NodeHandle         availableNodeProcess[MXC_NODE_CAPACITY];
+extern MxcNodeContext     nodeProcessContext[MXC_NODE_CAPACITY];
+extern MxcNodeShared      nodeProcessShared[MXC_NODE_CAPACITY];
+extern MxcNodeThreadCompData nodeProcessCompData[MXC_NODE_CAPACITY];
 
 //
 /// Methods
@@ -171,7 +214,7 @@ static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
 }
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*));
-void mxcRequestNodeThread(NodeHandle* pHandle);
+void mxcRequestNodeThread(NodeHandle* pNodeHandle);
 void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle);
 void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle);
 
@@ -185,7 +228,7 @@ void mxcShutdownIPCServer();
 void mxcConnectNodeIPC();
 void mxcShutdownNodeIPC();
 
-void mxcRequestNodeProcessImport(const MxcImportParam* pImportParam, NodeHandle* pHandle);
+void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalNodeMemory* pExternalMemory, const MxcImportParam* pImportParam, NodeHandle* pNodeHandle);
 void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures);
 
 typedef void (*MxcInterProcessFuncPtr)(const void*);

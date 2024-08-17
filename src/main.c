@@ -114,7 +114,8 @@ int main(void) {
 //    mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
   }
 
-  { // Compositor Loop
+
+  if (isCompositor) { // Compositor Loop
     const VkDevice device = context.device;
     const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
     uint64_t       compBaseCycleValue = 0;
@@ -154,7 +155,17 @@ int main(void) {
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
       mxcSubmitNodeThreadQueues(graphicsQueue);
     }
+  } else {
+
+    const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+    while (isRunning) {
+
+      // I guess technically we just want to go as fast as possible in a node, but we would probably need to process and send input here first at some point?
+      mxcSubmitNodeThreadQueues(graphicsQueue);
+    }
   }
+
+
 
   //  int result = pthread_join(testNodeContext.threadId, NULL);
   //  if (result != 0) {

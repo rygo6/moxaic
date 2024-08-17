@@ -119,7 +119,7 @@ static void CreateStdPipeLayout() {
     .pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){           \
         {                                                                        \
             .binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
-            .stride = sizeof(VkmVertex),                                         \
+            .stride = sizeof(MidVertex),                                         \
             .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,                            \
         },                                                                       \
     },                                                                           \
@@ -130,19 +130,19 @@ static void CreateStdPipeLayout() {
             .location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,            \
             .binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
             .format = VK_FORMAT_R32G32B32_SFLOAT,                                \
-            .offset = offsetof(VkmVertex, position),                             \
+            .offset = offsetof(MidVertex, position),                             \
         },                                                                       \
         {                                                                        \
             .location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,              \
             .binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
             .format = VK_FORMAT_R32G32B32_SFLOAT,                                \
-            .offset = offsetof(VkmVertex, normal),                               \
+            .offset = offsetof(MidVertex, normal),                               \
         },                                                                       \
         {                                                                        \
             .location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,                  \
             .binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
             .format = VK_FORMAT_R32G32_SFLOAT,                                   \
-            .offset = offsetof(VkmVertex, uv),                                   \
+            .offset = offsetof(MidVertex, uv),                                   \
         },                                                                       \
     },                                                                           \
   }
@@ -573,7 +573,7 @@ void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const
   MIDVK_REQUIRE(vkMapMemory(context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
 }
 
-void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkmSharedMemory* pMemory) {
+void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory) {
   const VkBufferCreateInfo bufferCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .size = pRequest->size,
@@ -621,7 +621,7 @@ void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset
 }
 void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
   pMesh->vertexCount = pCreateInfo->vertexCount;
-  uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
+  uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->vertexCount;
   pMesh->vertexOffset = 0;
   pMesh->indexCount = pCreateInfo->indexCount;
   uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
@@ -644,15 +644,15 @@ void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh
   // bind populate
   MIDVK_REQUIRE(vkBindBufferMemory(context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
   vkmUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
-  vkmUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(VkmVertex) * pMesh->vertexCount, pMesh->buffer);
+  vkmUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(MidVertex) * pMesh->vertexCount, pMesh->buffer);
 }
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
   pMesh->indexCount = pCreateInfo->indexCount;
   pMesh->vertexCount = pCreateInfo->vertexCount;
   uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-  uint32_t vertexBufferSize = sizeof(VkmVertex) * pMesh->vertexCount;
+  uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->vertexCount;
   pMesh->indexOffset = 0;
-  pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(VkmVertex));
+  pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
   CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VKM_BUFFER_USAGE_MESH, MID_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
   vkmUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
   vkmUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
@@ -1235,7 +1235,7 @@ void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler) {
   MIDVK_REQUIRE(vkCreateSampler(context.device, &minSamplerCreateInfo, MIDVK_ALLOC, pSampler));
 }
 
-void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, VkmSwap* pSwap) {
+void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, MidVkSwap* pSwap) {
   VkBool32 presentSupport = VK_FALSE;
   MIDVK_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
   REQUIRE(presentSupport, "Queue can't present to surface!")

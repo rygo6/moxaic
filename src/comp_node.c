@@ -232,7 +232,7 @@ void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* p
   VkRenderPass    renderPass = pNode->compRenderPass;
   VkFramebuffer   framebuffer = pNode->framebuffer;
 
-  VkmTransform       globalCameraTransform = {};
+  MidTransform       globalCameraTransform = {};
   VkmGlobalSetState  globalSetState = {};
   VkDescriptorSet    globalSet = pNode->globalSet.set;
   VkmGlobalSetState* pGlobalSetMapped = pMappedMemory[pNode->globalSet.sharedMemory.type] + pNode->globalSet.sharedMemory.offset;
@@ -244,7 +244,7 @@ void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* p
   VkDescriptorSet  compNodeSet = pNode->compNodeSet;
 
   VkDevice device = pNode->device;
-  VkmSwap  swap = pNodeContext->swap;
+  MidVkSwap swap = pNodeContext->swap;
 
   uint32_t     quadIndexCount = pNode->quadMesh.indexCount;
   VkBuffer     quadBuffer = pNode->quadMesh.buffer;
@@ -307,6 +307,16 @@ run_loop:
     vkmCmdResetBegin(cmd);
 
     for (int i = 0; i < nodeCount; ++i) {
+
+      switch (nodeCompData[i].type) {
+        default: PANIC("nodeType not supported");
+        case MXC_NODE_TYPE_INTERPROCESS:
+          // once we have different codepaths for these could check shared mem directly
+          nodesShared[i].currentTimelineSignal = nodeContexts[i].pExternalMemory->nodeShared.currentTimelineSignal;
+          break;
+      }
+
+
       if (nodesShared[i].currentTimelineSignal < 1)
         continue;
 
@@ -315,8 +325,8 @@ run_loop:
       nodeCompData[i].nodeSetState.model = Mat4FromPosRot(nodeCompData[i].transform.position, nodeCompData[i].transform.rotation);
 
       {  // check frame available
-        uint64_t value = nodesShared[i].currentTimelineSignal;
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        uint64_t value = nodesShared[i].currentTimelineSignal;
         if (value > nodeCompData[i].lastTimelineSwap) {
           {  // update framebuffer for comp
             nodeCompData[i].lastTimelineSwap = value;
@@ -385,12 +395,21 @@ run_loop:
 
             const vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 
-            __atomic_thread_fence(__ATOMIC_RELEASE);
             // write current global set state to node's global set state to use for next node render with new the framebuffer size
             memcpy((void*)&nodesShared[i].globalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
             nodesShared[i].globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
             nodesShared[i].ulUV = ulUV;
             nodesShared[i].lrUV = lrUV;
+
+            switch (nodeCompData[i].type) {
+              default: PANIC("nodeType not supported");
+              case MXC_NODE_TYPE_INTERPROCESS:
+                // can interface directly with shared memory once we have differnet codepaths
+                memcpy(&nodeContexts[i].pExternalMemory->nodeShared.currentTimelineSignal, (void*)&nodesShared[i], sizeof(MxcNodeShared));
+                break;
+            }
+
+            __atomic_thread_fence(__ATOMIC_RELEASE);
           }
         }
       }
