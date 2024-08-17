@@ -91,8 +91,10 @@ int main(void) {
     VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
     // standard/common rendering
     vkmCreateStdRenderPass();
-    mxcCreateNodeRenderPass();
     vkmCreateStdPipeLayout();
+
+    // this need to ge in node create
+    mxcCreateNodeRenderPass();
     vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
     // Comp
@@ -109,9 +111,9 @@ int main(void) {
 #endif
 
     //     Test Nodes
-//    NodeHandle testNodeHandle;
-//    mxcRequestNodeThread(&testNodeHandle);
-//    mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
+    NodeHandle testNodeHandle;
+    mxcRequestNodeThread(&testNodeHandle);
+    mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
   }
 
 

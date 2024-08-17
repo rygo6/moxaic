@@ -44,6 +44,10 @@ extern void Panic(const char* file, int line, const char* message);
 /// Globals
 //#define VKM_DEBUG_MEMORY_ALLOC
 
+#ifndef COUNT
+#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
+#endif
+
 // these values shouldnt be macros
 #ifndef DEFAULT_WIDTH
 #define DEFAULT_WIDTH  1024
@@ -445,7 +449,7 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImag
     .accessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
-#define VKM_COLOR_IMG_BARRIER(src, dst, barrier_image)   \
+#define VKM_COLOR_IMAGE_BARRIER(src, dst, barrier_image)   \
   (const VkImageMemoryBarrier2) {                        \
     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,   \
     .srcStageMask = src->stageMask,                      \

@@ -735,13 +735,13 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
   CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
   stbi_image_free(pImagePixels);
   const VkCommandBuffer commandBuffer = VkmBeginImmediateCommandBuffer();
-  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMG_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_DST, pTexture->image));
+  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_DST, pTexture->image));
   const VkBufferImageCopy region = {
       .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
       .imageExtent = {width, height, 1},
   };
   vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_TRANSFER_READ, pTexture->image));
+  vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_TRANSFER_READ, pTexture->image));
   VkmEndImmediateCommandBuffer(commandBuffer);
   vkFreeMemory(context.device, stagingBufferMemory, MIDVK_ALLOC);
   vkDestroyBuffer(context.device, stagingBuffer, MIDVK_ALLOC);
@@ -929,9 +929,9 @@ void vkmInitialize() {
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
             .apiVersion = MIDVK_VERSION,
         },
-        .enabledLayerCount = _countof(ppEnabledLayerNames),
+        .enabledLayerCount = COUNT(ppEnabledLayerNames),
         .ppEnabledLayerNames = ppEnabledLayerNames,
-        .enabledExtensionCount = _countof(ppEnabledInstanceExtensionNames),
+        .enabledExtensionCount = COUNT(ppEnabledInstanceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
     };
     MIDVK_REQUIRE(vkCreateInstance(&instanceCreationInfo, MIDVK_ALLOC, &instance));
@@ -1085,7 +1085,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
         .pNext = &physicalDeviceFeatures,
         .queueCreateInfoCount = activeQueueCount,
         .pQueueCreateInfos = activeQueueCreateInfos,
-        .enabledExtensionCount = _countof(ppEnabledDeviceExtensionNames),
+        .enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
         .ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
     };
     MIDVK_REQUIRE(vkCreateDevice(context.physicalDevice, &deviceCreateInfo, MIDVK_ALLOC, &context.device));

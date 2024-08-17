@@ -310,6 +310,7 @@ run_loop:
 
       switch (nodeCompData[i].type) {
         default: PANIC("nodeType not supported");
+        case MXC_NODE_TYPE_THREAD: break;
         case MXC_NODE_TYPE_INTERPROCESS:
           // once we have different codepaths for these could check shared mem directly
           nodesShared[i].currentTimelineSignal = nodeContexts[i].pExternalMemory->nodeShared.currentTimelineSignal;
@@ -340,8 +341,8 @@ run_loop:
             switch (nodeCompData[i].type) {
               case MXC_NODE_TYPE_THREAD:
                 const VkImageMemoryBarrier2 barriers[] = {
-                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompData[i].framebufferImages[nodeFramebufferIndex].color),
-                    VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompData[i].framebufferImages[nodeFramebufferIndex].normal),
+                    VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompData[i].framebufferImages[nodeFramebufferIndex].color),
+                    VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompData[i].framebufferImages[nodeFramebufferIndex].normal),
                     VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompData[i].framebufferImages[nodeFramebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS),
                 };
                 CmdPipelineImageBarriers2(cmd, _countof(barriers), barriers);
@@ -403,6 +404,7 @@ run_loop:
 
             switch (nodeCompData[i].type) {
               default: PANIC("nodeType not supported");
+              case MXC_NODE_TYPE_THREAD: break;
               case MXC_NODE_TYPE_INTERPROCESS:
                 // can interface directly with shared memory once we have differnet codepaths
                 memcpy(&nodeContexts[i].pExternalMemory->nodeShared.currentTimelineSignal, (void*)&nodesShared[i], sizeof(MxcNodeShared));
@@ -455,9 +457,9 @@ run_loop:
       {  // Blit Framebuffer
         AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeContext.swapIndex);
         const VkImage swapImage = swap.images[compNodeContext.swapIndex];
-        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
+        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
         CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swapImage);
-        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));
+        CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));
       }
 
       EndCommandBuffer(cmd);
