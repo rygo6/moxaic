@@ -37,31 +37,31 @@ static VkBool32 VkmDebugUtilsCallback(const VkDebugUtilsMessageSeverityFlagBitsE
   }
 }
 
-static VkCommandBuffer VkmBeginImmediateCommandBuffer() {
-  VkCommandBuffer                   commandBuffer;
+VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer() {
   const VkCommandBufferAllocateInfo allocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool,
       .commandBufferCount = 1,
   };
-  MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &allocateInfo, &commandBuffer));
+  VkCommandBuffer cmd;
+  MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &allocateInfo, &cmd));
   const VkCommandBufferBeginInfo beginInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
       .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
   };
-  MIDVK_REQUIRE(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-  return commandBuffer;
+  MIDVK_REQUIRE(vkBeginCommandBuffer(cmd, &beginInfo));
+  return cmd;
 }
-static void VkmEndImmediateCommandBuffer(VkCommandBuffer commandBuffer) {
-  MIDVK_REQUIRE(vkEndCommandBuffer(commandBuffer));
+void MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd) {
+  MIDVK_REQUIRE(vkEndCommandBuffer(cmd));
   const VkSubmitInfo submitInfo = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
       .commandBufferCount = 1,
-      .pCommandBuffers = &commandBuffer,
+      .pCommandBuffers = &cmd,
   };
   MIDVK_REQUIRE(vkQueueSubmit(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue, 1, &submitInfo, VK_NULL_HANDLE));
   MIDVK_REQUIRE(vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue));
-  vkFreeCommandBuffers(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool, 1, &commandBuffer);
+  vkFreeCommandBuffers(context.device, context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool, 1, &cmd);
 }
 
 //----------------------------------------------------------------------------------
@@ -497,12 +497,25 @@ void AllocateMemory(
     const HANDLE                            externalHandle,
     const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo,
     VkDeviceMemory*                         pDeviceMemory) {
+
+
+  pDedicatedAllocInfo = NULL; // test without dedicated
+
   VkPhysicalDeviceMemoryProperties memProps;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
   const uint32_t                   memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
+#if WIN32
+  const VkExportMemoryWin32HandleInfoKHR exportMemPlatformInfo = {
+      .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+      .pNext = pDedicatedAllocInfo,
+      // This seems to not make the actual UBO read only, only the NT handle I presume
+      .dwAccess = GENERIC_READ,
+//      .dwAccess = GENERIC_ALL,
+  };
+#endif
   const VkExportMemoryAllocateInfo exportMemAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-      .pNext = pDedicatedAllocInfo,
+      .pNext = &exportMemPlatformInfo,
       .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
   };
   const VkImportMemoryWin32HandleInfoKHR importMemAllocInfo = {
@@ -613,9 +626,9 @@ void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset
   VkBuffer       stagingBuffer;
   VkDeviceMemory stagingBufferMemory;
   CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
-  const VkCommandBuffer commandBuffer = VkmBeginImmediateCommandBuffer();
+  const VkCommandBuffer commandBuffer = MidVKBeginImmediateTransferCommandBuffer();
   vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.dstOffset = dstOffset, .size = bufferSize});
-  VkmEndImmediateCommandBuffer(commandBuffer);
+  MidVKEndImmediateTransferCommandBuffer(commandBuffer);
   vkFreeMemory(context.device, stagingBufferMemory, MIDVK_ALLOC);
   vkDestroyBuffer(context.device, stagingBuffer, MIDVK_ALLOC);
 }
@@ -734,7 +747,7 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
   VkDeviceMemory stagingBufferMemory;
   CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
   stbi_image_free(pImagePixels);
-  const VkCommandBuffer commandBuffer = VkmBeginImmediateCommandBuffer();
+  const VkCommandBuffer commandBuffer = MidVKBeginImmediateTransferCommandBuffer();
   vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_DST, pTexture->image));
   const VkBufferImageCopy region = {
       .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
@@ -742,7 +755,7 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
   };
   vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
   vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_TRANSFER_READ, pTexture->image));
-  VkmEndImmediateCommandBuffer(commandBuffer);
+  MidVKEndImmediateTransferCommandBuffer(commandBuffer);
   vkFreeMemory(context.device, stagingBufferMemory, MIDVK_ALLOC);
   vkDestroyBuffer(context.device, stagingBuffer, MIDVK_ALLOC);
 }

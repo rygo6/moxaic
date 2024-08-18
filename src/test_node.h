@@ -33,8 +33,6 @@ typedef struct MxcTestNode {
   VkDeviceMemory        sphereObjectSetMemory;
   VkBuffer              sphereObjectSetBuffer;
 
-  uint32_t queueIndex;
-
 } MxcTestNode;
 
 void* mxcTestNodeThread(const MxcNodeContext* pNodeContext);

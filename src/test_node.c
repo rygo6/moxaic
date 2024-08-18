@@ -55,6 +55,8 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
   const VkPipeline       nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
   const VkPipeline       nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
 
+  const uint32_t graphicsQueueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+
   struct {
     VkImage     color;
     VkImage     normal;
@@ -124,7 +126,7 @@ run_loop:
     case MXC_NODE_TYPE_THREAD: break;
     case MXC_NODE_TYPE_INTERPROCESS:
       //should make pointer to memory directly
-      memcpy(&nodesShared[handle], (void*)&pNodeContext->pExternalMemory->nodeShared, sizeof(MxcNodeShared));
+      memcpy(&nodesShared[handle], &pNodeContext->pExternalMemory->nodeShared, sizeof(MxcNodeShared));
       break;
     default: PANIC("nodeType not supported");
   }
@@ -241,13 +243,13 @@ run_loop:
 
   switch (nodeType) {
     case MXC_NODE_TYPE_THREAD:
-      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, framebufferImages[framebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS));
+      CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_RELEASE_SHADER_READ, framebufferImages[framebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS));
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
       const VkImageMemoryBarrier2 interProcessBarriers[] = {
-          VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_SHADER_READ, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, framebufferImages[framebufferIndex].color),
-          VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_SHADER_READ, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, framebufferImages[framebufferIndex].normal),
-          VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, framebufferImages[framebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS),
+          VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_SHADER_READ_ONLY, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferImages[framebufferIndex].color, graphicsQueueIndex, VK_QUEUE_FAMILY_EXTERNAL, 1),
+          VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_SHADER_READ_ONLY, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferImages[framebufferIndex].normal, graphicsQueueIndex, VK_QUEUE_FAMILY_EXTERNAL, 1),
+          VKM_IMG_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferImages[framebufferIndex].gBuffer, graphicsQueueIndex, VK_QUEUE_FAMILY_EXTERNAL, MXC_NODE_GBUFFER_LEVELS),
       };
       CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
       break;
@@ -397,11 +399,11 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
   }
 
   {  // Copy needed state
+    // context is available to all now so don't need to do this
     pTestNode->device = context.device;
     pTestNode->nodeRenderPass = context.nodeRenderPass;
     pTestNode->pipeLayout = context.stdPipeLayout.pipeLayout;
     pTestNode->basicPipe = context.basicPipe;
-    pTestNode->queueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
   }
 }
 

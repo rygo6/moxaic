@@ -4,6 +4,8 @@
 #include "test_node.h"
 #include "window.h"
 
+//#define TEST_NODE
+
 #define MID_DEBUG
 [[noreturn]] void Panic(const char* file, const int line, const char* message) {
   fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
@@ -111,9 +113,11 @@ int main(void) {
 #endif
 
     //     Test Nodes
+#ifdef TEST_NODE
     NodeHandle testNodeHandle;
     mxcRequestNodeThread(&testNodeHandle);
     mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
+#endif
   }
 
 

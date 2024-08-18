@@ -68,14 +68,15 @@ extern void Panic(const char* file, int line, const char* message);
 #define MIDVK_INSTANCE_FUNC(_func)                                                             \
   const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
   REQUIRE(_func != NULL, "Couldn't load " #_func)
+// I may not want this...
 #define MIDVK_INSTANCE_STATIC_FUNC(_func)                                  \
   static PFN_##vk##_func _func = NULL;                                     \
   if (_func == NULL) {                                                     \
     _func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
     REQUIRE(_func != NULL, "Couldn't load " #_func)                        \
   }
-#define MIDVK_DEVICE_FUNC(_func)                                                           \
-  const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(device, "vk" #_func); \
+#define MIDVK_DEVICE_FUNC(_func)                                                                   \
+  const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(context.device, "vk" #_func); \
   REQUIRE(_func != NULL, "Couldn't load " #_func)
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -342,6 +343,8 @@ typedef enum VkmQueueBarrier {
 //    case QUEUE_BARRIER_FAMILY_EXTERNAL: return VK_QUEUE_FAMILY_EXTERNAL;
 //  }
 //}
+
+// I think I might just want to get rid of all of this
 typedef struct VkmImageBarrier {
   VkPipelineStageFlagBits2 stageMask;
   VkAccessFlagBits2        accessMask;
@@ -359,13 +362,23 @@ static const VkmImageBarrier* VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED = &(c
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
+static const VkmImageBarrier* VKM_IMG_BARRIER_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, // normal and color might only need to wait on color attachment
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+};
 static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+};
+static const VkmImageBarrier* VKM_IMG_BARRIER_RELEASE_SHADER_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
 static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .stageMask = VK_ACCESS_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
@@ -429,7 +442,7 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const VkmImageBa
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_SHADER_READ = &(const VkmImageBarrier){
+static const VkmImageBarrier* VKM_IMG_BARRIER_SHADER_READ_ONLY = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -504,14 +517,39 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImag
         .layerCount = 1,                                      \
     },                                                        \
   }
-#define VKM_IMG_BARRIER_TRANSFER(src, dst, aspect_mask, barrier_image, src_queue, dst_queue) \
+#define VKM_IMG_BARRIER_TRANSFER(_src, _dst, _aspectMask, _barrierImage, _srcQueue, _dstQueue, _levelCount) \
+  (const VkImageMemoryBarrier2) {                                                                           \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                                      \
+    .srcStageMask = _src->stageMask,                                                                        \
+    .srcAccessMask = _src->accessMask,                                                                      \
+    .dstStageMask = _dst->stageMask,                                                                        \
+    .dstAccessMask = _dst->accessMask,                                                                      \
+    .oldLayout = _src->layout,                                                                              \
+    .newLayout = _dst->layout,                                                                              \
+    .srcQueueFamilyIndex = _srcQueue,                                                                       \
+    .dstQueueFamilyIndex = _dstQueue,                                                                       \
+    .image = _barrierImage,                                                                                 \
+    .subresourceRange = (const VkImageSubresourceRange){                                                    \
+        .aspectMask = _aspectMask,                                                                          \
+        .levelCount = _levelCount,                                                                          \
+        .layerCount = 1,                                                                                    \
+    },                                                                                                      \
+  }
+
+// might be better to do it like this
+#define VKM_IMG_BARRIER_SHADER_READ_ONLY2 (const VkmImageBarrier){ \
+    .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,          \
+    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,                     \
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,            \
+}
+#define VKM_IMG_BARRIER_TRANSFER2(src, dst, aspect_mask, barrier_image, src_queue, dst_queue) \
   (const VkImageMemoryBarrier2) {                                                            \
     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                       \
-    .srcStageMask = src->stageMask,                                                          \
-    .srcAccessMask = src->accessMask,                                                        \
+    .srcStageMask = src.stageMask,                                                          \
+    .srcAccessMask = src.accessMask,                                                        \
     .dstStageMask = dst->stageMask,                                                          \
     .dstAccessMask = dst->accessMask,                                                        \
-    .oldLayout = src->layout,                                                                \
+    .oldLayout = src.layout,                                                                \
     .newLayout = dst->layout,                                                                \
     .srcQueueFamilyIndex = src_queue,                                                        \
     .dstQueueFamilyIndex = dst_queue,                                                        \
@@ -528,12 +566,12 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImag
 //----------------------------------------------------------------------------------
 #define VKM_INLINE __attribute__((always_inline)) static inline
 
-#define CmdPipelineImageBarriers2(cmd, imageMemoryBarrierCount, pImageMemoryBarriers) PFN_CmdPipelineImageBarriers(CmdPipelineBarrier2, cmd, imageMemoryBarrierCount, pImageMemoryBarriers)
-VKM_INLINE void PFN_CmdPipelineImageBarriers(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+#define CmdPipelineImageBarriers2(cmd, imageMemoryBarrierCount, pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, cmd, imageMemoryBarrierCount, pImageMemoryBarriers)
+VKM_INLINE void PFN_CmdPipelineImageBarriers2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
   func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-#define CmdPipelineImageBarrier2(cmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc(CmdPipelineBarrier2, cmd, pImageMemoryBarrier)
-VKM_INLINE void PFN_CmdPipelineImageBarrierFunc(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
+#define CmdPipelineImageBarrier2(cmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, cmd, pImageMemoryBarrier)
+VKM_INLINE void PFN_CmdPipelineImageBarrierFunc2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
   func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
 #define CmdBlitImageFullScreen(cmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, cmd, srcImage, dstImage)
@@ -846,6 +884,9 @@ HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory);
 HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore);
 
 void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
+
+VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer();
+void            MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
 #ifdef WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);

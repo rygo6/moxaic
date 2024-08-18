@@ -276,7 +276,14 @@ void mxcRequestNodeThread(NodeHandle* pNodeHandle) {
   };
   MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
-  mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
+  mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->framebufferTextures);
+
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+    HANDLE colorHandle = GetMemoryExternalHandle(pNodeContext->framebufferTextures[i].color.memory);
+    HANDLE normalHandle = GetMemoryExternalHandle(pNodeContext->framebufferTextures[i].normal.memory);
+    HANDLE gbufferHandle = GetMemoryExternalHandle(pNodeContext->framebufferTextures[i].gbuffer.memory);
+  }
+
   const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
       .debugName = "NodeTimelineSemaphore",
       .locality = MID_LOCALITY_CONTEXT,
@@ -467,6 +474,14 @@ void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalN
   *pNodeCompData = (MxcNodeThreadCompData){};
   pNodeCompData->cmd = pNodeContext->cmd;
   pNodeCompData->nodeTimeline = pNodeContext->nodeTimeline;
+  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+    pNodeCompData->framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
+    pNodeCompData->framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
+    pNodeCompData->framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
+    pNodeCompData->framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
+    pNodeCompData->framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
+    pNodeCompData->framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
+  }
 
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
@@ -631,8 +646,19 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferText
     midvkCreateTexture(&gbufferCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
 
     // Depth is not shared over IPC.
-    if (locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY)
+    if (locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
+      // we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
+      VkCommandBuffer cmd = MidVKBeginImmediateTransferCommandBuffer();
+      const VkImageMemoryBarrier2 interProcessBarriers[] = {
+          VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].color.image),
+          VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].normal.image),
+          VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].gbuffer.image, 0, MXC_NODE_GBUFFER_LEVELS),
+      };
+      MIDVK_DEVICE_FUNC(CmdPipelineBarrier2);
+      CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
+      MidVKEndImmediateTransferCommandBuffer(cmd);
       continue;
+    }
     const VkmTextureCreateInfo depthCreateInfo = {
         .debugName = "ImportedDepthFramebuffer",
         .imageCreateInfo = {
@@ -646,7 +672,7 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferText
             .usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
         },
         .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-        .locality = locality,
+        .locality = MID_LOCALITY_CONTEXT,
     };
     midvkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].depth);
   }
