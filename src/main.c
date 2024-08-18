@@ -4,7 +4,7 @@
 #include "test_node.h"
 #include "window.h"
 
-//#define TEST_NODE
+#define TEST_NODE
 
 #define MID_DEBUG
 [[noreturn]] void Panic(const char* file, const int line, const char* message) {
@@ -99,24 +99,22 @@ int main(void) {
     mxcCreateNodeRenderPass();
     vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
 
-    // Comp
-    mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
-
 #if defined(MOXAIC_COMPOSITOR)
     printf("Moxaic Compositor\n");
     isCompositor = true;
+    mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
     mxcInitializeIPCServer();
-#elif defined(MOXAIC_NODE)
-    printf("Moxaic node\n");
-    isCompositor = false;
-    mxcConnectNodeIPC();
-#endif
 
-    //     Test Nodes
 #ifdef TEST_NODE
     NodeHandle testNodeHandle;
     mxcRequestNodeThread(&testNodeHandle);
     mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
+#endif
+
+#elif defined(MOXAIC_NODE)
+    printf("Moxaic node\n");
+    isCompositor = false;
+    mxcConnectNodeIPC();
 #endif
   }
 

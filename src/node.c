@@ -276,14 +276,7 @@ void mxcRequestNodeThread(NodeHandle* pNodeHandle) {
   };
   MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
-  mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->framebufferTextures);
-
-  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    HANDLE colorHandle = GetMemoryExternalHandle(pNodeContext->framebufferTextures[i].color.memory);
-    HANDLE normalHandle = GetMemoryExternalHandle(pNodeContext->framebufferTextures[i].normal.memory);
-    HANDLE gbufferHandle = GetMemoryExternalHandle(pNodeContext->framebufferTextures[i].gbuffer.memory);
-  }
-
+  mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->framebufferTextures);
   const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
       .debugName = "NodeTimelineSemaphore",
       .locality = MID_LOCALITY_CONTEXT,
