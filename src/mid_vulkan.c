@@ -1,4 +1,5 @@
 #include "mid_vulkan.h"
+
 #include "stb_image.h"
 
 #include <stdio.h>
@@ -525,7 +526,7 @@ void AllocateMemory(
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
       .pNext = MID_LOCALITY_INTERPROCESS_EXPORTED(locality) ? &exportMemAllocInfo :
                MID_LOCALITY_INTERPROCESS_IMPORTED(locality) ? &importMemAllocInfo :
-                                                              pDedicatedAllocInfo,
+                                                              (void*)pDedicatedAllocInfo,
       .allocationSize = pMemReqs->size,
       .memoryTypeIndex = memTypeIndex,
   };

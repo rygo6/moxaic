@@ -1,7 +1,7 @@
 #pragma once
 
-#include "mid_vulkan.h"
 #include "node.h"
+#include "mid_vulkan.h"
 
 typedef enum MxcCompMode {
   MXC_COMP_MODE_BASIC,

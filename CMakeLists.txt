@@ -7,6 +7,7 @@ set(TARGET_NAME moxaic)
 
 #set(THREADS_PREFER_PTHREAD_FLAG ON)
 #set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.290.0")
 
@@ -31,18 +32,30 @@ target_include_directories(${TARGET_NAME} PUBLIC
         "${VULKAN_SDK_PATH}/Include"
 )
 
-target_link_libraries(${TARGET_NAME}
+target_link_libraries(${TARGET_NAME} PUBLIC
         vulkan-1
         ws2_32
 )
 
-target_compile_definitions(${TARGET_NAME} PRIVATE
+target_compile_definitions(${TARGET_NAME} PUBLIC
     MOXAIC_COMPOSITOR
 )
 
 target_compile_options(${TARGET_NAME} PRIVATE
-        "-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/="
-        "-fopt-info-vec"
+        -include globals.h
+
+        # make __FILE__ path relative to project
+        -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=
+        -fopt-info-vec
+)
+
+target_link_options(${TARGET_NAME} PRIVATE
+#        -nostartfiles
+#        -nodefaultlibs
+#        -nostdlib
+#        -nolibc
+        -v
+#        --entry=_test
 )
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)

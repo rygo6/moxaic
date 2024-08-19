@@ -1,6 +1,5 @@
 #pragma once
 
-#include "globals.h"
 #include "mid_vulkan.h"
 
 #include <pthread.h>

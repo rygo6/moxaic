@@ -1,10 +1,7 @@
 #include "comp_node.h"
-#include "globals.h"
 #include "node.h"
 #include "test_node.h"
 #include "window.h"
-
-//#define TEST_NODE
 
 #define MID_DEBUG
 [[noreturn]] void Panic(const char* file, const int line, const char* message) {
@@ -104,6 +101,7 @@ int main(void) {
     mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
     mxcInitializeIPCServer();
 
+#define TEST_NODE
 #ifdef TEST_NODE
     NodeHandle testNodeHandle;
     mxcRequestNodeThread(&testNodeHandle);
