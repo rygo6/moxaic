@@ -19,6 +19,7 @@ typedef struct MxcCompNode {
   MxcCompMode compMode;
 
   // device should go in context
+  // todo no shjould just access it from context directly
   VkDevice        device;
 
   VkRenderPass compRenderPass;

@@ -88,6 +88,14 @@ void midCreateWindow();
 void midWindowLockCursor();
 void midWindowReleaseCursor();
 
+static inline uint64_t midQueryPerformanceCounter(){
+  LARGE_INTEGER value = {};
+  QueryPerformanceCounter(&value);
+  value.QuadPart *= 1000000;
+  value.QuadPart /= midWindow.frequency;
+  return value.QuadPart;
+}
+
 extern double timeQueryMs;
 
 //

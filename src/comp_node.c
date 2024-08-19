@@ -201,6 +201,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   }
 
   {  // Copy needed state
+    // todo get rid lets go to context directly
     pNode->compMode = pInfo->compMode;
     pNode->device = context.device;
     pNode->compRenderPass = context.renderPass;
@@ -330,8 +331,12 @@ run_loop:
       nodeCompData[i].nodeSetState.model = Mat4FromPosRot(nodeCompData[i].transform.position, nodeCompData[i].transform.rotation);
 
       {  // check frame available
+         
+         // tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
+         // shared: 569 - semaphore: 315416 ratio: 554.333919
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
         uint64_t value = nodesShared[i].currentTimelineSignal;
+
         // get rid of this if, use a queue mechanism instead
         if (value > nodeCompData[i].lastTimelineSwap) {
           nodeCompData[i].lastTimelineSwap = value;
@@ -493,6 +498,7 @@ run_loop:
 
       {  // Blit Framebuffer
         AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeContext.swapIndex);
+        __atomic_thread_fence(__ATOMIC_RELEASE);
         const VkImage swapImage = swap.images[compNodeContext.swapIndex];
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
         CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swapImage);
@@ -501,7 +507,6 @@ run_loop:
 
       EndCommandBuffer(cmd);
 
-      __atomic_thread_fence(__ATOMIC_RELEASE); // mainly to release swap index
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
     }
 
@@ -531,10 +536,6 @@ void* mxcCompNodeThread(const MxcCompNodeContext* pNodeContext) {
   mxcCreateCompNode(&compNodeInfo, &compNode);
   vkmEndAllocationRequests();
   mxcBindUpdateCompNode(&compNodeInfo, &compNode);
-
   mxcCompNodeRun(pNodeContext, &compNode);
-
-  __atomic_thread_fence(__ATOMIC_RELEASE);
-
   return NULL;
 }

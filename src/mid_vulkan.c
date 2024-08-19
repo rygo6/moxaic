@@ -440,7 +440,8 @@ static uint32_t FindMemoryTypeIndex(const uint32_t memoryTypeCount, VkMemoryType
   return -1;
 }
 
-// could go in thread context
+// todo should go in thread context
+// but should this be forced by thread local
 static __thread size_t  requestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
 static __thread size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = {};
 __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
@@ -492,15 +493,12 @@ void vkmEndAllocationRequests() {
 }
 
 void AllocateMemory(
-    const VkMemoryRequirements*             pMemReqs,
-    const VkMemoryPropertyFlags             propFlags,
-    const MidLocality                       locality,
-    const HANDLE                            externalHandle,
-    const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo,
-    VkDeviceMemory*                         pDeviceMemory) {
-
-  pDedicatedAllocInfo = NULL; // test without dedicated
-
+    const VkMemoryRequirements*          pMemReqs,
+    const VkMemoryPropertyFlags          propFlags,
+    const MidLocality                    locality,
+    const HANDLE                         externalHandle,
+    const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo,
+    VkDeviceMemory*                      pDeviceMemory) {
   VkPhysicalDeviceMemoryProperties memProps;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
   const uint32_t                   memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
@@ -537,7 +535,7 @@ void AllocateMemory(
   PrintMemoryPropertyFlags(propFlags);
 #endif
 }
-void vkmImportMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory) {
+void vkmImportMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory) {
   VkPhysicalDeviceMemoryProperties memProps;
   vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
   const uint32_t                   memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
@@ -574,8 +572,10 @@ static void CreateAllocBuffer(const VkMemoryPropertyFlags memPropFlags, const Vk
   if (requiresDedicated) printf("Dedicated allocation is required for this buffer.\n");
   else if (prefersDedicated) printf("Dedicated allocation is preferred for this buffer.\n");
 #endif
-  const VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .buffer = *pBuffer};
-  AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, (requiresDedicated || prefersDedicated) ? &dedicatedAllocInfo : NULL, pDeviceMem);
+  const VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .buffer = *pBuffer};
+  // for some reason dedicated and external allocations are crashing on 4090 after important in other process, so lets just leave is that as requires to be dedicated for now
+//  AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, (requiresDedicated || prefersDedicated) ? &dedicatedAllocInfo : NULL, pDeviceMem);
+  AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, requiresDedicated ? &dedicatedAllocInfo : NULL, pDeviceMem);
 }
 void CreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer) {
   CreateAllocBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
@@ -715,8 +715,10 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, cons
   if (requiresDedicated) printf("Dedicated allocation is required for this image.\n");
   else if (prefersDedicated) printf("Dedicated allocation is preferred for this image.\n");
 #endif
-  const VkMemoryDedicatedAllocateInfoKHR dedicatedAllocInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .image = *pImage};
-  AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, (requiresDedicated || prefersDedicated) ? &dedicatedAllocInfo : NULL, pMemory);
+  const VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .image = *pImage};
+  // for some reason dedicated and external allocations are crashing on 4090 after important in other process, so lets just leave is that as requires to be dedicated for now
+//  AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, (requiresDedicated || prefersDedicated) ? &dedicatedAllocInfo : NULL, pMemory);
+  AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, requiresDedicated ? &dedicatedAllocInfo : NULL, pMemory);
   MIDVK_REQUIRE(vkBindImageMemory(context.device, *pImage, *pMemory, 0));
 }
 static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImageAspectFlags aspectMask, const MidLocality locality, const HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView) {

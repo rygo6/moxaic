@@ -164,7 +164,7 @@ int main(void) {
     while (isRunning) {
 
       // I guess technically we just want to go as fast as possible in a node, but we would probably need to process and send input here first at some point?
-      // we probably want to signal a semaphore here
+      // we probably want to signal and wait on semaphore here
       mxcSubmitNodeCommandBuffers(graphicsQueue);
     }
   }
