@@ -7,9 +7,10 @@
 
 VkInstance instance = VK_NULL_HANDLE;
 MidVkContext context = {};
-__thread MidVkThreadContext threadContext = {};
+VkSurfaceKHR midVkSurface = VK_NULL_HANDLE;
+VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
 
-static VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
+__thread MidVkThreadContext threadContext = {};
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -498,7 +499,6 @@ void AllocateMemory(
     const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo,
     VkDeviceMemory*                         pDeviceMemory) {
 
-
   pDedicatedAllocInfo = NULL; // test without dedicated
 
   VkPhysicalDeviceMemoryProperties memProps;
@@ -510,18 +510,18 @@ void AllocateMemory(
       .pNext = pDedicatedAllocInfo,
       // This seems to not make the actual UBO read only, only the NT handle I presume
       .dwAccess = GENERIC_READ,
-//      .dwAccess = GENERIC_ALL,
+  };
+  const VkImportMemoryWin32HandleInfoKHR importMemAllocInfo = {
+      .sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
+      .pNext = pDedicatedAllocInfo,
+      .handleType = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
+      .handle = externalHandle,
   };
 #endif
   const VkExportMemoryAllocateInfo exportMemAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
       .pNext = &exportMemPlatformInfo,
       .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
-  };
-  const VkImportMemoryWin32HandleInfoKHR importMemAllocInfo = {
-      .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-      .pNext = pDedicatedAllocInfo,
-      .handle = externalHandle,
   };
   const VkMemoryAllocateInfo memAllocInfo = {
       .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -922,6 +922,7 @@ void vkmInitialize() {
     const char* ppEnabledLayerNames[] = {
         //                "VK_LAYER_KHRONOS_validation",
         //        "VK_LAYER_LUNARG_monitor"
+//        "VK_LAYER_RENDERDOC_Capture",
     };
     const char* ppEnabledInstanceExtensionNames[] = {
         //        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
@@ -1148,6 +1149,7 @@ void vkmCreateStdRenderPass() {
               .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
               .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
               .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              //VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL to blit
               .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
           },
           [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {

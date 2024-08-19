@@ -311,6 +311,7 @@ run_loop:
 
     for (int i = 0; i < nodeCount; ++i) {
 
+      // todo get rid of once we have different codepaths for these could check shared mem directly
       switch (nodeCompData[i].type) {
         default: PANIC("nodeType not supported");
         case MXC_NODE_TYPE_THREAD: break;
@@ -331,11 +332,12 @@ run_loop:
       {  // check frame available
         __atomic_thread_fence(__ATOMIC_ACQUIRE);
         uint64_t value = nodesShared[i].currentTimelineSignal;
+        // get rid of this if, use a queue mechanism instead
         if (value > nodeCompData[i].lastTimelineSwap) {
+          nodeCompData[i].lastTimelineSwap = value;
 
           {  // update framebuffer for comp
-            nodeCompData[i].lastTimelineSwap = value;
-            const int                  nodeFramebufferIndex = !(value % MIDVK_SWAP_COUNT);
+            const int nodeFramebufferIndex = !(value % MIDVK_SWAP_COUNT);
             switch (nodeCompData[i].type) {
               case MXC_NODE_TYPE_THREAD:
                 const VkImageMemoryBarrier2 barriers[] = {
@@ -347,9 +349,33 @@ run_loop:
                 break;
               case MXC_NODE_TYPE_INTERPROCESS:
                 const VkImageMemoryBarrier2 interProcessBarriers[] = {
-                    VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeCompData[i].framebufferImages[framebufferIndex].color, VK_QUEUE_FAMILY_EXTERNAL, graphicsQueueIndex, 1),
-                    VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeCompData[i].framebufferImages[framebufferIndex].normal, VK_QUEUE_FAMILY_EXTERNAL, graphicsQueueIndex, 1),
-                    VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, nodeCompData[i].framebufferImages[framebufferIndex].gBuffer, VK_QUEUE_FAMILY_EXTERNAL, graphicsQueueIndex, MXC_NODE_GBUFFER_LEVELS),
+                    {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+                        .dstQueueFamilyIndex = graphicsQueueIndex,
+                        .image = nodeCompData[i].framebufferImages[framebufferIndex].color,
+                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+                    },
+                    {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+                        .dstQueueFamilyIndex = graphicsQueueIndex,
+                        .image = nodeCompData[i].framebufferImages[framebufferIndex].normal,
+                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+                    },
+                    {
+                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+                        .dstQueueFamilyIndex = graphicsQueueIndex,
+                        .image = nodeCompData[i].framebufferImages[framebufferIndex].gBuffer,
+                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, MXC_NODE_GBUFFER_LEVELS, 0, 1},
+                    },
                 };
                 CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
                 break;
@@ -360,7 +386,7 @@ run_loop:
                 SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompData[i].framebufferImages[nodeFramebufferIndex].normalView),
                 SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompData[i].framebufferImages[nodeFramebufferIndex].gBufferView),
             };
-            vkUpdateDescriptorSets(device, _countof(writeSets), writeSets, 0, NULL);
+            vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
           }
 
           {
@@ -410,6 +436,7 @@ run_loop:
             nodesShared[i].ulUV = ulUV;
             nodesShared[i].lrUV = lrUV;
 
+            // todo get rid of once we have different codepaths for these could check shared mem directly
             switch (nodeCompData[i].type) {
               default: PANIC("nodeType not supported");
               case MXC_NODE_TYPE_THREAD: break;

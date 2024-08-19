@@ -89,6 +89,9 @@ extern void Panic(const char* file, int line, const char* message);
     .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,             \
   }
 
+#define MIDVK_COLOR_SUBRESOURCE_RANGE {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
+#define MIDVK_COLOR_SUBRESOURCE_RANGE_MIPS(_levelCount) {VK_IMAGE_ASPECT_COLOR_BIT, 0, _levelCount, 0, 1}
+
 //----------------------------------------------------------------------------------
 // Mid Types
 //----------------------------------------------------------------------------------
@@ -243,12 +246,16 @@ typedef struct __attribute((aligned(64))) MidVkContext {
 
 } MidVkContext;
 
-typedef struct __attribute((aligned(64))) MidVkThreadContext {
-    VkDescriptorPool descriptorPool;
-} MidVkThreadContext;
+
 
 extern VkInstance instance;
 extern MidVkContext context;
+extern VkSurfaceKHR midVkSurface;
+
+// ya lets do this
+typedef struct __attribute((aligned(64))) MidVkThreadContext {
+  VkDescriptorPool descriptorPool;
+} MidVkThreadContext;
 extern __thread MidVkThreadContext threadContext;
 
 extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
@@ -276,7 +283,7 @@ static const VkFormat MIDVK_PASS_FORMATS[] = {
     [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
 };
 static const VkImageUsageFlags MIDVK_PASS_USAGES[] = {
-    [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+    [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
     [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
     [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 };
@@ -367,18 +374,18 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_ACQUIRE_SHADER_READ = &(const VkmI
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
-    .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
 static const VkmImageBarrier* VKM_IMG_BARRIER_RELEASE_SHADER_READ = &(const VkmImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
+static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
+    .accessMask = VK_ACCESS_2_NONE,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+};
 static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ = &(const VkmImageBarrier){
-    .stageMask = VK_ACCESS_2_NONE,
+    .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };

@@ -193,6 +193,7 @@ extern MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY];
 extern MxcNodeShared      nodesShared[MXC_NODE_CAPACITY];
 extern MxcNodeThreadCompData nodeCompData[MXC_NODE_CAPACITY];
 
+// do this?
 extern size_t             nodeProcessCount;
 extern NodeHandle         availableNodeProcess[MXC_NODE_CAPACITY];
 extern MxcNodeContext     nodeProcessContext[MXC_NODE_CAPACITY];
@@ -202,7 +203,15 @@ extern MxcNodeThreadCompData nodeProcessCompData[MXC_NODE_CAPACITY];
 //
 /// Methods
 
-static inline void mxcSubmitNodeThreadQueues(const VkQueue graphicsQueue) {
+// todo change to use this
+extern size_t      submitNodeQueueCount;
+extern NodeHandle  submitNodeQueue[MXC_NODE_CAPACITY];
+static inline void mxcQueueNodeCommandBuffer(NodeHandle handle) {
+
+
+}
+
+static inline void mxcSubmitNodeCommandBuffers(const VkQueue graphicsQueue) {
   for (int i = 0; i < nodeCount; ++i) {
     uint64_t value = nodesShared[i].pendingTimelineSignal;
     __atomic_thread_fence(__ATOMIC_ACQUIRE);

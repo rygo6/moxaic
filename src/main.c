@@ -4,7 +4,7 @@
 #include "test_node.h"
 #include "window.h"
 
-#define TEST_NODE
+//#define TEST_NODE
 
 #define MID_DEBUG
 [[noreturn]] void Panic(const char* file, const int line, const char* message) {
@@ -51,15 +51,14 @@ int main(void) {
     midCreateWindow();
     vkmInitialize();
 
-    VkSurfaceKHR surface;
-    midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &surface);
+    midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &midVkSurface);
 
     const VkmContextCreateInfo contextCreateInfo = {
         .maxDescriptorCount = 30,
         .uniformDescriptorCount = 10,
         .combinedImageSamplerDescriptorCount = 10,
         .storageImageDescriptorCount = 10,
-        .presentSurface = surface,
+        .presentSurface = midVkSurface,
         .queueFamilyCreateInfos = {
             [VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
                 .supportsGraphics = VKM_SUPPORT_YES,
@@ -102,7 +101,7 @@ int main(void) {
 #if defined(MOXAIC_COMPOSITOR)
     printf("Moxaic Compositor\n");
     isCompositor = true;
-    mxcRequestAndRunCompNodeThread(surface, mxcCompNodeThread);
+    mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
     mxcInitializeIPCServer();
 
 #ifdef TEST_NODE
@@ -139,7 +138,7 @@ int main(void) {
 
       // Try submitting nodes before waiting to render composite
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-      mxcSubmitNodeThreadQueues(graphicsQueue);
+      mxcSubmitNodeCommandBuffers(graphicsQueue);
 
       // wait for recording to be done
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compNodeContext.compTimeline);
@@ -157,7 +156,7 @@ int main(void) {
 
       // Try submitting nodes before waiting to update window again.
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-      mxcSubmitNodeThreadQueues(graphicsQueue);
+      mxcSubmitNodeCommandBuffers(graphicsQueue);
     }
   } else {
 
@@ -165,12 +164,12 @@ int main(void) {
     while (isRunning) {
 
       // I guess technically we just want to go as fast as possible in a node, but we would probably need to process and send input here first at some point?
-      mxcSubmitNodeThreadQueues(graphicsQueue);
+      // we probably want to signal a semaphore here
+      mxcSubmitNodeCommandBuffers(graphicsQueue);
     }
   }
 
-
-
+  // todo rejoin running threads
   //  int result = pthread_join(testNodeContext.threadId, NULL);
   //  if (result != 0) {
   //    perror("Thread join failed");

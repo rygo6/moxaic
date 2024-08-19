@@ -110,7 +110,9 @@ static void acceptIPCServer() {
     WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
   }
 
-  nodeCount++;
+  nodeCount++; //todo move into mxcRequestNodeProcessExport
+
+
   __atomic_thread_fence(__ATOMIC_RELEASE);
   printf("Process Node Export Success.\n");
   goto ExitSuccess;
@@ -231,6 +233,9 @@ MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY] = {};
 MxcNodeShared      nodesShared[MXC_NODE_CAPACITY] = {};
 MxcNodeThreadCompData nodeCompData[MXC_NODE_CAPACITY] = {};
 
+extern size_t      submitNodeQueueCount = 0;
+extern NodeHandle  submitNodeQueue[MXC_NODE_CAPACITY] = {};
+
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*)) {
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -317,11 +322,13 @@ void mxcReleaseNodeThread(NodeHandle handle) {
 
 void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle) {
   *pNodeHandle = nodeCount;
+
   MxcNodeContext* pNodeContext = &nodeContexts[*pNodeHandle];
   *pNodeContext = (MxcNodeContext){};
   pNodeContext->compTimeline = compTimeline;
   pNodeContext->nodeType = MXC_NODE_TYPE_INTERPROCESS;
   pNodeContext->processHandle = INVALID_HANDLE_VALUE;
+
   mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->framebufferTextures);
   const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
       .debugName = "NodeTimelineSemaphore",
@@ -329,24 +336,27 @@ void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNo
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
-  MxcNodeShared* pNodeShared = &nodesShared[*pNodeHandle]; // use this
-  nodesShared[*pNodeHandle] = (MxcNodeShared){};
-  nodesShared[*pNodeHandle].radius = 0.5;
-  nodesShared[*pNodeHandle].compCycleSkip = 16;
-  nodeCompData[*pNodeHandle] = (MxcNodeThreadCompData){};
-  nodeCompData[*pNodeHandle].cmd = pNodeContext->cmd;
-  nodeCompData[*pNodeHandle].type = pNodeContext->nodeType;
-  nodeCompData[*pNodeHandle].nodeTimeline = pNodeContext->nodeTimeline;
-  nodeCompData[*pNodeHandle].transform.rotation = QuatFromEuler(nodeCompData[*pNodeHandle].transform.euler);
+
+  MxcNodeShared* pNodeShared = &nodesShared[*pNodeHandle];
+  *pNodeShared = (MxcNodeShared){};
+  pNodeShared->radius = 0.5;
+  pNodeShared->compCycleSkip = 16;
+
+  MxcNodeThreadCompData* pNodeCompData = &nodeCompData[*pNodeHandle];
+  *pNodeCompData = (MxcNodeThreadCompData){};
+  pNodeCompData->cmd = pNodeContext->cmd;
+  pNodeCompData->type = pNodeContext->nodeType;
+  pNodeCompData->nodeTimeline = pNodeContext->nodeTimeline;
+  pNodeCompData->transform.rotation = QuatFromEuler(nodeCompData[*pNodeHandle].transform.euler);
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    nodeCompData[*pNodeHandle].framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
-    nodeCompData[*pNodeHandle].framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
-    nodeCompData[*pNodeHandle].framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
-    nodeCompData[*pNodeHandle].framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
-    nodeCompData[*pNodeHandle].framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
-    nodeCompData[*pNodeHandle].framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
+    pNodeCompData->framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
+    pNodeCompData->framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
+    pNodeCompData->framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
+    pNodeCompData->framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
+    pNodeCompData->framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
+    pNodeCompData->framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
   }
-//  nodeCount++;
+//  nodeCount++; // pull framebuffer create into here so can increment this here
   __atomic_thread_fence(__ATOMIC_RELEASE);
   printf("Node Request Process Export Success. Handle: %d\n", *pNodeHandle);
 }
@@ -360,7 +370,6 @@ void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalN
   pNodeContext->externalMemoryHandle = externalMemoryHandle;
   pNodeContext->pExternalMemory = pExternalMemory;
 
-  MxcNodeFramebufferTexture*    pFramebufferTextures = pNodeContext->framebufferTextures;
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -374,6 +383,8 @@ void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalN
   };
   MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
   vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
+
+  MxcNodeFramebufferTexture* pFramebufferTextures = pNodeContext->framebufferTextures;
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     const VkmTextureCreateInfo colorCreateInfo = {
         .debugName = "ImportedColorFramebuffer",
@@ -483,11 +494,6 @@ void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalN
   printf("Node Request Process Import Success. Handle: %d\n", *pNodeHandle);
 }
 
-static const VkImageUsageFlags VKM_PASS_NODE_USAGES[] = {
-    [MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-    [MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-    [MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-};
 void mxcCreateNodeRenderPass() {
   const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,

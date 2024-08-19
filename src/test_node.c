@@ -34,6 +34,12 @@ enum PipeSetNodeProcessIndices {
   PIPE_SET_NODE_PROCESS_COUNT,
 };
 
+static const VkmImageBarrier* VKM_IMG_BARRIER_NODE_FINISH_RENDERPASS = &(const VkmImageBarrier){
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+    .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
+    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+};
+
 void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode) {
 
   const MxcNodeType     nodeType = pNodeContext->nodeType;   // figure out how to get rid of this
@@ -158,16 +164,50 @@ run_loop:
   const int framebufferIndex = nodeTimelineValue % MIDVK_SWAP_COUNT;
 
   switch (nodeType) {
-    case MXC_NODE_TYPE_THREAD:
-      break;
+    case MXC_NODE_TYPE_THREAD: break;
     case MXC_NODE_TYPE_INTERPROCESS:
-      // will need to some kind of interprocess acquire
-      //      const VkImageMemoryBarrier2 barrier[] = {
-      //          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE, framebufferColorImgs[framebufferIndex]),
-      //          VKM_COLOR_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE, framebufferNormalImgs[framebufferIndex]),
-      //          VKM_IMG_BARRIER(VKM_IMG_BARRIER_UNDEFINED, VKM_IMG_BARRIER_DEPTH_ATTACHMENT, VK_IMAGE_ASPECT_DEPTH_BIT, framebufferDepthImgs[framebufferIndex]),
-      //      };
-      //      CmdPipelineImageBarriers2(cmd, COUNT(barrier), barrier);
+      // Acquire Interprocess Framebuffers
+      // todo set this up beforehand so you don't need a switch!
+      const VkImageMemoryBarrier2 interProcessBarriers[] = {
+          {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+              .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+              .dstStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+              .dstAccessMask  = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
+              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+              .dstQueueFamilyIndex = graphicsQueueIndex,
+              .image = framebufferImages[framebufferIndex].color,
+              .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+              .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+              .dstStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+              .dstAccessMask  = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
+              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+              .dstQueueFamilyIndex = graphicsQueueIndex,
+              .image = framebufferImages[framebufferIndex].normal,
+              .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+              .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+              .dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+              .dstAccessMask  = VK_ACCESS_2_SHADER_WRITE_BIT,
+              .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+              .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+              .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+              .dstQueueFamilyIndex = graphicsQueueIndex,
+              .image = framebufferImages[framebufferIndex].gBuffer,
+              .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, MXC_NODE_GBUFFER_LEVELS, 0, 1},
+          },
+      };
+      CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
+      CmdPipelineImageBarriers2(cmd, 0, interProcessBarriers);
       break;
     default: PANIC("nodeType not supported");
   }
@@ -193,10 +233,11 @@ run_loop:
     const ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 32), 1);
     {
       CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL, framebufferImages[framebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS));
-      CmdClearColorImage(cmd, framebufferImages[framebufferIndex].gBuffer, VK_IMAGE_LAYOUT_GENERAL, &MXC_NODE_CLEAR_COLOR, 1, &(const VkImageSubresourceRange){.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = MXC_NODE_GBUFFER_LEVELS, .layerCount = 1});
+      const VkImageSubresourceRange gBufferSubresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = MXC_NODE_GBUFFER_LEVELS, .layerCount = 1};
+      CmdClearColorImage(cmd, framebufferImages[framebufferIndex].gBuffer, VK_IMAGE_LAYOUT_GENERAL, &MXC_NODE_CLEAR_COLOR, 1, &gBufferSubresourceRange);
       const VkImageMemoryBarrier2 barriers[] = {
           // could technically alter shader to take VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL and not need this, can different mips be in different layouts?
-          VKM_IMG_BARRIER(VKM_IMG_BARRIER_COMPUTE_SHADER_READ_ONLY, VKM_IMAGE_BARRIER_COMPUTE_READ, VK_IMAGE_ASPECT_DEPTH_BIT, framebufferImages[framebufferIndex].depth),
+          VKM_IMG_BARRIER(VKM_IMG_BARRIER_NODE_FINISH_RENDERPASS, VKM_IMAGE_BARRIER_COMPUTE_READ, VK_IMAGE_ASPECT_DEPTH_BIT, framebufferImages[framebufferIndex].depth),
           VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL, VKM_IMAGE_BARRIER_COMPUTE_WRITE, framebufferImages[framebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS),
       };
       CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
@@ -242,14 +283,45 @@ run_loop:
   }
 
   switch (nodeType) {
+      // todo set this up beforehand so you don't need a switch!
     case MXC_NODE_TYPE_THREAD:
       CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_RELEASE_SHADER_READ, framebufferImages[framebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS));
       break;
     case MXC_NODE_TYPE_INTERPROCESS:
       const VkImageMemoryBarrier2 interProcessBarriers[] = {
-          VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_SHADER_READ_ONLY, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferImages[framebufferIndex].color, graphicsQueueIndex, VK_QUEUE_FAMILY_EXTERNAL, 1),
-          VKM_IMG_BARRIER_TRANSFER(VKM_IMG_BARRIER_SHADER_READ_ONLY, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferImages[framebufferIndex].normal, graphicsQueueIndex, VK_QUEUE_FAMILY_EXTERNAL, 1),
-          VKM_IMG_BARRIER_TRANSFER(VKM_IMAGE_BARRIER_COMPUTE_WRITE, VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ, VK_IMAGE_ASPECT_COLOR_BIT, framebufferImages[framebufferIndex].gBuffer, graphicsQueueIndex, VK_QUEUE_FAMILY_EXTERNAL, MXC_NODE_GBUFFER_LEVELS),
+          {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+              .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+              .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
+              .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              .srcQueueFamilyIndex = graphicsQueueIndex,
+              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+              .image = framebufferImages[framebufferIndex].color,
+              .subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+              .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
+              .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
+              .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              .srcQueueFamilyIndex = graphicsQueueIndex,
+              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+              .image = framebufferImages[framebufferIndex].normal,
+              .subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+          },
+          {
+              .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+              .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+              .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+              .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+              .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+              .srcQueueFamilyIndex = graphicsQueueIndex,
+              .dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+              .image = framebufferImages[framebufferIndex].gBuffer,
+              .subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE_MIPS(MXC_NODE_GBUFFER_LEVELS),
+          },
       };
       CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
       break;
@@ -260,25 +332,27 @@ run_loop:
 
   nodeTimelineValue++;
 
+//  mxcQueueNodeCommandBuffer(handle); // todo switch to shis
   nodesShared[handle].pendingTimelineSignal = nodeTimelineValue;
   __atomic_thread_fence(__ATOMIC_RELEASE);
   vkmTimelineWait(device, nodeTimelineValue, nodeTimeline);
   nodesShared[handle].currentTimelineSignal = nodeTimelineValue;
+  // ref mem directly to not need a switch
   switch (nodeType) {
     case MXC_NODE_TYPE_THREAD: break;
     case MXC_NODE_TYPE_INTERPROCESS:
-      //should make pointer to memory directly
       pNodeContext->pExternalMemory->nodeShared.currentTimelineSignal = nodeTimelineValue;
       break;
     default: PANIC("nodeType not supported");
   }
   __atomic_thread_fence(__ATOMIC_RELEASE);
 
+
   compBaseCycleValue += MXC_CYCLE_COUNT * nodesShared[handle].compCycleSkip;
 
-  //  _Thread_local static int count;
-  //  if (count++ > 10)
-  //    return;
+//    _Thread_local static int count;
+//    if (count++ > 10)
+//      return;
 
   CHECK_RUNNING
   goto run_loop;
