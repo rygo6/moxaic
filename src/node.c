@@ -234,8 +234,9 @@ MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY] = {};
 MxcNodeShared         nodesShared[MXC_NODE_CAPACITY] = {};
 MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
 
-extern size_t      submitNodeQueueCount = 0;
-extern NodeHandle  submitNodeQueue[MXC_NODE_CAPACITY] = {};
+size_t                     submitNodeQueueStart = 0;
+size_t                     submitNodeQueueEnd = 0;
+MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*)) {
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {

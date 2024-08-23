@@ -108,7 +108,6 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
   REQUIRE(nodeTimelineValue != 0xffffffffffffffff, "NodeTimeline imported as max value!");
   compBaseCycleValue = nodeTimelineValue - (nodeTimelineValue % MXC_CYCLE_COUNT);
 
-  assert(__atomic_always_lock_free(sizeof(pNodeShared->pendingTimelineSignal), &pNodeShared->pendingTimelineSignal));
   assert(__atomic_always_lock_free(sizeof(pNodeShared->currentTimelineSignal), &pNodeShared->currentTimelineSignal));
 
   VkImageMemoryBarrier2 acquireBarriers[MIDVK_SWAP_COUNT][3];
@@ -379,11 +378,14 @@ run_loop:
   EndCommandBuffer(cmd);
 
   nodeTimelineValue++;
-  pNodeShared->pendingTimelineSignal = nodeTimelineValue;
-  __atomic_thread_fence(__ATOMIC_RELEASE);
+  mxcQueueNodeCommandBuffer((MxcQueuedNodeCommandBuffer){.cmd = cmd, .nodeTimeline = nodeTimeline, .nodeTimelineSignalValue = nodeTimelineValue});
   vkmTimelineWait(device, nodeTimelineValue, nodeTimeline);
+
+  // tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
+  // shared: 569 - semaphore: 315416 ratio: 554.333919
   pNodeShared->currentTimelineSignal = nodeTimelineValue;
   __atomic_thread_fence(__ATOMIC_RELEASE);
+
   compBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compCycleSkip;
 
 //    _Thread_local static int count;

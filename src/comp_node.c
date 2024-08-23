@@ -276,7 +276,6 @@ void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* p
 
   // just making sure atomics are only using barriers, not locks
   for (int i = 0; i < nodeCount; ++i) {
-    assert(__atomic_always_lock_free(sizeof(nodesShared[i].pendingTimelineSignal), &nodesShared[i].pendingTimelineSignal));
     assert(__atomic_always_lock_free(sizeof(nodesShared[i].currentTimelineSignal), &nodesShared[i].currentTimelineSignal));
   }
 
@@ -310,6 +309,7 @@ run_loop:
 
     vkmCmdResetBegin(cmd);
 
+    // this needs to change to ActiveThreadNodes and ActiveInterProcessNodes
     for (int i = 0; i < nodeCount; ++i) {
 
       // todo get rid of once we have different codepaths for these could check shared mem directly

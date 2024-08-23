@@ -101,7 +101,7 @@ int main(void) {
     mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
     mxcInitializeIPCServer();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
     NodeHandle testNodeHandle;
     mxcRequestNodeThread(&testNodeHandle);
@@ -136,7 +136,7 @@ int main(void) {
 
       // Try submitting nodes before waiting to render composite
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-      mxcSubmitNodeCommandBuffers(graphicsQueue);
+      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
       // wait for recording to be done
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compNodeContext.compTimeline);
@@ -154,7 +154,7 @@ int main(void) {
 
       // Try submitting nodes before waiting to update window again.
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-      mxcSubmitNodeCommandBuffers(graphicsQueue);
+      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
     }
   } else {
 
@@ -163,7 +163,7 @@ int main(void) {
 
       // I guess technically we just want to go as fast as possible in a node, but we would probably need to process and send input here first at some point?
       // we probably want to signal and wait on semaphore here
-      mxcSubmitNodeCommandBuffers(graphicsQueue);
+      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
     }
   }
 
