@@ -49,7 +49,6 @@ typedef struct CACHE_ALIGN MxcNodeShared {
   // read every cycle, occasional write
   int               compCycleSkip;
   float             radius;
-//  bool              active;
 
 } MxcNodeShared;
 typedef struct MxcImportParam {
@@ -82,7 +81,7 @@ typedef struct CACHE_ALIGN MxcCompNodeContext {
   pthread_t threadId;
 
 } MxcCompNodeContext;
-typedef struct MxcNodeSetState {
+typedef struct CACHE_ALIGN MxcNodeSetState {
   mat4 model;
 
   // Laid out same as VkmGlobalSetState for memcpy
@@ -111,16 +110,15 @@ typedef struct CACHE_ALIGN MxcNodeProcessCompData { // pretty sure we want this
     VkImageView gBufferView;
   } framebufferImages[MIDVK_SWAP_COUNT];
 } MxcNodeProcessCompData;
-typedef struct CACHE_ALIGN MxcNodeThreadCompData {
-  // node hot data for compositor
-  MxcNodeType             type; // get rid of this, we need thread and process arrays
-  MxcNodeSetState         nodeSetState;
-  MidTransform            transform;
-  VkCommandBuffer         cmd;
-  VkSemaphore             nodeTimeline;
-  uint64_t                lastTimelineSignal;
-  uint64_t                lastTimelineSwap;
-  struct {
+
+typedef struct CACHE_ALIGN MxcNodeCompositorData {
+  MxcNodeSetState nodeSetState;
+  MidTransform    transform;
+  VkCommandBuffer cmd;
+  VkSemaphore     nodeTimeline;
+  uint64_t        lastTimelineSignal;
+  uint64_t        lastTimelineSwap;
+  struct CACHE_ALIGN {
     VkImage     color;
     VkImage     normal;
     VkImage     gBuffer;
@@ -128,7 +126,7 @@ typedef struct CACHE_ALIGN MxcNodeThreadCompData {
     VkImageView normalView;
     VkImageView gBufferView;
   } framebufferImages[MIDVK_SWAP_COUNT];
-} MxcNodeThreadCompData;
+} MxcNodeCompositorData;
 
 //
 /// Node Types
@@ -140,12 +138,13 @@ typedef struct MxcNodeFramebufferTexture {
 } MxcNodeFramebufferTexture;
 typedef struct MxcNodeContext {
   // cold data
-  MxcNodeType nodeType;
-  VkCommandPool   pool;
-  VkCommandBuffer cmd;
-  VkSemaphore nodeTimeline;
-  VkSemaphore compTimeline; // not convinced I need this...
+  MxcNodeType               type;
+  VkCommandPool             pool;
+  VkCommandBuffer           cmd;
+  VkSemaphore               nodeTimeline;
+  VkSemaphore               compTimeline;  // not convinced I need this...
   MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+  MxcNodeShared*            pNodeShared;
 
   // MXC_NODE_TYPE_THREAD
   pthread_t threadId;
@@ -190,14 +189,14 @@ extern size_t             nodeCount;
 extern NodeHandle         nodesAvailable[MXC_NODE_CAPACITY];
 extern MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY];
 extern MxcNodeShared      nodesShared[MXC_NODE_CAPACITY];
-extern MxcNodeThreadCompData nodeCompData[MXC_NODE_CAPACITY];
+extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 
 // do this?
 extern size_t             nodeProcessCount;
 extern NodeHandle         availableNodeProcess[MXC_NODE_CAPACITY];
 extern MxcNodeContext     nodeProcessContext[MXC_NODE_CAPACITY];
 extern MxcNodeShared      nodeProcessShared[MXC_NODE_CAPACITY];
-extern MxcNodeThreadCompData nodeProcessCompData[MXC_NODE_CAPACITY];
+extern MxcNodeCompositorData nodeProcessCompData[MXC_NODE_CAPACITY];
 
 //
 /// Methods
@@ -214,9 +213,9 @@ static inline void mxcSubmitNodeCommandBuffers(const VkQueue graphicsQueue) {
   for (int i = 0; i < nodeCount; ++i) {
     uint64_t value = nodesShared[i].pendingTimelineSignal;
     __atomic_thread_fence(__ATOMIC_ACQUIRE);
-    if (value > nodeCompData[i].lastTimelineSignal) {
-      nodeCompData[i].lastTimelineSignal = value;
-      vkmSubmitCommandBuffer(nodeCompData[i].cmd, graphicsQueue, nodeCompData[i].nodeTimeline, value);
+    if (value > nodeCompositorData[i].lastTimelineSignal) {
+      nodeCompositorData[i].lastTimelineSignal = value;
+      vkmSubmitCommandBuffer(nodeCompositorData[i].cmd, graphicsQueue, nodeCompositorData[i].nodeTimeline, value);
     }
   }
 }

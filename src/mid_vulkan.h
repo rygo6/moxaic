@@ -56,6 +56,8 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 #endif
 
+#define MIDVK_INLINE __attribute__((always_inline)) static inline
+
 #define MIDVK_ALLOC      NULL
 #define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define MIDVK_SWAP_COUNT 2
@@ -68,7 +70,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define MIDVK_INSTANCE_FUNC(_func)                                                             \
   const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
   REQUIRE(_func != NULL, "Couldn't load " #_func)
-// I may not want this...
+// maybe the should all be static??
 #define MIDVK_INSTANCE_STATIC_FUNC(_func)                                  \
   static PFN_##vk##_func _func = NULL;                                     \
   if (_func == NULL) {                                                     \
@@ -89,8 +91,8 @@ extern void Panic(const char* file, int line, const char* message);
     .handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,             \
   }
 
-#define MIDVK_COLOR_SUBRESOURCE_RANGE {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}
-#define MIDVK_COLOR_SUBRESOURCE_RANGE_MIPS(_levelCount) {VK_IMAGE_ASPECT_COLOR_BIT, 0, _levelCount, 0, 1}
+#define MIDVK_COLOR_SUBRESOURCE_RANGE (const VkImageSubresourceRange) {VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS}
+#define MIDVK_DEPTH_SUBRESOURCE_RANGE (const VkImageSubresourceRange) {VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS}
 
 //----------------------------------------------------------------------------------
 // Mid Types
@@ -198,12 +200,12 @@ typedef struct VkmStandardObjectSetState {
   mat4 model;
 } VkmStdObjectSetState;
 
-typedef enum VkmQueueFamilyType {
+typedef enum MidVkQueueFamilyType {
   VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
   VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE,
   VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER,
   VKM_QUEUE_FAMILY_TYPE_COUNT
-} VkmQueueFamilyType;
+} MidVkQueueFamilyType;
 static const char* string_QueueFamilyType[] = {
     [VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = "VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS",
     [VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = "VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE",
@@ -333,142 +335,126 @@ static const VkImageUsageFlags MIDVK_PASS_USAGES[] = {
 // Image Barriers
 //----------------------------------------------------------------------------------
 
-typedef enum VkmQueueBarrier {
-  QUEUE_BARRIER_MAIN_GRAPHICS,
-  QUEUE_BARRIER_DEDICATED_COMPUTE,
-  QUEUE_BARRIER_DEDICATED_TRANSITION,
-  QUEUE_BARRIER_IGNORE,
-  QUEUE_BARRIER_FAMILY_EXTERNAL,
-} VkmQueueBarrier;
-//static uint32_t GetQueueIndex(const QueueBarrier queueBarrier) {
-//  switch (queueBarrier) {
-//    default:
-//    case QUEUE_BARRIER_IGNORE:          return VK_QUEUE_FAMILY_IGNORED;
-//    case QUEUE_BARRIER_MAIN_GRAPHICS:        return context.graphicsQueueFamilyIndex;
-//    case QUEUE_BARRIER_DEDICATED_COMPUTE:         return context.computeQueueFamilyIndex;
-//    case QUEUE_BARRIER_DEDICATED_TRANSITION:      return context.transferQueueFamilyIndex;
-//    case QUEUE_BARRIER_FAMILY_EXTERNAL: return VK_QUEUE_FAMILY_EXTERNAL;
-//  }
-//}
 
-// I think I might just want to get rid of all of this
-typedef struct VkmImageBarrier {
+typedef struct MidVkSrcDstImageBarrier {
   VkPipelineStageFlagBits2 stageMask;
   VkAccessFlagBits2        accessMask;
   VkImageLayout            layout;
-  // QueueBarrier             queueFamily;
-} VkmImageBarrier;
-// I wonder if its bad to have these stored static? stack wont let them go
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const VkmImageBarrier){
+} MidVkSrcDstImageBarrier;
+
+// I think I might just want to get rid of all of this?? Maybe it's useful
+// I wonder if its bad to have these stored static? stack won't let them go
+static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_ACQUIRE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, // normal and color might only need to wait on color attachment
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_RELEASE_SHADER_READ = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_RELEASE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_ACQUIRE = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_PRESENT_ACQUIRE = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_PRESENT = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_PRESENT = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_SHADER_READ_ONLY = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COMPUTE_SHADER_READ_ONLY = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_WRITE = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_WRITE = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ_WRITE = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ_WRITE = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_BLIT_DST = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_BLIT_DST = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_GENERAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_SHADER_READ_ONLY = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_SHADER_READ_ONLY = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_READ = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
     .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
-static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImageBarrier){
+static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
     .accessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
     .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 };
+
 #define VKM_COLOR_IMAGE_BARRIER(src, dst, barrier_image)   \
   (const VkImageMemoryBarrier2) {                        \
     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,   \
@@ -544,6 +530,129 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImag
   }
 
 // might be better to do it like this
+typedef struct MidVkImageBarrier {
+  VkImage                 image;
+  MidVkSrcDstImageBarrier src;
+  MidVkSrcDstImageBarrier dst;
+  VkImageSubresourceRange subresourceRange;
+} MidVkImageBarrier;
+typedef struct MidVkImageTransferBarrier {
+  VkImage                 image;
+  MidVkSrcDstImageBarrier src;
+  MidVkSrcDstImageBarrier dst;
+  VkImageSubresourceRange subresourceRange;
+  uint32_t                srcQueueFamilyIndex;
+  uint32_t                dstQueueFamilyIndex;
+} MidVkImageTransferBarrier;
+
+
+#define MIDVK_IMAGE_BARRIER_SRC_UNDEFINED   \
+  .srcStageMask = VK_PIPELINE_STAGE_2_NONE, \
+  .srcAccessMask = VK_ACCESS_2_NONE,        \
+  .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
+
+#define MIDVK_IMAGE_BARRIER_SRC_TRANSFER_WRITE         \
+  .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
+  .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
+  .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+#define MIDVK_IMAGE_BARRIER_DST_TRANSFER_WRITE         \
+  .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
+  .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
+  .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+
+#define MIDVK_IMAGE_BARRIER_SRC_COMPUTE_READ              \
+  .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+  .srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,           \
+  .oldLayout = VK_IMAGE_LAYOUT_GENERAL
+#define MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ              \
+  .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+  .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,           \
+  .newLayout = VK_IMAGE_LAYOUT_GENERAL
+#define MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE             \
+  .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+  .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
+  .oldLayout = VK_IMAGE_LAYOUT_GENERAL
+#define MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE             \
+  .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+  .dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
+  .newLayout = VK_IMAGE_LAYOUT_GENERAL
+
+#define MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED  \
+  .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
+  .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
+
+
+#define MIDVK_IMAGE_BARRIER_COLOR_SUBRESOURCE(_levelCount) .subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE
+#define MIDVK_IMAGE_BARRIER_COLOR_SUBRESOURCE_MIPS(_levelCount) .subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE_MIPS(_levelCount)
+
+#define MIDVK_IMAGE_BARRIER_UNDEFINED      \
+  (const MidVkSrcDstImageBarrier) {        \
+    .stageMask = VK_PIPELINE_STAGE_2_NONE, \
+    .accessMask = VK_ACCESS_2_NONE,        \
+    .layout = VK_IMAGE_LAYOUT_UNDEFINED,   \
+  }
+
+
+#define MIDVK_IMAGE_BARRIER_TRANSFER_DST              \
+  (const MidVkSrcDstImageBarrier) {                   \
+    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
+    .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
+    .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,   \
+  }
+#define MIDVK_IMAGE_BARRIER_COMPUTE_READ                 \
+  (const MidVkSrcDstImageBarrier) {                      \
+    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,           \
+    .layout = VK_IMAGE_LAYOUT_GENERAL,                   \
+  }
+#define MIDVK_IMAGE_BARRIER_COMPUTE_WRITE                \
+  (const MidVkSrcDstImageBarrier) {                      \
+    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+    .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
+    .layout = VK_IMAGE_LAYOUT_GENERAL,                   \
+  }
+
+#define MIDVK_IMAGE_BARRIER(_imageBarrier)                                                                                                    \
+  (const VkImageMemoryBarrier2) {                                                                                                             \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                                                                        \
+    .srcStageMask = _imageBarrier.src.stageMask,                                                                                              \
+    .srcAccessMask = _imageBarrier.src.accessMask,                                                                                            \
+    .dstStageMask = _imageBarrier.dst.stageMask,                                                                                              \
+    .dstAccessMask = _imageBarrier.dst.accessMask,                                                                                            \
+    .oldLayout = _imageBarrier.src.layout,                                                                                                    \
+    .newLayout = _imageBarrier.dst.layout,                                                                                                    \
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                                                                           \
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                                                                           \
+    .image = _imageBarrier.image,                                                                                                             \
+    .subresourceRange = {                                                                                                                     \
+        .aspectMask = _imageBarrier.subresourceRange.aspectMask == 0 ? VK_IMAGE_ASPECT_COLOR_BIT : _imageBarrier.subresourceRange.aspectMask, \
+        .baseMipLevel = _imageBarrier.subresourceRange.baseMipLevel,                                                                          \
+        .levelCount = _imageBarrier.subresourceRange.levelCount == 0 ? 1 : _imageBarrier.subresourceRange.levelCount,                         \
+        .baseArrayLayer = _imageBarrier.subresourceRange.baseArrayLayer,                                                                      \
+        .layerCount = _imageBarrier.subresourceRange.layerCount == 0 ? 1 : _imageBarrier.subresourceRange.layerCount,                         \
+    },                                                                                                                                        \
+  }
+#define MIDVK_IMAGE_TRANSFER_BARRIER(_imageBarrier)                                                                                           \
+  (const VkImageMemoryBarrier2) {                                                                                                             \
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                                                                        \
+    .srcStageMask = _imageBarrier.src.stageMask,                                                                                              \
+    .srcAccessMask = _imageBarrier.src.accessMask,                                                                                            \
+    .dstStageMask = _imageBarrier.dst.stageMask,                                                                                              \
+    .dstAccessMask = _imageBarrier.dst.accessMask,                                                                                            \
+    .oldLayout = _imageBarrier.src.layout,                                                                                                    \
+    .newLayout = _imageBarrier.dst.layout,                                                                                                    \
+    .srcQueueFamilyIndex = _imageBarrier.srcQueueFamilyIndex,                                                                                 \
+    .dstQueueFamilyIndex = _imageBarrier.dstQueueFamilyIndex,                                                                                 \
+    .image = _imageBarrier.image,                                                                                                             \
+    .subresourceRange = {                                                                                                                     \
+        .aspectMask = _imageBarrier.subresourceRange.aspectMask == 0 ? VK_IMAGE_ASPECT_COLOR_BIT : _imageBarrier.subresourceRange.aspectMask, \
+        .baseMipLevel = _imageBarrier.subresourceRange.baseMipLevel,                                                                          \
+        .levelCount = _imageBarrier.subresourceRange.levelCount == 0 ? 1 : _imageBarrier.subresourceRange.levelCount,                         \
+        .baseArrayLayer = _imageBarrier.subresourceRange.baseArrayLayer,                                                                      \
+        .layerCount = _imageBarrier.subresourceRange.layerCount == 0 ? 1 : _imageBarrier.subresourceRange.layerCount,                         \
+    },                                                                                                                                        \
+  }
+
 #define VKM_IMG_BARRIER_SHADER_READ_ONLY2 (const VkmImageBarrier){ \
     .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,          \
     .accessMask = VK_ACCESS_2_SHADER_READ_BIT,                     \
@@ -571,18 +680,40 @@ static const VkmImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const VkmImag
 //----------------------------------------------------------------------------------
 // Inline Methods
 //----------------------------------------------------------------------------------
-#define VKM_INLINE __attribute__((always_inline)) static inline
-
 #define CmdPipelineImageBarriers2(cmd, imageMemoryBarrierCount, pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, cmd, imageMemoryBarrierCount, pImageMemoryBarriers)
-VKM_INLINE void PFN_CmdPipelineImageBarriers2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+MIDVK_INLINE void PFN_CmdPipelineImageBarriers2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
   func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
 #define CmdPipelineImageBarrier2(cmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, cmd, pImageMemoryBarrier)
-VKM_INLINE void PFN_CmdPipelineImageBarrierFunc2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
+MIDVK_INLINE void PFN_CmdPipelineImageBarrierFunc2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
   func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
+#define CmdImageBarrier(_cmd, _pImageBarrier) PFN_CmdImageBarrier(CmdPipelineBarrier2, _cmd, _pImageBarrier)
+MIDVK_INLINE void PFN_CmdImageBarrier(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const MidVkImageBarrier* pImageBarrier) {
+  const VkImageMemoryBarrier2 barrier = MIDVK_IMAGE_BARRIER(pImageBarrier[0]);
+  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
+}
+#define CmdImageBarriers(_cmd, _barrierCount, _pImageMemoryBarrier) PFN_CmdImageBarriers(CmdPipelineBarrier2, _cmd, _barrierCount, _pImageMemoryBarrier)
+MIDVK_INLINE void PFN_CmdImageBarriers(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const int barrierCount, const MidVkImageBarrier* pImageBarrier) {
+  // on -O2 this ends up the same as if it were all const defined https://godbolt.org/z/qGqj8aqc5
+  VkImageMemoryBarrier2 barriers[barrierCount];
+  for (int i = 0; i < barrierCount; ++i) barriers[i] = MIDVK_IMAGE_BARRIER(pImageBarrier[i]);
+  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = barrierCount, .pImageMemoryBarriers = barriers});
+}
+#define CmdImageTransferBarrier(_cmd, _pImageBarrier) PFN_CmdImageTransferBarrier(CmdPipelineBarrier2, _cmd, _pImageBarrier)
+MIDVK_INLINE void PFN_CmdImageTransferBarrier(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const MidVkImageTransferBarrier* pImageBarrier) {
+  const VkImageMemoryBarrier2 barrier = MIDVK_IMAGE_TRANSFER_BARRIER(pImageBarrier[0]);
+  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
+}
+#define CmdImageTransferBarriers(_cmd, _barrierCount, _pImageMemoryBarrier) PFN_CmdImageTransferBarriers(CmdPipelineBarrier2, _cmd, _barrierCount, _pImageMemoryBarrier)
+MIDVK_INLINE void PFN_CmdImageTransferBarriers(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const int barrierCount, const MidVkImageTransferBarrier* pImageBarrier) {
+  // on -O2 this ends up the same as if it were all const defined https://godbolt.org/z/qGqj8aqc5
+  VkImageMemoryBarrier2 barriers[barrierCount];
+  for (int i = 0; i < barrierCount; ++i) barriers[i] = MIDVK_IMAGE_TRANSFER_BARRIER(pImageBarrier[i]);
+  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = barrierCount, .pImageMemoryBarriers = barriers});
+}
 #define CmdBlitImageFullScreen(cmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, cmd, srcImage, dstImage)
-VKM_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
+MIDVK_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
   const VkImageBlit imageBlit = {
       .srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
       .srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
@@ -593,7 +724,7 @@ VKM_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const 
 }
 #define CmdBeginRenderPass(_cmd, _render_pass, _framebuffer, _clear_color, _color_view, _normal_view, _depth_view) \
   PFN_CmdBeginRenderPass(CmdBeginRenderPass, _cmd, _render_pass, _framebuffer, _clear_color, _color_view, _normal_view, _depth_view)
-VKM_INLINE void PFN_CmdBeginRenderPass(
+MIDVK_INLINE void PFN_CmdBeginRenderPass(
     const PFN_vkCmdBeginRenderPass func,
     const VkCommandBuffer          cmd,
     const VkRenderPass             renderPass,
@@ -625,13 +756,13 @@ VKM_INLINE void PFN_CmdBeginRenderPass(
   };
   func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
-VKM_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
+MIDVK_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
-VKM_INLINE void vkmSubmitPresentCommandBuffer(
+MIDVK_INLINE void vkmSubmitPresentCommandBuffer(
     const VkCommandBuffer cmd,
     const VkSwapchainKHR  chain,
     const VkSemaphore     acquireSemaphore,
@@ -683,7 +814,7 @@ VKM_INLINE void vkmSubmitPresentCommandBuffer(
   MIDVK_REQUIRE(vkQueuePresentKHR(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
   //  vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
 }
-VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
+MIDVK_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
       .commandBufferInfoCount = 1,
@@ -705,7 +836,7 @@ VKM_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue 
   };
   MIDVK_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
-VKM_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline) {
+MIDVK_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline) {
   const VkSemaphoreWaitInfo semaphoreWaitInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
       .semaphoreCount = 1,
@@ -714,7 +845,7 @@ VKM_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue,
   };
   MIDVK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
-VKM_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline) {
+MIDVK_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline) {
   const VkSemaphoreSignalInfo semaphoreSignalInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
       .semaphore = timeline,
@@ -722,11 +853,11 @@ VKM_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalVa
   };
   MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
-VKM_INLINE void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
+MIDVK_INLINE void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
   vkUpdateDescriptorSets(device, 1, pWriteSet, 0, NULL);
 }
 
-VKM_INLINE void vkmUpdateGlobalSetViewProj(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+MIDVK_INLINE void vkmUpdateGlobalSetViewProj(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
   pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
@@ -739,25 +870,25 @@ VKM_INLINE void vkmUpdateGlobalSetViewProj(MidTransform* pCameraTransform, VkmGl
   pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-VKM_INLINE void vkmUpdateGlobalSetView(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+MIDVK_INLINE void vkmUpdateGlobalSetView(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pState->invView = Mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
   pState->view = Mat4Inv(pState->invView);
   pState->viewProj = Mat4Mul(pState->proj, pState->view);
   pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-VKM_INLINE void vkmUpdateObjectSet(MidTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
+MIDVK_INLINE void vkmUpdateObjectSet(MidTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
   pTransform->rotation = QuatFromEuler(pTransform->euler);
   pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStdObjectSetState));
 }
-VKM_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidTransform* pCameraTransform) {
+MIDVK_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidTransform* pCameraTransform) {
   pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
   pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
   pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
 }
 // move[] = Forward, Back, Left, Right
-VKM_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidTransform* pCameraTransform) {
+MIDVK_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidTransform* pCameraTransform) {
   const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
   const float moveSensitivity = deltaTime * 0.8f;
   for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
@@ -864,7 +995,7 @@ typedef struct VkmSamplerCreateInfo {
   (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
-void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
+void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
 
 typedef struct VkmTextureCreateInfo {
   const char*        debugName;

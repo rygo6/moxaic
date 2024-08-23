@@ -1253,7 +1253,7 @@ void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler) {
   MIDVK_REQUIRE(vkCreateSampler(context.device, &minSamplerCreateInfo, MIDVK_ALLOC, pSampler));
 }
 
-void vkmCreateSwap(const VkSurfaceKHR surface, const VkmQueueFamilyType presentQueueFamily, MidVkSwap* pSwap) {
+void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap) {
   VkBool32 presentSupport = VK_FALSE;
   MIDVK_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
   REQUIRE(presentSupport, "Queue can't present to surface!")
