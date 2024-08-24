@@ -190,11 +190,11 @@ extern MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY];
 extern MxcNodeShared      nodesShared[MXC_NODE_CAPACITY];
 extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 
-extern size_t         threadNodesCount;
+//extern size_t         threadNodesCount;
 extern MxcNodeShared* threadNodesShared[MXC_NODE_CAPACITY];
 
-extern size_t         interprocessNodesCount;
-extern MxcNodeShared* interprocessNodesShared[MXC_NODE_CAPACITY];
+//extern size_t         interprocessNodesCount;
+//extern MxcNodeShared* interprocessNodesShared[MXC_NODE_CAPACITY];
 
 // do this? I don't think so. Thread/Process can share data, just pointers need to be different?
 //extern size_t             nodeProcessCount;
@@ -237,29 +237,28 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*));
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
-void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle);
-void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalNodeMemory* pExternalMemory, const MxcImportParam* pImportParam, NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
 void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures);
 
-// Process IPC
+//
+/// Process IPC
 #include <pthread.h>
-void mxcInitializeIPCServer();
-void mxcShutdownIPCServer();
+void mxcInitializeCompositorIPCServer();
+void mxcShutdownCompositorIPCServer();
 void mxcConnectNodeIPC();
 void mxcShutdownNodeIPC();
 
-typedef void (*MxcInterProcessFuncPtr)(const void*);
-typedef enum MxcRingBufferTarget {
-  MXC_INTERPROCESS_TARGET_IMPORT
-} MxcRingBufferTarget;
-static const size_t MXC_INTERPROCESS_TARGET_SIZE[] = {
-    [MXC_INTERPROCESS_TARGET_IMPORT] = sizeof(MxcImportParam),
-};
-static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
-    [MXC_INTERPROCESS_TARGET_IMPORT] = (MxcInterProcessFuncPtr const)mxcRequestNodeProcessImport,
-};
+//typedef void (*MxcInterProcessFuncPtr)(const void*);
+//typedef enum MxcRingBufferTarget {
+//  MXC_INTERPROCESS_TARGET_IMPORT
+//} MxcRingBufferTarget;
+//static const size_t MXC_INTERPROCESS_TARGET_SIZE[] = {
+//    [MXC_INTERPROCESS_TARGET_IMPORT] = sizeof(MxcImportParam),
+//};
+//static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
+//    [MXC_INTERPROCESS_TARGET_IMPORT] = (MxcInterProcessFuncPtr const)mxcRequestNodeProcessImport,
+//};
 
 
 // to use ring buffer?

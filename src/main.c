@@ -99,7 +99,7 @@ int main(void) {
     printf("Moxaic Compositor\n");
     isCompositor = true;
     mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
-    mxcInitializeIPCServer();
+    mxcInitializeCompositorIPCServer();
 
 //#define TEST_NODE
 #ifdef TEST_NODE
@@ -174,7 +174,7 @@ int main(void) {
   //  }
 
 #if defined(MOXAIC_COMPOSITOR)
-  mxcShutdownIPCServer();
+  mxcShutdownCompositorIPCServer();
 #elif defined(MOXAIC_NODE)
   mxcShutdownNodeIPC();
 #endif

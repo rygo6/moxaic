@@ -309,7 +309,7 @@ run_loop:
 
     vkmCmdResetBegin(cmd);
 
-    for (int i = 0; i < threadNodesCount; ++i) {
+    for (int i = 0; i < nodeCount; ++i) {
       MxcNodeShared* pNodeShared = threadNodesShared[i];
 
       // tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
@@ -450,7 +450,7 @@ run_loop:
       CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
 
       // do I really need seperate loops ?
-      for (int i = 0; i < threadNodesCount; ++i) {
+      for (int i = 0; i < nodeCount; ++i) {
 
         // todo probably can get rid of this?
         MxcNodeShared* pNodeShared = threadNodesShared[i];
