@@ -309,21 +309,15 @@ run_loop:
 
     vkmCmdResetBegin(cmd);
 
-    // this needs to change to ActiveThreadNodes and ActiveInterProcessNodes
-    for (int i = 0; i < nodeCount; ++i) {
+    for (int i = 0; i < threadNodesCount; ++i) {
+      MxcNodeShared* pNodeShared = threadNodesShared[i];
 
-      // todo get rid of once we have different codepaths for these could check shared mem directly
-      switch (nodeContexts[i].type) {
-        default: PANIC("nodeType not supported");
-        case MXC_NODE_TYPE_THREAD: break;
-        case MXC_NODE_TYPE_INTERPROCESS:
-          // once we have different codepaths for these could check shared mem directly
-          nodesShared[i].currentTimelineSignal = nodeContexts[i].pExternalMemory->nodeShared.currentTimelineSignal;
-          break;
-      }
+      // tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
+      // shared: 569 - semaphore: 315416 ratio: 554.333919
+      __atomic_thread_fence(__ATOMIC_ACQUIRE);
+      uint64_t currentTimelineSignal = pNodeShared->currentTimelineSignal;
 
-
-      if (nodesShared[i].currentTimelineSignal < 1)
+      if (currentTimelineSignal < 1)
         continue;
 
       // update node model mat... this should happen every frame so user can move it in comp
@@ -332,17 +326,11 @@ run_loop:
 
       {  // check frame available
 
-         // tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
-         // shared: 569 - semaphore: 315416 ratio: 554.333919
-        __atomic_thread_fence(__ATOMIC_ACQUIRE);
-        uint64_t value = nodesShared[i].currentTimelineSignal;
-
-        // get rid of this if, use a queue mechanism instead
-        if (value > nodeCompositorData[i].lastTimelineSwap) {
-          nodeCompositorData[i].lastTimelineSwap = value;
+        if (currentTimelineSignal > nodeCompositorData[i].lastTimelineSwap) {
+          nodeCompositorData[i].lastTimelineSwap = currentTimelineSignal;
 
           {  // update framebuffer for comp
-            const int nodeFramebufferIndex = !(value % MIDVK_SWAP_COUNT);
+            const int nodeFramebufferIndex = !(currentTimelineSignal % MIDVK_SWAP_COUNT);
             switch (nodeContexts[i].type) {
               case MXC_NODE_TYPE_THREAD:
                 const VkImageMemoryBarrier2 barriers[] = {
@@ -396,14 +384,14 @@ run_loop:
 
           {
             // move the global set state that was previously used to render into the node set state to use in comp
-            memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&nodesShared[i].globalSetState, sizeof(VkmGlobalSetState));
-            nodeCompositorData[i].nodeSetState.ulUV = nodesShared[i].lrUV;
-            nodeCompositorData[i].nodeSetState.lrUV = nodesShared[i].ulUV;
+            memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
+            nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->lrUV;
+            nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->ulUV;
 
             memcpy(pCompNodeSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeSetState));
 
             // calc framebuffersize
-            const float radius = nodesShared[i].radius;
+            const float radius = pNodeShared->radius;
 
             const vec4 ulbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
             const vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbModel);
@@ -436,20 +424,10 @@ run_loop:
             const vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 
             // write current global set state to node's global set state to use for next node render with new the framebuffer size
-            memcpy((void*)&nodesShared[i].globalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
-            nodesShared[i].globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
-            nodesShared[i].ulUV = ulUV;
-            nodesShared[i].lrUV = lrUV;
-
-            // todo get rid of once we have different codepaths for these could check shared mem directly
-            switch (nodeContexts[i].type) {
-              default: PANIC("nodeType not supported");
-              case MXC_NODE_TYPE_THREAD: break;
-              case MXC_NODE_TYPE_INTERPROCESS:
-                // can interface directly with shared memory once we have differnet codepaths
-                memcpy(&nodeContexts[i].pExternalMemory->nodeShared, &nodesShared[i], sizeof(MxcNodeShared));
-                break;
-            }
+            memcpy(&pNodeShared->globalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
+            pNodeShared->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
+            pNodeShared->ulUV = ulUV;
+            pNodeShared->lrUV = lrUV;
 
             __atomic_thread_fence(__ATOMIC_RELEASE);
           }
@@ -471,8 +449,12 @@ run_loop:
       CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipe);
       CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
 
-      for (int i = 0; i < nodeCount; ++i) {
-        if (nodesShared[i].currentTimelineSignal < 1)
+      // do I really need seperate loops ?
+      for (int i = 0; i < threadNodesCount; ++i) {
+
+        // todo probably can get rid of this?
+        MxcNodeShared* pNodeShared = threadNodesShared[i];
+        if (pNodeShared->currentTimelineSignal < 1)
           continue;
 
         // this needs to be a push set

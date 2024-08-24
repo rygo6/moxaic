@@ -114,9 +114,6 @@ typedef struct CACHE_ALIGN MxcNodeProcessCompData { // pretty sure we want this
 typedef struct CACHE_ALIGN MxcNodeCompositorData {
   MxcNodeSetState nodeSetState;
   MidTransform    transform;
-  VkCommandBuffer cmd;
-  VkSemaphore     nodeTimeline;
-  uint64_t        lastTimelineSignal;
   uint64_t        lastTimelineSwap;
   struct CACHE_ALIGN {
     VkImage     color;

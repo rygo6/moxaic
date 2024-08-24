@@ -4,23 +4,18 @@
 #define WIN32_LEAN_AND_MEAN
 #undef UNICODE
 #include <winsock2.h>
-#include <ws2tcpip.h>
 #include <afunix.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 #include <pthread.h>
-#include <semaphore.h>
 #include <assert.h>
 
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
-#define BUFFER_SIZE 128
 
 static struct {
   SOCKET          listenSocket;
   pthread_t       thread;
 } ipcServer;
-
 const static char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
 const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
@@ -111,10 +106,17 @@ static void acceptIPCServer() {
     WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send failed");
   }
 
-  nodeCount++; //todo move into mxcRequestNodeProcessExport
+  MxcNodeShared* pNodeShared = &pExternalNodeMemory->nodeShared;
+  *pNodeShared = (MxcNodeShared){};
+  pNodeShared->radius = 0.5;
+  pNodeShared->compCycleSkip = 16;
 
-
+  //todo move into mxcRequestNodeProcessExport
+  nodeCount++;
+  threadNodesShared[threadNodesCount] = pNodeShared;
+  threadNodesCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
+
   printf("Process Node Export Success.\n");
   goto ExitSuccess;
 
@@ -277,9 +279,12 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
   const NodeHandle handle = nodeCount;
 
   MxcNodeContext* pNodeContext = &nodeContexts[handle];
+  *pNodeContext = (MxcNodeContext){};
   pNodeContext->compTimeline = compositorNodeContext.compTimeline;
   pNodeContext->type = MXC_NODE_TYPE_THREAD;
 
+  // mayube have the thread allocate this and submit it once ready to get rid of < 1 check
+  // then could also get rid of pNodeContext->pNodeShared?
   MxcNodeShared* pNodeShared = &nodesShared[handle];
   *pNodeShared = (MxcNodeShared){};
   pNodeContext->pNodeShared = pNodeShared;
@@ -308,8 +313,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
 
   MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
-  pNodeCompositorData->cmd = nodeContexts[handle].cmd;
-  pNodeCompositorData->nodeTimeline = nodeContexts[handle].nodeTimeline;
+  *pNodeCompositorData = (MxcNodeCompositorData){};
   pNodeCompositorData->transform.rotation = QuatFromEuler(pNodeCompositorData->transform.euler);
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     pNodeCompositorData->framebufferImages[i].color = nodeContexts[handle].framebufferTextures[i].color.image;
@@ -322,6 +326,9 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
   *pNodeHandle = handle;
   nodeCount++;
+
+  threadNodesShared[threadNodesCount] = pNodeShared;
+  threadNodesCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
 
   int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeContext);
@@ -351,15 +358,13 @@ void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNo
   };
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
 
-  MxcNodeShared* pNodeShared = &nodesShared[*pNodeHandle];
-  *pNodeShared = (MxcNodeShared){};
-  pNodeShared->radius = 0.5;
-  pNodeShared->compCycleSkip = 16;
+//  MxcNodeShared* pNodeShared = &nodesShared[*pNodeHandle];
+//  *pNodeShared = (MxcNodeShared){};
+//  pNodeShared->radius = 0.5;
+//  pNodeShared->compCycleSkip = 16;
 
   MxcNodeCompositorData* pNodeCompData = &nodeCompositorData[*pNodeHandle];
   *pNodeCompData = (MxcNodeCompositorData){};
-  pNodeCompData->cmd = pNodeContext->cmd;
-  pNodeCompData->nodeTimeline = pNodeContext->nodeTimeline;
   pNodeCompData->transform.rotation = QuatFromEuler(nodeCompositorData[*pNodeHandle].transform.euler);
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     pNodeCompData->framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
