@@ -101,11 +101,10 @@ int main(void) {
     mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
     mxcInitializeIPCServer();
 
-#define TEST_NODE
+//#define TEST_NODE
 #ifdef TEST_NODE
     NodeHandle testNodeHandle;
-    mxcRequestNodeThread(&testNodeHandle);
-    mxcRunNodeThread(mxcTestNodeThread, testNodeHandle);
+    mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
 #endif
 
 #elif defined(MOXAIC_NODE)
@@ -123,7 +122,7 @@ int main(void) {
     while (isRunning) {
 
       // we may not have to even wait... this could go faster
-      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compNodeContext.compTimeline);
+      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compTimeline);
 
       // somewhere input state needs to be copied to a node and only update when it knows the node needs it
       midUpdateWindowInput();
@@ -132,24 +131,24 @@ int main(void) {
       __atomic_thread_fence(__ATOMIC_RELEASE);
 
       // signal input ready to process!
-      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compNodeContext.compTimeline);
+      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compTimeline);
 
       // Try submitting nodes before waiting to render composite
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
       mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
       // wait for recording to be done
-      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compNodeContext.compTimeline);
+      vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
 
       compBaseCycleValue += MXC_CYCLE_COUNT;
       __atomic_thread_fence(__ATOMIC_ACQUIRE);
-      const int swapIndex = compNodeContext.swapIndex;
-      vkmSubmitPresentCommandBuffer(compNodeContext.cmd,
-                                    compNodeContext.swap.chain,
-                                    compNodeContext.swap.acquireSemaphore,
-                                    compNodeContext.swap.renderCompleteSemaphore,
+      const int swapIndex = compositorNodeContext.swapIndex;
+      vkmSubmitPresentCommandBuffer(compositorNodeContext.cmd,
+                                    compositorNodeContext.swap.chain,
+                                    compositorNodeContext.swap.acquireSemaphore,
+                                    compositorNodeContext.swap.renderCompleteSemaphore,
                                     swapIndex,
-                                    compNodeContext.compTimeline,
+                                    compositorNodeContext.compTimeline,
                                     compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
       // Try submitting nodes before waiting to update window again.

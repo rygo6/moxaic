@@ -225,7 +225,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
   vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
 }
 
-void mxcCompNodeRun(const MxcCompNodeContext* pNodeContext, const MxcCompNode* pNode) {
+void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompNode* pNode) {
 
   // these should go in struct so I can check alignment
   const MxcCompMode compMode = pNode->compMode;
@@ -497,9 +497,9 @@ run_loop:
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
       {  // Blit Framebuffer
-        AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compNodeContext.swapIndex);
+        AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compositorNodeContext.swapIndex);
         __atomic_thread_fence(__ATOMIC_RELEASE);
-        const VkImage swapImage = swap.images[compNodeContext.swapIndex];
+        const VkImage swapImage = swap.images[compositorNodeContext.swapIndex];
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
         CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swapImage);
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));
@@ -527,7 +527,7 @@ run_loop:
   goto run_loop;
 }
 
-void* mxcCompNodeThread(const MxcCompNodeContext* pNodeContext) {
+void* mxcCompNodeThread(const MxcCompositorNodeContext* pNodeContext) {
   MxcCompNode compNode;
   vkmBeginAllocationRequests();
   const MxcCompNodeCreateInfo compNodeInfo = {

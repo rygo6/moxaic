@@ -83,7 +83,7 @@ static void acceptIPCServer() {
 
   // Retrieve node handles
   NodeHandle  processNodeHandle;
-  mxcRequestNodeProcessExport(compNodeContext.compTimeline, &processNodeHandle);
+  mxcRequestNodeProcessExport(compositorNodeContext.compTimeline, &processNodeHandle);
   // todo this all needs to go in mxcRequestNodeProcessExport so that it increments nodeCount after allis created
   pProcessNodeContext = &nodeContexts[processNodeHandle];
   pProcessNodeContext->processId = nodeProcessId;
@@ -101,7 +101,7 @@ static void acceptIPCServer() {
       DuplicateHandle(currentHandle, GetMemoryExternalHandle(pProcessNodeContext->framebufferTextures[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS);
     }
     DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pProcessNodeContext->nodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
-    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
+    DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compositorNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS);
 
     HANDLE duplicatedExternalNodeMemoryHandle;
     DuplicateHandle(currentHandle, pProcessNodeContext->externalMemoryHandle, nodeProcessHandle, &duplicatedExternalNodeMemoryHandle, 0, false, DUPLICATE_SAME_ACCESS);
@@ -227,52 +227,65 @@ void mxcShutdownNodeIPC() {
 
 }
 
-MxcCompNodeContext compNodeContext = {};
-NodeHandle         nodesAvailable[MXC_NODE_CAPACITY]; // todo
+MxcCompositorNodeContext compositorNodeContext = {};
+
 size_t                nodeCount = 0;
 MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY] = {};
 MxcNodeShared         nodesShared[MXC_NODE_CAPACITY] = {};
 MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
+NodeHandle            nodesAvailable[MXC_NODE_CAPACITY] = {};
+
+size_t         threadNodesCount = 0;
+MxcNodeShared* threadNodesShared[MXC_NODE_CAPACITY] = {};
+
+size_t         interprocessNodesCount = 0;
+MxcNodeShared* interprocessNodesShared[MXC_NODE_CAPACITY] = {};
+
 
 size_t                     submitNodeQueueStart = 0;
 size_t                     submitNodeQueueEnd = 0;
 MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
-
-void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*)) {
+void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*)) {
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
       .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
   };
-  MIDVK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &compNodeContext.pool));
+  MIDVK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &compositorNodeContext.pool));
   const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = compNodeContext.pool,
+      .commandPool = compositorNodeContext.pool,
       .commandBufferCount = 1,
   };
-  MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &compNodeContext.cmd));
-  vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compNodeContext.cmd, "CompCmd");
+  MIDVK_REQUIRE(vkAllocateCommandBuffers(context.device, &commandBufferAllocateInfo, &compositorNodeContext.cmd));
+  vkmSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorNodeContext.cmd, "CompCmd");
   const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
       .debugName = "CompTimelineSemaphore",
       .locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
-  midvkCreateSemaphore(&semaphoreCreateInfo, &compNodeContext.compTimeline);
-  vkmCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compNodeContext.swap);
+  midvkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compTimeline);
+  vkmCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
 
-  int result = pthread_create(&compNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compNodeContext);
+  int result = pthread_create(&compositorNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorNodeContext);
   REQUIRE(result == 0, "Comp Node thread creation failed!");
   printf("Request and Run CompNode Thread Success.");
 }
 
-void mxcRequestNodeThread(NodeHandle* pNodeHandle) {
+
+void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle) {
   const NodeHandle handle = nodeCount;
+
   MxcNodeContext* pNodeContext = &nodeContexts[handle];
-  pNodeContext->compTimeline = compNodeContext.compTimeline;
+  pNodeContext->compTimeline = compositorNodeContext.compTimeline;
   pNodeContext->type = MXC_NODE_TYPE_THREAD;
+
   MxcNodeShared* pNodeShared = &nodesShared[handle];
   *pNodeShared = (MxcNodeShared){};
   pNodeContext->pNodeShared = pNodeShared;
+  pNodeShared->radius = 0.5;
+  pNodeShared->compCycleSkip = 16;
+
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -293,18 +306,7 @@ void mxcRequestNodeThread(NodeHandle* pNodeHandle) {
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
   midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
-  *pNodeHandle = handle;
-  nodeCount++;
-  __atomic_thread_fence(__ATOMIC_RELEASE);
-  printf("Request Node Thread Success. Handle: %d\n", handle);
-}
-//move into mxcRequestNodeThread
-void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), const NodeHandle handle) {
-  assert(nodeContexts[handle].type == MXC_NODE_TYPE_THREAD);
-  MxcNodeContext* pNodeContext = &nodeContexts[handle];
-  MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-  pNodeShared->radius = 0.5;
-  pNodeShared->compCycleSkip = 16;
+
   MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
   pNodeCompositorData->cmd = nodeContexts[handle].cmd;
   pNodeCompositorData->nodeTimeline = nodeContexts[handle].nodeTimeline;
@@ -317,10 +319,15 @@ void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), const Node
     pNodeCompositorData->framebufferImages[i].normalView = nodeContexts[handle].framebufferTextures[i].normal.view;
     pNodeCompositorData->framebufferImages[i].gBufferView = nodeContexts[handle].framebufferTextures[i].gbuffer.view;
   }
+
+  *pNodeHandle = handle;
+  nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
-  int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, &nodeContexts[handle]);
+
+  int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeContext);
   REQUIRE(result == 0, "Node thread creation failed!");
-  printf("Run Node Thread Success. Handle: %d\n", handle);
+
+  printf("Request Node Thread Success. Handle: %d\n", handle);
 }
 void mxcReleaseNodeThread(NodeHandle handle) {
   PANIC("Not Implemented");
@@ -338,7 +345,7 @@ void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNo
 
   mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->framebufferTextures);
   const MidVkSemaphoreCreateInfo semaphoreCreateInfo =  {
-      .debugName = "NodeTimelineSemaphore",
+      .debugName = "NodeTimelineSemaphoreExport",
       .locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
   };
@@ -466,14 +473,14 @@ void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalN
     midvkCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
   }
   const MidVkSemaphoreCreateInfo compTimelineCreateInfo =  {
-      .debugName = "ImportedCompTimelineSemaphore",
+      .debugName = "CompositorTimelineSemaphoreImport",
       .locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
       .externalHandle = pImportParam->compTimelineHandle,
   };
   midvkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->compTimeline);
   const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo =  {
-      .debugName = "ImportedNodeTimelineSemaphore",
+      .debugName = "NodeTimelineSemaphoreImport",
       .locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
       .externalHandle = pImportParam->nodeTimelineHandle,
@@ -481,18 +488,18 @@ void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalN
   midvkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->nodeTimeline);
 
   // do I want this on an imported node? Maybe would be nice to keep the ability for something to run it's own compositor for debug
-  MxcNodeCompositorData* pNodeCompData = &nodeCompositorData[*pNodeHandle];
-  *pNodeCompData = (MxcNodeCompositorData){};
-  pNodeCompData->cmd = pNodeContext->cmd;
-  pNodeCompData->nodeTimeline = pNodeContext->nodeTimeline;
-  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    pNodeCompData->framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
-    pNodeCompData->framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
-    pNodeCompData->framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
-    pNodeCompData->framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
-    pNodeCompData->framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
-    pNodeCompData->framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
-  }
+//  MxcNodeCompositorData* pNodeCompData = &nodeCompositorData[*pNodeHandle];
+//  *pNodeCompData = (MxcNodeCompositorData){};
+//  pNodeCompData->cmd = pNodeContext->cmd;
+//  pNodeCompData->nodeTimeline = pNodeContext->nodeTimeline;
+//  for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+//    pNodeCompData->framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
+//    pNodeCompData->framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
+//    pNodeCompData->framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
+//    pNodeCompData->framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
+//    pNodeCompData->framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
+//    pNodeCompData->framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
+//  }
 
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);

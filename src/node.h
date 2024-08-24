@@ -67,7 +67,7 @@ typedef struct MxcExternalNodeMemory {
 
 //
 /// Node Comp Types
-typedef struct CACHE_ALIGN MxcCompNodeContext {
+typedef struct CACHE_ALIGN MxcCompositorNodeContext {
   // read/write multiple threads
   uint32_t swapIndex;
 
@@ -80,7 +80,7 @@ typedef struct CACHE_ALIGN MxcCompNodeContext {
   VkCommandPool pool;
   pthread_t threadId;
 
-} MxcCompNodeContext;
+} MxcCompositorNodeContext;
 typedef struct CACHE_ALIGN MxcNodeSetState {
   mat4 model;
 
@@ -159,29 +159,31 @@ typedef struct MxcNodeContext {
 
 // probably going to want to do this.. although it could make it harder to pass this to the node thread
 // mayube dont want this? it is cold data
-typedef struct MxcNodeProcessExportContext {
-  VkSemaphore nodeTimeline;
-  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
-  DWORD                  processId;
-  HANDLE                 processHandle;
-  HANDLE                 externalMemoryHandle;
-  MxcExternalNodeMemory* pExternalMemory;
-} MxcNodeProcessContext;
-typedef struct MxcNodeProcessImportContext {
-  VkCommandPool             pool;
-  VkCommandBuffer           cmd;
-  VkSemaphore               nodeTimeline;
-  VkSemaphore               compTimeline;  // probably need this
-  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
-  pthread_t                 threadId;
-  HANDLE                    externalMemoryHandle;
-  MxcExternalNodeMemory*    pExternalMemory;
-} MxcNodeProcessImportContext;
+//typedef struct MxcNodeProcessExportContext {
+//  VkSemaphore nodeTimeline;
+//  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+//  DWORD                  processId;
+//  HANDLE                 processHandle;
+//  HANDLE                 externalMemoryHandle;
+//  MxcExternalNodeMemory* pExternalMemory;
+//} MxcNodeProcessContext;
+//typedef struct MxcNodeProcessImportContext {
+//  VkCommandPool             pool;
+//  VkCommandBuffer           cmd;
+//  VkSemaphore               nodeTimeline;
+//  VkSemaphore               compTimeline;  // probably need this
+//  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+//  pthread_t                 threadId;
+//  HANDLE                    externalMemoryHandle;
+//  MxcExternalNodeMemory*    pExternalMemory;
+//} MxcNodeProcessImportContext;
 
 //
-/// Global state
-extern MxcCompNodeContext compNodeContext;
+/// Compositor Node
+extern MxcCompositorNodeContext compositorNodeContext;
 
+//
+/// Node Global State
 #define MXC_NODE_CAPACITY 256
 typedef uint8_t           NodeHandle;
 
@@ -191,17 +193,22 @@ extern MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY];
 extern MxcNodeShared      nodesShared[MXC_NODE_CAPACITY];
 extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 
-// do this?
-extern size_t             nodeProcessCount;
-extern NodeHandle         availableNodeProcess[MXC_NODE_CAPACITY];
-extern MxcNodeContext     nodeProcessContext[MXC_NODE_CAPACITY];
-extern MxcNodeShared      nodeProcessShared[MXC_NODE_CAPACITY];
-extern MxcNodeCompositorData nodeProcessCompData[MXC_NODE_CAPACITY];
+extern size_t         threadNodesCount;
+extern MxcNodeShared* threadNodesShared[MXC_NODE_CAPACITY];
+
+extern size_t         interprocessNodesCount;
+extern MxcNodeShared* interprocessNodesShared[MXC_NODE_CAPACITY];
+
+// do this? I don't think so. Thread/Process can share data, just pointers need to be different?
+//extern size_t             nodeProcessCount;
+//extern NodeHandle         availableNodeProcess[MXC_NODE_CAPACITY];
+//extern MxcNodeContext     nodeProcessContext[MXC_NODE_CAPACITY];
+//extern MxcNodeShared      nodeProcessShared[MXC_NODE_CAPACITY];
+//extern MxcNodeCompositorData nodeProcessCompData[MXC_NODE_CAPACITY];
 
 //
-/// Methods
-
-
+/// Node
+// This could be a MidVK construct
 typedef struct MxcQueuedNodeCommandBuffer {
   VkCommandBuffer cmd;
   VkSemaphore     nodeTimeline;
@@ -214,7 +221,6 @@ static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer handle) 
   __atomic_thread_fence(__ATOMIC_ACQUIRE);
   submitNodeQueue[submitNodeQueueEnd] = handle;
   submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
-  // If each node can submit one command buffer, this should never be larger than NODE_CAPACITY. But should be INTERPROCESS+THREAD node capacity? I think I am going to have NodeContext be both so maybe not
   assert(submitNodeQueueEnd != submitNodeQueueStart);
   __atomic_thread_fence(__ATOMIC_RELEASE);
 }
@@ -232,10 +238,10 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
     }
 }
 
-void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompNodeContext*));
-void mxcRequestNodeThread(NodeHandle* pNodeHandle);
-void mxcRunNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle handle);
+void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*));
+void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 void mxcRequestNodeProcessExport(const VkSemaphore compTimeline, NodeHandle* pNodeHandle);
+void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalNodeMemory* pExternalMemory, const MxcImportParam* pImportParam, NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
 void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures);
@@ -246,9 +252,6 @@ void mxcInitializeIPCServer();
 void mxcShutdownIPCServer();
 void mxcConnectNodeIPC();
 void mxcShutdownNodeIPC();
-
-void mxcRequestNodeProcessImport(const HANDLE externalMemoryHandle, MxcExternalNodeMemory* pExternalMemory, const MxcImportParam* pImportParam, NodeHandle* pNodeHandle);
-void mxcCreateNodeFramebufferImport(const MidLocality locality, const MxcNodeFramebufferTexture* pNodeFramebuffers, MxcNodeFramebufferTexture* pFramebufferTextures);
 
 typedef void (*MxcInterProcessFuncPtr)(const void*);
 typedef enum MxcRingBufferTarget {
