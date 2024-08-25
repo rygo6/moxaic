@@ -22,7 +22,7 @@ enum SetBindCompIndices {
     .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
     .pBufferInfo = &(const VkDescriptorBufferInfo){      \
         .buffer = node_buffer,                           \
-        .range = sizeof(MxcNodeSetState),                \
+        .range = sizeof(MxcNodeCompositorSetState),      \
     },                                                   \
   }
 #define SET_WRITE_COMP_COLOR(node_set, color_image_view)         \
@@ -190,7 +190,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     vkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pNode->compNodeSet, "NodeSet");
     const VkmRequestAllocationInfo nodeSetAllocRequest = {
         .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-        .size = sizeof(MxcNodeSetState),
+        .size = sizeof(MxcNodeCompositorSetState),
         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
     };
     vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->compNodeSetBuffer, &pNode->compNodeSetMemory);
@@ -242,7 +242,7 @@ void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompN
   VkmGlobalSetState*    pGlobalSetMapped = pMappedMemory[pNode->globalSet.sharedMemory.type] + pNode->globalSet.sharedMemory.offset;
   vkmUpdateGlobalSetViewProj(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
-  MxcNodeSetState* pCompNodeSetMapped = pMappedMemory[pNode->compNodeSetMemory.type] + pNode->compNodeSetMemory.offset;
+  MxcNodeCompositorSetState* pCompNodeSetMapped = pMappedMemory[pNode->compNodeSetMemory.type] + pNode->compNodeSetMemory.offset;
   const VkPipelineLayout compNodePipeLayout = pNode->compNodePipeLayout;
   const VkPipeline       compNodePipe = pNode->compNodePipe;
   const VkDescriptorSet  compNodeSet = pNode->compNodeSet;
@@ -264,19 +264,19 @@ void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompN
     VkImageView color;
     VkImageView normal;
     VkImageView depth;
-  } framebufferViews[MIDVK_SWAP_COUNT];
-  VkImage frameBufferColorImages[MIDVK_SWAP_COUNT];
+  } compositorFramebufferViews[MIDVK_SWAP_COUNT];
+  VkImage compositorFramebufferColorImages[MIDVK_SWAP_COUNT];
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-    framebufferViews[i].color = pNode->framebuffers[i].color.view;
-    framebufferViews[i].normal = pNode->framebuffers[i].normal.view;
-    framebufferViews[i].depth = pNode->framebuffers[i].depth.view;
-    frameBufferColorImages[i] = pNode->framebuffers[i].color.image;
+    compositorFramebufferViews[i].color = pNode->framebuffers[i].color.view;
+    compositorFramebufferViews[i].normal = pNode->framebuffers[i].normal.view;
+    compositorFramebufferViews[i].depth = pNode->framebuffers[i].depth.view;
+    compositorFramebufferColorImages[i] = pNode->framebuffers[i].color.image;
   }
-  int framebufferIndex = 0;
+  int compositorFramebufferIndex = 0;
 
   // just making sure atomics are only using barriers, not locks
   for (int i = 0; i < nodeCount; ++i) {
-    assert(__atomic_always_lock_free(sizeof(nodesShared[i].currentTimelineSignal), &nodesShared[i].currentTimelineSignal));
+    assert(__atomic_always_lock_free(sizeof(nodesShared[i].nodeCurrentTimelineSignal), &nodesShared[i].nodeCurrentTimelineSignal));
   }
 
   // very common ones should be global to potentially share higher level cache
@@ -304,162 +304,128 @@ run_loop:
   vkmProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globalCameraTransform);
   vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
-  {  // Node cycle
+  // Update and Recording must be separate cycles because it's not ideal to acquire and transition images after being a renderpess
+  {  // Update Nodes
     vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
-
     vkmCmdResetBegin(cmd);
 
     for (int i = 0; i < nodeCount; ++i) {
-      MxcNodeShared* pNodeShared = threadNodesShared[i];
+      MxcNodeShared* pNodeShared = activeNodesShared[i];
 
       // tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
       // shared: 569 - semaphore: 315416 ratio: 554.333919
       __atomic_thread_fence(__ATOMIC_ACQUIRE);
-      uint64_t currentTimelineSignal = pNodeShared->currentTimelineSignal;
+      const uint64_t nodeCurrentTimelineSignal = pNodeShared->nodeCurrentTimelineSignal;
 
-      if (currentTimelineSignal < 1)
+      // I don't like this but it waits until the node renders something. Prediction should be okay here.
+      if (nodeCurrentTimelineSignal < 1)
         continue;
 
       // update node model mat... this should happen every frame so user can move it in comp
       nodeCompositorData[i].transform.rotation = QuatFromEuler(nodeCompositorData[i].transform.euler);
       nodeCompositorData[i].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[i].transform.position, nodeCompositorData[i].transform.rotation);
 
-      {  // check frame available
+      if (nodeCurrentTimelineSignal <= nodeCompositorData[i].lastTimelineSwap)
+        continue;
 
-        if (currentTimelineSignal > nodeCompositorData[i].lastTimelineSwap) {
-          nodeCompositorData[i].lastTimelineSwap = currentTimelineSignal;
+      nodeCompositorData[i].lastTimelineSwap = nodeCurrentTimelineSignal;
 
-          {  // update framebuffer for comp
-            const int nodeFramebufferIndex = !(currentTimelineSignal % MIDVK_SWAP_COUNT);
-            switch (nodeContexts[i].type) {
-              case MXC_NODE_TYPE_THREAD:
-                const VkImageMemoryBarrier2 barriers[] = {
-                    VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].color),
-                    VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].normal),
-                    VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMG_BARRIER_ACQUIRE_SHADER_READ, VKM_IMG_BARRIER_COMP_SHADER_READ, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].gBuffer, 0, MXC_NODE_GBUFFER_LEVELS),
-                };
-                CmdPipelineImageBarriers2(cmd, _countof(barriers), barriers);
-                break;
-              case MXC_NODE_TYPE_INTERPROCESS:
-                const VkImageMemoryBarrier2 interProcessBarriers[] = {
-                    {
-                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-                        .dstQueueFamilyIndex = graphicsQueueIndex,
-                        .image = nodeCompositorData[i].framebufferImages[framebufferIndex].color,
-                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-                    },
-                    {
-                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-                        .dstQueueFamilyIndex = graphicsQueueIndex,
-                        .image = nodeCompositorData[i].framebufferImages[framebufferIndex].normal,
-                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-                    },
-                    {
-                        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-                        .dstQueueFamilyIndex = graphicsQueueIndex,
-                        .image = nodeCompositorData[i].framebufferImages[framebufferIndex].gBuffer,
-                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, MXC_NODE_GBUFFER_LEVELS, 0, 1},
-                    },
-                };
-                CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
-                break;
-              default: PANIC("nodeType not supported");
-            }
-            const VkWriteDescriptorSet writeSets[] = {
-                SET_WRITE_COMP_COLOR(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].colorView),
-                SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].normalView),
-                SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].gBufferView),
-            };
-            vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
-          }
+      {  // Acquire new framembuffers from node
+        const int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % MIDVK_SWAP_COUNT);
+        CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].acquireBarriers[nodeFramebufferIndex]);
+        // these could be pre-recorded too
+        const VkWriteDescriptorSet writeSets[] = {
+            SET_WRITE_COMP_COLOR(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].colorView),
+            SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].normalView),
+            SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].gBufferView),
+        };
+        vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
+      }
 
-          {
-            // move the global set state that was previously used to render into the node set state to use in comp
-            memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
-            nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->lrUV;
-            nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->ulUV;
+      { // Calc new node uniform and shared data
 
-            memcpy(pCompNodeSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeSetState));
+        // move the global set state that was previously used to render into the node set state to use in comp
+        memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->nodeGlobalSetState, sizeof(VkmGlobalSetState));
+        nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->compositorLRScreenUV;
+        nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->compositorULScreenUV;
 
-            // calc framebuffersize
-            const float radius = pNodeShared->radius;
+        memcpy(pCompNodeSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
 
-            const vec4 ulbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
-            const vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbModel);
-            const vec4 ulbClip = Vec4MulMat4(globalSetState.view, ulbWorld);
-            const vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
-            const vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
+        // calc framebuffersize
+        const float radius = pNodeShared->compositorRadius;
 
-            const vec4 ulbfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-            const vec4 ulbfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbfModel);
-            const vec4 ulbfClip = Vec4MulMat4(globalSetState.view, ulbfWorld);
-            const vec3 ulbfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbfClip));
-            const vec2 ulfUV = Vec2Clamp(UVFromNDC(ulbfNDC), 0.0f, 1.0f);
+        const vec4 ulbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
+        const vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbModel);
+        const vec4 ulbClip = Vec4MulMat4(globalSetState.view, ulbWorld);
+        const vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
+        const vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
-            const vec2 ulUV = Vec2Min(ulfUV, ulbUV);
+        const vec4 ulbfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
+        const vec4 ulbfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbfModel);
+        const vec4 ulbfClip = Vec4MulMat4(globalSetState.view, ulbfWorld);
+        const vec3 ulbfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbfClip));
+        const vec2 ulfUV = Vec2Clamp(UVFromNDC(ulbfNDC), 0.0f, 1.0f);
 
-            const vec4 lrbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
-            const vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrbModel);
-            const vec4 lrbClip = Vec4MulMat4(globalSetState.view, lrbWorld);
-            const vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrbClip));
-            const vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
+        const vec2 ulUV = Vec2Min(ulfUV, ulbUV);
 
-            const vec4 lrfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
-            const vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrfModel);
-            const vec4 lrfClip = Vec4MulMat4(globalSetState.view, lrfWorld);
-            const vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrfClip));
-            const vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);
+        const vec4 lrbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
+        const vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrbModel);
+        const vec4 lrbClip = Vec4MulMat4(globalSetState.view, lrbWorld);
+        const vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrbClip));
+        const vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
 
-            const vec2 lrUV = Vec2Max(lrbUV, lrfUV);
+        const vec4 lrfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
+        const vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrfModel);
+        const vec4 lrfClip = Vec4MulMat4(globalSetState.view, lrfWorld);
+        const vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrfClip));
+        const vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);
 
-            const vec2 diff = {.vec = lrUV.vec - ulUV.vec};
+        const vec2 lrUV = Vec2Max(lrbUV, lrfUV);
 
-            // write current global set state to node's global set state to use for next node render with new the framebuffer size
-            memcpy(&pNodeShared->globalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
-            pNodeShared->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
-            pNodeShared->ulUV = ulUV;
-            pNodeShared->lrUV = lrUV;
+        const vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 
-            __atomic_thread_fence(__ATOMIC_RELEASE);
-          }
+        // write current global set state to node's global set state to use for next node render with new the framebuffer size
+        memcpy(&pNodeShared->nodeGlobalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
+        pNodeShared->nodeGlobalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
+        pNodeShared->compositorULScreenUV = ulUV;
+        pNodeShared->compositorLRScreenUV = lrUV;
 
-        }
+        __atomic_thread_fence(__ATOMIC_RELEASE);
       }
     }
 
     {  // Recording Cycle
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, compTimeline);
 
-      framebufferIndex = !framebufferIndex;
+      compositorFramebufferIndex = !compositorFramebufferIndex;
 
       ResetQueryPool(device, timeQueryPool, 0, 2);
       CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-      CmdBeginRenderPass(cmd, renderPass, framebuffer, MIDVK_PASS_CLEAR_COLOR, framebufferViews[framebufferIndex].color, framebufferViews[framebufferIndex].normal, framebufferViews[framebufferIndex].depth);
+      CmdBeginRenderPass(cmd, renderPass, framebuffer, MIDVK_PASS_CLEAR_COLOR,
+                         compositorFramebufferViews[compositorFramebufferIndex].color,
+                         compositorFramebufferViews[compositorFramebufferIndex].normal,
+                         compositorFramebufferViews[compositorFramebufferIndex].depth);
 
       CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipe);
       CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
 
-      // do I really need seperate loops ?
       for (int i = 0; i < nodeCount; ++i) {
+        MxcNodeShared* pNodeShared = activeNodesShared[i];
 
-        // todo probably can get rid of this?
-        MxcNodeShared* pNodeShared = threadNodesShared[i];
-        if (pNodeShared->currentTimelineSignal < 1)
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        const uint64_t nodeCurrentTimelineSignal = pNodeShared->nodeCurrentTimelineSignal;
+
+        // I don't like this but it waits until the node renders something. Prediction should be okay here.
+        if (nodeCurrentTimelineSignal < 1)
           continue;
+
+        const int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % MIDVK_SWAP_COUNT);
 
         // this needs to be a push set
         CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &compNodeSet, 0, NULL);
 
+        // move this into method delegate in node compositor data
         switch (compMode) {
           case MXC_COMP_MODE_BASIC:
           case MXC_COMP_MODE_TESS:
@@ -483,7 +449,7 @@ run_loop:
         __atomic_thread_fence(__ATOMIC_RELEASE);
         const VkImage swapImage = swap.images[compositorNodeContext.swapIndex];
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
-        CmdBlitImageFullScreen(cmd, frameBufferColorImages[framebufferIndex], swapImage);
+        CmdBlitImageFullScreen(cmd, compositorFramebufferColorImages[compositorFramebufferIndex], swapImage);
         CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));
       }
 

@@ -41,15 +41,14 @@ typedef enum MxcNodeType {
 
 typedef struct CACHE_ALIGN MxcNodeShared {
   // read/write every cycle
-  VkmGlobalSetState globalSetState;
-  vec2              ulUV;
-  vec2              lrUV;
-  uint64_t          currentTimelineSignal;
+  VkmGlobalSetState nodeGlobalSetState;
+  vec2              compositorULScreenUV;
+  vec2              compositorLRScreenUV;
+  uint64_t          nodeCurrentTimelineSignal;
 
   // read every cycle, occasional write
-  int               compCycleSkip;
-  float             radius;
-
+  int                   compositorCycleSkip;
+  float                 compositorRadius;
 } MxcNodeShared;
 typedef struct MxcImportParam {
   struct {
@@ -66,7 +65,7 @@ typedef struct MxcExternalNodeMemory {
 } MxcExternalNodeMemory;
 
 //
-/// Node Comp Types
+/// Compositor Types
 typedef struct CACHE_ALIGN MxcCompositorNodeContext {
   // read/write multiple threads
   uint32_t swapIndex;
@@ -81,7 +80,7 @@ typedef struct CACHE_ALIGN MxcCompositorNodeContext {
   pthread_t threadId;
 
 } MxcCompositorNodeContext;
-typedef struct CACHE_ALIGN MxcNodeSetState {
+typedef struct CACHE_ALIGN MxcNodeCompositorSetState {
   mat4 model;
 
   // Laid out same as VkmGlobalSetState for memcpy
@@ -95,26 +94,14 @@ typedef struct CACHE_ALIGN MxcNodeSetState {
 
   vec2 ulUV;
   vec2 lrUV;
-} MxcNodeSetState;
-typedef struct CACHE_ALIGN MxcNodeProcessCompData { // pretty sure we want this
-  MxcNodeSetState nodeSetState;
-  MidTransform    transform;
-  VkSemaphore     nodeTimeline;
-  uint64_t        lastTimelineSwap;
-  struct {
-    VkImage     color;
-    VkImage     normal;
-    VkImage     gBuffer;
-    VkImageView colorView;
-    VkImageView normalView;
-    VkImageView gBufferView;
-  } framebufferImages[MIDVK_SWAP_COUNT];
-} MxcNodeProcessCompData;
-
+} MxcNodeCompositorSetState;
 typedef struct CACHE_ALIGN MxcNodeCompositorData {
-  MxcNodeSetState nodeSetState;
-  MidTransform    transform;
-  uint64_t        lastTimelineSwap;
+  MxcNodeCompositorSetState nodeSetState;
+  MidTransform              transform;
+  uint64_t                  lastTimelineSwap;
+
+  CACHE_ALIGN VkImageMemoryBarrier2 acquireBarriers[MIDVK_SWAP_COUNT][3];
+
   struct CACHE_ALIGN {
     VkImage     color;
     VkImage     normal;
@@ -154,57 +141,19 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-// probably going to want to do this.. although it could make it harder to pass this to the node thread
-// mayube dont want this? it is cold data
-//typedef struct MxcNodeProcessExportContext {
-//  VkSemaphore nodeTimeline;
-//  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
-//  DWORD                  processId;
-//  HANDLE                 processHandle;
-//  HANDLE                 externalMemoryHandle;
-//  MxcExternalNodeMemory* pExternalMemory;
-//} MxcNodeProcessContext;
-//typedef struct MxcNodeProcessImportContext {
-//  VkCommandPool             pool;
-//  VkCommandBuffer           cmd;
-//  VkSemaphore               nodeTimeline;
-//  VkSemaphore               compTimeline;  // probably need this
-//  MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
-//  pthread_t                 threadId;
-//  HANDLE                    externalMemoryHandle;
-//  MxcExternalNodeMemory*    pExternalMemory;
-//} MxcNodeProcessImportContext;
-
 //
-/// Compositor Node
+/// Global State
+#define MXC_NODE_CAPACITY 256
+typedef uint8_t                 NodeHandle;
+extern size_t                   nodeCount;
+extern MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY];
+extern MxcNodeShared            nodesShared[MXC_NODE_CAPACITY];
+extern MxcNodeCompositorData    nodeCompositorData[MXC_NODE_CAPACITY];
+extern MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY];
 extern MxcCompositorNodeContext compositorNodeContext;
 
 //
-/// Node Global State
-#define MXC_NODE_CAPACITY 256
-typedef uint8_t           NodeHandle;
-
-extern size_t             nodeCount;
-extern NodeHandle         nodesAvailable[MXC_NODE_CAPACITY];
-extern MxcNodeContext     nodeContexts[MXC_NODE_CAPACITY];
-extern MxcNodeShared      nodesShared[MXC_NODE_CAPACITY];
-extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
-
-//extern size_t         threadNodesCount;
-extern MxcNodeShared* threadNodesShared[MXC_NODE_CAPACITY];
-
-//extern size_t         interprocessNodesCount;
-//extern MxcNodeShared* interprocessNodesShared[MXC_NODE_CAPACITY];
-
-// do this? I don't think so. Thread/Process can share data, just pointers need to be different?
-//extern size_t             nodeProcessCount;
-//extern NodeHandle         availableNodeProcess[MXC_NODE_CAPACITY];
-//extern MxcNodeContext     nodeProcessContext[MXC_NODE_CAPACITY];
-//extern MxcNodeShared      nodeProcessShared[MXC_NODE_CAPACITY];
-//extern MxcNodeCompositorData nodeProcessCompData[MXC_NODE_CAPACITY];
-
-//
-/// Node
+/// Node Queue
 // This could be a MidVK construct
 typedef struct MxcQueuedNodeCommandBuffer {
   VkCommandBuffer cmd;

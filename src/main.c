@@ -101,7 +101,7 @@ int main(void) {
     mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
     mxcInitializeCompositorIPCServer();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
     NodeHandle testNodeHandle;
     mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);

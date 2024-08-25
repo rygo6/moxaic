@@ -1,5 +1,6 @@
 #include "node.h"
 #include "test_node.h"
+#include "mid_vulkan.h"
 
 #define WIN32_LEAN_AND_MEAN
 #undef UNICODE
@@ -10,19 +11,15 @@
 #include <pthread.h>
 #include <assert.h>
 
-size_t                nodeCount = 0;
-MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY] = {};
-MxcNodeShared         nodesShared[MXC_NODE_CAPACITY] = {};
-MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
-MxcNodeShared*        threadNodesShared[MXC_NODE_CAPACITY] = {};
-
+size_t                     nodeCount = 0;
+MxcNodeContext             nodeContexts[MXC_NODE_CAPACITY] = {};
+MxcNodeShared              nodesShared[MXC_NODE_CAPACITY] = {};
+MxcNodeCompositorData      nodeCompositorData[MXC_NODE_CAPACITY] = {};
+MxcNodeShared*             activeNodesShared[MXC_NODE_CAPACITY] = {};
 size_t                     submitNodeQueueStart = 0;
 size_t                     submitNodeQueueEnd = 0;
 MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
-
-//
-/// Compositor
-MxcCompositorNodeContext compositorNodeContext = {};
+MxcCompositorNodeContext   compositorNodeContext = {};
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*)) {
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -51,35 +48,47 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
   printf("Request and Run CompNode Thread Success.");
 }
 
-static NodeHandle RequestNodeHandle(MxcNodeShared* pNodeShared) {
+static NodeHandle RequestLocalNodeHandle() {
   // This needs to be made atomic. We could use locks here.
   NodeHandle handle = nodeCount;
-  threadNodesShared[handle] = pNodeShared;
+  nodesShared[handle] = (MxcNodeShared){};
+  activeNodesShared[handle] = &nodesShared[handle];
+  nodeCount++;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  return handle;
+}
+static NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared) {
+  // This needs to be made atomic. We could use locks here.
+  NodeHandle handle = nodeCount;
+  activeNodesShared[handle] = pNodeShared;
   nodeCount++;
   __atomic_thread_fence(__ATOMIC_RELEASE);
   return handle;
 }
 
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle) {
-  const NodeHandle handle = nodeCount;
+  printf("Requesting Node Thread.\n");
+  const NodeHandle handle = RequestLocalNodeHandle();
 
   MxcNodeContext* pNodeContext = &nodeContexts[handle];
   *pNodeContext = (MxcNodeContext){};
   pNodeContext->compTimeline = compositorNodeContext.compTimeline;
   pNodeContext->type = MXC_NODE_TYPE_THREAD;
 
-  // mayube have the thread allocate this and submit it once ready to get rid of < 1 check
+  // maybe have the thread allocate this and submit it once ready to get rid of < 1 check
   // then could also get rid of pNodeContext->pNodeShared?
+  // no how would something on another process do that
   MxcNodeShared* pNodeShared = &nodesShared[handle];
   *pNodeShared = (MxcNodeShared){};
   pNodeContext->pNodeShared = pNodeShared;
-  pNodeShared->radius = 0.5;
-  pNodeShared->compCycleSkip = 16;
+  pNodeShared->compositorRadius = 0.5;
+  pNodeShared->compositorCycleSkip = 16;
 
+  const uint32_t graphicsQueueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-      .queueFamilyIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+      .queueFamilyIndex = graphicsQueueIndex,
   };
   MIDVK_REQUIRE(vkCreateCommandPool(context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
   const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
@@ -107,22 +116,59 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
     pNodeCompositorData->framebufferImages[i].colorView = nodeContexts[handle].framebufferTextures[i].color.view;
     pNodeCompositorData->framebufferImages[i].normalView = nodeContexts[handle].framebufferTextures[i].normal.view;
     pNodeCompositorData->framebufferImages[i].gBufferView = nodeContexts[handle].framebufferTextures[i].gbuffer.view;
+    pNodeCompositorData->acquireBarriers[i][0] = (VkImageMemoryBarrier2){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        .srcAccessMask = VK_ACCESS_2_NONE,
+        .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+        .image = pNodeCompositorData->framebufferImages[i].color,
+        MIDVK_COLOR_SUBRESOURCE_RANGE,
+    };
+    pNodeCompositorData->acquireBarriers[i][1] = (VkImageMemoryBarrier2){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        .srcAccessMask = VK_ACCESS_2_NONE,
+        .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+        .image = pNodeCompositorData->framebufferImages[i].normal,
+        MIDVK_COLOR_SUBRESOURCE_RANGE,
+    };
+    pNodeCompositorData->acquireBarriers[i][2] = (VkImageMemoryBarrier2){
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        .srcAccessMask = VK_ACCESS_2_NONE,
+        .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+        .image = pNodeCompositorData->framebufferImages[i].gBuffer,
+        MIDVK_COLOR_SUBRESOURCE_RANGE,
+    };
   }
 
   *pNodeHandle = handle;
-  nodeCount++;
-  __atomic_thread_fence(__ATOMIC_RELEASE);
 
   int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeContext);
   REQUIRE(result == 0, "Node thread creation failed!");
 
   printf("Request Node Thread Success. Handle: %d\n", handle);
+  // todo this needs error handling
 }
 void mxcReleaseNodeThread(NodeHandle handle) {
   PANIC("Not Implemented");
   printf("Release Node Thread Success. Handle: %d\n", handle);
 }
 
+//
+/// Node Render
 void mxcCreateNodeRenderPass() {
   const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
       .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
@@ -218,7 +264,6 @@ void mxcCreateNodeRenderPass() {
   MIDVK_REQUIRE(vkCreateRenderPass2(context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &context.nodeRenderPass));
   vkmSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)context.nodeRenderPass, "NodeRenderPass");
 }
-
 void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures) {
   for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
     const VkmTextureCreateInfo colorCreateInfo = {
@@ -341,7 +386,7 @@ static void acceptIPCServer() {
   MxcNodeShared*         pProcessNodeShared = NULL;
   MxcImportParam*        pImportParam = NULL;
   MxcNodeShared*         pNodeShared = NULL;
-  MxcNodeCompositorData* pNodeCompData = NULL;
+  MxcNodeCompositorData* pNodeCompositorData = NULL;
   HANDLE                 nodeProcessHandle = INVALID_HANDLE_VALUE;
   HANDLE                 externalNodeMemoryHandle = INVALID_HANDLE_VALUE;
   MxcExternalNodeMemory* pExternalNodeMemory = NULL;
@@ -390,12 +435,12 @@ static void acceptIPCServer() {
     pImportParam = &pExternalNodeMemory->importParam;
     pProcessNodeShared = &pExternalNodeMemory->nodeShared;
     pNodeShared = &pExternalNodeMemory->nodeShared;
-    pNodeShared->radius = 0.5;
-    pNodeShared->compCycleSkip = 16;
+    pNodeShared->compositorRadius = 0.5;
+    pNodeShared->compositorCycleSkip = 16;
 
-    const NodeHandle handle = RequestNodeHandle(pNodeShared);
-    pNodeCompData = &nodeCompositorData[handle];
-    *pNodeCompData = (MxcNodeCompositorData){};
+    const NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
+    pNodeCompositorData = &nodeCompositorData[handle];
+    *pNodeCompositorData = (MxcNodeCompositorData){};
     pNodeContext = &nodeContexts[handle];
     *pNodeContext = (MxcNodeContext){};
     pNodeContext->compTimeline = compositorNodeContext.compTimeline;
@@ -427,14 +472,42 @@ static void acceptIPCServer() {
     ERR_CHECK(!DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pNodeContext->nodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate nodeTimeline handle fail.");
     ERR_CHECK(!DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compositorNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate compeTimeline handle fail.");
 
-    pNodeCompData->transform.rotation = QuatFromEuler(pNodeCompData->transform.euler);
+    const uint32_t graphicsQueueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+    pNodeCompositorData->transform.rotation = QuatFromEuler(pNodeCompositorData->transform.euler);
     for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-      pNodeCompData->framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
-      pNodeCompData->framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
-      pNodeCompData->framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
-      pNodeCompData->framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
-      pNodeCompData->framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
-      pNodeCompData->framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
+      pNodeCompositorData->framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
+      pNodeCompositorData->framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
+      pNodeCompositorData->framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
+      pNodeCompositorData->framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
+      pNodeCompositorData->framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
+      pNodeCompositorData->framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
+      pNodeCompositorData->acquireBarriers[i][0] = (VkImageMemoryBarrier2){
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+          .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+          .dstQueueFamilyIndex = graphicsQueueIndex,
+          .image = pNodeCompositorData->framebufferImages[i].color,
+          MIDVK_COLOR_SUBRESOURCE_RANGE
+      };
+      pNodeCompositorData->acquireBarriers[i][1] = (VkImageMemoryBarrier2){
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+          .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+          .dstQueueFamilyIndex = graphicsQueueIndex,
+          .image = pNodeCompositorData->framebufferImages[i].normal,
+          MIDVK_COLOR_SUBRESOURCE_RANGE
+      };
+      pNodeCompositorData->acquireBarriers[i][2] = (VkImageMemoryBarrier2){
+          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+          .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+          .dstQueueFamilyIndex = graphicsQueueIndex,
+          .image = pNodeCompositorData->framebufferImages[i].gBuffer,
+          MIDVK_COLOR_SUBRESOURCE_RANGE
+      };
     }
   }
 
@@ -575,12 +648,9 @@ void mxcConnectNodeIPC() {
     pNodeShared = &pExternalNodeMemory->nodeShared;
   }
 
-//  NodeHandle nodeHandle;
-//  mxcRequestNodeProcessImport(externalNodeMemoryHandle, pExternalNodeMemory, &pExternalNodeMemory->importParam, &nodeHandle);
-
   // Request and setup handle data
   {
-    const NodeHandle handle = RequestNodeHandle(pNodeShared);
+    const NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
     pNodeContext = &nodeContexts[handle];
     *pNodeContext = (MxcNodeContext){};
     pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS;

@@ -722,8 +722,7 @@ MIDVK_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, cons
   };
   func(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-#define CmdBeginRenderPass(_cmd, _render_pass, _framebuffer, _clear_color, _color_view, _normal_view, _depth_view) \
-  PFN_CmdBeginRenderPass(CmdBeginRenderPass, _cmd, _render_pass, _framebuffer, _clear_color, _color_view, _normal_view, _depth_view)
+#define CmdBeginRenderPass(_cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView) PFN_CmdBeginRenderPass(CmdBeginRenderPass, _cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView)
 MIDVK_INLINE void PFN_CmdBeginRenderPass(
     const PFN_vkCmdBeginRenderPass func,
     const VkCommandBuffer          cmd,
@@ -756,12 +755,14 @@ MIDVK_INLINE void PFN_CmdBeginRenderPass(
   };
   func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
+// todo needs PFN version
 MIDVK_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
   vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
   vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
   vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
   vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
+// todo needs PFN version
 MIDVK_INLINE void vkmSubmitPresentCommandBuffer(
     const VkCommandBuffer cmd,
     const VkSwapchainKHR  chain,
@@ -812,8 +813,8 @@ MIDVK_INLINE void vkmSubmitPresentCommandBuffer(
       .pImageIndices = &swapIndex,
   };
   MIDVK_REQUIRE(vkQueuePresentKHR(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
-  //  vkQueueWaitIdle(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
 }
+// todo needs PFN version
 MIDVK_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
   const VkSubmitInfo2 submitInfo2 = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
@@ -836,6 +837,7 @@ MIDVK_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueu
   };
   MIDVK_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
+// todo needs PFN version
 MIDVK_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline) {
   const VkSemaphoreWaitInfo semaphoreWaitInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -845,6 +847,7 @@ MIDVK_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValu
   };
   MIDVK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
+// todo needs PFN version
 MIDVK_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline) {
   const VkSemaphoreSignalInfo semaphoreSignalInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
@@ -852,9 +855,6 @@ MIDVK_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signal
       .value = signalValue,
   };
   MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
-}
-MIDVK_INLINE void vkmUpdateDescriptorSet(const VkDevice device, const VkWriteDescriptorSet* pWriteSet) {
-  vkUpdateDescriptorSets(device, 1, pWriteSet, 0, NULL);
 }
 
 MIDVK_INLINE void vkmUpdateGlobalSetViewProj(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
