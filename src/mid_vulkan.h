@@ -121,11 +121,11 @@ typedef enum MidLocality {
                                                        _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
 
 // these should go in math. Can I make MidVk not depend on specific math lib?
-typedef struct MidTransform {
+typedef struct MidPose {
   vec3 position;
   vec3 euler;
   vec4 rotation;
-} MidTransform;
+} MidPose;
 typedef struct MidVertex {
   vec3 position;
   vec3 normal;
@@ -857,7 +857,7 @@ MIDVK_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signal
   MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 
-MIDVK_INLINE void vkmUpdateGlobalSetViewProj(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+MIDVK_INLINE void vkmUpdateGlobalSetViewProj(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
   pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
   pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
@@ -870,25 +870,25 @@ MIDVK_INLINE void vkmUpdateGlobalSetViewProj(MidTransform* pCameraTransform, Vkm
   pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-MIDVK_INLINE void vkmUpdateGlobalSetView(MidTransform* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+MIDVK_INLINE void vkmUpdateGlobalSetView(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
   pState->invView = Mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
   pState->view = Mat4Inv(pState->invView);
   pState->viewProj = Mat4Mul(pState->proj, pState->view);
   pState->invViewProj = Mat4Inv(pState->viewProj);
   memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-MIDVK_INLINE void vkmUpdateObjectSet(MidTransform* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
+MIDVK_INLINE void vkmUpdateObjectSet(MidPose* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
   pTransform->rotation = QuatFromEuler(pTransform->euler);
   pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
   memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStdObjectSetState));
 }
-MIDVK_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidTransform* pCameraTransform) {
+MIDVK_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPose* pCameraTransform) {
   pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
   pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
   pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
 }
 // move[] = Forward, Back, Left, Right
-MIDVK_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidTransform* pCameraTransform) {
+MIDVK_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform) {
   const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
   const float moveSensitivity = deltaTime * 0.8f;
   for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;

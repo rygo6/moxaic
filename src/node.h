@@ -26,29 +26,26 @@ typedef enum MxcNodeType {
 
 //
 /// IPC Types
-//#define MXC_RING_BUFFER_COUNT       256
-//#define MXC_RING_BUFFER_SIZE        MXC_RING_BUFFER_COUNT * sizeof(uint8_t)
-//#define MXC_RING_BUFFER_HEADER_SIZE 1
-//typedef struct MxcRingBuffer {
-//  uint8_t head;
-//  uint8_t tail;
-//  uint8_t ringBuffer[MXC_RING_BUFFER_SIZE];
-//} MxcRingBuffer;
-//typedef struct MxcInterProcessBuffer {
-//  LPVOID sharedBuffer;
-//  HANDLE mapFileHandle;
-//} MxcInterProcessBuffer;
+#define MXC_RING_BUFFER_COUNT       256
+#define MXC_RING_BUFFER_SIZE        MXC_RING_BUFFER_COUNT * sizeof(uint8_t)
+#define MXC_RING_BUFFER_HEADER_SIZE 1
+typedef struct MxcRingBuffer {
+  uint8_t head;
+  uint8_t tail;
+  uint8_t ringBuffer[MXC_RING_BUFFER_SIZE];
+} MxcRingBuffer;
 
-typedef struct CACHE_ALIGN MxcNodeShared {
+typedef struct MxcNodeShared {
   // read/write every cycle
   VkmGlobalSetState nodeGlobalSetState;
   vec2              compositorULScreenUV;
   vec2              compositorLRScreenUV;
   uint64_t          nodeCurrentTimelineSignal;
+  MidPose           rootPose;
 
   // read every cycle, occasional write
-  int                   compositorCycleSkip;
-  float                 compositorRadius;
+  float compositorRadius;
+  int   compositorCycleSkip;
 } MxcNodeShared;
 typedef struct MxcImportParam {
   struct {
@@ -60,13 +57,14 @@ typedef struct MxcImportParam {
   HANDLE compTimelineHandle;
 } MxcImportParam;
 typedef struct MxcExternalNodeMemory {
-  MxcNodeShared nodeShared;
-  MxcImportParam importParam;
+  CACHE_ALIGN MxcNodeShared nodeShared;
+  CACHE_ALIGN MxcRingBuffer ringBuffer;
+  CACHE_ALIGN MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
 //
 /// Compositor Types
-typedef struct CACHE_ALIGN MxcCompositorNodeContext {
+typedef struct MxcCompositorNodeContext {
   // read/write multiple threads
   uint32_t swapIndex;
 
@@ -80,7 +78,7 @@ typedef struct CACHE_ALIGN MxcCompositorNodeContext {
   pthread_t threadId;
 
 } MxcCompositorNodeContext;
-typedef struct CACHE_ALIGN MxcNodeCompositorSetState {
+typedef struct MxcNodeCompositorSetState {
   mat4 model;
 
   // Laid out same as VkmGlobalSetState for memcpy
@@ -95,21 +93,22 @@ typedef struct CACHE_ALIGN MxcNodeCompositorSetState {
   vec2 ulUV;
   vec2 lrUV;
 } MxcNodeCompositorSetState;
-typedef struct CACHE_ALIGN MxcNodeCompositorData {
+typedef struct MxcNodeCompositorData {
+  CACHE_ALIGN
   MxcNodeCompositorSetState nodeSetState;
-  MidTransform              transform;
+  MidPose                   rootPose;
   uint64_t                  lastTimelineSwap;
 
-  CACHE_ALIGN VkImageMemoryBarrier2 acquireBarriers[MIDVK_SWAP_COUNT][3];
-
-  struct CACHE_ALIGN {
+  struct {
+    CACHE_ALIGN
     VkImage     color;
     VkImage     normal;
     VkImage     gBuffer;
     VkImageView colorView;
     VkImageView normalView;
     VkImageView gBufferView;
-  } framebufferImages[MIDVK_SWAP_COUNT];
+    VkImageMemoryBarrier2 acquireBarriers[3];
+  } framebuffers[MIDVK_SWAP_COUNT];
 } MxcNodeCompositorData;
 
 //

@@ -193,7 +193,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .size = sizeof(MxcNodeCompositorSetState),
         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
     };
-    vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->compNodeSetBuffer, &pNode->compNodeSetMemory);
+    vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->compNodeSetBuffer, &pNode->compNodeSetSharedMemory);
 
     midvkCreateFramebufferTexture(MIDVK_SWAP_COUNT, MID_LOCALITY_CONTEXT, pNode->framebuffers);
     vkmCreateFramebuffer(context.renderPass, &pNode->framebuffer);
@@ -221,43 +221,40 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
   }
   MIDVK_REQUIRE(vkBindBufferMemory(context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
   vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
-  MIDVK_REQUIRE(vkBindBufferMemory(context.device, pNode->compNodeSetBuffer, deviceMemory[pNode->compNodeSetMemory.type], pNode->compNodeSetMemory.offset));
+  MIDVK_REQUIRE(vkBindBufferMemory(context.device, pNode->compNodeSetBuffer, deviceMemory[pNode->compNodeSetSharedMemory.type], pNode->compNodeSetSharedMemory.offset));
   vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
 }
 
 void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompNode* pNode) {
 
-  // these should go in struct so I can check alignment
   const MxcCompMode compMode = pNode->compMode;
 
+  const VkDevice        device = pNode->device;
   const VkCommandBuffer cmd = pNodeContext->cmd;
   const VkRenderPass    renderPass = pNode->compRenderPass;
   const VkFramebuffer   framebuffer = pNode->framebuffer;
-
-  const uint32_t graphicsQueueIndex = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
-
   const VkDescriptorSet globalSet = pNode->globalSet.set;
-  MidTransform          globalCameraTransform = {};
-  VkmGlobalSetState     globalSetState = {};
-  VkmGlobalSetState*    pGlobalSetMapped = pMappedMemory[pNode->globalSet.sharedMemory.type] + pNode->globalSet.sharedMemory.offset;
+
+  MidPose                    globalCameraTransform = {};
+  VkmGlobalSetState          globalSetState = {};
+  VkmGlobalSetState*         pGlobalSetMapped = pMappedMemory[pNode->globalSet.sharedMemory.type] + pNode->globalSet.sharedMemory.offset;
+  MxcNodeCompositorSetState* pCompNodeSetMapped = pMappedMemory[pNode->compNodeSetSharedMemory.type] + pNode->compNodeSetSharedMemory.offset;
   vkmUpdateGlobalSetViewProj(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
-  MxcNodeCompositorSetState* pCompNodeSetMapped = pMappedMemory[pNode->compNodeSetMemory.type] + pNode->compNodeSetMemory.offset;
   const VkPipelineLayout compNodePipeLayout = pNode->compNodePipeLayout;
   const VkPipeline       compNodePipe = pNode->compNodePipe;
   const VkDescriptorSet  compNodeSet = pNode->compNodeSet;
-
-  const VkDevice device = pNode->device;
-  const MidVkSwap swap = pNodeContext->swap;
-
+  
   const uint32_t     quadIndexCount = pNode->quadMesh.indexCount;
   const VkBuffer     quadBuffer = pNode->quadMesh.buffer;
   const VkDeviceSize quadIndexOffset = pNode->quadMesh.indexOffset;
   const VkDeviceSize quadVertexOffset = pNode->quadMesh.vertexOffset;
 
-  const VkSemaphore compTimeline = pNodeContext->compTimeline;
   uint64_t    compBaseCycleValue = 0;
-
+  const VkSemaphore compTimeline = pNodeContext->compTimeline;
+  
+  const MidVkSwap swap = pNodeContext->swap;
+  
   const VkQueryPool timeQueryPool = pNode->timeQueryPool;
 
   struct {
@@ -320,24 +317,27 @@ run_loop:
       // I don't like this but it waits until the node renders something. Prediction should be okay here.
       if (nodeCurrentTimelineSignal < 1)
         continue;
+      
+      // We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
+//      memcpy(&nodeCompositorData[i].rootPose.rotation, &pNodeShared->rootPose, sizeof(MidPose));
+      nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
 
       // update node model mat... this should happen every frame so user can move it in comp
-      nodeCompositorData[i].transform.rotation = QuatFromEuler(nodeCompositorData[i].transform.euler);
-      nodeCompositorData[i].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[i].transform.position, nodeCompositorData[i].transform.rotation);
+      nodeCompositorData[i].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[i].rootPose.position, nodeCompositorData[i].rootPose.rotation);
 
       if (nodeCurrentTimelineSignal <= nodeCompositorData[i].lastTimelineSwap)
         continue;
 
       nodeCompositorData[i].lastTimelineSwap = nodeCurrentTimelineSignal;
 
-      {  // Acquire new framembuffers from node
+      {  // Acquire new framebuffers from node
         const int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % MIDVK_SWAP_COUNT);
-        CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].acquireBarriers[nodeFramebufferIndex]);
+        CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].acquireBarriers);
         // these could be pre-recorded too
         const VkWriteDescriptorSet writeSets[] = {
-            SET_WRITE_COMP_COLOR(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].colorView),
-            SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].normalView),
-            SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompositorData[i].framebufferImages[nodeFramebufferIndex].gBufferView),
+            SET_WRITE_COMP_COLOR(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].colorView),
+            SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].normalView),
+            SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].gBufferView),
         };
         vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
       }
@@ -346,12 +346,11 @@ run_loop:
 
         // move the global set state that was previously used to render into the node set state to use in comp
         memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->nodeGlobalSetState, sizeof(VkmGlobalSetState));
-        nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->compositorLRScreenUV;
-        nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->compositorULScreenUV;
+        nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->compositorULScreenUV;
+        nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->compositorLRScreenUV;
 
         memcpy(pCompNodeSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
 
-        // calc framebuffersize
         const float radius = pNodeShared->compositorRadius;
 
         const vec4 ulbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
@@ -360,11 +359,11 @@ run_loop:
         const vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
         const vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
-        const vec4 ulbfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-        const vec4 ulbfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbfModel);
-        const vec4 ulbfClip = Vec4MulMat4(globalSetState.view, ulbfWorld);
-        const vec3 ulbfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbfClip));
-        const vec2 ulfUV = Vec2Clamp(UVFromNDC(ulbfNDC), 0.0f, 1.0f);
+        const vec4 ulfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
+        const vec4 ulfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulfModel);
+        const vec4 ulfClip = Vec4MulMat4(globalSetState.view, ulfWorld);
+        const vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulfClip));
+        const vec2 ulfUV = Vec2Clamp(UVFromNDC(ulfNDC), 0.0f, 1.0f);
 
         const vec2 ulUV = Vec2Min(ulfUV, ulbUV);
 
@@ -389,7 +388,6 @@ run_loop:
         pNodeShared->nodeGlobalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
         pNodeShared->compositorULScreenUV = ulUV;
         pNodeShared->compositorLRScreenUV = lrUV;
-
         __atomic_thread_fence(__ATOMIC_RELEASE);
       }
     }

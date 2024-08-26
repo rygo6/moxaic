@@ -22,8 +22,7 @@ void main()
 
     const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
     const vec2 scaledUV = inUV * scale;
-    // im reversing the lr and ul from what i'd expect... why!?
-    const vec2 ndcUV = mix(nodeUBO.lrUV, nodeUBO.ulUV, inUV);
+    const vec2 ndcUV = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
 
     float alphaValue = texture(nodeColor, scaledUV).a;
     float depthValue = texture(nodeGBuffer, scaledUV).r;

@@ -13,8 +13,7 @@ void main() {
 
     const vec2 scale = vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize);
     const vec2 scaledUV = inUV * scale;
-    // im reversing the lr and ul from what i'd expect... why!?
-    const vec2 ndcUV = mix(nodeUBO.lrUV, nodeUBO.ulUV, inUV);
+    const vec2 ndcUV = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
 
     vec2 nodeNDC = NDCFromUV(ndcUV);
     vec4 nodeClipPos = ClipPosFromNDC(nodeNDC, originClipPos.z / originClipPos.w);
