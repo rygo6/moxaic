@@ -11,15 +11,17 @@
 #include <pthread.h>
 #include <assert.h>
 
-size_t                     nodeCount = 0;
-MxcNodeContext             nodeContexts[MXC_NODE_CAPACITY] = {};
-MxcNodeShared              nodesShared[MXC_NODE_CAPACITY] = {};
-MxcNodeCompositorData      nodeCompositorData[MXC_NODE_CAPACITY] = {};
-MxcNodeShared*             activeNodesShared[MXC_NODE_CAPACITY] = {};
+size_t                   nodeCount = 0;
+MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
+MxcNodeShared            nodesShared[MXC_NODE_CAPACITY] = {};
+MxcNodeCompositorData    nodeCompositorData[MXC_NODE_CAPACITY] = {};
+MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY] = {};
+MxcCompositorNodeContext compositorNodeContext = {};
+
+// this should become a midvk construct
 size_t                     submitNodeQueueStart = 0;
 size_t                     submitNodeQueueEnd = 0;
 MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
-MxcCompositorNodeContext   compositorNodeContext = {};
 
 void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*)) {
   const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
@@ -381,12 +383,12 @@ const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
     }                                                           \
   }
 
-static void acceptIPCServer() {
+static void InterprocessServerAcceptNodeConnection() {
   printf("Accepting connections on: '%s'\n", SOCKET_PATH);
   MxcNodeContext*        pNodeContext = NULL;
-  MxcNodeShared*         pProcessNodeShared = NULL;
-  MxcImportParam*        pImportParam = NULL;
   MxcNodeShared*         pNodeShared = NULL;
+  MxcRingBuffer*         pTargetQueue = NULL;
+  MxcImportParam*        pImportParam = NULL;
   MxcNodeCompositorData* pNodeCompositorData = NULL;
   HANDLE                 nodeProcessHandle = INVALID_HANDLE_VALUE;
   HANDLE                 externalNodeMemoryHandle = INVALID_HANDLE_VALUE;
@@ -434,8 +436,7 @@ static void acceptIPCServer() {
   // Request and setup handle data
   {
     pImportParam = &pExternalNodeMemory->importParam;
-    pProcessNodeShared = &pExternalNodeMemory->nodeShared;
-    pNodeShared = &pExternalNodeMemory->nodeShared;
+    pNodeShared = &pExternalNodeMemory->shared;
     pNodeShared->rootPose.rotation = QuatFromEuler(pNodeShared->rootPose.euler);
     pNodeShared->compositorRadius = 0.5;
     pNodeShared->compositorCycleSkip = 16;
@@ -451,7 +452,7 @@ static void acceptIPCServer() {
     pNodeContext->processHandle = nodeProcessHandle;
     pNodeContext->externalMemoryHandle = externalNodeMemoryHandle;
     pNodeContext->pExternalMemory = pExternalNodeMemory;
-    pNodeContext->pNodeShared = pProcessNodeShared;
+    pNodeContext->pNodeShared = pNodeShared;
 
     printf("Exporting node handle %d\n", handle);
   }
@@ -549,7 +550,7 @@ ExitSuccess:
     closesocket(clientSocket);
 }
 
-static void* runIPCServer(void* arg) {
+static void* RunInterProcessServer(void* arg) {
   SOCKADDR_UN address = {.sun_family = AF_UNIX};
   WSADATA     wsaData = {};
 
@@ -565,7 +566,7 @@ static void* runIPCServer(void* arg) {
   WSA_ERR_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
 
   while (isRunning) {
-    acceptIPCServer();
+    InterprocessServerAcceptNodeConnection();
   }
 
 Exit:
@@ -576,15 +577,15 @@ Exit:
   WSACleanup();
   return NULL;
 }
-void mxcInitializeCompositorIPCServer() {
+void mxcInitializeInterprocessServer() {
   SYSTEM_INFO systemInfo;
   GetSystemInfo(&systemInfo);
   printf("Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
 
   ipcServer.listenSocket = INVALID_SOCKET;
-  REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, runIPCServer, NULL), "IPC server pipe creation Fail!");
+  REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
 }
-void mxcShutdownCompositorIPCServer() {
+void mxcShutdownInterprocessServer() {
   if (ipcServer.listenSocket != INVALID_SOCKET) {
     closesocket(ipcServer.listenSocket);
   }
@@ -592,7 +593,7 @@ void mxcShutdownCompositorIPCServer() {
   WSACleanup();
 }
 
-void mxcConnectNodeIPC() {
+void mxcConnectInterprocessNode() {
   printf("Connecting on: '%s'\n", SOCKET_PATH);
   MxcNodeContext*        pNodeContext = NULL;
   MxcImportParam*        pImportParam = NULL;
@@ -647,7 +648,7 @@ void mxcConnectNodeIPC() {
     pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
     ERR_CHECK(pExternalNodeMemory == NULL, "Map pExternalNodeMemory failed");
     pImportParam = &pExternalNodeMemory->importParam;
-    pNodeShared = &pExternalNodeMemory->nodeShared;
+    pNodeShared = &pExternalNodeMemory->shared;
   }
 
   // Request and setup handle data
@@ -785,6 +786,10 @@ ExitSuccess:
     closesocket(clientSocket);
   WSACleanup();
 }
-void mxcShutdownNodeIPC() {
+void mxcShutdownInterprocessNode() {
+ // don't think I need this? socket doesn't stay open.
+}
 
+void mxxInterprocessTargetNodeClosed(const NodeHandle handle){
+  printf("Closing %d\n", handle);
 }

@@ -393,7 +393,7 @@ run_loop:
     }
 
     {  // Recording Cycle
-      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, compTimeline);
+      vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
       compositorFramebufferIndex = !compositorFramebufferIndex;
 

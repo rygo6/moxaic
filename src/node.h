@@ -26,13 +26,15 @@ typedef enum MxcNodeType {
 
 //
 /// IPC Types
-#define MXC_RING_BUFFER_COUNT       256
-#define MXC_RING_BUFFER_SIZE        MXC_RING_BUFFER_COUNT * sizeof(uint8_t)
-#define MXC_RING_BUFFER_HEADER_SIZE 1
+typedef uint8_t MxcRingBufferHandle;
+#define MXC_RING_BUFFER_CAPACITY     256
+//#define MXC_RING_BUFFER_SIZE         MXC_RING_BUFFER_CAPACITY * sizeof(MxcRingBufferHandle)
+#define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
+_Static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY);
 typedef struct MxcRingBuffer {
-  uint8_t head;
-  uint8_t tail;
-  uint8_t ringBuffer[MXC_RING_BUFFER_SIZE];
+  MxcRingBufferHandle head;
+  MxcRingBufferHandle tail;
+  MxcRingBufferHandle targets[MXC_RING_BUFFER_CAPACITY];
 } MxcRingBuffer;
 
 typedef struct MxcNodeShared {
@@ -46,6 +48,9 @@ typedef struct MxcNodeShared {
   // read every cycle, occasional write
   float compositorRadius;
   int   compositorCycleSkip;
+
+  MxcRingBuffer  targetQueue;
+
 } MxcNodeShared;
 typedef struct MxcImportParam {
   struct {
@@ -57,8 +62,7 @@ typedef struct MxcImportParam {
   HANDLE compTimelineHandle;
 } MxcImportParam;
 typedef struct MxcExternalNodeMemory {
-  CACHE_ALIGN MxcNodeShared nodeShared;
-  CACHE_ALIGN MxcRingBuffer ringBuffer;
+  CACHE_ALIGN MxcNodeShared  shared;
   CACHE_ALIGN MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
@@ -146,8 +150,10 @@ typedef struct MxcNodeContext {
 typedef uint8_t                 NodeHandle;
 extern size_t                   nodeCount;
 extern MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY];
-extern MxcNodeShared            nodesShared[MXC_NODE_CAPACITY];
 extern MxcNodeCompositorData    nodeCompositorData[MXC_NODE_CAPACITY];
+// Could be missing if node is external process
+extern MxcNodeShared            nodesShared[MXC_NODE_CAPACITY];
+// Holds pointer to either local or external process shared memory
 extern MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY];
 extern MxcCompositorNodeContext compositorNodeContext;
 
@@ -192,55 +198,58 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferText
 //
 /// Process IPC
 #include <pthread.h>
-void mxcInitializeCompositorIPCServer();
-void mxcShutdownCompositorIPCServer();
-void mxcConnectNodeIPC();
-void mxcShutdownNodeIPC();
+void mxcInitializeInterprocessServer();
+void mxcShutdownInterprocessServer();
+void mxcConnectInterprocessNode();
+void mxcShutdownInterprocessNode();
 
-//typedef void (*MxcInterProcessFuncPtr)(const void*);
-//typedef enum MxcRingBufferTarget {
-//  MXC_INTERPROCESS_TARGET_IMPORT
-//} MxcRingBufferTarget;
-//static const size_t MXC_INTERPROCESS_TARGET_SIZE[] = {
-//    [MXC_INTERPROCESS_TARGET_IMPORT] = sizeof(MxcImportParam),
-//};
-//static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
-//    [MXC_INTERPROCESS_TARGET_IMPORT] = (MxcInterProcessFuncPtr const)mxcRequestNodeProcessImport,
-//};
+//
+/// Process IPC Targets
 
+// Do we need this for threads!? Ya lets do it
+void mxxInterprocessTargetNodeClosed(const NodeHandle handle);
 
-// to use ring buffer?
-//static inline void mxcRingBufferEnqeue(MxcRingBuffer* pBuffer, uint8_t target, void* pParam) {
-//  pBuffer->ringBuffer[pBuffer->head] = target;
-//  memcpy((void*)(pBuffer->ringBuffer + pBuffer->head + MXC_RING_BUFFER_HEADER_SIZE), pParam, MXC_INTERPROCESS_TARGET_SIZE[target]);
-//  pBuffer->head = pBuffer->head + MXC_RING_BUFFER_HEADER_SIZE + MXC_INTERPROCESS_TARGET_SIZE[target];
-//}
-//static inline int mxcRingBufferDeque(MxcRingBuffer* pBuffer) {
-//  // TODO this needs to actually cycle around the ring buffer, this is only half done
-//
-//  if (pBuffer->head == pBuffer->tail)
-//    return 1;
-//
-//  printf("IPC Polling %d %d...\n", pBuffer->head, pBuffer->tail);
-//
-//  MxcRingBufferTarget target = (MxcRingBufferTarget)(pBuffer->ringBuffer[pBuffer->tail]);
-//
-//  // TODO do you copy it out of the IPC or just send that chunk of shared memory on through?
-//  // If consumer consumes too slow then producer might run out of data in a stream?
-//  // From trusted parent app sending shared memory through is probably fine
-//  //    void *param = malloc(fbrIPCTargetParamSize(target));
-//  //    memcpy(param, pRingBuffer->pRingBuffer + pRingBuffer->tail + FBR_IPC_RING_HEADER_SIZE, fbrIPCTargetParamSize(target));
-//  void* pParam = (void*)(pBuffer->ringBuffer + pBuffer->tail + MXC_RING_BUFFER_HEADER_SIZE);
-//
-//  if (pBuffer->tail + MXC_RING_BUFFER_HEADER_SIZE + MXC_INTERPROCESS_TARGET_SIZE[target] > MXC_RING_BUFFER_SIZE) {
-//    // TODO this needs to actually cycle around the ring buffer, this is only half done
-//    PANIC("IPC BYTE ARRAY REACHED END!!!");
-//  }
-//
-//  printf("Calling IPC Target %d... ", target);
-//  MXC_INTERPROCESS_TARGET_FUNC[target](pParam);
-//
-//  pBuffer->tail = pBuffer->tail + MXC_RING_BUFFER_HEADER_SIZE + MXC_INTERPROCESS_TARGET_SIZE[target];
-//
-//  return 0;
-//}
+typedef void (*MxcInterProcessFuncPtr)(const NodeHandle);
+typedef enum MxcInterprocessTarget {
+  MXC_INTERPROCESS_TARGET_NODE_CLOSED,
+  MXC_INTERPROCESS_TARGET_COUNT,
+} MxcInterprocessTarget;
+_Static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
+static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
+    [MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcInterProcessFuncPtr const)mxxInterprocessTargetNodeClosed,
+};
+
+static inline int mxcInterprocessEnqueue(MxcRingBuffer* pBuffer, const MxcInterprocessTarget target) {
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  const MxcRingBufferHandle head = pBuffer->head;
+  const MxcRingBufferHandle tail = pBuffer->tail;
+  if (head + 1 == tail) {
+    fprintf(stderr, "Ring buffer wrapped!");
+    return 1;
+  }
+  pBuffer->targets[head] = target;
+  pBuffer->head = (head + 1) % MXC_RING_BUFFER_CAPACITY;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+  return 0;
+}
+static inline int mxcInterprocessDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle) {
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+  const MxcRingBufferHandle head = pBuffer->head;
+  const MxcRingBufferHandle tail = pBuffer->tail;
+  if (head == tail)
+    return 1;
+
+  printf("IPC Polling %d %d...\n", head, tail);
+  MxcInterprocessTarget target = (MxcInterprocessTarget)(pBuffer->targets[tail]);
+  pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+
+  printf("Calling IPC Target %d... ", target);
+  MXC_INTERPROCESS_TARGET_FUNC[target](nodeHandle);
+  return 0;
+}
+static inline void mxcInterprocessQueuePoll() {
+  for (int i = 0; i < nodeCount; ++i) {
+    mxcInterprocessDequeue(&activeNodesShared[i]->targetQueue, i);
+  }
+}

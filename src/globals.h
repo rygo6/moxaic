@@ -39,10 +39,20 @@ typedef enum MxcCycle {
   MXC_CYCLE_UPDATE_WINDOW_STATE,  // update window input, submit queues
   MXC_CYCLE_PROCESS_INPUT,        // process input for nodes/comp to read
   MXC_CYCLE_UPDATE_NODE_STATES,   // update state for nodes to render
-  MXC_CYCLE_RECORD_COMPOSITE,     // recording compositor commands
+  MXC_CYCLE_COMPOSITOR_RECORD,     // recording compositor commands
   MXC_CYCLE_RENDER_COMPOSITE,     // compositor render
   MXC_CYCLE_COUNT
 } MxcCycle;
+
+// Think I like this?
+typedef enum MxcPosCycle {
+  MXC_CYCLE_POST_UPDATE_WINDOW_STATE = MXC_CYCLE_PROCESS_INPUT,
+  MXC_CYCLE_POST_PROCESS_INPUT = MXC_CYCLE_UPDATE_NODE_STATES,
+  MXC_CYCLE_POST_UPDATE_NODE_STATES = MXC_CYCLE_COMPOSITOR_RECORD,
+  MXC_CYCLE_POST_COMPOSITOR_RECORD = MXC_CYCLE_RENDER_COMPOSITE,
+  MXC_CYCLE_POST_RENDER_COMPOSITE = MXC_CYCLE_UPDATE_WINDOW_STATE,
+  MXC_CYCLE_POST_COUNT
+} MxcPosCycle;
 
 typedef struct Input {
   float mouseDeltaX;

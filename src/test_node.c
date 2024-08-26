@@ -226,7 +226,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 run_loop:
 
-  vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RECORD_COMPOSITE, compTimeline);
+  vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
   __atomic_thread_fence(__ATOMIC_ACQUIRE);
   memcpy(pGlobalSetMapped, (void*)&pNodeShared->nodeGlobalSetState, sizeof(VkmGlobalSetState));

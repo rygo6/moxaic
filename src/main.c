@@ -99,7 +99,7 @@ int main(void) {
     printf("Moxaic Compositor\n");
     isCompositor = true;
     mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
-    mxcInitializeCompositorIPCServer();
+    mxcInitializeInterprocessServer();
 
 #define TEST_NODE
 #ifdef TEST_NODE
@@ -133,9 +133,17 @@ int main(void) {
       // signal input ready to process!
       vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compTimeline);
 
+      // MXC_CYCLE_COMPOSITOR_RECORD occurs here
+
+      // Compositor processes input and updates nodes.
+      // Nodes record command buffers.
+      // Very unlikely to make it for this present, will be in the next one.
+      // After MXC_CYCLE_PROCESS_INPUT and MXC_CYCLE_COMPOSITOR_RECORD we want to get that submitted ASAP
+
       // Try submitting nodes before waiting to render composite
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
+      // does this really make that big a difference?
+//      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
       // wait for recording to be done
       vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
@@ -154,6 +162,9 @@ int main(void) {
       // Try submitting nodes before waiting to update window again.
       // We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
       mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
+
+      // interprocess polling could be a different thread?
+      mxcInterprocessQueuePoll();
     }
   } else {
 
@@ -174,7 +185,7 @@ int main(void) {
   //  }
 
 #if defined(MOXAIC_COMPOSITOR)
-  mxcShutdownCompositorIPCServer();
+  mxcShutdownInterprocessServer();
 #elif defined(MOXAIC_NODE)
   mxcShutdownNodeIPC();
 #endif
