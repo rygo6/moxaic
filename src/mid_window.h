@@ -31,12 +31,12 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 
 typedef struct MidWindow {
-  bool running;
-  HINSTANCE     hInstance;
-  HWND          hWnd;
-  int           width, height;
-  POINT         localCenter, globalCenter;
-  uint64_t      frequency, start, current;
+  HINSTANCE hInstance;
+  HWND      hWnd;
+  int       width, height;
+  POINT     localCenter, globalCenter;
+  uint64_t  frequency, start, current;
+  bool      running;
 } MidWindow;
 
 typedef enum MidPhaseType {

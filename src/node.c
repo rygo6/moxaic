@@ -787,9 +787,16 @@ ExitSuccess:
   WSACleanup();
 }
 void mxcShutdownInterprocessNode() {
- // don't think I need this? socket doesn't stay open.
+  for (int i = 0; i < nodeCount; ++i) {
+    // make another queue to evade ptr?
+    mxcInterprocessEnqueue(&activeNodesShared[i]->targetQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
+  }
 }
 
-void mxxInterprocessTargetNodeClosed(const NodeHandle handle){
+void mxcInterprocessTargetNodeClosed(const NodeHandle handle){
   printf("Closing %d\n", handle);
 }
+
+const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
+    [MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcInterProcessFuncPtr const)mxcInterprocessTargetNodeClosed,
+};

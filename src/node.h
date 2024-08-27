@@ -27,10 +27,10 @@ typedef enum MxcNodeType {
 //
 /// IPC Types
 typedef uint8_t MxcRingBufferHandle;
-#define MXC_RING_BUFFER_CAPACITY     256
+#define MXC_RING_BUFFER_CAPACITY 256
 //#define MXC_RING_BUFFER_SIZE         MXC_RING_BUFFER_CAPACITY * sizeof(MxcRingBufferHandle)
 #define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
-_Static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY);
+_Static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY, "RingBufferHandle type can't store capacity.");
 typedef struct MxcRingBuffer {
   MxcRingBufferHandle head;
   MxcRingBufferHandle tail;
@@ -197,7 +197,6 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferText
 
 //
 /// Process IPC
-#include <pthread.h>
 void mxcInitializeInterprocessServer();
 void mxcShutdownInterprocessServer();
 void mxcConnectInterprocessNode();
@@ -207,7 +206,7 @@ void mxcShutdownInterprocessNode();
 /// Process IPC Targets
 
 // Do we need this for threads!? Ya lets do it
-void mxxInterprocessTargetNodeClosed(const NodeHandle handle);
+void mxcInterprocessTargetNodeClosed(const NodeHandle handle);
 
 typedef void (*MxcInterProcessFuncPtr)(const NodeHandle);
 typedef enum MxcInterprocessTarget {
@@ -215,9 +214,7 @@ typedef enum MxcInterprocessTarget {
   MXC_INTERPROCESS_TARGET_COUNT,
 } MxcInterprocessTarget;
 _Static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
-static const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
-    [MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcInterProcessFuncPtr const)mxxInterprocessTargetNodeClosed,
-};
+extern const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[];
 
 static inline int mxcInterprocessEnqueue(MxcRingBuffer* pBuffer, const MxcInterprocessTarget target) {
   __atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -244,7 +241,7 @@ static inline int mxcInterprocessDequeue(MxcRingBuffer* pBuffer, const NodeHandl
   pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
   __atomic_thread_fence(__ATOMIC_RELEASE);
 
-  printf("Calling IPC Target %d... ", target);
+  printf("Calling IPC Target %d...\n", target);
   MXC_INTERPROCESS_TARGET_FUNC[target](nodeHandle);
   return 0;
 }

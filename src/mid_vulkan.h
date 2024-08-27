@@ -6,8 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vk_enum_string_helper.h>
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -20,6 +20,15 @@
 #define MIDVK_EXTERNAL_FENCE_EXTENSION_NAME     VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
 #define MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE       VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #define MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE    VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
+#define MIDVK_EXTERNAL_HANDLE HANDLE
+#else
+#define MIDVK_PLATFORM_SURFACE_EXTENSION_NAME   0
+#define MIDVK_EXTERNAL_MEMORY_EXTENSION_NAME    0
+#define MIDVK_EXTERNAL_SEMAPHORE_EXTENSION_NAME 0
+#define MIDVK_EXTERNAL_FENCE_EXTENSION_NAME     0
+#define MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE       0
+#define MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE    0
+#define MIDVK_EXTERNAL_HANDLE int
 #endif
 
 //
@@ -231,28 +240,36 @@ typedef struct VkmGlobalSet {
   VkDescriptorSet    set;
 } VkmGlobalSet;
 
-typedef struct __attribute((aligned(64))) MidVkContext {
+typedef struct MidVkContext {
   VkPhysicalDevice physicalDevice;
   VkDevice         device;
   VkmQueueFamily   queueFamilies[VKM_QUEUE_FAMILY_TYPE_COUNT];
-//  VkDescriptorPool descriptorPool;
-  VkmStdPipeLayout stdPipeLayout;
 
-  VkSampler    linearSampler;
-  VkRenderPass renderPass;
+  // these shouldn't be here?
+  VkmStdPipeLayout stdPipeLayout;
+  VkPipeline       basicPipe;
+  VkSampler        linearSampler;
+  VkRenderPass     renderPass;
 
   // this should go elsewhere
   VkRenderPass nodeRenderPass;
-  // basic pipe could stay here
-  VkPipeline basicPipe;
 
 } MidVkContext;
 
 
+#define MIDVK_CONTEXT_CAPACITY 2
+#define MIDVK_SURFACE_CAPACITY 2
+typedef struct MidVk {
+  // ya migrate refs into here
+  VkInstance instance;
+  MidVkContext contexts[MIDVK_CONTEXT_CAPACITY];
+  VkSurfaceKHR surfaces[MIDVK_SURFACE_CAPACITY];
+} MidVk;
+extern MidVk midVk;
 
 extern VkInstance instance;
 extern MidVkContext context;
-extern VkSurfaceKHR midVkSurface;
+//extern VkSurfaceKHR midVkSurface;
 
 // ya lets do this
 typedef struct __attribute((aligned(64))) MidVkThreadContext {
@@ -336,14 +353,16 @@ static const VkImageUsageFlags MIDVK_PASS_USAGES[] = {
 //----------------------------------------------------------------------------------
 
 
+
+// I think I might just want to get rid of all of this?? Maybe it's useful
+// I wonder if its bad to have these stored static? stack won't let them go
+// todo ya we are getitng rid of all of this
 typedef struct MidVkSrcDstImageBarrier {
   VkPipelineStageFlagBits2 stageMask;
   VkAccessFlagBits2        accessMask;
   VkImageLayout            layout;
 } MidVkSrcDstImageBarrier;
 
-// I think I might just want to get rid of all of this?? Maybe it's useful
-// I wonder if its bad to have these stored static? stack won't let them go
 static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
@@ -354,65 +373,15 @@ static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFIN
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_UNDEFINED,
 };
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_ACQUIRE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, // normal and color might only need to wait on color attachment
-    .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_RELEASE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-    .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
 static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_NONE,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_EXTERNAL_RELEASE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_NONE,
-    .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_PRESENT_ACQUIRE = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-};
 static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
     .accessMask = VK_ACCESS_2_NONE,
     .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_PRESENT = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-    .accessMask = VK_ACCESS_2_NONE,
-    .layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COMPUTE_SHADER_READ_ONLY = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
-    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_READ = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
-    .layout = VK_IMAGE_LAYOUT_GENERAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_COMPUTE_WRITE = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-    .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-    .layout = VK_IMAGE_LAYOUT_GENERAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COMPUTE_READ_WRITE = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-    .accessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT,
-    .layout = VK_IMAGE_LAYOUT_GENERAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_SRC = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-    .accessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
-    .layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 };
 static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -424,37 +393,11 @@ static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_BLIT_DST = &(const MidVkSr
     .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
     .layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 };
-static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_TRANSFER_DST_GENERAL = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-    .accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
-    .layout = VK_IMAGE_LAYOUT_GENERAL,
-};
 static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const MidVkSrcDstImageBarrier){
     .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
     .accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
     .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_SHADER_READ_ONLY = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-    .accessMask = VK_ACCESS_2_SHADER_READ_BIT,
-    .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_WRITE = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COLOR_ATTACHMENT_READ = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
-    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const MidVkSrcDstImageBarrier){
-    .stageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-    .accessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-    .layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-};
-
 #define VKM_COLOR_IMAGE_BARRIER(src, dst, barrier_image)   \
   (const VkImageMemoryBarrier2) {                        \
     .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,   \
@@ -492,42 +435,7 @@ static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_DEPTH_ATTACHMENT = &(const
         .layerCount = 1,                                                                   \
     },                                                                                     \
   }
-#define VKM_IMG_BARRIER(src, dst, aspect_mask, barrier_image) \
-  (const VkImageMemoryBarrier2) {                             \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,        \
-    .srcStageMask = src->stageMask,                           \
-    .srcAccessMask = src->accessMask,                         \
-    .dstStageMask = dst->stageMask,                           \
-    .dstAccessMask = dst->accessMask,                         \
-    .oldLayout = src->layout,                                 \
-    .newLayout = dst->layout,                                 \
-    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,           \
-    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,           \
-    .image = barrier_image,                                   \
-    .subresourceRange = (const VkImageSubresourceRange){      \
-        .aspectMask = aspect_mask,                            \
-        .levelCount = 1,                                      \
-        .layerCount = 1,                                      \
-    },                                                        \
-  }
-#define VKM_IMG_BARRIER_TRANSFER(_src, _dst, _aspectMask, _barrierImage, _srcQueue, _dstQueue, _levelCount) \
-  (const VkImageMemoryBarrier2) {                                                                           \
-    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                                      \
-    .srcStageMask = _src->stageMask,                                                                        \
-    .srcAccessMask = _src->accessMask,                                                                      \
-    .dstStageMask = _dst->stageMask,                                                                        \
-    .dstAccessMask = _dst->accessMask,                                                                      \
-    .oldLayout = _src->layout,                                                                              \
-    .newLayout = _dst->layout,                                                                              \
-    .srcQueueFamilyIndex = _srcQueue,                                                                       \
-    .dstQueueFamilyIndex = _dstQueue,                                                                       \
-    .image = _barrierImage,                                                                                 \
-    .subresourceRange = (const VkImageSubresourceRange){                                                    \
-        .aspectMask = _aspectMask,                                                                          \
-        .levelCount = _levelCount,                                                                          \
-        .layerCount = 1,                                                                                    \
-    },                                                                                                      \
-  }
+
 
 // might be better to do it like this
 typedef struct MidVkImageBarrier {
@@ -680,37 +588,22 @@ typedef struct MidVkImageTransferBarrier {
 //----------------------------------------------------------------------------------
 // Inline Methods
 //----------------------------------------------------------------------------------
-#define CmdPipelineImageBarriers2(cmd, imageMemoryBarrierCount, pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, cmd, imageMemoryBarrierCount, pImageMemoryBarriers)
+
+// Do I want to do this? It is probably that vk commands would always tend to be used in clumps
+// so local caching may be pointless?
+//typedef struct {
+//  PFN_vkCmdPipelineBarrier2 CmdPipelineBarrier2;
+//  PFN_vkCmdPipelineBarrier2 CmdPipelineImageBarrierFunc2;
+//
+//} MidVk;
+
+#define CmdPipelineImageBarriers2(_cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers)
 MIDVK_INLINE void PFN_CmdPipelineImageBarriers2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
   func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
 #define CmdPipelineImageBarrier2(cmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, cmd, pImageMemoryBarrier)
 MIDVK_INLINE void PFN_CmdPipelineImageBarrierFunc2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
   func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
-}
-#define CmdImageBarrier(_cmd, _pImageBarrier) PFN_CmdImageBarrier(CmdPipelineBarrier2, _cmd, _pImageBarrier)
-MIDVK_INLINE void PFN_CmdImageBarrier(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const MidVkImageBarrier* pImageBarrier) {
-  const VkImageMemoryBarrier2 barrier = MIDVK_IMAGE_BARRIER(pImageBarrier[0]);
-  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
-}
-#define CmdImageBarriers(_cmd, _barrierCount, _pImageMemoryBarrier) PFN_CmdImageBarriers(CmdPipelineBarrier2, _cmd, _barrierCount, _pImageMemoryBarrier)
-MIDVK_INLINE void PFN_CmdImageBarriers(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const int barrierCount, const MidVkImageBarrier* pImageBarrier) {
-  // on -O2 this ends up the same as if it were all const defined https://godbolt.org/z/qGqj8aqc5
-  VkImageMemoryBarrier2 barriers[barrierCount];
-  for (int i = 0; i < barrierCount; ++i) barriers[i] = MIDVK_IMAGE_BARRIER(pImageBarrier[i]);
-  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = barrierCount, .pImageMemoryBarriers = barriers});
-}
-#define CmdImageTransferBarrier(_cmd, _pImageBarrier) PFN_CmdImageTransferBarrier(CmdPipelineBarrier2, _cmd, _pImageBarrier)
-MIDVK_INLINE void PFN_CmdImageTransferBarrier(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const MidVkImageTransferBarrier* pImageBarrier) {
-  const VkImageMemoryBarrier2 barrier = MIDVK_IMAGE_TRANSFER_BARRIER(pImageBarrier[0]);
-  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrier});
-}
-#define CmdImageTransferBarriers(_cmd, _barrierCount, _pImageMemoryBarrier) PFN_CmdImageTransferBarriers(CmdPipelineBarrier2, _cmd, _barrierCount, _pImageMemoryBarrier)
-MIDVK_INLINE void PFN_CmdImageTransferBarriers(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const int barrierCount, const MidVkImageTransferBarrier* pImageBarrier) {
-  // on -O2 this ends up the same as if it were all const defined https://godbolt.org/z/qGqj8aqc5
-  VkImageMemoryBarrier2 barriers[barrierCount];
-  for (int i = 0; i < barrierCount; ++i) barriers[i] = MIDVK_IMAGE_TRANSFER_BARRIER(pImageBarrier[i]);
-  func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = barrierCount, .pImageMemoryBarriers = barriers});
 }
 #define CmdBlitImageFullScreen(cmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, cmd, srcImage, dstImage)
 MIDVK_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
@@ -991,35 +884,34 @@ typedef struct VkmSamplerCreateInfo {
   VkSamplerAddressMode   addressMode;
   VkSamplerReductionMode reductionMode;
 } VkmSamplerCreateInfo;
-#define VKM_SAMPLER_LINEAR_CLAMP_DESC \
-  (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
+#define VKM_SAMPLER_LINEAR_CLAMP_DESC (const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
 void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
 
 typedef struct VkmTextureCreateInfo {
-  const char*        debugName;
-  VkImageCreateInfo  imageCreateInfo;
-  VkImageAspectFlags aspectMask;
-  MidLocality        locality;
-  HANDLE             externalHandle;
+  const char*           debugName;
+  VkImageCreateInfo     imageCreateInfo;
+  VkImageAspectFlags    aspectMask;
+  MidLocality           locality;
+  MIDVK_EXTERNAL_HANDLE externalHandle;
 } VkmTextureCreateInfo;
 void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture);
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
 
 
 typedef struct MidVkSemaphoreCreateInfo {
-  const char*     debugName;
-  VkSemaphoreType semaphoreType;
-  MidLocality     locality;
-  HANDLE          externalHandle;
+  const char*           debugName;
+  VkSemaphoreType       semaphoreType;
+  MidLocality           locality;
+  MIDVK_EXTERNAL_HANDLE externalHandle;
 } MidVkSemaphoreCreateInfo;
 void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 
-HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory);
-HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore);
+MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory);
+MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore);
 
 void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 

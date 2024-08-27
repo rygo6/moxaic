@@ -48,14 +48,14 @@ int main(void) {
     midCreateWindow();
     vkmInitialize();
 
-    midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &midVkSurface);
+    midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &midVk.surfaces[0]);
 
     const VkmContextCreateInfo contextCreateInfo = {
         .maxDescriptorCount = 30,
         .uniformDescriptorCount = 10,
         .combinedImageSamplerDescriptorCount = 10,
         .storageImageDescriptorCount = 10,
-        .presentSurface = midVkSurface,
+        .presentSurface = midVk.surfaces[0],
         .queueFamilyCreateInfos = {
             [VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
                 .supportsGraphics = VKM_SUPPORT_YES,
@@ -98,7 +98,7 @@ int main(void) {
 #if defined(MOXAIC_COMPOSITOR)
     printf("Moxaic Compositor\n");
     isCompositor = true;
-    mxcRequestAndRunCompNodeThread(midVkSurface, mxcCompNodeThread);
+    mxcRequestAndRunCompNodeThread(midVk.surfaces[0], mxcCompNodeThread);
     mxcInitializeInterprocessServer();
 
 #define TEST_NODE
@@ -110,7 +110,7 @@ int main(void) {
 #elif defined(MOXAIC_NODE)
     printf("Moxaic node\n");
     isCompositor = false;
-    mxcConnectNodeIPC();
+    mxcConnectInterprocessNode();
 #endif
   }
 
@@ -170,6 +170,8 @@ int main(void) {
 
     const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
     while (isRunning) {
+      midUpdateWindowInput();
+      isRunning = midWindow.running;
 
       // I guess technically we just want to go as fast as possible in a node, but we would probably need to process and send input here first at some point?
       // we probably want to signal and wait on semaphore here
@@ -187,7 +189,7 @@ int main(void) {
 #if defined(MOXAIC_COMPOSITOR)
   mxcShutdownInterprocessServer();
 #elif defined(MOXAIC_NODE)
-  mxcShutdownNodeIPC();
+  mxcShutdownInterprocessNode();
 #endif
 
   return EXIT_SUCCESS;

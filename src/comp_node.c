@@ -319,9 +319,9 @@ run_loop:
         continue;
       
       // We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
-//      memcpy(&nodeCompositorData[i].rootPose.rotation, &pNodeShared->rootPose, sizeof(MidPose));
-      nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
-
+      memcpy(&nodeCompositorData[i].rootPose, &pNodeShared->rootPose, sizeof(MidPose));
+//      nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
+//
       // update node model mat... this should happen every frame so user can move it in comp
       nodeCompositorData[i].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[i].rootPose.position, nodeCompositorData[i].rootPose.rotation);
 
@@ -475,12 +475,14 @@ run_loop:
 
 void* mxcCompNodeThread(const MxcCompositorNodeContext* pNodeContext) {
   MxcCompNode compNode;
+
   vkmBeginAllocationRequests();
   const MxcCompNodeCreateInfo compNodeInfo = {
       .compMode = MXC_COMP_MODE_TESS,
   };
   mxcCreateCompNode(&compNodeInfo, &compNode);
   vkmEndAllocationRequests();
+
   mxcBindUpdateCompNode(&compNodeInfo, &compNode);
   mxcCompNodeRun(pNodeContext, &compNode);
   return NULL;

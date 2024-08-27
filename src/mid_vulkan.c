@@ -6,9 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+MidVk midVk = {};
+
 VkInstance instance = VK_NULL_HANDLE;
 MidVkContext context = {};
-VkSurfaceKHR midVkSurface = VK_NULL_HANDLE;
+//VkSurfaceKHR midVkSurface = VK_NULL_HANDLE;
 VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
 
 __thread MidVkThreadContext threadContext = {};
