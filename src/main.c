@@ -151,7 +151,7 @@ int main(void) {
       compBaseCycleValue += MXC_CYCLE_COUNT;
       __atomic_thread_fence(__ATOMIC_ACQUIRE);
       const int swapIndex = compositorNodeContext.swapIndex;
-      vkmSubmitPresentCommandBuffer(compositorNodeContext.cmd,
+      midVkSubmitPresentCommandBuffer(compositorNodeContext.cmd,
                                     compositorNodeContext.swap.chain,
                                     compositorNodeContext.swap.acquireSemaphore,
                                     compositorNodeContext.swap.renderCompleteSemaphore,

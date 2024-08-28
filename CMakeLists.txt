@@ -2,14 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(moxaic C)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(TARGET_NAME moxaic)
-
-#set(THREADS_PREFER_PTHREAD_FLAG ON)
-#set(TOOLCHAIN_PREFIX x86_64-w64-mingw32)
-#set(CMAKE_VERBOSE_MAKEFILE ON)
-
-set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.290.0")
 
 file(GLOB SRC_FILES
         src/*.c
@@ -22,19 +15,22 @@ add_executable(${TARGET_NAME}
         ${SRC_FILES}
 )
 
+set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.290.0")
 target_link_directories(${TARGET_NAME} PUBLIC
         "${VULKAN_SDK_PATH}/Lib"
 )
-
 target_include_directories(${TARGET_NAME} PUBLIC
         src
         third_party
         "${VULKAN_SDK_PATH}/Include"
 )
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 target_link_libraries(${TARGET_NAME} PUBLIC
         vulkan-1
         ws2_32
+        ${CMAKE_THREAD_LIBS_INIT}
 )
 
 target_compile_definitions(${TARGET_NAME} PUBLIC

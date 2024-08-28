@@ -132,7 +132,7 @@ static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COMP_SHADER_READ = &(const
 
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
   {  // Create
-
+    
      // layouts
     CreateCompSetLayout(pInfo->compMode, &pNode->compNodeSetLayout);
     CreateCompPipeLayout(pNode->compNodeSetLayout, &pNode->compNodePipeLayout);
@@ -320,8 +320,8 @@ run_loop:
       
       // We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
       memcpy(&nodeCompositorData[i].rootPose, &pNodeShared->rootPose, sizeof(MidPose));
-//      nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
-//
+      //nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
+
       // update node model mat... this should happen every frame so user can move it in comp
       nodeCompositorData[i].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[i].rootPose.position, nodeCompositorData[i].rootPose.rotation);
 

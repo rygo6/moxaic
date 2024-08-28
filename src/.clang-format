@@ -28,7 +28,9 @@ AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: true
 IndentPPDirectives: None
 IndentWidth: 2
-TabWidth: 4
+ContinuationIndentWidth: 2
+TabWidth: 2
+UseTab: ForContinuationAndIndentation
 ReflowComments: false
 BraceWrapping:
   AfterClass: false

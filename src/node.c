@@ -416,7 +416,7 @@ static void InterprocessServerAcceptNodeConnection() {
 
   // Receive Node Process Handle
   {
-    int receiveLength = recv(clientSocket, &nodeProcessId, sizeof(DWORD), 0);
+    int receiveLength = recv(clientSocket, (char*)&nodeProcessId, sizeof(DWORD), 0);
     WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node process id failed");
     printf("Received node process id: %lu Size: %d\n", nodeProcessId, receiveLength);
     ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
@@ -519,7 +519,7 @@ static void InterprocessServerAcceptNodeConnection() {
     HANDLE duplicatedExternalNodeMemoryHandle;
     ERR_CHECK(!DuplicateHandle(GetCurrentProcess(), pNodeContext->externalMemoryHandle, nodeProcessHandle, &duplicatedExternalNodeMemoryHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate sharedMemory handle fail.");
     printf("Sending duplicatedExternalNodeMemoryHandle: %p Size: %llu\n", duplicatedExternalNodeMemoryHandle, sizeof(HANDLE));
-    WSA_ERR_CHECK(send(clientSocket, &duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0) == SOCKET_ERROR, "Send failed");
+    WSA_ERR_CHECK(send(clientSocket, (const char*)&duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0) == SOCKET_ERROR, "Send failed");
     printf("Process Node Export Success.\n");
     goto ExitSuccess;
   }
@@ -634,14 +634,14 @@ void mxcConnectInterprocessNode() {
   {
     const DWORD currentProcessId = GetCurrentProcessId();
     printf("Sending process handle: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
-    int sendResult = send(clientSocket, &currentProcessId, sizeof(DWORD), 0);
+    int sendResult = send(clientSocket, (const char*)&currentProcessId, sizeof(DWORD), 0);
     WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
   }
 
   // Receive shared memory
   {
     printf("Waiting to receive externalNodeMemoryHandle.\n");
-    int receiveLength = recv(clientSocket, &externalNodeMemoryHandle, sizeof(HANDLE), 0);
+    int receiveLength = recv(clientSocket, (char*)&externalNodeMemoryHandle, sizeof(HANDLE), 0);
     WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv externalNodeMemoryHandle failed");
     printf("Received externalNodeMemoryHandle: %p Size: %d\n", externalNodeMemoryHandle, receiveLength);
 
