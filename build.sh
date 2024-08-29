@@ -1,0 +1,1 @@
+gcc -std=c99 -fmacro-prefix-map=$(pwd)/= -DMOXAIC_COMPOSITOR -DWIN32 -Isrc -Ithird_party -IC:/VulkanSDK/1.3.290.0/Include -LC:/VulkanSDK/1.3.290.0/Lib -lvulkan-1 -lws2_32 -lpthread -include ./src/globals.h ./src/main.c

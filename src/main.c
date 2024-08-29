@@ -1,13 +1,25 @@
+#include "globals.h"
 #include "comp_node.h"
 #include "node.h"
 #include "test_node.h"
 #include "window.h"
+
+// build
+//#include "comp_node.c"
+//#include "node.c"
+//#include "test_node.c"
+//#include "window.c"
+//#include "mid_vulkan.c"
+
 
 #define MID_DEBUG
 [[noreturn]] void Panic(const char* file, const int line, const char* message) {
   fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
   __builtin_trap();
 }
+
+#define MID_MATH_IMPLEMENTATION
+#include "mid_math.h"
 
 #define MID_VULKAN_IMPLEMENTATION
 #include "mid_vulkan.h"
@@ -27,22 +39,21 @@
 
 bool isCompositor = true;
 bool isRunning = true;
+
 //typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 
 int main(void) {
 
-  // setup dynamic vk load at some point
-  //  HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
-  //  if (vulkanLibrary == NULL) {
-  //    fprintf(stderr, "Failed to load Vulkan library.\n");
-  //    return EXIT_FAILURE;
-  //  }
-  //
-  //  GetInstanceProcAddrFunc vkGetInstanceProcAddr = (GetInstanceProcAddrFunc)GetProcAddress(vulkanLibrary, "vkGetInstanceProcAddr");
-  //  if (vkGetInstanceProcAddr == NULL) {
-  //    fprintf(stderr, "Failed to retrieve function pointer to vkGetInstanceProcAddr.\n");
-  //    return EXIT_FAILURE;
-  //  }
+//    HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
+//    if (vulkanLibrary == NULL) {
+//      fprintf(stderr, "Failed to load Vulkan library.\n");
+//      return EXIT_FAILURE;
+//    }
+//    GetInstanceProcAddrFunc vkGetInstanceProcAddr = (GetInstanceProcAddrFunc)GetProcAddress(vulkanLibrary, "vkGetInstanceProcAddr");
+//    if (vkGetInstanceProcAddr == NULL) {
+//      fprintf(stderr, "Failed to retrieve function pointer to vkGetInstanceProcAddr.\n");
+//      return EXIT_FAILURE;
+//    }
 
   { // Initialize
     midCreateWindow();

@@ -1336,7 +1336,7 @@ void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char*
 	MIDVK_REQUIRE(SetDebugUtilsObjectNameEXT(context.device, &debugInfo));
 }
 
-HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory) {
+MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory) {
 	MIDVK_INSTANCE_STATIC_FUNC(GetMemoryWin32HandleKHR);
 	const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
@@ -1348,7 +1348,7 @@ HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory) {
 	return handle;
 }
 
-HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore) {
+MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore) {
 	MIDVK_INSTANCE_STATIC_FUNC(GetSemaphoreWin32HandleKHR);
 	const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
