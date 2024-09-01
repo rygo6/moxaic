@@ -1,4 +1,3 @@
-#include "globals.h"
 #include "comp_node.h"
 #include "node.h"
 #include "test_node.h"
@@ -17,6 +16,8 @@
   fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
   __builtin_trap();
 }
+
+#include "mid_oxr.h"
 
 #define MID_MATH_IMPLEMENTATION
 #include "mid_math.h"
