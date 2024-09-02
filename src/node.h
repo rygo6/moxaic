@@ -61,9 +61,10 @@ typedef struct MxcImportParam {
   HANDLE nodeTimelineHandle;
   HANDLE compTimelineHandle;
 } MxcImportParam;
-typedef struct MxcExternalNodeMemory {
-  CACHE_ALIGN MxcNodeShared  shared;
-  CACHE_ALIGN MxcImportParam importParam;
+typedef struct CACHE_ALIGN MxcExternalNodeMemory {
+	MxcNodeShared shared;
+	CACHE_ALIGN
+	MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
 //
@@ -97,22 +98,21 @@ typedef struct MxcNodeCompositorSetState {
   vec2 ulUV;
   vec2 lrUV;
 } MxcNodeCompositorSetState;
-typedef struct MxcNodeCompositorData {
-  CACHE_ALIGN
-  MxcNodeCompositorSetState nodeSetState;
-  MidPose                   rootPose;
-  uint64_t                  lastTimelineSwap;
+typedef struct CACHE_ALIGN MxcNodeCompositorData {
+	MxcNodeCompositorSetState nodeSetState;
+	MidPose                   rootPose;
+	uint64_t                  lastTimelineSwap;
 
-  struct {
-    CACHE_ALIGN
-    VkImage     color;
-    VkImage     normal;
-    VkImage     gBuffer;
-    VkImageView colorView;
-    VkImageView normalView;
-    VkImageView gBufferView;
-    VkImageMemoryBarrier2 acquireBarriers[3];
-  } framebuffers[MIDVK_SWAP_COUNT];
+	CACHE_ALIGN
+	struct {
+		VkImage               color;
+		VkImage               normal;
+		VkImage               gBuffer;
+		VkImageView           colorView;
+		VkImageView           normalView;
+		VkImageView           gBufferView;
+		VkImageMemoryBarrier2 acquireBarriers[3];
+	} framebuffers[MIDVK_SWAP_COUNT];
 } MxcNodeCompositorData;
 
 //

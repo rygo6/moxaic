@@ -1,7 +1,10 @@
-#define XR_USE_GRAPHICS_API_OPENGL
+//#define XR_EXTENSION_PROTOTYPES
+//#define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_VULKAN
+#define XR_USE_GRAPHICS_API_OPENGL
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+#include <openxr/openxr_reflection.h>
 #include <openxr/openxr_loader_negotiation.h>
 
 #ifndef COUNT
@@ -20,11 +23,82 @@
 #define EXPORT
 #endif
 
+#define MIDXR_DEFAULT_WIDTH        1024
+#define MIDXR_DEFAULT_HEIGHT       1024
+#define MIDXR_DEFAULT_SAMPLES      1
+#define MIDXR_OPENGL_MAJOR_VERSION 4
+#define MIDXR_OPENGL_MINOR_VERSION 6
+
+static int xrSystemCount = 1;
+static int xrInstanceCount = 1;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
+	XrInstance                       instance,
+	XrSystemId                       systemId,
+	XrGraphicsRequirementsOpenGLKHR* graphicsRequirements) {
+	const XrVersion openglApiVersion = XR_MAKE_VERSION(MIDXR_OPENGL_MAJOR_VERSION, MIDXR_OPENGL_MINOR_VERSION, 0);
+	*graphicsRequirements = (XrGraphicsRequirementsOpenGLKHR){
+		.minApiVersionSupported = openglApiVersion,
+		.maxApiVersionSupported = openglApiVersion,
+	};
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
+	XrInstance               instance,
+	XrSystemId               systemId,
+	XrViewConfigurationType  viewConfigurationType,
+	uint32_t                 viewCapacityInput,
+	uint32_t*                viewCountOutput,
+	XrViewConfigurationView* views) {
+	switch (viewConfigurationType) {
+		default:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+			*viewCountOutput = 1;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+			*viewCountOutput = 2;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+			*viewCountOutput = 4;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+			*viewCountOutput = 1;  // not sure
+			break;
+	}
+	for (int i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
+		views[i] = (XrViewConfigurationView){
+			.recommendedImageRectWidth = MIDXR_DEFAULT_WIDTH,
+			.maxImageRectWidth = MIDXR_DEFAULT_WIDTH,
+			.recommendedImageRectHeight = MIDXR_DEFAULT_HEIGHT,
+			.maxImageRectHeight = MIDXR_DEFAULT_HEIGHT,
+			.recommendedSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+			.maxSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+		};
+	};
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
+	XrInstance             instance,
+	const XrSystemGetInfo* getInfo,
+	XrSystemId*            systemId) {
+	*systemId = (XrSystemId)(uint64_t)xrSystemCount++;
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
+	const XrInstanceCreateInfo* createInfo,
+	XrInstance*                 instance) {
+	*instance = (XrInstance)(uint64_t)xrInstanceCount++;
+	return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
-	const char*                                 layerName,
-	uint32_t                                    propertyCapacityInput,
-	uint32_t*                                   propertyCountOutput,
-	XrExtensionProperties*                      properties){
+	const char*            layerName,
+	uint32_t               propertyCapacityInput,
+	uint32_t*              propertyCountOutput,
+	XrExtensionProperties* properties) {
 	printf("xrEnumerateInstanceExtensionProperties\n");
 	const XrExtensionProperties extensionProperties[] = {
 		{
@@ -39,6 +113,30 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
+	uint32_t              propertyCapacityInput,
+	uint32_t*             propertyCountOutput,
+	XrApiLayerProperties* properties) {
+	return XR_SUCCESS;
+}
+
+// sed -n 's/.*XRAPI_PTR \*PFN_\(xr[a-zA-Z0-9_]*\).*/PFN_CASE("\1") \\/p' /c/OpenXRSDK/OpenXR.Loader.1.1.38/include/openxr/openxr.h > output.txt
+/* clang-format off */
+#define PFN_FUNCS \
+	PFN_CASE("xrVoidFunction") \
+	PFN_CASE("xrGetInstanceProcAddr") \
+	PFN_CASE("xrEnumerateApiLayerProperties") \
+	PFN_CASE("xrEnumerateInstanceExtensionProperties") \
+	PFN_CASE("xrCreateInstance")
+
+/* clang-format on */
+
+
+#define PFN_CASE(c0, name)                \
+	case c0 + sizeof(#name):                \
+		*function = (PFN_xrVoidFunction)name; \
+		return XR_SUCCESS;
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
@@ -46,12 +144,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	printf("xrGetInstanceProcAddr %s\n", name);
 	int hash = name[2] + strlen(name) + 1;
 	switch (hash) {
-		case 'G' + sizeof("xrGetInstanceProcAddr"):
-			*function = (PFN_xrVoidFunction)xrGetInstanceProcAddr;
-			return XR_SUCCESS;
-		case 'E' + sizeof("xrEnumerateInstanceExtensionProperties"):
-			*function = (PFN_xrVoidFunction)xrEnumerateInstanceExtensionProperties;
-			return XR_SUCCESS;
+		PFN_CASE('G', xrGetInstanceProcAddr)
+		PFN_CASE('E', xrEnumerateApiLayerProperties)
+		PFN_CASE('E', xrEnumerateInstanceExtensionProperties)
+		PFN_CASE('C', xrCreateInstance)
+		PFN_CASE('G', xrGetSystem)
+		PFN_CASE('E', xrEnumerateViewConfigurationViews)
+		PFN_CASE('G', xrGetOpenGLGraphicsRequirementsKHR)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
