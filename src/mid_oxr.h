@@ -1,5 +1,14 @@
-//#define XR_EXTENSION_PROTOTYPES
-//#define XR_USE_PLATFORM_WIN32
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+//#include <unknwn.h> dummy typdef from unknwn.h because openxr_platform.h wants it
+typedef struct IUnknown IUnknown;
+
+#define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_VULKAN
 #define XR_USE_GRAPHICS_API_OPENGL
 #include <openxr/openxr.h>
@@ -10,10 +19,6 @@
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #if defined(__GNUC__)
 #define EXPORT __attribute__((visibility("default")))
@@ -29,8 +34,76 @@
 #define MIDXR_OPENGL_MAJOR_VERSION 4
 #define MIDXR_OPENGL_MINOR_VERSION 6
 
-static int xrSystemCount = 1;
-static int xrInstanceCount = 1;
+
+typedef struct XrInstanceContext {
+	XrInstance  instance;
+}XrInstanceContext;
+
+
+#define LETTER_COUNT ('z' - 'a')
+_Static_assert(LETTER_COUNT == 25, "");
+
+static int xrPathCount = 1;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
+	XrInstance  instance,
+	const char* pathString,
+	XrPath*     path) {
+	// ya not sure what im going to here yet
+//	const char* p = pathString;
+//	int hash;
+//	while (*p != '\0') {
+//		switch (*p) {
+//			case '/':
+//
+//				hash = 5381;
+//				break;
+//			default:
+//				hash = ((hash << 5) + hash) + *p;
+//		}
+//
+//		p++;
+//	}
+	*path = (XrPath)(uint64_t)xrPathCount++;
+	return XR_SUCCESS;
+}
+
+static int xrActionSetCount = 1;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
+	XrInstance                   instance,
+	const XrActionSetCreateInfo* createInfo,
+	XrActionSet*                 actionSet) {
+	*actionSet = (XrActionSet)(uint64_t)xrActionSetCount++;
+	return XR_SUCCESS;
+}
+
+static int xrSpaceCount = 1;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
+	XrSession                         session,
+	const XrReferenceSpaceCreateInfo* createInfo,
+	XrSpace*                          space) {
+	*space = (XrSpace)(uint64_t)xrSpaceCount++;
+	return XR_SUCCESS;
+}
+
+static XrGraphicsBindingOpenGLWin32KHR glBinding;
+static int                             xrSessionCount = 1;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
+	XrInstance                 instance,
+	const XrSessionCreateInfo* createInfo,
+	XrSession*                 session) {
+	switch ((XrStructureType)createInfo->next) {
+		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
+			glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
+			break;
+		default: break;
+	}
+	*session = (XrSession)(uint64_t)xrSessionCount++;
+	return XR_SUCCESS;
+}
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 	XrInstance                       instance,
@@ -79,6 +152,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	return XR_SUCCESS;
 }
 
+static int xrSystemCount = 1;
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	XrInstance             instance,
 	const XrSystemGetInfo* getInfo,
@@ -86,6 +161,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	*systemId = (XrSystemId)(uint64_t)xrSystemCount++;
 	return XR_SUCCESS;
 }
+
+static int xrInstanceCount = 1;
 
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	const XrInstanceCreateInfo* createInfo,
@@ -123,37 +200,55 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 // sed -n 's/.*XRAPI_PTR \*PFN_\(xr[a-zA-Z0-9_]*\).*/PFN_CASE("\1") \\/p' /c/OpenXRSDK/OpenXR.Loader.1.1.38/include/openxr/openxr.h > output.txt
 /* clang-format off */
 #define PFN_FUNCS \
-	PFN_CASE("xrVoidFunction") \
-	PFN_CASE("xrGetInstanceProcAddr") \
-	PFN_CASE("xrEnumerateApiLayerProperties") \
-	PFN_CASE("xrEnumerateInstanceExtensionProperties") \
-	PFN_CASE("xrCreateInstance")
-
+	PFN_CASE(xrGetInstanceProcAddr) \
+	PFN_CASE(xrEnumerateApiLayerProperties) \
+	PFN_CASE(xrEnumerateInstanceExtensionProperties) \
+	PFN_CASE(xrCreateInstance) \
+	PFN_CASE(xrGetSystem) \
+	PFN_CASE(xrEnumerateViewConfigurationViews) \
+	PFN_CASE(xrGetOpenGLGraphicsRequirementsKHR) \
+	PFN_CASE(xrCreateSession) \
+	PFN_CASE(xrCreateReferenceSpace)
 /* clang-format on */
 
-
-#define PFN_CASE(c0, name)                \
-	case c0 + sizeof(#name):                \
-		*function = (PFN_xrVoidFunction)name; \
+#define PFN_CASE(_c0, _c1, _c2, _c4, _name)                                 \
+	case _c0 + (_c1 << 2) + (_c2 << 4) + (_c4 << 8) + (sizeof(#_name) << 16): \
+		*function = (PFN_xrVoidFunction)_name;                                  \
 		return XR_SUCCESS;
-
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
 	PFN_xrVoidFunction* function) {
 	printf("xrGetInstanceProcAddr %s\n", name);
-	int hash = name[2] + strlen(name) + 1;
+	unsigned long long hash = name[2], len = 4, offset = 2;
+	const char*        p = &name[3];
+	while (*p != '\0') {
+		if (offset < 16 && *p >= 'A' && *p <= 'Z') {
+			hash += *p << offset;
+			offset += offset;
+		}
+		len++;
+		p++;
+	}
+	hash += len << 16;
 	switch (hash) {
-		PFN_CASE('G', xrGetInstanceProcAddr)
-		PFN_CASE('E', xrEnumerateApiLayerProperties)
-		PFN_CASE('E', xrEnumerateInstanceExtensionProperties)
-		PFN_CASE('C', xrCreateInstance)
-		PFN_CASE('G', xrGetSystem)
-		PFN_CASE('E', xrEnumerateViewConfigurationViews)
-		PFN_CASE('G', xrGetOpenGLGraphicsRequirementsKHR)
+		PFN_CASE('G', 'I', 'P', 'A', xrGetInstanceProcAddr)
+		PFN_CASE('E', 'A', 'L', 'P', xrEnumerateApiLayerProperties)
+		PFN_CASE('E', 'I', 'E', 'P', xrEnumerateInstanceExtensionProperties)
+		PFN_CASE('C', 'I', 0, 0, xrCreateInstance)
+		PFN_CASE('G', 'S', 0, 0, xrGetSystem)
+		PFN_CASE('E', 'V', 'C', 'V', xrEnumerateViewConfigurationViews)
+		PFN_CASE('G', 'O', 'G', 'L', xrGetOpenGLGraphicsRequirementsKHR)
+		PFN_CASE('C', 'S', 0, 0, xrCreateSession)
+		PFN_CASE('C', 'R', 'S', 0, xrCreateReferenceSpace)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
+	// could do something with computed gotos?
+	//	static void *jumpTable[] = {&&xrGetInstanceProcAddr, &&xrEnumerateApiLayerProperties, &&xrEnumerateInstanceExtensionProperties};
+	//xrGetInstanceProcAddr:
+	//xrEnumerateApiLayerProperties:
+	//xrEnumerateInstanceExtensionProperties:
 }
 
 XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
