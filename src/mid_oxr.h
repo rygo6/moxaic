@@ -5,7 +5,6 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-//#include <unknwn.h> dummy typdef from unknwn.h because openxr_platform.h wants it
 typedef struct IUnknown IUnknown;
 
 #define XR_USE_PLATFORM_WIN32
@@ -16,6 +15,8 @@ typedef struct IUnknown IUnknown;
 #include <openxr/openxr_reflection.h>
 #include <openxr/openxr_loader_negotiation.h>
 
+//
+/// Mid Common Utility
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
@@ -28,44 +29,60 @@ typedef struct IUnknown IUnknown;
 #define EXPORT
 #endif
 
+//
+/// Mid OpenXR Constants
 #define MIDXR_DEFAULT_WIDTH        1024
 #define MIDXR_DEFAULT_HEIGHT       1024
 #define MIDXR_DEFAULT_SAMPLES      1
 #define MIDXR_OPENGL_MAJOR_VERSION 4
 #define MIDXR_OPENGL_MINOR_VERSION 6
 
-
+//
+/// Mid OpenXR Types
+// ya we want to do this
 typedef struct XrInstanceContext {
 	XrInstance  instance;
 }XrInstanceContext;
 
+//
+/// Mid OpenXR Implementation
 
-#define LETTER_COUNT ('z' - 'a')
-_Static_assert(LETTER_COUNT == 25, "");
-
-static int xrPathCount = 1;
+#define nil '\0'
+#define PATH_CASE(_c0, _c1, _c2, _c3, _c4, _c5, _c6, _c7, _name)                                            \
+	case _c0 + (_c1 << 4) + (_c2 << 8) + (_c3 << 12) + (_c4 << 16) + (_c5 << 20) + (_c6 << 24) + (_c7 << 26): \
+		*bufferCountOutput = sizeof(_name) < bufferCapacityInput ? sizeof(_name) : bufferCapacityInput;        \
+		memcpy(buffer, &_name, *bufferCountOutput);                                                             \
+		return XR_SUCCESS;
+XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
+	XrInstance                                  instance,
+	XrPath                                      path,
+	uint32_t                                    bufferCapacityInput,
+	uint32_t*                                   bufferCountOutput,
+	char*                                       buffer) {
+	switch (path) {
+		PATH_CASE('u', 'h', 'l', nil, nil, nil, nil, nil, "/user/hand/left")
+		PATH_CASE('u', 'h', 'r', nil, nil, nil, nil, nil, "/user/hand/right")
+		PATH_CASE('u', 'h', 'l', 'i', 's', 'c', nil, nil, "/user/hand/left/input/select/click")
+		PATH_CASE('u', 'h', 'r', 'i', 's', 'c', nil, nil, "/user/hand/right/input/select/click")
+		default:
+			return XR_ERROR_FUNCTION_UNSUPPORTED;
+	}
+}
 
 XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	XrInstance  instance,
 	const char* pathString,
-	XrPath*     path) {
-	// ya not sure what im going to here yet
-//	const char* p = pathString;
-//	int hash;
-//	while (*p != '\0') {
-//		switch (*p) {
-//			case '/':
-//
-//				hash = 5381;
-//				break;
-//			default:
-//				hash = ((hash << 5) + hash) + *p;
-//		}
-//
-//		p++;
-//	}
-	*path = (XrPath)(uint64_t)xrPathCount++;
-	return XR_SUCCESS;
+	uint64_t*   path) {
+	printf("xrStringToPath\n");
+	*path = 0;
+	int offset = 4;
+	while (offset < 26 && *pathString++ != '\0') {
+		if (*pathString == '/') {
+			*path += *(pathString + 1) << offset;
+			offset += 4;
+		}
+	}
+	return *path != 0 ? XR_SUCCESS : XR_ERROR_PATH_INVALID;
 }
 
 static int xrActionSetCount = 1;
@@ -211,36 +228,36 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 	PFN_CASE(xrCreateReferenceSpace)
 /* clang-format on */
 
-#define PFN_CASE(_c0, _c1, _c2, _c4, _name)                                 \
-	case _c0 + (_c1 << 2) + (_c2 << 4) + (_c4 << 8) + (sizeof(#_name) << 16): \
-		*function = (PFN_xrVoidFunction)_name;                                  \
+#define PFN_CASE(_c0, _c1, _c2, _c3, _name)         \
+	case _c0 + (_c1 << 4) + (_c2 << 8) + (_c3 << 12): \
+		*function = (PFN_xrVoidFunction)_name;          \
 		return XR_SUCCESS;
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
 	PFN_xrVoidFunction* function) {
 	printf("xrGetInstanceProcAddr %s\n", name);
-	unsigned long long hash = name[2], len = 4, offset = 2;
-	const char*        p = &name[3];
-	while (*p != '\0') {
-		if (offset < 16 && *p >= 'A' && *p <= 'Z') {
+	const char* p = &name[3];
+	uint32_t    hash = name[2], offset = 4;
+	while (offset < 16 && *p++ != '\0') {
+		if (*p >= 'A' && *p <= 'Z') {
 			hash += *p << offset;
-			offset += offset;
+			offset += 4;
 		}
-		len++;
-		p++;
 	}
-	hash += len << 16;
 	switch (hash) {
 		PFN_CASE('G', 'I', 'P', 'A', xrGetInstanceProcAddr)
 		PFN_CASE('E', 'A', 'L', 'P', xrEnumerateApiLayerProperties)
 		PFN_CASE('E', 'I', 'E', 'P', xrEnumerateInstanceExtensionProperties)
-		PFN_CASE('C', 'I', 0, 0, xrCreateInstance)
-		PFN_CASE('G', 'S', 0, 0, xrGetSystem)
+		PFN_CASE('C', 'I', nil, nil, xrCreateInstance)
+		PFN_CASE('G', 'S', nil, nil, xrGetSystem)
 		PFN_CASE('E', 'V', 'C', 'V', xrEnumerateViewConfigurationViews)
 		PFN_CASE('G', 'O', 'G', 'L', xrGetOpenGLGraphicsRequirementsKHR)
-		PFN_CASE('C', 'S', 0, 0, xrCreateSession)
-		PFN_CASE('C', 'R', 'S', 0, xrCreateReferenceSpace)
+		PFN_CASE('C', 'S', nil, nil, xrCreateSession)
+		PFN_CASE('C', 'R', 'S', nil, xrCreateReferenceSpace)
+		PFN_CASE('C', 'A', 'S', nil, xrCreateActionSet)
+		PFN_CASE('S', 'T', 'P', nil, xrStringToPath)
+		PFN_CASE('P', 'T', 'S', nil, xrPathToString)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
