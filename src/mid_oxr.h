@@ -55,11 +55,6 @@ static uint32_t CalcDJB2(const char *str, int max) {
 	return hash;
 }
 
-#define PATH_TO_STRING_CASE(_name, _djb2)                                                           \
-	case _djb2:                                                                                       \
-		*bufferCountOutput = sizeof(_name) < bufferCapacityInput ? sizeof(_name) : bufferCapacityInput; \
-		memcpy(buffer, &_name, *bufferCountOutput);                                                     \
-		return XR_SUCCESS;
 XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 	XrInstance instance,
 	XrPath     path,
@@ -67,10 +62,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 	uint32_t*  bufferCountOutput,
 	char*      buffer) {
 	switch ((uint32_t)path) {
-		PATH_TO_STRING_CASE("/user/hand/left", 2556700407)
-		PATH_TO_STRING_CASE("/user/hand/right", 2773994890)
-		PATH_TO_STRING_CASE("/user/hand/left/input/select/click", 335458810)
-		PATH_TO_STRING_CASE("/user/hand/right/input/select/click", 1218722221)
+#define CASE(_name, _djb2)                                                                          \
+	case _djb2:                                                                                       \
+		*bufferCountOutput = sizeof(_name) < bufferCapacityInput ? sizeof(_name) : bufferCapacityInput; \
+		memcpy(buffer, &_name, *bufferCountOutput);                                                     \
+		return XR_SUCCESS;
+
+		CASE("/user/hand/left", 2556700407)
+		CASE("/user/hand/right", 2773994890)
+		CASE("/user/hand/left/input/select/click", 335458810)
+		CASE("/user/hand/right/input/select/click", 1218722221)
+#undef CASE
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
@@ -223,10 +225,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 	return XR_SUCCESS;
 }
 
-#define INSTANCE_PROC_CASE(_name, _djb2)   \
-	case _djb2:                              \
-		*function = (PFN_xrVoidFunction)_name; \
-		return XR_SUCCESS;
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
@@ -234,19 +232,25 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	printf("xrGetInstanceProcAddr %s\n", name);
 	const uint32_t djb2 = CalcDJB2(name, XR_MAX_RESULT_STRING_SIZE);
 	switch (djb2) {
-		INSTANCE_PROC_CASE(xrGetInstanceProcAddr, 2334007635)
-		INSTANCE_PROC_CASE(xrEnumerateApiLayerProperties, 1963032185)
-		INSTANCE_PROC_CASE(xrEnumerateInstanceExtensionProperties, 1017617012)
-		INSTANCE_PROC_CASE(xrCreateInstance, 799246840)
-		INSTANCE_PROC_CASE(xrGetSystem, 1809712692)
-		INSTANCE_PROC_CASE(xrEnumerateViewConfigurationViews, 4194621334)
-		INSTANCE_PROC_CASE(xrGetOpenGLGraphicsRequirementsKHR, 2661449710)
-		INSTANCE_PROC_CASE(xrCreateSession, 612805351)
-		INSTANCE_PROC_CASE(xrCreateReferenceSpace, 1138416702)
-		INSTANCE_PROC_CASE(xrCreateActionSet, 2376838285)
-		INSTANCE_PROC_CASE(xrCreateAction, 613291425)
-		INSTANCE_PROC_CASE(xrStringToPath, 1416299542)
-		INSTANCE_PROC_CASE(xrPathToString, 3598878870)
+#define CASE(_name, _djb2)                 \
+	case _djb2:                              \
+		*function = (PFN_xrVoidFunction)_name; \
+		return XR_SUCCESS;
+
+		CASE(xrGetInstanceProcAddr, 2334007635)
+		CASE(xrEnumerateApiLayerProperties, 1963032185)
+		CASE(xrEnumerateInstanceExtensionProperties, 1017617012)
+		CASE(xrCreateInstance, 799246840)
+		CASE(xrGetSystem, 1809712692)
+		CASE(xrEnumerateViewConfigurationViews, 4194621334)
+		CASE(xrGetOpenGLGraphicsRequirementsKHR, 2661449710)
+		CASE(xrCreateSession, 612805351)
+		CASE(xrCreateReferenceSpace, 1138416702)
+		CASE(xrCreateActionSet, 2376838285)
+		CASE(xrCreateAction, 613291425)
+		CASE(xrStringToPath, 1416299542)
+		CASE(xrPathToString, 3598878870)
+#undef CASE
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
