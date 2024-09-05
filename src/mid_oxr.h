@@ -39,6 +39,8 @@ typedef struct IUnknown IUnknown;
 
 //
 /// Mid OpenXR Types
+
+
 // ya we want to do this
 typedef struct XrInstanceContext {
 	XrInstance  instance;
@@ -46,24 +48,29 @@ typedef struct XrInstanceContext {
 
 //
 /// Mid OpenXR Implementation
+static uint32_t CalcDJB2(const char *str, int max) {
+	char c; int i = 0; uint32_t hash = 5381;
+	while ((c = *str++) && i++ < max)
+		hash = ((hash << 5) + hash) + c;
+	return hash;
+}
 
-#define nil '\0'
-#define PATH_CASE(_c0, _c1, _c2, _c3, _c4, _c5, _c6, _c7, _name)                                            \
-	case _c0 + (_c1 << 4) + (_c2 << 8) + (_c3 << 12) + (_c4 << 16) + (_c5 << 20) + (_c6 << 24) + (_c7 << 26): \
-		*bufferCountOutput = sizeof(_name) < bufferCapacityInput ? sizeof(_name) : bufferCapacityInput;        \
-		memcpy(buffer, &_name, *bufferCountOutput);                                                             \
+#define PATH_TO_STRING_CASE(_name, _djb2)                                                           \
+	case _djb2:                                                                                       \
+		*bufferCountOutput = sizeof(_name) < bufferCapacityInput ? sizeof(_name) : bufferCapacityInput; \
+		memcpy(buffer, &_name, *bufferCountOutput);                                                     \
 		return XR_SUCCESS;
 XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
-	XrInstance                                  instance,
-	XrPath                                      path,
-	uint32_t                                    bufferCapacityInput,
-	uint32_t*                                   bufferCountOutput,
-	char*                                       buffer) {
-	switch (path) {
-		PATH_CASE('u', 'h', 'l', nil, nil, nil, nil, nil, "/user/hand/left")
-		PATH_CASE('u', 'h', 'r', nil, nil, nil, nil, nil, "/user/hand/right")
-		PATH_CASE('u', 'h', 'l', 'i', 's', 'c', nil, nil, "/user/hand/left/input/select/click")
-		PATH_CASE('u', 'h', 'r', 'i', 's', 'c', nil, nil, "/user/hand/right/input/select/click")
+	XrInstance instance,
+	XrPath     path,
+	uint32_t   bufferCapacityInput,
+	uint32_t*  bufferCountOutput,
+	char*      buffer) {
+	switch ((uint32_t)path) {
+		PATH_TO_STRING_CASE("/user/hand/left", 2556700407)
+		PATH_TO_STRING_CASE("/user/hand/right", 2773994890)
+		PATH_TO_STRING_CASE("/user/hand/left/input/select/click", 335458810)
+		PATH_TO_STRING_CASE("/user/hand/right/input/select/click", 1218722221)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
@@ -72,16 +79,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	XrInstance  instance,
 	const char* pathString,
-	uint64_t*   path) {
+	XrPath*   path) {
 	printf("xrStringToPath\n");
-	*path = 0;
-	int offset = 4;
-	while (offset < 26 && *pathString++ != '\0') {
-		if (*pathString == '/') {
-			*path += *(pathString + 1) << offset;
-			offset += 4;
-		}
-	}
+	const uint32_t djb2 = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
+	*path = (XrPath)djb2;
 	return *path != 0 ? XR_SUCCESS : XR_ERROR_PATH_INVALID;
 }
 
@@ -92,6 +93,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	const XrActionSetCreateInfo* createInfo,
 	XrActionSet*                 actionSet) {
 	*actionSet = (XrActionSet)(uint64_t)xrActionSetCount++;
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
+	XrActionSet               actionSet,
+	const XrActionCreateInfo* createInfo,
+	XrAction*                 action) {
+
 	return XR_SUCCESS;
 }
 
@@ -112,7 +121,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	XrInstance                 instance,
 	const XrSessionCreateInfo* createInfo,
 	XrSession*                 session) {
-	switch ((XrStructureType)createInfo->next) {
+	switch (*(XrStructureType*)createInfo->next) {
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
 			glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
 			break;
@@ -214,58 +223,33 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 	return XR_SUCCESS;
 }
 
-// sed -n 's/.*XRAPI_PTR \*PFN_\(xr[a-zA-Z0-9_]*\).*/PFN_CASE("\1") \\/p' /c/OpenXRSDK/OpenXR.Loader.1.1.38/include/openxr/openxr.h > output.txt
-/* clang-format off */
-#define PFN_FUNCS \
-	PFN_CASE(xrGetInstanceProcAddr) \
-	PFN_CASE(xrEnumerateApiLayerProperties) \
-	PFN_CASE(xrEnumerateInstanceExtensionProperties) \
-	PFN_CASE(xrCreateInstance) \
-	PFN_CASE(xrGetSystem) \
-	PFN_CASE(xrEnumerateViewConfigurationViews) \
-	PFN_CASE(xrGetOpenGLGraphicsRequirementsKHR) \
-	PFN_CASE(xrCreateSession) \
-	PFN_CASE(xrCreateReferenceSpace)
-/* clang-format on */
-
-#define PFN_CASE(_c0, _c1, _c2, _c3, _name)         \
-	case _c0 + (_c1 << 4) + (_c2 << 8) + (_c3 << 12): \
-		*function = (PFN_xrVoidFunction)_name;          \
+#define INSTANCE_PROC_CASE(_name, _djb2)   \
+	case _djb2:                              \
+		*function = (PFN_xrVoidFunction)_name; \
 		return XR_SUCCESS;
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
 	PFN_xrVoidFunction* function) {
 	printf("xrGetInstanceProcAddr %s\n", name);
-	const char* p = &name[3];
-	uint32_t    hash = name[2], offset = 4;
-	while (offset < 16 && *p++ != '\0') {
-		if (*p >= 'A' && *p <= 'Z') {
-			hash += *p << offset;
-			offset += 4;
-		}
-	}
-	switch (hash) {
-		PFN_CASE('G', 'I', 'P', 'A', xrGetInstanceProcAddr)
-		PFN_CASE('E', 'A', 'L', 'P', xrEnumerateApiLayerProperties)
-		PFN_CASE('E', 'I', 'E', 'P', xrEnumerateInstanceExtensionProperties)
-		PFN_CASE('C', 'I', nil, nil, xrCreateInstance)
-		PFN_CASE('G', 'S', nil, nil, xrGetSystem)
-		PFN_CASE('E', 'V', 'C', 'V', xrEnumerateViewConfigurationViews)
-		PFN_CASE('G', 'O', 'G', 'L', xrGetOpenGLGraphicsRequirementsKHR)
-		PFN_CASE('C', 'S', nil, nil, xrCreateSession)
-		PFN_CASE('C', 'R', 'S', nil, xrCreateReferenceSpace)
-		PFN_CASE('C', 'A', 'S', nil, xrCreateActionSet)
-		PFN_CASE('S', 'T', 'P', nil, xrStringToPath)
-		PFN_CASE('P', 'T', 'S', nil, xrPathToString)
+	const uint32_t djb2 = CalcDJB2(name, XR_MAX_RESULT_STRING_SIZE);
+	switch (djb2) {
+		INSTANCE_PROC_CASE(xrGetInstanceProcAddr, 2334007635)
+		INSTANCE_PROC_CASE(xrEnumerateApiLayerProperties, 1963032185)
+		INSTANCE_PROC_CASE(xrEnumerateInstanceExtensionProperties, 1017617012)
+		INSTANCE_PROC_CASE(xrCreateInstance, 799246840)
+		INSTANCE_PROC_CASE(xrGetSystem, 1809712692)
+		INSTANCE_PROC_CASE(xrEnumerateViewConfigurationViews, 4194621334)
+		INSTANCE_PROC_CASE(xrGetOpenGLGraphicsRequirementsKHR, 2661449710)
+		INSTANCE_PROC_CASE(xrCreateSession, 612805351)
+		INSTANCE_PROC_CASE(xrCreateReferenceSpace, 1138416702)
+		INSTANCE_PROC_CASE(xrCreateActionSet, 2376838285)
+		INSTANCE_PROC_CASE(xrCreateAction, 613291425)
+		INSTANCE_PROC_CASE(xrStringToPath, 1416299542)
+		INSTANCE_PROC_CASE(xrPathToString, 3598878870)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
-	// could do something with computed gotos?
-	//	static void *jumpTable[] = {&&xrGetInstanceProcAddr, &&xrEnumerateApiLayerProperties, &&xrEnumerateInstanceExtensionProperties};
-	//xrGetInstanceProcAddr:
-	//xrEnumerateApiLayerProperties:
-	//xrEnumerateInstanceExtensionProperties:
 }
 
 XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
