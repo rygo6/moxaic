@@ -87,7 +87,7 @@ static Path Paths[PathCapacity];
 static int  PathHashes[PathCapacity];
 
 static int GetPathHash(const Path* pPath) {
-	const int handle = (pPath - Paths) / sizeof(Path);
+	const int handle = pPath - Paths;
 	return PathHashes[handle];
 }
 
@@ -140,7 +140,7 @@ typedef struct InteractionProfile {
 static XrResult RegisterBinding(Path* pPath, int (*const func)(void*)) {
 	const int hash = GetPathHash(pPath);
 	for (int i = 0; i < BindingCount; ++i) {
-		if (PathHashes[i] == hash) {
+		if (BindingHashes[i] == hash) {
 			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pPath->string, hash);
 			return XR_ERROR_PATH_INVALID;
 		}
@@ -232,7 +232,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 
 static int CompareSubPath(const char* pSubPath, const char* pPath) {
 	while (*pSubPath != '\0') {
-		if (pSubPath != pPath )
+		if (*pSubPath != *pPath )
 			return 1;
 		pSubPath++;
 		pPath++;
@@ -301,6 +301,28 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	return XR_EVENT_UNAVAILABLE;
 }
 
+static XrSessionState SessionState = XR_SESSION_STATE_UNKNOWN;
+static XrSessionState PendingSessionState = XR_SESSION_STATE_IDLE;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
+	XrInstance         instance,
+	XrEventDataBuffer* eventData) {
+
+	if (SessionState != PendingSessionState)  {
+
+		// for debugging, this needs to be manually set elsewhere
+		if (PendingSessionState == XR_SESSION_STATE_IDLE)
+			PendingSessionState = XR_SESSION_STATE_READY;
+
+		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
+		pEventData->state = PendingSessionState;
+		SessionState = PendingSessionState;
+		return XR_SUCCESS;
+	}
+
+	return XR_EVENT_UNAVAILABLE;
+}
 
 static int xrSpaceCount = 1;
 
@@ -453,6 +475,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 		CASE(xrStringToPath, 1416299542)
 		CASE(xrPathToString, 3598878870)
 		CASE(xrSuggestInteractionProfileBindings, 3618139248)
+		CASE(xrPollEvent, 2376322568)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
