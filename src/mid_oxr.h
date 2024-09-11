@@ -39,9 +39,114 @@ typedef struct IUnknown IUnknown;
 
 //
 /// Mid OpenXR Types
-typedef struct XrInstanceContext {
-	XrInstance instance;
-} XrInstanceContext;
+
+#define CONTAINER(_type, _capacity)                                  \
+	typedef struct _type##Container {                                  \
+		_type    data[_capacity];                                        \
+		uint32_t hash[_capacity];                                        \
+		uint32_t count;                                                  \
+	} _type##Container;                                                \
+	static _type* Claim##_type(_type##Container* p##_type##s) {        \
+		if (p##_type##s->count >= COUNT(p##_type##s->data)) return NULL; \
+		const uint32_t handle = p##_type##s->count++;                    \
+		return &p##_type##s->data[handle];                               \
+	}
+
+typedef struct Path {
+	char string[XR_MAX_PATH_LENGTH];
+	void* chained;
+} Path;
+#define PathCapacity 128
+static int  PathCount = 0;
+static Path Paths[PathCapacity];
+static int  PathHashes[PathCapacity];
+
+typedef struct Binding {
+	const Path* pPath;
+	int (*func)(void*);
+} Binding;
+#define BindingCapacity 128
+static int     BindingCount = 0;
+static Binding Bindings[BindingCapacity];
+static int     BindingHashes[BindingCapacity];
+
+#define MIDXR_MAX_INTERACTION_PROFILE_BINDINGS 16
+typedef struct InteractionProfile {
+	const Path* pPath;
+	Binding bindings[MIDXR_MAX_INTERACTION_PROFILE_BINDINGS];
+} InteractionProfile;
+
+#define MIDXR_MAX_SUBACTION_PATHS 2
+typedef struct Action {
+	char         actionName[XR_MAX_ACTION_NAME_SIZE];
+	XrActionType actionType;
+	uint32_t     countSubactionPaths;
+	const Path*  pSubactionPaths[MIDXR_MAX_SUBACTION_PATHS];
+	char         localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
+	//this only supports one suggested binding atm
+	//	const Path* bindings[MIDXR_MAX_SUBACTION_PATH_COUNT];
+	Binding* pBindings[MIDXR_MAX_SUBACTION_PATHS];
+} Action;
+#define ActionCapacity 64
+static int ActionCount = 1;
+Action     Actions[ActionCapacity];
+
+CONTAINER(Action, 32);
+
+typedef struct ActionSet {
+	char            actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
+	uint32_t        priority;
+	ActionContainer actions;
+} ActionSet;
+CONTAINER(ActionSet, 4);
+
+typedef struct Space {
+	XrReferenceSpaceType referenceSpaceType;
+	XrPosef              poseInReferenceSpace;
+} Space;
+CONTAINER(Space, 4);
+
+typedef struct Session {
+	XrGraphicsBindingOpenGLWin32KHR glBinding;
+	SpaceContainer                  spaces;
+} Session;
+CONTAINER(Session, 2);
+
+typedef struct Instance {
+	char             applicationName[XR_MAX_APPLICATION_NAME_SIZE];
+	XrFormFactor     systemFormFactor;
+	SessionContainer sessions;
+	ActionSetContainer actionSets;
+} Instance;
+CONTAINER(Instance, 2);
+
+static InstanceContainer instances;
+
+#define CLAIM_SUBHANDLE(_parent, _type)                         \
+	if (_parent->_type##s.count >= COUNT(_parent->_type##s.data)) \
+		return XR_ERROR_LIMIT_REACHED;                              \
+	const int handle = _parent->_type##s.count++;                 \
+	_type*    p##_type = &_parent->_type##s.data[handle];         \
+	*p##_type = (_type)
+
+#define CLAIM_HANDLE2(_type)                   \
+	if (_type##s.count >= COUNT(_type##s.data))  \
+		return XR_ERROR_LIMIT_REACHED;             \
+	const int handle = _type##s.count++;         \
+	_type*    p##_type = &_type##s.data[handle]; \
+	*p##_type = (_type)
+
+//static Space* ClaimSpace(SpaceContainer* pSpaces, Space** ppSpace) {
+//	if (pSpaces->count >= COUNT(pSpaces->data)) return NULL;
+//	const int handle = pSpaces->count++;
+//	return &pSpaces->data[handle];
+//}
+
+//#define InstanceCapacity 2
+//static int      InstanceCount = 0;
+//static Instance Instances[InstanceCapacity];
+//static int      InstanceHashes[InstanceCapacity];
+
 
 //
 /// Mid OpenXR Utility
@@ -76,15 +181,6 @@ static int OculusRightClick(float* pValue) {
 
 //
 /// Mid OpenXR Implementation
-
-typedef struct Path {
-	char string[XR_MAX_PATH_LENGTH];
-	void* chained;
-} Path;
-#define PathCapacity 128
-static int  PathCount = 0;
-static Path Paths[PathCapacity];
-static int  PathHashes[PathCapacity];
 
 static int GetPathHash(const Path* pPath) {
 	const int handle = pPath - Paths;
@@ -121,20 +217,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	return XR_SUCCESS;
 }
 
-typedef struct Binding {
-	const Path* pPath;
-	int (*func)(void*);
-} Binding;
-#define BindingCapacity 128
-static int     BindingCount = 0;
-static Binding Bindings[BindingCapacity];
-static int     BindingHashes[BindingCapacity];
+//
+/// Interaction
 
-#define MIDXR_MAX_INTERACTION_PROFILE_BINDINGS 16
-typedef struct InteractionProfile {
-	const Path* pPath;
-	Binding bindings[MIDXR_MAX_INTERACTION_PROFILE_BINDINGS]
-} InteractionProfile;
+
 
 // this needs to register to interaction profiles
 static XrResult RegisterBinding(Path* pPath, int (*const func)(void*)) {
@@ -168,39 +254,16 @@ static void InitStandardBindings(){
 	}
 }
 
-#define MIDXR_MAX_SUBACTION_PATHS 2
-typedef struct Action {
-	char         actionName[XR_MAX_ACTION_NAME_SIZE];
-	XrActionType actionType;
-	uint32_t     countSubactionPaths;
-	const Path*  pSubactionPaths[MIDXR_MAX_SUBACTION_PATHS];
-	char         localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
-	//this only supports one suggested binding atm
-	//	const Path* bindings[MIDXR_MAX_SUBACTION_PATH_COUNT];
-	Binding* pBindings[MIDXR_MAX_SUBACTION_PATHS];
-} Action;
-#define ActionCapacity 64
-static int ActionCount = 1;
-Action     Actions[ActionCapacity];
-
-#define MIDXR_MAX_ACTION_SET_ACTION_COUNT 32
-typedef struct ActionSet {
-	char          actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
-	char          localizedActionSetName[XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE];
-	uint32_t      priority;
-	uint32_t      actionCount;
-	const Action* pActions[MIDXR_MAX_ACTION_SET_ACTION_COUNT];
-} ActionSet;
-#define ActionSetCapacity 32
-static int ActionSetCount = 0;
-ActionSet  ActionSets[ActionSetCapacity];
 
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	XrActionSet               actionSet,
 	const XrActionCreateInfo* createInfo,
 	XrAction*                 action) {
 	printf("Creating Action %s with %d subactions.\n", createInfo->actionName, createInfo->countSubactionPaths);
-	CLAIM_HANDLE(Action){
+	ActionSet* pActionSet = (ActionSet*)actionSet;
+	Action*    pAction = ClaimAction(&pActionSet->actions);
+	if (pAction == NULL) return XR_ERROR_LIMIT_REACHED;
+	*pAction = (Action){
 		.actionType = createInfo->actionType,
 		.countSubactionPaths = createInfo->countSubactionPaths,
 	};
@@ -212,9 +275,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	strncpy((char*)&pAction->localizedActionName, (const char*)&createInfo->localizedActionName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
 	memcpy(&pAction->pSubactionPaths, createInfo->subactionPaths, pAction->countSubactionPaths * sizeof(XrPath));
 	*action = (XrAction)pAction;
-	ActionSet* pActionSet = (ActionSet*)actionSet;
-	const int  actionHandle = pActionSet->actionCount;
-	pActionSet->pActions[actionHandle] = pAction;
 	return XR_SUCCESS;
 }
 
@@ -222,10 +282,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	XrInstance                   instance,
 	const XrActionSetCreateInfo* createInfo,
 	XrActionSet*                 actionSet) {
-	CLAIM_HANDLE(ActionSet){
-		.priority = createInfo->priority};
+	printf("Creating ActionSet with %s\n", createInfo->actionSetName);
+	Instance*  pInstance = (Instance*)instance;
+	ActionSet* pActionSet = ClaimActionSet(&pInstance->actionSets);
+	*pActionSet = (ActionSet){
+		.priority = createInfo->priority,
+	};
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
-	strncpy((char*)&pActionSet->localizedActionSetName, (const char*)&createInfo->localizedActionSetName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
 	*actionSet = (XrActionSet)pActionSet;
 	return XR_SUCCESS;
 }
@@ -265,11 +328,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
+	XrSession                                   session,
+	const XrSessionActionSetsAttachInfo*        attachInfo) {
+	return XR_SUCCESS;
+}
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state) {
+	Session* pSession = (Session*)session;
 	const Action* pAction = (Action*)getInfo->action;
 	if (pAction->pBindings[0] == NULL) {
 		fprintf(stderr, "%s not bound l\n", pAction->actionName);
@@ -301,55 +370,64 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	return XR_EVENT_UNAVAILABLE;
 }
 
-static XrSessionState SessionState = XR_SESSION_STATE_UNKNOWN;
-static XrSessionState PendingSessionState = XR_SESSION_STATE_IDLE;
-
-XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
-	XrInstance         instance,
-	XrEventDataBuffer* eventData) {
-
-	if (SessionState != PendingSessionState)  {
-
-		// for debugging, this needs to be manually set elsewhere
-		if (PendingSessionState == XR_SESSION_STATE_IDLE)
-			PendingSessionState = XR_SESSION_STATE_READY;
-
-		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
-		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
-		pEventData->state = PendingSessionState;
-		SessionState = PendingSessionState;
-		return XR_SUCCESS;
-	}
-
-	return XR_EVENT_UNAVAILABLE;
-}
-
-static int xrSpaceCount = 1;
-
+//
+/// Creation
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	XrSession                         session,
 	const XrReferenceSpaceCreateInfo* createInfo,
 	XrSpace*                          space) {
-	*space = (XrSpace)(uint64_t)xrSpaceCount++;
+	Session* pSession = (Session*)session;
+	Space* pSpace = ClaimSpace(&pSession->spaces);
+	if (pSpace == NULL) return XR_ERROR_LIMIT_REACHED;
+	*pSpace = (Space){
+		.referenceSpaceType = createInfo->referenceSpaceType,
+		.poseInReferenceSpace = createInfo->poseInReferenceSpace,
+	};
+	*space = (XrSpace)pSpace;
 	return XR_SUCCESS;
 }
-
-static XrGraphicsBindingOpenGLWin32KHR glBinding;
-static int                             xrSessionCount = 1;
 
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	XrInstance                 instance,
 	const XrSessionCreateInfo* createInfo,
 	XrSession*                 session) {
+	Instance* pInstance = (Instance*)instance;
+	Session* pSession = ClaimSession(&pInstance->sessions);
+	if (pSession == NULL) return XR_ERROR_LIMIT_REACHED;
+	*pSession = (Session){};
 	switch (*(XrStructureType*)createInfo->next) {
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
-			glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
-			break;
-		default: break;
+			pSession->glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
+			*session = (XrSession)pSession;
+			return XR_SUCCESS;
+		default:
+			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 	}
-	*session = (XrSession)(uint64_t)xrSessionCount++;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
+	XrInstance             instance,
+	const XrSystemGetInfo* getInfo,
+	XrSystemId*            systemId) {
+	Instance* pInstance = (Instance*)instance;
+	pInstance->systemFormFactor = getInfo->formFactor;
+	*systemId = (XrSystemId)&pInstance->systemFormFactor;
 	return XR_SUCCESS;
 }
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
+	const XrInstanceCreateInfo* createInfo,
+	XrInstance*                 instance) {
+	Instance* pInstance = ClaimInstance(&instances);
+	if (pInstance == NULL) return XR_ERROR_LIMIT_REACHED;
+	*pInstance = (Instance){};
+	strncpy((char*)&pInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
+	*instance = (XrInstance)pInstance;
+	return XR_SUCCESS;
+}
+
+//
+/// Diagnostics
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 	XrInstance                       instance,
@@ -360,6 +438,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 		.minApiVersionSupported = openglApiVersion,
 		.maxApiVersionSupported = openglApiVersion,
 	};
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
+	XrSession                                   session,
+	uint32_t                                    spaceCapacityInput,
+	uint32_t*                                   spaceCountOutput,
+	XrReferenceSpaceType*                       spaces) {
 	return XR_SUCCESS;
 }
 
@@ -398,25 +484,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	return XR_SUCCESS;
 }
 
-static int xrSystemCount = 1;
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
-	XrInstance             instance,
-	const XrSystemGetInfo* getInfo,
-	XrSystemId*            systemId) {
-	*systemId = (XrSystemId)(uint64_t)xrSystemCount++;
-	return XR_SUCCESS;
-}
-
-static int xrInstanceCount = 1;
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
-	const XrInstanceCreateInfo* createInfo,
-	XrInstance*                 instance) {
-	*instance = (XrInstance)(uint64_t)xrInstanceCount++;
-	return XR_SUCCESS;
-}
-
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 	const char*            layerName,
 	uint32_t               propertyCapacityInput,
@@ -443,9 +510,52 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 	return XR_SUCCESS;
 }
 
+//
+/// Event
+static XrViewConfigurationType viewConfigurationType;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
+	XrSession                 session,
+	const XrSessionBeginInfo* beginInfo) {
+	viewConfigurationType = beginInfo->primaryViewConfigurationType;
+	return XR_SUCCESS;
+}
+
+//
+/// Polling
+static XrSessionState SessionState = XR_SESSION_STATE_UNKNOWN;
+static XrSessionState PendingSessionState = XR_SESSION_STATE_IDLE;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
+	XrInstance         instance,
+	XrEventDataBuffer* eventData) {
+
+	if (SessionState != PendingSessionState)  {
+
+		// for debugging, this needs to be manually set elsewhere
+		if (PendingSessionState == XR_SESSION_STATE_IDLE)
+			PendingSessionState = XR_SESSION_STATE_READY;
+
+		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
+		pEventData->state = PendingSessionState;
+		SessionState = PendingSessionState;
+		return XR_SUCCESS;
+	}
+
+	return XR_EVENT_UNAVAILABLE;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
+	XrSession                session,
+	const XrActionsSyncInfo* syncInfo) {
+	return XR_SUCCESS;
+}
+
+
 // modulo to ensure jump table is generated
 // https://godbolt.org/z/rGz6TbsG1
-#define PROC_ADDR_MODULO 63
+#define PROC_ADDR_MODULO 84
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
@@ -476,6 +586,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 		CASE(xrPathToString, 3598878870)
 		CASE(xrSuggestInteractionProfileBindings, 3618139248)
 		CASE(xrPollEvent, 2376322568)
+		CASE(xrBeginSession, 1003855288)
+		CASE(xrSyncActions, 2043237693)
+		CASE(xrAttachSessionActionSets, 3383012517)
+		CASE(xrEnumerateReferenceSpaces, 3445226179)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}

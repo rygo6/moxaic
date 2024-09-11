@@ -76,18 +76,18 @@ extern void Panic(const char* file, int line, const char* message);
 		REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
 	}
 
-#define MIDVK_INSTANCE_FUNC(_func)                                                             \
-	const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
+#define MIDVK_INSTANCE_FUNC(_func)                                                                   \
+	const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \
 	REQUIRE(_func != NULL, "Couldn't load " #_func)
 // maybe the should all be static??
-#define MIDVK_INSTANCE_STATIC_FUNC(_func)                                  \
-	static PFN_##vk##_func _func = NULL;                                     \
-	if (_func == NULL) {                                                     \
-		_func = (PFN_##vk##_func)vkGetInstanceProcAddr(instance, "vk" #_func); \
-		REQUIRE(_func != NULL, "Couldn't load " #_func)                        \
+#define MIDVK_INSTANCE_STATIC_FUNC(_func)                                        \
+	static PFN_##vk##_func _func = NULL;                                           \
+	if (_func == NULL) {                                                           \
+		_func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \
+		REQUIRE(_func != NULL, "Couldn't load " #_func)                              \
 	}
-#define MIDVK_DEVICE_FUNC(_func)                                                                   \
-	const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(context.device, "vk" #_func); \
+#define MIDVK_DEVICE_FUNC(_func)                                                                         \
+	const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
 	REQUIRE(_func != NULL, "Couldn't load " #_func)
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -262,15 +262,11 @@ typedef struct MidVkContext {
 #define MIDVK_CONTEXT_CAPACITY 2
 #define MIDVK_SURFACE_CAPACITY 2
 typedef struct MidVk {
-	// ya migrate refs into here
 	VkInstance   instance;
-	MidVkContext contexts[MIDVK_CONTEXT_CAPACITY];
+	MidVkContext context;
 	VkSurfaceKHR surfaces[MIDVK_SURFACE_CAPACITY];
 } MidVk;
 extern MidVk midVk;
-
-extern VkInstance   instance;
-extern MidVkContext context;
 
 // do this ??
 typedef struct __attribute((aligned(64))) MidVkThreadContext {
@@ -583,7 +579,7 @@ MIDVK_INLINE void midVkSubmitPresentCommandBuffer(
 			},
 		},
 	};
-	MIDVK_REQUIRE(vkQueueSubmit2(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
+	MIDVK_REQUIRE(vkQueueSubmit2(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
 	const VkPresentInfoKHR presentInfo = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
@@ -592,7 +588,7 @@ MIDVK_INLINE void midVkSubmitPresentCommandBuffer(
 		.pSwapchains = &chain,
 		.pImageIndices = &swapIndex,
 	};
-	MIDVK_REQUIRE(vkQueuePresentKHR(context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
+	MIDVK_REQUIRE(vkQueuePresentKHR(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
 }
 // todo needs PFN version
 MIDVK_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {

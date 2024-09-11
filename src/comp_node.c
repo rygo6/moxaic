@@ -86,25 +86,25 @@ static void CreateCompSetLayout(const MxcCompMode compMode, VkDescriptorSetLayou
               .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
               .descriptorCount = 1,
               .stageFlags = stageFlags,
-              .pImmutableSamplers = &context.linearSampler,
+              .pImmutableSamplers = &midVk.context.linearSampler,
           },
           [SET_BIND_COMP_NORMAL_INDEX] = {
               .binding = SET_BIND_COMP_NORMAL_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
               .descriptorCount = 1,
               .stageFlags = stageFlags,
-              .pImmutableSamplers = &context.linearSampler,
+              .pImmutableSamplers = &midVk.context.linearSampler,
           },
           [SET_BIND_COMP_GBUFFER_INDEX] = {
               .binding = SET_BIND_COMP_GBUFFER_INDEX,
               .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
               .descriptorCount = 1,
               .stageFlags = stageFlags,
-              .pImmutableSamplers = &context.linearSampler,
+              .pImmutableSamplers = &midVk.context.linearSampler,
           },
       },
   };
-  MIDVK_REQUIRE(vkCreateDescriptorSetLayout(context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
+  MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
 }
 
 enum PipeSetCompIndices {
@@ -117,11 +117,11 @@ static void CreateCompPipeLayout(const VkDescriptorSetLayout nodeSetLayout, VkPi
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = PIPE_SET_COMP_COUNT,
       .pSetLayouts = (const VkDescriptorSetLayout[]){
-          [PIPE_SET_COMP_GLOBAL_INDEX] = context.stdPipeLayout.globalSetLayout,
+          [PIPE_SET_COMP_GLOBAL_INDEX] = midVk.context.stdPipeLayout.globalSetLayout,
           [PIPE_SET_COMP_NODE_INDEX] = nodeSetLayout,
       },
   };
-  MIDVK_REQUIRE(vkCreatePipelineLayout(context.device, &createInfo, MIDVK_ALLOC, pNodePipeLayout));
+  MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, pNodePipeLayout));
 }
 
 static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_COMP_SHADER_READ = &(const MidVkSrcDstImageBarrier){
@@ -140,15 +140,15 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     // meshes
     switch (pInfo->compMode) {
       case MXC_COMP_MODE_BASIC:
-        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
+        vkmCreateBasicPipe("./shaders/basic_comp.vert.spv", "./shaders/basic_comp.frag.spv", midVk.context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
         CreateQuadMesh(0.5f, &pNode->quadMesh);
         break;
       case MXC_COMP_MODE_TESS:
-        vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
+        vkmCreateTessPipe("./shaders/tess_comp.vert.spv", "./shaders/tess_comp.tesc.spv", "./shaders/tess_comp.tese.spv", "./shaders/tess_comp.frag.spv", midVk.context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
         CreateQuadPatchMeshSharedMemory(&pNode->quadMesh);
         break;
       case MXC_COMP_MODE_TASK_MESH:
-        vkmCreateTaskMeshPipe("./shaders/mesh_comp.task.spv", "./shaders/mesh_comp.mesh.spv", "./shaders/mesh_comp.frag.spv", context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
+        vkmCreateTaskMeshPipe("./shaders/mesh_comp.task.spv", "./shaders/mesh_comp.mesh.spv", "./shaders/mesh_comp.frag.spv", midVk.context.renderPass, pNode->compNodePipeLayout, &pNode->compNodePipe);
         CreateQuadMesh(0.5f, &pNode->quadMesh);
         break;
       default: PANIC("CompMode not supported!");
@@ -160,7 +160,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .queryType = VK_QUERY_TYPE_TIMESTAMP,
         .queryCount = 2,
     };
-    MIDVK_REQUIRE(vkCreateQueryPool(context.device, &queryPoolCreateInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
+    MIDVK_REQUIRE(vkCreateQueryPool(midVk.context.device, &queryPoolCreateInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
 
     // This is way too many descriptors... optimize this
     const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
@@ -174,10 +174,10 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
             {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
         },
     };
-    MIDVK_REQUIRE(vkCreateDescriptorPool(context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+    MIDVK_REQUIRE(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
 
     // global set
-    vkmAllocateDescriptorSet(threadContext.descriptorPool, &context.stdPipeLayout.globalSetLayout, &pNode->globalSet.set);
+    vkmAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.globalSetLayout, &pNode->globalSet.set);
     const VkmRequestAllocationInfo globalSetAllocRequest = {
         .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
         .size = sizeof(VkmGlobalSetState),
@@ -196,15 +196,15 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->compNodeSetBuffer, &pNode->compNodeSetSharedMemory);
 
     midvkCreateFramebufferTexture(MIDVK_SWAP_COUNT, MID_LOCALITY_CONTEXT, pNode->framebuffers);
-    vkmCreateFramebuffer(context.renderPass, &pNode->framebuffer);
+    vkmCreateFramebuffer(midVk.context.renderPass, &pNode->framebuffer);
     vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
   }
 
   {  // Copy needed state
     // todo get rid lets go to context directly
     pNode->compMode = pInfo->compMode;
-    pNode->device = context.device;
-    pNode->compRenderPass = context.renderPass;
+    pNode->device = midVk.context.device;
+    pNode->compRenderPass = midVk.context.renderPass;
   }
 }
 
@@ -219,10 +219,10 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
       break;
     default: PANIC("CompMode not supported!");
   }
-  MIDVK_REQUIRE(vkBindBufferMemory(context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
-  vkUpdateDescriptorSets(context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
-  MIDVK_REQUIRE(vkBindBufferMemory(context.device, pNode->compNodeSetBuffer, deviceMemory[pNode->compNodeSetSharedMemory.type], pNode->compNodeSetSharedMemory.offset));
-  vkUpdateDescriptorSets(context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
+  MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
+  vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
+  MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pNode->compNodeSetBuffer, deviceMemory[pNode->compNodeSetSharedMemory.type], pNode->compNodeSetSharedMemory.offset));
+  vkUpdateDescriptorSets(midVk.context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
 }
 
 void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompNode* pNode) {

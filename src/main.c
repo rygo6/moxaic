@@ -98,14 +98,14 @@ int main(void) {
 
     // these probably should go elsewhere ?
     // global samplers
-    VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &context.linearSampler);
+    VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &midVk.context.linearSampler);
     // standard/common rendering
     vkmCreateStdRenderPass();
     vkmCreateStdPipeLayout();
 
     // this need to ge in node create
     mxcCreateNodeRenderPass();
-    vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", context.nodeRenderPass, context.stdPipeLayout.pipeLayout, &context.basicPipe);
+    vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", midVk.context.nodeRenderPass, midVk.context.stdPipeLayout.pipeLayout, &midVk.context.basicPipe);
 
 #if defined(MOXAIC_COMPOSITOR)
     printf("Moxaic Compositor\n");
@@ -128,8 +128,8 @@ int main(void) {
 
 
   if (isCompositor) { // Compositor Loop
-    const VkDevice device = context.device;
-    const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+    const VkDevice device = midVk.context.device;
+    const VkQueue  graphicsQueue = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
     uint64_t       compBaseCycleValue = 0;
     while (isRunning) {
 
@@ -180,7 +180,7 @@ int main(void) {
     }
   } else {
 
-    const VkQueue  graphicsQueue = context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+    const VkQueue  graphicsQueue = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
     while (isRunning) {
       midUpdateWindowInput();
       isRunning = midWindow.running;
