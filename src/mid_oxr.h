@@ -16,7 +16,7 @@ typedef struct IUnknown IUnknown;
 #include <openxr/openxr_loader_negotiation.h>
 
 //
-/// Mid Common Utility
+//// Mid Common Utility
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
@@ -30,7 +30,7 @@ typedef struct IUnknown IUnknown;
 #endif
 
 //
-/// Mid OpenXR Constants
+//// Mid OpenXR Constants
 #define MIDXR_DEFAULT_WIDTH        1024
 #define MIDXR_DEFAULT_HEIGHT       1024
 #define MIDXR_DEFAULT_SAMPLES      1
@@ -38,65 +38,86 @@ typedef struct IUnknown IUnknown;
 #define MIDXR_OPENGL_MINOR_VERSION 6
 
 //
-/// Mid OpenXR Types
+//// Mid OpenXR Types
 
-typedef uint32_t Hash;
-
+typedef uint32_t XrHash;
 #define CHECK(_command)                      \
 	{                                          \
 		XrResult result = _command;              \
 		if (result != XR_SUCCESS) return result; \
 	}
-
-#define CONTAINER(_type, _capacity)                                                    \
-	typedef struct _type##Container {                                                    \
-		_type    data[_capacity];                                                          \
-		uint32_t count;                                                                    \
-	} _type##Container;                                                                  \
-	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type) {     \
-		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED; \
-		const uint32_t handle = p##_type##s->count++;                                      \
-		*pp##_type = &p##_type##s->data[handle];                                           \
-		return XR_SUCCESS;                                                                 \
+#define CONTAINER(_type, _capacity)                                                                  \
+	typedef struct _type##Container {                                                                  \
+		uint32_t count;                                                                                  \
+		_type    data[_capacity];                                                                        \
+	} _type##Container;                                                                                \
+	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type) {                   \
+		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;               \
+		const uint32_t handle = p##_type##s->count++;                                                    \
+		*pp##_type = &p##_type##s->data[handle];                                                         \
+		return XR_SUCCESS;                                                                               \
+	}                                                                                                  \
+	static inline int Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) { \
+		return p##_type - p##_type##s->data;                                                             \
+	}
+#define CONTAINER_HASHED(_type, _capacity)                                                           \
+	typedef struct _type##Container {                                                                  \
+		uint32_t count;                                                                                  \
+		_type    data[_capacity];                                                                        \
+		XrHash   hash[_capacity];                                                                        \
+	} _type##Container;                                                                                \
+	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type, XrHash hash) {      \
+		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;               \
+		const uint32_t handle = p##_type##s->count++;                                                    \
+		p##_type##s->hash[handle] = hash;                                                                \
+		*pp##_type = &p##_type##s->data[handle];                                                         \
+		return XR_SUCCESS;                                                                               \
+	}                                                                                                  \
+	static inline int Get##_type##Hash(const _type##Container* p##_type##s, const _type* p##_type) {   \
+		const int handle = p##_type - p##_type##s->data;                                                 \
+		return p##_type##s->hash[handle];                                                                \
+	}                                                                                                  \
+	static inline _type* Get##_type##ByHash(_type##Container* p##_type##s, const XrHash hash) {        \
+		for (int i = 0; i < p##_type##s->count; ++i) {                                                   \
+			if (p##_type##s->hash[i] == hash)                                                              \
+				return &p##_type##s->data[i];                                                                \
+		}                                                                                                \
+		return NULL;                                                                                     \
+	}                                                                                                  \
+	static inline int Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) { \
+		return p##_type - p##_type##s->data;                                                             \
 	}
 
-#define CONTAINER_HASHED(_type, _capacity)                                                    \
-	typedef struct _type##Container {                                                           \
-		_type    data[_capacity];                                                                 \
-		Hash     hash[_capacity];                                                                 \
-		uint32_t count;                                                                           \
-	} _type##Container;                                                                         \
-	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type, Hash hash) { \
-		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;        \
-		const uint32_t handle = p##_type##s->count++;                                             \
-		p##_type##s->hash[handle] = hash;                                                         \
-		*pp##_type = &p##_type##s->data[handle];                                                  \
-		return XR_SUCCESS;                                                                        \
-	}                                                                                           \
-	static int Get##_type##Hash(const _type##Container* p##_type##s, const _type* p##_type) {   \
-		const int handle = p##_type - p##_type##s->data;                                          \
-		return p##_type##s->hash[handle];                                                         \
-	}                                                                                           \
-	static _type* Get##_type##ByHash(_type##Container* p##_type##s, const Hash hash) {          \
-		for (int i = 0; i < p##_type##s->count; ++i) {                                            \
-			if (p##_type##s->hash[i] == hash)                                                       \
-				return &p##_type##s->data[i];                                                         \
-		}                                                                                         \
-		return NULL;                                                                              \
-	}
-
+#define MIDXR_MAX_PATHS 128
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
-CONTAINER_HASHED(Path, 128);
+CONTAINER_HASHED(Path, MIDXR_MAX_PATHS);
 
-typedef uint64_t XrBinding;
 typedef struct Binding {
 	XrPath path;
-//	XrAction action; ?
 	int (*func)(void*);
 } Binding;
 CONTAINER_HASHED(Binding, 32);
+
+#define MIDXR_MAX_ACTIONS 32
+typedef Binding* XrBinding;
+CONTAINER(XrBinding, MIDXR_MAX_ACTIONS);
+
+#define MIDXR_MAX_SUBACTION_PATHS 2
+typedef struct Action {
+	XrActionSet        actionSet;
+	XrBindingContainer bindings;
+	uint32_t           countSubactionPaths;
+	XrPath             subactionPaths[MIDXR_MAX_SUBACTION_PATHS];
+	XrActionType       actionType;
+	char               actionName[XR_MAX_ACTION_NAME_SIZE];
+	char               localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
+} Action;
+CONTAINER(Action, MIDXR_MAX_ACTIONS);
+
+#define MIDXR_MAX_BOUND_ACTIONS 4
+CONTAINER(XrAction, MIDXR_MAX_BOUND_ACTIONS);
 
 // probably want to do this?
 typedef struct InteractionProfile {
@@ -105,22 +126,20 @@ typedef struct InteractionProfile {
 } InteractionProfile;
 static InteractionProfile interactionProfiles;
 
-#define MIDXR_MAX_SUBACTION_PATHS 2
-typedef struct Action {
-	char         actionName[XR_MAX_ACTION_NAME_SIZE];
-	XrActionType actionType;
-	uint32_t     countSubactionPaths;
-	XrPath       subactionPaths[MIDXR_MAX_SUBACTION_PATHS];
-	char         localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
+typedef struct ActionState {
+	// actualy layout from OXR to memcopy
+	float                 currentState;
+	XrBool32              changedSinceLastSync;
+	XrTime                lastChangeTime;
+	XrBool32              isActive;
+} ActionState;
+CONTAINER(ActionState, MIDXR_MAX_ACTIONS);
 
-	XrActionSet actionSet;
-
-	XrBinding pBindings[MIDXR_MAX_SUBACTION_PATHS];
-} Action;
-CONTAINER(Action, 32);
-
-typedef Action* ActionPtr;
-CONTAINER(ActionPtr, 32);
+typedef struct ActionSetState {
+	ActionStateContainer actionStates;
+	XrActionSet          actionSet;
+} ActionSetState;
+CONTAINER_HASHED(ActionSetState, 4);
 
 typedef struct ActionSet {
 	char            actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
@@ -128,9 +147,7 @@ typedef struct ActionSet {
 	ActionContainer actions;
 	XrSession       attachedToSession;
 } ActionSet;
-CONTAINER(ActionSet, 4);
-
-CONTAINER(XrActionSet, 32);
+CONTAINER_HASHED(ActionSet, 4);
 
 typedef struct Space {
 	XrReferenceSpaceType referenceSpaceType;
@@ -139,9 +156,10 @@ typedef struct Space {
 CONTAINER(Space, 4);
 
 typedef struct Session {
+	XrInstance                      instance;
 	XrGraphicsBindingOpenGLWin32KHR glBinding;
 	SpaceContainer                  spaces;
-	XrActionSetContainer            attachedActionSets;
+	ActionSetStateContainer         actionSetStates;
 } Session;
 CONTAINER(Session, 2);
 
@@ -158,7 +176,7 @@ CONTAINER(Instance, 2);
 static InstanceContainer instances;
 
 //
-/// Mid OpenXR Utility
+//// Mid OpenXR Utility
 static uint32_t CalcDJB2(const char* str, int max) {
 	char     c;
 	int      i = 0;
@@ -169,8 +187,7 @@ static uint32_t CalcDJB2(const char* str, int max) {
 }
 
 //
-/// Mid Device Input Funcs
-
+//// Mid Device Input Funcs
 static int OculusLeftClick(float* pValue) {
 	*pValue = 0;
 	return 0;
@@ -220,19 +237,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 
 static XrResult RegisterBinding(XrInstance instance, Path* pPath, int (*const func)(void*)) {
 	Instance* pInstance = (Instance*)instance;
-	const int hash = GetPathHash(&pInstance->paths, pPath);
+	const int pathHash = GetPathHash(&pInstance->paths, pPath);
 	for (int i = 0; i < pInstance->bindings.count; ++i) {
-		if (GetPathHash(&pInstance->paths, (Path*)pInstance->bindings.data[i].path) == hash) {
-			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pPath->string, hash);
+		if (GetPathHash(&pInstance->paths, (Path*)pInstance->bindings.data[i].path) == pathHash) {
+			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pPath->string, pathHash);
 			return XR_ERROR_PATH_INVALID;
 		}
 	}
 	Binding* pBinding;
-	ClaimBinding(&pInstance->bindings, &pBinding, hash);
-	*pBinding = (Binding){
-		.path = (XrPath)pPath,
-		.func = func,
-	};
+	ClaimBinding(&pInstance->bindings, &pBinding, pathHash);
+	pBinding->path = (XrPath)pPath;
+	pBinding->func = func;
 	return XR_SUCCESS;
 }
 static XrResult InitStandardBindings(XrInstance instance){
@@ -277,8 +292,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	XrActionSet*                 actionSet) {
 	printf("Creating ActionSet with %s\n", createInfo->actionSetName);
 	Instance*  pInstance = (Instance*)instance;
+	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	ActionSet* pActionSet;
-	CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet));
+	CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
 	pActionSet->priority = createInfo->priority;
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	*actionSet = (XrActionSet)pActionSet;
@@ -314,21 +330,34 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		Action*        pActionToBind = (Action*)pSuggestedBindings[i].action;
 		const Path*    pBindingPath = (Path*)pSuggestedBindings[i].binding;
-		const Hash     bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
+		const XrHash   bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
 		Binding* pBinding = GetBindingByHash(&pInstance->bindings, bindingPathHash);
 		printf("Action: %s BindingPath: %s\n", pActionToBind->actionName, pBindingPath->string);
 
 		if (pActionToBind->countSubactionPaths == 0) {
 			printf("No Subactions. Bound to zero.\n");
-			pActionToBind->pBindings[0] = (XrBinding)pBinding;
+			XrBinding* pActionBinding;
+			ClaimXrBinding(&pActionToBind->bindings, &pActionBinding);
+			*pActionBinding = pBinding;
+
+//			XrAction* pAction;
+//			ClaimXrAction(&pBinding->actions, &pAction);
+//			*pAction = (XrAction)pActionToBind;
 			continue;
 		}
 
 		for (int j = 0; j < pActionToBind->countSubactionPaths; ++j) {
-			const Path* pSubPath = (Path*)pActionToBind->subactionPaths[j];
-			if (CompareSubPath(pSubPath->string, pBindingPath->string)) continue;
-			printf("Bound to %d %s\n", j, pSubPath->string);
-			pActionToBind->pBindings[0] = (XrBinding)pBinding;
+			const Path* pActionSubPath = (Path*)pActionToBind->subactionPaths[j];
+			if (CompareSubPath(pActionSubPath->string, pBindingPath->string))
+				continue;
+			printf("Bound to %d %s\n", j, pActionSubPath->string);
+			XrBinding* pActionBinding;
+			ClaimXrBinding(&pActionToBind->bindings, &pActionBinding);
+			*pActionBinding = pBinding;
+
+//			XrAction* pAction;
+//			ClaimXrAction(&pBinding->actions, &pAction);
+//			*pAction = (XrAction)pActionToBind;
 		}
 	}
 	return XR_SUCCESS;
@@ -338,15 +367,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	XrSession                            session,
 	const XrSessionActionSetsAttachInfo* attachInfo) {
 	Session* pSession = (Session*)session;
-	if (pSession->attachedActionSets.count != 0)
+	if (pSession->actionSetStates.count != 0)
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
 
+	Instance* pInstance = (Instance*)pSession->instance;
 	for (int i = 0; i < attachInfo->countActionSets; ++i) {
-		ActionSet* pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
-		XrActionSet* pClaimedActionSet;
-		CHECK(ClaimXrActionSet(&pSession->attachedActionSets, &pClaimedActionSet));
-		pAttachingActionSet->attachedToSession = session;
-		*pClaimedActionSet = (XrActionSet)pAttachingActionSet;
+		ActionSet*      pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
+		XrHash          attachingActionSetHash = GetActionSetHash(&pInstance->actionSets, pAttachingActionSet);
+		ActionSetState* pClaimedActionSetState;
+		CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
+		pClaimedActionSetState->actionStates.count = pAttachingActionSet->actions.count;
+		pClaimedActionSetState->actionSet =  (XrActionSet)pAttachingActionSet;
 	}
 
 	return XR_SUCCESS;
@@ -357,37 +388,29 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state) {
 
-	const Action* pAction = (Action*)getInfo->action;
-	if (pAction->pBindings[0] == NULL) {
-		fprintf(stderr, "%s not bound l\n", pAction->actionName);
-		return XR_EVENT_UNAVAILABLE;
-	}
-
 	Session* pSession = (Session*)session;
-	pSession->attachedActionSets.count
+	const Instance* pInstance = (Instance*)pSession->instance;
+
+	const Action* pAction = (Action*)getInfo->action;
+	const ActionSet* pActionSet = (ActionSet*)pAction->actionSet;
+	const int actionHandle = GetActionHandle(&pActionSet->actions, pAction);
+	const XrHash     actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
+
+	ActionSetState* pActionSetState =  GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
+	ActionState* pActionState = &pActionSetState->actionStates.data[actionHandle];
 
 	const Path* subactionPath = (Path*)getInfo->subactionPath;
 	if (subactionPath == NULL) {
-		float result;
-		Binding* pBinding = (Binding*)pAction->pBindings[0];
-		pBinding->func(&result);
-		state->currentState = result;
-		state->changedSinceLastSync = true;
-		state->lastChangeTime = 0;
-		state->isActive = true;
+		memcpy(&state->currentState, &pActionState->currentState, sizeof(ActionState));
+		pActionState->changedSinceLastSync = false;
 		return XR_SUCCESS;
 	}
 
 	for (int i = 0; i < pAction->countSubactionPaths; ++i) {
 		const Path* pSubPath = (Path*)pAction->subactionPaths[i];
 		if (subactionPath == pSubPath) {
-			float result;
-			Binding* pBinding = (Binding*)pAction->pBindings[i];
-			pBinding->func(&result);
-			state->currentState = result;
-			state->changedSinceLastSync = true;
-			state->lastChangeTime = 0;
-			state->isActive = true;
+			memcpy(&state->currentState, &pActionState->currentState, sizeof(ActionState));
+			pActionState->changedSinceLastSync = false;
 			return XR_SUCCESS;
 		}
 	}
@@ -420,7 +443,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	Instance* pInstance = (Instance*)instance;
 	Session*  pClaimedSession;
 	CHECK(ClaimSession(&pInstance->sessions, &pClaimedSession));
-	*pClaimedSession = (Session){};
+	pClaimedSession->instance = instance;
 	switch (*(XrStructureType*)createInfo->next) {
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
 			pClaimedSession->glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
@@ -576,6 +599,38 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	XrSession                session,
 	const XrActionsSyncInfo* syncInfo) {
+	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+
+//	for (int i = 0; i < pInstance->bindings.count; ++i) {
+//		pInstance->bindings.data[i].
+//	}
+
+
+	for (int i = 0; i < pSession->actionSetStates.count; ++i) {
+		ActionSet* pActionSet = (ActionSet*)syncInfo->activeActionSets[i].actionSet;
+		XrHash actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
+		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
+		if (pActionSetState == NULL)
+			continue;
+
+		for (int j = 0; j < pActionSet->actions.count; ++j){
+			Action* pAction = &pActionSet->actions.data[j];
+			ActionState* pActionState = &pActionSetState->actionStates.data[j];
+
+			!!! no this just needs to set the highest priorit binding!!!!
+			for (int k = 0; k < pAction->bindings.count; ++k) {
+				Binding* pBinding = (Binding*)&pAction->bindings.data[k];
+				pBinding->func(pActionState);
+			}
+
+		}
+		pInstance->bindings
+
+
+	}
+
+
 	return XR_SUCCESS;
 }
 
