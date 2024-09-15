@@ -288,20 +288,23 @@ static XrResult InitStandardBindings(XrInstance instance){
 		const BindingDefinition bindingDefinitions[] = {
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
+
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
+
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
+
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
