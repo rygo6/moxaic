@@ -77,7 +77,7 @@ typedef uint32_t XrHash;
 		const int handle = p##_type - p##_type##s->data;                                                 \
 		return p##_type##s->hash[handle];                                                                \
 	}                                                                                                  \
-	static inline _type* Get##_type##ByHash(_type##Container* p##_type##s, const XrHash hash) {        \
+	static inline _type* Get##_type##ByHash(const _type##Container* p##_type##s, const XrHash hash) {  \
 		for (int i = 0; i < p##_type##s->count; ++i) {                                                   \
 			if (p##_type##s->hash[i] == hash)                                                              \
 				return &p##_type##s->data[i];                                                                \
@@ -113,8 +113,8 @@ CONTAINER(XrBinding, MIDXR_MAX_ACTIONS);
 #define MIDXR_MAX_SUBACTION_PATHS 2
 typedef struct Action {
 	XrActionSet        actionSet;
-	XrBindingContainer bindings;
 	uint32_t           countSubactionPaths;
+	XrBindingContainer subactionBindings[MIDXR_MAX_SUBACTION_PATHS];
 	XrPath             subactionPaths[MIDXR_MAX_SUBACTION_PATHS];
 	XrActionType       actionType;
 	char               actionName[XR_MAX_ACTION_NAME_SIZE];
@@ -132,13 +132,17 @@ typedef struct InteractionProfile {
 } InteractionProfile;
 static InteractionProfile interactionProfiles;
 
+typedef struct SubactionState {
+		uint32_t lastSyncedPriority;
+		
+		// actual layout from OXR to memcpy
+		float    currentState;
+		XrBool32 changedSinceLastSync;
+		XrTime   lastChangeTime;
+		XrBool32 isActive;
+}SubactionState;
 typedef struct ActionState {
-	uint32_t lastSyncedPriority;
-	// actual layout from OXR to memcpy
-	float    currentState;
-	XrBool32 changedSinceLastSync;
-	XrTime   lastChangeTime;
-	XrBool32 isActive;
+	SubactionState subactionStates[MIDXR_MAX_SUBACTION_PATHS];
 } ActionState;
 CONTAINER(ActionState, MIDXR_MAX_ACTIONS);
 
@@ -404,18 +408,18 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 		if (pBindingAction->countSubactionPaths == 0) {
 			printf("No Subactions. Bound to zero.\n");
 			XrBinding* pActionBinding;
-			ClaimXrBinding(&pBindingAction->bindings, &pActionBinding);
+			ClaimXrBinding(&pBindingAction->subactionBindings[0], &pActionBinding);
 			*pActionBinding = pBinding;
 			continue;
 		}
 
-		for (int j = 0; j < pBindingAction->countSubactionPaths; ++j) {
-			const Path* pActionSubPath = (Path*)pBindingAction->subactionPaths[j];
+		for (int subactionIndex = 0; subactionIndex < pBindingAction->countSubactionPaths; ++subactionIndex) {
+			const Path* pActionSubPath = (Path*)pBindingAction->subactionPaths[subactionIndex];
 			if (CompareSubPath(pActionSubPath->string, pBindingPath->string))
 				continue;
-			printf("Bound to %d %s\n", j, pActionSubPath->string);
+			printf("Bound to %d %s\n", subactionIndex, pActionSubPath->string);
 			XrBinding* pActionBinding;
-			ClaimXrBinding(&pBindingAction->bindings, &pActionBinding);
+			ClaimXrBinding(&pBindingAction->subactionBindings[subactionIndex], &pActionBinding);
 			*pActionBinding = pBinding;
 		}
 	}
@@ -444,29 +448,33 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state) {
-	Session*         pSession = (Session*)session;
+
+	const Action*    pGetAction = (Action*)getInfo->action;
+	const Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
+	const ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
+
+	const Session*         pSession = (Session*)session;
 	const Instance*  pInstance = (Instance*)pSession->instance;
-	const Action*    pAction = (Action*)getInfo->action;
-	const ActionSet* pActionSet = (ActionSet*)pAction->actionSet;
-	const int        actionHandle = GetActionHandle(&pActionSet->actions, pAction);
-	const XrHash     actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
-	ActionSetState*  pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
-	ActionState*     pActionState = &pActionSetState->actionStates.data[actionHandle];
-	const Path*      subactionPath = (Path*)getInfo->subactionPath;
-	if (subactionPath == NULL) {
-		memcpy(&state->currentState, &pActionState->currentState, sizeof(ActionState));
-		pActionState->changedSinceLastSync = false;
+	const XrHash     getActionSetHash = GetActionSetHash(&pInstance->actionSets, pGetActionSet);
+	ActionSetState*  pGetActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, getActionSetHash);
+
+	const int    getActionHandle = GetActionHandle(&pGetActionSet->actions, pGetAction);
+	ActionState* pGetActionState = &pGetActionSetState->actionStates.data[getActionHandle];
+
+	if (pGetActionSubactionPath == NULL) {
+		memcpy(&state->currentState, &pGetActionState->subactionStates[0].currentState, sizeof(ActionState));
+		pGetActionState->subactionStates[0].changedSinceLastSync = false;
 		return XR_SUCCESS;
 	}
-	for (int i = 0; i < pAction->countSubactionPaths; ++i) {
-		const Path* pSubPath = (Path*)pAction->subactionPaths[i];
-		if (subactionPath == pSubPath) {
-			memcpy(&state->currentState, &pActionState->currentState, sizeof(ActionState));
-			pActionState->changedSinceLastSync = false;
+	for (int i = 0; i < pGetAction->countSubactionPaths; ++i) {
+		const Path* pSubPath = (Path*)pGetAction->subactionPaths[i];
+		if (pGetActionSubactionPath == pSubPath) {
+			memcpy(&state->currentState, &pGetActionState->subactionStates[i].currentState, sizeof(ActionState));
+			pGetActionState->subactionStates[i].changedSinceLastSync = false;
 			return XR_SUCCESS;
 		}
 	}
-	fprintf(stderr, "%s subaction on %s not bound l\n", subactionPath->string,  pAction->actionName);
+	fprintf(stderr, "%s subaction on %s not bound l\n", pGetActionSubactionPath->string, pGetAction->actionName);
 	return XR_EVENT_UNAVAILABLE;
 }
 
@@ -656,25 +664,37 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	const XrTime currentTime = GetXrTime();
-	for (int i = 0; i < pSession->actionSetStates.count; ++i) {
-		ActionSet* pActionSet = (ActionSet*)syncInfo->activeActionSets[i].actionSet;
+
+	for (int sessionIndex = 0; sessionIndex < pSession->actionSetStates.count; ++sessionIndex) {
+		ActionSet* pActionSet = (ActionSet*)syncInfo->activeActionSets[sessionIndex].actionSet;
 		XrHash actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
 		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
+
 		if (pActionSetState == NULL)
 			continue;
-		for (int j = 0; j < pActionSet->actions.count; ++j){
-			Action* pAction = &pActionSet->actions.data[j];
-			ActionState* pActionState = &pActionSetState->actionStates.data[j];
-			for (int k = 0; k < pAction->bindings.count; ++k) {
-				if (pActionState->lastSyncedPriority > pActionSet->priority && pActionState->lastChangeTime == currentTime)
+
+		for (int actionIndex = 0; actionIndex < pActionSet->actions.count; ++actionIndex){
+			Action* pAction = &pActionSet->actions.data[actionIndex];
+			ActionState* pActionState = &pActionSetState->actionStates.data[actionIndex];
+
+			for (int subActionIndex = 0; subActionIndex < pAction->countSubactionPaths; ++subActionIndex) {
+				XrBindingContainer* pSubactionBindingContainer = &pAction->subactionBindings[subActionIndex];
+				SubactionState* pSubactionState = &pActionState->subactionStates[subActionIndex];
+
+				if (pSubactionState->lastSyncedPriority > pActionSet->priority &&
+						pSubactionState->lastChangeTime == currentTime)
 					continue;
-				const float lastState = pActionState->currentState;
-				Binding* pBinding = (Binding*)pAction->bindings.data[k];
-				pBinding->func(pActionState);
-				pActionState->lastSyncedPriority = pActionSet->priority;
-				pActionState->lastChangeTime = currentTime;
-				pActionState->isActive = XR_TRUE;
-				pActionState->changedSinceLastSync = pActionState->currentState != lastState;
+
+				const float lastState = pSubactionState->currentState;
+				
+				for (int bindingIndex = 0; bindingIndex < pSubactionBindingContainer->count; ++bindingIndex) {
+					Binding* pBinding = (Binding*)pSubactionBindingContainer->data[bindingIndex];
+					pBinding->func(pActionState);
+					pSubactionState->lastSyncedPriority = pActionSet->priority;
+					pSubactionState->lastChangeTime = currentTime;
+					pSubactionState->isActive = XR_TRUE;
+					pSubactionState->changedSinceLastSync = pSubactionState->currentState != lastState;
+				}
 			}
 		}
 	}
