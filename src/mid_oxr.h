@@ -95,10 +95,16 @@ typedef struct Path {
 CONTAINER_HASHED(Path, MIDXR_MAX_PATHS);
 
 typedef struct Binding {
-	XrPath path;
+	XrPath   path;
 	int (*func)(void*);
 } Binding;
-CONTAINER_HASHED(Binding, 32);
+CONTAINER_HASHED(Binding, 16);
+
+typedef struct BindingSet {
+	XrPath interactionProfile;
+	BindingContainer bindings;
+} BindingSet;
+CONTAINER_HASHED(BindingSet, 16);
 
 #define MIDXR_MAX_ACTIONS 32
 typedef Binding* XrBinding;
@@ -121,17 +127,18 @@ CONTAINER(XrAction, MIDXR_MAX_BOUND_ACTIONS);
 
 // probably want to do this?
 typedef struct InteractionProfile {
-	XrPath path;
+	XrPath           path;
 	BindingContainer bindings;
 } InteractionProfile;
 static InteractionProfile interactionProfiles;
 
 typedef struct ActionState {
-	// actualy layout from OXR to memcopy
-	float                 currentState;
-	XrBool32              changedSinceLastSync;
-	XrTime                lastChangeTime;
-	XrBool32              isActive;
+	uint32_t lastSyncedPriority;
+	// actual layout from OXR to memcpy
+	float    currentState;
+	XrBool32 changedSinceLastSync;
+	XrTime   lastChangeTime;
+	XrBool32 isActive;
 } ActionState;
 CONTAINER(ActionState, MIDXR_MAX_ACTIONS);
 
@@ -164,12 +171,12 @@ typedef struct Session {
 CONTAINER(Session, 2);
 
 typedef struct Instance {
-	char               applicationName[XR_MAX_APPLICATION_NAME_SIZE];
-	XrFormFactor       systemFormFactor;
-	SessionContainer   sessions;
-	ActionSetContainer actionSets;
-	BindingContainer   bindings;
-	PathContainer      paths;
+	char                applicationName[XR_MAX_APPLICATION_NAME_SIZE];
+	XrFormFactor        systemFormFactor;
+	SessionContainer    sessions;
+	ActionSetContainer  actionSets;
+	BindingSetContainer bindingSets;
+	PathContainer       paths;
 } Instance;
 CONTAINER(Instance, 2);
 
@@ -189,13 +196,26 @@ static uint32_t CalcDJB2(const char* str, int max) {
 //
 //// Mid Device Input Funcs
 static int OculusLeftClick(float* pValue) {
-	*pValue = 0;
+	*pValue = 100;
 	return 0;
 }
 
 static int OculusRightClick(float* pValue) {
-	*pValue = 0;
+	*pValue = 200;
 	return 0;
+}
+
+XrTime GetXrTime() {
+	LARGE_INTEGER frequency;
+	LARGE_INTEGER counter;
+	if (!QueryPerformanceFrequency(&frequency)) {
+		return 0;
+	}
+	if (!QueryPerformanceCounter(&counter)) {
+		return 0;
+	}
+	uint64_t nanoseconds = (uint64_t)((counter.QuadPart * 1e9) / frequency.QuadPart);
+	return nanoseconds;
 }
 
 //
@@ -219,10 +239,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	Instance* pInstance = (Instance*)instance;
 	const int hash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (int i = 0; i < pInstance->paths.count; ++i) {
-		if (pInstance->paths.hash[i] == hash) {
-			*path = (XrPath)&pInstance->paths.data[i];
-			return XR_SUCCESS;
+		if (pInstance->paths.hash[i] != hash)
+			continue;
+		if (strncmp(pInstance->paths.data[i].string, pathString, XR_MAX_PATH_LENGTH))
+		{
+			fprintf(stderr, "Path Hash Collision! %s | %s\n", pInstance->paths.data[i].string, pathString);
+			return XR_ERROR_PATH_INVALID;
 		}
+		*path = (XrPath)&pInstance->paths.data[i];
+		return XR_SUCCESS;
 	}
 	Path* pPath;
 	CHECK(ClaimPath(&pInstance->paths, &pPath, hash));
@@ -235,31 +260,62 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 //
 /// Interaction
 
-static XrResult RegisterBinding(XrInstance instance, Path* pPath, int (*const func)(void*)) {
+typedef struct BindingDefinition {
+	int (*const func)(void*);
+	const char path[XR_MAX_PATH_LENGTH];
+} BindingDefinition;
+static XrResult RegisterBinding(XrInstance instance, BindingContainer* pBindings, Path* pPath, int (*const func)(void*)) {
 	Instance* pInstance = (Instance*)instance;
 	const int pathHash = GetPathHash(&pInstance->paths, pPath);
-	for (int i = 0; i < pInstance->bindings.count; ++i) {
-		if (GetPathHash(&pInstance->paths, (Path*)pInstance->bindings.data[i].path) == pathHash) {
+	for (int i = 0; i < pBindings->count; ++i) {
+		if (GetPathHash(&pInstance->paths, (Path*)pBindings->data[i].path) == pathHash) {
 			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pPath->string, pathHash);
 			return XR_ERROR_PATH_INVALID;
 		}
 	}
 	Binding* pBinding;
-	ClaimBinding(&pInstance->bindings, &pBinding, pathHash);
+	ClaimBinding(pBindings, &pBinding, pathHash);
 	pBinding->path = (XrPath)pPath;
 	pBinding->func = func;
+	float t;
+	pBinding->func(&t);
 	return XR_SUCCESS;
 }
 static XrResult InitStandardBindings(XrInstance instance){
 	Instance* pInstance = (Instance*)instance;
 	{
-		const char* interactionProfile = "/interaction_profiles/oculus/touch_controller";
-		Path* leftPath;
-		xrStringToPath(instance, "/user/hand/left/input/select/click", (XrPath*)&leftPath);
-		RegisterBinding(instance, leftPath, (int (*)(void*))OculusLeftClick);
-		Path* rightPath;
-		xrStringToPath(instance, "/user/hand/right/input/select/click", (XrPath*)&rightPath);
-		RegisterBinding(instance, rightPath, (int (*)(void*))OculusRightClick);
+#define BINDING_DEFINITION(_func, _path) (int (*)(void*)) _func, _path
+		const BindingDefinition bindingDefinitions[] = {
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
+		};
+#undef BINDING_DEFINITION
+		XrPath bindingSetPath;
+		xrStringToPath(instance, "/interaction_profiles/oculus/touch_controller", &bindingSetPath);
+		XrHash bindingSetHash = GetPathHash(&pInstance->paths, (const Path*)bindingSetPath);
+		BindingSet* pBindingSet;
+		CHECK(ClaimBindingSet(&pInstance->bindingSets, &pBindingSet, bindingSetHash));
+		for (int i = 0; i < COUNT(bindingDefinitions); ++i) {
+			XrPath path;
+			xrStringToPath(instance, bindingDefinitions[i].path, &path);
+			RegisterBinding(instance, &pBindingSet->bindings, (Path*)path, bindingDefinitions[i].func);
+		}
 	}
 	return XR_SUCCESS;
 }
@@ -315,10 +371,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	XrInstance                                  instance,
 	const XrInteractionProfileSuggestedBinding* suggestedBindings) {
 	Instance* pInstance = (Instance*)instance;
-
 	const Path* pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
+	const XrHash interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
 	printf("Binding: %s\n", pInteractionProfilePath->string);
 	const XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
+
+	BindingSet *pBindingSet = GetBindingSetByHash(&pInstance->bindingSets, interactionProfilePathHash);
+	if (pBindingSet == NULL)
+	{
+		fprintf(stderr, "Could not find interaction profile binding set! %s %d\n",pInteractionProfilePath->string);
+		return XR_ERROR_PATH_UNSUPPORTED;
+	}
 
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		Action* pAction= (Action*)pSuggestedBindings[i].action;
@@ -328,36 +391,29 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	}
 
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		Action*        pActionToBind = (Action*)pSuggestedBindings[i].action;
+		Action*        pBindingAction = (Action*)pSuggestedBindings[i].action;
+		ActionSet*     pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
 		const Path*    pBindingPath = (Path*)pSuggestedBindings[i].binding;
 		const XrHash   bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
-		Binding* pBinding = GetBindingByHash(&pInstance->bindings, bindingPathHash);
-		printf("Action: %s BindingPath: %s\n", pActionToBind->actionName, pBindingPath->string);
+		Binding* pBinding = GetBindingByHash(&pBindingSet->bindings, bindingPathHash);
+		printf("Action: %s BindingPath: %s\n", pBindingAction->actionName, pBindingPath->string);
 
-		if (pActionToBind->countSubactionPaths == 0) {
+		if (pBindingAction->countSubactionPaths == 0) {
 			printf("No Subactions. Bound to zero.\n");
 			XrBinding* pActionBinding;
-			ClaimXrBinding(&pActionToBind->bindings, &pActionBinding);
+			ClaimXrBinding(&pBindingAction->bindings, &pActionBinding);
 			*pActionBinding = pBinding;
-
-//			XrAction* pAction;
-//			ClaimXrAction(&pBinding->actions, &pAction);
-//			*pAction = (XrAction)pActionToBind;
 			continue;
 		}
 
-		for (int j = 0; j < pActionToBind->countSubactionPaths; ++j) {
-			const Path* pActionSubPath = (Path*)pActionToBind->subactionPaths[j];
+		for (int j = 0; j < pBindingAction->countSubactionPaths; ++j) {
+			const Path* pActionSubPath = (Path*)pBindingAction->subactionPaths[j];
 			if (CompareSubPath(pActionSubPath->string, pBindingPath->string))
 				continue;
 			printf("Bound to %d %s\n", j, pActionSubPath->string);
 			XrBinding* pActionBinding;
-			ClaimXrBinding(&pActionToBind->bindings, &pActionBinding);
+			ClaimXrBinding(&pBindingAction->bindings, &pActionBinding);
 			*pActionBinding = pBinding;
-
-//			XrAction* pAction;
-//			ClaimXrAction(&pBinding->actions, &pAction);
-//			*pAction = (XrAction)pActionToBind;
 		}
 	}
 	return XR_SUCCESS;
@@ -369,7 +425,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	Session* pSession = (Session*)session;
 	if (pSession->actionSetStates.count != 0)
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
-
 	Instance* pInstance = (Instance*)pSession->instance;
 	for (int i = 0; i < attachInfo->countActionSets; ++i) {
 		ActionSet*      pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
@@ -377,9 +432,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 		ActionSetState* pClaimedActionSetState;
 		CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
 		pClaimedActionSetState->actionStates.count = pAttachingActionSet->actions.count;
-		pClaimedActionSetState->actionSet =  (XrActionSet)pAttachingActionSet;
+		pClaimedActionSetState->actionSet = (XrActionSet)pAttachingActionSet;
 	}
-
 	return XR_SUCCESS;
 }
 
@@ -387,25 +441,20 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state) {
-
-	Session* pSession = (Session*)session;
-	const Instance* pInstance = (Instance*)pSession->instance;
-
-	const Action* pAction = (Action*)getInfo->action;
+	Session*         pSession = (Session*)session;
+	const Instance*  pInstance = (Instance*)pSession->instance;
+	const Action*    pAction = (Action*)getInfo->action;
 	const ActionSet* pActionSet = (ActionSet*)pAction->actionSet;
-	const int actionHandle = GetActionHandle(&pActionSet->actions, pAction);
+	const int        actionHandle = GetActionHandle(&pActionSet->actions, pAction);
 	const XrHash     actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
-
-	ActionSetState* pActionSetState =  GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
-	ActionState* pActionState = &pActionSetState->actionStates.data[actionHandle];
-
-	const Path* subactionPath = (Path*)getInfo->subactionPath;
+	ActionSetState*  pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
+	ActionState*     pActionState = &pActionSetState->actionStates.data[actionHandle];
+	const Path*      subactionPath = (Path*)getInfo->subactionPath;
 	if (subactionPath == NULL) {
 		memcpy(&state->currentState, &pActionState->currentState, sizeof(ActionState));
 		pActionState->changedSinceLastSync = false;
 		return XR_SUCCESS;
 	}
-
 	for (int i = 0; i < pAction->countSubactionPaths; ++i) {
 		const Path* pSubPath = (Path*)pAction->subactionPaths[i];
 		if (subactionPath == pSubPath) {
@@ -414,9 +463,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 			return XR_SUCCESS;
 		}
 	}
-
 	fprintf(stderr, "%s subaction on %s not bound l\n", subactionPath->string,  pAction->actionName);
 	return XR_EVENT_UNAVAILABLE;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
+	XrSession                                   session,
+	const XrActionSpaceCreateInfo*              createInfo,
+	XrSpace*                                    space) {
+	return XR_SUCCESS;
 }
 
 //
@@ -579,20 +634,16 @@ static XrSessionState PendingSessionState = XR_SESSION_STATE_IDLE;
 XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	XrInstance         instance,
 	XrEventDataBuffer* eventData) {
-
 	if (SessionState != PendingSessionState)  {
-
 		// for debugging, this needs to be manually set elsewhere
 		if (PendingSessionState == XR_SESSION_STATE_IDLE)
 			PendingSessionState = XR_SESSION_STATE_READY;
-
 		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
 		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
 		pEventData->state = PendingSessionState;
 		SessionState = PendingSessionState;
 		return XR_SUCCESS;
 	}
-
 	return XR_EVENT_UNAVAILABLE;
 }
 
@@ -601,43 +652,36 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	const XrActionsSyncInfo* syncInfo) {
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-
-//	for (int i = 0; i < pInstance->bindings.count; ++i) {
-//		pInstance->bindings.data[i].
-//	}
-
-
+	const XrTime currentTime = GetXrTime();
 	for (int i = 0; i < pSession->actionSetStates.count; ++i) {
 		ActionSet* pActionSet = (ActionSet*)syncInfo->activeActionSets[i].actionSet;
 		XrHash actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
 		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
 		if (pActionSetState == NULL)
 			continue;
-
 		for (int j = 0; j < pActionSet->actions.count; ++j){
 			Action* pAction = &pActionSet->actions.data[j];
 			ActionState* pActionState = &pActionSetState->actionStates.data[j];
-
-			!!! no this just needs to set the highest priorit binding!!!!
 			for (int k = 0; k < pAction->bindings.count; ++k) {
-				Binding* pBinding = (Binding*)&pAction->bindings.data[k];
+				if (pActionState->lastSyncedPriority > pActionSet->priority && pActionState->lastChangeTime == currentTime)
+					continue;
+				const float lastState = pActionState->currentState;
+				Binding* pBinding = (Binding*)pAction->bindings.data[k];
 				pBinding->func(pActionState);
+				pActionState->lastSyncedPriority = pActionSet->priority;
+				pActionState->lastChangeTime = currentTime;
+				pActionState->isActive = XR_TRUE;
+				pActionState->changedSinceLastSync = pActionState->currentState != lastState;
 			}
-
 		}
-		pInstance->bindings
-
-
 	}
-
-
 	return XR_SUCCESS;
 }
 
 
 // modulo to ensure jump table is generated
 // https://godbolt.org/z/rGz6TbsG1
-#define PROC_ADDR_MODULO 84
+#define PROC_ADDR_MODULO 113
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
@@ -670,6 +714,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 		CASE(xrSyncActions, 2043237693)
 		CASE(xrAttachSessionActionSets, 3383012517)
 		CASE(xrEnumerateReferenceSpaces, 3445226179)
+		CASE(xrCreateActionSpace, 2806958157)
 		default:
 			return XR_ERROR_FUNCTION_UNSUPPORTED;
 	}
