@@ -71,10 +71,10 @@ extern void Panic(const char* file, int line, const char* message);
 #define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define MIDVK_SWAP_COUNT 2
 #define MIDVK_REQUIRE(command)                              \
-	{                                                         \
+	({                                                        \
 		VkResult result = command;                              \
 		REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
-	}
+	})
 
 #define MIDVK_INSTANCE_FUNC(_func)                                                                   \
 	const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \

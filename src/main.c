@@ -17,6 +17,7 @@
   __builtin_trap();
 }
 
+#define MID_OPENXR_IMPLEMENTATION
 #include "mid_oxr.h"
 
 #define MID_MATH_IMPLEMENTATION
@@ -41,10 +42,23 @@
 bool isCompositor = true;
 bool isRunning = true;
 
-//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
+
+
+void midXrInitialize() {
+
+}
+
+void midXrWaitFrame() {
+
+}
+
+void midXrBeginFrame() {
+
+}
 
 int main(void) {
 
+	//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 //    HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 //    if (vulkanLibrary == NULL) {
 //      fprintf(stderr, "Failed to load Vulkan library.\n");
