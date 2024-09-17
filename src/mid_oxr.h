@@ -585,6 +585,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	}
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
+	XrInstance            instance,
+	XrInstanceProperties* instanceProperties)
+{
+	instanceProperties->runtimeVersion = XR_MAKE_VERSION(0, 1, 0);
+	strncpy(instanceProperties->runtimeName, "Moxaic OpenXR", XR_MAX_RUNTIME_NAME_SIZE);
+	return XR_SUCCESS;
+}
+
+#define MIDXR_SYSTEM_ID 1
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	XrInstance             instance,
 	const XrSystemGetInfo* getInfo,
@@ -592,7 +603,24 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 {
 	Instance* pInstance = (Instance*)instance;
 	pInstance->systemFormFactor = getInfo->formFactor;
-	*systemId = (XrSystemId)&pInstance->systemFormFactor;
+	*systemId = MIDXR_SYSTEM_ID;
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
+	XrInstance          instance,
+	XrSystemId          systemId,
+	XrSystemProperties* properties)
+{
+	properties->systemId = MIDXR_SYSTEM_ID;
+	properties->vendorId = 0;
+	strncpy(properties->systemName, "moxaic", XR_MAX_SYSTEM_NAME_SIZE);
+	properties->graphicsProperties.maxLayerCount = 3;
+	properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
+	properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
+	properties->trackingProperties.orientationTracking = XR_TRUE;
+	properties->trackingProperties.positionTracking = XR_TRUE;
+
 	return XR_SUCCESS;
 }
 
@@ -643,7 +671,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 	uint32_t*              propertyCountOutput,
 	XrExtensionProperties* properties)
 {
-	printf("xrEnumerateInstanceExtensionProperties\n");
 	const XrExtensionProperties extensionProperties[] = {
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
@@ -728,8 +755,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 	if (formatCapacityInput < 2)
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	formatCountOutput[0] = GL_SRGB8_ALPHA8;
-	formatCountOutput[1] = GL_SRGB8;
+	formats[0] = GL_SRGB8_ALPHA8;
+	formats[1] = GL_SRGB8;
 
 	return XR_SUCCESS;
 }
@@ -860,7 +887,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance          instanc
 													 const char*         name,
 													 PFN_xrVoidFunction* function)
 {
-	printf("xrGetInstanceProcAddr %s\n", name);
+//	printf("xrGetInstanceProcAddr %s\n", name);
 
 	// These only load once so it being a so if chain is not an issue.
 #define CHECK_PROC_ADDR(_name)                                    \
@@ -874,6 +901,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance          instanc
 	CHECK_PROC_ADDR(xrEnumerateInstanceExtensionProperties)
 	CHECK_PROC_ADDR(xrCreateInstance)
 	CHECK_PROC_ADDR(xrGetSystem)
+	CHECK_PROC_ADDR(xrGetSystemProperties)
 	CHECK_PROC_ADDR(xrEnumerateViewConfigurationViews)
 	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
 	CHECK_PROC_ADDR(xrCreateSession)
@@ -894,6 +922,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance          instanc
 	CHECK_PROC_ADDR(xrCreateActionSpace)
 	CHECK_PROC_ADDR(xrEnumerateSwapchainFormats)
 	CHECK_PROC_ADDR(xrCreateSwapchain)
+	CHECK_PROC_ADDR(xrGetInstanceProperties)
 
 #undef CHECK_PROC_ADDR
 
@@ -904,8 +933,6 @@ XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
 	const XrNegotiateLoaderInfo* loaderInfo,
 	XrNegotiateRuntimeRequest*   runtimeRequest)
 {
-	printf("xrNegotiateLoaderRuntimeInterface\n");
-
 	if (!loaderInfo ||
 		!runtimeRequest ||
 		loaderInfo->structType != XR_LOADER_INTERFACE_STRUCT_LOADER_INFO ||
@@ -927,7 +954,6 @@ XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
 	runtimeRequest->runtimeInterfaceVersion = XR_CURRENT_LOADER_API_LAYER_VERSION;
 	runtimeRequest->runtimeApiVersion = XR_CURRENT_API_VERSION;
 
-	printf("xrNegotiateLoaderRuntimeInterface success\n");
 	return XR_SUCCESS;
 }
 

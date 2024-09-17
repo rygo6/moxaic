@@ -45,9 +45,9 @@ bool isRunning = true;
 
 void midXrInitialize() {
 	printf("Initializing Moxaic node.\n");
-	midVkInitialize();
 	isCompositor = false;
-	mxcConnectInterprocessNode();
+//	midVkInitialize();
+//	mxcConnectInterprocessNode();
 }
 
 void midXrWaitFrame() {
