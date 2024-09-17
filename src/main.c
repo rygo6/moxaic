@@ -43,17 +43,23 @@ bool isCompositor = true;
 bool isRunning = true;
 
 
-
 void midXrInitialize() {
-
+	printf("Initializing Moxaic node.\n");
+	midVkInitialize();
+	isCompositor = false;
+	mxcConnectInterprocessNode();
 }
 
 void midXrWaitFrame() {
-
+	// wait on timeline
 }
 
 void midXrBeginFrame() {
+	// transition frames
+}
 
+void midXrEndFrame() {
+	// submit frame
 }
 
 int main(void) {
@@ -72,7 +78,7 @@ int main(void) {
 
   { // Initialize
     midCreateWindow();
-    vkmInitialize();
+		midVkInitialize();
 
     midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &midVk.surfaces[0]);
 
@@ -81,7 +87,6 @@ int main(void) {
         .uniformDescriptorCount = 10,
         .combinedImageSamplerDescriptorCount = 10,
         .storageImageDescriptorCount = 10,
-        .presentSurface = midVk.surfaces[0],
         .queueFamilyCreateInfos = {
             [VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
                 .supportsGraphics = VKM_SUPPORT_YES,

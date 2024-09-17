@@ -27,9 +27,9 @@ IndentCaseLabels: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: true
 IndentPPDirectives: None
-IndentWidth: 2
-ContinuationIndentWidth: 2
-TabWidth: 2
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
 UseTab: ForContinuationAndIndentation
 ReflowComments: false
 BraceWrapping:
@@ -68,7 +68,7 @@ BreakBeforeConceptDeclarations: false
 BreakBeforeInheritanceComma: false
 BreakBeforeInlineASMColon: Never
 BreakStringLiterals: false
-BreakBeforeBraces: Attach
+BreakBeforeBraces: Linux
 BreakConstructorInitializers: AfterColon
 BreakConstructorInitializersBeforeComma: false
 BreakInheritanceList: AfterColon

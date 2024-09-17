@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-MidVk midVk = {};
+MidVk                       midVk = {};
 __thread MidVkThreadContext threadContext = {};
 
 VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
@@ -15,7 +15,8 @@ VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
 // Utility
 //----------------------------------------------------------------------------------
 
-static void VkmReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents) {
+static void VkmReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents)
+{
 	FILE* file = fopen(pPath, "rb");
 	REQUIRE(file != NULL, "File can't be opened!");
 	fseek(file, 0, SEEK_END);
@@ -27,7 +28,12 @@ static void VkmReadFile(const char* pPath, size_t* pFileLength, char** ppFileCon
 	fclose(file);
 }
 
-static VkBool32 VkmDebugUtilsCallback(const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, const VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+static VkBool32 VkmDebugUtilsCallback(
+	const VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+	const VkDebugUtilsMessageTypeFlagsEXT messageType,
+	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+	void* pUserData)
+{
 	switch (messageSeverity) {
 		default:
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
@@ -37,7 +43,8 @@ static VkBool32 VkmDebugUtilsCallback(const VkDebugUtilsMessageSeverityFlagBitsE
 	}
 }
 
-VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer() {
+VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer()
+{
 	const VkCommandBufferAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool,
@@ -52,14 +59,15 @@ VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer() {
 	MIDVK_REQUIRE(vkBeginCommandBuffer(cmd, &beginInfo));
 	return cmd;
 }
-void MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd) {
+void MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
+{
 	MIDVK_REQUIRE(vkEndCommandBuffer(cmd));
-	const VkSubmitInfo submitInfo = {
+	const VkSubmitInfo info = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.commandBufferCount = 1,
 		.pCommandBuffers = &cmd,
 	};
-	MIDVK_REQUIRE(vkQueueSubmit(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue, 1, &submitInfo, VK_NULL_HANDLE));
+	MIDVK_REQUIRE(vkQueueSubmit(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue, 1, &info, VK_NULL_HANDLE));
 	MIDVK_REQUIRE(vkQueueWaitIdle(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue));
 	vkFreeCommandBuffers(midVk.context.device, midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool, 1, &cmd);
 }
@@ -70,16 +78,17 @@ void MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd) {
 
 #define COLOR_WRITE_MASK_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
-void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule) {
-	size_t codeSize;
+void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule)
+{
+	size_t size;
 	char*  pCode;
-	VkmReadFile(pShaderPath, &codeSize, &pCode);
-	const VkShaderModuleCreateInfo createInfo = {
+	VkmReadFile(pShaderPath, &size, &pCode);
+	const VkShaderModuleCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		.codeSize = codeSize,
+		.codeSize = size,
 		.pCode = (uint32_t*)pCode,
 	};
-	MIDVK_REQUIRE(vkCreateShaderModule(midVk.context.device, &createInfo, MIDVK_ALLOC, pShaderModule));
+	MIDVK_REQUIRE(vkCreateShaderModule(midVk.context.device, &info, MIDVK_ALLOC, pShaderModule));
 	free(pCode);
 }
 
@@ -91,7 +100,8 @@ enum VkmPipeVertexAttributeStandardIndices {
 	VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,
 	VKM_PIPE_VERTEX_ATTRIBUTE_STD_COUNT,
 };
-static void CreateStdPipeLayout() {
+static void CreateStdPipeLayout()
+{
 	VkDescriptorSetLayout pSetLayouts[MIDVK_PIPE_SET_STD_INDEX_COUNT];
 	pSetLayouts[MIDVK_PIPE_SET_STD_GLOBAL_INDEX] = midVk.context.stdPipeLayout.globalSetLayout;
 	pSetLayouts[MIDVK_PIPE_SET_STD_MATERIAL_INDEX] = midVk.context.stdPipeLayout.materialSetLayout;
@@ -104,50 +114,53 @@ static void CreateStdPipeLayout() {
 	MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.pipeLayout));
 }
 
-#define DEFAULT_ROBUSTNESS_STATE                                                         \
-	(const VkPipelineRobustnessCreateInfoEXT) {                                            \
+#define DEFAULT_ROBUSTNESS_STATE                                                             \
+	(const VkPipelineRobustnessCreateInfoEXT)                                                \
+	{                                                                                        \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO_EXT,                      \
 		.storageBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT, \
 		.uniformBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT, \
 		.vertexInputs = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT,   \
 		.images = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_ROBUST_IMAGE_ACCESS_2_EXT,           \
 	}
-#define DEFAULT_VERTEX_INPUT_STATE                                               \
-	(const VkPipelineVertexInputStateCreateInfo) {                                 \
+#define DEFAULT_VERTEX_INPUT_STATE                                                   \
+	(const VkPipelineVertexInputStateCreateInfo)                                     \
+	{                                                                                \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,          \
 		.vertexBindingDescriptionCount = 1,                                          \
 		.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){           \
-			{                                                                          \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                            \
-				.stride = sizeof(MidVertex),                                             \
-				.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,                                \
-			},                                                                         \
+			{                                                                        \
+				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.stride = sizeof(MidVertex),                                         \
+				.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,                            \
+			},                                                                       \
 		},                                                                           \
 		.vertexAttributeDescriptionCount = 3,                                        \
-                                                                                 \
+                                                                                     \
 		.pVertexAttributeDescriptions = (const VkVertexInputAttributeDescription[]){ \
-			{                                                                          \
-				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,                \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                            \
-				.format = VK_FORMAT_R32G32B32_SFLOAT,                                    \
-				.offset = offsetof(MidVertex, position),                                 \
-			},                                                                         \
-			{                                                                          \
-				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,                  \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                            \
-				.format = VK_FORMAT_R32G32B32_SFLOAT,                                    \
-				.offset = offsetof(MidVertex, normal),                                   \
-			},                                                                         \
-			{                                                                          \
-				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,                      \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                            \
-				.format = VK_FORMAT_R32G32_SFLOAT,                                       \
-				.offset = offsetof(MidVertex, uv),                                       \
-			},                                                                         \
+			{                                                                        \
+				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,            \
+				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.format = VK_FORMAT_R32G32B32_SFLOAT,                                \
+				.offset = offsetof(MidVertex, position),                             \
+			},                                                                       \
+			{                                                                        \
+				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,              \
+				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.format = VK_FORMAT_R32G32B32_SFLOAT,                                \
+				.offset = offsetof(MidVertex, normal),                               \
+			},                                                                       \
+			{                                                                        \
+				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,                  \
+				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.format = VK_FORMAT_R32G32_SFLOAT,                                   \
+				.offset = offsetof(MidVertex, uv),                                   \
+			},                                                                       \
 		},                                                                           \
 	}
-#define DEFAULT_VIEWPORT_STATE                                      \
-	(const VkPipelineViewportStateCreateInfo) {                       \
+#define DEFAULT_VIEWPORT_STATE                                          \
+	(const VkPipelineViewportStateCreateInfo)                           \
+	{                                                                   \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, \
 		.viewportCount = 1,                                             \
 		.scissorCount = 1,                                              \
@@ -157,42 +170,47 @@ static void CreateStdPipeLayout() {
 #else
 #define FILL_MODE VK_POLYGON_MODE_FILL
 #endif
-#define DEFAULT_RASTERIZATION_STATE                                      \
-	(const VkPipelineRasterizationStateCreateInfo) {                       \
+#define DEFAULT_RASTERIZATION_STATE                                          \
+	(const VkPipelineRasterizationStateCreateInfo)                           \
+	{                                                                        \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, \
 		.polygonMode = FILL_MODE,                                            \
 		.frontFace = VK_FRONT_FACE_CLOCKWISE,                                \
 		.lineWidth = 1.0f,                                                   \
 	}
-#define DEFAULT_DEPTH_STENCIL_STATE                                      \
-	(const VkPipelineDepthStencilStateCreateInfo) {                        \
+#define DEFAULT_DEPTH_STENCIL_STATE                                          \
+	(const VkPipelineDepthStencilStateCreateInfo)                            \
+	{                                                                        \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, \
 		.depthTestEnable = VK_TRUE,                                          \
 		.depthWriteEnable = VK_TRUE,                                         \
 		.depthCompareOp = VK_COMPARE_OP_GREATER,                             \
 		.maxDepthBounds = 1.0f,                                              \
 	}
-#define DEFAULT_DYNAMIC_STATE                                      \
-	(const VkPipelineDynamicStateCreateInfo) {                       \
+#define DEFAULT_DYNAMIC_STATE                                          \
+	(const VkPipelineDynamicStateCreateInfo)                           \
+	{                                                                  \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, \
 		.dynamicStateCount = 2,                                        \
 		.pDynamicStates = (const VkDynamicState[]){                    \
-			VK_DYNAMIC_STATE_VIEWPORT,                                   \
-			VK_DYNAMIC_STATE_SCISSOR,                                    \
+			VK_DYNAMIC_STATE_VIEWPORT,                                 \
+			VK_DYNAMIC_STATE_SCISSOR,                                  \
 		},                                                             \
 	}
-#define DEFAULT_OPAQUE_COLOR_BLEND_STATE                               \
-	(const VkPipelineColorBlendStateCreateInfo) {                        \
+#define DEFAULT_OPAQUE_COLOR_BLEND_STATE                                   \
+	(const VkPipelineColorBlendStateCreateInfo)                            \
+	{                                                                      \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, \
 		.logicOp = VK_LOGIC_OP_COPY,                                       \
 		.attachmentCount = 2,                                              \
 		.pAttachments = (const VkPipelineColorBlendAttachmentState[]){     \
-			{/* Color */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},           \
-			{/* Normal */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},          \
+			{/* Color */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},         \
+			{/* Normal */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},        \
 		},                                                                 \
 	}
 
-void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
+void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
+{
 	VkShaderModule vertShader;
 	vkmCreateShaderModule(vertShaderPath, &vertShader);
 	VkShaderModule fragShader;
@@ -237,7 +255,8 @@ void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, 
 	vkDestroyShaderModule(midVk.context.device, vertShader, MIDVK_ALLOC);
 }
 
-void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
+void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
+{
 	VkShaderModule vertShader;
 	vkmCreateShaderModule(vertShaderPath, &vertShader);
 	VkShaderModule tescShader;
@@ -305,7 +324,8 @@ void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, c
 }
 
 
-void vkmCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe) {
+void vkmCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
+{
 	VkShaderModule taskShader;
 	vkmCreateShaderModule(taskShaderPath, &taskShader);
 	VkShaderModule meshShader;
@@ -358,8 +378,9 @@ void vkmCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPat
 // Descriptors
 //----------------------------------------------------------------------------------
 
-static void CreateGlobalSetLayout() {
-	const VkDescriptorSetLayoutCreateInfo createInfo = {
+static void CreateGlobalSetLayout()
+{
+	const VkDescriptorSetLayoutCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
 		.pBindings = &(const VkDescriptorSetLayoutBinding){
@@ -375,9 +396,10 @@ static void CreateGlobalSetLayout() {
 				VK_SHADER_STAGE_TASK_BIT_EXT,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.globalSetLayout))
+	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &info, MIDVK_ALLOC, &midVk.context.stdPipeLayout.globalSetLayout));
 }
-static void CreateStdMaterialSetLayout() {
+static void CreateStdMaterialSetLayout()
+{
 	const VkDescriptorSetLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
@@ -391,7 +413,8 @@ static void CreateStdMaterialSetLayout() {
 	};
 	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.materialSetLayout));
 }
-static void CreateStdObjectSetLayout() {
+static void CreateStdObjectSetLayout()
+{
 	const VkDescriptorSetLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
@@ -405,7 +428,8 @@ static void CreateStdObjectSetLayout() {
 	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.objectSetLayout));
 }
 
-void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet) {
+void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet)
+{
 	const VkDescriptorSetAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = descriptorPool,
@@ -414,7 +438,8 @@ void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDes
 	};
 	MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, pSet));
 }
-void vkmAllocateDescriptorSets(const VkDescriptorPool descriptorPool, const uint32_t descriptorSetCount, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSets) {
+void vkmAllocateDescriptorSets(const VkDescriptorPool descriptorPool, const uint32_t descriptorSetCount, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSets)
+{
 	const VkDescriptorSetAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = descriptorPool,
@@ -428,7 +453,8 @@ void vkmAllocateDescriptorSets(const VkDescriptorPool descriptorPool, const uint
 // Memory
 //----------------------------------------------------------------------------------
 
-static void PrintMemoryPropertyFlags(VkMemoryPropertyFlags propFlags) {
+static void PrintMemoryPropertyFlags(VkMemoryPropertyFlags propFlags)
+{
 	int index = 0;
 	while (propFlags) {
 		if (propFlags & 1) {
@@ -440,7 +466,12 @@ static void PrintMemoryPropertyFlags(VkMemoryPropertyFlags propFlags) {
 	printf("\n");
 }
 
-static uint32_t FindMemoryTypeIndex(const uint32_t memoryTypeCount, VkMemoryType* pMemoryTypes, const uint32_t memoryTypeBits, const VkMemoryPropertyFlags memPropFlags) {
+static uint32_t FindMemoryTypeIndex(
+	const uint32_t              memoryTypeCount,
+	VkMemoryType*               pMemoryTypes,
+	const uint32_t              memoryTypeBits,
+	const VkMemoryPropertyFlags memPropFlags)
+{
 	for (uint32_t i = 0; i < memoryTypeCount; i++) {
 		bool hasTypeBits = memoryTypeBits & 1 << i;
 		bool hasPropertyFlags = (pMemoryTypes[i].propertyFlags & memPropFlags) == memPropFlags;
@@ -460,14 +491,16 @@ static __thread size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = 
 __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
 __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {};
 
-void vkmBeginAllocationRequests() {
+void vkmBeginAllocationRequests()
+{
 	printf("Begin Memory Allocation Requests.\n");
 	// what do I do here? should I enable a mechanic to do this twice? or on pass in memory?
 	for (int memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
 		requestedMemoryAllocSize[memTypeIndex] = 0;
 	}
 }
-void vkmEndAllocationRequests() {
+void vkmEndAllocationRequests()
+{
 	printf("End Memory Allocation Requests.\n");
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 	vkGetPhysicalDeviceMemoryProperties2(midVk.context.physicalDevice, &memProps2);
@@ -499,7 +532,8 @@ void AllocateMemory(
 	const MidLocality                    locality,
 	const HANDLE                         externalHandle,
 	const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo,
-	VkDeviceMemory*                      pDeviceMemory) {
+	VkDeviceMemory*                      pDeviceMemory)
+{
 	VkPhysicalDeviceMemoryProperties memProps;
 	vkGetPhysicalDeviceMemoryProperties(midVk.context.physicalDevice, &memProps);
 	const uint32_t memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
@@ -525,8 +559,8 @@ void AllocateMemory(
 	const VkMemoryAllocateInfo memAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.pNext = MID_LOCALITY_INTERPROCESS_EXPORTED(locality) ? &exportMemAllocInfo :
-						 MID_LOCALITY_INTERPROCESS_IMPORTED(locality) ? &importMemAllocInfo :
-																														(void*)pDedicatedAllocInfo,
+				 MID_LOCALITY_INTERPROCESS_IMPORTED(locality) ? &importMemAllocInfo :
+																(void*)pDedicatedAllocInfo,
 		.allocationSize = pMemReqs->size,
 		.memoryTypeIndex = memTypeIndex,
 	};
@@ -536,7 +570,8 @@ void AllocateMemory(
 	PrintMemoryPropertyFlags(propFlags);
 #endif
 }
-void vkmImportMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory) {
+void vkmImportMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory)
+{
 	VkPhysicalDeviceMemoryProperties memProps;
 	vkGetPhysicalDeviceMemoryProperties(midVk.context.physicalDevice, &memProps);
 	const uint32_t                         memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
@@ -557,7 +592,8 @@ void vkmImportMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropert
 	PrintMemoryPropertyFlags(propFlags);
 #endif
 }
-static void CreateAllocBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer) {
+static void CreateAllocBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
+{
 	const VkBufferCreateInfo bufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = bufferSize,
@@ -580,16 +616,19 @@ static void CreateAllocBuffer(const VkMemoryPropertyFlags memPropFlags, const Vk
 	//  AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, (requiresDedicated || prefersDedicated) ? &dedicatedAllocInfo : NULL, pDeviceMem);
 	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, requiresDedicated ? &dedicatedAllocInfo : NULL, pDeviceMem);
 }
-void CreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer) {
+void CreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
+{
 	CreateAllocBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
 	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, *pBuffer, *pDeviceMem, 0));
 }
-void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped) {
+void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped)
+{
 	CreateAllocBindBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
 	MIDVK_REQUIRE(vkMapMemory(midVk.context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
 }
 
-void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory) {
+void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory)
+{
 	const VkBufferCreateInfo bufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = pRequest->size,
@@ -620,14 +659,16 @@ void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuf
 #endif
 }
 
-static void CreateStagingBuffer(const void* srcData, const VkDeviceSize bufferSize, VkDeviceMemory* pStagingMemory, VkBuffer* pStagingBuffer) {
+static void CreateStagingBuffer(const void* srcData, const VkDeviceSize bufferSize, VkDeviceMemory* pStagingMemory, VkBuffer* pStagingBuffer)
+{
 	void* dstData;
 	CreateAllocBindBuffer(VKM_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MID_LOCALITY_CONTEXT, pStagingMemory, pStagingBuffer);
 	MIDVK_REQUIRE(vkMapMemory(midVk.context.device, *pStagingMemory, 0, bufferSize, 0, &dstData));
 	memcpy(dstData, srcData, bufferSize);
 	vkUnmapMemory(midVk.context.device, *pStagingMemory);
 }
-void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer) {
+void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer)
+{
 	VkBuffer       stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 	CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
@@ -637,7 +678,8 @@ void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset
 	vkFreeMemory(midVk.context.device, stagingBufferMemory, MIDVK_ALLOC);
 	vkDestroyBuffer(midVk.context.device, stagingBuffer, MIDVK_ALLOC);
 }
-void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
+void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
+{
 	pMesh->vertexCount = pCreateInfo->vertexCount;
 	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->vertexCount;
 	pMesh->vertexOffset = 0;
@@ -653,7 +695,8 @@ void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pM
 	};
 	vkmCreateBufferSharedMemory(&AllocRequest, &pMesh->buffer, &pMesh->sharedMemory);
 }
-void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
+void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
+{
 	// Ensure size is same
 	const VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->buffer};
 	VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
@@ -664,7 +707,8 @@ void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh
 	vkmUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
 	vkmUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(MidVertex) * pMesh->vertexCount, pMesh->buffer);
 }
-void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
+void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
+{
 	pMesh->indexCount = pCreateInfo->indexCount;
 	pMesh->vertexCount = pCreateInfo->vertexCount;
 	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
@@ -680,13 +724,16 @@ void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh) {
 // Images
 //----------------------------------------------------------------------------------
 
-static inline void vkmCmdPipelineImageBarriers(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+static inline void vkmCmdPipelineImageBarriers(const VkCommandBuffer commandBuffer, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
+{
 	vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-static inline void vkmCmdPipelineImageBarrier(const VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
+static inline void vkmCmdPipelineImageBarrier(const VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier)
+{
 	vkCmdPipelineBarrier2(commandBuffer, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
-static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImage image, const VkImageAspectFlags aspectMask, VkImageView* pImageView) {
+static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImage image, const VkImageAspectFlags aspectMask, VkImageView* pImageView)
+{
 	const VkImageViewCreateInfo imageViewCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = image,
@@ -700,7 +747,8 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, const VkI
 	};
 	MIDVK_REQUIRE(vkCreateImageView(midVk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, pImageView));
 }
-static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, const MidLocality locality, const HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage) {
+static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, const MidLocality locality, const HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage)
+{
 	MIDVK_REQUIRE(vkCreateImage(midVk.context.device, pImageCreateInfo, MIDVK_ALLOC, pImage));
 	const VkImageMemoryRequirementsInfo2 imgMemReqInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
@@ -728,15 +776,18 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, cons
 	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, requiresDedicated ? &dedicatedAllocInfo : NULL, pMemory);
 	MIDVK_REQUIRE(vkBindImageMemory(midVk.context.device, *pImage, *pMemory, 0));
 }
-static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImageAspectFlags aspectMask, const MidLocality locality, const HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView) {
+static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImageAspectFlags aspectMask, const MidLocality locality, const HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView)
+{
 	CreateAllocBindImage(pImageCreateInfo, locality, externalHandle, pMemory, pImage);
 	CreateImageView(pImageCreateInfo, *pImage, aspectMask, pImageView);
 }
-void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture) {
+void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture)
+{
 	CreateAllocateBindImageView(&pCreateInfo->imageCreateInfo, pCreateInfo->aspectMask, pCreateInfo->locality, pCreateInfo->externalHandle, &pTexture->memory, &pTexture->image, &pTexture->view);
 	vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
-void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
+void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
+{
 	int      texChannels, width, height;
 	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
 	REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
@@ -770,7 +821,8 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture) {
 }
 
 // add createinfo?
-void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer) {
+void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer)
+{
 	const VkFramebufferCreateInfo framebufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 		.pNext = &(const VkFramebufferAttachmentsCreateInfo){
@@ -810,7 +862,8 @@ void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebu
 	MIDVK_REQUIRE(vkCreateFramebuffer(midVk.context.device, &framebufferCreateInfo, MIDVK_ALLOC, pFramebuffer));
 }
 
-void midvkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers) {
+void midvkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers)
+{
 	for (int i = 0; i < framebufferCount; ++i) {
 		const VkmTextureCreateInfo colorCreateInfo = {
 			.debugName = "CompColorFramebuffer",
@@ -870,7 +923,8 @@ void midvkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLoc
 // Context
 //----------------------------------------------------------------------------------
 
-static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQueueFamilyCreateInfo* pQueueDesc) {
+static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQueueFamilyCreateInfo* pQueueDesc)
+{
 	uint32_t queueFamilyCount;
 	vkGetPhysicalDeviceQueueFamilyProperties2(physicalDevice, &queueFamilyCount, NULL);
 	VkQueueFamilyProperties2                 queueFamilyProperties[queueFamilyCount] = {};
@@ -912,15 +966,16 @@ static uint32_t FindQueueIndex(const VkPhysicalDevice physicalDevice, const VkmQ
 	}
 
 	fprintf(stderr, "Can't find queue family: graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
-					string_Support[pQueueDesc->supportsGraphics],
-					string_Support[pQueueDesc->supportsCompute],
-					string_Support[pQueueDesc->supportsTransfer],
-					string_VkQueueGlobalPriorityKHR(pQueueDesc->globalPriority));
+			string_Support[pQueueDesc->supportsGraphics],
+			string_Support[pQueueDesc->supportsCompute],
+			string_Support[pQueueDesc->supportsTransfer],
+			string_VkQueueGlobalPriorityKHR(pQueueDesc->globalPriority));
 	PANIC("Can't find queue family");
 	return -1;
 }
 
-void vkmInitialize() {
+void midVkInitialize()
+{
 	{
 		const char* ppEnabledLayerNames[] = {
 			//                "VK_LAYER_KHRONOS_validation",
@@ -953,10 +1008,10 @@ void vkmInitialize() {
 		};
 		MIDVK_REQUIRE(vkCreateInstance(&instanceCreationInfo, MIDVK_ALLOC, &midVk.instance));
 		printf("Instance Vulkan API version: %d.%d.%d.%d\n",
-					 VK_API_VERSION_VARIANT(instanceCreationInfo.pApplicationInfo->apiVersion),
-					 VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
-					 VK_API_VERSION_MINOR(instanceCreationInfo.pApplicationInfo->apiVersion),
-					 VK_API_VERSION_PATCH(instanceCreationInfo.pApplicationInfo->apiVersion));
+			   VK_API_VERSION_VARIANT(instanceCreationInfo.pApplicationInfo->apiVersion),
+			   VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
+			   VK_API_VERSION_MINOR(instanceCreationInfo.pApplicationInfo->apiVersion),
+			   VK_API_VERSION_PATCH(instanceCreationInfo.pApplicationInfo->apiVersion));
 	}
 	{
 		//        VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = {};
@@ -979,7 +1034,8 @@ void vkmInitialize() {
 	}
 }
 
-void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
+void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo)
+{
 	{  // PhysicalDevice
 		uint32_t deviceCount = 0;
 		MIDVK_REQUIRE(vkEnumeratePhysicalDevices(midVk.instance, &deviceCount, NULL));
@@ -990,10 +1046,10 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
 		vkGetPhysicalDeviceProperties2(midVk.context.physicalDevice, &physicalDeviceProperties);
 		printf("PhysicalDevice: %s\n", physicalDeviceProperties.properties.deviceName);
 		printf("PhysicalDevice Vulkan API version: %d.%d.%d.%d\n",
-					 VK_API_VERSION_VARIANT(physicalDeviceProperties.properties.apiVersion),
-					 VK_API_VERSION_MAJOR(physicalDeviceProperties.properties.apiVersion),
-					 VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
-					 VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
+			   VK_API_VERSION_VARIANT(physicalDeviceProperties.properties.apiVersion),
+			   VK_API_VERSION_MAJOR(physicalDeviceProperties.properties.apiVersion),
+			   VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
+			   VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
 
 		printf("minUniformBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment);
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
@@ -1123,7 +1179,8 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo) {
 	}
 }
 
-void vkmCreateStdRenderPass() {
+void vkmCreateStdRenderPass()
+{
 	const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
@@ -1220,7 +1277,8 @@ void vkmCreateStdRenderPass() {
 	vkmSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)midVk.context.renderPass, "ContextRenderPass");
 }
 
-void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler) {
+void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
+{
 	const VkSamplerCreateInfo minSamplerCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.pNext = &(const VkSamplerReductionModeCreateInfo){
@@ -1238,7 +1296,8 @@ void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler) {
 	MIDVK_REQUIRE(vkCreateSampler(midVk.context.device, &minSamplerCreateInfo, MIDVK_ALLOC, pSampler));
 }
 
-void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap) {
+void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap)
+{
 	VkBool32 presentSupport = VK_FALSE;
 	MIDVK_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(midVk.context.physicalDevice, midVk.context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
 	REQUIRE(presentSupport, "Queue can't present to surface!")
@@ -1267,14 +1326,16 @@ void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presen
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
 }
 
-void vkmCreateStdPipeLayout() {
+void vkmCreateStdPipeLayout()
+{
 	CreateGlobalSetLayout();
 	CreateStdMaterialSetLayout();
 	CreateStdObjectSetLayout();
 	CreateStdPipeLayout();
 }
 
-void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore) {
+void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore)
+{
 #if WIN32
 	const VkExportSemaphoreWin32HandleInfoKHR exportSemaphorePlatformHandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
@@ -1316,13 +1377,15 @@ void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 	}
 }
 
-void vkmCreateGlobalSet(VkmGlobalSet* pSet) {
+void vkmCreateGlobalSet(VkmGlobalSet* pSet)
+{
 	vkmAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.globalSetLayout, &pSet->set);
 	vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
 	vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }
 
-void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName) {
+void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName)
+{
 	const VkDebugUtilsObjectNameInfoEXT debugInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 		.objectType = objectType,
@@ -1333,7 +1396,8 @@ void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char*
 	MIDVK_REQUIRE(SetDebugUtilsObjectNameEXT(midVk.context.device, &debugInfo));
 }
 
-MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory) {
+MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory)
+{
 	MIDVK_INSTANCE_STATIC_FUNC(GetMemoryWin32HandleKHR);
 	const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
@@ -1345,7 +1409,8 @@ MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory) {
 	return handle;
 }
 
-MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore) {
+MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore)
+{
 	MIDVK_INSTANCE_STATIC_FUNC(GetSemaphoreWin32HandleKHR);
 	const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
@@ -1358,7 +1423,8 @@ MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore) {
 }
 
 #ifdef WIN32
-void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface) {
+void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
+{
 	const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
 		.hinstance = hInstance,

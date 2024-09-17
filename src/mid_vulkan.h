@@ -718,7 +718,7 @@ typedef struct VkmInitializeDesc {
 	bool enableValidationMessages;
 	bool enablePerformanceMessages;
 } VkmInitializeDesc;
-void vkmInitialize();
+void midVkInitialize();
 
 typedef enum VkmSupport {
 	VKM_SUPPORT_OPTIONAL,
@@ -744,7 +744,6 @@ typedef struct VkmContextCreateInfo {
 	uint32_t                 uniformDescriptorCount;
 	uint32_t                 combinedImageSamplerDescriptorCount;
 	uint32_t                 storageImageDescriptorCount;
-	VkSurfaceKHR             presentSurface;
 	VkmQueueFamilyCreateInfo queueFamilyCreateInfos[VKM_QUEUE_FAMILY_TYPE_COUNT];
 } VkmContextCreateInfo;
 void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo);
