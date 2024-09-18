@@ -6,10 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-MidVk                       midVk = {};
-__thread MidVkThreadContext threadContext = {};
-
-VkDebugUtilsMessengerEXT debugUtilsMessenger = VK_NULL_HANDLE;
+__attribute((aligned(64))) MidVk                       midVk = {};
+__thread __attribute((aligned(64))) MidVkThreadContext threadContext = {};
+VkDebugUtilsMessengerEXT                               debugUtilsMessenger = VK_NULL_HANDLE;
 
 //----------------------------------------------------------------------------------
 // Utility
@@ -535,6 +534,7 @@ void AllocateMemory(
 	VkDeviceMemory*                      pDeviceMemory)
 {
 	VkPhysicalDeviceMemoryProperties memProps;
+	printf("%p\n", midVk.context.physicalDevice);
 	vkGetPhysicalDeviceMemoryProperties(midVk.context.physicalDevice, &memProps);
 	const uint32_t memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
 #if WIN32

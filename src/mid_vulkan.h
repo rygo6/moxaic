@@ -32,7 +32,7 @@
 #endif
 
 //
-/// Debug
+//// Mid Common Utility
 #ifndef MID_DEBUG
 #define MID_DEBUG
 extern void Panic(const char* file, int line, const char* message);
@@ -49,13 +49,21 @@ extern void Panic(const char* file, int line, const char* message);
 #endif
 #endif
 
-//
-/// Globals
-//#define VKM_DEBUG_MEMORY_ALLOC
+#ifndef CACHE_ALIGN
+#define CACHE_ALIGN __attribute((aligned(64)))
+#endif
 
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
+
+#ifndef INLINE
+#define INLINE __attribute__((always_inline)) static inline
+#endif
+
+//
+/// Globals
+//#define VKM_DEBUG_MEMORY_ALLOC
 
 // these values shouldnt be macros
 #ifndef DEFAULT_WIDTH
@@ -64,8 +72,6 @@ extern void Panic(const char* file, int line, const char* message);
 #ifndef DEFAULT_HEIGHT
 #define DEFAULT_HEIGHT 1024
 #endif
-
-#define MIDVK_INLINE __attribute__((always_inline)) static inline
 
 #define MIDVK_ALLOC      NULL
 #define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
@@ -94,8 +100,9 @@ extern void Panic(const char* file, int line, const char* message);
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
-#define MIDVK_EXTERNAL_IMAGE_CREATE_INFO                          \
-	&(const VkExternalMemoryImageCreateInfo) {                      \
+#define MIDVK_EXTERNAL_IMAGE_CREATE_INFO                              \
+	&(const VkExternalMemoryImageCreateInfo)                          \
+	{                                                                 \
 		.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO, \
 		.handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,             \
 	}
@@ -122,14 +129,17 @@ typedef enum MidLocality {
 	MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 	MID_LOCALITY_COUNT,
 } MidLocality;
-#define MID_LOCALITY_INTERPROCESS(_locality) (_locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
-																							_locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY ||  \
-																							_locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
-																							_locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
-#define MID_LOCALITY_INTERPROCESS_EXPORTED(_locality) (_locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
-																											 _locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY)
-#define MID_LOCALITY_INTERPROCESS_IMPORTED(_locality) (_locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
-																											 _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
+#define MID_LOCALITY_INTERPROCESS(_locality)                      \
+	(_locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
+	 _locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY ||  \
+	 _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
+	 _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
+#define MID_LOCALITY_INTERPROCESS_EXPORTED(_locality)             \
+	(_locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
+	 _locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY)
+#define MID_LOCALITY_INTERPROCESS_IMPORTED(_locality)             \
+	(_locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
+	 _locality == MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
 
 // these should go in math. Can I make MidVk not depend on specific math lib?
 typedef struct MidPose {
@@ -266,13 +276,13 @@ typedef struct MidVk {
 	MidVkContext context;
 	VkSurfaceKHR surfaces[MIDVK_SURFACE_CAPACITY];
 } MidVk;
-extern MidVk midVk;
+extern __attribute((aligned(64))) MidVk midVk;
 
-// do this ??
-typedef struct __attribute((aligned(64))) MidVkThreadContext {
+// do this ?? I think so yes
+typedef struct MidVkThreadContext {
 	VkDescriptorPool descriptorPool;
 } MidVkThreadContext;
-extern __thread MidVkThreadContext threadContext;
+extern __thread __attribute((aligned(64))) MidVkThreadContext threadContext;
 
 extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
@@ -481,15 +491,15 @@ static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const Mi
 //} MidVk;
 
 #define CmdPipelineImageBarriers2(_cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers)
-MIDVK_INLINE void PFN_CmdPipelineImageBarriers2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+INLINE void PFN_CmdPipelineImageBarriers2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
 	func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
 #define CmdPipelineImageBarrier2(cmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, cmd, pImageMemoryBarrier)
-MIDVK_INLINE void PFN_CmdPipelineImageBarrierFunc2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
+INLINE void PFN_CmdPipelineImageBarrierFunc2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier) {
 	func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
 #define CmdBlitImageFullScreen(cmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, cmd, srcImage, dstImage)
-MIDVK_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
+INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage) {
 	const VkImageBlit imageBlit = {
 		.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
 		.srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
@@ -499,7 +509,7 @@ MIDVK_INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, cons
 	func(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
 #define CmdBeginRenderPass(_cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView) PFN_CmdBeginRenderPass(CmdBeginRenderPass, _cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView)
-MIDVK_INLINE void PFN_CmdBeginRenderPass(
+INLINE void PFN_CmdBeginRenderPass(
 	const PFN_vkCmdBeginRenderPass func,
 	const VkCommandBuffer          cmd,
 	const VkRenderPass             renderPass,
@@ -532,14 +542,14 @@ MIDVK_INLINE void PFN_CmdBeginRenderPass(
 	func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 // todo needs PFN version
-MIDVK_INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
+INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer) {
 	vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 	vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
 	vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
 // todo needs PFN version
-MIDVK_INLINE void midVkSubmitPresentCommandBuffer(
+INLINE void midVkSubmitPresentCommandBuffer(
 	const VkCommandBuffer cmd,
 	const VkSwapchainKHR  chain,
 	const VkSemaphore     acquireSemaphore,
@@ -591,7 +601,7 @@ MIDVK_INLINE void midVkSubmitPresentCommandBuffer(
 	MIDVK_REQUIRE(vkQueuePresentKHR(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
 }
 // todo needs PFN version
-MIDVK_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
+INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal) {
 	const VkSubmitInfo2 submitInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		.commandBufferInfoCount = 1,
@@ -614,7 +624,7 @@ MIDVK_INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueu
 	MIDVK_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
 // todo needs PFN version
-MIDVK_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline) {
+INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline) {
 	const VkSemaphoreWaitInfo semaphoreWaitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
@@ -624,7 +634,7 @@ MIDVK_INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValu
 	MIDVK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 // todo needs PFN version
-MIDVK_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline) {
+INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline) {
 	const VkSemaphoreSignalInfo semaphoreSignalInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
 		.semaphore = timeline,
@@ -633,7 +643,7 @@ MIDVK_INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signal
 	MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 
-MIDVK_INLINE void vkmUpdateGlobalSetViewProj(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+INLINE void vkmUpdateGlobalSetViewProj(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
 	pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
 	pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
 	pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
@@ -646,25 +656,25 @@ MIDVK_INLINE void vkmUpdateGlobalSetViewProj(MidPose* pCameraTransform, VkmGloba
 	pState->invViewProj = Mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-MIDVK_INLINE void vkmUpdateGlobalSetView(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
+INLINE void vkmUpdateGlobalSetView(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
 	pState->invView = Mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
 	pState->view = Mat4Inv(pState->invView);
 	pState->viewProj = Mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = Mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkmGlobalSetState));
 }
-MIDVK_INLINE void vkmUpdateObjectSet(MidPose* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
+INLINE void vkmUpdateObjectSet(MidPose* pTransform, VkmStdObjectSetState* pState, VkmStdObjectSetState* pSphereObjectSetMapped) {
 	pTransform->rotation = QuatFromEuler(pTransform->euler);
 	pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
 	memcpy(pSphereObjectSetMapped, pState, sizeof(VkmStdObjectSetState));
 }
-MIDVK_INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPose* pCameraTransform) {
+INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPose* pCameraTransform) {
 	pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
 	pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
 	pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
 }
 // move[] = Forward, Back, Left, Right
-MIDVK_INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform) {
+INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform) {
 	const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
 	const float moveSensitivity = deltaTime * 0.8f;
 	for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;

@@ -47,7 +47,7 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
 
   int result = pthread_create(&compositorNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorNodeContext);
   REQUIRE(result == 0, "Comp Node thread creation failed!");
-  printf("Request and Run CompNode Thread Success.");
+  printf("Request and Run CompNode Thread Success.\n");
 }
 
 static NodeHandle RequestLocalNodeHandle() {
@@ -580,7 +580,7 @@ Exit:
 void mxcInitializeInterprocessServer() {
   SYSTEM_INFO systemInfo;
   GetSystemInfo(&systemInfo);
-  printf("Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
+  printf("Min size of shared memory. Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
 
   ipcServer.listenSocket = INVALID_SOCKET;
   REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
