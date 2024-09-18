@@ -333,7 +333,10 @@ run_loop:
       {  // Acquire new framebuffers from node
         const int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % MIDVK_SWAP_COUNT);
         CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].acquireBarriers);
-        // these could be pre-recorded too
+
+
+        // these could be pre-recorded too,
+		// no these need to be pushed otherwise cant destroy them
         const VkWriteDescriptorSet writeSets[] = {
             SET_WRITE_COMP_COLOR(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].colorView),
             SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].normalView),

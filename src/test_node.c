@@ -128,7 +128,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
 				};
 				break;
-			case MXC_NODE_TYPE_INTERPROCESS:
+			case MXC_NODE_TYPE_INTERPROCESS_IMPORTED:
 				acquireBarrierCount = 3;
 				acquireBarriers[i][0] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -201,6 +201,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
 				};
 				break;
+			case MXC_NODE_TYPE_INTERPROCESS_EXPORTED: PANIC("Shouldn't be rendering an exported node from this process.");
 			default: PANIC("nodeType not supported");
 		}
 	}
