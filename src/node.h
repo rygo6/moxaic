@@ -195,7 +195,7 @@ static inline void                mxcQueueNodeCommandBuffer(MxcQueuedNodeCommand
 static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
 {
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	bool pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
+	bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
 	while (pendingBuffer) {
 		vkmSubmitCommandBuffer(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
 
