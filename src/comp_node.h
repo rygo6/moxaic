@@ -31,10 +31,10 @@ typedef struct MxcCompNode {
   VkQueryPool timeQueryPool;
 
   VkmGlobalSet    globalSet;
-  VkDescriptorSet compNodeSet;
+//  VkDescriptorSet compNodeSet;
 
-  MidVkSharedMemory compNodeSetSharedMemory;
-  VkBuffer        compNodeSetBuffer;
+//  MidVkSharedMemory compNodeSetSharedMemory;
+//  VkBuffer          compNodeSetBuffer;
 
   VkmMesh quadMesh;
 

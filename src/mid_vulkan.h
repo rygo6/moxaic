@@ -643,6 +643,13 @@ INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue,
 	MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 
+INLINE void midVkBindBufferSharedMemory(const VkBuffer buffer, const MidVkSharedMemory shareMemory){
+	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, buffer, deviceMemory[shareMemory.type], shareMemory.offset));
+}
+INLINE void* midVkSharedMemoryPointer(const MidVkSharedMemory shareMemory){
+	return pMappedMemory[shareMemory.type] + shareMemory.offset;
+}
+
 INLINE void vkmUpdateGlobalSetViewProj(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped) {
 	pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
 	pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
@@ -697,12 +704,12 @@ typedef struct VkmRequestAllocationInfo {
 	MidLocality           locality;
 	VkmDedicatedMemory    dedicated;
 } VkmRequestAllocationInfo;
-void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void midVkAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 //void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
 //void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
 void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
 void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
-void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory);
+void midVkCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory);
 void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 

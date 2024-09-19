@@ -427,7 +427,8 @@ static void CreateStdObjectSetLayout()
 	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.objectSetLayout));
 }
 
-void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet)
+// get rid of this don't wrap methods that don't actually simplify the structs
+void midVkAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet)
 {
 	const VkDescriptorSetAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -436,16 +437,6 @@ void vkmAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDes
 		.pSetLayouts = pSetLayout,
 	};
 	MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, pSet));
-}
-void vkmAllocateDescriptorSets(const VkDescriptorPool descriptorPool, const uint32_t descriptorSetCount, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSets)
-{
-	const VkDescriptorSetAllocateInfo allocateInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = descriptorPool,
-		.descriptorSetCount = descriptorSetCount,
-		.pSetLayouts = pSetLayout,
-	};
-	MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, pSets));
 }
 
 //----------------------------------------------------------------------------------
@@ -626,7 +617,7 @@ void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const
 	MIDVK_REQUIRE(vkMapMemory(midVk.context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
 }
 
-void vkmCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory)
+void midVkCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory)
 {
 	const VkBufferCreateInfo bufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -692,7 +683,7 @@ void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pM
 		.locality = MID_LOCALITY_CONTEXT,
 		.dedicated = VKM_DEDICATED_MEMORY_FALSE,
 	};
-	vkmCreateBufferSharedMemory(&AllocRequest, &pMesh->buffer, &pMesh->sharedMemory);
+	midVkCreateBufferSharedMemory(&AllocRequest, &pMesh->buffer, &pMesh->sharedMemory);
 }
 void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
 {
@@ -1378,7 +1369,7 @@ void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet)
 {
-	vkmAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.globalSetLayout, &pSet->set);
+	midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.globalSetLayout, &pSet->set);
 	vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
 	vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }

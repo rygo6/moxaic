@@ -162,38 +162,47 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
     };
     MIDVK_REQUIRE(vkCreateQueryPool(midVk.context.device, &queryPoolCreateInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
 
-    // This is way too many descriptors... optimize this
     const VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-        .maxSets = 30,
-        .poolSizeCount = 3,
+        .maxSets = MXC_NODE_CAPACITY * 3,
+        .poolSizeCount = MXC_NODE_CAPACITY,
         .pPoolSizes = (const VkDescriptorPoolSize[]){
-            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 10},
-            {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 10},
-            {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
+            {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = MXC_NODE_CAPACITY},
+            {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MXC_NODE_CAPACITY},
+            {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = MXC_NODE_CAPACITY},
         },
     };
     MIDVK_REQUIRE(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
 
     // global set
-    vkmAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.globalSetLayout, &pNode->globalSet.set);
+	midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.globalSetLayout, &pNode->globalSet.set);
     const VkmRequestAllocationInfo globalSetAllocRequest = {
         .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
         .size = sizeof(VkmGlobalSetState),
         .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
     };
-    vkmCreateBufferSharedMemory(&globalSetAllocRequest, &pNode->globalSet.buffer, &pNode->globalSet.sharedMemory);
+	midVkCreateBufferSharedMemory(&globalSetAllocRequest, &pNode->globalSet.buffer, &pNode->globalSet.sharedMemory);
 
     // node set
-    vkmAllocateDescriptorSet(threadContext.descriptorPool, &pNode->compNodeSetLayout, &pNode->compNodeSet);
-    vkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pNode->compNodeSet, "NodeSet");
-    const VkmRequestAllocationInfo nodeSetAllocRequest = {
-        .memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-        .size = sizeof(MxcNodeCompositorSetState),
-        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-    };
-    vkmCreateBufferSharedMemory(&nodeSetAllocRequest, &pNode->compNodeSetBuffer, &pNode->compNodeSetSharedMemory);
+	// should I preallocate all set memory? the MxcNodeCompositorSetState * 256 is only 130 kb. That may be a small price to pay to ensure contiguous memory on GPU
+	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
+		const VkDescriptorSetAllocateInfo allocateInfo = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = threadContext.descriptorPool,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &pNode->compNodeSetLayout,
+		};
+		MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, &nodeCompositorData[i].set));
+		vkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].set, CONCAT(NodeSet, i));
+		const VkmRequestAllocationInfo nodeSetAllocRequest = {
+			.memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+			.size = sizeof(MxcNodeCompositorSetState),
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		};
+		// should I make them all share the same buffer? probably
+		midVkCreateBufferSharedMemory(&nodeSetAllocRequest, &nodeCompositorData[i].SetBuffer, &nodeCompositorData[i].SetSharedMemory);
+	}
 
     midvkCreateFramebufferTexture(MIDVK_SWAP_COUNT, MID_LOCALITY_CONTEXT, pNode->framebuffers);
     vkmCreateFramebuffer(midVk.context.renderPass, &pNode->framebuffer);
@@ -221,8 +230,12 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
   }
   MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
   vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
-  MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pNode->compNodeSetBuffer, deviceMemory[pNode->compNodeSetSharedMemory.type], pNode->compNodeSetSharedMemory.offset));
-  vkUpdateDescriptorSets(midVk.context.device, 1, &SET_WRITE_COMP_BUFFER(pNode->compNodeSet, pNode->compNodeSetBuffer), 0, NULL);
+  for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
+	  // should I make them all share the same buffer? probably
+	  midVkBindBufferSharedMemory(nodeCompositorData[i].SetBuffer, nodeCompositorData[i].SetSharedMemory);
+	  vkUpdateDescriptorSets(midVk.context.device, 1, &SET_WRITE_COMP_BUFFER(nodeCompositorData[i].set, nodeCompositorData[i].SetBuffer), 0, NULL);
+	  nodeCompositorData[i].pSetMapped = midVkSharedMemoryPointer(nodeCompositorData[i].SetSharedMemory);
+  }
 }
 
 void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompNode* pNode) {
@@ -238,12 +251,11 @@ void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompN
   MidPose                    globalCameraTransform = {};
   VkmGlobalSetState          globalSetState = {};
   VkmGlobalSetState*         pGlobalSetMapped = pMappedMemory[pNode->globalSet.sharedMemory.type] + pNode->globalSet.sharedMemory.offset;
-  MxcNodeCompositorSetState* pCompNodeSetMapped = pMappedMemory[pNode->compNodeSetSharedMemory.type] + pNode->compNodeSetSharedMemory.offset;
+//  MxcNodeCompositorSetState* pCompNodeSetMapped = pMappedMemory[pNode->compNodeSetSharedMemory.type] + pNode->compNodeSetSharedMemory.offset;
   vkmUpdateGlobalSetViewProj(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
 
   const VkPipelineLayout compNodePipeLayout = pNode->compNodePipeLayout;
   const VkPipeline       compNodePipe = pNode->compNodePipe;
-  const VkDescriptorSet  compNodeSet = pNode->compNodeSet;
   
   const uint32_t     quadIndexCount = pNode->quadMesh.indexCount;
   const VkBuffer     quadBuffer = pNode->quadMesh.buffer;
@@ -334,13 +346,12 @@ run_loop:
         const int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % MIDVK_SWAP_COUNT);
         CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].acquireBarriers);
 
-
         // these could be pre-recorded too,
 		// no these need to be pushed otherwise cant destroy them
         const VkWriteDescriptorSet writeSets[] = {
-            SET_WRITE_COMP_COLOR(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].colorView),
-            SET_WRITE_COMP_NORMAL(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].normalView),
-            SET_WRITE_COMP_GBUFFER(compNodeSet, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].gBufferView),
+            SET_WRITE_COMP_COLOR(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].colorView),
+            SET_WRITE_COMP_NORMAL(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].normalView),
+            SET_WRITE_COMP_GBUFFER(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].gBufferView),
         };
         vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
       }
@@ -352,7 +363,7 @@ run_loop:
         nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->compositorULScreenUV;
         nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->compositorLRScreenUV;
 
-        memcpy(pCompNodeSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
+        memcpy(nodeCompositorData[i].pSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
 
         const float radius = pNodeShared->compositorRadius;
 
@@ -424,7 +435,7 @@ run_loop:
         const int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % MIDVK_SWAP_COUNT);
 
         // this needs to be a push set
-        CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &compNodeSet, 0, NULL);
+        CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &nodeCompositorData[i].set, 0, NULL);
 
         // move this into method delegate in node compositor data
         switch (compMode) {

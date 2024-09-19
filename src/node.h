@@ -105,6 +105,11 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	MxcNodeCompositorSetState nodeSetState;
 	MidPose                   rootPose;
 	uint64_t                  lastTimelineSwap;
+	VkDescriptorSet            set;
+	MxcNodeCompositorSetState* pSetMapped;
+	// should make them share buffer? probably
+	VkBuffer                   SetBuffer;
+	MidVkSharedMemory          SetSharedMemory;
 
 	CACHE_ALIGN
 	struct {
@@ -149,18 +154,19 @@ typedef struct MxcNodeContext {
 
 //
 /// Global State
-#define MXC_NODE_CAPACITY 256
+#define MXC_NODE_CAPACITY 64
 typedef uint8_t NodeHandle;
 // move these into struct
 extern size_t nodeCount;
 // Cold storage for all node data
 extern MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY];
-extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 // Could be missing if node is external process
 extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
 
+// technically this should go into a comp node thread local....
+extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 extern MxcCompositorNodeContext compositorNodeContext;
 
 //
