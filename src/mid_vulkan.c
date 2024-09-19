@@ -1066,7 +1066,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo)
 			.pNext = (void*)&physicalDeviceGlobalPriorityQueryFeatures,
 			.robustBufferAccess2 = VK_TRUE,
 			.robustImageAccess2 = VK_TRUE,
-			.nullDescriptor = VK_FALSE,
+			.nullDescriptor = VK_TRUE,
 		};
 		const VkPhysicalDeviceMeshShaderFeaturesEXT physicalDeviceMeshShaderFeatures = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
@@ -1269,12 +1269,14 @@ void vkmCreateStdRenderPass()
 
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
 {
-	const VkSamplerCreateInfo minSamplerCreateInfo = {
+	const VkSamplerCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.pNext = &(const VkSamplerReductionModeCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
-			.reductionMode = pDesc->reductionMode,
-		},
+		.pNext = pDesc->reductionMode != VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE ?
+					 &(const VkSamplerReductionModeCreateInfo){
+						 .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
+						 .reductionMode = pDesc->reductionMode,
+					 } :
+					 NULL,
 		.magFilter = pDesc->filter,
 		.minFilter = pDesc->filter,
 		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -1282,8 +1284,9 @@ void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
 		.addressModeU = pDesc->addressMode,
 		.addressModeV = pDesc->addressMode,
 		.addressModeW = pDesc->addressMode,
-		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK};
-	MIDVK_REQUIRE(vkCreateSampler(midVk.context.device, &minSamplerCreateInfo, MIDVK_ALLOC, pSampler));
+		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+	};
+	MIDVK_REQUIRE(vkCreateSampler(midVk.context.device, &info, MIDVK_ALLOC, pSampler));
 }
 
 void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap)

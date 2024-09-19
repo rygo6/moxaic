@@ -120,7 +120,12 @@ int main(void)
 
 		// these probably should go elsewhere ?
 		// global samplers
-		VkmCreateSampler(&VKM_SAMPLER_LINEAR_CLAMP_DESC, &midVk.context.linearSampler);
+		const VkmSamplerCreateInfo samplerCreateInfo = {
+			.filter = VK_FILTER_LINEAR,
+			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
+		};
+		VkmCreateSampler(&samplerCreateInfo, &midVk.context.linearSampler);
 		// standard/common rendering
 		vkmCreateStdRenderPass();
 		vkmCreateStdPipeLayout();
@@ -135,7 +140,7 @@ int main(void)
 		mxcRequestAndRunCompNodeThread(midVk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-#define TEST_NODE
+//#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
@@ -157,6 +162,10 @@ int main(void)
 
 			// we may not have to even wait... this could go faster
 			vkmTimelineWait(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compTimeline);
+
+			// interprocess polling could be a different thread?
+			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
+			mxcInterprocessQueuePoll();
 
 			// somewhere input state needs to be copied to a node and only update when it knows the node needs it
 			midUpdateWindowInput();
@@ -198,9 +207,6 @@ int main(void)
 			// Try submitting nodes before waiting to update window again.
 			// We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
 			mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
-
-			// interprocess polling could be a different thread?
-			mxcInterprocessQueuePoll();
 		}
 	} else {
 

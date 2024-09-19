@@ -64,7 +64,7 @@ enum SetBindCompIndices {
 #define SHADER_STAGE_VERT_TESC_TESE_FRAG VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
 #define SHADER_STAGE_TASK_MESH_FRAG VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT
 static void CreateCompSetLayout(const MxcCompMode compMode, VkDescriptorSetLayout* pLayout) {
-  VkShaderStageFlags stageFlags;
+  VkShaderStageFlags stageFlags = {};
   switch (compMode) {
     case MXC_COMP_MODE_BASIC: stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; break;
     case MXC_COMP_MODE_TESS: stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT; break;
@@ -166,7 +166,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
         .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
         .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
         .maxSets = MXC_NODE_CAPACITY * 3,
-        .poolSizeCount = MXC_NODE_CAPACITY,
+        .poolSizeCount = 3,
         .pPoolSizes = (const VkDescriptorPoolSize[]){
             {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = MXC_NODE_CAPACITY},
             {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MXC_NODE_CAPACITY},
@@ -290,21 +290,21 @@ void mxcCompNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompN
 
   // very common ones should be global to potentially share higher level cache
   // but maybe do it anyways because it'd just be better? each func pointer is 8 bytes. 8 can fit on a cache line
-  MIDVK_DEVICE_FUNC(CmdPipelineBarrier2);
-  MIDVK_DEVICE_FUNC(ResetQueryPool);
-  MIDVK_DEVICE_FUNC(GetQueryPoolResults);
-  MIDVK_DEVICE_FUNC(CmdWriteTimestamp2);
-  MIDVK_DEVICE_FUNC(CmdBeginRenderPass);
-  MIDVK_DEVICE_FUNC(CmdBindPipeline);
-  MIDVK_DEVICE_FUNC(CmdBlitImage);
-  MIDVK_DEVICE_FUNC(CmdBindDescriptorSets);
-  MIDVK_DEVICE_FUNC(CmdBindVertexBuffers);
-  MIDVK_DEVICE_FUNC(CmdBindIndexBuffer);
-  MIDVK_DEVICE_FUNC(CmdDrawIndexed);
-  MIDVK_DEVICE_FUNC(CmdEndRenderPass);
-  MIDVK_DEVICE_FUNC(EndCommandBuffer);
-  MIDVK_DEVICE_FUNC(AcquireNextImageKHR);
-  MIDVK_DEVICE_FUNC(CmdDrawMeshTasksEXT);
+  MIDVK_DEVICE_FUNC(CmdPipelineBarrier2)
+  MIDVK_DEVICE_FUNC(ResetQueryPool)
+  MIDVK_DEVICE_FUNC(GetQueryPoolResults)
+  MIDVK_DEVICE_FUNC(CmdWriteTimestamp2)
+  MIDVK_DEVICE_FUNC(CmdBeginRenderPass)
+  MIDVK_DEVICE_FUNC(CmdBindPipeline)
+  MIDVK_DEVICE_FUNC(CmdBlitImage)
+  MIDVK_DEVICE_FUNC(CmdBindDescriptorSets)
+  MIDVK_DEVICE_FUNC(CmdBindVertexBuffers)
+  MIDVK_DEVICE_FUNC(CmdBindIndexBuffer)
+  MIDVK_DEVICE_FUNC(CmdDrawIndexed)
+  MIDVK_DEVICE_FUNC(CmdEndRenderPass)
+  MIDVK_DEVICE_FUNC(EndCommandBuffer)
+  MIDVK_DEVICE_FUNC(AcquireNextImageKHR)
+  MIDVK_DEVICE_FUNC(CmdDrawMeshTasksEXT)
 
 run_loop:
 

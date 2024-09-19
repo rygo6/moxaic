@@ -75,8 +75,17 @@ static int ReleaseNode(NodeHandle handle)
 	int newCount = __atomic_sub_fetch(&nodeCount, 1, __ATOMIC_RELEASE);
 	printf("Releasing Node %d. Count %d.\n", handle, newCount);
 
+//	{ as long as mxcInterprocessQueuePoll is called after waiting on MXC_CYCLE_PROCESS_INPUT we don't have to wait here
+//		// we need to wait one cycle to get the compositor cmd buffer cleared
+//		uint64_t compBaseCycleValue = compositorNodeContext.compBaseCycleValue - (compositorNodeContext.compBaseCycleValue % MXC_CYCLE_COUNT);
+//		vkmTimelineWait(midVk.context.device, compBaseCycleValue + MXC_CYCLE_COUNT, compositorNodeContext.compTimeline);
+//	}
+
+	// Close external handles
 	switch (pNodeContext->type) {
 		case MXC_NODE_TYPE_THREAD:
+			vkFreeCommandBuffers(midVk.context.device, pNodeContext->pool, 1, &pNodeContext->cmd);
+			vkDestroyCommandPool(midVk.context.device, pNodeContext->pool, MIDVK_ALLOC);
 			int result = pthread_join(pNodeContext->threadId, NULL);
 			if (result != 0) {
 				perror("Thread join failed");
@@ -108,6 +117,48 @@ static int ReleaseNode(NodeHandle handle)
 		default: PANIC("Node type not supported");
 	}
 
+	// must first release command buffer
+	vkDestroySemaphore(midVk.context.device, pNodeContext->nodeTimeline, MIDVK_ALLOC);
+
+	// Clear compositor data
+	const VkWriteDescriptorSet writeSets[] = {
+		(VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = nodeCompositorData[handle].set,
+			.dstBinding = 1,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &(const VkDescriptorImageInfo){
+				.imageView = VK_NULL_HANDLE,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			},
+		},
+		(VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = nodeCompositorData[handle].set,
+			.dstBinding = 2,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &(const VkDescriptorImageInfo){
+				.imageView = VK_NULL_HANDLE,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			},
+		},
+		(VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = nodeCompositorData[handle].set,
+			.dstBinding = 3,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &(const VkDescriptorImageInfo){
+				.imageView = VK_NULL_HANDLE,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			},
+		}
+	};
+	vkUpdateDescriptorSets(midVk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+
+	// destroy images... this will eventually just return back to some pool
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 		vkDestroyImageView(midVk.context.device, pNodeContext->framebufferTextures[i].color.view, MIDVK_ALLOC);
 		vkDestroyImage(midVk.context.device, pNodeContext->framebufferTextures[i].color.image, MIDVK_ALLOC);
@@ -125,10 +176,6 @@ static int ReleaseNode(NodeHandle handle)
 		vkDestroyImage(midVk.context.device, pNodeContext->framebufferTextures[i].gbuffer.image, MIDVK_ALLOC);
 		vkFreeMemory(midVk.context.device, pNodeContext->framebufferTextures[i].gbuffer.memory, MIDVK_ALLOC);
 	}
-
-	vkDestroySemaphore(midVk.context.device, pNodeContext->nodeTimeline, MIDVK_ALLOC);
-	vkFreeCommandBuffers(midVk.context.device, pNodeContext->pool, 1, &pNodeContext->cmd);
-	vkDestroyCommandPool(midVk.context.device, pNodeContext->pool, MIDVK_ALLOC);
 
 	return 0;
 }
@@ -174,7 +221,8 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
 
 	MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
-	*pNodeCompositorData = (MxcNodeCompositorData){};
+	// do not clear since it is set data is prealloced
+//	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].framebufferTextures[i].color.image;
@@ -506,7 +554,8 @@ static void InterprocessServerAcceptNodeConnection()
 
 		const NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 		pNodeCompositorData = &nodeCompositorData[handle];
-		*pNodeCompositorData = (MxcNodeCompositorData){};
+		// do not clear since it is set data is prealloced
+//		*pNodeCompositorData = (MxcNodeCompositorData){};
 		pNodeContext = &nodeContexts[handle];
 		*pNodeContext = (MxcNodeContext){};
 		pNodeContext->compTimeline = compositorNodeContext.compTimeline;

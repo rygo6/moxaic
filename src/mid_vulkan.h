@@ -783,8 +783,6 @@ typedef struct VkmSamplerCreateInfo {
 	VkSamplerAddressMode   addressMode;
 	VkSamplerReductionMode reductionMode;
 } VkmSamplerCreateInfo;
-#define VKM_SAMPLER_LINEAR_CLAMP_DESC \
-	(const VkmSamplerCreateInfo) { .filter = VK_FILTER_LINEAR, .addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE, .reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE }
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
 void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);

@@ -113,6 +113,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
 	CACHE_ALIGN
 	struct {
+		// this will get pulled out into a shared pool of some sort
 		VkImage               color;
 		VkImage               normal;
 		VkImage               gBuffer;
@@ -134,15 +135,18 @@ typedef struct MxcNodeFramebufferTexture {
 typedef struct MxcNodeContext {
 	// cold data
 	MxcNodeType               type;
-	VkCommandPool             pool;
-	VkCommandBuffer           cmd;
+
 	VkSemaphore               nodeTimeline;
-	VkSemaphore               compTimeline;  // not convinced I need this...
+	// not convinced I need this...
+	VkSemaphore               compTimeline;
+	// ya this will get pulled out into a shared pool of some sort
 	MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
 	MxcNodeShared*            pNodeShared;
 
 	// MXC_NODE_TYPE_THREAD
-	pthread_t threadId;
+	pthread_t       threadId;
+	VkCommandPool   pool;
+	VkCommandBuffer cmd;
 
 	// MXC_NODE_TYPE_INTERPROCESS
 	DWORD                  processId;
