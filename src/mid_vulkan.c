@@ -774,7 +774,7 @@ static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInf
 void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture)
 {
 	CreateAllocateBindImageView(&pCreateInfo->imageCreateInfo, pCreateInfo->aspectMask, pCreateInfo->locality, pCreateInfo->externalHandle, &pTexture->memory, &pTexture->image, &pTexture->view);
-	vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
+	midVkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
 void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
 {
@@ -1159,7 +1159,7 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo)
 			continue;
 
 		vkGetDeviceQueue(midVk.context.device, midVk.context.queueFamilies[i].index, 0, &midVk.context.queueFamilies[i].queue);
-		vkmSetDebugName(VK_OBJECT_TYPE_QUEUE, (uint64_t)midVk.context.queueFamilies[i].queue, string_QueueFamilyType[i]);
+		midVkSetDebugName(VK_OBJECT_TYPE_QUEUE, (uint64_t)midVk.context.queueFamilies[i].queue, string_QueueFamilyType[i]);
 		const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -1264,7 +1264,7 @@ void vkmCreateStdRenderPass()
 		},
 	};
 	MIDVK_REQUIRE(vkCreateRenderPass2(midVk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &midVk.context.renderPass));
-	vkmSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)midVk.context.renderPass, "ContextRenderPass");
+	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)midVk.context.renderPass, "ContextRenderPass");
 }
 
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
@@ -1289,12 +1289,13 @@ void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
 	MIDVK_REQUIRE(vkCreateSampler(midVk.context.device, &info, MIDVK_ALLOC, pSampler));
 }
 
-void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap)
+void midVkCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap)
 {
 	VkBool32 presentSupport = VK_FALSE;
 	MIDVK_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(midVk.context.physicalDevice, midVk.context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
 	REQUIRE(presentSupport, "Queue can't present to surface!")
-	const VkSwapchainCreateInfoKHR swapchainCreateInfo = {
+
+	const VkSwapchainCreateInfoKHR info = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = surface,
 		.minImageCount = MIDVK_SWAP_COUNT,
@@ -1308,15 +1309,20 @@ void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presen
 		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
 		.clipped = VK_TRUE,
 	};
-	MIDVK_REQUIRE(vkCreateSwapchainKHR(midVk.context.device, &swapchainCreateInfo, MIDVK_ALLOC, &pSwap->chain));
+	MIDVK_REQUIRE(vkCreateSwapchainKHR(midVk.context.device, &info, MIDVK_ALLOC, &pSwap->chain));
+
 	uint32_t swapCount;
 	MIDVK_REQUIRE(vkGetSwapchainImagesKHR(midVk.context.device, pSwap->chain, &swapCount, NULL));
 	REQUIRE(swapCount == MIDVK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
 	MIDVK_REQUIRE(vkGetSwapchainImagesKHR(midVk.context.device, pSwap->chain, &swapCount, pSwap->images));
+	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i)
+		midVkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
+
 	const VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &acquireSwapSemaphoreCreateInfo, MIDVK_ALLOC, &pSwap->acquireSemaphore));
 	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &acquireSwapSemaphoreCreateInfo, MIDVK_ALLOC, &pSwap->renderCompleteSemaphore));
-	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) vkmSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
+	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->acquireSemaphore, "SwapAcquireSemaphore");
+	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->renderCompleteSemaphore, "SwapRenderCompleteSemaphore");
 }
 
 void vkmCreateStdPipeLayout()
@@ -1351,7 +1357,7 @@ void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 		.pNext = &semaphoreTypeCreateInfo,
 	};
 	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &semaphoreCreateInfo, MIDVK_ALLOC, pSemaphore));
-	vkmSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
+	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
 	switch (pCreateInfo->locality) {
 		default: break;
 		case MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
@@ -1377,7 +1383,7 @@ void vkmCreateGlobalSet(VkmGlobalSet* pSet)
 	vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }
 
-void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName)
+void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName)
 {
 	const VkDebugUtilsObjectNameInfoEXT debugInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,

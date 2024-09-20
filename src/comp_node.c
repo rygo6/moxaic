@@ -194,7 +194,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 			.pSetLayouts = &pNode->compNodeSetLayout,
 		};
 		MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, &nodeCompositorData[i].set));
-		vkmSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].set, CONCAT(NodeSet, i));
+		midVkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].set, CONCAT(NodeSet, i));
 		const VkmRequestAllocationInfo nodeSetAllocRequest = {
 			.memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			.size = sizeof(MxcNodeCompositorSetState),
@@ -206,7 +206,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode) {
 
     midvkCreateFramebufferTexture(MIDVK_SWAP_COUNT, MID_LOCALITY_CONTEXT, pNode->framebuffers);
     vkmCreateFramebuffer(midVk.context.renderPass, &pNode->framebuffer);
-    vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
+	midVkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer"); // should be moved into method? probably
   }
 
   {  // Copy needed state

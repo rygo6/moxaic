@@ -15,6 +15,10 @@
 /// Constants
 typedef enum MxcNodeType {
 	MXC_NODE_TYPE_THREAD,
+	MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_OPENGL_EXPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_OPENGL_IMPORTED,
 	MXC_NODE_TYPE_INTERPROCESS_EXPORTED,
 	MXC_NODE_TYPE_INTERPROCESS_IMPORTED,
 	MXC_NODE_TYPE_COUNT
@@ -126,22 +130,28 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
 //
 /// Node Types
-typedef struct MxcNodeFramebufferTexture {
+typedef struct MxcNodeVkFramebufferTexture {
 	MidVkTexture color;
 	MidVkTexture normal;
 	MidVkTexture depth;
 	MidVkTexture gbuffer;
-} MxcNodeFramebufferTexture;
+} MxcNodeVkFramebufferTexture;
 typedef struct MxcNodeContext {
 	// cold data
 	MxcNodeType               type;
 
-	VkSemaphore               nodeTimeline;
-	// not convinced I need this...
-	VkSemaphore               compTimeline;
-	// ya this will get pulled out into a shared pool of some sort
-	MxcNodeFramebufferTexture framebufferTextures[MIDVK_SWAP_COUNT];
+	// shared data
 	MxcNodeShared*            pNodeShared;
+
+	// vulkan shared data
+	MxcNodeVkFramebufferTexture vkFramebufferTextures[MIDVK_SWAP_COUNT];
+	VkSemaphore               vkNodeTimeline;
+	VkSemaphore               vkCompTimeline;
+
+	// opengl shared data
+//	GLuint glFramebufferTextures;
+//	GLuint glCompTimeline;
+//	GLuint glNodeTimeline;
 
 	// MXC_NODE_TYPE_THREAD
 	pthread_t       threadId;
@@ -195,7 +205,7 @@ static inline void                mxcQueueNodeCommandBuffer(MxcQueuedNodeCommand
 static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
 {
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
+	bool pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
 	while (pendingBuffer) {
 		vkmSubmitCommandBuffer(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
 
@@ -211,7 +221,7 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
-void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeFramebufferTexture* pNodeFramebufferTextures);
+void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures);
 
 //
 /// Process IPC

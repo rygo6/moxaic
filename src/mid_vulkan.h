@@ -785,7 +785,7 @@ typedef struct VkmSamplerCreateInfo {
 } VkmSamplerCreateInfo;
 void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
-void vkmCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
+void midVkCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
 
 typedef struct VkmTextureCreateInfo {
 	const char*           debugName;
@@ -811,7 +811,7 @@ void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory);
 MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore);
 
-void vkmSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
+void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
 VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer();
 void            MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);

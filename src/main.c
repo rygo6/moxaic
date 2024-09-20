@@ -140,7 +140,7 @@ int main(void)
 		mxcRequestAndRunCompNodeThread(midVk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);

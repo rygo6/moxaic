@@ -80,14 +80,14 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 		VkImageView gBufferView;
 	} framebufferImages[MIDVK_SWAP_COUNT];
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		framebufferImages[i].color = pNodeContext->framebufferTextures[i].color.image;
-		framebufferImages[i].normal = pNodeContext->framebufferTextures[i].normal.image;
-		framebufferImages[i].gBuffer = pNodeContext->framebufferTextures[i].gbuffer.image;
-		framebufferImages[i].depth = pNodeContext->framebufferTextures[i].depth.image;
-		framebufferImages[i].colorView = pNodeContext->framebufferTextures[i].color.view;
-		framebufferImages[i].normalView = pNodeContext->framebufferTextures[i].normal.view;
-		framebufferImages[i].depthView = pNodeContext->framebufferTextures[i].depth.view;
-		framebufferImages[i].gBufferView = pNodeContext->framebufferTextures[i].gbuffer.view;
+		framebufferImages[i].color = pNodeContext->vkFramebufferTextures[i].color.image;
+		framebufferImages[i].normal = pNodeContext->vkFramebufferTextures[i].normal.image;
+		framebufferImages[i].gBuffer = pNodeContext->vkFramebufferTextures[i].gbuffer.image;
+		framebufferImages[i].depth = pNodeContext->vkFramebufferTextures[i].depth.image;
+		framebufferImages[i].colorView = pNodeContext->vkFramebufferTextures[i].color.view;
+		framebufferImages[i].normalView = pNodeContext->vkFramebufferTextures[i].normal.view;
+		framebufferImages[i].depthView = pNodeContext->vkFramebufferTextures[i].depth.view;
+		framebufferImages[i].gBufferView = pNodeContext->vkFramebufferTextures[i].gbuffer.view;
 	}
 	VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 	memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -99,8 +99,8 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	const VkDevice device = pNode->device;
 
-	const VkSemaphore compTimeline = pNodeContext->compTimeline;
-	const VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
+	const VkSemaphore compTimeline = pNodeContext->vkCompTimeline;
+	const VkSemaphore nodeTimeline = pNodeContext->vkNodeTimeline;
 
 	uint64_t nodeTimelineValue;
 	uint64_t compBaseCycleValue;
@@ -128,7 +128,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
 				};
 				break;
-			case MXC_NODE_TYPE_INTERPROCESS_IMPORTED:
+			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
 				acquireBarrierCount = 3;
 				acquireBarriers[i][0] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -201,7 +201,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
 				};
 				break;
-			case MXC_NODE_TYPE_INTERPROCESS_EXPORTED: PANIC("Shouldn't be rendering an exported node from this process.");
+			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED: PANIC("Shouldn't be rendering an exported node from this process.");
 			default: PANIC("nodeType not supported");
 		}
 	}
@@ -457,13 +457,13 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
 
 		vkmCreateFramebuffer(midVk.context.nodeRenderPass, &pTestNode->framebuffer);
-		vkmSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
+		midVkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
 
 		for (uint32_t bufferIndex = 0; bufferIndex < MIDVK_SWAP_COUNT; ++bufferIndex) {
 			for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
 				const VkImageViewCreateInfo imageViewCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-					.image = pTestNodeContext->framebufferTextures[bufferIndex].gbuffer.image,
+					.image = pTestNodeContext->vkFramebufferTextures[bufferIndex].gbuffer.image,
 					.viewType = VK_IMAGE_VIEW_TYPE_2D,
 					.format = MXC_NODE_GBUFFER_FORMAT,
 					.subresourceRange = {
