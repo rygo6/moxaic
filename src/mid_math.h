@@ -13,7 +13,7 @@ SIMD_TYPE(float, float3, 4);
 SIMD_TYPE(uint32_t, int3, 4);
 SIMD_TYPE(float, float4, 4);
 SIMD_TYPE(uint32_t, int4, 4);
-// basing it off a 64 byte simd type can offer small per gain
+// basing it off a 64 byte simd type can offer small perf gain
 // with no negative when accessing 16 byte rows
 // https://godbolt.org/z/Gbssve8rf
 SIMD_TYPE(float, mat4, 16);

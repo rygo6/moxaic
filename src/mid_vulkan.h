@@ -756,14 +756,10 @@ typedef struct VkmQueueFamilyCreateInfo {
 	uint32_t                 queueCount;  // probably get rid of this, we will multiplex queues automatically and presume only 1
 	const float*             pQueuePriorities;
 } VkmQueueFamilyCreateInfo;
-typedef struct VkmContextCreateInfo {
-	uint32_t                 maxDescriptorCount;
-	uint32_t                 uniformDescriptorCount;
-	uint32_t                 combinedImageSamplerDescriptorCount;
-	uint32_t                 storageImageDescriptorCount;
+typedef struct MidVkContextCreateInfo {
 	VkmQueueFamilyCreateInfo queueFamilyCreateInfos[VKM_QUEUE_FAMILY_TYPE_COUNT];
-} VkmContextCreateInfo;
-void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo);
+} MidVkContextCreateInfo;
+void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo);
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet);
 

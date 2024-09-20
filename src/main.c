@@ -30,7 +30,6 @@
 #include "mid_shape.h"
 
 #define MID_WINDOW_IMPLEMENTATION
-#define MID_WINDOW_VULKAN
 #include "mid_window.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -46,8 +45,28 @@ void midXrInitialize()
 {
 	printf("Initializing Moxaic node.\n");
 	isCompositor = false;
-	//	midVkInitialize();
-	//	mxcConnectInterprocessNode();
+
+	// Debating if each node should have a vulkan instance to read timeline semaphore
+	// and run compute shaders. It would certainly simplify the code. However it may be more
+	// performant to run such processes in local graphics context of OGL or DX11. For now
+	// we are just relying on vulkan to simplify
+	midVkInitialize();
+	const MidVkContextCreateInfo contextCreateInfo = {
+		// this should probably send physical device to set here to match compositor
+		.queueFamilyCreateInfos = {
+			[VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
+				.supportsGraphics = VKM_SUPPORT_NO,
+				.supportsCompute = VKM_SUPPORT_YES,
+				.supportsTransfer = VKM_SUPPORT_YES,
+				.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
+				.queueCount = 1,
+				.pQueuePriorities = (float[]){1.0f},
+			},
+		},
+	};
+	midVkCreateContext(&contextCreateInfo);
+
+	mxcConnectInterprocessNode();
 }
 
 void midXrWaitFrame()
@@ -85,11 +104,7 @@ int main(void)
 
 		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &midVk.surfaces[0]);
 
-		const VkmContextCreateInfo contextCreateInfo = {
-			.maxDescriptorCount = 30,
-			.uniformDescriptorCount = 10,
-			.combinedImageSamplerDescriptorCount = 10,
-			.storageImageDescriptorCount = 10,
+		const MidVkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
 				[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
 					.supportsGraphics = VKM_SUPPORT_YES,
@@ -116,7 +131,7 @@ int main(void)
 				},
 			},
 		};
-		vkmCreateContext(&contextCreateInfo);
+		midVkCreateContext(&contextCreateInfo);
 
 		// these probably should go elsewhere ?
 		// global samplers
@@ -140,7 +155,7 @@ int main(void)
 		mxcRequestAndRunCompNodeThread(midVk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-#define TEST_NODE
+//#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);

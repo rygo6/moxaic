@@ -603,7 +603,9 @@ static void CreateAllocBuffer(const VkMemoryPropertyFlags memPropFlags, const Vk
 #endif
 	const VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .buffer = *pBuffer};
 	// for some reason dedicated and external allocations are crashing on 4090 after important in other process, so lets just leave is that as requires to be dedicated for now
-	//  AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, (requiresDedicated || prefersDedicated) ? &dedicatedAllocInfo : NULL, pDeviceMem);
+	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, NULL,
+				   (requiresDedicated || prefersDedicated) && !MID_LOCALITY_INTERPROCESS(locality) ? &dedicatedAllocInfo : NULL,
+				   pDeviceMem);
 	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, requiresDedicated ? &dedicatedAllocInfo : NULL, pDeviceMem);
 }
 void CreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
@@ -760,10 +762,15 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, cons
 	else if (prefersDedicated)
 		printf("Dedicated allocation is preferred for this image.\n");
 #endif
-	const VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .image = *pImage};
-	// for some reason dedicated and external allocations are crashing on 4090 after important in other process, so lets just leave is that as requires to be dedicated for now
-	//  AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, (requiresDedicated || prefersDedicated) ? &dedicatedAllocInfo : NULL, pMemory);
-	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, requiresDedicated ? &dedicatedAllocInfo : NULL, pMemory);
+	const VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
+		.image = *pImage,
+	};
+	// for some reason dedicated and external allocations are crashing on 4090 after import in other process, so lets just leave is that as requires to be dedicated for now
+	// should this moveinto a struct?
+	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle,
+				   (requiresDedicated || prefersDedicated) && !MID_LOCALITY_INTERPROCESS(locality) ? &dedicatedAllocInfo : NULL,
+				   pMemory);
 	MIDVK_REQUIRE(vkBindImageMemory(midVk.context.device, *pImage, *pMemory, 0));
 }
 static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, const VkImageAspectFlags aspectMask, const MidLocality locality, const HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView)
@@ -1024,7 +1031,7 @@ void midVkInitialize()
 	}
 }
 
-void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo)
+void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 {
 	{  // PhysicalDevice
 		uint32_t deviceCount = 0;
@@ -1104,17 +1111,11 @@ void vkmCreateContext(const VkmContextCreateInfo* pContextCreateInfo)
 		};
 		const char* ppEnabledDeviceExtensionNames[] = {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-			//        VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
-			//        VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME,
-			//        VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-			//        VK_KHR_EXTERNAL_FENCE_EXTENSION_NAME,
-			//        VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
+			VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
 			VK_EXT_MESH_SHADER_EXTENSION_NAME,
-			//        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
 			VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-			//        VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
-			VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME,
-			//        VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
+			VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME,
+			VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
 			VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME,
 			VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
 			VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,

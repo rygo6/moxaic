@@ -27,14 +27,12 @@ typedef enum MxcNodeType {
 #define MXC_NODE_GBUFFER_FORMAT VK_FORMAT_R32_SFLOAT
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
 #define MXC_NODE_GBUFFER_LEVELS 10
-#define MXC_NODE_CLEAR_COLOR \
-	(VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
+#define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 
 //
 /// IPC Types
 typedef uint8_t MxcRingBufferHandle;
 #define MXC_RING_BUFFER_CAPACITY 256
-//#define MXC_RING_BUFFER_SIZE         MXC_RING_BUFFER_CAPACITY * sizeof(MxcRingBufferHandle)
 #define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
 _Static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY, "RingBufferHandle type can't store capacity.");
 typedef struct MxcRingBuffer {
@@ -43,6 +41,8 @@ typedef struct MxcRingBuffer {
 	MxcRingBufferHandle targets[MXC_RING_BUFFER_CAPACITY];
 } MxcRingBuffer;
 
+//
+/// Shared Types
 typedef struct MxcNodeShared {
 	// read/write every cycle
 	VkmGlobalSetState nodeGlobalSetState;
@@ -145,8 +145,8 @@ typedef struct MxcNodeContext {
 
 	// vulkan shared data
 	MxcNodeVkFramebufferTexture vkFramebufferTextures[MIDVK_SWAP_COUNT];
-	VkSemaphore               vkNodeTimeline;
-	VkSemaphore               vkCompTimeline;
+	VkSemaphore                 vkNodeTimeline;
+	VkSemaphore                 vkCompTimeline;
 
 	// opengl shared data
 //	GLuint glFramebufferTextures;
@@ -167,8 +167,15 @@ typedef struct MxcNodeContext {
 } MxcNodeContext;
 
 //
-/// Global State
+//// Node State
+
+// I am presuming a node simply won't need to have as many thread nodes within it
+#if defined(MOXAIC_COMPOSITOR)
 #define MXC_NODE_CAPACITY 64
+#elif defined(MOXAIC_NODE)
+#define MXC_NODE_CAPACITY 4
+#endif
+
 typedef uint8_t NodeHandle;
 // move these into struct
 extern size_t nodeCount;
@@ -179,9 +186,15 @@ extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
 
+//
+//// Compositor State
+
+// I should do this. remove compositor code from nodes entirely
+//#if defined(MOXAIC_COMPOSITOR)
 // technically this should go into a comp node thread local....
 extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 extern MxcCompositorNodeContext compositorNodeContext;
+//#endif
 
 //
 /// Node Queue
@@ -194,7 +207,8 @@ typedef struct MxcQueuedNodeCommandBuffer {
 extern size_t                     submitNodeQueueStart;
 extern size_t                     submitNodeQueueEnd;
 extern MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY];
-static inline void                mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer handle)
+
+static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer handle)
 {
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
 	submitNodeQueue[submitNodeQueueEnd] = handle;
@@ -205,7 +219,7 @@ static inline void                mxcQueueNodeCommandBuffer(MxcQueuedNodeCommand
 static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
 {
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	bool pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
+	bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
 	while (pendingBuffer) {
 		vkmSubmitCommandBuffer(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
 
@@ -232,8 +246,6 @@ void mxcShutdownInterprocessNode();
 
 //
 /// Process IPC Targets
-
-// Do we need this for threads!? Ya lets do it
 void mxcInterprocessTargetNodeClosed(const NodeHandle handle);
 
 typedef void (*MxcInterProcessFuncPtr)(const NodeHandle);
