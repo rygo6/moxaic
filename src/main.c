@@ -41,49 +41,6 @@
 bool isCompositor = true;
 bool isRunning = true;
 
-void midXrInitialize()
-{
-	printf("Initializing Moxaic node.\n");
-	isCompositor = false;
-
-	// Debating if each node should have a vulkan instance to read timeline semaphore
-	// and run compute shaders. It would certainly simplify the code. However it may be more
-	// performant to run such processes in local graphics context of OGL or DX11. For now
-	// we are just relying on vulkan to simplify
-	midVkInitialize();
-	const MidVkContextCreateInfo contextCreateInfo = {
-		// this should probably send physical device to set here to match compositor
-		.queueFamilyCreateInfos = {
-			[VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
-				.supportsGraphics = VKM_SUPPORT_NO,
-				.supportsCompute = VKM_SUPPORT_YES,
-				.supportsTransfer = VKM_SUPPORT_YES,
-				.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
-				.queueCount = 1,
-				.pQueuePriorities = (float[]){1.0f},
-			},
-		},
-	};
-	midVkCreateContext(&contextCreateInfo);
-
-	mxcConnectInterprocessNode();
-}
-
-void midXrWaitFrame()
-{
-	// wait on timeline
-}
-
-void midXrBeginFrame()
-{
-	// transition frames
-}
-
-void midXrEndFrame()
-{
-	// submit frame
-}
-
 int main(void)
 {
 	//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
@@ -147,7 +104,11 @@ int main(void)
 
 		// this need to ge in node create
 		mxcCreateNodeRenderPass();
-		vkmCreateBasicPipe("./shaders/basic_material.vert.spv", "./shaders/basic_material.frag.spv", midVk.context.nodeRenderPass, midVk.context.stdPipeLayout.pipeLayout, &midVk.context.basicPipe);
+		midVkCreateBasicPipe("./shaders/basic_material.vert.spv",
+							 "./shaders/basic_material.frag.spv",
+							 midVk.context.nodeRenderPass,
+							 midVk.context.basicPipeLayout.pipeLayout,
+							 &midVk.context.basicPipe);
 
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");
@@ -164,7 +125,7 @@ int main(void)
 #elif defined(MOXAIC_NODE)
 		printf("Moxaic node\n");
 		isCompositor = false;
-		mxcConnectInterprocessNode();
+		mxcConnectInterprocessNode(true);
 #endif
 	}
 

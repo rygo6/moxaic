@@ -26,7 +26,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 
 #define HOT    __attribute__((hot))
-#define INLINE __attribute__((always_inline)) inline
+#define INLINE __attribute__((always_inline)) static inline
 
 extern bool isCompositor;
 

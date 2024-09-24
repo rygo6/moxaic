@@ -7,26 +7,28 @@ enum SetBindNodeProcessIndices {
 	SET_BIND_NODE_PROCESS_DST_INDEX,
 	SET_BIND_NODE_PROCESS_COUNT
 };
-#define SET_WRITE_NODE_PROCESS_SRC(src_image_view)               \
-	(const VkWriteDescriptorSet) {                                 \
+#define SET_WRITE_NODE_PROCESS_SRC(src_image_view)                   \
+	(const VkWriteDescriptorSet)                                     \
+	{                                                                \
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
 		.dstBinding = SET_BIND_NODE_PROCESS_SRC_INDEX,               \
 		.descriptorCount = 1,                                        \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(const VkDescriptorImageInfo){                \
-			.imageView = src_image_view,                               \
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                    \
+			.imageView = src_image_view,                             \
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
 		},                                                           \
 	}
-#define SET_WRITE_NODE_PROCESS_DST(dst_image_view)      \
-	(const VkWriteDescriptorSet) {                        \
+#define SET_WRITE_NODE_PROCESS_DST(dst_image_view)          \
+	(const VkWriteDescriptorSet)                            \
+	{                                                       \
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,    \
 		.dstBinding = SET_BIND_NODE_PROCESS_DST_INDEX,      \
 		.descriptorCount = 1,                               \
 		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
 		.pImageInfo = &(const VkDescriptorImageInfo){       \
-			.imageView = dst_image_view,                      \
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,           \
+			.imageView = dst_image_view,                    \
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,         \
 		},                                                  \
 	}
 enum PipeSetNodeProcessIndices {
@@ -39,17 +41,17 @@ static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_NODE_FINISH_RENDERPASS = &
 	.accessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,
 	.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 };
-#define IMAGE_BARRIER_SRC_NODE_FINISH_RENDERPASS                       \
+#define IMAGE_BARRIER_SRC_NODE_FINISH_RENDERPASS                         \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, \
 	.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,         \
 	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-#define IMAGE_BARRIER_DST_NODE_RELEASE                  \
+#define IMAGE_BARRIER_DST_NODE_RELEASE                    \
 	.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, \
 	.dstAccessMask = VK_ACCESS_2_NONE,                    \
 	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 
-void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode) {
-
+void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode)
+{
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 
 	const VkCommandBuffer cmd = pNodeContext->cmd;
@@ -202,7 +204,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 				};
 				break;
 			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED: PANIC("Shouldn't be rendering an exported node from this process.");
-			default: PANIC("nodeType not supported");
+			default:                                         PANIC("nodeType not supported");
 		}
 	}
 
@@ -234,29 +236,31 @@ run_loop:
 
 	ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
-	const VkViewport viewport = {
-		.x = -pNodeShared->compositorULScreenUV.x * DEFAULT_WIDTH,
-		.y = -pNodeShared->compositorULScreenUV.y * DEFAULT_HEIGHT,
-		.width = DEFAULT_WIDTH,
-		.height = DEFAULT_HEIGHT,
-		.maxDepth = 1.0f,
-	};
-	const VkRect2D scissor = {
-		.offset = {
-			.x = 0,
-			.y = 0,
-		},
-		.extent = {
-			.width = pNodeShared->nodeGlobalSetState.framebufferSize.x,
-			.height = pNodeShared->nodeGlobalSetState.framebufferSize.y,
-		},
-	};
-	CmdSetViewport(cmd, 0, 1, &viewport);
-	CmdSetScissor(cmd, 0, 1, &scissor);
+
 	const int framebufferIndex = nodeTimelineValue % MIDVK_SWAP_COUNT;
-	CmdPipelineImageBarriers2(cmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
 
 	{  // this is really all that'd be user exposed....
+		const VkViewport viewport = {
+			.x = -pNodeShared->compositorULScreenUV.x * DEFAULT_WIDTH,
+			.y = -pNodeShared->compositorULScreenUV.y * DEFAULT_HEIGHT,
+			.width = DEFAULT_WIDTH,
+			.height = DEFAULT_HEIGHT,
+			.maxDepth = 1.0f,
+		};
+		const VkRect2D scissor = {
+			.offset = {
+				.x = 0,
+				.y = 0,
+			},
+			.extent = {
+				.width = pNodeShared->nodeGlobalSetState.framebufferSize.x,
+				.height = pNodeShared->nodeGlobalSetState.framebufferSize.y,
+			},
+		};
+		CmdSetViewport(cmd, 0, 1, &viewport);
+		CmdSetScissor(cmd, 0, 1, &scissor);
+		CmdPipelineImageBarriers2(cmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
+
 		const VkClearColorValue clearColor = (VkClearColorValue){0, 0, 0.1, 0};
 		CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, framebufferImages[framebufferIndex].colorView, framebufferImages[framebufferIndex].normalView, framebufferImages[framebufferIndex].depthView);
 
@@ -273,7 +277,7 @@ run_loop:
 	}
 
 	{  // Blit GBuffer
-		const ivec2 extent = {scissor.extent.width, scissor.extent.height};
+		const ivec2 extent = {pNodeShared->nodeGlobalSetState.framebufferSize.x, pNodeShared->nodeGlobalSetState.framebufferSize.y};
 		const ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 32), 1);
 		{
 			const VkImageMemoryBarrier2 clearBarrier = {
@@ -399,7 +403,8 @@ run_loop:
 
 //
 ///Create
-static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout) {
+static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout)
+{
 	const VkDescriptorSetLayoutCreateInfo nodeSetLayoutCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
@@ -423,7 +428,8 @@ static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout) {
 	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
 }
 
-static void CreateNodeProcessPipeLayout(const VkDescriptorSetLayout nodeProcessSetLayout, VkPipelineLayout* pPipeLayout) {
+static void CreateNodeProcessPipeLayout(const VkDescriptorSetLayout nodeProcessSetLayout, VkPipelineLayout* pPipeLayout)
+{
 	const VkPipelineLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = 1,
@@ -433,7 +439,8 @@ static void CreateNodeProcessPipeLayout(const VkDescriptorSetLayout nodeProcessS
 	};
 	MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, pPipeLayout));
 }
-static void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout layout, VkPipeline* pPipe) {
+static void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout layout, VkPipeline* pPipe)
+{
 	VkShaderModule shader;
 	vkmCreateShaderModule(shaderPath, &shader);
 	const VkComputePipelineCreateInfo pipelineInfo = {
@@ -449,7 +456,8 @@ static void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout
 	MIDVK_REQUIRE(vkCreateComputePipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
 	vkDestroyShaderModule(midVk.context.device, shader, MIDVK_ALLOC);
 }
-static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNode* pTestNode) {
+static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNode* pTestNode)
+{
 	{  // Create
 		CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
 		CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
@@ -493,10 +501,10 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 
 		vkmCreateGlobalSet(&pTestNode->globalSet);
 
-		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
+		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
 		vkmCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
-		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
+		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
 		vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
 
 		const VkWriteDescriptorSet writeSets[] = {
@@ -515,12 +523,13 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		// context is available to all now so don't need to do this
 		pTestNode->device = midVk.context.device;
 		pTestNode->nodeRenderPass = midVk.context.nodeRenderPass;
-		pTestNode->pipeLayout = midVk.context.stdPipeLayout.pipeLayout;
+		pTestNode->pipeLayout = midVk.context.basicPipeLayout.pipeLayout;
 		pTestNode->basicPipe = midVk.context.basicPipe;
 	}
 }
 
-void* mxcTestNodeThread(const MxcNodeContext* pNodeContext) {
+void* mxcTestNodeThread(const MxcNodeContext* pNodeContext)
+{
 	MxcTestNode testNode;
 	mxcCreateTestNode(pNodeContext, &testNode);
 	mxcTestNodeRun(pNodeContext, &testNode);

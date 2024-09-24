@@ -102,15 +102,15 @@ enum VkmPipeVertexAttributeStandardIndices {
 static void CreateStdPipeLayout()
 {
 	VkDescriptorSetLayout pSetLayouts[MIDVK_PIPE_SET_STD_INDEX_COUNT];
-	pSetLayouts[MIDVK_PIPE_SET_STD_GLOBAL_INDEX] = midVk.context.stdPipeLayout.globalSetLayout;
-	pSetLayouts[MIDVK_PIPE_SET_STD_MATERIAL_INDEX] = midVk.context.stdPipeLayout.materialSetLayout;
-	pSetLayouts[MIDVK_PIPE_SET_STD_OBJECT_INDEX] = midVk.context.stdPipeLayout.objectSetLayout;
+	pSetLayouts[MIDVK_PIPE_SET_STD_GLOBAL_INDEX] = midVk.context.basicPipeLayout.globalSetLayout;
+	pSetLayouts[MIDVK_PIPE_SET_STD_MATERIAL_INDEX] = midVk.context.basicPipeLayout.materialSetLayout;
+	pSetLayouts[MIDVK_PIPE_SET_STD_OBJECT_INDEX] = midVk.context.basicPipeLayout.objectSetLayout;
 	const VkPipelineLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = MIDVK_PIPE_SET_STD_INDEX_COUNT,
 		.pSetLayouts = pSetLayouts,
 	};
-	MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.pipeLayout));
+	MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.pipeLayout));
 }
 
 #define DEFAULT_ROBUSTNESS_STATE                                                             \
@@ -208,7 +208,7 @@ static void CreateStdPipeLayout()
 		},                                                                 \
 	}
 
-void vkmCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
+void midVkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule vertShader;
 	vkmCreateShaderModule(vertShaderPath, &vertShader);
@@ -395,7 +395,7 @@ static void CreateGlobalSetLayout()
 				VK_SHADER_STAGE_TASK_BIT_EXT,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &info, MIDVK_ALLOC, &midVk.context.stdPipeLayout.globalSetLayout));
+	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &info, MIDVK_ALLOC, &midVk.context.basicPipeLayout.globalSetLayout));
 }
 static void CreateStdMaterialSetLayout()
 {
@@ -410,7 +410,7 @@ static void CreateStdMaterialSetLayout()
 			.pImmutableSamplers = &midVk.context.linearSampler,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.materialSetLayout));
+	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.materialSetLayout));
 }
 static void CreateStdObjectSetLayout()
 {
@@ -424,7 +424,7 @@ static void CreateStdObjectSetLayout()
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.stdPipeLayout.objectSetLayout));
+	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.objectSetLayout));
 }
 
 // get rid of this don't wrap methods that don't actually simplify the structs
@@ -1168,6 +1168,14 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 		};
 		MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &midVk.context.queueFamilies[i].pool));
 	}
+
+	{
+#define PFN_FUNC(_func)                                                                         \
+	midVk.func._func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
+	REQUIRE(midVk.func._func != NULL, "Couldn't load " #_func)
+		PFN_FUNCS
+#undef PFN_FUNC
+	}
 }
 
 void vkmCreateStdRenderPass()
@@ -1370,7 +1378,7 @@ void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 				.handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
 				.handle = pCreateInfo->externalHandle,
 			};
-			MIDVK_INSTANCE_STATIC_FUNC(ImportSemaphoreWin32HandleKHR);
+			MIDVK_INSTANCE_FUNC(ImportSemaphoreWin32HandleKHR);
 			MIDVK_REQUIRE(ImportSemaphoreWin32HandleKHR(midVk.context.device, &importSemaphoreWin32HandleInfo));
 #endif
 			break;
@@ -1379,7 +1387,7 @@ void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 
 void vkmCreateGlobalSet(VkmGlobalSet* pSet)
 {
-	midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.stdPipeLayout.globalSetLayout, &pSet->set);
+	midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.globalSetLayout, &pSet->set);
 	vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
 	vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }
@@ -1392,13 +1400,13 @@ void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const cha
 		.objectHandle = objectHandle,
 		.pObjectName = pDebugName,
 	};
-	MIDVK_INSTANCE_STATIC_FUNC(SetDebugUtilsObjectNameEXT);
+	MIDVK_INSTANCE_FUNC(SetDebugUtilsObjectNameEXT);
 	MIDVK_REQUIRE(SetDebugUtilsObjectNameEXT(midVk.context.device, &debugInfo));
 }
 
 MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory)
 {
-	MIDVK_INSTANCE_STATIC_FUNC(GetMemoryWin32HandleKHR);
+	MIDVK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
 	const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
 		.memory = memory,
@@ -1411,7 +1419,7 @@ MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory)
 
 MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore)
 {
-	MIDVK_INSTANCE_STATIC_FUNC(GetSemaphoreWin32HandleKHR);
+	MIDVK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
 	const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
 		.semaphore = semaphore,

@@ -76,7 +76,7 @@ typedef struct CACHE_ALIGN MxcExternalNodeMemory {
 //
 /// Compositor Types
 typedef struct MxcCompositorNodeContext {
-	// read/write multiple threads
+	// read multiple threads, write 1 thread
 	uint32_t swapIndex;
 
 	// read by multiple threads
@@ -93,7 +93,7 @@ typedef struct MxcCompositorNodeContext {
 typedef struct MxcNodeCompositorSetState {
 	mat4 model;
 
-	// Laid out same as VkmGlobalSetState for memcpy
+	// Laid out same as GlobalSetState for memcpy
 	mat4  view;
 	mat4  proj;
 	mat4  viewProj;
@@ -136,9 +136,12 @@ typedef struct MxcNodeVkFramebufferTexture {
 	MidVkTexture depth;
 	MidVkTexture gbuffer;
 } MxcNodeVkFramebufferTexture;
+// Cold Node date
 typedef struct MxcNodeContext {
-	// cold data
-	MxcNodeType               type;
+	MxcNodeType type;
+
+	VkCommandPool   pool;
+	VkCommandBuffer cmd;
 
 	// shared data
 	MxcNodeShared*            pNodeShared;
@@ -148,6 +151,7 @@ typedef struct MxcNodeContext {
 	VkSemaphore                 vkNodeTimeline;
 	VkSemaphore                 vkCompTimeline;
 
+	// debating if this should be an option
 	// opengl shared data
 //	GLuint glFramebufferTextures;
 //	GLuint glCompTimeline;
@@ -155,14 +159,14 @@ typedef struct MxcNodeContext {
 
 	// MXC_NODE_TYPE_THREAD
 	pthread_t       threadId;
-	VkCommandPool   pool;
-	VkCommandBuffer cmd;
 
+	// really this can be shared by multiple node thread contexts on a node
+	// it should go into generic ipc struct
 	// MXC_NODE_TYPE_INTERPROCESS
 	DWORD                  processId;
 	HANDLE                 processHandle;
-	HANDLE                 externalMemoryHandle;
-	MxcExternalNodeMemory* pExternalMemory;
+	HANDLE                 exportedExternalMemoryHandle;
+	MxcExternalNodeMemory* pExportedExternalMemory;
 
 } MxcNodeContext;
 
@@ -186,8 +190,13 @@ extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
 
+
+
 //
 //// Compositor State
+
+extern HANDLE                 importedExternalMemoryHandle;
+extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 // I should do this. remove compositor code from nodes entirely
 //#if defined(MOXAIC_COMPOSITOR)
@@ -237,11 +246,13 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 void mxcCreateNodeRenderPass();
 void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures);
 
+NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared);
+
 //
 /// Process IPC
 void mxcInitializeInterprocessServer();
 void mxcShutdownInterprocessServer();
-void mxcConnectInterprocessNode();
+void mxcConnectInterprocessNode(bool createTestNode);
 void mxcShutdownInterprocessNode();
 
 //

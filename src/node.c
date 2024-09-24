@@ -18,6 +18,9 @@ MxcNodeCompositorData    nodeCompositorData[MXC_NODE_CAPACITY] = {};
 MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY] = {};
 MxcCompositorNodeContext compositorNodeContext = {};
 
+HANDLE                 importedExternalMemoryHandle = NULL;
+MxcExternalNodeMemory* pImportedExternalMemory = NULL;
+
 // this should become a midvk construct
 size_t                     submitNodeQueueStart = 0;
 size_t                     submitNodeQueueEnd = 0;
@@ -57,7 +60,7 @@ static NodeHandle RequestLocalNodeHandle()
 	activeNodesShared[handle] = &nodesShared[handle];
 	return handle;
 }
-static NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
+NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
 	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
 	activeNodesShared[handle] = pNodeShared;
@@ -100,19 +103,20 @@ static int ReleaseNode(NodeHandle handle)
 			CLOSE_HANDLE(GetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline));
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
-			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-				CLOSE_HANDLE(pNodeContext->pExternalMemory->importParam.framebufferHandles[i].color);
-				CLOSE_HANDLE(pNodeContext->pExternalMemory->importParam.framebufferHandles[i].normal);
-				CLOSE_HANDLE(pNodeContext->pExternalMemory->importParam.framebufferHandles[i].gbuffer);
-			}
-			CLOSE_HANDLE(pNodeContext->pExternalMemory->importParam.nodeTimelineHandle);
-			CLOSE_HANDLE(pNodeContext->pExternalMemory->importParam.compTimelineHandle);
-			if (!UnmapViewOfFile(pNodeContext->pExternalMemory)) {
-				DWORD dwError = GetLastError();
-				printf("Could not unmap view of file (%d).\n", dwError);
-			}
-			CLOSE_HANDLE(pNodeContext->externalMemoryHandle);
-			CLOSE_HANDLE(pNodeContext->processHandle);
+			// this should probably run on the node when closing, but it also seems to clean itself up fine ?
+//			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+//				CLOSE_HANDLE(pImportedExternalMemory->importParam.framebufferHandles[i].color);
+//				CLOSE_HANDLE(pImportedExternalMemory->importParam.framebufferHandles[i].normal);
+//				CLOSE_HANDLE(pImportedExternalMemory->importParam.framebufferHandles[i].gbuffer);
+//			}
+//			CLOSE_HANDLE(pImportedExternalMemory->importParam.nodeTimelineHandle);
+//			CLOSE_HANDLE(pImportedExternalMemory->importParam.compTimelineHandle);
+//			if (!UnmapViewOfFile(pImportedExternalMemory)) {
+//				DWORD dwError = GetLastError();
+//				printf("Could not unmap view of file (%d).\n", dwError);
+//			}
+//			CLOSE_HANDLE(pImportedExternalMemory);
+//			CLOSE_HANDLE(pNodeContext->processHandle);
 			break;
 		default: PANIC("Node type not supported");
 	}
@@ -562,8 +566,8 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED;
 		pNodeContext->processId = nodeProcessId;
 		pNodeContext->processHandle = nodeProcessHandle;
-		pNodeContext->externalMemoryHandle = externalNodeMemoryHandle;
-		pNodeContext->pExternalMemory = pExternalNodeMemory;
+		pNodeContext->exportedExternalMemoryHandle = externalNodeMemoryHandle;
+		pNodeContext->pExportedExternalMemory = pExternalNodeMemory;
 		pNodeContext->pNodeShared = pNodeShared;
 
 		printf("Exporting node handle %d\n", handle);
@@ -626,7 +630,7 @@ static void InterprocessServerAcceptNodeConnection()
 	// Send shared memory handle
 	{
 		HANDLE duplicatedExternalNodeMemoryHandle;
-		ERR_CHECK(!DuplicateHandle(GetCurrentProcess(), pNodeContext->externalMemoryHandle, nodeProcessHandle, &duplicatedExternalNodeMemoryHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate sharedMemory handle fail.");
+		ERR_CHECK(!DuplicateHandle(GetCurrentProcess(), pNodeContext->exportedExternalMemoryHandle, nodeProcessHandle, &duplicatedExternalNodeMemoryHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate sharedMemory handle fail.");
 		printf("Sending duplicatedExternalNodeMemoryHandle: %p Size: %llu\n", duplicatedExternalNodeMemoryHandle, sizeof(HANDLE));
 		WSA_ERR_CHECK(send(clientSocket, (const char*)&duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0) == SOCKET_ERROR, "Send failed");
 		printf("Process Node Export Success.\n");
@@ -705,7 +709,7 @@ void mxcShutdownInterprocessServer()
 	WSACleanup();
 }
 
-void mxcConnectInterprocessNode()
+void mxcConnectInterprocessNode(bool createTestNode)
 {
 	printf("Connecting on: '%s'\n", SOCKET_PATH);
 	MxcNodeContext*        pNodeContext = NULL;
@@ -760,9 +764,15 @@ void mxcConnectInterprocessNode()
 
 		pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
 		ERR_CHECK(pExternalNodeMemory == NULL, "Map pExternalNodeMemory failed");
+		pImportedExternalMemory = pExternalNodeMemory;
+		importedExternalMemoryHandle = externalNodeMemoryHandle;
+
 		pImportParam = &pExternalNodeMemory->importParam;
 		pNodeShared = &pExternalNodeMemory->shared;
 	}
+
+	if (!createTestNode)
+		goto ExitSuccess;
 
 	// Request and setup handle data
 	{
@@ -770,8 +780,6 @@ void mxcConnectInterprocessNode()
 		pNodeContext = &nodeContexts[handle];
 		*pNodeContext = (MxcNodeContext){};
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
-		pNodeContext->externalMemoryHandle = externalNodeMemoryHandle;
-		pNodeContext->pExternalMemory = pExternalNodeMemory;
 		pNodeContext->pNodeShared = pNodeShared;
 		printf("Importing node handle %d\n", handle);
 	}

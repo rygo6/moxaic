@@ -32,7 +32,8 @@ typedef struct IUnknown IUnknown;
 //
 //// Mid OpenXR
 void midXrInitialize();
-void midXrWaitFrame();
+void midXrCreateSession(int* pSessionHandle);
+void midXrWaitFrame(int handle);
 void midXrBeginFrame();
 void midXrEndFrame();
 
@@ -47,57 +48,58 @@ void midXrEndFrame();
 //
 //// Mid OpenXR Types
 typedef uint32_t XrHash;
+typedef uint32_t XrHandle;
 #define CHECK(_command)                          \
 	({                                           \
 		XrResult result = _command;              \
 		if (result != XR_SUCCESS) return result; \
 	})
-#define CONTAINER(_type, _capacity)                                                                  \
-	typedef struct _type##Container {                                                                \
-		uint32_t count;                                                                              \
-		_type    data[_capacity];                                                                    \
-	} _type##Container;                                                                              \
-	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type)                   \
-	{                                                                                                \
-		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;           \
-		const uint32_t handle = p##_type##s->count++;                                                \
-		*pp##_type = &p##_type##s->data[handle];                                                     \
-		return XR_SUCCESS;                                                                           \
-	}                                                                                                \
-	static inline int Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) \
-	{                                                                                                \
-		return p##_type - p##_type##s->data;                                                         \
+#define CONTAINER(_type, _capacity)                                                                       \
+	typedef struct _type##Container {                                                                     \
+		uint32_t count;                                                                                   \
+		_type    data[_capacity];                                                                         \
+	} _type##Container;                                                                                   \
+	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type)                        \
+	{                                                                                                     \
+		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;                \
+		const uint32_t handle = p##_type##s->count++;                                                     \
+		*pp##_type = &p##_type##s->data[handle];                                                          \
+		return XR_SUCCESS;                                                                                \
+	}                                                                                                     \
+	static inline XrHandle Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) \
+	{                                                                                                     \
+		return p##_type - p##_type##s->data;                                                              \
 	}
-#define CONTAINER_HASHED(_type, _capacity)                                                           \
-	typedef struct _type##Container {                                                                \
-		uint32_t count;                                                                              \
-		_type    data[_capacity];                                                                    \
-		XrHash   hash[_capacity];                                                                    \
-	} _type##Container;                                                                              \
-	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type, XrHash hash)      \
-	{                                                                                                \
-		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;           \
-		const uint32_t handle = p##_type##s->count++;                                                \
-		p##_type##s->hash[handle] = hash;                                                            \
-		*pp##_type = &p##_type##s->data[handle];                                                     \
-		return XR_SUCCESS;                                                                           \
-	}                                                                                                \
-	static inline int Get##_type##Hash(const _type##Container* p##_type##s, const _type* p##_type)   \
-	{                                                                                                \
-		const int handle = p##_type - p##_type##s->data;                                             \
-		return p##_type##s->hash[handle];                                                            \
-	}                                                                                                \
-	static inline _type* Get##_type##ByHash(_type##Container* p##_type##s, const XrHash hash)        \
-	{                                                                                                \
-		for (int i = 0; i < p##_type##s->count; ++i) {                                               \
-			if (p##_type##s->hash[i] == hash)                                                        \
-				return &p##_type##s->data[i];                                                        \
-		}                                                                                            \
-		return NULL;                                                                                 \
-	}                                                                                                \
-	static inline int Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) \
-	{                                                                                                \
-		return p##_type - p##_type##s->data;                                                         \
+#define CONTAINER_HASHED(_type, _capacity)                                                                \
+	typedef struct _type##Container {                                                                     \
+		uint32_t count;                                                                                   \
+		_type    data[_capacity];                                                                         \
+		XrHash   hash[_capacity];                                                                         \
+	} _type##Container;                                                                                   \
+	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type, XrHash hash)           \
+	{                                                                                                     \
+		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;                \
+		const uint32_t handle = p##_type##s->count++;                                                     \
+		p##_type##s->hash[handle] = hash;                                                                 \
+		*pp##_type = &p##_type##s->data[handle];                                                          \
+		return XR_SUCCESS;                                                                                \
+	}                                                                                                     \
+	static inline XrHash Get##_type##Hash(const _type##Container* p##_type##s, const _type* p##_type)     \
+	{                                                                                                     \
+		const int handle = p##_type - p##_type##s->data;                                                  \
+		return p##_type##s->hash[handle];                                                                 \
+	}                                                                                                     \
+	static inline _type* Get##_type##ByHash(_type##Container* p##_type##s, const XrHash hash)             \
+	{                                                                                                     \
+		for (int i = 0; i < p##_type##s->count; ++i) {                                                    \
+			if (p##_type##s->hash[i] == hash)                                                             \
+				return &p##_type##s->data[i];                                                             \
+		}                                                                                                 \
+		return NULL;                                                                                      \
+	}                                                                                                     \
+	static inline XrHandle Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) \
+	{                                                                                                     \
+		return p##_type - p##_type##s->data;                                                              \
 	}
 
 #define MIDXR_MAX_PATHS 128
@@ -571,6 +573,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	const XrSessionCreateInfo* createInfo,
 	XrSession*                 session)
 {
+	XrHandle sessionHandle;
+	midXrCreateSession(&sessionHandle);
+
 	Instance* pInstance = (Instance*)instance;
 	Session*  pClaimedSession;
 	CHECK(ClaimSession(&pInstance->sessions, &pClaimedSession));
@@ -580,6 +585,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			pClaimedSession->glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
 			*session = (XrSession)pClaimedSession;
 			return XR_SUCCESS;
+		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR:
+		case XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR:
+		case XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR:
 		default:
 			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 	}
@@ -735,6 +743,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	return XR_SUCCESS;
 }
 
+#ifndef GL_RGBA8
+#define GL_RGBA8 0x8058
+#endif
 #ifndef GL_SRGB8_ALPHA8
 #define GL_SRGB8_ALPHA8 0x8C43
 #endif
@@ -747,16 +758,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 	uint32_t* formatCountOutput,
 	int64_t*  formats)
 {
-	*formatCountOutput = 2;
+	const int64_t swapFormats[] = {
+		GL_RGBA8,
+		GL_SRGB8_ALPHA8,
+		GL_SRGB8,
+	};
+	*formatCountOutput = COUNT(swapFormats);
 
 	if (formats == NULL)
 		return XR_SUCCESS;
 
-	if (formatCapacityInput < 2)
+	if (formatCapacityInput < COUNT(swapFormats))
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	formats[0] = GL_SRGB8_ALPHA8;
-	formats[1] = GL_SRGB8;
+	for (int i = 0; i < COUNT(swapFormats); ++i)
+		formats[i] = swapFormats[i];
 
 	return XR_SUCCESS;
 }
@@ -789,8 +805,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	XrFrameState*          frameState)
 {
 	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance *)pSession->instance;
+	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 
-	midXrWaitFrame();
+	midXrWaitFrame(sessionHandle);
 
 	const XrTime currentTime = GetXrTime();
 
