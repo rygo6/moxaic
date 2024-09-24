@@ -26,8 +26,15 @@ size_t                     submitNodeQueueStart = 0;
 size_t                     submitNodeQueueEnd = 0;
 MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
-void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*))
+void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*))
 {
+	const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
+		.debugName = "CompTimelineSemaphore",
+		.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
+		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
+	midVkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compTimeline);
+	midVkCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
+
 	const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -41,12 +48,6 @@ void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)
 	};
 	MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &compositorNodeContext.cmd));
 	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorNodeContext.cmd, "CompCmd");
-	const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
-		.debugName = "CompTimelineSemaphore",
-		.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
-		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-	midvkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compTimeline);
-	midVkCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
 
 	int result = pthread_create(&compositorNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorNodeContext);
 	REQUIRE(result == 0, "Comp Node thread creation failed!");
@@ -96,11 +97,11 @@ static int ReleaseNode(NodeHandle handle)
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
 			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->vkFramebufferTextures[i].color.memory));
-				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->vkFramebufferTextures[i].normal.memory));
-				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->vkFramebufferTextures[i].gbuffer.memory));
+				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory));
+				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory));
+				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory));
 			}
-			CLOSE_HANDLE(GetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline));
+			CLOSE_HANDLE(GetSemaphoreExternalHandle(pNodeContext->nodeTimeline));
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
 			// this should probably run on the node when closing, but it also seems to clean itself up fine ?
@@ -122,7 +123,7 @@ static int ReleaseNode(NodeHandle handle)
 	}
 
 	// must first release command buffer
-	vkDestroySemaphore(midVk.context.device, pNodeContext->vkNodeTimeline, MIDVK_ALLOC);
+	vkDestroySemaphore(midVk.context.device, pNodeContext->nodeTimeline, MIDVK_ALLOC);
 
 	// Clear compositor data
 	const VkWriteDescriptorSet writeSets[] = {
@@ -164,21 +165,21 @@ static int ReleaseNode(NodeHandle handle)
 
 	// destroy images... this will eventually just return back to some pool
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		vkDestroyImageView(midVk.context.device, pNodeContext->vkFramebufferTextures[i].color.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->vkFramebufferTextures[i].color.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->vkFramebufferTextures[i].color.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].color.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].color.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].color.memory, MIDVK_ALLOC);
 
-		vkDestroyImageView(midVk.context.device, pNodeContext->vkFramebufferTextures[i].normal.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->vkFramebufferTextures[i].normal.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->vkFramebufferTextures[i].normal.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].normal.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].normal.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].normal.memory, MIDVK_ALLOC);
 
-		vkDestroyImageView(midVk.context.device, pNodeContext->vkFramebufferTextures[i].depth.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->vkFramebufferTextures[i].depth.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->vkFramebufferTextures[i].depth.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].depth.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].depth.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].depth.memory, MIDVK_ALLOC);
 
-		vkDestroyImageView(midVk.context.device, pNodeContext->vkFramebufferTextures[i].gbuffer.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->vkFramebufferTextures[i].gbuffer.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->vkFramebufferTextures[i].gbuffer.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].gbuffer.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].gbuffer.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].gbuffer.memory, MIDVK_ALLOC);
 	}
 
 	return 0;
@@ -191,7 +192,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 	MxcNodeContext* pNodeContext = &nodeContexts[handle];
 	*pNodeContext = (MxcNodeContext){};
-	pNodeContext->vkCompTimeline = compositorNodeContext.compTimeline;
+	pNodeContext->compositorTimeline = compositorNodeContext.compTimeline;
 	pNodeContext->type = MXC_NODE_TYPE_THREAD;
 
 	// maybe have the thread allocate this and submit it once ready to get rid of < 1 check
@@ -203,6 +204,18 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	pNodeShared->rootPose.rotation = QuatFromEuler(pNodeShared->rootPose.euler);
 	pNodeShared->compositorRadius = 0.5;
 	pNodeShared->compositorCycleSkip = 16;
+
+	const MidVkFenceCreateInfo nodeFenceCreateInfo = {
+		.debugName = "NodeFence",
+		.locality = MID_LOCALITY_CONTEXT,
+	};
+	midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->nodeFence);
+	const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
+		.debugName = "NodeTimelineSemaphore",
+		.locality = MID_LOCALITY_CONTEXT,
+		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+	};
+	midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
 
 	const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -217,24 +230,20 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	};
 	MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
-	mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->vkFramebufferTextures);
-	const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
-		.debugName = "NodeTimelineSemaphore",
-		.locality = MID_LOCALITY_CONTEXT,
-		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-	midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
+
+	mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->nodeFramebuffer);
 
 	MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
 	// do not clear since it is set data is prealloced
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].vkFramebufferTextures[i].color.image;
-		pNodeCompositorData->framebuffers[i].normal = nodeContexts[handle].vkFramebufferTextures[i].normal.image;
-		pNodeCompositorData->framebuffers[i].gBuffer = nodeContexts[handle].vkFramebufferTextures[i].gbuffer.image;
-		pNodeCompositorData->framebuffers[i].colorView = nodeContexts[handle].vkFramebufferTextures[i].color.view;
-		pNodeCompositorData->framebuffers[i].normalView = nodeContexts[handle].vkFramebufferTextures[i].normal.view;
-		pNodeCompositorData->framebuffers[i].gBufferView = nodeContexts[handle].vkFramebufferTextures[i].gbuffer.view;
+		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].nodeFramebuffer[i].color.image;
+		pNodeCompositorData->framebuffers[i].normal = nodeContexts[handle].nodeFramebuffer[i].normal.image;
+		pNodeCompositorData->framebuffers[i].gBuffer = nodeContexts[handle].nodeFramebuffer[i].gbuffer.image;
+		pNodeCompositorData->framebuffers[i].colorView = nodeContexts[handle].nodeFramebuffer[i].color.view;
+		pNodeCompositorData->framebuffers[i].normalView = nodeContexts[handle].nodeFramebuffer[i].normal.view;
+		pNodeCompositorData->framebuffers[i].gBufferView = nodeContexts[handle].nodeFramebuffer[i].gbuffer.view;
 		pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -562,7 +571,7 @@ static void InterprocessServerAcceptNodeConnection()
 //		*pNodeCompositorData = (MxcNodeCompositorData){};
 		pNodeContext = &nodeContexts[handle];
 		*pNodeContext = (MxcNodeContext){};
-		pNodeContext->vkCompTimeline = compositorNodeContext.compTimeline;
+		pNodeContext->compositorTimeline = compositorNodeContext.compTimeline;
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED;
 		pNodeContext->processId = nodeProcessId;
 		pNodeContext->processHandle = nodeProcessHandle;
@@ -575,31 +584,38 @@ static void InterprocessServerAcceptNodeConnection()
 
 	// Create node data
 	{
-		mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->vkFramebufferTextures);
+		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
+			.debugName = "NodeFenceExport",
+			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
+			.externalHandle = pImportParam->compTimelineHandle,
+		};
+		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->nodeFence);
 		const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-		midvkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
+		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
+
+		mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->nodeFramebuffer);
 
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->vkFramebufferTextures[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate color handle fail");
-			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->vkFramebufferTextures[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
-			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->vkFramebufferTextures[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
+			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate color handle fail");
+			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
+			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
 		}
-		ERR_CHECK(!DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate vkNodeTimeline handle fail.");
+		ERR_CHECK(!DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pNodeContext->nodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate nodeTimeline handle fail.");
 		ERR_CHECK(!DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compositorNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate compeTimeline handle fail.");
 
 		const uint32_t graphicsQueueIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			pNodeCompositorData->framebuffers[i].color = pNodeContext->vkFramebufferTextures[i].color.image;
-			pNodeCompositorData->framebuffers[i].normal = pNodeContext->vkFramebufferTextures[i].normal.image;
-			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->vkFramebufferTextures[i].gbuffer.image;
-			pNodeCompositorData->framebuffers[i].colorView = pNodeContext->vkFramebufferTextures[i].color.view;
-			pNodeCompositorData->framebuffers[i].normalView = pNodeContext->vkFramebufferTextures[i].normal.view;
-			pNodeCompositorData->framebuffers[i].gBufferView = pNodeContext->vkFramebufferTextures[i].gbuffer.view;
+			pNodeCompositorData->framebuffers[i].color = pNodeContext->nodeFramebuffer[i].color.image;
+			pNodeCompositorData->framebuffers[i].normal = pNodeContext->nodeFramebuffer[i].normal.image;
+			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->nodeFramebuffer[i].gbuffer.image;
+			pNodeCompositorData->framebuffers[i].colorView = pNodeContext->nodeFramebuffer[i].color.view;
+			pNodeCompositorData->framebuffers[i].normalView = pNodeContext->nodeFramebuffer[i].normal.view;
+			pNodeCompositorData->framebuffers[i].gBufferView = pNodeContext->nodeFramebuffer[i].gbuffer.view;
 			pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -786,6 +802,21 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 	// Create node data
 	{
+		const MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
+			.debugName = "CompositorTimelineSemaphoreImport",
+			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+			.externalHandle = pImportParam->compTimelineHandle,
+		};
+		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->compositorTimeline);
+		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
+			.debugName = "NodeTimelineSemaphoreImport",
+			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+			.externalHandle = pImportParam->nodeTimelineHandle,
+		};
+		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->nodeTimeline);
+
 		const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -800,7 +831,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 		midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
-		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkFramebufferTextures;
+		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->nodeFramebuffer;
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			const VkmTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
@@ -874,20 +905,6 @@ void mxcConnectInterprocessNode(bool createTestNode)
 			};
 			midvkCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
 		}
-		const MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
-			.debugName = "CompositorTimelineSemaphoreImport",
-			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
-			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-			.externalHandle = pImportParam->compTimelineHandle,
-		};
-		midvkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompTimeline);
-		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
-			.debugName = "NodeTimelineSemaphoreImport",
-			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-			.externalHandle = pImportParam->nodeTimelineHandle,
-		};
-		midvkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
 	}
 
 	// Start node thread

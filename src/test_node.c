@@ -82,14 +82,14 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 		VkImageView gBufferView;
 	} framebufferImages[MIDVK_SWAP_COUNT];
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		framebufferImages[i].color = pNodeContext->vkFramebufferTextures[i].color.image;
-		framebufferImages[i].normal = pNodeContext->vkFramebufferTextures[i].normal.image;
-		framebufferImages[i].gBuffer = pNodeContext->vkFramebufferTextures[i].gbuffer.image;
-		framebufferImages[i].depth = pNodeContext->vkFramebufferTextures[i].depth.image;
-		framebufferImages[i].colorView = pNodeContext->vkFramebufferTextures[i].color.view;
-		framebufferImages[i].normalView = pNodeContext->vkFramebufferTextures[i].normal.view;
-		framebufferImages[i].depthView = pNodeContext->vkFramebufferTextures[i].depth.view;
-		framebufferImages[i].gBufferView = pNodeContext->vkFramebufferTextures[i].gbuffer.view;
+		framebufferImages[i].color = pNodeContext->nodeFramebuffer[i].color.image;
+		framebufferImages[i].normal = pNodeContext->nodeFramebuffer[i].normal.image;
+		framebufferImages[i].gBuffer = pNodeContext->nodeFramebuffer[i].gbuffer.image;
+		framebufferImages[i].depth = pNodeContext->nodeFramebuffer[i].depth.image;
+		framebufferImages[i].colorView = pNodeContext->nodeFramebuffer[i].color.view;
+		framebufferImages[i].normalView = pNodeContext->nodeFramebuffer[i].normal.view;
+		framebufferImages[i].depthView = pNodeContext->nodeFramebuffer[i].depth.view;
+		framebufferImages[i].gBufferView = pNodeContext->nodeFramebuffer[i].gbuffer.view;
 	}
 	VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 	memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -101,8 +101,8 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	const VkDevice device = pNode->device;
 
-	const VkSemaphore compTimeline = pNodeContext->vkCompTimeline;
-	const VkSemaphore nodeTimeline = pNodeContext->vkNodeTimeline;
+	const VkSemaphore compTimeline = pNodeContext->compositorTimeline;
+	const VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
 
 	uint64_t nodeTimelineValue;
 	uint64_t compBaseCycleValue;
@@ -229,7 +229,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 run_loop:
 
-	vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
+	midVkTimelineWait(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
 	memcpy(pGlobalSetMapped, (void*)&pNodeShared->nodeGlobalSetState, sizeof(VkmGlobalSetState));
@@ -239,7 +239,7 @@ run_loop:
 
 	const int framebufferIndex = nodeTimelineValue % MIDVK_SWAP_COUNT;
 
-	{  // this is really all that'd be user exposed....
+	{
 		const VkViewport viewport = {
 			.x = -pNodeShared->compositorULScreenUV.x * DEFAULT_WIDTH,
 			.y = -pNodeShared->compositorULScreenUV.y * DEFAULT_HEIGHT,
@@ -264,6 +264,7 @@ run_loop:
 		const VkClearColorValue clearColor = (VkClearColorValue){0, 0, 0.1, 0};
 		CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, framebufferImages[framebufferIndex].colorView, framebufferImages[framebufferIndex].normalView, framebufferImages[framebufferIndex].depthView);
 
+		// this is really all that'd be user exposed....
 		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
 		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
 		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
@@ -384,7 +385,7 @@ run_loop:
 
 	nodeTimelineValue++;
 	mxcQueueNodeCommandBuffer((MxcQueuedNodeCommandBuffer){.cmd = cmd, .nodeTimeline = nodeTimeline, .nodeTimelineSignalValue = nodeTimelineValue});
-	vkmTimelineWait(device, nodeTimelineValue, nodeTimeline);
+	midVkTimelineWait(device, nodeTimelineValue, nodeTimeline);
 
 	// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 	// shared: 569 - semaphore: 315416 ratio: 554.333919
@@ -471,7 +472,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 			for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
 				const VkImageViewCreateInfo imageViewCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-					.image = pTestNodeContext->vkFramebufferTextures[bufferIndex].gbuffer.image,
+					.image = pTestNodeContext->nodeFramebuffer[bufferIndex].gbuffer.image,
 					.viewType = VK_IMAGE_VIEW_TYPE_2D,
 					.format = MXC_NODE_GBUFFER_FORMAT,
 					.subresourceRange = {

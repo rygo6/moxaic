@@ -324,7 +324,7 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 
 run_loop:
 
-	vkmTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
+	midVkTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
 	vkmProcessCameraMouseInput(midWindowInput.deltaTime, mxcInput.mouseDelta, &globalCameraTransform);
 	vkmProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globalCameraTransform);
 	vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);

@@ -20,6 +20,7 @@
 #define MIDVK_EXTERNAL_FENCE_EXTENSION_NAME     VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
 #define MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE       VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #define MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE    VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
+#define MIDVK_EXTERNAL_FENCE_HANDLE_TYPE        VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #define MIDVK_EXTERNAL_HANDLE                   HANDLE
 #else
 #define MIDVK_PLATFORM_SURFACE_EXTENSION_NAME   0
@@ -656,7 +657,7 @@ INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queu
 	MIDVK_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
 // todo needs PFN version
-INLINE void vkmTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline)
+INLINE void midVkTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline)
 {
 	const VkSemaphoreWaitInfo semaphoreWaitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -841,7 +842,14 @@ typedef struct MidVkSemaphoreCreateInfo {
 	MidLocality           locality;
 	MIDVK_EXTERNAL_HANDLE externalHandle;
 } MidVkSemaphoreCreateInfo;
-void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
+void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
+
+typedef struct MidVkFenceCreateInfo {
+	const char*           debugName;
+	MidLocality           locality;
+	MIDVK_EXTERNAL_HANDLE externalHandle;
+} MidVkFenceCreateInfo;
+void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 

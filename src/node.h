@@ -147,9 +147,13 @@ typedef struct MxcNodeContext {
 	MxcNodeShared*            pNodeShared;
 
 	// vulkan shared data
-	MxcNodeVkFramebufferTexture vkFramebufferTextures[MIDVK_SWAP_COUNT];
-	VkSemaphore                 vkNodeTimeline;
-	VkSemaphore                 vkCompTimeline;
+	MxcNodeVkFramebufferTexture nodeFramebuffer[MIDVK_SWAP_COUNT];
+
+	// I'm not actually 100% sure if I want this
+	VkFence     nodeFence;
+
+	VkSemaphore nodeTimeline;
+	VkSemaphore compositorTimeline;
 
 	// debating if this should be an option
 	// opengl shared data
@@ -240,7 +244,7 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 	}
 }
 
-void mxcRequestAndRunCompNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*));
+void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*));
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();

@@ -1342,44 +1342,82 @@ void vkmCreateStdPipeLayout()
 	CreateStdPipeLayout();
 }
 
-void midvkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore)
+void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
 {
 #if WIN32
-	const VkExportSemaphoreWin32HandleInfoKHR exportSemaphorePlatformHandleInfo = {
+	const VkExportFenceWin32HandleInfoKHR exportPlatformInfo = {
+		.sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_WIN32_HANDLE_INFO_KHR,
+		// TODO are these the best security options? Read seems to affect it and solves issue of child corrupting semaphore on crash... but not 100%
+		.dwAccess = pCreateInfo->locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY ? GENERIC_READ : GENERIC_ALL,
+	};
+#endif
+	const VkExportFenceCreateInfo exportInfo = {
+		.sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO,
+		.pNext = &exportPlatformInfo,
+		.handleTypes = MIDVK_EXTERNAL_FENCE_HANDLE_TYPE,
+	};
+	const VkFenceCreateInfo info = {
+		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+		.pNext = &exportInfo,
+	};
+	MIDVK_REQUIRE(vkCreateFence(midVk.context.device, &info, MIDVK_ALLOC, pFence));
+	midVkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
+	switch (pCreateInfo->locality) {
+		default: break;
+		case MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
+		case MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY:
+#if WIN32
+			const VkImportFenceWin32HandleInfoKHR importWin32HandleInfo = {
+				.sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_WIN32_HANDLE_INFO_KHR,
+				.fence = *pFence,
+				.handleType = MIDVK_EXTERNAL_FENCE_HANDLE_TYPE,
+				.handle = pCreateInfo->externalHandle,
+			};
+			MIDVK_INSTANCE_FUNC(ImportFenceWin32HandleKHR);
+			MIDVK_REQUIRE(ImportFenceWin32HandleKHR(midVk.context.device, &importWin32HandleInfo));
+#endif
+			break;
+	}
+}
+
+void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore)
+{
+#if WIN32
+	const VkExportSemaphoreWin32HandleInfoKHR exportPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
 		// TODO are these the best security options? Read seems to affect it and solves issue of child corrupting semaphore on crash... but not 100%
 		.dwAccess = pCreateInfo->locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY ? GENERIC_READ : GENERIC_ALL,
 	};
 #endif
-	const VkExportSemaphoreCreateInfo exportSemaphoreCreateInfo = {
+	const VkExportSemaphoreCreateInfo exportInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
-		.pNext = &exportSemaphorePlatformHandleInfo,
+		.pNext = &exportPlatformInfo,
 		.handleTypes = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
 	};
-	const VkSemaphoreTypeCreateInfo semaphoreTypeCreateInfo = {
+	const VkSemaphoreTypeCreateInfo typeInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportSemaphoreCreateInfo : NULL,
+		.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
 		.semaphoreType = pCreateInfo->semaphoreType,
 	};
-	const VkSemaphoreCreateInfo semaphoreCreateInfo = {
+	const VkSemaphoreCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		.pNext = &semaphoreTypeCreateInfo,
+		.pNext = &typeInfo,
 	};
-	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &semaphoreCreateInfo, MIDVK_ALLOC, pSemaphore));
+	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &info, MIDVK_ALLOC, pSemaphore));
 	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
 	switch (pCreateInfo->locality) {
 		default: break;
 		case MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
 		case MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY:
 #if WIN32
-			const VkImportSemaphoreWin32HandleInfoKHR importSemaphoreWin32HandleInfo = {
+			const VkImportSemaphoreWin32HandleInfoKHR importWin32HandleInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
 				.semaphore = *pSemaphore,
 				.handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
 				.handle = pCreateInfo->externalHandle,
 			};
 			MIDVK_INSTANCE_FUNC(ImportSemaphoreWin32HandleKHR);
-			MIDVK_REQUIRE(ImportSemaphoreWin32HandleKHR(midVk.context.device, &importSemaphoreWin32HandleInfo));
+			MIDVK_REQUIRE(ImportSemaphoreWin32HandleKHR(midVk.context.device, &importWin32HandleInfo));
 #endif
 			break;
 	}

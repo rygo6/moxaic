@@ -113,7 +113,7 @@ int main(void)
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");
 		isCompositor = true;
-		mxcRequestAndRunCompNodeThread(midVk.surfaces[0], mxcCompNodeThread);
+		mxcRequestAndRunCompositorNodeThread(midVk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
 //#define TEST_NODE
@@ -137,7 +137,7 @@ int main(void)
 		while (isRunning) {
 
 			// we may not have to even wait... this could go faster
-			vkmTimelineWait(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compTimeline);
+			midVkTimelineWait(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compTimeline);
 
 			// interprocess polling could be a different thread?
 			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
@@ -165,7 +165,7 @@ int main(void)
 			//      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
 			// wait for recording to be done
-			vkmTimelineWait(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
+			midVkTimelineWait(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
 
 			compositorNodeContext.compBaseCycleValue += MXC_CYCLE_COUNT;
 			__atomic_thread_fence(__ATOMIC_RELEASE); // should use atomic add ?

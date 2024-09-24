@@ -69,7 +69,7 @@ void midXrCreateSession(int* pSessionHandle)
 		MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 		midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
-		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkFramebufferTextures;
+		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->nodeFramebuffer;
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			const VkmTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
@@ -143,20 +143,27 @@ void midXrCreateSession(int* pSessionHandle)
 			};
 			midvkCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
 		}
+
+		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
+			.debugName = "NodeFenceImport",
+			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+			.externalHandle = pImportParam->compTimelineHandle,
+		};
+		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->nodeFence);
 		const MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
 			.debugName = "CompositorTimelineSemaphoreImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.externalHandle = pImportParam->compTimelineHandle,
 		};
-		midvkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompTimeline);
+		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->compositorTimeline);
 		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.externalHandle = pImportParam->nodeTimelineHandle,
 		};
-		midvkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
+		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->nodeTimeline);
 	}
 }
 
