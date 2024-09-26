@@ -54,6 +54,7 @@ typedef struct MxcNodeShared {
 	// read every cycle, occasional write
 	float compositorRadius;
 	int   compositorCycleSkip;
+	int   compositorBaseCycleValue;
 
 	MxcRingBuffer targetQueue;
 

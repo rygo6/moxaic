@@ -103,12 +103,14 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	const VkSemaphore compTimeline = pNodeContext->compositorTimeline;
 	const VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
+	uint64_t nodeTimelineValue = 0;
 
-	uint64_t nodeTimelineValue;
-	uint64_t compBaseCycleValue;
-	MIDVK_REQUIRE(vkGetSemaphoreCounterValue(device, compTimeline, &nodeTimelineValue));
-	REQUIRE(nodeTimelineValue != 0xffffffffffffffff, "NodeTimeline imported as max value!");
-	compBaseCycleValue = nodeTimelineValue - (nodeTimelineValue % MXC_CYCLE_COUNT);
+	{
+		uint64_t compositorTimelineValue;
+		MIDVK_REQUIRE(vkGetSemaphoreCounterValue(device, compTimeline, &compositorTimelineValue));
+		REQUIRE(compositorTimelineValue != 0xffffffffffffffff, "compositorTimelineValue imported as max value!");
+		pNodeShared->compositorBaseCycleValue = compositorTimelineValue - (compositorTimelineValue % MXC_CYCLE_COUNT);
+	}
 
 	assert(__atomic_always_lock_free(sizeof(pNodeShared->nodeCurrentTimelineSignal), &pNodeShared->nodeCurrentTimelineSignal));
 
@@ -229,7 +231,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 run_loop:
 
-	midVkTimelineWait(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
+	midVkTimelineWait(device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
 	memcpy(pGlobalSetMapped, (void*)&pNodeShared->nodeGlobalSetState, sizeof(VkmGlobalSetState));
@@ -392,7 +394,7 @@ run_loop:
 	pNodeShared->nodeCurrentTimelineSignal = nodeTimelineValue;
 	__atomic_thread_fence(__ATOMIC_RELEASE);
 
-	compBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
+	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 
 	//    _Thread_local static int count;
 	//    if (count++ > 10)

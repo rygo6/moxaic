@@ -1170,6 +1170,7 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 	}
 
 	{
+		// do I want to switch to this? probably
 #define PFN_FUNC(_func)                                                                         \
 	midVk.func._func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
 	REQUIRE(midVk.func._func != NULL, "Couldn't load " #_func)

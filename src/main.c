@@ -18,7 +18,7 @@
 }
 
 #define MID_OPENXR_IMPLEMENTATION
-#include "mid_oxr.h"
+#include "mid_openxr_runtime.h"
 
 #define MID_MATH_IMPLEMENTATION
 #include "mid_math.h"
@@ -116,7 +116,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(midVk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);

@@ -33,7 +33,7 @@ typedef struct IUnknown IUnknown;
 //// Mid OpenXR
 void midXrInitialize();
 void midXrCreateSession(int* pSessionHandle);
-void midXrWaitFrame(int handle);
+void midXrWaitFrame(int sessionHandle);
 void midXrBeginFrame();
 void midXrEndFrame();
 
@@ -173,6 +173,7 @@ typedef struct Space {
 } Space;
 CONTAINER(Space, 4)
 
+#define MIDXR_MAX_SESSIONS 4
 typedef struct Session {
 	XrInstance                      instance;
 	XrTime                          lastPredictedDisplayTime;
@@ -181,8 +182,9 @@ typedef struct Session {
 	XrGraphicsBindingOpenGLWin32KHR glBinding;
 	XrViewConfigurationType         primaryViewConfigurationType;
 } Session;
-CONTAINER(Session, 2)
+CONTAINER(Session, MIDXR_MAX_SESSIONS)
 
+#define MIDXR_MAX_INSTANCES 2
 typedef struct Instance {
 	char                        applicationName[XR_MAX_APPLICATION_NAME_SIZE];
 	XrFormFactor                systemFormFactor;
@@ -191,7 +193,7 @@ typedef struct Instance {
 	InteractionProfileContainer interactionProfiles;
 	PathContainer               paths;
 } Instance;
-CONTAINER(Instance, 2)
+CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 
 //
 //// MidOpenXR Implementation
@@ -783,6 +785,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	const XrSwapchainCreateInfo* createInfo,
 	XrSwapchain*                 swapchain)
 {
+
+
 	return XR_SUCCESS;
 }
 
@@ -818,6 +822,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 
 	return XR_SUCCESS;
 }
+
+typedef enum XrStructureTypeExt {
+	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
+} XrStructureTypeExt;
+
+typedef struct XrFrameBeginSwapPoolInfo {
+	XrStructureType             type;
+	const void* XR_MAY_ALIAS    next;
+} XrFrameBeginSwapPoolInfo;
 
 XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 	XrSession               session,
