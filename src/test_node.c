@@ -445,7 +445,7 @@ static void CreateNodeProcessPipeLayout(const VkDescriptorSetLayout nodeProcessS
 static void CreateNodeProcessPipe(const char* shaderPath, const VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule shader;
-	vkmCreateShaderModule(shaderPath, &shader);
+	midVkCreateShaderModule(shaderPath, &shader);
 	const VkComputePipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 		.stage = {
@@ -467,7 +467,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		CreateNodeProcessPipe("./shaders/node_process_blit_slope_average_up.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
 		CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
 
-		vkmCreateFramebuffer(midVk.context.nodeRenderPass, &pTestNode->framebuffer);
+		midVkCreateFramebuffer(midVk.context.nodeRenderPass, &pTestNode->framebuffer);
 		midVkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
 
 		for (uint32_t bufferIndex = 0; bufferIndex < MIDVK_SWAP_COUNT; ++bufferIndex) {
@@ -502,13 +502,13 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		};
 		MIDVK_REQUIRE(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
 
-		vkmCreateGlobalSet(&pTestNode->globalSet);
+		midVkCreateGlobalSet(&pTestNode->globalSet);
 
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
-		vkmCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
+		midVkCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
-		vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
+		midVkCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
 
 		const VkWriteDescriptorSet writeSets[] = {
 			VKM_SET_WRITE_STD_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.view),

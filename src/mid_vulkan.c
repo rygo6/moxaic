@@ -42,7 +42,7 @@ static VkBool32 VkmDebugUtilsCallback(
 	}
 }
 
-VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer()
+VkCommandBuffer midVkBeginImmediateTransferCommandBuffer()
 {
 	const VkCommandBufferAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -58,7 +58,7 @@ VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer()
 	MIDVK_REQUIRE(vkBeginCommandBuffer(cmd, &beginInfo));
 	return cmd;
 }
-void MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
+void midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
 {
 	MIDVK_REQUIRE(vkEndCommandBuffer(cmd));
 	const VkSubmitInfo info = {
@@ -77,7 +77,7 @@ void MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
 
 #define COLOR_WRITE_MASK_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
-void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule)
+void midVkCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule)
 {
 	size_t size;
 	char*  pCode;
@@ -211,9 +211,9 @@ static void CreateStdPipeLayout()
 void midVkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule vertShader;
-	vkmCreateShaderModule(vertShaderPath, &vertShader);
+	midVkCreateShaderModule(vertShaderPath, &vertShader);
 	VkShaderModule fragShader;
-	vkmCreateShaderModule(fragShaderPath, &fragShader);
+	midVkCreateShaderModule(fragShaderPath, &fragShader);
 	const VkGraphicsPipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -254,16 +254,16 @@ void midVkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath
 	vkDestroyShaderModule(midVk.context.device, vertShader, MIDVK_ALLOC);
 }
 
-void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
+void midVkCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule vertShader;
-	vkmCreateShaderModule(vertShaderPath, &vertShader);
+	midVkCreateShaderModule(vertShaderPath, &vertShader);
 	VkShaderModule tescShader;
-	vkmCreateShaderModule(tescShaderPath, &tescShader);
+	midVkCreateShaderModule(tescShaderPath, &tescShader);
 	VkShaderModule teseShader;
-	vkmCreateShaderModule(teseShaderPath, &teseShader);
+	midVkCreateShaderModule(teseShaderPath, &teseShader);
 	VkShaderModule fragShader;
-	vkmCreateShaderModule(fragShaderPath, &fragShader);
+	midVkCreateShaderModule(fragShaderPath, &fragShader);
 	const VkGraphicsPipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -323,14 +323,14 @@ void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, c
 }
 
 
-void vkmCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
+void midVkCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule taskShader;
-	vkmCreateShaderModule(taskShaderPath, &taskShader);
+	midVkCreateShaderModule(taskShaderPath, &taskShader);
 	VkShaderModule meshShader;
-	vkmCreateShaderModule(meshShaderPath, &meshShader);
+	midVkCreateShaderModule(meshShaderPath, &meshShader);
 	VkShaderModule fragShader;
-	vkmCreateShaderModule(fragShaderPath, &fragShader);
+	midVkCreateShaderModule(fragShaderPath, &fragShader);
 	const VkGraphicsPipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -481,7 +481,7 @@ static __thread size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = 
 __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
 __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {};
 
-void vkmBeginAllocationRequests()
+void midVkBeginAllocationRequests()
 {
 	printf("Begin Memory Allocation Requests.\n");
 	// what do I do here? should I enable a mechanic to do this twice? or on pass in memory?
@@ -489,7 +489,7 @@ void vkmBeginAllocationRequests()
 		requestedMemoryAllocSize[memTypeIndex] = 0;
 	}
 }
-void vkmEndAllocationRequests()
+void midVkEndAllocationRequests()
 {
 	printf("End Memory Allocation Requests.\n");
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
@@ -516,13 +516,7 @@ void vkmEndAllocationRequests()
 	}
 }
 
-void AllocateMemory(
-	const VkMemoryRequirements*          pMemReqs,
-	const VkMemoryPropertyFlags          propFlags,
-	const MidLocality                    locality,
-	const HANDLE                         externalHandle,
-	const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo,
-	VkDeviceMemory*                      pDeviceMemory)
+void AllocateMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const HANDLE externalHandle, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory)
 {
 	VkPhysicalDeviceMemoryProperties memProps;
 	vkGetPhysicalDeviceMemoryProperties(midVk.context.physicalDevice, &memProps);
@@ -613,13 +607,13 @@ void CreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDev
 	CreateAllocBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
 	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, *pBuffer, *pDeviceMem, 0));
 }
-void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped)
+void midVkCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped)
 {
 	CreateAllocBindBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
 	MIDVK_REQUIRE(vkMapMemory(midVk.context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
 }
 
-void midVkCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory)
+void midVkCreateBufferSharedMemory(const MidVkRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory)
 {
 	const VkBufferCreateInfo bufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -659,18 +653,18 @@ static void CreateStagingBuffer(const void* srcData, const VkDeviceSize bufferSi
 	memcpy(dstData, srcData, bufferSize);
 	vkUnmapMemory(midVk.context.device, *pStagingMemory);
 }
-void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer)
+void midVkUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer)
 {
 	VkBuffer       stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 	CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
-	const VkCommandBuffer commandBuffer = MidVKBeginImmediateTransferCommandBuffer();
+	const VkCommandBuffer commandBuffer = midVkBeginImmediateTransferCommandBuffer();
 	vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.dstOffset = dstOffset, .size = bufferSize});
-	MidVKEndImmediateTransferCommandBuffer(commandBuffer);
+	midVkEndImmediateTransferCommandBuffer(commandBuffer);
 	vkFreeMemory(midVk.context.device, stagingBufferMemory, MIDVK_ALLOC);
 	vkDestroyBuffer(midVk.context.device, stagingBuffer, MIDVK_ALLOC);
 }
-void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
+void midVkCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
 {
 	pMesh->vertexCount = pCreateInfo->vertexCount;
 	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->vertexCount;
@@ -678,16 +672,16 @@ void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pM
 	pMesh->indexCount = pCreateInfo->indexCount;
 	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
 	pMesh->indexOffset = vertexBufferSize;
-	const VkmRequestAllocationInfo AllocRequest = {
+	const MidVkRequestAllocationInfo AllocRequest = {
 		.memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.size = pMesh->indexOffset + indexBufferSize,
 		.usage = VKM_BUFFER_USAGE_MESH,
 		.locality = MID_LOCALITY_CONTEXT,
-		.dedicated = VKM_DEDICATED_MEMORY_FALSE,
+		.dedicated = MIDVK_DEDICATED_MEMORY_FALSE,
 	};
 	midVkCreateBufferSharedMemory(&AllocRequest, &pMesh->buffer, &pMesh->sharedMemory);
 }
-void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
+void midVkBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
 {
 	// Ensure size is same
 	const VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->buffer};
@@ -696,8 +690,8 @@ void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh
 	REQUIRE(pMesh->sharedMemory.size == memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
 	// bind populate
 	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
-	vkmUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
-	vkmUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(MidVertex) * pMesh->vertexCount, pMesh->buffer);
+	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
+	midVkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(MidVertex) * pMesh->vertexCount, pMesh->buffer);
 }
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
 {
@@ -708,8 +702,8 @@ void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
 	pMesh->indexOffset = 0;
 	pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
 	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VKM_BUFFER_USAGE_MESH, MID_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
-	vkmUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
-	vkmUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
+	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
+	midVkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
 }
 
 //----------------------------------------------------------------------------------
@@ -783,7 +777,7 @@ void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* p
 	CreateAllocateBindImageView(&pCreateInfo->imageCreateInfo, pCreateInfo->aspectMask, pCreateInfo->locality, pCreateInfo->externalHandle, &pTexture->memory, &pTexture->image, &pTexture->view);
 	midVkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
-void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
+void midVkCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
 {
 	int      texChannels, width, height;
 	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
@@ -804,7 +798,7 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
 	VkDeviceMemory stagingBufferMemory;
 	CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
 	stbi_image_free(pImagePixels);
-	const VkCommandBuffer commandBuffer = MidVKBeginImmediateTransferCommandBuffer();
+	const VkCommandBuffer commandBuffer = midVkBeginImmediateTransferCommandBuffer();
 	vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_DST, pTexture->image));
 	const VkBufferImageCopy region = {
 		.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
@@ -812,13 +806,13 @@ void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
 	};
 	vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_TRANSFER_READ, pTexture->image));
-	MidVKEndImmediateTransferCommandBuffer(commandBuffer);
+	midVkEndImmediateTransferCommandBuffer(commandBuffer);
 	vkFreeMemory(midVk.context.device, stagingBufferMemory, MIDVK_ALLOC);
 	vkDestroyBuffer(midVk.context.device, stagingBuffer, MIDVK_ALLOC);
 }
 
 // add createinfo?
-void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer)
+void midVkCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer)
 {
 	const VkFramebufferCreateInfo framebufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -1179,7 +1173,7 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 	}
 }
 
-void vkmCreateStdRenderPass()
+void midVkCreateStdRenderPass()
 {
 	const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
@@ -1277,7 +1271,7 @@ void vkmCreateStdRenderPass()
 	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)midVk.context.renderPass, "ContextRenderPass");
 }
 
-void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
+void midVkCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
 {
 	const VkSamplerCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1335,7 +1329,7 @@ void midVkCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType pres
 	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->renderCompleteSemaphore, "SwapRenderCompleteSemaphore");
 }
 
-void vkmCreateStdPipeLayout()
+void midVkCreateStdPipeLayout()
 {
 	CreateGlobalSetLayout();
 	CreateStdMaterialSetLayout();
@@ -1359,7 +1353,7 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
 	};
 	const VkFenceCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-		.pNext = &exportInfo,
+		.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
 	};
 	MIDVK_REQUIRE(vkCreateFence(midVk.context.device, &info, MIDVK_ALLOC, pFence));
 	midVkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
@@ -1424,10 +1418,10 @@ void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 	}
 }
 
-void vkmCreateGlobalSet(VkmGlobalSet* pSet)
+void midVkCreateGlobalSet(VkmGlobalSet* pSet)
 {
 	midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.globalSetLayout, &pSet->set);
-	vkmCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
+	midVkCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
 	vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }
 
@@ -1443,7 +1437,7 @@ void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const cha
 	MIDVK_REQUIRE(SetDebugUtilsObjectNameEXT(midVk.context.device, &debugInfo));
 }
 
-MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory)
+MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(const VkDeviceMemory memory)
 {
 	MIDVK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
 	const VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
@@ -1456,7 +1450,7 @@ MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory)
 	return handle;
 }
 
-MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore)
+MIDVK_EXTERNAL_HANDLE midVkGetSemaphoreExternalHandle(const VkSemaphore semaphore)
 {
 	MIDVK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
 	const VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {

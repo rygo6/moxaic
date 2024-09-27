@@ -97,10 +97,10 @@ int main(void)
 			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
 		};
-		VkmCreateSampler(&samplerCreateInfo, &midVk.context.linearSampler);
+		midVkCreateSampler(&samplerCreateInfo, &midVk.context.linearSampler);
 		// standard/common rendering
-		vkmCreateStdRenderPass();
-		vkmCreateStdPipeLayout();
+		midVkCreateStdRenderPass();
+		midVkCreateStdPipeLayout();
 
 		// this need to ge in node create
 		mxcCreateNodeRenderPass();
@@ -116,7 +116,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(midVk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-#define TEST_NODE
+//#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);

@@ -97,11 +97,11 @@ static int ReleaseNode(NodeHandle handle)
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
 			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory));
-				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory));
-				CLOSE_HANDLE(GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory));
+				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory));
+				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory));
+				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory));
 			}
-			CLOSE_HANDLE(GetSemaphoreExternalHandle(pNodeContext->nodeTimeline));
+			CLOSE_HANDLE(midVkGetSemaphoreExternalHandle(pNodeContext->nodeTimeline));
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
 			// this should probably run on the node when closing, but it also seems to clean itself up fine ?
@@ -447,7 +447,7 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTe
 		// Depth is not shared over IPC.
 		if (locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
 			// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
-			VkCommandBuffer             cmd = MidVKBeginImmediateTransferCommandBuffer();
+			VkCommandBuffer             cmd = midVkBeginImmediateTransferCommandBuffer();
 			const VkImageMemoryBarrier2 interProcessBarriers[] = {
 				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].color.image),
 				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].normal.image),
@@ -455,7 +455,7 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTe
 			};
 			MIDVK_DEVICE_FUNC(CmdPipelineBarrier2);
 			CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
-			MidVKEndImmediateTransferCommandBuffer(cmd);
+			midVkEndImmediateTransferCommandBuffer(cmd);
 			continue;
 		}
 		const VkmTextureCreateInfo depthCreateInfo = {
@@ -587,25 +587,25 @@ static void InterprocessServerAcceptNodeConnection()
 		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
 			.debugName = "NodeFenceExport",
 			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
-			.externalHandle = pImportParam->compTimelineHandle,
 		};
 		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->nodeFence);
 		const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
-			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
+			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+		};
 		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
 
 		mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->nodeFramebuffer);
 
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate color handle fail");
-			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
-			ERR_CHECK(!DuplicateHandle(currentHandle, GetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
+			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate color handle fail");
+			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
+			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
 		}
-		ERR_CHECK(!DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(pNodeContext->nodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate nodeTimeline handle fail.");
-		ERR_CHECK(!DuplicateHandle(currentHandle, GetSemaphoreExternalHandle(compositorNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate compeTimeline handle fail.");
+		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetSemaphoreExternalHandle(pNodeContext->nodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate nodeTimeline handle fail.");
+		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetSemaphoreExternalHandle(compositorNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate compeTimeline handle fail.");
 
 		const uint32_t graphicsQueueIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);

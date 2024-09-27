@@ -174,7 +174,6 @@ void midXrBeginSession(int sessionHandle)
 	REQUIRE(result == 0, "Node thread creation failed!");
 }
 
-
 void midXrWaitFrame(int sessionHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];

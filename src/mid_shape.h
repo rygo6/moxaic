@@ -16,7 +16,7 @@ void RequestSphereMeshAllocation(const int slicesCount, const int stackCount, Vk
       .indexCount = slicesCount * stackCount * 2 * 3,
       .vertexCount = (slicesCount + 1) * (stackCount + 1),
   };
-  vkmCreateMeshSharedMemory(&info, pMesh);
+  midVkCreateMeshSharedMemory(&info, pMesh);
 }
 void CreateSphereMesh(const float radius, const int slicesCount, const int stackCount, VkmMesh* pMesh) {
   VkmMeshCreateInfo info = {
@@ -97,12 +97,12 @@ void CreateQuadMesh(const float size, VkmMesh* pMesh) {
     };
 void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh) {
   QUAD_PATCH_MESH_INFO
-  vkmCreateMeshSharedMemory(&info, pMesh);
+  midVkCreateMeshSharedMemory(&info, pMesh);
 }
 void BindUpdateQuadPatchMesh(const float size, VkmMesh* pMesh) {
   QUAD_PATCH_MESH_INFO
   QUAD_PATCH_MESH_VERTICES_INDICES
-  vkmBindUpdateMeshSharedMemory(&info, pMesh);
+  midVkBindUpdateMeshSharedMemory(&info, pMesh);
 }
 void midCreateQuadPatchMesh(const float size, VkmMesh* pMesh) {
   QUAD_PATCH_MESH_INFO

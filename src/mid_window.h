@@ -100,6 +100,7 @@ extern double timeQueryMs;
 
 //
 //// MidWindow Implementation
+//#define MID_WINDOW_IMPLEMENTATION
 #ifdef MID_WINDOW_IMPLEMENTATION
 
 #define WIN32_LEAN_AND_MEAN
@@ -207,8 +208,9 @@ void midUpdateWindowInput() {
   static int titleUpdateRate = 64;
   if (!--titleUpdateRate) {
     titleUpdateRate = 64;
-    static char titleBuffer[32];
-    sprintf(titleBuffer, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0f / midWindowInput.deltaTime, timeQueryMs);
+#define TITLE_BUFFER_SIZE 64
+    static char titleBuffer[TITLE_BUFFER_SIZE];
+    snprintf(titleBuffer, TITLE_BUFFER_SIZE, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0f / midWindowInput.deltaTime, timeQueryMs);
     SetWindowText(midWindow.hWnd, titleBuffer);
   }
 }

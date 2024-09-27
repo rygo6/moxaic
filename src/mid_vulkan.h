@@ -105,11 +105,11 @@ extern void Panic(const char* file, int line, const char* message);
 	})
 
 #define MIDVK_INSTANCE_FUNC(_func)                                                                     \
-	const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \
+	const PFN_vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \
 	REQUIRE(_func != NULL, "Couldn't load " #_func)
 
 #define MIDVK_DEVICE_FUNC(_func)                                                                           \
-	const PFN_##vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
+	const PFN_vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
 	REQUIRE(_func != NULL, "Couldn't load " #_func)
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -299,19 +299,19 @@ typedef struct MidVkFunc {
 
 #define MIDVK_CONTEXT_CAPACITY 2
 #define MIDVK_SURFACE_CAPACITY 2
-typedef struct MidVk {
+typedef struct CACHE_ALIGN MidVk {
 	VkInstance   instance;
 	MidVkContext context;
 	VkSurfaceKHR surfaces[MIDVK_SURFACE_CAPACITY];
 	MidVkFunc    func;
 } MidVk;
-extern __attribute((aligned(64))) MidVk midVk;
+extern MidVk midVk;
 
 // do this ?? I think so yes
 typedef struct MidVkThreadContext {
 	VkDescriptorPool descriptorPool;
 } MidVkThreadContext;
-extern __thread __attribute((aligned(64))) MidVkThreadContext threadContext;
+extern __thread MidVkThreadContext threadContext;
 
 extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
@@ -580,14 +580,7 @@ INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer)
 	vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
 // todo needs PFN version
-INLINE void midVkSubmitPresentCommandBuffer(
-	const VkCommandBuffer cmd,
-	const VkSwapchainKHR  chain,
-	const VkSemaphore     acquireSemaphore,
-	const VkSemaphore     renderCompleteSemaphore,
-	const uint32_t        swapIndex,
-	const VkSemaphore     timeline,
-	const uint64_t        timelineSignalValue)
+INLINE void midVkSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkSwapchainKHR chain, const VkSemaphore acquireSemaphore, const VkSemaphore renderCompleteSemaphore, const uint32_t swapIndex, const VkSemaphore timeline, const uint64_t timelineSignalValue)
 {
 	const VkSubmitInfo2 submitInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
@@ -733,30 +726,28 @@ INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pC
 // Methods
 //----------------------------------------------------------------------------------
 
-typedef enum VkmDedicatedMemory {
-	VKM_DEDICATED_MEMORY_FALSE,
-	VKM_DEDICATED_MEMORY_IF_PREFERRED,
-	VKM_DEDICATED_MEMORY_FORCE_TRUE,
-	VKM_DEDICATED_MEMORY_COUNT,
-} VkmDedicatedMemory;
-typedef struct VkmRequestAllocationInfo {
+typedef enum MidVkDedicatedMemory {
+	MIDVK_DEDICATED_MEMORY_FALSE,
+	MIDVK_DEDICATED_MEMORY_IF_PREFERRED,
+	MIDVK_DEDICATED_MEMORY_FORCE_TRUE,
+	MIDVK_DEDICATED_MEMORY_COUNT,
+} MidVkDedicatedMemory;
+typedef struct MidVkRequestAllocationInfo {
 	VkMemoryPropertyFlags memoryPropertyFlags;
 	VkDeviceSize          size;
 	VkBufferUsageFlags    usage;
 	MidLocality           locality;
-	VkmDedicatedMemory    dedicated;
-} VkmRequestAllocationInfo;
+	MidVkDedicatedMemory  dedicated;
+} MidVkRequestAllocationInfo;
 void midVkAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-//void vkmAllocMemory(const VkMemoryRequirements* pMemReqs, const VkMemoryPropertyFlags propFlags, const MidLocality locality, const VkMemoryDedicatedAllocateInfoKHR* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory);
-//void vkmCreateAllocBindBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer);
-void vkmCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
-void vkmUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
-void midVkCreateBufferSharedMemory(const VkmRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory);
-void vkmCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
-void vkmBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+void midVkCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
+void midVkUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
+void midVkCreateBufferSharedMemory(const MidVkRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory);
+void midVkCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
+void midVkBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 
-void vkmBeginAllocationRequests();
-void vkmEndAllocationRequests();
+void midVkBeginAllocationRequests();
+void midVkEndAllocationRequests();
 
 typedef struct VkmInitializeDesc {
 	// should use this... ? but need to decide on this vs vulkan configurator
@@ -803,25 +794,25 @@ typedef struct MidVkContextCreateInfo {
 } MidVkContextCreateInfo;
 void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo);
 
-void vkmCreateGlobalSet(VkmGlobalSet* pSet);
+void midVkCreateGlobalSet(VkmGlobalSet* pSet);
 
-void vkmCreateStdRenderPass();
-void vkmCreateStdPipeLayout();
+void midVkCreateStdRenderPass();
+void midVkCreateStdPipeLayout();
 void midvkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers);
-void vkmCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
+void midVkCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
 
-void vkmCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
+void midVkCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
 
 void midVkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
-void vkmCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
-void vkmCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
+void midVkCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
+void midVkCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
 
 typedef struct VkmSamplerCreateInfo {
 	VkFilter               filter;
 	VkSamplerAddressMode   addressMode;
 	VkSamplerReductionMode reductionMode;
 } VkmSamplerCreateInfo;
-void VkmCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
+void midVkCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
 void midVkCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
 
@@ -833,7 +824,7 @@ typedef struct VkmTextureCreateInfo {
 	MIDVK_EXTERNAL_HANDLE externalHandle;
 } VkmTextureCreateInfo;
 void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture);
-void vkmCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
+void midVkCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
 
 
 typedef struct MidVkSemaphoreCreateInfo {
@@ -853,13 +844,13 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 
-MIDVK_EXTERNAL_HANDLE GetMemoryExternalHandle(const VkDeviceMemory memory);
-MIDVK_EXTERNAL_HANDLE GetSemaphoreExternalHandle(const VkSemaphore semaphore);
+MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(const VkDeviceMemory memory);
+MIDVK_EXTERNAL_HANDLE midVkGetSemaphoreExternalHandle(const VkSemaphore semaphore);
 
 void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
-VkCommandBuffer MidVKBeginImmediateTransferCommandBuffer();
-void            MidVKEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
+VkCommandBuffer midVkBeginImmediateTransferCommandBuffer();
+void            midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
 #ifdef WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);

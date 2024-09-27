@@ -149,22 +149,22 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 				CreateQuadMesh(0.5f, &pNode->quadMesh);
 				break;
 			case MXC_COMP_MODE_TESS:
-				vkmCreateTessPipe("./shaders/tess_comp.vert.spv",
-								  "./shaders/tess_comp.tesc.spv",
-								  "./shaders/tess_comp.tese.spv",
-								  "./shaders/tess_comp.frag.spv",
-								  midVk.context.renderPass,
-								  pNode->compNodePipeLayout,
-								  &pNode->compNodePipe);
+				midVkCreateTessPipe("./shaders/tess_comp.vert.spv",
+									"./shaders/tess_comp.tesc.spv",
+									"./shaders/tess_comp.tese.spv",
+									"./shaders/tess_comp.frag.spv",
+									midVk.context.renderPass,
+									pNode->compNodePipeLayout,
+									&pNode->compNodePipe);
 				CreateQuadPatchMeshSharedMemory(&pNode->quadMesh);
 				break;
 			case MXC_COMP_MODE_TASK_MESH:
-				vkmCreateTaskMeshPipe("./shaders/mesh_comp.task.spv",
-									  "./shaders/mesh_comp.mesh.spv",
-									  "./shaders/mesh_comp.frag.spv",
-									  midVk.context.renderPass,
-									  pNode->compNodePipeLayout,
-									  &pNode->compNodePipe);
+				midVkCreateTaskMeshPipe("./shaders/mesh_comp.task.spv",
+										"./shaders/mesh_comp.mesh.spv",
+										"./shaders/mesh_comp.frag.spv",
+										midVk.context.renderPass,
+										pNode->compNodePipeLayout,
+										&pNode->compNodePipe);
 				CreateQuadMesh(0.5f, &pNode->quadMesh);
 				break;
 			default: PANIC("CompMode not supported!");
@@ -193,7 +193,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 
 		// global set
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.globalSetLayout, &pNode->globalSet.set);
-		const VkmRequestAllocationInfo globalSetAllocRequest = {
+		const MidVkRequestAllocationInfo globalSetAllocRequest = {
 			.memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			.size = sizeof(VkmGlobalSetState),
 			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -211,7 +211,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 			};
 			MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, &nodeCompositorData[i].set));
 			midVkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].set, CONCAT(NodeSet, i));
-			const VkmRequestAllocationInfo nodeSetAllocRequest = {
+			const MidVkRequestAllocationInfo nodeSetAllocRequest = {
 				.memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 				.size = sizeof(MxcNodeCompositorSetState),
 				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -221,7 +221,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 		}
 
 		midvkCreateFramebufferTexture(MIDVK_SWAP_COUNT, MID_LOCALITY_CONTEXT, pNode->framebuffers);
-		vkmCreateFramebuffer(midVk.context.renderPass, &pNode->framebuffer);
+		midVkCreateFramebuffer(midVk.context.renderPass, &pNode->framebuffer);
 		midVkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer");  // should be moved into method? probably
 	}
 
@@ -507,12 +507,12 @@ void* mxcCompNodeThread(const MxcCompositorNodeContext* pNodeContext)
 {
 	MxcCompNode compNode;
 
-	vkmBeginAllocationRequests();
+	midVkBeginAllocationRequests();
 	const MxcCompNodeCreateInfo compNodeInfo = {
 		.compMode = MXC_COMP_MODE_TESS,
 	};
 	mxcCreateCompNode(&compNodeInfo, &compNode);
-	vkmEndAllocationRequests();
+	midVkEndAllocationRequests();
 
 	mxcBindUpdateCompNode(&compNodeInfo, &compNode);
 	mxcCompostorNodeRun(pNodeContext, &compNode);
