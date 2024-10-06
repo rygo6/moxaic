@@ -33,7 +33,7 @@ typedef struct IUnknown IUnknown;
 //// Mid OpenXR
 void midXrInitialize();
 void midXrCreateSession(int* pSessionHandle);
-void midXrAcquireGlSwapchain(int sessionHandle, int imageCount, GLuint* images);
+void midXrClaimGlSwapchain(int sessionHandle, int imageCount, GLuint* images);
 void midXrWaitFrame(int sessionHandle);
 void midXrBeginFrame();
 void midXrEndFrame();
@@ -491,6 +491,25 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
 	uint32_t*             spaceCountOutput,
 	XrReferenceSpaceType* spaces)
 {
+	Session* pSession = (Session*)session;
+	const XrReferenceSpaceType supportedSpaces[] = {
+//		XR_REFERENCE_SPACE_TYPE_VIEW,
+//		XR_REFERENCE_SPACE_TYPE_LOCAL,
+		XR_REFERENCE_SPACE_TYPE_STAGE,
+	};
+
+	*spaceCountOutput = COUNT(supportedSpaces);
+
+	if (spaces == NULL)
+		return XR_SUCCESS;
+
+	if (spaceCapacityInput < COUNT(supportedSpaces))
+		return XR_ERROR_SIZE_INSUFFICIENT;
+
+	for (int i = 0; i < spaceCapacityInput && i < COUNT(supportedSpaces); ++i) {
+		spaces[i] = supportedSpaces[i];
+	}
+
 	return XR_SUCCESS;
 }
 
@@ -517,6 +536,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
 	XrSession                      session,
 	const XrActionSpaceCreateInfo* createInfo,
 	XrSpace*                       space)
+{
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(
+	XrSpace          space,
+	XrSpace          baseSpace,
+	XrTime           time,
+	XrSpaceLocation* location)
 {
 	return XR_SUCCESS;
 }
@@ -613,7 +641,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	pSwapchain->arraySize = createInfo->arraySize;
 	pSwapchain->mipCount = createInfo->mipCount;
 
-	midXrAcquireGlSwapchain(sessionHandle, MIDXR_SWAP_COUNT, pSwapchain->color);
+	midXrClaimGlSwapchain(sessionHandle, MIDXR_SWAP_COUNT, pSwapchain->color);
 
 	return XR_SUCCESS;
 }
@@ -645,6 +673,29 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 			return XR_ERROR_HANDLE_INVALID;
 	}
 
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
+	XrSwapchain                        swapchain,
+	const XrSwapchainImageAcquireInfo* acquireInfo,
+	uint32_t*                          index)
+{
+	*index = 0;
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
+	XrSwapchain                     swapchain,
+	const XrSwapchainImageWaitInfo* waitInfo)
+{
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
+	XrSwapchain                        swapchain,
+	const XrSwapchainImageReleaseInfo* releaseInfo)
+{
 	return XR_SUCCESS;
 }
 
@@ -680,6 +731,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 	XrSession               session,
 	const XrFrameBeginInfo* frameBeginInfo)
+{
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
+	XrSession             session,
+	const XrFrameEndInfo* frameEndInfo)
 {
 	return XR_SUCCESS;
 }
@@ -873,6 +931,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateBoolean(
+	XrSession                                   session,
+	const XrActionStateGetInfo*                 getInfo,
+	XrActionStateBoolean*                       state)
+{
+	return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
@@ -997,7 +1063,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrCreateReferenceSpace)
 //	CHECK_PROC_ADDR(xrGetReferenceSpaceBoundsRect)
 	CHECK_PROC_ADDR(xrCreateActionSpace)
-//	CHECK_PROC_ADDR(xrLocateSpace)
+	CHECK_PROC_ADDR(xrLocateSpace)
 //	CHECK_PROC_ADDR(xrDestroySpace)
 //	CHECK_PROC_ADDR(xrEnumerateViewConfigurations)
 //	CHECK_PROC_ADDR(xrGetViewConfigurationProperties)
@@ -1006,15 +1072,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrCreateSwapchain)
 //	CHECK_PROC_ADDR(xrDestroySwapchain)
 	CHECK_PROC_ADDR(xrEnumerateSwapchainImages)
-//	CHECK_PROC_ADDR(xrAcquireSwapchainImage)
-//	CHECK_PROC_ADDR(xrWaitSwapchainImage)
-//	CHECK_PROC_ADDR(xrReleaseSwapchainImage)
+	CHECK_PROC_ADDR(xrAcquireSwapchainImage)
+	CHECK_PROC_ADDR(xrWaitSwapchainImage)
+	CHECK_PROC_ADDR(xrReleaseSwapchainImage)
 	CHECK_PROC_ADDR(xrBeginSession)
 //	CHECK_PROC_ADDR(xrEndSession)
 //	CHECK_PROC_ADDR(xrRequestExitSession)
 	CHECK_PROC_ADDR(xrWaitFrame)
 	CHECK_PROC_ADDR(xrBeginFrame)
-//	CHECK_PROC_ADDR(xrEndFrame)
+	CHECK_PROC_ADDR(xrEndFrame)
 	CHECK_PROC_ADDR(xrLocateViews)
 	CHECK_PROC_ADDR(xrStringToPath)
 	CHECK_PROC_ADDR(xrPathToString)
@@ -1025,7 +1091,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrSuggestInteractionProfileBindings)
 	CHECK_PROC_ADDR(xrAttachSessionActionSets)
 //	CHECK_PROC_ADDR(xrGetCurrentInteractionProfile)
-//	CHECK_PROC_ADDR(xrGetActionStateBoolean)
+	CHECK_PROC_ADDR(xrGetActionStateBoolean)
 	CHECK_PROC_ADDR(xrGetActionStateFloat)
 //	CHECK_PROC_ADDR(xrGetActionStateVector2f)
 //	CHECK_PROC_ADDR(xrGetActionStatePose)

@@ -218,7 +218,7 @@ void midXrBeginSession(int sessionHandle)
 	REQUIRE(result == 0, "Node thread creation failed!");
 }
 
-void midXrAcquireGlSwapchain(int sessionHandle, int imageCount, GLuint* images)
+void midXrClaimGlSwapchain(int sessionHandle, int imageCount, GLuint* images)
 {
 	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!");
 	MxcNodeContext *pNodeContext = &nodeContexts[sessionHandle];
