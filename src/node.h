@@ -65,6 +65,7 @@ typedef struct MxcImportParam {
 		HANDLE normal;
 		HANDLE gbuffer;
 	} framebufferHandles[MIDVK_SWAP_COUNT];
+	HANDLE nodeFenceHandle;
 	HANDLE nodeTimelineHandle;
 	HANDLE compTimelineHandle;
 } MxcImportParam;
@@ -137,7 +138,19 @@ typedef struct MxcNodeVkFramebufferTexture {
 	MidVkTexture depth;
 	MidVkTexture gbuffer;
 } MxcNodeVkFramebufferTexture;
-// Cold Node date
+
+typedef unsigned int GLuint;
+typedef struct MxcGlTexture {
+	GLuint memObject;
+	GLuint texture;
+} MxcGlTexture;
+typedef struct MxcNodeGlFramebufferTexture {
+	MxcGlTexture color;
+	MxcGlTexture normal;
+	MxcGlTexture depth;
+	MxcGlTexture gbuffer;
+} MxcNodeGlFramebufferTexture;
+
 typedef struct MxcNodeContext {
 	MxcNodeType type;
 
@@ -147,18 +160,17 @@ typedef struct MxcNodeContext {
 	// shared data
 	MxcNodeShared*            pNodeShared;
 
-	// vulkan shared data
-	MxcNodeVkFramebufferTexture nodeFramebuffer[MIDVK_SWAP_COUNT];
+	// this should be a pool of swaps shared by all nodes
+	// unless it can import an image fast enough on the fly, maybe it can? CEF does
+	MxcNodeGlFramebufferTexture glNodeFramebufferTextures[MIDVK_SWAP_COUNT];
+	MxcNodeVkFramebufferTexture vkNodeFramebufferTextures[MIDVK_SWAP_COUNT];
 
 	// I'm not actually 100% sure if I want this
-	VkFence     nodeFence;
-
-	VkSemaphore nodeTimeline;
-	VkSemaphore compositorTimeline;
+	VkFence vkNodeFence;
+	VkSemaphore vkNodeTimeline;
+	VkSemaphore vkCompositorTimeline;
 
 	// debating if this should be an option
-	// opengl shared data
-//	GLuint glFramebufferTextures;
 //	GLuint glCompTimeline;
 //	GLuint glNodeTimeline;
 

@@ -33,6 +33,7 @@ typedef struct IUnknown IUnknown;
 //// Mid OpenXR
 void midXrInitialize();
 void midXrCreateSession(int* pSessionHandle);
+void midXrAcquireGlSwapchain(int sessionHandle, int imageCount, GLuint* images);
 void midXrWaitFrame(int sessionHandle);
 void midXrBeginFrame();
 void midXrEndFrame();
@@ -173,11 +174,27 @@ typedef struct Space {
 } Space;
 CONTAINER(Space, 4)
 
+#define MIDXR_SWAP_COUNT 2
+typedef struct Swapchain {
+	XrSession              session;
+	GLuint                 color[MIDXR_SWAP_COUNT];
+	XrSwapchainUsageFlags  usageFlags;
+	int64_t                format;
+	uint32_t               sampleCount;
+	uint32_t               width;
+	uint32_t               height;
+	uint32_t               faceCount;
+	uint32_t               arraySize;
+	uint32_t               mipCount;
+} Swapchain;
+CONTAINER(Swapchain, 4)
+
 #define MIDXR_MAX_SESSIONS 4
 typedef struct Session {
 	XrInstance                      instance;
 	XrTime                          lastPredictedDisplayTime;
 	SpaceContainer                  spaces;
+	SwapchainContainer              swapchains;
 	ActionSetStateContainer         actionSetStates;
 	XrGraphicsBindingOpenGLWin32KHR glBinding;
 	XrViewConfigurationType         primaryViewConfigurationType;
@@ -243,52 +260,6 @@ static int OculusRightClick(float* pValue)
 
 //
 /// Mid OpenXR Implementation
-XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
-	XrInstance instance,
-	XrPath     path,
-	uint32_t   bufferCapacityInput,
-	uint32_t*  bufferCountOutput,
-	char*      buffer)
-{
-	Instance* pInstance = (Instance*)instance;  // check its in instance ?
-	Path*     pPath = (Path*)path;
-
-	strncpy(buffer, pPath->string, bufferCapacityInput < XR_MAX_PATH_LENGTH ? bufferCapacityInput : XR_MAX_PATH_LENGTH);
-	*bufferCountOutput = strlen(buffer);
-
-	return XR_SUCCESS;
-}
-XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
-	XrInstance  instance,
-	const char* pathString,
-	XrPath*     path)
-{
-	Instance* pInstance = (Instance*)instance;
-
-	const int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
-	for (int i = 0; i < pInstance->paths.count; ++i) {
-		if (pInstance->paths.hash[i] != pathHash)
-			continue;
-		if (strncmp(pInstance->paths.data[i].string, pathString, XR_MAX_PATH_LENGTH)) {
-			fprintf(stderr, "Path Hash Collision! %s | %s\n", pInstance->paths.data[i].string, pathString);
-			return XR_ERROR_PATH_INVALID;
-		}
-		*path = (XrPath)&pInstance->paths.data[i];
-		return XR_SUCCESS;
-	}
-
-	Path* pPath;
-	CHECK(ClaimPath(&pInstance->paths, &pPath, pathHash));
-
-	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
-	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
-	*path = (XrPath)pPath;
-
-	return XR_SUCCESS;
-}
-
-//
-/// Interaction
 
 static XrResult RegisterBinding(
 	XrInstance        instance,
@@ -369,6 +340,425 @@ static XrResult InitStandardBindings(XrInstance instance)
 	return XR_SUCCESS;
 }
 
+// ????
+//typedef enum XrStructureTypeExt {
+//	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
+//} XrStructureTypeExt;
+//typedef struct XrFrameBeginSwapPoolInfo {
+//	XrStructureType             type;
+//	const void* XR_MAY_ALIAS    next;
+//} XrFrameBeginSwapPoolInfo;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
+	uint32_t              propertyCapacityInput,
+	uint32_t*             propertyCountOutput,
+	XrApiLayerProperties* properties)
+{
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
+	const char*            layerName,
+	uint32_t               propertyCapacityInput,
+	uint32_t*              propertyCountOutput,
+	XrExtensionProperties* properties)
+{
+	const XrExtensionProperties extensionProperties[] = {
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_opengl_enable_SPEC_VERSION,
+		},
+	};
+
+	*propertyCountOutput = COUNT(extensionProperties);
+
+	if (!properties)
+		return XR_SUCCESS;
+
+	memcpy(properties, &extensionProperties, sizeof(XrExtensionProperties) * propertyCapacityInput);
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
+	const XrInstanceCreateInfo* createInfo,
+	XrInstance*                 instance)
+{
+	Instance* pClaimedInstance;
+	CHECK(ClaimInstance(&instances, &pClaimedInstance));
+
+	strncpy((char*)&pClaimedInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
+	*instance = (XrInstance)pClaimedInstance;
+
+	InitStandardBindings(*instance);
+	midXrInitialize();
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
+	XrInstance            instance,
+	XrInstanceProperties* instanceProperties)
+{
+	instanceProperties->runtimeVersion = XR_MAKE_VERSION(0, 1, 0);
+	strncpy(instanceProperties->runtimeName, "Moxaic OpenXR", XR_MAX_RUNTIME_NAME_SIZE);
+	return XR_SUCCESS;
+}
+
+static XrSessionState SessionState = XR_SESSION_STATE_UNKNOWN;
+static XrSessionState PendingSessionState = XR_SESSION_STATE_IDLE;
+
+XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
+	XrInstance         instance,
+	XrEventDataBuffer* eventData)
+{
+	if (SessionState != PendingSessionState) {
+		// for debugging, this needs to be manually set elsewhere
+		if (PendingSessionState == XR_SESSION_STATE_IDLE)
+			PendingSessionState = XR_SESSION_STATE_READY;
+
+		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+
+		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
+		pEventData->state = PendingSessionState;
+
+		SessionState = PendingSessionState;
+
+		return XR_SUCCESS;
+	}
+
+	return XR_EVENT_UNAVAILABLE;
+}
+
+#define MIDXR_SYSTEM_ID 1
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
+	XrInstance             instance,
+	const XrSystemGetInfo* getInfo,
+	XrSystemId*            systemId)
+{
+	Instance* pInstance = (Instance*)instance;
+	pInstance->systemFormFactor = getInfo->formFactor;
+	*systemId = MIDXR_SYSTEM_ID;
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
+	XrInstance          instance,
+	XrSystemId          systemId,
+	XrSystemProperties* properties)
+{
+	properties->systemId = MIDXR_SYSTEM_ID;
+	properties->vendorId = 0;
+	strncpy(properties->systemName, "moxaic", XR_MAX_SYSTEM_NAME_SIZE);
+	properties->graphicsProperties.maxLayerCount = 3;
+	properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
+	properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
+	properties->trackingProperties.orientationTracking = XR_TRUE;
+	properties->trackingProperties.positionTracking = XR_TRUE;
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
+	XrInstance                 instance,
+	const XrSessionCreateInfo* createInfo,
+	XrSession*                 session)
+{
+	XrHandle sessionHandle;
+	midXrCreateSession(&sessionHandle);
+
+	Instance* pInstance = (Instance*)instance;
+	Session*  pClaimedSession;
+	CHECK(ClaimSession(&pInstance->sessions, &pClaimedSession));
+	pClaimedSession->instance = instance;
+	switch (*(XrStructureType*)createInfo->next) {
+		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
+			pClaimedSession->glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
+			*session = (XrSession)pClaimedSession;
+			return XR_SUCCESS;
+		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR:
+		case XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR:
+		case XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR:
+		default:
+			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+	}
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
+	XrSession             session,
+	uint32_t              spaceCapacityInput,
+	uint32_t*             spaceCountOutput,
+	XrReferenceSpaceType* spaces)
+{
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
+	XrSession                         session,
+	const XrReferenceSpaceCreateInfo* createInfo,
+	XrSpace*                          space)
+{
+	Session* pSession = (Session*)session;
+
+	Space* pClaimedSpace;
+	CHECK(ClaimSpace(&pSession->spaces, &pClaimedSpace));
+
+	*pClaimedSpace = (Space){
+		.referenceSpaceType = createInfo->referenceSpaceType,
+		.poseInReferenceSpace = createInfo->poseInReferenceSpace,
+	};
+	*space = (XrSpace)pClaimedSpace;
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
+	XrSession                      session,
+	const XrActionSpaceCreateInfo* createInfo,
+	XrSpace*                       space)
+{
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
+	XrInstance               instance,
+	XrSystemId               systemId,
+	XrViewConfigurationType  viewConfigurationType,
+	uint32_t                 viewCapacityInput,
+	uint32_t*                viewCountOutput,
+	XrViewConfigurationView* views)
+{
+	switch (viewConfigurationType) {
+		default:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+			*viewCountOutput = 1;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+			*viewCountOutput = 2;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+			*viewCountOutput = 4;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+			*viewCountOutput = 1;  // not sure
+			break;
+	}
+
+	for (int i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
+		views[i] = (XrViewConfigurationView){
+			.recommendedImageRectWidth = MIDXR_DEFAULT_WIDTH,
+			.maxImageRectWidth = MIDXR_DEFAULT_WIDTH,
+			.recommendedImageRectHeight = MIDXR_DEFAULT_HEIGHT,
+			.maxImageRectHeight = MIDXR_DEFAULT_HEIGHT,
+			.recommendedSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+			.maxSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+		};
+	};
+
+	return XR_SUCCESS;
+}
+
+#ifndef GL_RGBA8
+#define GL_RGBA8 0x8058
+#endif
+#ifndef GL_SRGB8_ALPHA8
+#define GL_SRGB8_ALPHA8 0x8C43
+#endif
+#ifndef GL_SRGB8
+#define GL_SRGB8 0x8C41
+#endif
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
+	XrSession session,
+	uint32_t  formatCapacityInput,
+	uint32_t* formatCountOutput,
+	int64_t*  formats)
+{
+	const int64_t swapFormats[] = {
+		GL_RGBA8,
+		GL_SRGB8_ALPHA8,
+		GL_SRGB8,
+	};
+	*formatCountOutput = COUNT(swapFormats);
+
+	if (formats == NULL)
+		return XR_SUCCESS;
+
+	if (formatCapacityInput < COUNT(swapFormats))
+		return XR_ERROR_SIZE_INSUFFICIENT;
+
+	for (int i = 0; i < COUNT(swapFormats); ++i)
+		formats[i] = swapFormats[i];
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
+	XrSession                    session,
+	const XrSwapchainCreateInfo* createInfo,
+	XrSwapchain*                 swapchain)
+{
+	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+
+	Swapchain* pSwapchain;
+	CHECK(ClaimSwapchain(&pSession->swapchains, &pSwapchain));
+	pSwapchain->usageFlags = createInfo->usageFlags;
+	pSwapchain->format = createInfo->format;
+	pSwapchain->sampleCount = createInfo->sampleCount;
+	pSwapchain->width = createInfo->width;
+	pSwapchain->height = createInfo->height;
+	pSwapchain->faceCount = createInfo->faceCount;
+	pSwapchain->arraySize = createInfo->arraySize;
+	pSwapchain->mipCount = createInfo->mipCount;
+
+	midXrAcquireGlSwapchain(sessionHandle, MIDXR_SWAP_COUNT, pSwapchain->color);
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
+	XrSwapchain                 swapchain,
+	uint32_t                    imageCapacityInput,
+	uint32_t*                   imageCountOutput,
+	XrSwapchainImageBaseHeader* images)
+{
+	*imageCountOutput = MIDXR_SWAP_COUNT;
+	if (images == NULL)
+		return XR_SUCCESS;
+
+	if (imageCapacityInput < MIDXR_SWAP_COUNT)
+		return XR_ERROR_SIZE_INSUFFICIENT;
+
+	Swapchain* pSwapchain = (Swapchain*)swapchain;
+	switch (images[0].type) {
+		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
+			XrSwapchainImageOpenGLKHR* pGlImage = (XrSwapchainImageOpenGLKHR*)images;
+			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
+				pGlImage[i].image = pSwapchain->color[i];
+			}
+			break;
+		}
+		default:
+			fprintf(stderr, "Swap type not currently supported\n");
+			return XR_ERROR_HANDLE_INVALID;
+	}
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
+	XrSession                 session,
+	const XrSessionBeginInfo* beginInfo)
+{
+	Session* pSession = (Session*)session;
+	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
+	XrSession              session,
+	const XrFrameWaitInfo* frameWaitInfo,
+	XrFrameState*          frameState)
+{
+	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance *)pSession->instance;
+	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+
+	midXrWaitFrame(sessionHandle);
+
+	const XrTime currentTime = GetXrTime();
+
+	frameState->predictedDisplayPeriod = currentTime - pSession->lastPredictedDisplayTime;
+	frameState->predictedDisplayTime = currentTime;
+	frameState->shouldRender = XR_TRUE;
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
+	XrSession               session,
+	const XrFrameBeginInfo* frameBeginInfo)
+{
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
+	XrSession               session,
+	const XrViewLocateInfo* viewLocateInfo,
+	XrViewState*            viewState,
+	uint32_t                viewCapacityInput,
+	uint32_t*               viewCountOutput,
+	XrView*                 views)
+{
+	// get view poses and fovs
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
+	XrInstance  instance,
+	const char* pathString,
+	XrPath*     path)
+{
+	Instance* pInstance = (Instance*)instance;
+
+	const int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
+	for (int i = 0; i < pInstance->paths.count; ++i) {
+		if (pInstance->paths.hash[i] != pathHash)
+			continue;
+		if (strncmp(pInstance->paths.data[i].string, pathString, XR_MAX_PATH_LENGTH)) {
+			fprintf(stderr, "Path Hash Collision! %s | %s\n", pInstance->paths.data[i].string, pathString);
+			return XR_ERROR_PATH_INVALID;
+		}
+		*path = (XrPath)&pInstance->paths.data[i];
+		return XR_SUCCESS;
+	}
+
+	Path* pPath;
+	CHECK(ClaimPath(&pInstance->paths, &pPath, pathHash));
+
+	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
+	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
+	*path = (XrPath)pPath;
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
+	XrInstance instance,
+	XrPath     path,
+	uint32_t   bufferCapacityInput,
+	uint32_t*  bufferCountOutput,
+	char*      buffer)
+{
+	Instance* pInstance = (Instance*)instance;  // check its in instance ?
+	Path*     pPath = (Path*)path;
+
+	strncpy(buffer, pPath->string, bufferCapacityInput < XR_MAX_PATH_LENGTH ? bufferCapacityInput : XR_MAX_PATH_LENGTH);
+	*bufferCountOutput = strlen(buffer);
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
+	XrInstance                   instance,
+	const XrActionSetCreateInfo* createInfo,
+	XrActionSet*                 actionSet)
+{
+	printf("Creating ActionSet with %s\n", createInfo->actionSetName);
+	Instance* pInstance = (Instance*)instance;
+
+	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
+	ActionSet* pActionSet;
+	CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
+
+	pActionSet->priority = createInfo->priority;
+	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
+	*actionSet = (XrActionSet)pActionSet;
+
+	return XR_SUCCESS;
+}
 
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	XrActionSet               actionSet,
@@ -396,25 +786,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
-	XrInstance                   instance,
-	const XrActionSetCreateInfo* createInfo,
-	XrActionSet*                 actionSet)
-{
-	printf("Creating ActionSet with %s\n", createInfo->actionSetName);
-	Instance* pInstance = (Instance*)instance;
-
-	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
-	ActionSet* pActionSet;
-	CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
-
-	pActionSet->priority = createInfo->priority;
-	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
-	*actionSet = (XrActionSet)pActionSet;
-
-	return XR_SUCCESS;
-}
-
 static int CompareSubPath(const char* pSubPath, const char* pPath)
 {
 	while (*pSubPath != '\0') {
@@ -427,7 +798,6 @@ static int CompareSubPath(const char* pSubPath, const char* pPath)
 
 	return 0;
 }
-
 XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	XrInstance                                  instance,
 	const XrInteractionProfileSuggestedBinding* suggestedBindings)
@@ -541,331 +911,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	return XR_EVENT_UNAVAILABLE;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
-	XrSession                      session,
-	const XrActionSpaceCreateInfo* createInfo,
-	XrSpace*                       space)
-{
-	return XR_SUCCESS;
-}
-
-//
-/// Creation
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
-	XrSession                         session,
-	const XrReferenceSpaceCreateInfo* createInfo,
-	XrSpace*                          space)
-{
-	Session* pSession = (Session*)session;
-
-	Space* pClaimedSpace;
-	CHECK(ClaimSpace(&pSession->spaces, &pClaimedSpace));
-
-	*pClaimedSpace = (Space){
-		.referenceSpaceType = createInfo->referenceSpaceType,
-		.poseInReferenceSpace = createInfo->poseInReferenceSpace,
-	};
-	*space = (XrSpace)pClaimedSpace;
-
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
-	XrInstance                 instance,
-	const XrSessionCreateInfo* createInfo,
-	XrSession*                 session)
-{
-	XrHandle sessionHandle;
-	midXrCreateSession(&sessionHandle);
-
-	Instance* pInstance = (Instance*)instance;
-	Session*  pClaimedSession;
-	CHECK(ClaimSession(&pInstance->sessions, &pClaimedSession));
-	pClaimedSession->instance = instance;
-	switch (*(XrStructureType*)createInfo->next) {
-		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
-			pClaimedSession->glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
-			*session = (XrSession)pClaimedSession;
-			return XR_SUCCESS;
-		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR:
-		case XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR:
-		case XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR:
-		default:
-			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
-	}
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
-	XrInstance            instance,
-	XrInstanceProperties* instanceProperties)
-{
-	instanceProperties->runtimeVersion = XR_MAKE_VERSION(0, 1, 0);
-	strncpy(instanceProperties->runtimeName, "Moxaic OpenXR", XR_MAX_RUNTIME_NAME_SIZE);
-	return XR_SUCCESS;
-}
-
-#define MIDXR_SYSTEM_ID 1
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
-	XrInstance             instance,
-	const XrSystemGetInfo* getInfo,
-	XrSystemId*            systemId)
-{
-	Instance* pInstance = (Instance*)instance;
-	pInstance->systemFormFactor = getInfo->formFactor;
-	*systemId = MIDXR_SYSTEM_ID;
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
-	XrInstance          instance,
-	XrSystemId          systemId,
-	XrSystemProperties* properties)
-{
-	properties->systemId = MIDXR_SYSTEM_ID;
-	properties->vendorId = 0;
-	strncpy(properties->systemName, "moxaic", XR_MAX_SYSTEM_NAME_SIZE);
-	properties->graphicsProperties.maxLayerCount = 3;
-	properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
-	properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
-	properties->trackingProperties.orientationTracking = XR_TRUE;
-	properties->trackingProperties.positionTracking = XR_TRUE;
-
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
-	const XrInstanceCreateInfo* createInfo,
-	XrInstance*                 instance)
-{
-	Instance* pClaimedInstance;
-	CHECK(ClaimInstance(&instances, &pClaimedInstance));
-
-	strncpy((char*)&pClaimedInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
-	*instance = (XrInstance)pClaimedInstance;
-
-	InitStandardBindings(*instance);
-	midXrInitialize();
-
-	return XR_SUCCESS;
-}
-
-//
-/// Diagnostics
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
-	XrInstance                       instance,
-	XrSystemId                       systemId,
-	XrGraphicsRequirementsOpenGLKHR* graphicsRequirements)
-{
-	const XrVersion openglApiVersion = XR_MAKE_VERSION(MIDXR_OPENGL_MAJOR_VERSION, MIDXR_OPENGL_MINOR_VERSION, 0);
-	*graphicsRequirements = (XrGraphicsRequirementsOpenGLKHR){
-		.minApiVersionSupported = openglApiVersion,
-		.maxApiVersionSupported = openglApiVersion,
-	};
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
-	XrSession             session,
-	uint32_t              spaceCapacityInput,
-	uint32_t*             spaceCountOutput,
-	XrReferenceSpaceType* spaces)
-{
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
-	const char*            layerName,
-	uint32_t               propertyCapacityInput,
-	uint32_t*              propertyCountOutput,
-	XrExtensionProperties* properties)
-{
-	const XrExtensionProperties extensionProperties[] = {
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
-			.extensionVersion = XR_KHR_opengl_enable_SPEC_VERSION,
-		},
-	};
-
-	*propertyCountOutput = COUNT(extensionProperties);
-
-	if (!properties)
-		return XR_SUCCESS;
-
-	memcpy(properties, &extensionProperties, sizeof(XrExtensionProperties) * propertyCapacityInput);
-
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
-	uint32_t              propertyCapacityInput,
-	uint32_t*             propertyCountOutput,
-	XrApiLayerProperties* properties)
-{
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
-	XrInstance               instance,
-	XrSystemId               systemId,
-	XrViewConfigurationType  viewConfigurationType,
-	uint32_t                 viewCapacityInput,
-	uint32_t*                viewCountOutput,
-	XrViewConfigurationView* views)
-{
-	switch (viewConfigurationType) {
-		default:
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-			*viewCountOutput = 1;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			*viewCountOutput = 2;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-			*viewCountOutput = 4;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			*viewCountOutput = 1;  // not sure
-			break;
-	}
-
-	for (int i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
-		views[i] = (XrViewConfigurationView){
-			.recommendedImageRectWidth = MIDXR_DEFAULT_WIDTH,
-			.maxImageRectWidth = MIDXR_DEFAULT_WIDTH,
-			.recommendedImageRectHeight = MIDXR_DEFAULT_HEIGHT,
-			.maxImageRectHeight = MIDXR_DEFAULT_HEIGHT,
-			.recommendedSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
-			.maxSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
-		};
-	};
-
-	return XR_SUCCESS;
-}
-
-#ifndef GL_RGBA8
-#define GL_RGBA8 0x8058
-#endif
-#ifndef GL_SRGB8_ALPHA8
-#define GL_SRGB8_ALPHA8 0x8C43
-#endif
-#ifndef GL_SRGB8
-#define GL_SRGB8 0x8C41
-#endif
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
-	XrSession session,
-	uint32_t  formatCapacityInput,
-	uint32_t* formatCountOutput,
-	int64_t*  formats)
-{
-	const int64_t swapFormats[] = {
-		GL_RGBA8,
-		GL_SRGB8_ALPHA8,
-		GL_SRGB8,
-	};
-	*formatCountOutput = COUNT(swapFormats);
-
-	if (formats == NULL)
-		return XR_SUCCESS;
-
-	if (formatCapacityInput < COUNT(swapFormats))
-		return XR_ERROR_SIZE_INSUFFICIENT;
-
-	for (int i = 0; i < COUNT(swapFormats); ++i)
-		formats[i] = swapFormats[i];
-
-	return XR_SUCCESS;
-}
-
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
-	XrSession                    session,
-	const XrSwapchainCreateInfo* createInfo,
-	XrSwapchain*                 swapchain)
-{
-
-
-	return XR_SUCCESS;
-}
-
-//
-/// Event
-XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
-	XrSession                 session,
-	const XrSessionBeginInfo* beginInfo)
-{
-	Session* pSession = (Session*)session;
-
-	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
-
-	return XR_SUCCESS;
-}
-
-XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
-	XrSession              session,
-	const XrFrameWaitInfo* frameWaitInfo,
-	XrFrameState*          frameState)
-{
-	Session* pSession = (Session*)session;
-	Instance* pInstance = (Instance *)pSession->instance;
-	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
-
-	midXrWaitFrame(sessionHandle);
-
-	const XrTime currentTime = GetXrTime();
-
-	frameState->predictedDisplayPeriod = currentTime - pSession->lastPredictedDisplayTime;
-	frameState->predictedDisplayTime = currentTime;
-	frameState->shouldRender = XR_TRUE;
-
-	return XR_SUCCESS;
-}
-
-typedef enum XrStructureTypeExt {
-	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
-} XrStructureTypeExt;
-
-typedef struct XrFrameBeginSwapPoolInfo {
-	XrStructureType             type;
-	const void* XR_MAY_ALIAS    next;
-} XrFrameBeginSwapPoolInfo;
-
-XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
-	XrSession               session,
-	const XrFrameBeginInfo* frameBeginInfo)
-{
-	return XR_SUCCESS;
-}
-
-//
-/// Polling
-static XrSessionState SessionState = XR_SESSION_STATE_UNKNOWN;
-static XrSessionState PendingSessionState = XR_SESSION_STATE_IDLE;
-
-XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
-	XrInstance         instance,
-	XrEventDataBuffer* eventData)
-{
-	if (SessionState != PendingSessionState) {
-		// for debugging, this needs to be manually set elsewhere
-		if (PendingSessionState == XR_SESSION_STATE_IDLE)
-			PendingSessionState = XR_SESSION_STATE_READY;
-
-		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
-
-		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
-		pEventData->state = PendingSessionState;
-
-		SessionState = PendingSessionState;
-
-		return XR_SUCCESS;
-	}
-
-	return XR_EVENT_UNAVAILABLE;
-}
-
 XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	XrSession                session,
 	const XrActionsSyncInfo* syncInfo)
@@ -910,17 +955,24 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	return XR_SUCCESS;
 }
 
-
-// modulo to ensure jump table is generated
-// https://godbolt.org/z/rGz6TbsG1
-#define PROC_ADDR_MODULO 113
-XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance          instance,
-													 const char*         name,
-													 PFN_xrVoidFunction* function)
+XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
+	XrInstance                       instance,
+	XrSystemId                       systemId,
+	XrGraphicsRequirementsOpenGLKHR* graphicsRequirements)
 {
-//	printf("xrGetInstanceProcAddr %s\n", name);
+	const XrVersion openglApiVersion = XR_MAKE_VERSION(MIDXR_OPENGL_MAJOR_VERSION, MIDXR_OPENGL_MINOR_VERSION, 0);
+	*graphicsRequirements = (XrGraphicsRequirementsOpenGLKHR){
+		.minApiVersionSupported = openglApiVersion,
+		.maxApiVersionSupported = openglApiVersion,
+	};
+	return XR_SUCCESS;
+}
 
-	// These only load once so it being a so if chain is not an issue.
+XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
+	XrInstance          instance,
+	const char*         name,
+	PFN_xrVoidFunction* function)
+{
 #define CHECK_PROC_ADDR(_name)                                    \
 	if (strncmp(name, #_name, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
 		*function = (PFN_xrVoidFunction)_name;                    \
@@ -931,29 +983,59 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(XrInstance          instanc
 	CHECK_PROC_ADDR(xrEnumerateApiLayerProperties)
 	CHECK_PROC_ADDR(xrEnumerateInstanceExtensionProperties)
 	CHECK_PROC_ADDR(xrCreateInstance)
+//	CHECK_PROC_ADDR(xrDestroyInstance)
+	CHECK_PROC_ADDR(xrGetInstanceProperties)
+	CHECK_PROC_ADDR(xrPollEvent)
+//	CHECK_PROC_ADDR(xrResultToString)
+//	CHECK_PROC_ADDR(xrStructureTypeToString)
 	CHECK_PROC_ADDR(xrGetSystem)
 	CHECK_PROC_ADDR(xrGetSystemProperties)
-	CHECK_PROC_ADDR(xrEnumerateViewConfigurationViews)
-	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
+//	CHECK_PROC_ADDR(xrEnumerateEnvironmentBlendModes)
 	CHECK_PROC_ADDR(xrCreateSession)
-	CHECK_PROC_ADDR(xrGetActionStateFloat)
-	CHECK_PROC_ADDR(xrCreateReferenceSpace)
-	CHECK_PROC_ADDR(xrCreateActionSet)
-	CHECK_PROC_ADDR(xrCreateAction)
-	CHECK_PROC_ADDR(xrStringToPath)
-	CHECK_PROC_ADDR(xrPathToString)
-	CHECK_PROC_ADDR(xrSuggestInteractionProfileBindings)
-	CHECK_PROC_ADDR(xrPollEvent)
-	CHECK_PROC_ADDR(xrBeginSession)
-	CHECK_PROC_ADDR(xrWaitFrame)
-	CHECK_PROC_ADDR(xrBeginFrame)
-	CHECK_PROC_ADDR(xrSyncActions)
-	CHECK_PROC_ADDR(xrAttachSessionActionSets)
+//	CHECK_PROC_ADDR(xrDestroySession)
 	CHECK_PROC_ADDR(xrEnumerateReferenceSpaces)
+	CHECK_PROC_ADDR(xrCreateReferenceSpace)
+//	CHECK_PROC_ADDR(xrGetReferenceSpaceBoundsRect)
 	CHECK_PROC_ADDR(xrCreateActionSpace)
+//	CHECK_PROC_ADDR(xrLocateSpace)
+//	CHECK_PROC_ADDR(xrDestroySpace)
+//	CHECK_PROC_ADDR(xrEnumerateViewConfigurations)
+//	CHECK_PROC_ADDR(xrGetViewConfigurationProperties)
+	CHECK_PROC_ADDR(xrEnumerateViewConfigurationViews)
 	CHECK_PROC_ADDR(xrEnumerateSwapchainFormats)
 	CHECK_PROC_ADDR(xrCreateSwapchain)
-	CHECK_PROC_ADDR(xrGetInstanceProperties)
+//	CHECK_PROC_ADDR(xrDestroySwapchain)
+	CHECK_PROC_ADDR(xrEnumerateSwapchainImages)
+//	CHECK_PROC_ADDR(xrAcquireSwapchainImage)
+//	CHECK_PROC_ADDR(xrWaitSwapchainImage)
+//	CHECK_PROC_ADDR(xrReleaseSwapchainImage)
+	CHECK_PROC_ADDR(xrBeginSession)
+//	CHECK_PROC_ADDR(xrEndSession)
+//	CHECK_PROC_ADDR(xrRequestExitSession)
+	CHECK_PROC_ADDR(xrWaitFrame)
+	CHECK_PROC_ADDR(xrBeginFrame)
+//	CHECK_PROC_ADDR(xrEndFrame)
+	CHECK_PROC_ADDR(xrLocateViews)
+	CHECK_PROC_ADDR(xrStringToPath)
+	CHECK_PROC_ADDR(xrPathToString)
+	CHECK_PROC_ADDR(xrCreateActionSet)
+//	CHECK_PROC_ADDR(xrDestroyActionSet)
+	CHECK_PROC_ADDR(xrCreateAction)
+//	CHECK_PROC_ADDR(xrDestroyAction)
+	CHECK_PROC_ADDR(xrSuggestInteractionProfileBindings)
+	CHECK_PROC_ADDR(xrAttachSessionActionSets)
+//	CHECK_PROC_ADDR(xrGetCurrentInteractionProfile)
+//	CHECK_PROC_ADDR(xrGetActionStateBoolean)
+	CHECK_PROC_ADDR(xrGetActionStateFloat)
+//	CHECK_PROC_ADDR(xrGetActionStateVector2f)
+//	CHECK_PROC_ADDR(xrGetActionStatePose)
+	CHECK_PROC_ADDR(xrSyncActions)
+//	CHECK_PROC_ADDR(xrEnumerateBoundSourcesForAction)
+//	CHECK_PROC_ADDR(xrGetInputSourceLocalizedName)
+//	CHECK_PROC_ADDR(xrApplyHapticFeedback)
+//	CHECK_PROC_ADDR(xrStopHapticFeedback)
+
+	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
 
 #undef CHECK_PROC_ADDR
 

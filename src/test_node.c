@@ -82,14 +82,14 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 		VkImageView gBufferView;
 	} framebufferImages[MIDVK_SWAP_COUNT];
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		framebufferImages[i].color = pNodeContext->nodeFramebuffer[i].color.image;
-		framebufferImages[i].normal = pNodeContext->nodeFramebuffer[i].normal.image;
-		framebufferImages[i].gBuffer = pNodeContext->nodeFramebuffer[i].gbuffer.image;
-		framebufferImages[i].depth = pNodeContext->nodeFramebuffer[i].depth.image;
-		framebufferImages[i].colorView = pNodeContext->nodeFramebuffer[i].color.view;
-		framebufferImages[i].normalView = pNodeContext->nodeFramebuffer[i].normal.view;
-		framebufferImages[i].depthView = pNodeContext->nodeFramebuffer[i].depth.view;
-		framebufferImages[i].gBufferView = pNodeContext->nodeFramebuffer[i].gbuffer.view;
+		framebufferImages[i].color = pNodeContext->vkNodeFramebufferTextures[i].color.image;
+		framebufferImages[i].normal = pNodeContext->vkNodeFramebufferTextures[i].normal.image;
+		framebufferImages[i].gBuffer = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image;
+		framebufferImages[i].depth = pNodeContext->vkNodeFramebufferTextures[i].depth.image;
+		framebufferImages[i].colorView = pNodeContext->vkNodeFramebufferTextures[i].color.view;
+		framebufferImages[i].normalView = pNodeContext->vkNodeFramebufferTextures[i].normal.view;
+		framebufferImages[i].depthView = pNodeContext->vkNodeFramebufferTextures[i].depth.view;
+		framebufferImages[i].gBufferView = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view;
 	}
 	VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 	memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -101,8 +101,8 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	const VkDevice device = pNode->device;
 
-	const VkSemaphore compTimeline = pNodeContext->compositorTimeline;
-	const VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
+	const VkSemaphore compTimeline = pNodeContext->vkCompositorTimeline;
+	const VkSemaphore nodeTimeline = pNodeContext->vkNodeTimeline;
 	uint64_t nodeTimelineValue = 0;
 
 	{
@@ -268,9 +268,9 @@ run_loop:
 
 		// this is really all that'd be user exposed....
 		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_GLOBAL_INDEX, 1, &globalSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_MATERIAL_INDEX, 1, &checkerMaterialSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_STD_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_INDEX_GLOBAL, 1, &globalSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_INDEX_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
 
 		CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){sphereBuffer}, (const VkDeviceSize[]){sphereVertexOffset});
 		CmdBindIndexBuffer(cmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
@@ -474,7 +474,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 			for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
 				const VkImageViewCreateInfo imageViewCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-					.image = pTestNodeContext->nodeFramebuffer[bufferIndex].gbuffer.image,
+					.image = pTestNodeContext->vkNodeFramebufferTextures[bufferIndex].gbuffer.image,
 					.viewType = VK_IMAGE_VIEW_TYPE_2D,
 					.format = MXC_NODE_GBUFFER_FORMAT,
 					.subresourceRange = {

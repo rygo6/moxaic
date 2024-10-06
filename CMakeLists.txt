@@ -32,8 +32,10 @@ target_include_directories(${TARGET_NAME} PUBLIC
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
+find_package(OpenGL REQUIRED)
 target_link_libraries(${TARGET_NAME} PUBLIC
         vulkan-1
+        opengl32
         openxr_loader
         ws2_32
         ${CMAKE_THREAD_LIBS_INIT}

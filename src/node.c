@@ -97,11 +97,11 @@ static int ReleaseNode(NodeHandle handle)
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
 			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory));
-				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory));
-				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory));
+				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory));
+				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory));
+				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory));
 			}
-			CLOSE_HANDLE(midVkGetSemaphoreExternalHandle(pNodeContext->nodeTimeline));
+			CLOSE_HANDLE(midVkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline));
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
 			// this should probably run on the node when closing, but it also seems to clean itself up fine ?
@@ -123,7 +123,7 @@ static int ReleaseNode(NodeHandle handle)
 	}
 
 	// must first release command buffer
-	vkDestroySemaphore(midVk.context.device, pNodeContext->nodeTimeline, MIDVK_ALLOC);
+	vkDestroySemaphore(midVk.context.device, pNodeContext->vkNodeTimeline, MIDVK_ALLOC);
 
 	// Clear compositor data
 	const VkWriteDescriptorSet writeSets[] = {
@@ -165,21 +165,21 @@ static int ReleaseNode(NodeHandle handle)
 
 	// destroy images... this will eventually just return back to some pool
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].color.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].color.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].color.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.memory, MIDVK_ALLOC);
 
-		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].normal.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].normal.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].normal.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].normal.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].normal.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].normal.memory, MIDVK_ALLOC);
 
-		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].depth.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].depth.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].depth.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].depth.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].depth.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].depth.memory, MIDVK_ALLOC);
 
-		vkDestroyImageView(midVk.context.device, pNodeContext->nodeFramebuffer[i].gbuffer.view, MIDVK_ALLOC);
-		vkDestroyImage(midVk.context.device, pNodeContext->nodeFramebuffer[i].gbuffer.image, MIDVK_ALLOC);
-		vkFreeMemory(midVk.context.device, pNodeContext->nodeFramebuffer[i].gbuffer.memory, MIDVK_ALLOC);
+		vkDestroyImageView(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view, MIDVK_ALLOC);
+		vkDestroyImage(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image, MIDVK_ALLOC);
+		vkFreeMemory(midVk.context.device, pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory, MIDVK_ALLOC);
 	}
 
 	return 0;
@@ -192,7 +192,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 	MxcNodeContext* pNodeContext = &nodeContexts[handle];
 	*pNodeContext = (MxcNodeContext){};
-	pNodeContext->compositorTimeline = compositorNodeContext.compTimeline;
+	pNodeContext->vkCompositorTimeline = compositorNodeContext.compTimeline;
 	pNodeContext->type = MXC_NODE_TYPE_THREAD;
 
 	// maybe have the thread allocate this and submit it once ready to get rid of < 1 check
@@ -209,13 +209,13 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 		.debugName = "NodeFence",
 		.locality = MID_LOCALITY_CONTEXT,
 	};
-	midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->nodeFence);
+	midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 	const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
 		.locality = MID_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
-	midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
+	midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
 
 	const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -231,19 +231,19 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
-	mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->nodeFramebuffer);
+	mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->vkNodeFramebufferTextures);
 
 	MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
 	// do not clear since it is set data is prealloced
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].nodeFramebuffer[i].color.image;
-		pNodeCompositorData->framebuffers[i].normal = nodeContexts[handle].nodeFramebuffer[i].normal.image;
-		pNodeCompositorData->framebuffers[i].gBuffer = nodeContexts[handle].nodeFramebuffer[i].gbuffer.image;
-		pNodeCompositorData->framebuffers[i].colorView = nodeContexts[handle].nodeFramebuffer[i].color.view;
-		pNodeCompositorData->framebuffers[i].normalView = nodeContexts[handle].nodeFramebuffer[i].normal.view;
-		pNodeCompositorData->framebuffers[i].gBufferView = nodeContexts[handle].nodeFramebuffer[i].gbuffer.view;
+		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].vkNodeFramebufferTextures[i].color.image;
+		pNodeCompositorData->framebuffers[i].normal = nodeContexts[handle].vkNodeFramebufferTextures[i].normal.image;
+		pNodeCompositorData->framebuffers[i].gBuffer = nodeContexts[handle].vkNodeFramebufferTextures[i].gbuffer.image;
+		pNodeCompositorData->framebuffers[i].colorView = nodeContexts[handle].vkNodeFramebufferTextures[i].color.view;
+		pNodeCompositorData->framebuffers[i].normalView = nodeContexts[handle].vkNodeFramebufferTextures[i].normal.view;
+		pNodeCompositorData->framebuffers[i].gBufferView = nodeContexts[handle].vkNodeFramebufferTextures[i].gbuffer.view;
 		pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -299,9 +299,9 @@ void mxcCreateNodeRenderPass()
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
 		.pAttachments = (const VkAttachmentDescription2[]){
-			[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
+			[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -310,9 +310,9 @@ void mxcCreateNodeRenderPass()
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
-			[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
+			[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -321,9 +321,9 @@ void mxcCreateNodeRenderPass()
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
-			[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX] = {
+			[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -340,22 +340,22 @@ void mxcCreateNodeRenderPass()
 				.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 				.colorAttachmentCount = 2,
 				.pColorAttachments = (const VkAttachmentReference2[]){
-					[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX] = {
+					[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {
 						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX,
+						.attachment = MIDVK_PASS_ATTACHMENT_COLOR_INDEX,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
-					[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX] = {
+					[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = {
 						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX,
+						.attachment = MIDVK_PASS_ATTACHMENT_NORMAL_INDEX,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
 				},
 				.pDepthStencilAttachment = &(const VkAttachmentReference2){
 					.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-					.attachment = MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX,
+					.attachment = MIDVK_PASS_ATTACHMENT_DEPTH_INDEX,
 					.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 				},
@@ -398,12 +398,12 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTe
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
@@ -415,12 +415,12 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTe
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
@@ -463,12 +463,12 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTe
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.locality = MID_LOCALITY_CONTEXT,
@@ -571,7 +571,7 @@ static void InterprocessServerAcceptNodeConnection()
 //		*pNodeCompositorData = (MxcNodeCompositorData){};
 		pNodeContext = &nodeContexts[handle];
 		*pNodeContext = (MxcNodeContext){};
-		pNodeContext->compositorTimeline = compositorNodeContext.compTimeline;
+		pNodeContext->vkCompositorTimeline = compositorNodeContext.compTimeline;
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED;
 		pNodeContext->processId = nodeProcessId;
 		pNodeContext->processHandle = nodeProcessHandle;
@@ -588,34 +588,35 @@ static void InterprocessServerAcceptNodeConnection()
 			.debugName = "NodeFenceExport",
 			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 		};
-		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->nodeFence);
+		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 		const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
-		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
+		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
 
-		mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->nodeFramebuffer);
+		mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->vkNodeFramebufferTextures);
 
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate color handle fail");
-			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
-			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->nodeFramebuffer[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
+			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate color handle fail");
+			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
+			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
 		}
-		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetSemaphoreExternalHandle(pNodeContext->nodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate nodeTimeline handle fail.");
+		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetFenceExternalHandle(pNodeContext->vkNodeFence), nodeProcessHandle, &pImportParam->nodeFenceHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate nodeFenceHandle handle fail.");
+		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate vkNodeTimeline handle fail.");
 		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetSemaphoreExternalHandle(compositorNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate compeTimeline handle fail.");
 
 		const uint32_t graphicsQueueIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			pNodeCompositorData->framebuffers[i].color = pNodeContext->nodeFramebuffer[i].color.image;
-			pNodeCompositorData->framebuffers[i].normal = pNodeContext->nodeFramebuffer[i].normal.image;
-			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->nodeFramebuffer[i].gbuffer.image;
-			pNodeCompositorData->framebuffers[i].colorView = pNodeContext->nodeFramebuffer[i].color.view;
-			pNodeCompositorData->framebuffers[i].normalView = pNodeContext->nodeFramebuffer[i].normal.view;
-			pNodeCompositorData->framebuffers[i].gBufferView = pNodeContext->nodeFramebuffer[i].gbuffer.view;
+			pNodeCompositorData->framebuffers[i].color = pNodeContext->vkNodeFramebufferTextures[i].color.image;
+			pNodeCompositorData->framebuffers[i].normal = pNodeContext->vkNodeFramebufferTextures[i].normal.image;
+			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image;
+			pNodeCompositorData->framebuffers[i].colorView = pNodeContext->vkNodeFramebufferTextures[i].color.view;
+			pNodeCompositorData->framebuffers[i].normalView = pNodeContext->vkNodeFramebufferTextures[i].normal.view;
+			pNodeCompositorData->framebuffers[i].gBufferView = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view;
 			pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -663,6 +664,8 @@ Exit:
 			if (pImportParam->framebufferHandles[i].gbuffer != INVALID_HANDLE_VALUE)
 				CloseHandle(pImportParam->framebufferHandles[i].gbuffer);
 		}
+		if (pImportParam->nodeFenceHandle != INVALID_HANDLE_VALUE)
+			CloseHandle(pImportParam->nodeFenceHandle);
 		if (pImportParam->nodeTimelineHandle != INVALID_HANDLE_VALUE)
 			CloseHandle(pImportParam->nodeTimelineHandle);
 		if (pImportParam->compTimelineHandle != INVALID_HANDLE_VALUE)
@@ -808,14 +811,14 @@ void mxcConnectInterprocessNode(bool createTestNode)
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.externalHandle = pImportParam->compTimelineHandle,
 		};
-		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->compositorTimeline);
+		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompositorTimeline);
 		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.externalHandle = pImportParam->nodeTimelineHandle,
 		};
-		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->nodeTimeline);
+		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
 
 		const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -831,7 +834,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 		midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
-		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->nodeFramebuffer;
+		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			const VkmTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
@@ -839,12 +842,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_COLOR_INDEX],
+					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
@@ -857,12 +860,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_NORMAL_INDEX],
+					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
@@ -893,12 +896,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_STD_DEPTH_INDEX],
+					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 				.locality = MID_LOCALITY_CONTEXT,
