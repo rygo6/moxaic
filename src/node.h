@@ -46,10 +46,11 @@ typedef struct MxcRingBuffer {
 typedef struct MxcNodeShared {
 	// read/write every cycle
 
-	VkmGlobalSetState nodeGlobalSetState;
-	vec2              compositorULScreenUV;
-	vec2              compositorLRScreenUV;
-	uint64_t          nodeCurrentTimelineSignal;
+	VkmGlobalSetState globalSetState;
+	// bounds?
+	vec2              ulScreenUV;
+	vec2              lrScreenUV;
+	uint64_t          timelineValue;
 	MidPose           rootPose;
 	MidPose           cameraPos;
 	MidCamera         camera;

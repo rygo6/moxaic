@@ -998,7 +998,7 @@ void midVkInitialize()
 			.ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
 		};
 		MIDVK_REQUIRE(vkCreateInstance(&instanceCreationInfo, MIDVK_ALLOC, &midVk.instance));
-		printf("Instance Vulkan API version: %d.%d.%d.%d\n",
+		printf("instance Vulkan API version: %d.%d.%d.%d\n",
 			   VK_API_VERSION_VARIANT(instanceCreationInfo.pApplicationInfo->apiVersion),
 			   VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
 			   VK_API_VERSION_MINOR(instanceCreationInfo.pApplicationInfo->apiVersion),

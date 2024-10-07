@@ -112,7 +112,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 		pNodeShared->compositorBaseCycleValue = compositorTimelineValue - (compositorTimelineValue % MXC_CYCLE_COUNT);
 	}
 
-	assert(__atomic_always_lock_free(sizeof(pNodeShared->nodeCurrentTimelineSignal), &pNodeShared->nodeCurrentTimelineSignal));
+	assert(__atomic_always_lock_free(sizeof(pNodeShared->timelineValue), &pNodeShared->timelineValue));
 
 	VkImageMemoryBarrier2 acquireBarriers[MIDVK_SWAP_COUNT][3];
 	uint32_t              acquireBarrierCount = 0;
@@ -234,7 +234,7 @@ run_loop:
 	midVkTimelineWait(device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	memcpy(pGlobalSetMapped, (void*)&pNodeShared->nodeGlobalSetState, sizeof(VkmGlobalSetState));
+	memcpy(pGlobalSetMapped, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
 
 	ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	BeginCommandBuffer(cmd, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
@@ -243,8 +243,8 @@ run_loop:
 
 	{
 		const VkViewport viewport = {
-			.x = -pNodeShared->compositorULScreenUV.x * DEFAULT_WIDTH,
-			.y = -pNodeShared->compositorULScreenUV.y * DEFAULT_HEIGHT,
+			.x = -pNodeShared->ulScreenUV.x * DEFAULT_WIDTH,
+			.y = -pNodeShared->ulScreenUV.y * DEFAULT_HEIGHT,
 			.width = DEFAULT_WIDTH,
 			.height = DEFAULT_HEIGHT,
 			.maxDepth = 1.0f,
@@ -255,8 +255,8 @@ run_loop:
 				.y = 0,
 			},
 			.extent = {
-				.width = pNodeShared->nodeGlobalSetState.framebufferSize.x,
-				.height = pNodeShared->nodeGlobalSetState.framebufferSize.y,
+				.width = pNodeShared->globalSetState.framebufferSize.x,
+				.height = pNodeShared->globalSetState.framebufferSize.y,
 			},
 		};
 		CmdSetViewport(cmd, 0, 1, &viewport);
@@ -280,7 +280,7 @@ run_loop:
 	}
 
 	{  // Blit GBuffer
-		const ivec2 extent = {pNodeShared->nodeGlobalSetState.framebufferSize.x, pNodeShared->nodeGlobalSetState.framebufferSize.y};
+		const ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
 		const ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 32), 1);
 		{
 			const VkImageMemoryBarrier2 clearBarrier = {
@@ -391,7 +391,7 @@ run_loop:
 
 	// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 	// shared: 569 - semaphore: 315416 ratio: 554.333919
-	pNodeShared->nodeCurrentTimelineSignal = nodeTimelineValue;
+	pNodeShared->timelineValue = nodeTimelineValue;
 	__atomic_thread_fence(__ATOMIC_RELEASE);
 
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;

@@ -310,7 +310,7 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 
 	// just making sure atomics are only using barriers, not locks
 	for (int i = 0; i < nodeCount; ++i) {
-		assert(__atomic_always_lock_free(sizeof(nodesShared[i].nodeCurrentTimelineSignal), &nodesShared[i].nodeCurrentTimelineSignal));
+		assert(__atomic_always_lock_free(sizeof(nodesShared[i].timelineValue), &nodesShared[i].timelineValue));
 	}
 
 	// very common ones should be global to potentially share higher level cache
@@ -349,10 +349,10 @@ run_loop:
 			// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 			// shared: 569 - semaphore: 315416 ratio: 554.333919
 			__atomic_thread_fence(__ATOMIC_ACQUIRE);
-			const uint64_t nodeCurrentTimelineSignal = pNodeShared->nodeCurrentTimelineSignal;
+			const uint64_t nodeTimelineValue = pNodeShared->timelineValue;
 
 			// I don't like this but it waits until the node renders something. Prediction should be okay here.
-			if (nodeCurrentTimelineSignal < 1)
+			if (nodeTimelineValue < 1)
 				continue;
 
 			// We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
@@ -362,13 +362,13 @@ run_loop:
 			// update node model mat... this should happen every frame so user can move it in comp
 			nodeCompositorData[i].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[i].rootPose.position, nodeCompositorData[i].rootPose.rotation);
 
-			if (nodeCurrentTimelineSignal <= nodeCompositorData[i].lastTimelineSwap)
+			if (nodeTimelineValue <= nodeCompositorData[i].lastTimelineSwap)
 				continue;
 
-			nodeCompositorData[i].lastTimelineSwap = nodeCurrentTimelineSignal;
+			nodeCompositorData[i].lastTimelineSwap = nodeTimelineValue;
 
 			{  // Acquire new framebuffers from node
-				const int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % MIDVK_SWAP_COUNT);
+				const int nodeFramebufferIndex = !(nodeTimelineValue % MIDVK_SWAP_COUNT);
 				CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].acquireBarriers);
 
 				// these could be pre-recorded too,
@@ -384,9 +384,9 @@ run_loop:
 			{  // Calc new node uniform and shared data
 
 				// move the global set state that was previously used to render into the node set state to use in comp
-				memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->nodeGlobalSetState, sizeof(VkmGlobalSetState));
-				nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->compositorULScreenUV;
-				nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->compositorLRScreenUV;
+				memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
+				nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->ulScreenUV;
+				nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->lrScreenUV;
 
 				memcpy(nodeCompositorData[i].pSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
 
@@ -426,10 +426,10 @@ run_loop:
 				pNodeShared->cameraPos = globalCameraPose;
 				pNodeShared->camera = globalCamera;
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
-				memcpy(&pNodeShared->nodeGlobalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
-				pNodeShared->nodeGlobalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
-				pNodeShared->compositorULScreenUV = ulUV;
-				pNodeShared->compositorLRScreenUV = lrUV;
+				memcpy(&pNodeShared->globalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
+				pNodeShared->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
+				pNodeShared->ulScreenUV = ulUV;
+				pNodeShared->lrScreenUV = lrUV;
 				__atomic_thread_fence(__ATOMIC_RELEASE);
 			}
 		}
@@ -454,7 +454,7 @@ run_loop:
 				MxcNodeShared* pNodeShared = activeNodesShared[i];
 
 				__atomic_thread_fence(__ATOMIC_ACQUIRE);
-				const uint64_t nodeCurrentTimelineSignal = pNodeShared->nodeCurrentTimelineSignal;
+				const uint64_t nodeCurrentTimelineSignal = pNodeShared->timelineValue;
 
 				// I don't like this but it waits until the node renders something. Prediction should be okay here.
 				if (nodeCurrentTimelineSignal < 1)

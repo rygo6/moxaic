@@ -39,7 +39,7 @@ void midXrInitialize()
 	mxcConnectInterprocessNode(false);
 }
 
-void midXrCreateSession(int* pSessionHandle)
+void midXrCreateSession(XrHandle* pSessionHandle)
 {
 	MxcImportParam* const pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared* const  pNodeShared = &pImportedExternalMemory->shared;
@@ -180,11 +180,11 @@ void midXrCreateSession(int* pSessionHandle)
 	}
 }
 
-void midXrCreateSwapchain(const int swapHandle)
+void midXrCreateSwapchain(const XrHandle swapHandle)
 {
 }
 
-void midXrBeginSession(const int sessionHandle)
+void midXrBeginSession(const XrHandle sessionHandle)
 {
 	MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
 
@@ -192,7 +192,7 @@ void midXrBeginSession(const int sessionHandle)
 	REQUIRE(result == 0, "Node thread creation failed!");
 }
 
-void midXrClaimGlSwapchain(const int sessionHandle, const int imageCount, GLuint* pImages)
+void midXrClaimGlSwapchain(const XrHandle sessionHandle, const int imageCount, GLuint* pImages)
 {
 	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!");
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
@@ -202,16 +202,16 @@ void midXrClaimGlSwapchain(const int sessionHandle, const int imageCount, GLuint
 	}
 }
 
-void midXrWaitFrame(const int sessionHandle)
+void midXrWaitFrame(const XrHandle sessionHandle)
 {
-	MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
-	MxcNodeShared* const  pNodeShared = &nodesShared[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = &nodesShared[sessionHandle];
 	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
 }
 
-void midXrGetView(const int sessionHandle, const int viewIndex, XrView* pView)
+void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pView)
 {
-	const MxcNodeShared* const pNodeShared = &nodesShared[sessionHandle];
+	const MxcNodeShared* pNodeShared = &nodesShared[sessionHandle];
 
 	pView->pose.position = *(XrVector3f*)&pNodeShared->cameraPos.position;
 	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
@@ -223,12 +223,12 @@ void midXrGetView(const int sessionHandle, const int viewIndex, XrView* pView)
 	pView->fov.angleDown = -halfAngle;
 }
 
-void midXrBeginFrame()
+void midXrBeginFrame(const XrHandle sessionHandle)
 {
-	// transition frames
 }
 
-void midXrEndFrame()
+void midXrEndFrame(const XrHandle sessionHandle)
 {
-	// submit frame
+	MxcNodeShared* const pNodeShared = &nodesShared[sessionHandle];
+	__atomic_fetch_add(&pNodeShared->timelineValue, 1, __ATOMIC_RELEASE);
 }

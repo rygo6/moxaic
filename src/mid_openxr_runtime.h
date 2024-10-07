@@ -35,13 +35,16 @@ typedef struct IUnknown IUnknown;
 
 //
 //// Mid OpenXR
+typedef uint32_t XrHash;
+typedef uint32_t XrHandle;
+
 void midXrInitialize();
-void midXrCreateSession(int* pSessionHandle);
-void midXrClaimGlSwapchain(int sessionHandle, int imageCount, GLuint* pImages);
-void midXrWaitFrame(int sessionHandle);
-void midXrGetView(const int sessionHandle, const int viewIndex, XrView* pView);
+void midXrCreateSession(XrHandle* pSessionHandle);
+void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
+void midXrWaitFrame(XrHandle sessionHandle);
+void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pView);
 void midXrBeginFrame();
-void midXrEndFrame();
+void midXrEndFrame(const XrHandle sessionHandle);
 
 //
 //// Mid OpenXR Constants
@@ -53,8 +56,6 @@ void midXrEndFrame();
 
 //
 //// Mid OpenXR Types
-typedef uint32_t XrHash;
-typedef uint32_t XrHandle;
 #define CHECK(_command)                          \
 	({                                           \
 		XrResult result = _command;              \
@@ -107,6 +108,7 @@ typedef uint32_t XrHandle;
 	{                                                                                                     \
 		return p##_type - p##_type##s->data;                                                              \
 	}
+
 
 #define MIDXR_MAX_PATHS 128
 typedef struct Path {
@@ -168,8 +170,8 @@ CONTAINER_HASHED(ActionSetState, 4)
 typedef struct ActionSet {
 	char            actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
 	uint32_t        priority;
-	ActionContainer actions;
 	XrSession       attachedToSession;
+	ActionContainer Actions;
 } ActionSet;
 CONTAINER_HASHED(ActionSet, 4)
 
@@ -199,11 +201,11 @@ CONTAINER(Swapchain, 4)
 typedef struct Session {
 	XrInstance                      instance;
 	XrTime                          lastPredictedDisplayTime;
-	SpaceContainer                  spaces;
-	SwapchainContainer              swapchains;
-	ActionSetStateContainer         actionSetStates;
 	XrGraphicsBindingOpenGLWin32KHR glBinding;
 	XrViewConfigurationType         primaryViewConfigurationType;
+	SpaceContainer                  Spaces;
+	SwapchainContainer              Swapchains;
+	ActionSetStateContainer         actionSetStates;
 } Session;
 CONTAINER(Session, MIDXR_MAX_SESSIONS)
 
@@ -212,7 +214,7 @@ typedef struct Instance {
 	char                        applicationName[XR_MAX_APPLICATION_NAME_SIZE];
 	XrFormFactor                systemFormFactor;
 	SessionContainer            sessions;
-	ActionSetContainer          actionSets;
+	ActionSetContainer          sctionSets;
 	InteractionProfileContainer interactionProfiles;
 	PathContainer               paths;
 } Instance;
@@ -527,7 +529,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	Session* pSession = (Session*)session;
 
 	Space* pClaimedSpace;
-	CHECK(ClaimSpace(&pSession->spaces, &pClaimedSpace));
+	CHECK(ClaimSpace(&pSession->Spaces, &pClaimedSpace));
 
 	*pClaimedSpace = (Space){
 		.referenceSpaceType = createInfo->referenceSpaceType,
@@ -637,7 +639,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 
 	Swapchain* pSwapchain;
-	CHECK(ClaimSwapchain(&pSession->swapchains, &pSwapchain));
+	CHECK(ClaimSwapchain(&pSession->Swapchains, &pSwapchain));
 	pSwapchain->usageFlags = createInfo->usageFlags;
 	pSwapchain->format = createInfo->format;
 	pSwapchain->sampleCount = createInfo->sampleCount;
@@ -721,9 +723,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	const XrFrameWaitInfo* frameWaitInfo,
 	XrFrameState*          frameState)
 {
-	Session* pSession = (Session*)session;
-	Instance* pInstance = (Instance *)pSession->instance;
-	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	const Session* const pSession = (Session*)session;
+	const Instance* const pInstance = (Instance*)pSession->instance;
+	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 
 	midXrWaitFrame(sessionHandle);
 
@@ -747,6 +749,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	XrSession             session,
 	const XrFrameEndInfo* frameEndInfo)
 {
+	const Session* const pSession = (Session*)session;
+	const Instance* const pInstance = (Instance*)pSession->instance;
+	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	midXrEndFrame(sessionHandle);
 	return XR_SUCCESS;
 }
 
@@ -844,7 +850,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 
 	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	ActionSet* pActionSet;
-	CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
+	CHECK(ClaimActionSet(&pInstance->sctionSets, &pActionSet, actionSetNameHash));
 
 	pActionSet->priority = createInfo->priority;
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
@@ -866,7 +872,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
 
 	Action* pAction;
-	CHECK(ClaimAction(&pActionSet->actions, &pAction));
+	CHECK(ClaimAction(&pActionSet->Actions, &pAction));
 
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
 	pAction->actionType = createInfo->actionType;
@@ -955,11 +961,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	Instance* pInstance = (Instance*)pSession->instance;
 	for (int i = 0; i < attachInfo->countActionSets; ++i) {
 		ActionSet*      pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
-		XrHash          attachingActionSetHash = GetActionSetHash(&pInstance->actionSets, pAttachingActionSet);
+		XrHash          attachingActionSetHash = GetActionSetHash(&pInstance->sctionSets, pAttachingActionSet);
 		ActionSetState* pClaimedActionSetState;
 		CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
 
-		pClaimedActionSetState->actionStates.count = pAttachingActionSet->actions.count;
+		pClaimedActionSetState->actionStates.count = pAttachingActionSet->Actions.count;
 		pClaimedActionSetState->actionSet = (XrActionSet)pAttachingActionSet;
 	}
 
@@ -985,10 +991,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 
 	Session*        pSession = (Session*)session;
 	const Instance* pInstance = (Instance*)pSession->instance;
-	const XrHash    getActionSetHash = GetActionSetHash(&pInstance->actionSets, pGetActionSet);
+	const XrHash    getActionSetHash = GetActionSetHash(&pInstance->sctionSets, pGetActionSet);
 	ActionSetState* pGetActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, getActionSetHash);
 
-	const int    getActionHandle = GetActionHandle(&pGetActionSet->actions, pGetAction);
+	const int    getActionHandle = GetActionHandle(&pGetActionSet->Actions, pGetAction);
 	ActionState* pGetActionState = &pGetActionSetState->actionStates.data[getActionHandle];
 
 	if (pGetActionSubactionPath == NULL) {
@@ -1022,14 +1028,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 
 	for (int sessionIndex = 0; sessionIndex < pSession->actionSetStates.count; ++sessionIndex) {
 		ActionSet*      pActionSet = (ActionSet*)syncInfo->activeActionSets[sessionIndex].actionSet;
-		XrHash          actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
+		XrHash          actionSetHash = GetActionSetHash(&pInstance->sctionSets, pActionSet);
 		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
 
 		if (pActionSetState == NULL)
 			continue;
 
-		for (int actionIndex = 0; actionIndex < pActionSet->actions.count; ++actionIndex) {
-			Action*      pAction = &pActionSet->actions.data[actionIndex];
+		for (int actionIndex = 0; actionIndex < pActionSet->Actions.count; ++actionIndex) {
+			Action*      pAction = &pActionSet->Actions.data[actionIndex];
 			ActionState* pActionState = &pActionSetState->actionStates.data[actionIndex];
 
 			for (int subActionIndex = 0; subActionIndex < pAction->countSubactionPaths; ++subActionIndex) {
