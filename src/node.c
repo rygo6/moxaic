@@ -202,6 +202,10 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	*pNodeShared = (MxcNodeShared){};
 	pNodeContext->pNodeShared = pNodeShared;
 	pNodeShared->rootPose.rotation = QuatFromEuler(pNodeShared->rootPose.euler);
+	pNodeShared->cameraPos.rotation = QuatFromEuler(pNodeShared->cameraPos.euler);
+	pNodeShared->camera.yFOV = 45.0f;
+	pNodeShared->camera.zNear = 0.1f;
+	pNodeShared->camera.zFar = 100.0f;
 	pNodeShared->compositorRadius = 0.5;
 	pNodeShared->compositorCycleSkip = 16;
 
@@ -562,6 +566,10 @@ static void InterprocessServerAcceptNodeConnection()
 		pImportParam = &pExternalNodeMemory->importParam;
 		pNodeShared = &pExternalNodeMemory->shared;
 		pNodeShared->rootPose.rotation = QuatFromEuler(pNodeShared->rootPose.euler);
+		pNodeShared->cameraPos.rotation = QuatFromEuler(pNodeShared->cameraPos.euler);
+		pNodeShared->camera.yFOV = 45.0f;
+		pNodeShared->camera.zNear = 0.1f;
+		pNodeShared->camera.zFar = 100.0f;
 		pNodeShared->compositorRadius = 0.5;
 		pNodeShared->compositorCycleSkip = 16;
 

@@ -15,6 +15,10 @@ typedef struct IUnknown IUnknown;
 #include <openxr/openxr_reflection.h>
 #include <openxr/openxr_loader_negotiation.h>
 
+#ifdef __JETBRAINS_IDE__
+#define XRAPI_CALL
+#endif
+
 //
 //// Mid Common Utility
 #ifndef COUNT
@@ -33,8 +37,9 @@ typedef struct IUnknown IUnknown;
 //// Mid OpenXR
 void midXrInitialize();
 void midXrCreateSession(int* pSessionHandle);
-void midXrClaimGlSwapchain(int sessionHandle, int imageCount, GLuint* images);
+void midXrClaimGlSwapchain(int sessionHandle, int imageCount, GLuint* pImages);
 void midXrWaitFrame(int sessionHandle);
+void midXrGetView(const int sessionHandle, const int viewIndex, XrView* pView);
 void midXrBeginFrame();
 void midXrEndFrame();
 
@@ -176,16 +181,17 @@ CONTAINER(Space, 4)
 
 #define MIDXR_SWAP_COUNT 2
 typedef struct Swapchain {
-	XrSession              session;
-	GLuint                 color[MIDXR_SWAP_COUNT];
-	XrSwapchainUsageFlags  usageFlags;
-	int64_t                format;
-	uint32_t               sampleCount;
-	uint32_t               width;
-	uint32_t               height;
-	uint32_t               faceCount;
-	uint32_t               arraySize;
-	uint32_t               mipCount;
+	XrSession             session;
+	GLuint                color[MIDXR_SWAP_COUNT];
+	int                   swapIndex;
+	XrSwapchainUsageFlags usageFlags;
+	int64_t               format;
+	uint32_t              sampleCount;
+	uint32_t              width;
+	uint32_t              height;
+	uint32_t              faceCount;
+	uint32_t              arraySize;
+	uint32_t              mipCount;
 } Swapchain;
 CONTAINER(Swapchain, 4)
 
@@ -681,7 +687,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	const XrSwapchainImageAcquireInfo* acquireInfo,
 	uint32_t*                          index)
 {
-	*index = 0;
+	Swapchain* pSwapchain = (Swapchain *)swapchain;
+	pSwapchain->swapIndex = !pSwapchain->swapIndex;
+	*index = pSwapchain->swapIndex;
 	return XR_SUCCESS;
 }
 
@@ -750,6 +758,33 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 	uint32_t*               viewCountOutput,
 	XrView*                 views)
 {
+	switch (viewLocateInfo->viewConfigurationType) {
+		default:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+			*viewCountOutput = 1;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+			*viewCountOutput = 2;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+			*viewCountOutput = 4;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+			*viewCountOutput = 1;  // not sure
+			break;
+	}
+
+	if (views == NULL)
+		return XR_SUCCESS;
+
+	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+
+	for (int i = 0; i < viewCapacityInput; ++i) {
+		midXrGetView(sessionHandle, i, &views[i]);
+	}
+
 	// get view poses and fovs
 	return XR_SUCCESS;
 }
@@ -759,7 +794,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	const char* pathString,
 	XrPath*     path)
 {
-	Instance* pInstance = (Instance*)instance;
+	Instance* const pInstance = (Instance*)instance;
 
 	const int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (int i = 0; i < pInstance->paths.count; ++i) {
@@ -790,8 +825,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 	uint32_t*  bufferCountOutput,
 	char*      buffer)
 {
-	Instance* pInstance = (Instance*)instance;  // check its in instance ?
-	Path*     pPath = (Path*)path;
+	Instance* const pInstance = (Instance*)instance;  // check its in instance ?
+	Path* const     pPath = (Path*)path;
 
 	strncpy(buffer, pPath->string, bufferCapacityInput < XR_MAX_PATH_LENGTH ? bufferCapacityInput : XR_MAX_PATH_LENGTH);
 	*bufferCountOutput = strlen(buffer);
@@ -805,7 +840,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	XrActionSet*                 actionSet)
 {
 	printf("Creating ActionSet with %s\n", createInfo->actionSetName);
-	Instance* pInstance = (Instance*)instance;
+	Instance* const pInstance = (Instance*)instance;
 
 	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	ActionSet* pActionSet;
@@ -823,7 +858,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	const XrActionCreateInfo* createInfo,
 	XrAction*                 action)
 {
-	ActionSet* pActionSet = (ActionSet*)actionSet;
+	ActionSet* const pActionSet = (ActionSet*)actionSet;
 
 	if (pActionSet->attachedToSession != NULL)
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;

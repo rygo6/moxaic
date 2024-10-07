@@ -5,6 +5,8 @@
 #include <stdio.h>
 
 #define MID_PI 3.14159265358979323846f
+#define MID_DEG_TO_RAD(_deg) (_deg * (MID_PI / 180.0f))
+#define MID_RAD_TO_DEG(_rad) (_rad * (180.0f / MID_PI))
 
 #define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
 SIMD_TYPE(float, float2, 2);
@@ -59,7 +61,7 @@ enum MatComponents {
   C3_R0,  C3_R1,  C3_R2,  C3_R3,
   MAT_COUNT,
 };
-static const float3_vec VEC3_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
+static const vec3 VEC3_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
 static const vec4 VEC4_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
 static const quat QUAT_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -234,6 +236,7 @@ MATH_INLINE mat4 Mat4FromPosRot(const vec3 pos, const quat rot) {
   const mat4 rotationMat4 = QuatToMat4(rot);
   return Mat4Mul(translationMat4, rotationMat4);
 }
+
 // should I do this?
 typedef struct mat4_proj_packed {
   float c0r0;
@@ -242,11 +245,12 @@ typedef struct mat4_proj_packed {
   float c2r3;
   float c3r2;
 } mat4_proj_packed;
+
 // Perspective matrix in Vulkan Reverse Z
-MATH_INLINE void vkmMat4Perspective(const float fov, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
-  const float tanHalfFovy = tan(fov / 2.0f);
-  *pDstMat4 = (mat4){.c0 = {.r0 = 1.0f / (aspect * tanHalfFovy)},
-                     .c1 = {.r1 = 1.0f / tanHalfFovy},
+MATH_INLINE void vkmMat4Perspective(const float yFOV, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
+  const float tanHalfYFOV = tan(yFOV / 2.0f);
+  *pDstMat4 = (mat4){.c0 = {.r0 = 1.0f / (aspect * tanHalfYFOV)},
+                     .c1 = {.r1 = 1.0f / tanHalfYFOV},
                      .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
                      .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
 }

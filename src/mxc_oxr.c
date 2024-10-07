@@ -41,42 +41,24 @@ void midXrInitialize()
 
 void midXrCreateSession(int* pSessionHandle)
 {
-	MxcNodeContext*        pNodeContext = NULL;
-	MxcImportParam*        pImportParam = &pImportedExternalMemory->importParam;
-	MxcNodeShared*         pNodeShared = &pImportedExternalMemory->shared;;
+	MxcImportParam* const pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeShared* const  pNodeShared = &pImportedExternalMemory->shared;
 
-	// Request and setup handle data
-	{
-		const NodeHandle nodeHandle = RequestExternalNodeHandle(pNodeShared);
-		pNodeContext = &nodeContexts[nodeHandle];
-		*pNodeContext = (MxcNodeContext){};
-		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
-		pNodeContext->pNodeShared = pNodeShared;
-		printf("Importing node handle %d as openxr session\n", nodeHandle);
+	const NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShared);
+	MxcNodeContext* const pNodeContext = &nodeContexts[nodeHandle];
+	*pNodeContext = (MxcNodeContext){};
+	pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
+	pNodeContext->pNodeShared = pNodeShared;
+	printf("Importing node handle %d as openxr session\n", nodeHandle);
 
-		// openxr session = moxaic node
-		*pSessionHandle = nodeHandle;
-	}
+	// openxr session = moxaic node
+	*pSessionHandle = nodeHandle;
 
 	// compositor should not allocate framebuffers and other data until this point
 	// as it needs to allocate them per node/session
 
-	// Create node data
+	// Import framebuffers. These should really be a pool across all sessions
 	{
-//		const VkCommandPoolCreateInfo commandPoolCreateInfo = {
-//			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-//			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-//			.queueFamilyIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE].index,
-//		};
-//		MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &commandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
-//		const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-//			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-//			.commandPool = pNodeContext->pool,
-//			.commandBufferCount = 1,
-//		};
-//		MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
-//		midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
-
 		PFNGLCREATEMEMORYOBJECTSEXTPROC glCreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
 		if (!glCreateMemoryObjectsEXT) {
 			printf("Failed to load glCreateMemoryObjectsEXT\n");
@@ -94,26 +76,30 @@ void midXrCreateSession(int* pSessionHandle)
 			printf("Failed to load glTextureStorageMem2DEXT\n");
 		}
 
-		const int width = DEFAULT_WIDTH;
-		const int height = DEFAULT_HEIGHT;
+		const int                    width = DEFAULT_WIDTH;
+		const int                    height = DEFAULT_HEIGHT;
 		MxcNodeVkFramebufferTexture* pVkFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
 		MxcNodeGlFramebufferTexture* pGlFramebufferTextures = pNodeContext->glNodeFramebufferTextures;
 
-		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-
 #define DEFAULT_VK_IMAGE_CREATE_INFO(_width, _height, _format, _usage) \
-	.imageCreateInfo = {                                            \
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,               \
-		.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,                  \
-		.imageType = VK_IMAGE_TYPE_2D,                              \
-		.format = _format,                                          \
-		.extent = {_width, _height, 1.0f},                          \
-		.mipLevels = 1,                                             \
-		.arrayLayers = 1,                                           \
-		.samples = VK_SAMPLE_COUNT_1_BIT,                           \
-		.usage = _usage,                                            \
+	.imageCreateInfo = {                                               \
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,                  \
+		.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,                     \
+		.imageType = VK_IMAGE_TYPE_2D,                                 \
+		.format = _format,                                             \
+		.extent = {_width, _height, 1.0f},                             \
+		.mipLevels = 1,                                                \
+		.arrayLayers = 1,                                              \
+		.samples = VK_SAMPLE_COUNT_1_BIT,                              \
+		.usage = _usage,                                               \
 	}
+#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                   \
+	glCreateMemoryObjectsEXT(1, &_memObject);                                                                \
+	glImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
+	glCreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
+	glTextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 
+		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			const VkmTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -166,20 +152,9 @@ void midXrCreateSession(int* pSessionHandle)
 			};
 			midvkCreateTexture(&depthCreateInfo, &pVkFramebufferTextures[i].depth);
 
-#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle) \
-	glCreateMemoryObjectsEXT(1, &_memObject);  \
-	glImportMemoryWin32HandleEXT(_memObject, _width * _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
-	glCreateTextures(GL_TEXTURE_2D, 1, &_texture); \
-	glTextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
-
-			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->color.memObject, pGlFramebufferTextures->color.texture,  pImportParam->framebufferHandles[i].color);
-//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->normal.memObject, pGlFramebufferTextures->normal.texture,  pImportParam->framebufferHandles[i].normal);
-//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->color.memObject, pGlFramebufferTextures->color.texture,  pImportParam->framebufferHandles[i].color);
-
-//			glCreateMemoryObjectsEXT(1, &pGlFramebufferTextures->color.memObject);
-//			glImportMemoryWin32HandleEXT(pGlFramebufferTextures->color.memObject, DEFAULT_WIDTH * DEFAULT_WIDTH * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, pImportParam->framebufferHandles[i].color);
-//			glCreateTextures(GL_TEXTURE_2D, 1, &pGlFramebufferTextures->color.texture);
-//			glTextureStorageMem2DEXT(pGlFramebufferTextures->color.texture, 1, GL_RGBA8, 1024, 1024, pGlFramebufferTextures->color.memObject, 0);
+			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures[i].color.memObject, pGlFramebufferTextures[i].color.texture, pImportParam->framebufferHandles[i].color);
+			//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->normal.memObject, pGlFramebufferTextures->normal.texture,  pImportParam->framebufferHandles[i].normal);
+			//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->color.memObject, pGlFramebufferTextures->color.texture,  pImportParam->framebufferHandles[i].color);
 		}
 
 		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
@@ -205,34 +180,47 @@ void midXrCreateSession(int* pSessionHandle)
 	}
 }
 
-void midXrCreateSwapchain(int swapHandle)
+void midXrCreateSwapchain(const int swapHandle)
 {
-
 }
 
-void midXrBeginSession(int sessionHandle)
+void midXrBeginSession(const int sessionHandle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
 
 	int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext);
 	REQUIRE(result == 0, "Node thread creation failed!");
 }
 
-void midXrClaimGlSwapchain(int sessionHandle, int imageCount, GLuint* images)
+void midXrClaimGlSwapchain(const int sessionHandle, const int imageCount, GLuint* pImages)
 {
 	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!");
-	MxcNodeContext *pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 
 	for (int i = 0; i < imageCount; ++i) {
-		images[i] = pNodeContext->glNodeFramebufferTextures[i].color.texture;
+		pImages[i] = pNodeContext->glNodeFramebufferTextures[i].color.texture;
 	}
 }
 
-void midXrWaitFrame(int sessionHandle)
+void midXrWaitFrame(const int sessionHandle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
-	MxcNodeShared* pNodeShared = &nodesShared[sessionHandle];
+	MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* const  pNodeShared = &nodesShared[sessionHandle];
 	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
+}
+
+void midXrGetView(const int sessionHandle, const int viewIndex, XrView* pView)
+{
+	const MxcNodeShared* const pNodeShared = &nodesShared[sessionHandle];
+
+	pView->pose.position = *(XrVector3f*)&pNodeShared->cameraPos.position;
+	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
+
+	const float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
+	pView->fov.angleLeft = -halfAngle;
+	pView->fov.angleRight = halfAngle;
+	pView->fov.angleUp = -halfAngle;
+	pView->fov.angleDown = -halfAngle;
 }
 
 void midXrBeginFrame()

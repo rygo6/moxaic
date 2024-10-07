@@ -168,6 +168,11 @@ typedef struct MidVertex {
 	vec3 normal;
 	vec2 uv;
 } MidVertex;
+typedef struct MidCamera {
+	float   zNear;
+	float   zFar;
+	float   yFOV;
+} MidCamera;
 
 //----------------------------------------------------------------------------------
 // Vulkan Types
@@ -680,15 +685,12 @@ INLINE void* midVkSharedMemoryPointer(const MidVkSharedMemory shareMemory)
 	return pMappedMemory[shareMemory.type] + shareMemory.offset;
 }
 
-INLINE void vkmUpdateGlobalSetViewProj(MidPose* pCameraTransform, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped)
+INLINE void vkmUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkmGlobalSetState* pState, VkmGlobalSetState* pMapped)
 {
-	pCameraTransform->position = (vec3){0.0f, 0.0f, 2.0f};
-	pCameraTransform->euler = (vec3){0.0f, 0.0f, 0.0f};
 	pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
-	vkmMat4Perspective(45.0f, DEFAULT_WIDTH / DEFAULT_HEIGHT, 0.1f, 100.0f, &pState->proj);
-	pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
+	vkmMat4Perspective(camera.yFOV, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar, &pState->proj);
 	pState->invProj = Mat4Inv(pState->proj);
-	pState->invView = Mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
+	pState->invView = Mat4FromPosRot(cameraPose.position, cameraPose.rotation);
 	pState->view = Mat4Inv(pState->invView);
 	pState->viewProj = Mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = Mat4Inv(pState->viewProj);

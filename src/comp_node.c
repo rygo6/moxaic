@@ -265,10 +265,19 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 	const VkFramebuffer   framebuffer = pNode->framebuffer;
 	const VkDescriptorSet globalSet = pNode->globalSet.set;
 
-	MidPose            globalCameraTransform = {};
+	MidCamera globalCamera = {
+		.yFOV = 45.0f,
+		.zNear = 0.1f,
+		.zFar = 100.0f,
+	};
+	MidPose globalCameraPose = {
+		.position = {0.0f, 0.0f, 2.0f},
+		.euler = {0.0f, 0.0f, 0.0f},
+	};
+	globalCameraPose.rotation = QuatFromEuler(globalCameraPose.euler);
 	VkmGlobalSetState  globalSetState = {};
 	VkmGlobalSetState* pGlobalSetMapped = midVkSharedMemoryPointer(pNode->globalSet.sharedMemory);
-	vkmUpdateGlobalSetViewProj(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
+	vkmUpdateGlobalSetViewProj(globalCamera, globalCameraPose, &globalSetState, pGlobalSetMapped);
 
 	const VkPipelineLayout compNodePipeLayout = pNode->compNodePipeLayout;
 	const VkPipeline       compNodePipe = pNode->compNodePipe;
@@ -325,9 +334,9 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 run_loop:
 
 	midVkTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
-	vkmProcessCameraMouseInput(midWindowInput.deltaTime, mxcInput.mouseDelta, &globalCameraTransform);
-	vkmProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globalCameraTransform);
-	vkmUpdateGlobalSetView(&globalCameraTransform, &globalSetState, pGlobalSetMapped);
+	vkmProcessCameraMouseInput(midWindowInput.deltaTime, mxcInput.mouseDelta, &globalCameraPose);
+	vkmProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globalCameraPose);
+	vkmUpdateGlobalSetView(&globalCameraPose, &globalSetState, pGlobalSetMapped);
 
 	// Update and Recording must be separate cycles because it's not ideal to acquire and transition images after being a renderpess
 	{  // Update Nodes
@@ -383,13 +392,13 @@ run_loop:
 
 				const float radius = pNodeShared->compositorRadius;
 
-				const vec4 ulbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
+				const vec4 ulbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
 				const vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbModel);
 				const vec4 ulbClip = Vec4MulMat4(globalSetState.view, ulbWorld);
 				const vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
 				const vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
-				const vec4 ulfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
+				const vec4 ulfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
 				const vec4 ulfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulfModel);
 				const vec4 ulfClip = Vec4MulMat4(globalSetState.view, ulfWorld);
 				const vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulfClip));
@@ -397,13 +406,13 @@ run_loop:
 
 				const vec2 ulUV = Vec2Min(ulfUV, ulbUV);
 
-				const vec4 lrbModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
+				const vec4 lrbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
 				const vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrbModel);
 				const vec4 lrbClip = Vec4MulMat4(globalSetState.view, lrbWorld);
 				const vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrbClip));
 				const vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
 
-				const vec4 lrfModel = Vec4Rot(globalCameraTransform.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
+				const vec4 lrfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
 				const vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrfModel);
 				const vec4 lrfClip = Vec4MulMat4(globalSetState.view, lrfWorld);
 				const vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrfClip));
@@ -413,6 +422,9 @@ run_loop:
 
 				const vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 
+				// maybe I should only copy camera pos info and generate matrix on other thread? oxr only wants the pose
+				pNodeShared->cameraPos = globalCameraPose;
+				pNodeShared->camera = globalCamera;
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShared->nodeGlobalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
 				pNodeShared->nodeGlobalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
