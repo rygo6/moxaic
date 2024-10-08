@@ -61,7 +61,7 @@ static NodeHandle RequestLocalNodeHandle()
 	activeNodesShared[handle] = &nodesShared[handle];
 	return handle;
 }
-NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
+NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared)
 {
 	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
 	activeNodesShared[handle] = pNodeShared;

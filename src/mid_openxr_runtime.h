@@ -43,7 +43,7 @@ void midXrCreateSession(XrHandle* pSessionHandle);
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
 void midXrWaitFrame(XrHandle sessionHandle);
 void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pView);
-void midXrBeginFrame();
+void midXrBeginFrame(const XrHandle sessionHandle);
 void midXrEndFrame(const XrHandle sessionHandle);
 
 //
@@ -650,6 +650,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	pSwapchain->mipCount = createInfo->mipCount;
 
 	midXrClaimGlSwapchain(sessionHandle, MIDXR_SWAP_COUNT, pSwapchain->color);
+
+	*swapchain = (XrSwapchain)pSwapchain;
 
 	return XR_SUCCESS;
 }

@@ -41,7 +41,7 @@ void midXrInitialize()
 
 void midXrCreateSession(XrHandle* pSessionHandle)
 {
-	MxcImportParam* const pImportParam = &pImportedExternalMemory->importParam;
+	const MxcImportParam* const pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared* const  pNodeShared = &pImportedExternalMemory->shared;
 
 	const NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShared);
@@ -152,7 +152,7 @@ void midXrCreateSession(XrHandle* pSessionHandle)
 			};
 			midvkCreateTexture(&depthCreateInfo, &pVkFramebufferTextures[i].depth);
 
-			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures[i].color.memObject, pGlFramebufferTextures[i].color.texture, pImportParam->framebufferHandles[i].color);
+			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures[i].color.memObject, pGlFramebufferTextures[i].color.texture, pImportParam->framebufferHandles[i].color)
 			//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->normal.memObject, pGlFramebufferTextures->normal.texture,  pImportParam->framebufferHandles[i].normal);
 			//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->color.memObject, pGlFramebufferTextures->color.texture,  pImportParam->framebufferHandles[i].color);
 		}
@@ -189,13 +189,13 @@ void midXrBeginSession(const XrHandle sessionHandle)
 	MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
 
 	int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext);
-	REQUIRE(result == 0, "Node thread creation failed!");
+	REQUIRE(result == 0, "Node thread creation failed!")
 }
 
 void midXrClaimGlSwapchain(const XrHandle sessionHandle, const int imageCount, GLuint* pImages)
 {
-	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!");
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!")
+	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
 
 	for (int i = 0; i < imageCount; ++i) {
 		pImages[i] = pNodeContext->glNodeFramebufferTextures[i].color.texture;
@@ -204,19 +204,19 @@ void midXrClaimGlSwapchain(const XrHandle sessionHandle, const int imageCount, G
 
 void midXrWaitFrame(const XrHandle sessionHandle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
-	MxcNodeShared* pNodeShared = &nodesShared[sessionHandle];
+	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
+	const MxcNodeShared* const pNodeShared = pNodeContext->pNodeShared;
 	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
 }
 
 void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pView)
 {
-	const MxcNodeShared* pNodeShared = &nodesShared[sessionHandle];
+	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
+	const MxcNodeShared* const pNodeShared = pNodeContext->pNodeShared;
+	const float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
 
 	pView->pose.position = *(XrVector3f*)&pNodeShared->cameraPos.position;
 	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
-
-	const float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
 	pView->fov.angleLeft = -halfAngle;
 	pView->fov.angleRight = halfAngle;
 	pView->fov.angleUp = -halfAngle;
@@ -229,6 +229,7 @@ void midXrBeginFrame(const XrHandle sessionHandle)
 
 void midXrEndFrame(const XrHandle sessionHandle)
 {
-	MxcNodeShared* const pNodeShared = &nodesShared[sessionHandle];
+	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* const pNodeShared = pNodeContext->pNodeShared;
 	__atomic_fetch_add(&pNodeShared->timelineValue, 1, __ATOMIC_RELEASE);
 }

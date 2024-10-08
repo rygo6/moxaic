@@ -267,7 +267,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 void mxcCreateNodeRenderPass();
 void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures);
 
-NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared);
+NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
 
 //
 /// Process IPC
