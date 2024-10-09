@@ -219,7 +219,7 @@ void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pVi
 	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
 	pView->fov.angleLeft = -halfAngle;
 	pView->fov.angleRight = halfAngle;
-	pView->fov.angleUp = -halfAngle;
+	pView->fov.angleUp = halfAngle;
 	pView->fov.angleDown = -halfAngle;
 }
 

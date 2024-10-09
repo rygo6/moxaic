@@ -521,7 +521,8 @@ void* mxcCompNodeThread(const MxcCompositorNodeContext* pNodeContext)
 
 	midVkBeginAllocationRequests();
 	const MxcCompNodeCreateInfo compNodeInfo = {
-		.compMode = MXC_COMP_MODE_TESS,
+//		.compMode = MXC_COMP_MODE_TESS,
+		.compMode = MXC_COMP_MODE_BASIC,
 	};
 	mxcCreateCompNode(&compNodeInfo, &compNode);
 	midVkEndAllocationRequests();
