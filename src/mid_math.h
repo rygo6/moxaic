@@ -88,33 +88,33 @@ MATH_INLINE float Float4Sum(float4_vec float4) {
   sums = sums + shuf;
   return sums[0];
 }
-MATH_INLINE mat4 Mat4Translation(const vec3 v) {
+MATH_INLINE mat4 Mat4Translation(vec3 v) {
   mat4 out = MAT4_IDENT;
   for (int i = 0; i < 3; ++i) out.col[3].row += MAT4_IDENT.col[i].row * v.vec[i];
   return out;
 }
-MATH_INLINE float Vec4Dot(const vec4 l, const vec4 r) {
+MATH_INLINE float Vec4Dot(vec4 l, vec4 r) {
   float4_vec product = l.vec * r.vec;
   return Float4Sum(product);
 }
-MATH_INLINE float Vec4Mag(const vec4 v) {
+MATH_INLINE float Vec4Mag(vec4 v) {
   return sqrtf(Vec4Dot(v, v));
 }
-MATH_INLINE mat4 QuatToMat4(const quat q) {
-  const float norm = Vec4Mag(q);
-  const float s = norm > 0.0f ? 2.0f / norm : 0.0f;
+MATH_INLINE mat4 QuatToMat4(quat q) {
+  float norm = Vec4Mag(q);
+  float s = norm > 0.0f ? 2.0f / norm : 0.0f;
 
-  const float3_vec xxw = SHUFFLE(q.vec, X, X, W, VEC_NIL);
-  const float3_vec xyx = SHUFFLE(q.vec, X, Y, X, VEC_NIL);
-  const float3_vec xx_xy_wx = s * xxw * xyx;
+  float3_vec xxw = SHUFFLE(q.vec, X, X, W, VEC_NIL);
+  float3_vec xyx = SHUFFLE(q.vec, X, Y, X, VEC_NIL);
+  float3_vec xx_xy_wx = s * xxw * xyx;
 
-  const float3_vec yyw = SHUFFLE(q.vec, Y, Y, W, VEC_NIL);
-  const float3_vec yzy = SHUFFLE(q.vec, Y, Z, Y, VEC_NIL);
-  const float3_vec yy_yz_wy = s * yyw * yzy;
+  float3_vec yyw = SHUFFLE(q.vec, Y, Y, W, VEC_NIL);
+  float3_vec yzy = SHUFFLE(q.vec, Y, Z, Y, VEC_NIL);
+  float3_vec yy_yz_wy = s * yyw * yzy;
 
-  const float3_vec zxw = SHUFFLE(q.vec, Z, X, W, VEC_NIL);
-  const float3_vec zzz = SHUFFLE(q.vec, Z, Z, Z, VEC_NIL);
-  const float3_vec zz_xz_wz = s * zxw * zzz;
+  float3_vec zxw = SHUFFLE(q.vec, Z, X, W, VEC_NIL);
+  float3_vec zzz = SHUFFLE(q.vec, Z, Z, Z, VEC_NIL);
+  float3_vec zz_xz_wz = s * zxw * zzz;
 
   // Setting to specific SIMD indices produces same SIMD assembly as long as target
   // SIMD vec is same size as source vecs https://godbolt.org/z/qqMMa4v3G
@@ -143,7 +143,7 @@ MATH_INLINE mat4 QuatToMat4(const quat q) {
 // Turns out this is the fastest way. Write out the multiplication on the 16 byte vecs and GCC will produce the best SIMD
 // Accessing a simd through a union of a different type will apply simd optimizations
 // https://godbolt.org/z/Wb1hP5dv7
-MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
+MATH_INLINE mat4 Mat4Mul(mat4 l, mat4 r) {
   /// verify if refing these not through the simd type actually breaks the gcc simd optimization
   const float a00 = l.c0.r0, a01 = l.c0.r1, a02 = l.c0.r2, a03 = l.c0.r3,
               a10 = l.c1.r0, a11 = l.c1.r1, a12 = l.c1.r2, a13 = l.c1.r3,
@@ -173,7 +173,7 @@ MATH_INLINE mat4 Mat4Mul(const mat4 l, const mat4 r) {
   dest.c3.r3 = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
   return dest;
 }
-MATH_INLINE mat4 Mat4Inv(const mat4 src) {
+MATH_INLINE mat4 Mat4Inv(mat4 src) {
   // todo SIMDIZE
   float t[6];
   float det;
@@ -231,9 +231,9 @@ MATH_INLINE mat4 Mat4Inv(const mat4 src) {
 
   return out;
 }
-MATH_INLINE mat4 Mat4FromPosRot(const vec3 pos, const quat rot) {
-  const mat4 translationMat4 = Mat4Translation(pos);
-  const mat4 rotationMat4 = QuatToMat4(rot);
+MATH_INLINE mat4 Mat4FromPosRot(vec3 pos, quat rot) {
+  mat4 translationMat4 = Mat4Translation(pos);
+  mat4 rotationMat4 = QuatToMat4(rot);
   return Mat4Mul(translationMat4, rotationMat4);
 }
 
@@ -247,33 +247,33 @@ typedef struct mat4_proj_packed {
 } mat4_proj_packed;
 
 // Perspective matrix in Vulkan Reverse Z
-MATH_INLINE void vkmMat4Perspective(const float yFOV, const float aspect, const float zNear, const float zFar, mat4* pDstMat4) {
+MATH_INLINE void vkmMat4Perspective(float yFOV, float aspect, float zNear, float zFar, mat4* pDstMat4) {
   const float tanHalfYFOV = tan(yFOV / 2.0f);
   *pDstMat4 = (mat4){.c0 = {.r0 = 1.0f / (aspect * tanHalfYFOV)},
                      .c1 = {.r1 = 1.0f / tanHalfYFOV},
                      .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
                      .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
 }
-MATH_INLINE vec3 Vec3Cross(const float3_vec l, const float3_vec r) {
+MATH_INLINE vec3 Vec3Cross(float3_vec l, float3_vec r) {
   return (vec3){l[Y] * r[Z] - r[Y] * l[Z],
                 l[Z] * r[X] - r[Z] * l[X],
                 l[X] * r[Y] - r[X] * l[Y]};
 }
-MATH_INLINE vec3 Vec3Rot(const quat q, const vec3 v) {
-  const vec3 uv = Vec3Cross(q.vec, v.vec);
-  const vec3 uuv = Vec3Cross(q.vec, uv.vec);
+MATH_INLINE vec3 Vec3Rot(quat q, vec3 v) {
+  vec3 uv = Vec3Cross(q.vec, v.vec);
+  vec3 uuv = Vec3Cross(q.vec, uv.vec);
   vec3       out;
   for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
   return out;
 }
-MATH_INLINE vec4 Vec4Rot(const quat q, const vec4 v) {
-  const vec3 uv = Vec3Cross(q.vec, v.vec);
-  const vec3 uuv = Vec3Cross(q.vec, uv.vec);
+MATH_INLINE vec4 Vec4Rot(quat q, vec4 v) {
+  vec3 uv = Vec3Cross(q.vec, v.vec);
+  vec3 uuv = Vec3Cross(q.vec, uv.vec);
   vec4       out = {.w = v.w};
   for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
   return out;
 }
-MATH_INLINE quat QuatFromEuler(const vec3 euler) {
+MATH_INLINE quat QuatFromEuler(vec3 euler) {
   vec3 c, s;
   for (int i = 0; i < 3; ++i) {
     c.vec[i] = cos(euler.vec[i] * 0.5f);
@@ -287,14 +287,14 @@ MATH_INLINE quat QuatFromEuler(const vec3 euler) {
   out.z = c.x * c.y * s.z - s.x * s.y * c.z;
   return out;
 }
-MATH_INLINE void QuatMul(const quat* pSrc, const quat* pMul, quat* pDst) {
+MATH_INLINE void QuatMul(quat src, quat mul, quat* pDst) {
   // todo SIMDIZE
-  pDst->w = pSrc->w * pMul->w - pSrc->x * pMul->x - pSrc->y * pMul->y - pSrc->z * pMul->z;
-  pDst->x = pSrc->w * pMul->x + pSrc->x * pMul->w + pSrc->y * pMul->z - pSrc->z * pMul->y;
-  pDst->y = pSrc->w * pMul->y + pSrc->y * pMul->w + pSrc->z * pMul->x - pSrc->x * pMul->z;
-  pDst->z = pSrc->w * pMul->z + pSrc->z * pMul->w + pSrc->x * pMul->y - pSrc->y * pMul->x;
+  pDst->w = src.w * mul.w - src.x * mul.x - src.y * mul.y - src.z * mul.z;
+  pDst->x = src.w * mul.x + src.x * mul.w + src.y * mul.z - src.z * mul.y;
+  pDst->y = src.w * mul.y + src.y * mul.w + src.z * mul.x - src.x * mul.z;
+  pDst->z = src.w * mul.z + src.z * mul.w + src.x * mul.y - src.y * mul.x;
 }
-MATH_INLINE vec4 Vec4MulMat4(const mat4 m, const vec4 v) {
+MATH_INLINE vec4 Vec4MulMat4(mat4 m, vec4 v) {
   // todo SIMDIZE
   vec4 out;
   out.x = m.c0.r0 * v.x + m.c1.r0 * v.y + m.c2.r0 * v.z + m.c3.r0 * v.w;
@@ -303,32 +303,32 @@ MATH_INLINE vec4 Vec4MulMat4(const mat4 m, const vec4 v) {
   out.w = m.c0.r3 * v.x + m.c1.r3 * v.y + m.c2.r3 * v.z + m.c3.r3 * v.w;
   return out;
 }
-MATH_INLINE vec3 Vec4WDivide(const vec4 v) {
+MATH_INLINE vec3 Vec4WDivide(vec4 v) {
   return (vec3){.vec = v.vec / v.vec[W]};
 }
-MATH_INLINE vec2 Vec2FromVec3(const vec3 ndc) {
+MATH_INLINE vec2 Vec2FromVec3(vec3 ndc) {
   return (vec2){.x = ndc.x, .y = ndc.y};
 }
-MATH_INLINE vec2 UVFromNDC(const vec3 ndc) {
+MATH_INLINE vec2 UVFromNDC(vec3 ndc) {
   vec2 out = Vec2FromVec3(ndc);
   out.vec = out.vec * 0.5f + 0.5f;
   return out;
 }
-MATH_INLINE ivec2 iVec2CeiDivide(const ivec2 v, int d) {
+MATH_INLINE ivec2 iVec2CeiDivide(ivec2 v, int d) {
   vec2 fv = {.vec = {v.vec[X], v.vec[Y]}};
   fv.vec = fv.vec / (float)d;
   return (ivec2){ceilf(fv.vec[X]), ceilf(fv.vec[Y])};
 }
-MATH_INLINE ivec2 iVec2ShiftRightCeil(const ivec2 v, const int shift) {
+MATH_INLINE ivec2 iVec2ShiftRightCeil(ivec2 v, int shift) {
   if (shift <= 0) return v;
   return (ivec2){(v.vec >> shift) + (v.vec % 2)};
 }
-MATH_INLINE ivec2 iVec2Min(const ivec2 v, const int min) {
+MATH_INLINE ivec2 iVec2Min(ivec2 v, int min) {
   ivec2 out;
   for (int i = 0; i < 2; ++i) out.vec[i] = v.vec[i] < min ? min : v.vec[i];
   return out;
 }
-MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
+MATH_INLINE vec2 Vec2Clamp(vec2 v, float min, float max) {
   const float2_vec minVec = {min, min};
   const float2_vec maxVec = {max, max};
   vec2             clamped = v;
@@ -338,17 +338,17 @@ MATH_INLINE vec2 Vec2Clamp(const vec2 v, const float min, const float max) {
   }
   return clamped;
 }
-MATH_INLINE vec2 Vec2Min(const vec2 a, const vec2 b) {
+MATH_INLINE vec2 Vec2Min(vec2 a, vec2 b) {
   vec2 out;
   for (int i = 0; i < 2; ++i) out.vec[i] = a.vec[i] < b.vec[i] ? a.vec[i] : b.vec[i];
   return out;
 }
-MATH_INLINE vec2 Vec2Max(const vec2 a, const vec2 b) {
+MATH_INLINE vec2 Vec2Max(vec2 a, vec2 b) {
   vec2 out;
   for (int i = 0; i < 2; ++i) out.vec[i] = a.vec[i] > b.vec[i] ? a.vec[i] : b.vec[i];
   return out;
 }
-MATH_INLINE void Mat4Print(const mat4 m) {
+MATH_INLINE void Mat4Print(mat4 m) {
   printf("mat4:\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n",
          m.c0.r0, m.c1.r0, m.c2.r0, m.c3.r0,
          m.c0.r1, m.c1.r1, m.c2.r1, m.c3.r1,

@@ -41,11 +41,11 @@ void midXrInitialize()
 
 void midXrCreateSession(XrHandle* pSessionHandle)
 {
-	const MxcImportParam* const pImportParam = &pImportedExternalMemory->importParam;
-	MxcNodeShared* const  pNodeShared = &pImportedExternalMemory->shared;
+	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 
-	const NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShared);
-	MxcNodeContext* const pNodeContext = &nodeContexts[nodeHandle];
+	NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShared);
+	MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
 	*pNodeContext = (MxcNodeContext){};
 	pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
 	pNodeContext->pNodeShared = pNodeShared;
@@ -180,19 +180,19 @@ void midXrCreateSession(XrHandle* pSessionHandle)
 	}
 }
 
-void midXrCreateSwapchain(const XrHandle swapHandle)
+void midXrCreateSwapchain(XrHandle swapHandle)
 {
 }
 
-void midXrBeginSession(const XrHandle sessionHandle)
+void midXrBeginSession(XrHandle sessionHandle)
 {
-	MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 
 	int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext);
 	REQUIRE(result == 0, "Node thread creation failed!")
 }
 
-void midXrClaimGlSwapchain(const XrHandle sessionHandle, const int imageCount, GLuint* pImages)
+void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages)
 {
 	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!")
 	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
@@ -202,18 +202,18 @@ void midXrClaimGlSwapchain(const XrHandle sessionHandle, const int imageCount, G
 	}
 }
 
-void midXrWaitFrame(const XrHandle sessionHandle)
+void midXrWaitFrame(XrHandle sessionHandle)
 {
-	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
-	const MxcNodeShared* const pNodeShared = pNodeContext->pNodeShared;
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
 }
 
-void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pView)
+void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 {
-	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
-	const MxcNodeShared* const pNodeShared = pNodeContext->pNodeShared;
-	const float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
 
 	pView->pose.position = *(XrVector3f*)&pNodeShared->cameraPos.position;
 	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
@@ -223,13 +223,13 @@ void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pVi
 	pView->fov.angleDown = -halfAngle;
 }
 
-void midXrBeginFrame(const XrHandle sessionHandle)
+void midXrBeginFrame(XrHandle sessionHandle)
 {
 }
 
-void midXrEndFrame(const XrHandle sessionHandle)
+void midXrEndFrame(XrHandle sessionHandle)
 {
-	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
-	MxcNodeShared* const pNodeShared = pNodeContext->pNodeShared;
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	__atomic_fetch_add(&pNodeShared->timelineValue, 1, __ATOMIC_RELEASE);
 }

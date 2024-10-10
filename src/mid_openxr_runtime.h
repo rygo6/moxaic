@@ -42,9 +42,9 @@ void midXrInitialize();
 void midXrCreateSession(XrHandle* pSessionHandle);
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
 void midXrWaitFrame(XrHandle sessionHandle);
-void midXrGetView(const XrHandle sessionHandle, const int viewIndex, XrView* pView);
-void midXrBeginFrame(const XrHandle sessionHandle);
-void midXrEndFrame(const XrHandle sessionHandle);
+void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
+void midXrBeginFrame(XrHandle sessionHandle);
+void midXrEndFrame(XrHandle sessionHandle);
 
 //
 //// Mid OpenXR Constants
@@ -220,6 +220,8 @@ typedef struct Instance {
 } Instance;
 CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 
+// I think I want to put all of the above in an arena pool
+
 //
 //// MidOpenXR Implementation
 #ifdef MID_OPENXR_IMPLEMENTATION
@@ -273,11 +275,11 @@ static XrResult RegisterBinding(
 	XrInstance        instance,
 	BindingContainer* pBindings,
 	Path*             pPath,
-	int (*const func)(void*))
+	int (*func)(void*))
 {
 	Instance* pInstance = (Instance*)instance;
 
-	const int pathHash = GetPathHash(&pInstance->paths, pPath);
+	int pathHash = GetPathHash(&pInstance->paths, pPath);
 	for (int i = 0; i < pBindings->count; ++i) {
 		if (GetPathHash(&pInstance->paths, (Path*)pBindings->data[i].path) == pathHash) {
 			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pPath->string, pathHash);
@@ -294,7 +296,7 @@ static XrResult RegisterBinding(
 }
 
 typedef struct BindingDefinition {
-	int (*const func)(void*);
+	int (*func)(void*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
 static XrResult InitStandardBindings(XrInstance instance)
@@ -636,7 +638,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 {
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 
 	Swapchain* pSwapchain;
 	CHECK(ClaimSwapchain(&pSession->Swapchains, &pSwapchain));
@@ -725,13 +727,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	const XrFrameWaitInfo* frameWaitInfo,
 	XrFrameState*          frameState)
 {
-	const Session* const pSession = (Session*)session;
-	const Instance* const pInstance = (Instance*)pSession->instance;
-	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	Session*  pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle  sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 
 	midXrWaitFrame(sessionHandle);
 
-	const XrTime currentTime = GetXrTime();
+	XrTime currentTime = GetXrTime();
 
 	frameState->predictedDisplayPeriod = currentTime - pSession->lastPredictedDisplayTime;
 	frameState->predictedDisplayTime = currentTime;
@@ -751,9 +753,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	XrSession             session,
 	const XrFrameEndInfo* frameEndInfo)
 {
-	const Session* const pSession = (Session*)session;
-	const Instance* const pInstance = (Instance*)pSession->instance;
-	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 	midXrEndFrame(sessionHandle);
 	return XR_SUCCESS;
 }
@@ -802,7 +804,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	const char* pathString,
 	XrPath*     path)
 {
-	Instance* const pInstance = (Instance*)instance;
+	Instance* pInstance = (Instance*)instance;
 
 	const int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (int i = 0; i < pInstance->paths.count; ++i) {
@@ -833,8 +835,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 	uint32_t*  bufferCountOutput,
 	char*      buffer)
 {
-	Instance* const pInstance = (Instance*)instance;  // check its in instance ?
-	Path* const     pPath = (Path*)path;
+	Instance* pInstance = (Instance*)instance;  // check its in instance ?
+	Path*     pPath = (Path*)path;
 
 	strncpy(buffer, pPath->string, bufferCapacityInput < XR_MAX_PATH_LENGTH ? bufferCapacityInput : XR_MAX_PATH_LENGTH);
 	*bufferCountOutput = strlen(buffer);
@@ -848,7 +850,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	XrActionSet*                 actionSet)
 {
 	printf("Creating ActionSet with %s\n", createInfo->actionSetName);
-	Instance* const pInstance = (Instance*)instance;
+	Instance* pInstance = (Instance*)instance;
 
 	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	ActionSet* pActionSet;
@@ -866,7 +868,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	const XrActionCreateInfo* createInfo,
 	XrAction*                 action)
 {
-	ActionSet* const pActionSet = (ActionSet*)actionSet;
+	ActionSet* pActionSet = (ActionSet*)actionSet;
 
 	if (pActionSet->attachedToSession != NULL)
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
@@ -904,10 +906,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	const XrInteractionProfileSuggestedBinding* suggestedBindings)
 {
 	Instance*    pInstance = (Instance*)instance;
-	const Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
-	const XrHash interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
+	Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
+	XrHash interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
 	printf("Binding: %s\n", pInteractionProfilePath->string);
-	const XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
+	XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
 
 	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&pInstance->interactionProfiles, interactionProfilePathHash);
 	if (pInteractionProfile == NULL) {
@@ -925,8 +927,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		Action*      pBindingAction = (Action*)pSuggestedBindings[i].action;
 		ActionSet*   pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
-		const Path*  pBindingPath = (Path*)pSuggestedBindings[i].binding;
-		const XrHash bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
+		Path*  pBindingPath = (Path*)pSuggestedBindings[i].binding;
+		XrHash bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
 		Binding*     pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
 		printf("Action: %s BindingPath: %s\n", pBindingAction->actionName, pBindingPath->string);
 
@@ -939,7 +941,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 		}
 
 		for (int subactionIndex = 0; subactionIndex < pBindingAction->countSubactionPaths; ++subactionIndex) {
-			const Path* pActionSubPath = (Path*)pBindingAction->subactionPaths[subactionIndex];
+			Path* pActionSubPath = (Path*)pBindingAction->subactionPaths[subactionIndex];
 			if (CompareSubPath(pActionSubPath->string, pBindingPath->string))
 				continue;
 			printf("Bound to %d %s\n", subactionIndex, pActionSubPath->string);
