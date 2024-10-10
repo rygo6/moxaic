@@ -909,7 +909,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
 	XrHash interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
 	printf("Binding: %s\n", pInteractionProfilePath->string);
-	XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
+	const XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
 
 	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&pInstance->interactionProfiles, interactionProfilePathHash);
 	if (pInteractionProfile == NULL) {
@@ -1028,7 +1028,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 {
 	Session*     pSession = (Session*)session;
 	Instance*    pInstance = (Instance*)pSession->instance;
-	const XrTime currentTime = GetXrTime();
+	XrTime currentTime = GetXrTime();
 
 	for (int sessionIndex = 0; sessionIndex < pSession->actionSetStates.count; ++sessionIndex) {
 		ActionSet*      pActionSet = (ActionSet*)syncInfo->activeActionSets[sessionIndex].actionSet;

@@ -43,7 +43,7 @@ extern void Panic(const char* file, int line, const char* message);
 		PANIC(message);                      \
 	}
 #ifdef MID_VULKAN_IMPLEMENTATION
-[[noreturn]] void Panic(const char* file, const int line, const char* message)
+[[noreturn]] void Panic(const char* file, int line, const char* message)
 {
 	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
 	__builtin_trap();
@@ -105,11 +105,11 @@ extern void Panic(const char* file, int line, const char* message);
 	})
 
 #define MIDVK_INSTANCE_FUNC(_func)                                                                     \
-	const PFN_vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \
+	PFN_vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \
 	REQUIRE(_func != NULL, "Couldn't load " #_func)
 
 #define MIDVK_DEVICE_FUNC(_func)                                                                           \
-	const PFN_vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
+	PFN_vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
 	REQUIRE(_func != NULL, "Couldn't load " #_func)
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
@@ -117,16 +117,16 @@ extern void Panic(const char* file, int line, const char* message);
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
 #define MIDVK_EXTERNAL_IMAGE_CREATE_INFO                              \
-	&(const VkExternalMemoryImageCreateInfo)                          \
+	&(VkExternalMemoryImageCreateInfo)                          \
 	{                                                                 \
 		.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO, \
 		.handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,             \
 	}
 
 #define MIDVK_COLOR_SUBRESOURCE_RANGE \
-	(const VkImageSubresourceRange) { VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
+	(VkImageSubresourceRange) { VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
 #define MIDVK_DEPTH_SUBRESOURCE_RANGE \
-	(const VkImageSubresourceRange) { VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
+	(VkImageSubresourceRange) { VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
 
 //----------------------------------------------------------------------------------
 // Mid Types
@@ -358,7 +358,7 @@ static const VkImageUsageFlags MIDVK_PASS_USAGES[] = {
 		.dstBinding = VKM_SET_BIND_STD_GLOBAL_BUFFER,                  \
 		.descriptorCount = 1,                                          \
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,           \
-		.pBufferInfo = &(const VkDescriptorBufferInfo){                \
+		.pBufferInfo = &(VkDescriptorBufferInfo){                \
 			.buffer = global_set_buffer,                               \
 			.range = sizeof(VkmGlobalSetState),                        \
 		},                                                             \
@@ -372,7 +372,7 @@ static const VkImageUsageFlags MIDVK_PASS_USAGES[] = {
 		.dstBinding = VKM_SET_BIND_STD_MATERIAL_TEXTURE,                   \
 		.descriptorCount = 1,                                              \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,       \
-		.pImageInfo = &(const VkDescriptorImageInfo){                      \
+		.pImageInfo = &(VkDescriptorImageInfo){                      \
 			.imageView = material_image_view,                              \
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,       \
 		},                                                                 \
@@ -386,7 +386,7 @@ static const VkImageUsageFlags MIDVK_PASS_USAGES[] = {
 		.dstBinding = VKM_SET_BIND_STD_OBJECT_BUFFER,               \
 		.descriptorCount = 1,                                       \
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,        \
-		.pBufferInfo = &(const VkDescriptorBufferInfo){             \
+		.pBufferInfo = &(VkDescriptorBufferInfo){             \
 			.buffer = objectSetBuffer,                              \
 			.range = sizeof(VkmStdObjectSetState),                  \
 		},                                                          \
@@ -522,19 +522,19 @@ static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const Mi
 //----------------------------------------------------------------------------------
 
 #define CmdPipelineImageBarriers2(_cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers)
-INLINE void PFN_CmdPipelineImageBarriers2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
+INLINE void PFN_CmdPipelineImageBarriers2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
 {
-	func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
+	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
 #define CmdPipelineImageBarrier2(cmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, cmd, pImageMemoryBarrier)
-INLINE void PFN_CmdPipelineImageBarrierFunc2(const PFN_vkCmdPipelineBarrier2 func, const VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier)
+INLINE void PFN_CmdPipelineImageBarrierFunc2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier)
 {
-	func(cmd, &(const VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
+	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
 #define CmdBlitImageFullScreen(cmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, cmd, srcImage, dstImage)
-INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const VkCommandBuffer cmd, const VkImage srcImage, const VkImage dstImage)
+INLINE void PFN_CmdBlitImageFullScreen(PFN_vkCmdBlitImage func, VkCommandBuffer cmd, VkImage srcImage, VkImage dstImage)
 {
-	const VkImageBlit imageBlit = {
+	VkImageBlit imageBlit = {
 		.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
 		.srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_WIDTH, .z = 1}},
 		.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
@@ -544,21 +544,21 @@ INLINE void PFN_CmdBlitImageFullScreen(const PFN_vkCmdBlitImage func, const VkCo
 }
 #define CmdBeginRenderPass(_cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView) PFN_CmdBeginRenderPass(CmdBeginRenderPass, _cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView)
 INLINE void PFN_CmdBeginRenderPass(
-	const PFN_vkCmdBeginRenderPass func,
-	const VkCommandBuffer          cmd,
-	const VkRenderPass             renderPass,
-	const VkFramebuffer            framebuffer,
-	const VkClearColorValue        clearColor,
-	const VkImageView              colorView,
-	const VkImageView              normalView,
-	const VkImageView              depthView)
+	PFN_vkCmdBeginRenderPass func,
+	VkCommandBuffer          cmd,
+	VkRenderPass             renderPass,
+	VkFramebuffer            framebuffer,
+	VkClearColorValue        clearColor,
+	VkImageView              colorView,
+	VkImageView              normalView,
+	VkImageView              depthView)
 {
-	const VkRenderPassBeginInfo renderPassBeginInfo = {
+	VkRenderPassBeginInfo renderPassBeginInfo = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.pNext = &(VkRenderPassAttachmentBeginInfo){
 			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
 			.attachmentCount = MIDVK_PASS_ATTACHMENT_COUNT,
-			.pAttachments = (const VkImageView[]){
+			.pAttachments = (VkImageView[]){
 				[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = colorView,
 				[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = normalView,
 				[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = depthView,
@@ -568,7 +568,7 @@ INLINE void PFN_CmdBeginRenderPass(
 		.framebuffer = framebuffer,
 		.renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
 		.clearValueCount = MIDVK_PASS_ATTACHMENT_COUNT,
-		.pClearValues = (const VkClearValue[]){
+		.pClearValues = (VkClearValue[]){
 			[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {.color = clearColor},
 			[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
 			[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = {.depthStencil = {0.0f}},
@@ -577,17 +577,17 @@ INLINE void PFN_CmdBeginRenderPass(
 	func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 // todo needs PFN version
-INLINE void vkmCmdResetBegin(const VkCommandBuffer commandBuffer)
+INLINE void vkmCmdResetBegin(VkCommandBuffer commandBuffer)
 {
 	vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-	vkBeginCommandBuffer(commandBuffer, &(const VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
-	vkCmdSetViewport(commandBuffer, 0, 1, &(const VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
-	vkCmdSetScissor(commandBuffer, 0, 1, &(const VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
+	vkBeginCommandBuffer(commandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+	vkCmdSetViewport(commandBuffer, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
+	vkCmdSetScissor(commandBuffer, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
 // todo needs PFN version
-INLINE void midVkSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkSwapchainKHR chain, const VkSemaphore acquireSemaphore, const VkSemaphore renderCompleteSemaphore, const uint32_t swapIndex, const VkSemaphore timeline, const uint64_t timelineSignalValue)
+INLINE void midVkSubmitPresentCommandBuffer(VkCommandBuffer cmd, VkSwapchainKHR chain, VkSemaphore acquireSemaphore, VkSemaphore renderCompleteSemaphore, uint32_t swapIndex, VkSemaphore timeline, uint64_t timelineSignalValue)
 {
-	const VkSubmitInfo2 submitInfo2 = {
+	VkSubmitInfo2 submitInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		.waitSemaphoreInfoCount = 1,
 		.pWaitSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
@@ -620,7 +620,7 @@ INLINE void midVkSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkS
 		},
 	};
 	MIDVK_REQUIRE(vkQueueSubmit2(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
-	const VkPresentInfoKHR presentInfo = {
+	VkPresentInfoKHR presentInfo = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
 		.pWaitSemaphores = &renderCompleteSemaphore,
@@ -631,9 +631,9 @@ INLINE void midVkSubmitPresentCommandBuffer(const VkCommandBuffer cmd, const VkS
 	MIDVK_REQUIRE(vkQueuePresentKHR(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
 }
 // todo needs PFN version
-INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queue, const VkSemaphore timeline, const uint64_t signal)
+INLINE void vkmSubmitCommandBuffer(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, uint64_t signal)
 {
-	const VkSubmitInfo2 submitInfo2 = {
+	VkSubmitInfo2 submitInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		.commandBufferInfoCount = 1,
 		.pCommandBufferInfos = (VkCommandBufferSubmitInfo[]){
@@ -655,9 +655,9 @@ INLINE void vkmSubmitCommandBuffer(const VkCommandBuffer cmd, const VkQueue queu
 	MIDVK_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
 // todo needs PFN version
-INLINE void midVkTimelineWait(const VkDevice device, const uint64_t waitValue, const VkSemaphore timeline)
+INLINE void midVkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore timeline)
 {
-	const VkSemaphoreWaitInfo semaphoreWaitInfo = {
+	VkSemaphoreWaitInfo semaphoreWaitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
 		.pSemaphores = &timeline,
@@ -666,9 +666,9 @@ INLINE void midVkTimelineWait(const VkDevice device, const uint64_t waitValue, c
 	MIDVK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 // todo needs PFN version
-INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue, const VkSemaphore timeline)
+INLINE void vkmTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
 {
-	const VkSemaphoreSignalInfo semaphoreSignalInfo = {
+	VkSemaphoreSignalInfo semaphoreSignalInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
 		.semaphore = timeline,
 		.value = signalValue,
@@ -676,11 +676,11 @@ INLINE void vkmTimelineSignal(const VkDevice device, const uint64_t signalValue,
 	MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 
-INLINE void midVkBindBufferSharedMemory(const VkBuffer buffer, const MidVkSharedMemory shareMemory)
+INLINE void midVkBindBufferSharedMemory(VkBuffer buffer, MidVkSharedMemory shareMemory)
 {
 	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, buffer, deviceMemory[shareMemory.type], shareMemory.offset));
 }
-INLINE void* midVkSharedMemoryPointer(const MidVkSharedMemory shareMemory)
+INLINE void* midVkSharedMemoryPointer(MidVkSharedMemory shareMemory)
 {
 	return pMappedMemory[shareMemory.type] + shareMemory.offset;
 }
@@ -719,8 +719,8 @@ INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPos
 // move[] = Forward, Back, Left, Right
 INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
 {
-	const vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
-	const float moveSensitivity = deltaTime * 0.8f;
+	vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
+	float moveSensitivity = deltaTime * 0.8f;
 	for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }
 
@@ -741,9 +741,9 @@ typedef struct MidVkRequestAllocationInfo {
 	MidLocality           locality;
 	MidVkDedicatedMemory  dedicated;
 } MidVkRequestAllocationInfo;
-void midVkAllocateDescriptorSet(const VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void midVkCreateAllocBindMapBuffer(const VkMemoryPropertyFlags memPropFlags, const VkDeviceSize bufferSize, const VkBufferUsageFlags usage, const MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
-void midVkUpdateBufferViaStaging(const void* srcData, const VkDeviceSize dstOffset, const VkDeviceSize bufferSize, const VkBuffer buffer);
+void midVkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void midVkCreateAllocBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
+void midVkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDeviceSize bufferSize, VkBuffer buffer);
 void midVkCreateBufferSharedMemory(const MidVkRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory);
 void midVkCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 void midVkBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
@@ -800,14 +800,14 @@ void midVkCreateGlobalSet(VkmGlobalSet* pSet);
 
 void midVkCreateStdRenderPass();
 void midVkCreateStdPipeLayout();
-void midvkCreateFramebufferTexture(const uint32_t framebufferCount, const MidLocality locality, MidVkFramebufferTexture* pFrameBuffers);
-void midVkCreateFramebuffer(const VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
+void midvkCreateFramebufferTexture(uint32_t framebufferCount, MidLocality locality, MidVkFramebufferTexture* pFrameBuffers);
+void midVkCreateFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
 
 void midVkCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderModule);
 
-void midVkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
-void midVkCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
-void midVkCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, const VkRenderPass renderPass, const VkPipelineLayout layout, VkPipeline* pPipe);
+void midVkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe);
+void midVkCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe);
+void midVkCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe);
 
 typedef struct VkmSamplerCreateInfo {
 	VkFilter               filter;
@@ -816,7 +816,7 @@ typedef struct VkmSamplerCreateInfo {
 } VkmSamplerCreateInfo;
 void midVkCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
-void midVkCreateSwap(const VkSurfaceKHR surface, const MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
+void midVkCreateSwap(VkSurfaceKHR surface, MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
 
 typedef struct VkmTextureCreateInfo {
 	const char*           debugName;
@@ -846,9 +846,9 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 
-MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(const VkDeviceMemory memory);
-MIDVK_EXTERNAL_HANDLE midVkGetFenceExternalHandle(const VkFence fence);
-MIDVK_EXTERNAL_HANDLE midVkGetSemaphoreExternalHandle(const VkSemaphore semaphore);
+MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(VkDeviceMemory memory);
+MIDVK_EXTERNAL_HANDLE midVkGetFenceExternalHandle(VkFence fence);
+MIDVK_EXTERNAL_HANDLE midVkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
@@ -866,7 +866,7 @@ void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocation
 #ifdef WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
 {
-	const VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
+	VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
 		.hinstance = hInstance,
 		.hwnd = hWnd,

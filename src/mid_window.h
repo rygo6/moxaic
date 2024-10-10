@@ -18,7 +18,7 @@ extern void Panic(const char* file, int line, const char* message);
     PANIC(message);                        \
   }
 #ifdef MID_WINDOW_IMPLEMENTATION
-[[noreturn]] void Panic(const char* file, const int line, const char* message) {
+[[noreturn]] void Panic(const char* file, int line, const char* message) {
   fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
   __builtin_trap();
 }
