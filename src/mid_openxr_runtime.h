@@ -57,12 +57,12 @@ void midXrEndFrame(XrHandle sessionHandle);
 //
 //// Mid OpenXR Types
 #define CHECK(_command)                          \
-	({                                           \
+	{                                            \
 		XrResult result = _command;              \
 		if (result != XR_SUCCESS) return result; \
-	})
+	}
 #define CONTAINER(_type, _capacity)                                                                       \
-	typedef struct _type##Container {                                                                     \
+	typedef struct __attribute((aligned(4))) _type##Container {                                                                     \
 		uint32_t count;                                                                                   \
 		_type    data[_capacity];                                                                         \
 	} _type##Container;                                                                                   \
@@ -109,6 +109,22 @@ void midXrEndFrame(XrHandle sessionHandle);
 		return p##_type - p##_type##s->data;                                                              \
 	}
 
+// ya we want to switch to this below rather than the above macro monstrosities
+typedef struct Container {
+	uint32_t count;
+	__attribute((aligned(8)))
+	// could maybe switch this to be handles in larger pool
+	uint8_t  data;
+} Container;
+
+#define CLAIM(_container, _outValue) Claim((Container*)&_container, sizeof(_container.data[0]), COUNT(_container.data), (void**)&_outValue)
+static XrResult Claim(Container* pContainer, int stride, int capacity, void** ppOutValue)
+{
+	if (pContainer->count >= capacity) return XR_ERROR_LIMIT_REACHED;
+	const uint32_t handle = pContainer->count++;
+	*ppOutValue = &pContainer->data + (handle * stride);
+	return XR_SUCCESS;
+}
 
 #define MIDXR_MAX_PATHS 128
 typedef struct Path {
@@ -267,10 +283,8 @@ static int OculusRightClick(float* pValue)
 	return 0;
 }
 
-
 //
-/// Mid OpenXR Implementation
-
+//// Mid OpenXR Implementation
 static XrResult RegisterBinding(
 	XrInstance        instance,
 	BindingContainer* pBindings,
@@ -396,7 +410,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	XrInstance*                 instance)
 {
 	Instance* pClaimedInstance;
-	CHECK(ClaimInstance(&instances, &pClaimedInstance));
+//	CHECK(ClaimInstance(&instances, &pClaimedInstance));
+	CHECK(CLAIM(instances, pClaimedInstance))
 
 	strncpy((char*)&pClaimedInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
 	*instance = (XrInstance)pClaimedInstance;
@@ -480,7 +495,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 
 	Instance* pInstance = (Instance*)instance;
 	Session*  pClaimedSession;
-	CHECK(ClaimSession(&pInstance->sessions, &pClaimedSession));
+//	CHECK(ClaimSession(&pInstance->sessions, &pClaimedSession));
+	CHECK(CLAIM(pInstance->sessions, pClaimedSession))
 	pClaimedSession->instance = instance;
 	switch (*(XrStructureType*)createInfo->next) {
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
@@ -531,7 +547,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	Session* pSession = (Session*)session;
 
 	Space* pClaimedSpace;
-	CHECK(ClaimSpace(&pSession->Spaces, &pClaimedSpace));
+//	CHECK(ClaimSpace(&pSession->Spaces, &pClaimedSpace));
+	CHECK(CLAIM(pSession->Spaces, pClaimedSpace))
 
 	*pClaimedSpace = (Space){
 		.referenceSpaceType = createInfo->referenceSpaceType,
@@ -641,7 +658,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 
 	Swapchain* pSwapchain;
-	CHECK(ClaimSwapchain(&pSession->Swapchains, &pSwapchain));
+//	CHECK(ClaimSwapchain(&pSession->Swapchains, &pSwapchain));
+	CHECK(CLAIM(pSession->Swapchains, pSwapchain))
 	pSwapchain->usageFlags = createInfo->usageFlags;
 	pSwapchain->format = createInfo->format;
 	pSwapchain->sampleCount = createInfo->sampleCount;
@@ -876,7 +894,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
 
 	Action* pAction;
-	CHECK(ClaimAction(&pActionSet->Actions, &pAction));
+//	CHECK(ClaimAction(&pActionSet->Actions, &pAction));
+	CHECK(CLAIM(pActionSet->Actions, pAction))
 
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
 	pAction->actionType = createInfo->actionType;

@@ -11,7 +11,7 @@
 //#include "mid_vulkan.c"
 
 #define MID_DEBUG
-[[noreturn]] void Panic(const char* file, const int line, const char* message)
+[[noreturn]] void Panic(const char* file, int line, const char* message)
 {
 	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
 	__builtin_trap();
@@ -61,7 +61,7 @@ int main(void)
 
 		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &midVk.surfaces[0]);
 
-		const MidVkContextCreateInfo contextCreateInfo = {
+		MidVkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
 				[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
 					.supportsGraphics = VKM_SUPPORT_YES,
@@ -92,7 +92,7 @@ int main(void)
 
 		// these probably should go elsewhere ?
 		// global samplers
-		const VkmSamplerCreateInfo samplerCreateInfo = {
+		VkmSamplerCreateInfo samplerCreateInfo = {
 			.filter = VK_FILTER_LINEAR,
 			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
