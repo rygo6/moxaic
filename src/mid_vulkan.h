@@ -666,7 +666,7 @@ INLINE void midVkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore t
 	MIDVK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 // todo needs PFN version
-INLINE void vkmTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
+INLINE void midVkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
 {
 	VkSemaphoreSignalInfo semaphoreSignalInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
@@ -719,7 +719,7 @@ INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPos
 // move[] = Forward, Back, Left, Right
 INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
 {
-	vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .z = move[1] - move[0]});
+	vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .y = move[5] - move[4], .z = move[1] - move[0]});
 	float moveSensitivity = deltaTime * 0.8f;
 	for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }

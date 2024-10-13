@@ -150,7 +150,7 @@ int main(void)
 			__atomic_thread_fence(__ATOMIC_RELEASE);
 
 			// signal input ready to process!
-			vkmTimelineSignal(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compTimeline);
+			midVkTimelineSignal(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compTimeline);
 
 			// MXC_CYCLE_COMPOSITOR_RECORD occurs here
 

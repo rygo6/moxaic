@@ -180,18 +180,6 @@ void midXrCreateSession(XrHandle* pSessionHandle)
 	}
 }
 
-void midXrCreateSwapchain(XrHandle swapHandle)
-{
-}
-
-void midXrBeginSession(XrHandle sessionHandle)
-{
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
-
-	int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext);
-	REQUIRE(result == 0, "Node thread creation failed!")
-}
-
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages)
 {
 	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!")
@@ -209,18 +197,35 @@ void midXrWaitFrame(XrHandle sessionHandle)
 	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
 }
 
+typedef struct XrSubView {
+	XrStructureType       type;
+	void* XR_MAY_ALIAS    next;
+	XrPosef               pose;
+	XrFovf                fov;
+} XrSubView;
+
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
 
 	pView->pose.position = *(XrVector3f*)&pNodeShared->cameraPos.position;
 	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
-	pView->fov.angleLeft = -halfAngle;
-	pView->fov.angleRight = halfAngle;
-	pView->fov.angleUp = halfAngle;
-	pView->fov.angleDown = -halfAngle;
+
+	float fovX = pNodeShared->globalSetState.proj.c0.r0;
+	float fovY = pNodeShared->globalSetState.proj.c1.r1;
+	float angleX = atan(1.0f / fovX);
+	float angleY = atan(1.0f / fovY);
+	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
+	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
+	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
+	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
+
+//	float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
+//	pView->fov.angleLeft = -halfAngle;
+//	pView->fov.angleRight = halfAngle;
+//	pView->fov.angleUp = halfAngle;
+//	pView->fov.angleDown = -halfAngle;
 }
 
 void midXrBeginFrame(XrHandle sessionHandle)

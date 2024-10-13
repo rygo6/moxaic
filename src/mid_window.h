@@ -76,6 +76,8 @@ typedef struct MidWindowInput {
 
 #define MID_KEY_A keyChar['A' - '0']
 #define MID_KEY_D keyChar['D' - '0']
+#define MID_KEY_F keyChar['F' - '0']
+#define MID_KEY_R keyChar['R' - '0']
 #define MID_KEY_S keyChar['S' - '0']
 #define MID_KEY_W keyChar['W' - '0']
 

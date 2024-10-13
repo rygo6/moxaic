@@ -348,6 +348,10 @@ MATH_INLINE vec2 Vec2Max(vec2 a, vec2 b) {
   for (int i = 0; i < 2; ++i) out.vec[i] = a.vec[i] > b.vec[i] ? a.vec[i] : b.vec[i];
   return out;
 }
+MATH_INLINE float Lerp(float a, float b, float t) {
+	return a + t * (b - a);
+}
+
 MATH_INLINE void Mat4Print(mat4 m) {
   printf("mat4:\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n% .4f % .4f % .4f % .4f\n",
          m.c0.r0, m.c1.r0, m.c2.r0, m.c3.r0,

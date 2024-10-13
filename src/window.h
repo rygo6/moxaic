@@ -4,8 +4,8 @@
 
 typedef struct MxcInput {
   vec2 mouseDelta;
-  // forward, back, left, right
-  bool move[4];
+  // forward, back, left, right, up, down
+  bool move[6];
 } MxcInput;
 
 extern MxcInput mxcInput;

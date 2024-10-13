@@ -340,7 +340,7 @@ run_loop:
 
 	// Update and Recording must be separate cycles because it's not ideal to acquire and transition images after being a renderpess
 	{  // Update Nodes
-		vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
+		midVkTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 		vkmCmdResetBegin(cmd);
 
 		for (int i = 0; i < nodeCount; ++i) {
@@ -435,7 +435,7 @@ run_loop:
 		}
 
 		{  // Recording Cycle
-			vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
+			midVkTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 			compositorFramebufferIndex = !compositorFramebufferIndex;
 
@@ -495,7 +495,9 @@ run_loop:
 
 		EndCommandBuffer(cmd);
 
-		vkmTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
+		midVkTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
+
+		midVkTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compTimeline);
 
 		{  // update timequery
 			uint64_t timestampsNS[2];
