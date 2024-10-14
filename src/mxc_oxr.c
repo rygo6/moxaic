@@ -12,6 +12,13 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 
+static struct {
+	PFNGLCREATEMEMORYOBJECTSEXTPROC     CreateMemoryObjectsEXT;
+	PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC ImportMemoryWin32HandleEXT;
+	PFNGLCREATETEXTURESPROC             CreateTextures;
+	PFNGLTEXTURESTORAGEMEM2DEXTPROC     TextureStorageMem2DEXT;
+} gl;
+
 void midXrInitialize()
 {
 	printf("Initializing Moxaic node.\n");
@@ -37,6 +44,23 @@ void midXrInitialize()
 	};
 	midVkCreateContext(&contextCreateInfo);
 	mxcConnectInterprocessNode(false);
+
+	gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
+	if (!gl.CreateMemoryObjectsEXT) {
+		printf("Failed to load glCreateMemoryObjectsEXT\n");
+	}
+	gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
+	if (!gl.ImportMemoryWin32HandleEXT) {
+		printf("Failed to load glImportMemoryWin32HandleEXT\n");
+	}
+	gl.CreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
+	if (!gl.CreateTextures) {
+		printf("Failed to load glCreateTextures\n");
+	}
+	gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
+	if (!gl.TextureStorageMem2DEXT) {
+		printf("Failed to load glTextureStorageMem2DEXT\n");
+	}
 }
 
 void midXrCreateSession(XrHandle* pSessionHandle)
@@ -59,23 +83,6 @@ void midXrCreateSession(XrHandle* pSessionHandle)
 
 	// Import framebuffers. These should really be a pool across all sessions
 	{
-		PFNGLCREATEMEMORYOBJECTSEXTPROC glCreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
-		if (!glCreateMemoryObjectsEXT) {
-			printf("Failed to load glCreateMemoryObjectsEXT\n");
-		}
-		PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC glImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
-		if (!glImportMemoryWin32HandleEXT) {
-			printf("Failed to load glImportMemoryWin32HandleEXT\n");
-		}
-		PFNGLCREATETEXTURESPROC glCreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
-		if (!glCreateTextures) {
-			printf("Failed to load glCreateTextures\n");
-		}
-		PFNGLTEXTURESTORAGEMEM2DEXTPROC glTextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
-		if (!glTextureStorageMem2DEXT) {
-			printf("Failed to load glTextureStorageMem2DEXT\n");
-		}
-
 		const int                    width = DEFAULT_WIDTH;
 		const int                    height = DEFAULT_HEIGHT;
 		MxcNodeVkFramebufferTexture* pVkFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
@@ -94,10 +101,10 @@ void midXrCreateSession(XrHandle* pSessionHandle)
 		.usage = _usage,                                               \
 	}
 #define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                   \
-	glCreateMemoryObjectsEXT(1, &_memObject);                                                                \
-	glImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
-	glCreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
-	glTextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
+	gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
+	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
+	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
+	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			const VkmTextureCreateInfo colorCreateInfo = {
@@ -183,11 +190,20 @@ void midXrCreateSession(XrHandle* pSessionHandle)
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages)
 {
 	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!")
-	const MxcNodeContext* const pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 
 	for (int i = 0; i < imageCount; ++i) {
 		pImages[i] = pNodeContext->glNodeFramebufferTextures[i].color.texture;
 	}
+}
+
+void midXrAcquireSwapchainImage(XrHandle sessionHandle, uint32_t* pIndex)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	__atomic_thread_fence(__ATOMIC_ACQUIRE);
+	int framebufferIndex = pNodeShared->timelineValue % MIDVK_SWAP_COUNT;
+	*pIndex = framebufferIndex;
 }
 
 void midXrWaitFrame(XrHandle sessionHandle)
@@ -197,12 +213,18 @@ void midXrWaitFrame(XrHandle sessionHandle)
 	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
 }
 
-typedef struct XrSubView {
-	XrStructureType       type;
-	void* XR_MAY_ALIAS    next;
-	XrPosef               pose;
-	XrFovf                fov;
-} XrSubView;
+void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView)
+{
+	*pView = (XrViewConfigurationView){
+		.recommendedImageRectWidth = MIDXR_DEFAULT_WIDTH,
+		.maxImageRectWidth = MIDXR_DEFAULT_WIDTH,
+		.recommendedImageRectHeight = MIDXR_DEFAULT_HEIGHT,
+		.maxImageRectHeight = MIDXR_DEFAULT_HEIGHT,
+		.recommendedSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+		.maxSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+	};
+}
+
 
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 {
@@ -221,7 +243,26 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
 	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
 
-//	float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
+	int width = pNodeShared->globalSetState.framebufferSize.x;
+	int height = pNodeShared->globalSetState.framebufferSize.y;
+
+	// do this? the app could calculate the subimage and pass it back with endframe info
+	// but xrEnumerateViewConfigurationViews instance based, not session based, so it can't be relied on
+	// to get expected frame size
+	// but I can get the different swap sizes via midXrClaimGlSwapchain
+	// then have it calculate clip size off XrSpace and pass back the clipping size in end frame
+	if (pView->next != NULL) {
+		switch (*(XrStructureTypeExt*)pView->next) {
+			case XR_TYPE_SUB_VIEW: {
+				XrSubView* pSubView = (XrSubView*)pView->next;
+				pSubView->imageRect.extent.width = width;
+				pSubView->imageRect.extent.height = height;
+				break;
+			}
+		}
+	}
+
+	//	float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
 //	pView->fov.angleLeft = -halfAngle;
 //	pView->fov.angleRight = halfAngle;
 //	pView->fov.angleUp = halfAngle;

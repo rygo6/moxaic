@@ -41,7 +41,9 @@ typedef uint32_t XrHandle;
 void midXrInitialize();
 void midXrCreateSession(XrHandle* pSessionHandle);
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
+void midXrAcquireSwapchainImage(XrHandle sessionHandle, uint32_t* pIndex);
 void midXrWaitFrame(XrHandle sessionHandle);
+void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView);
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
 void midXrBeginFrame(XrHandle sessionHandle);
 void midXrEndFrame(XrHandle sessionHandle);
@@ -56,6 +58,27 @@ void midXrEndFrame(XrHandle sessionHandle);
 
 //
 //// Mid OpenXR Types
+
+
+typedef enum XrStructureTypeExt {
+	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
+	XR_TYPE_SUB_VIEW = 2000480000,
+} XrStructureTypeExt;
+
+typedef struct XrSubView {
+	XrStructureType    type;
+	void* XR_MAY_ALIAS next;
+	XrRect2Di          imageRect;
+	uint32_t       imageArrayIndex;
+} XrSubView;
+
+// maybe?
+//typedef struct XrFrameBeginSwapPoolInfo {
+//	XrStructureType             type;
+//	const void* XR_MAY_ALIAS    next;
+//} XrFrameBeginSwapPoolInfo;
+
+
 #define CHECK(_command)                          \
 	{                                            \
 		XrResult result = _command;              \
@@ -124,6 +147,11 @@ static XrResult Claim(Container* pContainer, int stride, int capacity, void** pp
 	const uint32_t handle = pContainer->count++;
 	*ppOutValue = &pContainer->data + (handle * stride);
 	return XR_SUCCESS;
+}
+
+static inline XrHandle GetHandle(const Container* pContainer, int stride, const void* pType)
+{
+	return (XrHandle)((pType - (void*)&pContainer->data) / stride);
 }
 
 #define MIDXR_MAX_PATHS 128
@@ -364,15 +392,6 @@ static XrResult InitStandardBindings(XrInstance instance)
 	return XR_SUCCESS;
 }
 
-// ????
-//typedef enum XrStructureTypeExt {
-//	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
-//} XrStructureTypeExt;
-//typedef struct XrFrameBeginSwapPoolInfo {
-//	XrStructureType             type;
-//	const void* XR_MAY_ALIAS    next;
-//} XrFrameBeginSwapPoolInfo;
-
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 	uint32_t              propertyCapacityInput,
 	uint32_t*             propertyCountOutput,
@@ -559,6 +578,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
+	XrSession            session,
+	XrReferenceSpaceType referenceSpaceType,
+	XrExtent2Df*         bounds)
+{
+	return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
 	XrSession                      session,
 	const XrActionSpaceCreateInfo* createInfo,
@@ -658,8 +685,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
 
 	Swapchain* pSwapchain;
-//	CHECK(ClaimSwapchain(&pSession->Swapchains, &pSwapchain));
 	CHECK(CLAIM(pSession->Swapchains, pSwapchain))
+	pSwapchain->session = session;
 	pSwapchain->usageFlags = createInfo->usageFlags;
 	pSwapchain->format = createInfo->format;
 	pSwapchain->sampleCount = createInfo->sampleCount;
@@ -711,9 +738,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	const XrSwapchainImageAcquireInfo* acquireInfo,
 	uint32_t*                          index)
 {
-	Swapchain* pSwapchain = (Swapchain *)swapchain;
+	Swapchain* pSwapchain = (Swapchain*)swapchain;
+	Session*   pSession = (Session*)pSwapchain->session;
+	Instance*  pInstance = (Instance*)pSession->instance;
+	XrHandle   sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+
 	pSwapchain->swapIndex = !pSwapchain->swapIndex;
 	*index = pSwapchain->swapIndex;
+
+	midXrAcquireSwapchainImage(sessionHandle, index);
+
 	return XR_SUCCESS;
 }
 
@@ -786,6 +820,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 	uint32_t*               viewCountOutput,
 	XrView*                 views)
 {
+	viewState->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT |
+								XR_VIEW_STATE_POSITION_VALID_BIT |
+								XR_VIEW_STATE_ORIENTATION_TRACKED_BIT |
+								XR_VIEW_STATE_POSITION_TRACKED_BIT;
+
 	switch (viewLocateInfo->viewConfigurationType) {
 		default:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
@@ -1125,7 +1164,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 //	CHECK_PROC_ADDR(xrDestroySession)
 	CHECK_PROC_ADDR(xrEnumerateReferenceSpaces)
 	CHECK_PROC_ADDR(xrCreateReferenceSpace)
-//	CHECK_PROC_ADDR(xrGetReferenceSpaceBoundsRect)
+	CHECK_PROC_ADDR(xrGetReferenceSpaceBoundsRect)
 	CHECK_PROC_ADDR(xrCreateActionSpace)
 	CHECK_PROC_ADDR(xrLocateSpace)
 //	CHECK_PROC_ADDR(xrDestroySpace)

@@ -22,6 +22,5 @@ void main() {
 
     outNormal = inNormal;
 
-//    outUV = scaledUV;
-    outUV = inUV;
+    outUV = scaledUV;
 }
