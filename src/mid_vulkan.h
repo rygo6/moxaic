@@ -585,7 +585,14 @@ INLINE void vkmCmdResetBegin(VkCommandBuffer commandBuffer)
 	vkCmdSetScissor(commandBuffer, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 }
 // todo needs PFN version
-INLINE void midVkSubmitPresentCommandBuffer(VkCommandBuffer cmd, VkSwapchainKHR chain, VkSemaphore acquireSemaphore, VkSemaphore renderCompleteSemaphore, uint32_t swapIndex, VkSemaphore timeline, uint64_t timelineSignalValue)
+INLINE void midVkSubmitPresentCommandBuffer(
+	VkCommandBuffer cmd,
+	VkSwapchainKHR chain,
+	VkSemaphore acquireSemaphore,
+	VkSemaphore renderCompleteSemaphore,
+	uint32_t swapIndex,
+	VkSemaphore timeline,
+	uint64_t timelineSignalValue)
 {
 	VkSubmitInfo2 submitInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
@@ -608,15 +615,16 @@ INLINE void midVkSubmitPresentCommandBuffer(VkCommandBuffer cmd, VkSwapchainKHR 
 		.pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
 			{
 				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+				.semaphore = renderCompleteSemaphore,
+				.stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 				.value = timelineSignalValue,
 				.semaphore = timeline,
 				.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 			},
-			{
-				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-				.semaphore = renderCompleteSemaphore,
-				.stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
-			},
+
 		},
 	};
 	MIDVK_REQUIRE(vkQueueSubmit2(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));

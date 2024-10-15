@@ -88,7 +88,6 @@ typedef struct MxcCompositorNodeContext {
 	// read by multiple threads
 	VkCommandBuffer cmd;
 	VkSemaphore     compTimeline;
-	uint64_t        compBaseCycleValue;
 	MidVkSwap       swap;
 
 	// cold data

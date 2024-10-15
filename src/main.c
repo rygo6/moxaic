@@ -133,11 +133,11 @@ int main(void)
 	if (isCompositor) {  // Compositor Loop
 		const VkDevice device = midVk.context.device;
 		const VkQueue  graphicsQueue = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-		compositorNodeContext.compBaseCycleValue = 0;
+		uint64_t compositorBaseCycleValue = 0;
 		while (isRunning) {
 
 			// we may not have to even wait... this could go faster
-			midVkTimelineWait(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compTimeline);
+			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compTimeline);
 
 			// interprocess polling could be a different thread?
 			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
@@ -150,7 +150,7 @@ int main(void)
 			__atomic_thread_fence(__ATOMIC_RELEASE);
 
 			// signal input ready to process!
-			midVkTimelineSignal(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compTimeline);
+			midVkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compTimeline);
 
 			// MXC_CYCLE_COMPOSITOR_RECORD occurs here
 
@@ -165,9 +165,9 @@ int main(void)
 			//      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
 			// wait for recording to be done
-			midVkTimelineWait(device, compositorNodeContext.compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
+			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
 
-			compositorNodeContext.compBaseCycleValue += MXC_CYCLE_COUNT;
+			compositorBaseCycleValue += MXC_CYCLE_COUNT;
 			__atomic_thread_fence(__ATOMIC_RELEASE); // should use atomic add ?
 
 			__atomic_thread_fence(__ATOMIC_ACQUIRE);
@@ -178,7 +178,7 @@ int main(void)
 											compositorNodeContext.swap.renderCompleteSemaphore,
 											swapIndex,
 											compositorNodeContext.compTimeline,
-											compositorNodeContext.compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
+											compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
 			// Try submitting nodes before waiting to update window again.
 			// We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.

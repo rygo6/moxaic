@@ -287,7 +287,7 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 	const VkDeviceSize quadIndexOffset = pNode->quadMesh.indexOffset;
 	const VkDeviceSize quadVertexOffset = pNode->quadMesh.vertexOffset;
 
-	uint64_t          compBaseCycleValue = 0;
+	uint64_t          compositorBaseCycleValue = 0;
 	const VkSemaphore compTimeline = pNodeContext->compTimeline;
 
 	const MidVkSwap swap = pNodeContext->swap;
@@ -333,14 +333,14 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 
 run_loop:
 
-	midVkTimelineWait(device, compBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
+	midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
 	vkmProcessCameraMouseInput(midWindowInput.deltaTime, mxcInput.mouseDelta, &globalCameraPose);
 	vkmProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globalCameraPose);
 	vkmUpdateGlobalSetView(&globalCameraPose, &globalSetState, pGlobalSetMapped);
 
 	// Update and Recording must be separate cycles because it's not ideal to acquire and transition images after being a renderpess
 	{  // Update Nodes
-		midVkTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
+		midVkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 		vkmCmdResetBegin(cmd);
 
 		for (int i = 0; i < nodeCount; ++i) {
@@ -435,7 +435,7 @@ run_loop:
 		}
 
 		{  // Recording Cycle
-			midVkTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
+			midVkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 			compositorFramebufferIndex = !compositorFramebufferIndex;
 
@@ -495,9 +495,11 @@ run_loop:
 
 		EndCommandBuffer(cmd);
 
-		midVkTimelineSignal(device, compBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
+		midVkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
 
-		midVkTimelineWait(device, compBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compTimeline);
+		compositorBaseCycleValue += MXC_CYCLE_COUNT;
+
+		midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compTimeline);
 
 		{  // update timequery
 			uint64_t timestampsNS[2];
@@ -508,8 +510,6 @@ run_loop:
 			}
 			timeQueryMs = timestampsMS[1] - timestampsMS[0];
 		}
-
-		compBaseCycleValue += MXC_CYCLE_COUNT;
 	}
 
 	CHECK_RUNNING;

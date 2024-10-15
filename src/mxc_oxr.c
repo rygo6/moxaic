@@ -187,6 +187,16 @@ void midXrCreateSession(XrHandle* pSessionHandle)
 	}
 }
 
+void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	float radius = pNodeShared->compositorRadius * 2.0f;
+
+	// we just assume depth is the same, and treat this like a cube
+	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
+}
+
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages)
 {
 	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!")
@@ -213,6 +223,7 @@ void midXrWaitFrame(XrHandle sessionHandle)
 	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
 }
 
+// this isn't associated with sessions, its associated with instance, so sizes need to be global... ?
 void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView)
 {
 	*pView = (XrViewConfigurationView){
@@ -224,7 +235,6 @@ void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConf
 		.maxSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
 	};
 }
-
 
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 {

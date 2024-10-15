@@ -40,6 +40,7 @@ typedef uint32_t XrHandle;
 
 void midXrInitialize();
 void midXrCreateSession(XrHandle* pSessionHandle);
+void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
 void midXrAcquireSwapchainImage(XrHandle sessionHandle, uint32_t* pIndex);
 void midXrWaitFrame(XrHandle sessionHandle);
@@ -58,12 +59,15 @@ void midXrEndFrame(XrHandle sessionHandle);
 
 //
 //// Mid OpenXR Types
-
-
 typedef enum XrStructureTypeExt {
 	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
 	XR_TYPE_SUB_VIEW = 2000480000,
+	XR_TYPE_SPACE_BOUNDS = 2000490000,
 } XrStructureTypeExt;
+
+typedef enum XrReferenceSpaceTypeExt {
+	XR_REFERENCE_SPACE_TYPE_LOCAL_BOUNDED = 2000115000,
+} XrReferenceSpaceTypeExt;
 
 typedef struct XrSubView {
 	XrStructureType    type;
@@ -71,6 +75,28 @@ typedef struct XrSubView {
 	XrRect2Di          imageRect;
 	uint32_t       imageArrayIndex;
 } XrSubView;
+
+typedef struct XrSpaceBounds {
+	XrStructureType    type;
+	void* XR_MAY_ALIAS next;
+	XrRect2Di          imageRect;
+} XrSpaceBounds;
+
+//typedef struct XrFrameEndInfo {
+//	XrStructureType    type;
+//	void* XR_MAY_ALIAS next;
+//	XrRect2Di          imageRect;
+//	uint32_t       imageArrayIndex;
+//} XrFrameEndInfo;
+
+//typedef struct XrSubView {
+//	XrStructureType    type;
+//	void* XR_MAY_ALIAS next;
+//	XrRect2Di          imageRect;
+//	uint32_t       imageArrayIndex;
+//} XrSubView;
+
+
 
 // maybe?
 //typedef struct XrFrameBeginSwapPoolInfo {
@@ -247,7 +273,7 @@ typedef struct Session {
 	XrTime                          lastPredictedDisplayTime;
 	XrGraphicsBindingOpenGLWin32KHR glBinding;
 	XrViewConfigurationType         primaryViewConfigurationType;
-	SpaceContainer                  Spaces;
+	Space                           referenceSpace;
 	SwapchainContainer              Swapchains;
 	ActionSetStateContainer         actionSetStates;
 } Session;
@@ -429,7 +455,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	XrInstance*                 instance)
 {
 	Instance* pClaimedInstance;
-//	CHECK(ClaimInstance(&instances, &pClaimedInstance));
 	CHECK(CLAIM(instances, pClaimedInstance))
 
 	strncpy((char*)&pClaimedInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
@@ -514,7 +539,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 
 	Instance* pInstance = (Instance*)instance;
 	Session*  pClaimedSession;
-//	CHECK(ClaimSession(&pInstance->sessions, &pClaimedSession));
 	CHECK(CLAIM(pInstance->sessions, pClaimedSession))
 	pClaimedSession->instance = instance;
 	switch (*(XrStructureType*)createInfo->next) {
@@ -538,8 +562,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
 {
 	Session* pSession = (Session*)session;
 	const XrReferenceSpaceType supportedSpaces[] = {
-//		XR_REFERENCE_SPACE_TYPE_VIEW,
-//		XR_REFERENCE_SPACE_TYPE_LOCAL,
+		XR_REFERENCE_SPACE_TYPE_VIEW,
+		XR_REFERENCE_SPACE_TYPE_LOCAL,
 		XR_REFERENCE_SPACE_TYPE_STAGE,
 	};
 
@@ -565,15 +589,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 {
 	Session* pSession = (Session*)session;
 
-	Space* pClaimedSpace;
-//	CHECK(ClaimSpace(&pSession->Spaces, &pClaimedSpace));
-	CHECK(CLAIM(pSession->Spaces, pClaimedSpace))
-
-	*pClaimedSpace = (Space){
+	pSession->referenceSpace = (Space){
 		.referenceSpaceType = createInfo->referenceSpaceType,
 		.poseInReferenceSpace = createInfo->poseInReferenceSpace,
 	};
-	*space = (XrSpace)pClaimedSpace;
+	*space = (XrSpace)&pSession->referenceSpace;
 
 	return XR_SUCCESS;
 }
@@ -583,8 +603,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 	XrReferenceSpaceType referenceSpaceType,
 	XrExtent2Df*         bounds)
 {
+	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+
+	midXrGetReferenceSpaceBounds(sessionHandle, bounds);
+
 	return XR_SUCCESS;
 }
+
+//XRAPI_ATTR XrResult XRAPI_CALL xrSetReferenceSpaceBoundsRect(
+//	XrSession            session,
+//	XrReferenceSpaceType referenceSpaceType,
+//	XrExtent2Df          bounds)
+//{
+//	return XR_SUCCESS;
+//}
 
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
 	XrSession                      session,
@@ -1047,13 +1081,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state)
 {
-	const Action*    pGetAction = (Action*)getInfo->action;
-	const Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
-	const ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
+	Action*    pGetAction = (Action*)getInfo->action;
+	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
+	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
 
 	Session*        pSession = (Session*)session;
-	const Instance* pInstance = (Instance*)pSession->instance;
-	const XrHash    getActionSetHash = GetActionSetHash(&pInstance->sctionSets, pGetActionSet);
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHash    getActionSetHash = GetActionSetHash(&pInstance->sctionSets, pGetActionSet);
 	ActionSetState* pGetActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, getActionSetHash);
 
 	const int    getActionHandle = GetActionHandle(&pGetActionSet->Actions, pGetAction);
