@@ -19,9 +19,9 @@ static struct {
 	PFNGLTEXTURESTORAGEMEM2DEXTPROC     TextureStorageMem2DEXT;
 } gl;
 
-void midXrInitialize()
+void midXrInitialize(XrGraphicsApi graphicsApi)
 {
-	printf("Initializing Moxaic node.\n");
+	printf("Initializing Moxaic OpenXR Node.\n");
 	isCompositor = false;
 
 	// Debating if each node should have a vulkan instance to read timeline semaphore
@@ -45,26 +45,37 @@ void midXrInitialize()
 	midVkCreateContext(&contextCreateInfo);
 	mxcConnectInterprocessNode(false);
 
-	gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
-	if (!gl.CreateMemoryObjectsEXT) {
-		printf("Failed to load glCreateMemoryObjectsEXT\n");
-	}
-	gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
-	if (!gl.ImportMemoryWin32HandleEXT) {
-		printf("Failed to load glImportMemoryWin32HandleEXT\n");
-	}
-	gl.CreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
-	if (!gl.CreateTextures) {
-		printf("Failed to load glCreateTextures\n");
-	}
-	gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
-	if (!gl.TextureStorageMem2DEXT) {
-		printf("Failed to load glTextureStorageMem2DEXT\n");
+	switch (graphicsApi){
+
+		case XR_GRAPHICS_API_OPENGL:
+			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
+			if (!gl.CreateMemoryObjectsEXT) {
+				printf("Failed to load glCreateMemoryObjectsEXT\n");
+			}
+			gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
+			if (!gl.ImportMemoryWin32HandleEXT) {
+				printf("Failed to load glImportMemoryWin32HandleEXT\n");
+			}
+			gl.CreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
+			if (!gl.CreateTextures) {
+				printf("Failed to load glCreateTextures\n");
+			}
+			gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
+			if (!gl.TextureStorageMem2DEXT) {
+				printf("Failed to load glTextureStorageMem2DEXT\n");
+			}
+			break;
+		case XR_GRAPHICS_API_OPENGL_ES: break;
+		case XR_GRAPHICS_API_VULKAN:    break;
+		case XR_GRAPHICS_API_D3D11_1:   break;
+		case XR_GRAPHICS_API_COUNT:     break;
 	}
 }
 
 void midXrCreateSession(XrHandle* pSessionHandle)
 {
+	printf("Creating Moxaic OpenXR Session.\n");
+
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 

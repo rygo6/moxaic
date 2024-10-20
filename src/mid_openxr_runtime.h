@@ -6,10 +6,16 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 typedef struct IUnknown IUnknown;
+typedef struct ID3D11Device ID3D11Device;
+typedef struct ID3D11Texture2D ID3D11Texture2D;
+typedef enum D3D_FEATURE_LEVEL {
+	D3D_FEATURE_LEVEL_11_1 = 0xb100,
+} D3D_FEATURE_LEVEL;
 
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_VULKAN
 #define XR_USE_GRAPHICS_API_OPENGL
+#define XR_USE_GRAPHICS_API_D3D11
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_reflection.h>
@@ -38,7 +44,16 @@ typedef struct IUnknown IUnknown;
 typedef uint32_t XrHash;
 typedef uint32_t XrHandle;
 
-void midXrInitialize();
+
+typedef enum XrGraphicsApi {
+	XR_GRAPHICS_API_OPENGL,
+	XR_GRAPHICS_API_OPENGL_ES,
+	XR_GRAPHICS_API_VULKAN,
+	XR_GRAPHICS_API_D3D11_1,
+	XR_GRAPHICS_API_COUNT,
+} XrGraphicsApi;
+
+void midXrInitialize(XrGraphicsApi graphicsApi);
 void midXrCreateSession(XrHandle* pSessionHandle);
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
@@ -283,6 +298,7 @@ CONTAINER(Session, MIDXR_MAX_SESSIONS)
 typedef struct Instance {
 	char                        applicationName[XR_MAX_APPLICATION_NAME_SIZE];
 	XrFormFactor                systemFormFactor;
+	XrGraphicsApi				graphicsApi;
 	SessionContainer            sessions;
 	ActionSetContainer          sctionSets;
 	InteractionProfileContainer interactionProfiles;
@@ -438,6 +454,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_opengl_enable_SPEC_VERSION,
 		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_D3D11_ENABLE_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_D3D11_enable_SPEC_VERSION,
+		},
 	};
 
 	*propertyCountOutput = COUNT(extensionProperties);
@@ -454,14 +475,28 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	const XrInstanceCreateInfo* createInfo,
 	XrInstance*                 instance)
 {
-	Instance* pClaimedInstance;
-	CHECK(CLAIM(instances, pClaimedInstance))
+	Instance* pInstance;
+	CHECK(CLAIM(instances, pInstance))
 
-	strncpy((char*)&pClaimedInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
-	*instance = (XrInstance)pClaimedInstance;
+	for (int i = 0; i < createInfo->enabledApiLayerCount; ++i) {
+		printf("Enabled API Layer: %s\n", createInfo->enabledApiLayerNames[i]);
+	}
+
+	for (int i = 0; i < createInfo->enabledExtensionCount; ++i) {
+		printf("Enabled Extension: %s\n", createInfo->enabledExtensionNames[i]);
+		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0) {
+			pInstance->graphicsApi = XR_GRAPHICS_API_OPENGL;
+		}
+		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0) {
+			pInstance->graphicsApi = XR_GRAPHICS_API_D3D11_1;
+		}
+	}
+
+	strncpy((char*)&pInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
+	*instance = (XrInstance)pInstance;
 
 	InitStandardBindings(*instance);
-	midXrInitialize();
+	midXrInitialize(pInstance->graphicsApi);
 
 	return XR_SUCCESS;
 }
@@ -759,6 +794,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 			}
 			break;
 		}
+		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
+			XrSwapchainImageOpenGLKHR* pGlImage = (XrSwapchainImageOpenGLKHR*)images;
+			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
+				pGlImage[i].image = pSwapchain->color[i];
+			}
+			break;
+		}
 		default:
 			fprintf(stderr, "Swap type not currently supported\n");
 			return XR_ERROR_HANDLE_INVALID;
@@ -967,7 +1009,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
 
 	Action* pAction;
-//	CHECK(ClaimAction(&pActionSet->Actions, &pAction));
 	CHECK(CLAIM(pActionSet->Actions, pAction))
 
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
@@ -1171,11 +1212,26 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
+	XrInstance                      instance,
+	XrSystemId                      systemId,
+	XrGraphicsRequirementsD3D11KHR* graphicsRequirements)
+{
+	Instance* pInstance = (Instance*)instance;
+
+	*graphicsRequirements = (XrGraphicsRequirementsD3D11KHR){
+		.minFeatureLevel = D3D_FEATURE_LEVEL_11_1,
+	};
+	return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
 	PFN_xrVoidFunction* function)
 {
+	printf("OpenXR Proc: %s\n", name);
+
 #define CHECK_PROC_ADDR(_name)                                    \
 	if (strncmp(name, #_name, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
 		*function = (PFN_xrVoidFunction)_name;                    \
@@ -1239,6 +1295,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 //	CHECK_PROC_ADDR(xrStopHapticFeedback)
 
 	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
+	CHECK_PROC_ADDR(xrGetD3D11GraphicsRequirementsKHR)
 
 #undef CHECK_PROC_ADDR
 
