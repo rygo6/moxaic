@@ -312,6 +312,13 @@ CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 //// MidOpenXR Implementation
 #ifdef MID_OPENXR_IMPLEMENTATION
 
+#define ENABLE_DEBUG_LOG_METHOD
+#ifdef ENABLE_DEBUG_LOG_METHOD
+#define LOG_METHOD(_name) printf(#_name "\n")
+#else
+#define LOG_METHOD(_name)
+#endif
+
 static InstanceContainer instances;
 
 //
@@ -439,6 +446,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 	uint32_t*             propertyCountOutput,
 	XrApiLayerProperties* properties)
 {
+	LOG_METHOD(xrEnumerateApiLayerProperties);
+
 	return XR_SUCCESS;
 }
 
@@ -448,6 +457,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 	uint32_t*              propertyCountOutput,
 	XrExtensionProperties* properties)
 {
+	LOG_METHOD(xrEnumerateInstanceExtensionProperties);
+
 	const XrExtensionProperties extensionProperties[] = {
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
@@ -475,6 +486,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	const XrInstanceCreateInfo* createInfo,
 	XrInstance*                 instance)
 {
+	LOG_METHOD(xrCreateInstance);
+
 	Instance* pInstance;
 	CHECK(CLAIM(instances, pInstance))
 
@@ -501,10 +514,19 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyInstance(
+	XrInstance instance)
+{
+	LOG_METHOD(xrDestroyInstance);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
 	XrInstance            instance,
 	XrInstanceProperties* instanceProperties)
 {
+	LOG_METHOD(xrGetInstanceProperties);
+
 	instanceProperties->runtimeVersion = XR_MAKE_VERSION(0, 1, 0);
 	strncpy(instanceProperties->runtimeName, "Moxaic OpenXR", XR_MAX_RUNTIME_NAME_SIZE);
 	return XR_SUCCESS;
@@ -517,6 +539,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	XrInstance         instance,
 	XrEventDataBuffer* eventData)
 {
+	LOG_METHOD(xrPollEvent);
+
 	if (SessionState != PendingSessionState) {
 		// for debugging, this needs to be manually set elsewhere
 		if (PendingSessionState == XR_SESSION_STATE_IDLE)
@@ -535,15 +559,50 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	return XR_EVENT_UNAVAILABLE;
 }
 
-#define MIDXR_SYSTEM_ID 1
+XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(
+	XrInstance instance,
+	XrResult   value,
+	char       buffer[XR_MAX_RESULT_STRING_SIZE])
+{
+	LOG_METHOD(xrResultToString);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrStructureTypeToString(
+	XrInstance      instance,
+	XrStructureType value,
+	char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
+{
+	LOG_METHOD(xrStructureTypeToString);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+#define XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID 1
+#define XR_HANDHELD_DISPLAY_SYSTEM_ID 2
 XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	XrInstance             instance,
 	const XrSystemGetInfo* getInfo,
 	XrSystemId*            systemId)
 {
+	LOG_METHOD(xrGetSystem);
+
 	Instance* pInstance = (Instance*)instance;
-	pInstance->systemFormFactor = getInfo->formFactor;
-	*systemId = MIDXR_SYSTEM_ID;
+
+	switch (getInfo->formFactor){
+
+		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
+			pInstance->systemFormFactor = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
+			*systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
+			break;
+		case XR_FORM_FACTOR_HANDHELD_DISPLAY:
+			pInstance->systemFormFactor = XR_HANDHELD_DISPLAY_SYSTEM_ID;
+			*systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
+			break;
+		default:
+			*systemId = XR_NULL_SYSTEM_ID;
+			return XR_ERROR_FORM_FACTOR_UNSUPPORTED;
+	}
+
 	return XR_SUCCESS;
 }
 
@@ -552,14 +611,73 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 	XrSystemId          systemId,
 	XrSystemProperties* properties)
 {
-	properties->systemId = MIDXR_SYSTEM_ID;
-	properties->vendorId = 0;
-	strncpy(properties->systemName, "moxaic", XR_MAX_SYSTEM_NAME_SIZE);
-	properties->graphicsProperties.maxLayerCount = 3;
-	properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
-	properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
-	properties->trackingProperties.orientationTracking = XR_TRUE;
-	properties->trackingProperties.positionTracking = XR_TRUE;
+	LOG_METHOD(xrGetSystemProperties);
+
+	switch (systemId){
+
+		case XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID:
+			properties->systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
+			properties->vendorId = 0;
+			strncpy(properties->systemName, "MoxaicHMD", XR_MAX_SYSTEM_NAME_SIZE);
+			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
+			properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
+			properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
+			properties->trackingProperties.orientationTracking = XR_TRUE;
+			properties->trackingProperties.positionTracking = XR_TRUE;
+			break;
+		case XR_HANDHELD_DISPLAY_SYSTEM_ID:
+			properties->systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
+			properties->vendorId = 0;
+			strncpy(properties->systemName, "MoxaicHandheld", XR_MAX_SYSTEM_NAME_SIZE);
+			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
+			properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
+			properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
+			properties->trackingProperties.orientationTracking = XR_TRUE;
+			properties->trackingProperties.positionTracking = XR_TRUE;
+			break;
+		default:
+			return XR_ERROR_HANDLE_INVALID;
+	}
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
+	XrInstance              instance,
+	XrSystemId              systemId,
+	XrViewConfigurationType viewConfigurationType,
+	uint32_t                environmentBlendModeCapacityInput,
+	uint32_t*               environmentBlendModeCountOutput,
+	XrEnvironmentBlendMode* environmentBlendModes)
+{
+	LOG_METHOD(xrEnumerateEnvironmentBlendModes);
+
+	const XrEnvironmentBlendMode modes[] = {
+		XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
+		XR_ENVIRONMENT_BLEND_MODE_ADDITIVE,
+		XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND,
+	};
+
+	*environmentBlendModeCountOutput = COUNT(modes);
+
+	if (environmentBlendModes == NULL)
+		return XR_SUCCESS;
+
+	if (environmentBlendModeCapacityInput < COUNT(modes))
+		return XR_ERROR_SIZE_INSUFFICIENT;
+
+	switch (viewConfigurationType) {
+
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+		default:
+			for (int i = 0; i < COUNT(modes); ++i) {
+				environmentBlendModes[i] = modes[i];
+			}
+			break;
+	}
 
 	return XR_SUCCESS;
 }
@@ -569,6 +687,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	const XrSessionCreateInfo* createInfo,
 	XrSession*                 session)
 {
+	LOG_METHOD(xrCreateSession);
+
 	XrHandle sessionHandle;
 	midXrCreateSession(&sessionHandle);
 
@@ -589,13 +709,23 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	}
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroySession(
+	XrSession session)
+{
+	LOG_METHOD(xrDestroySession);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
 	XrSession             session,
 	uint32_t              spaceCapacityInput,
 	uint32_t*             spaceCountOutput,
 	XrReferenceSpaceType* spaces)
 {
+	LOG_METHOD(xrEnumerateReferenceSpaces);
+
 	Session* pSession = (Session*)session;
+
 	const XrReferenceSpaceType supportedSpaces[] = {
 		XR_REFERENCE_SPACE_TYPE_VIEW,
 		XR_REFERENCE_SPACE_TYPE_LOCAL,
@@ -622,6 +752,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	const XrReferenceSpaceCreateInfo* createInfo,
 	XrSpace*                          space)
 {
+	LOG_METHOD(xrCreateReferenceSpace);
+
 	Session* pSession = (Session*)session;
 
 	pSession->referenceSpace = (Space){
@@ -638,6 +770,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 	XrReferenceSpaceType referenceSpaceType,
 	XrExtent2Df*         bounds)
 {
+	LOG_METHOD(xrGetReferenceSpaceBoundsRect);
+
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
@@ -660,6 +794,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
 	const XrActionSpaceCreateInfo* createInfo,
 	XrSpace*                       space)
 {
+	LOG_METHOD(xrCreateActionSpace);
 	return XR_SUCCESS;
 }
 
@@ -669,7 +804,57 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(
 	XrTime           time,
 	XrSpaceLocation* location)
 {
+	LOG_METHOD(xrLocateSpace);
 	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpace(
+	XrSpace space)
+{
+	LOG_METHOD(xrDestroySpace);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurations(
+	XrInstance               instance,
+	XrSystemId               systemId,
+	uint32_t                 viewConfigurationTypeCapacityInput,
+	uint32_t*                viewConfigurationTypeCountOutput,
+	XrViewConfigurationType* viewConfigurationTypes)
+{
+	LOG_METHOD(xrEnumerateViewConfigurations);
+
+	const XrViewConfigurationType modes[] = {
+		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
+		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET,
+//		XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT,
+//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO,
+	};
+
+	*viewConfigurationTypeCountOutput = COUNT(modes);
+
+	if (viewConfigurationTypes == NULL)
+		return XR_SUCCESS;
+
+	if (viewConfigurationTypeCapacityInput < COUNT(modes))
+		return XR_ERROR_SIZE_INSUFFICIENT;
+
+	for (int i = 0; i < COUNT(modes); ++i) {
+		viewConfigurationTypes[i] = modes[i];
+	}
+
+	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetViewConfigurationProperties(
+	XrInstance                     instance,
+	XrSystemId                     systemId,
+	XrViewConfigurationType        viewConfigurationType,
+	XrViewConfigurationProperties* configurationProperties)
+{
+	LOG_METHOD(xrGetViewConfigurationProperties);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
@@ -680,6 +865,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	uint32_t*                viewCountOutput,
 	XrViewConfigurationView* views)
 {
+	LOG_METHOD(xrEnumerateViewConfigurationViews);
+
 	switch (viewConfigurationType) {
 		default:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
@@ -725,6 +912,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 	uint32_t* formatCountOutput,
 	int64_t*  formats)
 {
+	LOG_METHOD(xrEnumerateSwapchainFormats);
+
 	const int64_t swapFormats[] = {
 		GL_RGBA8,
 		GL_SRGB8_ALPHA8,
@@ -749,6 +938,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	const XrSwapchainCreateInfo* createInfo,
 	XrSwapchain*                 swapchain)
 {
+	LOG_METHOD(xrCreateSwapchain);
+
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
@@ -772,12 +963,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroySwapchain(
+	XrSwapchain swapchain)
+{
+	LOG_METHOD(xrGetViewConfigurationProperties);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 	XrSwapchain                 swapchain,
 	uint32_t                    imageCapacityInput,
 	uint32_t*                   imageCountOutput,
 	XrSwapchainImageBaseHeader* images)
 {
+	LOG_METHOD(xrEnumerateSwapchainImages);
+
 	*imageCountOutput = MIDXR_SWAP_COUNT;
 	if (images == NULL)
 		return XR_SUCCESS;
@@ -814,6 +1014,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	const XrSwapchainImageAcquireInfo* acquireInfo,
 	uint32_t*                          index)
 {
+	LOG_METHOD(xrAcquireSwapchainImage);
+
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
 	Instance*  pInstance = (Instance*)pSession->instance;
@@ -831,6 +1033,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
 	XrSwapchain                     swapchain,
 	const XrSwapchainImageWaitInfo* waitInfo)
 {
+	LOG_METHOD(xrWaitSwapchainImage);
 	return XR_SUCCESS;
 }
 
@@ -838,6 +1041,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
 	XrSwapchain                        swapchain,
 	const XrSwapchainImageReleaseInfo* releaseInfo)
 {
+	LOG_METHOD(xrReleaseSwapchainImage);
 	return XR_SUCCESS;
 }
 
@@ -845,9 +1049,25 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	XrSession                 session,
 	const XrSessionBeginInfo* beginInfo)
 {
+	LOG_METHOD(xrBeginSession);
+
 	Session* pSession = (Session*)session;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEndSession(
+	XrSession session)
+{
+	LOG_METHOD(xrEndSession);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrRequestExitSession(
+	XrSession session)
+{
+	LOG_METHOD(xrRequestExitSession);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
@@ -855,6 +1075,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	const XrFrameWaitInfo* frameWaitInfo,
 	XrFrameState*          frameState)
 {
+	LOG_METHOD(xrWaitFrame);
+
 	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
@@ -874,6 +1096,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 	XrSession               session,
 	const XrFrameBeginInfo* frameBeginInfo)
 {
+	LOG_METHOD(xrBeginFrame);
+
 	return XR_SUCCESS;
 }
 
@@ -881,6 +1105,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	XrSession             session,
 	const XrFrameEndInfo* frameEndInfo)
 {
+	LOG_METHOD(xrEndFrame);
+
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
@@ -896,6 +1122,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 	uint32_t*               viewCountOutput,
 	XrView*                 views)
 {
+	LOG_METHOD(xrLocateViews);
+
 	viewState->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT |
 								XR_VIEW_STATE_POSITION_VALID_BIT |
 								XR_VIEW_STATE_ORIENTATION_TRACKED_BIT |
@@ -937,6 +1165,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	const char* pathString,
 	XrPath*     path)
 {
+	LOG_METHOD(xrStringToPath);
+
 	Instance* pInstance = (Instance*)instance;
 
 	const int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
@@ -968,6 +1198,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 	uint32_t*  bufferCountOutput,
 	char*      buffer)
 {
+	LOG_METHOD(xrPathToString);
+
 	Instance* pInstance = (Instance*)instance;  // check its in instance ?
 	Path*     pPath = (Path*)path;
 
@@ -982,6 +1214,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	const XrActionSetCreateInfo* createInfo,
 	XrActionSet*                 actionSet)
 {
+	LOG_METHOD(xrCreateActionSet);
+
 	printf("Creating ActionSet with %s\n", createInfo->actionSetName);
 	Instance* pInstance = (Instance*)instance;
 
@@ -996,11 +1230,19 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyActionSet(
+	XrActionSet actionSet)
+{
+	LOG_METHOD(xrDestroyActionSet);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	XrActionSet               actionSet,
 	const XrActionCreateInfo* createInfo,
 	XrAction*                 action)
 {
+	LOG_METHOD(xrCreateAction);
 	ActionSet* pActionSet = (ActionSet*)actionSet;
 
 	if (pActionSet->attachedToSession != NULL)
@@ -1022,6 +1264,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyAction(
+	XrAction action)
+{
+	LOG_METHOD(xrDestroyAction);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 static int CompareSubPath(const char* pSubPath, const char* pPath)
 {
 	while (*pSubPath != '\0') {
@@ -1038,6 +1287,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	XrInstance                                  instance,
 	const XrInteractionProfileSuggestedBinding* suggestedBindings)
 {
+	LOG_METHOD(xrSuggestInteractionProfileBindings);
+
 	Instance*    pInstance = (Instance*)instance;
 	Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
 	XrHash interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
@@ -1090,6 +1341,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	XrSession                            session,
 	const XrSessionActionSetsAttachInfo* attachInfo)
 {
+	LOG_METHOD(xrAttachSessionActionSets);
+
 	Session* pSession = (Session*)session;
 
 	if (pSession->actionSetStates.count != 0)
@@ -1109,11 +1362,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
+	XrSession                  session,
+	XrPath                     topLevelUserPath,
+	XrInteractionProfileState* interactionProfile)
+{
+	LOG_METHOD(xrGetCurrentInteractionProfile);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateBoolean(
 	XrSession                                   session,
 	const XrActionStateGetInfo*                 getInfo,
 	XrActionStateBoolean*                       state)
 {
+	LOG_METHOD(xrGetActionStateBoolean);
 	return XR_SUCCESS;
 }
 
@@ -1122,6 +1385,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state)
 {
+	LOG_METHOD(xrGetActionStateFloat);
+
 	Action*    pGetAction = (Action*)getInfo->action;
 	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
 	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
@@ -1155,10 +1420,30 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	return XR_EVENT_UNAVAILABLE;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(
+	XrSession                   session,
+	const XrActionStateGetInfo* getInfo,
+	XrActionStateVector2f*      state)
+{
+	LOG_METHOD(xrGetActionStateVector2f);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(
+	XrSession                   session,
+	const XrActionStateGetInfo* getInfo,
+	XrActionStatePose*          state)
+{
+	LOG_METHOD(xrGetActionStateVector2f);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	XrSession                session,
 	const XrActionsSyncInfo* syncInfo)
 {
+	LOG_METHOD(xrSyncActions);
+
 	Session*     pSession = (Session*)session;
 	Instance*    pInstance = (Instance*)pSession->instance;
 	XrTime currentTime = GetXrTime();
@@ -1199,11 +1484,52 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateBoundSourcesForAction(
+	XrSession                                   session,
+	const XrBoundSourcesForActionEnumerateInfo* enumerateInfo,
+	uint32_t                                    sourceCapacityInput,
+	uint32_t*                                   sourceCountOutput,
+	XrPath*                                     sources)
+{
+	LOG_METHOD(xrEnumerateBoundSourcesForAction);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetInputSourceLocalizedName(
+	XrSession                                session,
+	const XrInputSourceLocalizedNameGetInfo* getInfo,
+	uint32_t                                 bufferCapacityInput,
+	uint32_t*                                bufferCountOutput,
+	char*                                    buffer)
+{
+	LOG_METHOD(xrGetInputSourceLocalizedName);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(
+	XrSession                 session,
+	const XrHapticActionInfo* hapticActionInfo,
+	const XrHapticBaseHeader* hapticFeedback)
+{
+	LOG_METHOD(xrGetInputSourceLocalizedName);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(
+	XrSession                 session,
+	const XrHapticActionInfo* hapticActionInfo)
+{
+	LOG_METHOD(xrGetInputSourceLocalizedName);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 	XrInstance                       instance,
 	XrSystemId                       systemId,
 	XrGraphicsRequirementsOpenGLKHR* graphicsRequirements)
 {
+	LOG_METHOD(xrGetOpenGLGraphicsRequirementsKHR);
+
 	const XrVersion openglApiVersion = XR_MAKE_VERSION(MIDXR_OPENGL_MAJOR_VERSION, MIDXR_OPENGL_MINOR_VERSION, 0);
 	*graphicsRequirements = (XrGraphicsRequirementsOpenGLKHR){
 		.minApiVersionSupported = openglApiVersion,
@@ -1217,6 +1543,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 	XrSystemId                      systemId,
 	XrGraphicsRequirementsD3D11KHR* graphicsRequirements)
 {
+	LOG_METHOD(xrGetD3D11GraphicsRequirementsKHR);
+
 	Instance* pInstance = (Instance*)instance;
 
 	*graphicsRequirements = (XrGraphicsRequirementsD3D11KHR){
@@ -1230,7 +1558,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	const char*         name,
 	PFN_xrVoidFunction* function)
 {
-	printf("OpenXR Proc: %s\n", name);
+#ifdef ENABLE_DEBUG_LOG_METHOD
+	printf("xrGetInstanceProcAddr: %s\n", name);
+#endif
 
 #define CHECK_PROC_ADDR(_name)                                    \
 	if (strncmp(name, #_name, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
@@ -1242,35 +1572,35 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrEnumerateApiLayerProperties)
 	CHECK_PROC_ADDR(xrEnumerateInstanceExtensionProperties)
 	CHECK_PROC_ADDR(xrCreateInstance)
-//	CHECK_PROC_ADDR(xrDestroyInstance)
+	CHECK_PROC_ADDR(xrDestroyInstance)
 	CHECK_PROC_ADDR(xrGetInstanceProperties)
 	CHECK_PROC_ADDR(xrPollEvent)
-//	CHECK_PROC_ADDR(xrResultToString)
-//	CHECK_PROC_ADDR(xrStructureTypeToString)
+	CHECK_PROC_ADDR(xrResultToString)
+	CHECK_PROC_ADDR(xrStructureTypeToString)
 	CHECK_PROC_ADDR(xrGetSystem)
 	CHECK_PROC_ADDR(xrGetSystemProperties)
-//	CHECK_PROC_ADDR(xrEnumerateEnvironmentBlendModes)
+	CHECK_PROC_ADDR(xrEnumerateEnvironmentBlendModes)
 	CHECK_PROC_ADDR(xrCreateSession)
-//	CHECK_PROC_ADDR(xrDestroySession)
+	CHECK_PROC_ADDR(xrDestroySession)
 	CHECK_PROC_ADDR(xrEnumerateReferenceSpaces)
 	CHECK_PROC_ADDR(xrCreateReferenceSpace)
 	CHECK_PROC_ADDR(xrGetReferenceSpaceBoundsRect)
 	CHECK_PROC_ADDR(xrCreateActionSpace)
 	CHECK_PROC_ADDR(xrLocateSpace)
-//	CHECK_PROC_ADDR(xrDestroySpace)
-//	CHECK_PROC_ADDR(xrEnumerateViewConfigurations)
-//	CHECK_PROC_ADDR(xrGetViewConfigurationProperties)
+	CHECK_PROC_ADDR(xrDestroySpace)
+	CHECK_PROC_ADDR(xrEnumerateViewConfigurations)
+	CHECK_PROC_ADDR(xrGetViewConfigurationProperties)
 	CHECK_PROC_ADDR(xrEnumerateViewConfigurationViews)
 	CHECK_PROC_ADDR(xrEnumerateSwapchainFormats)
 	CHECK_PROC_ADDR(xrCreateSwapchain)
-//	CHECK_PROC_ADDR(xrDestroySwapchain)
+	CHECK_PROC_ADDR(xrDestroySwapchain)
 	CHECK_PROC_ADDR(xrEnumerateSwapchainImages)
 	CHECK_PROC_ADDR(xrAcquireSwapchainImage)
 	CHECK_PROC_ADDR(xrWaitSwapchainImage)
 	CHECK_PROC_ADDR(xrReleaseSwapchainImage)
 	CHECK_PROC_ADDR(xrBeginSession)
-//	CHECK_PROC_ADDR(xrEndSession)
-//	CHECK_PROC_ADDR(xrRequestExitSession)
+	CHECK_PROC_ADDR(xrEndSession)
+	CHECK_PROC_ADDR(xrRequestExitSession)
 	CHECK_PROC_ADDR(xrWaitFrame)
 	CHECK_PROC_ADDR(xrBeginFrame)
 	CHECK_PROC_ADDR(xrEndFrame)
@@ -1278,21 +1608,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrStringToPath)
 	CHECK_PROC_ADDR(xrPathToString)
 	CHECK_PROC_ADDR(xrCreateActionSet)
-//	CHECK_PROC_ADDR(xrDestroyActionSet)
+	CHECK_PROC_ADDR(xrDestroyActionSet)
 	CHECK_PROC_ADDR(xrCreateAction)
-//	CHECK_PROC_ADDR(xrDestroyAction)
+	CHECK_PROC_ADDR(xrDestroyAction)
 	CHECK_PROC_ADDR(xrSuggestInteractionProfileBindings)
 	CHECK_PROC_ADDR(xrAttachSessionActionSets)
-//	CHECK_PROC_ADDR(xrGetCurrentInteractionProfile)
+	CHECK_PROC_ADDR(xrGetCurrentInteractionProfile)
 	CHECK_PROC_ADDR(xrGetActionStateBoolean)
 	CHECK_PROC_ADDR(xrGetActionStateFloat)
-//	CHECK_PROC_ADDR(xrGetActionStateVector2f)
-//	CHECK_PROC_ADDR(xrGetActionStatePose)
+	CHECK_PROC_ADDR(xrGetActionStateVector2f)
+	CHECK_PROC_ADDR(xrGetActionStatePose)
 	CHECK_PROC_ADDR(xrSyncActions)
-//	CHECK_PROC_ADDR(xrEnumerateBoundSourcesForAction)
-//	CHECK_PROC_ADDR(xrGetInputSourceLocalizedName)
-//	CHECK_PROC_ADDR(xrApplyHapticFeedback)
-//	CHECK_PROC_ADDR(xrStopHapticFeedback)
+	CHECK_PROC_ADDR(xrEnumerateBoundSourcesForAction)
+	CHECK_PROC_ADDR(xrGetInputSourceLocalizedName)
+	CHECK_PROC_ADDR(xrApplyHapticFeedback)
+	CHECK_PROC_ADDR(xrStopHapticFeedback)
 
 	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
 	CHECK_PROC_ADDR(xrGetD3D11GraphicsRequirementsKHR)
@@ -1306,6 +1636,8 @@ XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
 	const XrNegotiateLoaderInfo* loaderInfo,
 	XrNegotiateRuntimeRequest*   runtimeRequest)
 {
+	LOG_METHOD(xrNegotiateLoaderRuntimeInterface);
+
 	if (!loaderInfo ||
 		!runtimeRequest ||
 		loaderInfo->structType != XR_LOADER_INTERFACE_STRUCT_LOADER_INFO ||
@@ -1330,4 +1662,4 @@ XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
 	return XR_SUCCESS;
 }
 
-#endif
+#endif //MID_OPENXR_IMPLEMENTATION
