@@ -474,7 +474,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
 	XrApiLayerProperties* properties)
 {
 	LOG_METHOD(xrEnumerateApiLayerProperties);
-
 	return XR_SUCCESS;
 }
 
@@ -556,6 +555,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
 
 	instanceProperties->runtimeVersion = XR_MAKE_VERSION(0, 1, 0);
 	strncpy(instanceProperties->runtimeName, "Moxaic OpenXR", XR_MAX_RUNTIME_NAME_SIZE);
+
 	return XR_SUCCESS;
 }
 
@@ -995,7 +995,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroySwapchain(
 	XrSwapchain swapchain)
 {
-	LOG_METHOD(xrGetViewConfigurationProperties);
+	LOG_METHOD(xrDestroySwapchain);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1272,6 +1272,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	XrAction*                 action)
 {
 	LOG_METHOD(xrCreateAction);
+
 	ActionSet* pActionSet = (ActionSet*)actionSet;
 
 	if (pActionSet->attachedToSession != NULL)
@@ -1401,9 +1402,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateBoolean(
-	XrSession                                   session,
-	const XrActionStateGetInfo*                 getInfo,
-	XrActionStateBoolean*                       state)
+	XrSession                   session,
+	const XrActionStateGetInfo* getInfo,
+	XrActionStateBoolean*       state)
 {
 	LOG_METHOD(xrGetActionStateBoolean);
 	return XR_SUCCESS;
@@ -1463,7 +1464,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStatePose*          state)
 {
-	LOG_METHOD(xrGetActionStateVector2f);
+	LOG_METHOD(xrGetActionStatePose);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1540,7 +1541,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(
 	const XrHapticActionInfo* hapticActionInfo,
 	const XrHapticBaseHeader* hapticFeedback)
 {
-	LOG_METHOD(xrGetInputSourceLocalizedName);
+	LOG_METHOD(xrApplyHapticFeedback);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1548,7 +1549,30 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(
 	XrSession                 session,
 	const XrHapticActionInfo* hapticActionInfo)
 {
-	LOG_METHOD(xrGetInputSourceLocalizedName);
+	LOG_METHOD(xrStopHapticFeedback);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSessionBeginDebugUtilsLabelRegionEXT(
+	XrSession                   session,
+	const XrDebugUtilsLabelEXT* labelInfo)
+{
+	LOG_METHOD(xrSessionBeginDebugUtilsLabelRegionEXT);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSessionEndDebugUtilsLabelRegionEXT(
+	XrSession session)
+{
+	LOG_METHOD(xrSessionEndDebugUtilsLabelRegionEXT);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSessionInsertDebugUtilsLabelEXT(
+	XrSession                   session,
+	const XrDebugUtilsLabelEXT* labelInfo)
+{
+	LOG_METHOD(xrSessionInsertDebugUtilsLabelEXT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1601,12 +1625,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateHandTrackerEXT(
 	const XrHandTrackerCreateInfoEXT* createInfo,
 	XrHandTrackerEXT*                 handTracker)
 {
+	LOG_METHOD(xrCreateHandTrackerEXT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroyHandTrackerEXT(
 	XrHandTrackerEXT handTracker)
 {
+	LOG_METHOD(xrDestroyHandTrackerEXT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1615,6 +1641,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateHandJointsEXT(
 	const XrHandJointsLocateInfoEXT* locateInfo,
 	XrHandJointLocationsEXT*         locations)
 {
+	LOG_METHOD(xrLocateHandJointsEXT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1623,6 +1650,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorMSFT(
 	const XrSpatialAnchorCreateInfoMSFT* createInfo,
 	XrSpatialAnchorMSFT*                 anchor)
 {
+	LOG_METHOD(xrCreateSpatialAnchorMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1631,12 +1659,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorSpaceMSFT(
 	const XrSpatialAnchorSpaceCreateInfoMSFT* createInfo,
 	XrSpace*                                  space)
 {
+	LOG_METHOD(xrCreateSpatialAnchorSpaceMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpatialAnchorMSFT(
 	XrSpatialAnchorMSFT anchor)
 {
+	LOG_METHOD(xrDestroySpatialAnchorMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1647,6 +1677,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSceneComputeFeaturesMSFT(
 	uint32_t*                  featureCountOutput,
 	XrSceneComputeFeatureMSFT* features)
 {
+	LOG_METHOD(xrEnumerateSceneComputeFeaturesMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1655,12 +1686,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneObserverMSFT(
 	const XrSceneObserverCreateInfoMSFT* createInfo,
 	XrSceneObserverMSFT*                 sceneObserver)
 {
+	LOG_METHOD(xrCreateSceneObserverMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneObserverMSFT(
 	XrSceneObserverMSFT sceneObserver)
 {
+	LOG_METHOD(xrDestroySceneObserverMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1669,12 +1702,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneMSFT(
 	const XrSceneCreateInfoMSFT* createInfo,
 	XrSceneMSFT*                 scene)
 {
+	LOG_METHOD(xrCreateSceneMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneMSFT(
 	XrSceneMSFT scene)
 {
+	LOG_METHOD(xrDestroySceneMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1682,6 +1717,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrComputeNewSceneMSFT(
 	XrSceneObserverMSFT              sceneObserver,
 	const XrNewSceneComputeInfoMSFT* computeInfo)
 {
+	LOG_METHOD(xrComputeNewSceneMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1689,6 +1725,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComputeStateMSFT(
 	XrSceneObserverMSFT      sceneObserver,
 	XrSceneComputeStateMSFT* state)
 {
+	LOG_METHOD(xrGetSceneComputeStateMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1697,6 +1734,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComponentsMSFT(
 	const XrSceneComponentsGetInfoMSFT* getInfo,
 	XrSceneComponentsMSFT*              components)
 {
+	LOG_METHOD(xrGetSceneComponentsMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1705,6 +1743,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSceneComponentsMSFT(
 	const XrSceneComponentsLocateInfoMSFT* locateInfo,
 	XrSceneComponentLocationsMSFT*         locations)
 {
+	LOG_METHOD(xrLocateSceneComponentsMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1713,6 +1752,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneMeshBuffersMSFT(
 	const XrSceneMeshBuffersGetInfoMSFT* getInfo,
 	XrSceneMeshBuffersMSFT*              buffers)
 {
+	LOG_METHOD(xrGetSceneMeshBuffersMSFT);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1721,6 +1761,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrConvertWin32PerformanceCounterToTimeKHR(
 	const LARGE_INTEGER*                        performanceCounter,
 	XrTime*                                     time)
 {
+	LOG_METHOD(xrConvertWin32PerformanceCounterToTimeKHR);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1794,6 +1835,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrGetInputSourceLocalizedName)
 	CHECK_PROC_ADDR(xrApplyHapticFeedback)
 	CHECK_PROC_ADDR(xrStopHapticFeedback)
+	CHECK_PROC_ADDR(xrSessionBeginDebugUtilsLabelRegionEXT)
+	CHECK_PROC_ADDR(xrSessionEndDebugUtilsLabelRegionEXT)
+	CHECK_PROC_ADDR(xrSessionInsertDebugUtilsLabelEXT)
 
 	CHECK_PROC_ADDR(xrCreateHandTrackerEXT)
 	CHECK_PROC_ADDR(xrDestroyHandTrackerEXT)
@@ -1817,7 +1861,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 
 #undef CHECK_PROC_ADDR
 
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
