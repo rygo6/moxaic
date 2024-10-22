@@ -38,6 +38,8 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         opengl32
         openxr_loader
         ws2_32
+        dxgi
+        d3d11
         ${CMAKE_THREAD_LIBS_INIT}
 )
 

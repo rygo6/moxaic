@@ -4,13 +4,15 @@
 #include <string.h>
 
 #define WIN32_LEAN_AND_MEAN
+#define NOCOMM
 #include <windows.h>
-typedef struct IUnknown IUnknown;
-typedef struct ID3D11Device ID3D11Device;
-typedef struct ID3D11Texture2D ID3D11Texture2D;
-typedef enum D3D_FEATURE_LEVEL {
-	D3D_FEATURE_LEVEL_11_1 = 0xb100,
-} D3D_FEATURE_LEVEL;
+
+#define D3D11_NO_HELPERS
+#define CINTERFACE
+#define COBJMACROS
+#define WIDL_C_INLINE_WRAPPERS
+#include <d3d11_1.h>
+#include <dxgi.h>
 
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_VULKAN
@@ -22,6 +24,7 @@ typedef enum D3D_FEATURE_LEVEL {
 #include <openxr/openxr_loader_negotiation.h>
 
 #ifdef __JETBRAINS_IDE__
+#undef XRAPI_CALL
 #define XRAPI_CALL
 #endif
 
@@ -297,8 +300,9 @@ CONTAINER(Session, MIDXR_MAX_SESSIONS)
 #define MIDXR_MAX_INSTANCES 2
 typedef struct Instance {
 	char                        applicationName[XR_MAX_APPLICATION_NAME_SIZE];
+	XrSystemId                  systemId;
 	XrFormFactor                systemFormFactor;
-	XrGraphicsApi				graphicsApi;
+	XrGraphicsApi               graphicsApi;
 	SessionContainer            sessions;
 	ActionSetContainer          sctionSets;
 	InteractionProfileContainer interactionProfiles;
@@ -317,6 +321,29 @@ CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 #define LOG_METHOD(_name) printf(#_name "\n")
 #else
 #define LOG_METHOD(_name)
+#endif
+
+#ifndef MID_WIN32_DEBUG
+#define MID_WIN32_DEBUG
+[[noreturn]] static void PanicWin32(const char* file, const int line, DWORD err) {
+	fprintf(stderr, "\n%s:%d Error! ", file, line);
+	LPWSTR err_str;
+	if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPWSTR) &err_str, 0, NULL)) {
+		OutputDebugStringW(err_str);
+		LocalFree(err_str);
+	}
+	__builtin_trap();
+}
+#define PANIC_WIN32(err) PanicWin32(__FILE__, __LINE__, err)
+#define REQUIRE_WIN32(condition, err)      \
+  if (__builtin_expect(!(condition), 0)) { \
+    PANIC_WIN32(err);                      \
+  }
+#define DX_REQUIRE(command)           \
+  {                                   \
+    HRESULT hr = command;             \
+    REQUIRE_WIN32(SUCCEEDED(hr), hr); \
+  }
 #endif
 
 static InstanceContainer instances;
@@ -591,11 +618,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	switch (getInfo->formFactor){
 
 		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
-			pInstance->systemFormFactor = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
+			pInstance->systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
+			pInstance->systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
 			*systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
 			break;
 		case XR_FORM_FACTOR_HANDHELD_DISPLAY:
-			pInstance->systemFormFactor = XR_HANDHELD_DISPLAY_SYSTEM_ID;
+			pInstance->systemFormFactor = XR_FORM_FACTOR_HANDHELD_DISPLAY;
+			pInstance->systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
 			*systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
 			break;
 		default:
@@ -1546,11 +1575,153 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 	LOG_METHOD(xrGetD3D11GraphicsRequirementsKHR);
 
 	Instance* pInstance = (Instance*)instance;
+	if (pInstance->systemId != systemId)
+		return XR_ERROR_SYSTEM_INVALID;
 
-	*graphicsRequirements = (XrGraphicsRequirementsD3D11KHR){
-		.minFeatureLevel = D3D_FEATURE_LEVEL_11_1,
-	};
+	IDXGIFactory* factory = NULL;
+	DX_REQUIRE(CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory))
+	IDXGIAdapter* adapter = NULL;
+	for (UINT i = 0; IDXGIFactory_EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+		DXGI_ADAPTER_DESC desc;
+		DX_REQUIRE(IDXGIAdapter_GetDesc(adapter, &desc));
+		wprintf(L"DX11 Adapter %d Name: %ls Description: %ld:%lu\n", i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
+		graphicsRequirements->adapterLuid = desc.AdapterLuid;
+		IDXGIAdapter_Release(adapter);
+		break;
+	}
+	IDXGIFactory_Release(factory);
+
+	graphicsRequirements->minFeatureLevel = D3D_FEATURE_LEVEL_11_1;
+
 	return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateHandTrackerEXT(
+	XrSession                         session,
+	const XrHandTrackerCreateInfoEXT* createInfo,
+	XrHandTrackerEXT*                 handTracker)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyHandTrackerEXT(
+	XrHandTrackerEXT handTracker)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrLocateHandJointsEXT(
+	XrHandTrackerEXT                 handTracker,
+	const XrHandJointsLocateInfoEXT* locateInfo,
+	XrHandJointLocationsEXT*         locations)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorMSFT(
+	XrSession                            session,
+	const XrSpatialAnchorCreateInfoMSFT* createInfo,
+	XrSpatialAnchorMSFT*                 anchor)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorSpaceMSFT(
+	XrSession                                 session,
+	const XrSpatialAnchorSpaceCreateInfoMSFT* createInfo,
+	XrSpace*                                  space)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpatialAnchorMSFT(
+	XrSpatialAnchorMSFT anchor)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSceneComputeFeaturesMSFT(
+	XrInstance                 instance,
+	XrSystemId                 systemId,
+	uint32_t                   featureCapacityInput,
+	uint32_t*                  featureCountOutput,
+	XrSceneComputeFeatureMSFT* features)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneObserverMSFT(
+	XrSession                            session,
+	const XrSceneObserverCreateInfoMSFT* createInfo,
+	XrSceneObserverMSFT*                 sceneObserver)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneObserverMSFT(
+	XrSceneObserverMSFT sceneObserver)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneMSFT(
+	XrSceneObserverMSFT          sceneObserver,
+	const XrSceneCreateInfoMSFT* createInfo,
+	XrSceneMSFT*                 scene)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneMSFT(
+	XrSceneMSFT scene)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrComputeNewSceneMSFT(
+	XrSceneObserverMSFT              sceneObserver,
+	const XrNewSceneComputeInfoMSFT* computeInfo)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComputeStateMSFT(
+	XrSceneObserverMSFT      sceneObserver,
+	XrSceneComputeStateMSFT* state)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComponentsMSFT(
+	XrSceneMSFT                         scene,
+	const XrSceneComponentsGetInfoMSFT* getInfo,
+	XrSceneComponentsMSFT*              components)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrLocateSceneComponentsMSFT(
+	XrSceneMSFT                            scene,
+	const XrSceneComponentsLocateInfoMSFT* locateInfo,
+	XrSceneComponentLocationsMSFT*         locations)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneMeshBuffersMSFT(
+	XrSceneMSFT                          scene,
+	const XrSceneMeshBuffersGetInfoMSFT* getInfo,
+	XrSceneMeshBuffersMSFT*              buffers)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrConvertWin32PerformanceCounterToTimeKHR(
+	XrInstance                                  instance,
+	const LARGE_INTEGER*                        performanceCounter,
+	XrTime*                                     time)
+{
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
@@ -1624,8 +1795,25 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrApplyHapticFeedback)
 	CHECK_PROC_ADDR(xrStopHapticFeedback)
 
+	CHECK_PROC_ADDR(xrCreateHandTrackerEXT)
+	CHECK_PROC_ADDR(xrDestroyHandTrackerEXT)
+	CHECK_PROC_ADDR(xrLocateHandJointsEXT)
+	CHECK_PROC_ADDR(xrCreateSpatialAnchorMSFT)
+	CHECK_PROC_ADDR(xrCreateSpatialAnchorSpaceMSFT)
+	CHECK_PROC_ADDR(xrDestroySpatialAnchorMSFT)
+	CHECK_PROC_ADDR(xrEnumerateSceneComputeFeaturesMSFT)
+	CHECK_PROC_ADDR(xrCreateSceneObserverMSFT)
+	CHECK_PROC_ADDR(xrDestroySceneObserverMSFT)
+	CHECK_PROC_ADDR(xrDestroySceneMSFT)
+	CHECK_PROC_ADDR(xrComputeNewSceneMSFT)
+	CHECK_PROC_ADDR(xrGetSceneComputeStateMSFT)
+	CHECK_PROC_ADDR(xrGetSceneComponentsMSFT)
+	CHECK_PROC_ADDR(xrLocateSceneComponentsMSFT)
+	CHECK_PROC_ADDR(xrGetSceneMeshBuffersMSFT)
+
 	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
 	CHECK_PROC_ADDR(xrGetD3D11GraphicsRequirementsKHR)
+	CHECK_PROC_ADDR(xrConvertWin32PerformanceCounterToTimeKHR)
 
 #undef CHECK_PROC_ADDR
 
