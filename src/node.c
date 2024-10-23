@@ -608,7 +608,7 @@ static void InterprocessServerAcceptNodeConnection()
 
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate color handle fail");
+			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate glColor handle fail");
 			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
 			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
 		}

@@ -57,7 +57,7 @@ typedef enum XrGraphicsApi {
 } XrGraphicsApi;
 
 void midXrInitialize(XrGraphicsApi graphicsApi);
-void midXrCreateSession(XrHandle* pSessionHandle);
+void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle);
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
 void midXrAcquireSwapchainImage(XrHandle sessionHandle, uint32_t* pIndex);
@@ -124,26 +124,16 @@ typedef struct XrSpaceBounds {
 
 
 #define CHECK(_command)                          \
-	{                                            \
+	({                                           \
 		XrResult result = _command;              \
 		if (result != XR_SUCCESS) return result; \
-	}
-#define CONTAINER(_type, _capacity)                                                                       \
-	typedef struct __attribute((aligned(4))) _type##Container {                                                                     \
-		uint32_t count;                                                                                   \
-		_type    data[_capacity];                                                                         \
-	} _type##Container;                                                                                   \
-	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type)                        \
-	{                                                                                                     \
-		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;                \
-		const uint32_t handle = p##_type##s->count++;                                                     \
-		*pp##_type = &p##_type##s->data[handle];                                                          \
-		return XR_SUCCESS;                                                                                \
-	}                                                                                                     \
-	static inline XrHandle Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) \
-	{                                                                                                     \
-		return p##_type - p##_type##s->data;                                                              \
-	}
+	})
+#define CONTAINER(_type, _capacity)                                                        \
+	typedef struct __attribute((aligned(4))) _type##Container {                            \
+		uint32_t count;                                                                    \
+		_type    data[_capacity];                                                          \
+	} _type##Container;                                                                    \
+
 #define CONTAINER_HASHED(_type, _capacity)                                                                \
 	typedef struct _type##Container {                                                                     \
 		uint32_t count;                                                                                   \
@@ -171,12 +161,8 @@ typedef struct XrSpaceBounds {
 		}                                                                                                 \
 		return NULL;                                                                                      \
 	}                                                                                                     \
-	static inline XrHandle Get##_type##Handle(const _type##Container* p##_type##s, const _type* p##_type) \
-	{                                                                                                     \
-		return p##_type - p##_type##s->data;                                                              \
-	}
 
-// ya we want to switch to this below rather than the above macro monstrosities
+// ya we want to switch to do this below rather than the above macro monstrosities
 typedef struct Container {
 	uint32_t count;
 	__attribute((aligned(8)))
@@ -184,18 +170,19 @@ typedef struct Container {
 	uint8_t  data;
 } Container;
 
-#define CLAIM(_container, _outValue) Claim((Container*)&_container, sizeof(_container.data[0]), COUNT(_container.data), (void**)&_outValue)
-static XrResult Claim(Container* pContainer, int stride, int capacity, void** ppOutValue)
+// maybe this should return the handle?
+#define ClaimHandle(_container, _pValue) CHECK(_ClaimHandle((Container*)&_container, sizeof(_container.data[0]), COUNT(_container.data), (void**)&_pValue))
+static XrResult _ClaimHandle(Container* pContainer, int stride, int capacity, void** ppValue)
 {
 	if (pContainer->count >= capacity) return XR_ERROR_LIMIT_REACHED;
 	const uint32_t handle = pContainer->count++;
-	*ppOutValue = &pContainer->data + (handle * stride);
+	*ppValue = &pContainer->data + (handle * stride);
 	return XR_SUCCESS;
 }
-
-static inline XrHandle GetHandle(const Container* pContainer, int stride, const void* pType)
+#define GetHandle(_container, _pValue) _GetHandle((Container*)&_container, sizeof(_container.data[0]), _pValue)
+static XrHandle _GetHandle(const Container* pContainer, int stride, const void* pValue)
 {
-	return (XrHandle)((pType - (void*)&pContainer->data) / stride);
+	return (XrHandle)((pValue - (void*)&pContainer->data) / stride);
 }
 
 #define MIDXR_MAX_PATHS 128
@@ -272,7 +259,8 @@ CONTAINER(Space, 4)
 #define MIDXR_SWAP_COUNT 2
 typedef struct Swapchain {
 	XrSession             session;
-	GLuint                color[MIDXR_SWAP_COUNT];
+	GLuint                glColor[MIDXR_SWAP_COUNT];
+	ID3D11Texture2D*      dxColor[MIDXR_SWAP_COUNT];
 	int                   swapIndex;
 	XrSwapchainUsageFlags usageFlags;
 	int64_t               format;
@@ -287,13 +275,18 @@ CONTAINER(Swapchain, 4)
 
 #define MIDXR_MAX_SESSIONS 4
 typedef struct Session {
-	XrInstance                      instance;
-	XrTime                          lastPredictedDisplayTime;
-	XrGraphicsBindingOpenGLWin32KHR glBinding;
-	XrViewConfigurationType         primaryViewConfigurationType;
-	Space                           referenceSpace;
-	SwapchainContainer              Swapchains;
-	ActionSetStateContainer         actionSetStates;
+	XrInstance              instance;
+	XrTime                  lastPredictedDisplayTime;
+	Space                   referenceSpace;
+	SwapchainContainer      Swapchains;
+	ActionSetStateContainer actionSetStates;
+
+	XrViewConfigurationType primaryViewConfigurationType;
+	union {
+		XrGraphicsBindingOpenGLWin32KHR gl;
+		XrGraphicsBindingD3D11KHR       d3d11;
+		XrGraphicsBindingVulkanKHR      vk;
+	} binding;
 } Session;
 CONTAINER(Session, MIDXR_MAX_SESSIONS)
 
@@ -515,7 +508,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	LOG_METHOD(xrCreateInstance);
 
 	Instance* pInstance;
-	CHECK(CLAIM(instances, pInstance))
+	ClaimHandle(instances, pInstance);
 
 	for (int i = 0; i < createInfo->enabledApiLayerCount; ++i) {
 		printf("Enabled API Layer: %s\n", createInfo->enabledApiLayerNames[i]);
@@ -718,21 +711,36 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 {
 	LOG_METHOD(xrCreateSession);
 
-	XrHandle sessionHandle;
-	midXrCreateSession(&sessionHandle);
-
 	Instance* pInstance = (Instance*)instance;
-	Session*  pClaimedSession;
-	CHECK(CLAIM(pInstance->sessions, pClaimedSession))
+
+	XrHandle createdHandle;
+	midXrCreateSession(pInstance->graphicsApi, &createdHandle);
+
+	Session* pClaimedSession;
+	ClaimHandle(pInstance->sessions, pClaimedSession);
+	XrHandle claimedHandle = GetHandle(pInstance->sessions, pClaimedSession);
+
+	// these should be the same but probably want to get these handles better...
+	assert(createdHandle == claimedHandle);
+
 	pClaimedSession->instance = instance;
+
 	switch (*(XrStructureType*)createInfo->next) {
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR:
-			pClaimedSession->glBinding = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
+			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR\n");
+			pClaimedSession->binding.gl = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
+			*session = (XrSession)pClaimedSession;
+			return XR_SUCCESS;
+		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
+			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_D3D11_KHR\n");
+			pClaimedSession->binding.d3d11 = *(XrGraphicsBindingD3D11KHR*)&createInfo->next;
 			*session = (XrSession)pClaimedSession;
 			return XR_SUCCESS;
 		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR:
-		case XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR:
-		case XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR:
+			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR\n");
+			pClaimedSession->binding.vk = *(XrGraphicsBindingVulkanKHR*)&createInfo->next;
+			*session = (XrSession)pClaimedSession;
+			return XR_SUCCESS;
 		default:
 			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 	}
@@ -803,7 +811,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	midXrGetReferenceSpaceBounds(sessionHandle, bounds);
 
@@ -971,10 +979,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	Swapchain* pSwapchain;
-	CHECK(CLAIM(pSession->Swapchains, pSwapchain))
+	ClaimHandle(pSession->Swapchains, pSwapchain);
+
 	pSwapchain->session = session;
 	pSwapchain->usageFlags = createInfo->usageFlags;
 	pSwapchain->format = createInfo->format;
@@ -985,7 +994,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	pSwapchain->arraySize = createInfo->arraySize;
 	pSwapchain->mipCount = createInfo->mipCount;
 
-	midXrClaimGlSwapchain(sessionHandle, MIDXR_SWAP_COUNT, pSwapchain->color);
+	midXrClaimGlSwapchain(sessionHandle, MIDXR_SWAP_COUNT, pSwapchain->glColor);
 
 	*swapchain = (XrSwapchain)pSwapchain;
 
@@ -1015,18 +1024,19 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
+
 	switch (images[0].type) {
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
-			XrSwapchainImageOpenGLKHR* pGlImage = (XrSwapchainImageOpenGLKHR*)images;
+			XrSwapchainImageOpenGLKHR* pImage = (XrSwapchainImageOpenGLKHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
-				pGlImage[i].image = pSwapchain->color[i];
+				pImage[i].image = pSwapchain->glColor[i];
 			}
 			break;
 		}
 		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
-			XrSwapchainImageOpenGLKHR* pGlImage = (XrSwapchainImageOpenGLKHR*)images;
+			XrSwapchainImageD3D11KHR* pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
-				pGlImage[i].image = pSwapchain->color[i];
+				pImage[i].texture = pSwapchain->dxColor[i];
 			}
 			break;
 		}
@@ -1048,7 +1058,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
 	Instance*  pInstance = (Instance*)pSession->instance;
-	XrHandle   sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	pSwapchain->swapIndex = !pSwapchain->swapIndex;
 	*index = pSwapchain->swapIndex;
@@ -1108,7 +1118,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 
 	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	midXrWaitFrame(sessionHandle);
 
@@ -1138,7 +1148,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
 	midXrEndFrame(sessionHandle);
 	return XR_SUCCESS;
 }
@@ -1179,7 +1189,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-	const XrHandle sessionHandle = GetSessionHandle(&pInstance->sessions, pSession);
+	const XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	for (int i = 0; i < viewCapacityInput; ++i) {
 		midXrGetView(sessionHandle, i, &views[i]);
@@ -1281,7 +1291,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
 
 	Action* pAction;
-	CHECK(CLAIM(pActionSet->Actions, pAction))
+	ClaimHandle(pActionSet->Actions, pAction);
 
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
 	pAction->actionType = createInfo->actionType;
@@ -1349,7 +1359,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 		if (pBindingAction->countSubactionPaths == 0) {
 			printf("No Subactions. Bound to zero.\n");
 			XrBinding* pActionBinding;
-			ClaimXrBinding(&pBindingAction->subactionBindings[0], &pActionBinding);
+			ClaimHandle(pBindingAction->subactionBindings[0], pActionBinding);
 			*pActionBinding = pBinding;
 			continue;
 		}
@@ -1360,7 +1370,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 				continue;
 			printf("Bound to %d %s\n", subactionIndex, pActionSubPath->string);
 			XrBinding* pActionBinding;
-			ClaimXrBinding(&pBindingAction->subactionBindings[subactionIndex], &pActionBinding);
+			ClaimHandle(pBindingAction->subactionBindings[subactionIndex], pActionBinding);
 			*pActionBinding = pBinding;
 		}
 	}
@@ -1426,7 +1436,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	XrHash    getActionSetHash = GetActionSetHash(&pInstance->sctionSets, pGetActionSet);
 	ActionSetState* pGetActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, getActionSetHash);
 
-	const int    getActionHandle = GetActionHandle(&pGetActionSet->Actions, pGetAction);
+	XrHandle     getActionHandle = GetHandle(pGetActionSet->Actions, pGetAction);
 	ActionState* pGetActionState = &pGetActionSetState->actionStates.data[getActionHandle];
 
 	if (pGetActionSubactionPath == NULL) {
