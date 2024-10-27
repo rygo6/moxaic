@@ -14,6 +14,10 @@
 #include <d3d11_1.h>
 #include <dxgi.h>
 
+#define GL_GLEXT_PROTOTYPES
+#include <GL/gl.h>
+#include <GL/glext.h>
+
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_VULKAN
 #define XR_USE_GRAPHICS_API_OPENGL
@@ -59,7 +63,7 @@ typedef enum XrGraphicsApi {
 void midXrInitialize(XrGraphicsApi graphicsApi);
 void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle);
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
-void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages);
+void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
 void midXrAcquireSwapchainImage(XrHandle sessionHandle, uint32_t* pIndex);
 void midXrWaitFrame(XrHandle sessionHandle);
 void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView);
@@ -256,12 +260,21 @@ typedef struct Space {
 } Space;
 CONTAINER(Space, 4)
 
+typedef struct XrGlTexture {
+	GLuint texture;
+	GLuint memObject;
+} XrGlTexture;
+
 #define MIDXR_SWAP_COUNT 2
 typedef struct Swapchain {
-	XrSession             session;
-	GLuint                glColor[MIDXR_SWAP_COUNT];
-	ID3D11Texture2D*      dxColor[MIDXR_SWAP_COUNT];
-	int                   swapIndex;
+	XrSession session;
+
+	uint32_t swapIndex;
+	union {
+		XrGlTexture      gl[MIDXR_SWAP_COUNT];
+		ID3D11Texture2D* d3d11[MIDXR_SWAP_COUNT];
+	} color;
+
 	XrSwapchainUsageFlags usageFlags;
 	int64_t               format;
 	uint32_t              sampleCount;
@@ -272,6 +285,17 @@ typedef struct Swapchain {
 	uint32_t              mipCount;
 } Swapchain;
 CONTAINER(Swapchain, 4)
+
+//typedef struct XrGlTexture {
+//	GLuint memObject;
+//	GLuint texture;
+//} XrGlTexture;
+//typedef struct XrGlFramebufferTexture {
+//	MxcGlTexture color;
+//	MxcGlTexture normal;
+//	MxcGlTexture depth;
+//	MxcGlTexture gbuffer;
+//} XrGlFramebufferTexture;
 
 #define MIDXR_MAX_SESSIONS 4
 typedef struct Session {
@@ -287,6 +311,7 @@ typedef struct Session {
 		XrGraphicsBindingD3D11KHR       d3d11;
 		XrGraphicsBindingVulkanKHR      vk;
 	} binding;
+
 } Session;
 CONTAINER(Session, MIDXR_MAX_SESSIONS)
 
@@ -309,7 +334,7 @@ CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 //// MidOpenXR Implementation
 #ifdef MID_OPENXR_IMPLEMENTATION
 
-#define ENABLE_DEBUG_LOG_METHOD
+//#define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
 #define LOG_METHOD(_name) printf(#_name "\n")
 #else
@@ -501,6 +526,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 	return XR_SUCCESS;
 }
 
+static struct {
+	PFNGLCREATEMEMORYOBJECTSEXTPROC     CreateMemoryObjectsEXT;
+	PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC ImportMemoryWin32HandleEXT;
+	PFNGLCREATETEXTURESPROC             CreateTextures;
+	PFNGLTEXTURESTORAGEMEM2DEXTPROC     TextureStorageMem2DEXT;
+} gl;
+
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	const XrInstanceCreateInfo* createInfo,
 	XrInstance*                 instance)
@@ -529,6 +561,32 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 
 	InitStandardBindings(*instance);
 	midXrInitialize(pInstance->graphicsApi);
+
+	switch (pInstance->graphicsApi){
+
+		case XR_GRAPHICS_API_OPENGL:
+			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
+			if (!gl.CreateMemoryObjectsEXT) {
+				printf("Failed to load glCreateMemoryObjectsEXT\n");
+			}
+			gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
+			if (!gl.ImportMemoryWin32HandleEXT) {
+				printf("Failed to load glImportMemoryWin32HandleEXT\n");
+			}
+			gl.CreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
+			if (!gl.CreateTextures) {
+				printf("Failed to load glCreateTextures\n");
+			}
+			gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
+			if (!gl.TextureStorageMem2DEXT) {
+				printf("Failed to load glTextureStorageMem2DEXT\n");
+			}
+			break;
+		case XR_GRAPHICS_API_OPENGL_ES: break;
+		case XR_GRAPHICS_API_VULKAN:    break;
+		case XR_GRAPHICS_API_D3D11_1:   break;
+		case XR_GRAPHICS_API_COUNT:     break;
+	}
 
 	return XR_SUCCESS;
 }
@@ -977,9 +1035,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 {
 	LOG_METHOD(xrCreateSwapchain);
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	Swapchain* pSwapchain;
 	ClaimHandle(pSession->Swapchains, pSwapchain);
@@ -994,7 +1052,25 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	pSwapchain->arraySize = createInfo->arraySize;
 	pSwapchain->mipCount = createInfo->mipCount;
 
-	midXrClaimGlSwapchain(sessionHandle, MIDXR_SWAP_COUNT, pSwapchain->glColor);
+	HANDLE colorHandles[MIDXR_SWAP_COUNT];
+	midXrClaimFramebufferImages(sessionHandle, MIDXR_SWAP_COUNT, colorHandles);
+
+	switch (pInstance->graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL:
+#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
+	gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
+	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
+	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
+	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
+			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color.gl[i].memObject, pSwapchain->color.gl[i].texture, colorHandles[i]);
+			}
+			break;
+		case XR_GRAPHICS_API_D3D11_1:
+			break;
+		default:
+			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
+	}
 
 	*swapchain = (XrSwapchain)pSwapchain;
 
@@ -1029,14 +1105,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
 			XrSwapchainImageOpenGLKHR* pImage = (XrSwapchainImageOpenGLKHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
-				pImage[i].image = pSwapchain->glColor[i];
+				pImage[i].image = pSwapchain->color.gl[i].texture;
 			}
 			break;
 		}
 		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
 			XrSwapchainImageD3D11KHR* pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
-				pImage[i].texture = pSwapchain->dxColor[i];
+				pImage[i].texture = pSwapchain->color.d3d11[i];
 			}
 			break;
 		}
@@ -1060,10 +1136,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	Instance*  pInstance = (Instance*)pSession->instance;
 	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
 
-	pSwapchain->swapIndex = !pSwapchain->swapIndex;
+	midXrAcquireSwapchainImage(sessionHandle, &pSwapchain->swapIndex);
 	*index = pSwapchain->swapIndex;
-
-	midXrAcquireSwapchainImage(sessionHandle, index);
 
 	return XR_SUCCESS;
 }

@@ -12,13 +12,6 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 
-static struct {
-	PFNGLCREATEMEMORYOBJECTSEXTPROC     CreateMemoryObjectsEXT;
-	PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC ImportMemoryWin32HandleEXT;
-	PFNGLCREATETEXTURESPROC             CreateTextures;
-	PFNGLTEXTURESTORAGEMEM2DEXTPROC     TextureStorageMem2DEXT;
-} gl;
-
 void midXrInitialize(XrGraphicsApi graphicsApi)
 {
 	printf("Initializing Moxaic OpenXR Node.\n");
@@ -44,32 +37,6 @@ void midXrInitialize(XrGraphicsApi graphicsApi)
 	};
 	midVkCreateContext(&contextCreateInfo);
 	mxcConnectInterprocessNode(false);
-
-	switch (graphicsApi){
-
-		case XR_GRAPHICS_API_OPENGL:
-			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
-			if (!gl.CreateMemoryObjectsEXT) {
-				printf("Failed to load glCreateMemoryObjectsEXT\n");
-			}
-			gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
-			if (!gl.ImportMemoryWin32HandleEXT) {
-				printf("Failed to load glImportMemoryWin32HandleEXT\n");
-			}
-			gl.CreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
-			if (!gl.CreateTextures) {
-				printf("Failed to load glCreateTextures\n");
-			}
-			gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
-			if (!gl.TextureStorageMem2DEXT) {
-				printf("Failed to load glTextureStorageMem2DEXT\n");
-			}
-			break;
-		case XR_GRAPHICS_API_OPENGL_ES: break;
-		case XR_GRAPHICS_API_VULKAN:    break;
-		case XR_GRAPHICS_API_D3D11_1:   break;
-		case XR_GRAPHICS_API_COUNT:     break;
-	}
 }
 
 void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
@@ -96,8 +63,8 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 	{
 		const int                    width = DEFAULT_WIDTH;
 		const int                    height = DEFAULT_HEIGHT;
-		MxcNodeVkFramebufferTexture* pVkFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
-		MxcNodeGlFramebufferTexture* pGlFramebufferTextures = pNodeContext->glNodeFramebufferTextures;
+//		MxcNodeVkFramebufferTexture* pVkFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
+//		MxcNodeGlFramebufferTexture* pGlFramebufferTextures = pNodeContext->glNodeFramebufferTextures;
 
 #define DEFAULT_VK_IMAGE_CREATE_INFO(_width, _height, _format, _usage) \
 	.imageCreateInfo = {                                               \
@@ -120,64 +87,64 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			switch (graphicsApi){
 				case XR_GRAPHICS_API_OPENGL: {
-					DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures[i].color.memObject, pGlFramebufferTextures[i].color.texture, pImportParam->framebufferHandles[i].color)
+//					DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures[i].color.memObject, pGlFramebufferTextures[i].color.texture, pImportParam->framebufferHandles[i].color)
 					//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->normal.memObject, pGlFramebufferTextures->normal.texture,  pImportParam->framebufferHandles[i].normal);
 					//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->color.memObject, pGlFramebufferTextures->color.texture,  pImportParam->framebufferHandles[i].color);
 					break;
 				}
 				case XR_GRAPHICS_API_OPENGL_ES: break;
 				case XR_GRAPHICS_API_VULKAN: {
-					const VkmTextureCreateInfo colorCreateInfo = {
-						.debugName = "ImportedColorFramebuffer",
-						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-						.externalHandle = pImportParam->framebufferHandles[i].color,
-						DEFAULT_VK_IMAGE_CREATE_INFO(width, height, MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX], MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX]),
-					};
-					midvkCreateTexture(&colorCreateInfo, &pVkFramebufferTextures[i].color);
-					const VkmTextureCreateInfo normalCreateInfo = {
-						.debugName = "ImportedNormalFramebuffer",
-						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-						.externalHandle = pImportParam->framebufferHandles[i].normal,
-						DEFAULT_VK_IMAGE_CREATE_INFO(width, height, MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX], MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX]),
-					};
-					midvkCreateTexture(&normalCreateInfo, &pVkFramebufferTextures[i].normal);
-					const VkmTextureCreateInfo gbufferCreateInfo = {
-						.debugName = "ImportedGBufferFramebuffer",
-						.imageCreateInfo = {
-							.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-							.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
-							.imageType = VK_IMAGE_TYPE_2D,
-							.format = MXC_NODE_GBUFFER_FORMAT,
-							.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-							.mipLevels = MXC_NODE_GBUFFER_LEVELS,
-							.arrayLayers = 1,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.usage = MXC_NODE_GBUFFER_USAGE,
-						},
-						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-						.externalHandle = pImportParam->framebufferHandles[i].gbuffer,
-					};
-					midvkCreateTexture(&gbufferCreateInfo, &pVkFramebufferTextures[i].gbuffer);
-					// Depth is not shared over IPC.
-					const VkmTextureCreateInfo depthCreateInfo = {
-						.debugName = "ImportedDepthFramebuffer",
-						.imageCreateInfo = {
-							.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-							.imageType = VK_IMAGE_TYPE_2D,
-							.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
-							.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-							.mipLevels = 1,
-							.arrayLayers = 1,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
-						},
-						.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-						.locality = MID_LOCALITY_CONTEXT,
-					};
-					midvkCreateTexture(&depthCreateInfo, &pVkFramebufferTextures[i].depth);
+//					const VkmTextureCreateInfo colorCreateInfo = {
+//						.debugName = "ImportedColorFramebuffer",
+//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//						.externalHandle = pImportParam->framebufferHandles[i].color,
+//						DEFAULT_VK_IMAGE_CREATE_INFO(width, height, MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX], MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX]),
+//					};
+//					midvkCreateTexture(&colorCreateInfo, &pVkFramebufferTextures[i].color);
+//					const VkmTextureCreateInfo normalCreateInfo = {
+//						.debugName = "ImportedNormalFramebuffer",
+//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//						.externalHandle = pImportParam->framebufferHandles[i].normal,
+//						DEFAULT_VK_IMAGE_CREATE_INFO(width, height, MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX], MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX]),
+//					};
+//					midvkCreateTexture(&normalCreateInfo, &pVkFramebufferTextures[i].normal);
+//					const VkmTextureCreateInfo gbufferCreateInfo = {
+//						.debugName = "ImportedGBufferFramebuffer",
+//						.imageCreateInfo = {
+//							.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//							.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
+//							.imageType = VK_IMAGE_TYPE_2D,
+//							.format = MXC_NODE_GBUFFER_FORMAT,
+//							.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//							.mipLevels = MXC_NODE_GBUFFER_LEVELS,
+//							.arrayLayers = 1,
+//							.samples = VK_SAMPLE_COUNT_1_BIT,
+//							.usage = MXC_NODE_GBUFFER_USAGE,
+//						},
+//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//						.externalHandle = pImportParam->framebufferHandles[i].gbuffer,
+//					};
+//					midvkCreateTexture(&gbufferCreateInfo, &pVkFramebufferTextures[i].gbuffer);
+//					// Depth is not shared over IPC.
+//					const VkmTextureCreateInfo depthCreateInfo = {
+//						.debugName = "ImportedDepthFramebuffer",
+//						.imageCreateInfo = {
+//							.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//							.imageType = VK_IMAGE_TYPE_2D,
+//							.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+//							.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//							.mipLevels = 1,
+//							.arrayLayers = 1,
+//							.samples = VK_SAMPLE_COUNT_1_BIT,
+//							.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+//						},
+//						.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+//						.locality = MID_LOCALITY_CONTEXT,
+//					};
+//					midvkCreateTexture(&depthCreateInfo, &pVkFramebufferTextures[i].depth);
 					break;
 				}
 				case XR_GRAPHICS_API_D3D11_1: {
@@ -222,13 +189,16 @@ void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
 }
 
-void midXrClaimGlSwapchain(XrHandle sessionHandle, int imageCount, GLuint* pImages)
+void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle)
 {
-	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Requires Gl swap image count does not match imported swap count!")
+	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 
+	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
+
 	for (int i = 0; i < imageCount; ++i) {
-		pImages[i] = pNodeContext->glNodeFramebufferTextures[i].color.texture;
+		pHandle[i] = pImportParam->framebufferHandles[i].color;
 	}
 }
 

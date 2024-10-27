@@ -73,9 +73,9 @@ typedef struct MxcImportParam {
 	HANDLE nodeTimelineHandle;
 	HANDLE compTimelineHandle;
 } MxcImportParam;
-typedef struct CACHE_ALIGN MxcExternalNodeMemory {
+typedef struct MxcExternalNodeMemory {
+	// these needs to turn into array so one process can share chunk of shared memory
 	MxcNodeShared shared;
-	CACHE_ALIGN
 	MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
