@@ -198,6 +198,7 @@ void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE*
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 
 	for (int i = 0; i < imageCount; ++i) {
+		printf("Claiming framebuffer handle %p\n", pImportParam->framebufferHandles[i].color);
 		pHandle[i] = pImportParam->framebufferHandles[i].color;
 	}
 }

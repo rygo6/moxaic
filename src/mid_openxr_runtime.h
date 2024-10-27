@@ -260,18 +260,17 @@ typedef struct Space {
 } Space;
 CONTAINER(Space, 4)
 
-typedef struct XrGlTexture {
-	GLuint texture;
-	GLuint memObject;
-} XrGlTexture;
-
 #define MIDXR_SWAP_COUNT 2
 typedef struct Swapchain {
+	// we should replace XrHandle pointers with uint16_t handle offsets
 	XrSession session;
 
 	uint32_t swapIndex;
 	union {
-		XrGlTexture      gl[MIDXR_SWAP_COUNT];
+		struct {
+			GLuint texture;
+			GLuint memObject;
+		} gl[MIDXR_SWAP_COUNT];
 		ID3D11Texture2D* d3d11[MIDXR_SWAP_COUNT];
 	} color;
 
@@ -320,13 +319,25 @@ typedef struct Instance {
 	char                        applicationName[XR_MAX_APPLICATION_NAME_SIZE];
 	XrSystemId                  systemId;
 	XrFormFactor                systemFormFactor;
-	XrGraphicsApi               graphicsApi;
 	SessionContainer            sessions;
-	ActionSetContainer          sctionSets;
+	ActionSetContainer          actionSets;
 	InteractionProfileContainer interactionProfiles;
 	PathContainer               paths;
+
+	XrGraphicsApi graphicsApi;
+	union {
+		struct {
+			ID3D11Device1*        device1;
+			ID3D11DeviceContext1* context1;
+			LUID                  adapterLuid;
+			D3D_FEATURE_LEVEL     minFeatureLevel;
+		} d3d11;
+	} graphics;
+
 } Instance;
 CONTAINER(Instance, MIDXR_MAX_INSTANCES)
+// only 1 probably
+//static Instance instance;
 
 // I think I want to put all of the above in an arena pool
 
@@ -334,7 +345,7 @@ CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 //// MidOpenXR Implementation
 #ifdef MID_OPENXR_IMPLEMENTATION
 
-//#define ENABLE_DEBUG_LOG_METHOD
+#define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
 #define LOG_METHOD(_name) printf(#_name "\n")
 #else
@@ -343,20 +354,22 @@ CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 
 #ifndef MID_WIN32_DEBUG
 #define MID_WIN32_DEBUG
-[[noreturn]] static void PanicWin32(const char* file, const int line, DWORD err) {
-	fprintf(stderr, "\n%s:%d Error! ", file, line);
-	LPWSTR err_str;
-	if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPWSTR) &err_str, 0, NULL)) {
-		OutputDebugStringW(err_str);
-		LocalFree(err_str);
+static void PanicWin32(const char* file, const int line, HRESULT err) {
+	fprintf(stderr, "\n%s:%d Error! 0x%08lX: ", file, line, err);
+	char* errStr;
+	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR) &errStr, 0, NULL)) {
+		fprintf(stderr, "%s\n", err, errStr);
+		LocalFree(errStr);
 	}
-	__builtin_trap();
+//	__builtin_trap();
 }
 #define PANIC_WIN32(err) PanicWin32(__FILE__, __LINE__, err)
 #define REQUIRE_WIN32(condition, err)      \
   if (__builtin_expect(!(condition), 0)) { \
     PANIC_WIN32(err);                      \
   }
+// change this to return OXR fail message
 #define DX_REQUIRE(command)           \
   {                                   \
     HRESULT hr = command;             \
@@ -548,12 +561,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 
 	for (int i = 0; i < createInfo->enabledExtensionCount; ++i) {
 		printf("Enabled Extension: %s\n", createInfo->enabledExtensionNames[i]);
-		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0) {
+		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
 			pInstance->graphicsApi = XR_GRAPHICS_API_OPENGL;
-		}
-		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0) {
+		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
 			pInstance->graphicsApi = XR_GRAPHICS_API_D3D11_1;
-		}
 	}
 
 	strncpy((char*)&pInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
@@ -563,7 +574,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	midXrInitialize(pInstance->graphicsApi);
 
 	switch (pInstance->graphicsApi){
-
 		case XR_GRAPHICS_API_OPENGL:
 			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
 			if (!gl.CreateMemoryObjectsEXT) {
@@ -584,7 +594,37 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 			break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
-		case XR_GRAPHICS_API_D3D11_1:   break;
+		case XR_GRAPHICS_API_D3D11_1:   {
+
+			// do I need to close these?
+			ID3D11Device*        renderDevice;
+			ID3D11DeviceContext* renderContext;
+			DX_REQUIRE(D3D11CreateDevice(
+				NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG,
+				(D3D_FEATURE_LEVEL[]) {D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
+				&renderDevice, &pInstance->graphics.d3d11.minFeatureLevel, &renderContext))
+			assert(pInstance->graphics.d3d11.minFeatureLevel == D3D_FEATURE_LEVEL_11_1);
+			DX_REQUIRE(ID3D11Device_QueryInterface(renderDevice, &IID_ID3D11Device1, (void**)&pInstance->graphics.d3d11.device1))
+			DX_REQUIRE(ID3D11DeviceContext_QueryInterface(renderContext, &IID_ID3D11DeviceContext1, (void**) &pInstance->graphics.d3d11.context1))
+			printf("DX11 Adapter Feature Level: 0x%X Device: %p context %p\n",
+					pInstance->graphics.d3d11.minFeatureLevel, pInstance->graphics.d3d11.device1, pInstance->graphics.d3d11.context1);
+
+			IDXGIFactory* factory = NULL;
+			DX_REQUIRE(CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory))
+			IDXGIAdapter* adapter = NULL;
+			for (UINT i = 0; IDXGIFactory_EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+				DXGI_ADAPTER_DESC desc;
+				DX_REQUIRE(IDXGIAdapter_GetDesc(adapter, &desc));
+				pInstance->graphics.d3d11.adapterLuid = desc.AdapterLuid;
+				wprintf(L"DX11 Adapter %d Name: %ls Description: %ld:%lu\n",
+						i, desc.Description, desc.AdapterLuid.HighPart,	desc.AdapterLuid.LowPart);
+				IDXGIAdapter_Release(adapter);
+				break;
+			}
+			IDXGIFactory_Release(factory);
+
+			break;
+		}
 		case XR_GRAPHICS_API_COUNT:     break;
 	}
 
@@ -666,8 +706,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 
 	Instance* pInstance = (Instance*)instance;
 
-	switch (getInfo->formFactor){
+	assert(getInfo->next == NULL);
 
+	switch (getInfo->formFactor){
 		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
 			pInstance->systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 			pInstance->systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
@@ -731,6 +772,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
 	XrEnvironmentBlendMode* environmentBlendModes)
 {
 	LOG_METHOD(xrEnumerateEnvironmentBlendModes);
+
+	Instance* pInstance = (Instance*)instance;
 
 	const XrEnvironmentBlendMode modes[] = {
 		XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
@@ -992,15 +1035,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	return XR_SUCCESS;
 }
 
-#ifndef GL_RGBA8
-#define GL_RGBA8 0x8058
-#endif
-#ifndef GL_SRGB8_ALPHA8
-#define GL_SRGB8_ALPHA8 0x8C43
-#endif
-#ifndef GL_SRGB8
-#define GL_SRGB8 0x8C41
-#endif
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 	XrSession session,
 	uint32_t  formatCapacityInput,
@@ -1009,21 +1043,64 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 {
 	LOG_METHOD(xrEnumerateSwapchainFormats);
 
-	const int64_t swapFormats[] = {
-		GL_RGBA8,
-		GL_SRGB8_ALPHA8,
-		GL_SRGB8,
-	};
-	*formatCountOutput = COUNT(swapFormats);
+	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
 
-	if (formats == NULL)
-		return XR_SUCCESS;
+	switch (pInstance->graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL: {
+			const int64_t swapFormats[] = {
+				GL_SRGB8_ALPHA8,
+//				GL_SRGB8,
+			};
+			*formatCountOutput = COUNT(swapFormats);
 
-	if (formatCapacityInput < COUNT(swapFormats))
-		return XR_ERROR_SIZE_INSUFFICIENT;
+			if (formats == NULL)
+				return XR_SUCCESS;
+			if (formatCapacityInput < COUNT(swapFormats))
+				return XR_ERROR_SIZE_INSUFFICIENT;
 
-	for (int i = 0; i < COUNT(swapFormats); ++i)
-		formats[i] = swapFormats[i];
+			for (int i = 0; i < COUNT(swapFormats); ++i)
+				formats[i] = swapFormats[i];
+
+			break;
+		}
+		case XR_GRAPHICS_API_OPENGL_ES: break;
+		case XR_GRAPHICS_API_VULKAN:    {
+			const int64_t swapFormats[] = {
+				VK_FORMAT_R8G8B8A8_SRGB,
+			};
+			*formatCountOutput = COUNT(swapFormats);
+
+			if (formats == NULL)
+				return XR_SUCCESS;
+			if (formatCapacityInput < COUNT(swapFormats))
+				return XR_ERROR_SIZE_INSUFFICIENT;
+
+			for (int i = 0; i < COUNT(swapFormats); ++i)
+				formats[i] = swapFormats[i];
+
+			break;
+		}
+		case XR_GRAPHICS_API_D3D11_1:   {
+			const int64_t swapFormats[] = {
+				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+			};
+			*formatCountOutput = COUNT(swapFormats);
+
+			if (formats == NULL)
+				return XR_SUCCESS;
+			if (formatCapacityInput < COUNT(swapFormats))
+				return XR_ERROR_SIZE_INSUFFICIENT;
+
+			for (int i = 0; i < COUNT(swapFormats); ++i)
+				formats[i] = swapFormats[i];
+
+			break;
+		}
+		default:
+			fprintf(stderr, "xrEnumerateSwapchainFormats Graphics API not supported.");
+			return XR_ERROR_RUNTIME_FAILURE;
+	}
 
 	return XR_SUCCESS;
 }
@@ -1043,6 +1120,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	ClaimHandle(pSession->Swapchains, pSwapchain);
 
 	pSwapchain->session = session;
+
 	pSwapchain->usageFlags = createInfo->usageFlags;
 	pSwapchain->format = createInfo->format;
 	pSwapchain->sampleCount = createInfo->sampleCount;
@@ -1052,11 +1130,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	pSwapchain->arraySize = createInfo->arraySize;
 	pSwapchain->mipCount = createInfo->mipCount;
 
+	printf("Create swapchain usageFlags: %llu format: %lld sampleCount %d width: %d height %d faceCount: %d arraySize: %d mipCount %d\n",
+		   createInfo->usageFlags, createInfo->format, createInfo->sampleCount, createInfo->width, createInfo->height, createInfo->faceCount, createInfo->arraySize, createInfo->mipCount);
+
 	HANDLE colorHandles[MIDXR_SWAP_COUNT];
 	midXrClaimFramebufferImages(sessionHandle, MIDXR_SWAP_COUNT, colorHandles);
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:
+			assert(pSwapchain->format == GL_RGBA8);
 #define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
 	gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
 	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
@@ -1064,10 +1146,20 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color.gl[i].memObject, pSwapchain->color.gl[i].texture, colorHandles[i]);
+				printf("Imported gl swap texture: %d memObject: %d\n", pSwapchain->color.gl[i].texture, pSwapchain->color.gl[i].memObject);
 			}
 			break;
 		case XR_GRAPHICS_API_D3D11_1:
+			assert(pSwapchain->format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+				printf("Importing d3d11 device: %p handle: %p type: %guid texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, &pSwapchain->color.d3d11[i]);
+				DX_REQUIRE(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
+				printf("Imported d3d11 swap texture: %p\n", pSwapchain->color.d3d11[i]);
+			}
 			break;
+		case XR_GRAPHICS_API_VULKAN:
+			assert(pSwapchain->format == VK_FORMAT_R8G8B8A8_SRGB);
+//			assert(pSwapchain->format == VK_FORMAT_R8G8B8A8_UNORM);
 		default:
 			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
@@ -1166,6 +1258,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 
 	Session* pSession = (Session*)session;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
+
+	printf("Session ViewConfigurationType: %d\n", beginInfo->primaryViewConfigurationType);
+
 	return XR_SUCCESS;
 }
 
@@ -1296,6 +1391,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 
 	Path* pPath;
 	CHECK(ClaimPath(&pInstance->paths, &pPath, pathHash));
+	XrHandle pathHandle = GetHandle(pInstance->paths, pPath);
+	printf("Path handle claimed: %d\n", pathHandle);
 
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
@@ -1334,7 +1431,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 
 	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	ActionSet* pActionSet;
-	CHECK(ClaimActionSet(&pInstance->sctionSets, &pActionSet, actionSetNameHash));
+	CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
 
 	pActionSet->priority = createInfo->priority;
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
@@ -1403,9 +1500,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 {
 	LOG_METHOD(xrSuggestInteractionProfileBindings);
 
-	Instance*    pInstance = (Instance*)instance;
-	Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
-	XrHash interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
+	Instance* pInstance = (Instance*)instance;
+	Path*     pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
+	XrHash    interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
 	printf("Binding: %s\n", pInteractionProfilePath->string);
 	const XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
 
@@ -1423,11 +1520,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	}
 
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		Action*      pBindingAction = (Action*)pSuggestedBindings[i].action;
-		ActionSet*   pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
-		Path*  pBindingPath = (Path*)pSuggestedBindings[i].binding;
-		XrHash bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
-		Binding*     pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
+		Action*    pBindingAction = (Action*)pSuggestedBindings[i].action;
+		ActionSet* pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
+		Path*      pBindingPath = (Path*)pSuggestedBindings[i].binding;
+		XrHash     bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
+		Binding*   pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
 		printf("Action: %s BindingPath: %s\n", pBindingAction->actionName, pBindingPath->string);
 
 		if (pBindingAction->countSubactionPaths == 0) {
@@ -1465,7 +1562,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	Instance* pInstance = (Instance*)pSession->instance;
 	for (int i = 0; i < attachInfo->countActionSets; ++i) {
 		ActionSet*      pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
-		XrHash          attachingActionSetHash = GetActionSetHash(&pInstance->sctionSets, pAttachingActionSet);
+		XrHash          attachingActionSetHash = GetActionSetHash(&pInstance->actionSets, pAttachingActionSet);
 		ActionSetState* pClaimedActionSetState;
 		CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
 
@@ -1506,8 +1603,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
 
 	Session*        pSession = (Session*)session;
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHash    getActionSetHash = GetActionSetHash(&pInstance->sctionSets, pGetActionSet);
+	Instance*       pInstance = (Instance*)pSession->instance;
+	XrHash          getActionSetHash = GetActionSetHash(&pInstance->actionSets, pGetActionSet);
 	ActionSetState* pGetActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, getActionSetHash);
 
 	XrHandle     getActionHandle = GetHandle(pGetActionSet->Actions, pGetAction);
@@ -1564,7 +1661,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 
 	for (int sessionIndex = 0; sessionIndex < pSession->actionSetStates.count; ++sessionIndex) {
 		ActionSet*      pActionSet = (ActionSet*)syncInfo->activeActionSets[sessionIndex].actionSet;
-		XrHash          actionSetHash = GetActionSetHash(&pInstance->sctionSets, pActionSet);
+		XrHash          actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
 		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
 
 		if (pActionSetState == NULL)
@@ -1675,6 +1772,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 	return XR_SUCCESS;
 }
 
+//IDXGISwapChain* render_swapchain;
+//ID3D11Device* render_device;
+//ID3D11Device1* render_device1;
+//ID3D11DeviceContext* render_context;
+//ID3D11DeviceContext1* render_context1;
+//ID3D11RenderTargetView* render_window_rtview;
+//HANDLE render_frame_latency_wait;
+
 XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 	XrInstance                      instance,
 	XrSystemId                      systemId,
@@ -1683,23 +1788,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 	LOG_METHOD(xrGetD3D11GraphicsRequirementsKHR);
 
 	Instance* pInstance = (Instance*)instance;
+
 	if (pInstance->systemId != systemId)
 		return XR_ERROR_SYSTEM_INVALID;
 
-	IDXGIFactory* factory = NULL;
-	DX_REQUIRE(CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory))
-	IDXGIAdapter* adapter = NULL;
-	for (UINT i = 0; IDXGIFactory_EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
-		DXGI_ADAPTER_DESC desc;
-		DX_REQUIRE(IDXGIAdapter_GetDesc(adapter, &desc));
-		wprintf(L"DX11 Adapter %d Name: %ls Description: %ld:%lu\n", i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
-		graphicsRequirements->adapterLuid = desc.AdapterLuid;
-		IDXGIAdapter_Release(adapter);
-		break;
-	}
-	IDXGIFactory_Release(factory);
-
-	graphicsRequirements->minFeatureLevel = D3D_FEATURE_LEVEL_11_1;
+	graphicsRequirements->adapterLuid = pInstance->graphics.d3d11.adapterLuid;
+	graphicsRequirements->minFeatureLevel = pInstance->graphics.d3d11.minFeatureLevel;
 
 	return XR_SUCCESS;
 }
