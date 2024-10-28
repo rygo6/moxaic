@@ -28,20 +28,20 @@ MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
 void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*))
 {
-	const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
+	MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 		.debugName = "CompTimelineSemaphore",
 		.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
 	midVkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compTimeline);
 	midVkCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
 
-	const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &compositorNodeContext.pool));
-	const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = compositorNodeContext.pool,
 		.commandBufferCount = 1,
@@ -133,7 +133,7 @@ static int ReleaseNode(NodeHandle handle)
 			.dstBinding = 1,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &(const VkDescriptorImageInfo){
+			.pImageInfo = &(VkDescriptorImageInfo){
 				.imageView = VK_NULL_HANDLE,
 				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
@@ -144,7 +144,7 @@ static int ReleaseNode(NodeHandle handle)
 			.dstBinding = 2,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &(const VkDescriptorImageInfo){
+			.pImageInfo = &(VkDescriptorImageInfo){
 				.imageView = VK_NULL_HANDLE,
 				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
@@ -155,7 +155,7 @@ static int ReleaseNode(NodeHandle handle)
 			.dstBinding = 3,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &(const VkDescriptorImageInfo){
+			.pImageInfo = &(VkDescriptorImageInfo){
 				.imageView = VK_NULL_HANDLE,
 				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
@@ -209,25 +209,25 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	pNodeShared->compositorRadius = 0.5;
 	pNodeShared->compositorCycleSkip = 16;
 
-	const MidVkFenceCreateInfo nodeFenceCreateInfo = {
+	MidVkFenceCreateInfo nodeFenceCreateInfo = {
 		.debugName = "NodeFence",
 		.locality = MID_LOCALITY_CONTEXT,
 	};
 	midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
-	const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
+	MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
 		.locality = MID_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
 	midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
 
-	const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
-	const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = pNodeContext->pool,
 		.commandBufferCount = 1,
@@ -297,12 +297,17 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 //
 /// Node Render
+static const VkImageUsageFlags NODE_PASS_USAGES[] = {
+	[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+	[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+	[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+};
 void mxcCreateNodeRenderPass()
 {
 	const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
-		.pAttachments = (const VkAttachmentDescription2[]){
+		.pAttachments = (VkAttachmentDescription2[]){
 			[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
 				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
@@ -338,12 +343,12 @@ void mxcCreateNodeRenderPass()
 			},
 		},
 		.subpassCount = 1,
-		.pSubpasses = (const VkSubpassDescription2[]){
+		.pSubpasses = (VkSubpassDescription2[]){
 			{
 				.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
 				.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 				.colorAttachmentCount = 2,
-				.pColorAttachments = (const VkAttachmentReference2[]){
+				.pColorAttachments = (VkAttachmentReference2[]){
 					[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {
 						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 						.attachment = MIDVK_PASS_ATTACHMENT_COLOR_INDEX,
@@ -357,7 +362,7 @@ void mxcCreateNodeRenderPass()
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
 				},
-				.pDepthStencilAttachment = &(const VkAttachmentReference2){
+				.pDepthStencilAttachment = &(VkAttachmentReference2){
 					.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 					.attachment = MIDVK_PASS_ATTACHMENT_DEPTH_INDEX,
 					.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
@@ -366,7 +371,7 @@ void mxcCreateNodeRenderPass()
 			},
 		},
 		.dependencyCount = 2,
-		.pDependencies = (const VkSubpassDependency2[]){
+		.pDependencies = (VkSubpassDependency2[]){
 			// from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
 			{
 				.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
@@ -393,10 +398,10 @@ void mxcCreateNodeRenderPass()
 	MIDVK_REQUIRE(vkCreateRenderPass2(midVk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &midVk.context.nodeRenderPass));
 	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)midVk.context.nodeRenderPass, "NodeRenderPass");
 }
-void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
+void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
 {
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		const VkmTextureCreateInfo colorCreateInfo = {
+		VkmTextureCreateInfo colorCreateInfo = {
 			.debugName = "ExportedColorFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -407,13 +412,13 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTe
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+				.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
 		};
 		midvkCreateTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].color);
-		const VkmTextureCreateInfo normalCreateInfo = {
+		VkmTextureCreateInfo normalCreateInfo = {
 			.debugName = "ExportedNormalFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -424,13 +429,13 @@ void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTe
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+				.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
 		};
 		midvkCreateTexture(&normalCreateInfo, &pNodeFramebufferTextures[i].normal);
-		const VkmTextureCreateInfo gbufferCreateInfo = {
+		VkmTextureCreateInfo gbufferCreateInfo = {
 			.debugName = "ExportedGBufferFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,

@@ -12,7 +12,9 @@
 #define COBJMACROS
 #define WIDL_C_INLINE_WRAPPERS
 #include <d3d11_1.h>
+#include <initguid.h>
 #include <dxgi.h>
+#include <dxgi1_4.h>
 
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
@@ -307,7 +309,7 @@ typedef struct Session {
 	XrViewConfigurationType primaryViewConfigurationType;
 	union {
 		XrGraphicsBindingOpenGLWin32KHR gl;
-		XrGraphicsBindingD3D11KHR       d3d11;
+//		XrGraphicsBindingD3D11KHR       d3d11;
 		XrGraphicsBindingVulkanKHR      vk;
 	} binding;
 
@@ -327,8 +329,8 @@ typedef struct Instance {
 	XrGraphicsApi graphicsApi;
 	union {
 		struct {
+			ID3D11Device*         device;
 			ID3D11Device1*        device1;
-			ID3D11DeviceContext1* context1;
 			LUID                  adapterLuid;
 			D3D_FEATURE_LEVEL     minFeatureLevel;
 		} d3d11;
@@ -352,30 +354,26 @@ CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 #define LOG_METHOD(_name)
 #endif
 
-#ifndef MID_WIN32_DEBUG
-#define MID_WIN32_DEBUG
-static void PanicWin32(const char* file, const int line, HRESULT err) {
-	fprintf(stderr, "\n%s:%d Error! 0x%08lX: ", file, line, err);
+static void LogWin32Error(const char* file, const int line, HRESULT err)
+{
+	fprintf(stderr, "\n%s:%d Error! 0x%08lX\n", file, line, err);
 	char* errStr;
 	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR) &errStr, 0, NULL)) {
-		fprintf(stderr, "%s\n", err, errStr);
+					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
+		fprintf(stderr, "%s\n", errStr);
 		LocalFree(errStr);
 	}
-//	__builtin_trap();
 }
-#define PANIC_WIN32(err) PanicWin32(__FILE__, __LINE__, err)
-#define REQUIRE_WIN32(condition, err)      \
-  if (__builtin_expect(!(condition), 0)) { \
-    PANIC_WIN32(err);                      \
-  }
-// change this to return OXR fail message
-#define DX_REQUIRE(command)           \
-  {                                   \
-    HRESULT hr = command;             \
-    REQUIRE_WIN32(SUCCEEDED(hr), hr); \
-  }
-#endif
+#define REQUIRE_WIN32(condition, err)           \
+	if (__builtin_expect(!(condition), 0)) {    \
+		LogWin32Error(__FILE__, __LINE__, err); \
+		return XR_ERROR_RUNTIME_FAILURE;        \
+	}
+#define DX_REQUIRE(command)               \
+	{                                     \
+		HRESULT hr = command;             \
+		REQUIRE_WIN32(SUCCEEDED(hr), hr); \
+	}
 
 static InstanceContainer instances;
 
@@ -597,31 +595,55 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 		case XR_GRAPHICS_API_D3D11_1:   {
 
 			// do I need to close these?
-			ID3D11Device*        renderDevice;
-			ID3D11DeviceContext* renderContext;
-			DX_REQUIRE(D3D11CreateDevice(
-				NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG,
-				(D3D_FEATURE_LEVEL[]) {D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
-				&renderDevice, &pInstance->graphics.d3d11.minFeatureLevel, &renderContext))
-			assert(pInstance->graphics.d3d11.minFeatureLevel == D3D_FEATURE_LEVEL_11_1);
-			DX_REQUIRE(ID3D11Device_QueryInterface(renderDevice, &IID_ID3D11Device1, (void**)&pInstance->graphics.d3d11.device1))
-			DX_REQUIRE(ID3D11DeviceContext_QueryInterface(renderContext, &IID_ID3D11DeviceContext1, (void**) &pInstance->graphics.d3d11.context1))
-			printf("DX11 Adapter Feature Level: 0x%X Device: %p context %p\n",
-					pInstance->graphics.d3d11.minFeatureLevel, pInstance->graphics.d3d11.device1, pInstance->graphics.d3d11.context1);
+//			ID3D11Device*        renderDevice;
+//			ID3D11DeviceContext* renderContext;
+//			DX_REQUIRE(D3D11CreateDevice(
+//				NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG,
+//				(D3D_FEATURE_LEVEL[]) {D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
+//				&renderDevice, &pInstance->graphics.d3d11.minFeatureLevel, &renderContext))
+//			assert(pInstance->graphics.d3d11.minFeatureLevel == D3D_FEATURE_LEVEL_11_1);
+//			DX_REQUIRE(ID3D11Device_QueryInterface(renderDevice, &IID_ID3D11Device1, (void**)&pInstance->graphics.d3d11.device1))
+//			DX_REQUIRE(ID3D11DeviceContext_QueryInterface(renderContext, &IID_ID3D11DeviceContext1, (void**) &pInstance->graphics.d3d11.context1))
+//			printf("DX11 Adapter Feature Level: 0x%X Device: %p context %p\n",
+//					pInstance->graphics.d3d11.minFeatureLevel, pInstance->graphics.d3d11.device1, pInstance->graphics.d3d11.context1);
 
-			IDXGIFactory* factory = NULL;
-			DX_REQUIRE(CreateDXGIFactory(&IID_IDXGIFactory, (void**)&factory))
+//			ID3D11Debug* debug;
+//			DX_REQUIRE(ID3D11Device1_QueryInterface(pInstance->graphics.d3d11.device1, &IID_ID3D11Debug, (void**)&debug))
+//			ID3D11Debug_ReportLiveDeviceObjects(debug, D3D11_RLDO_SUMMARY);
+
+//			ID3D11Debug_Release(debug);
+//			ID3D11Device_Release(renderDevice);
+//			ID3D11DeviceContext_Release(renderContext);
+
+			pInstance->graphics.d3d11.minFeatureLevel = D3D_FEATURE_LEVEL_11_1;
+
+			IDXGIFactory1* factory = NULL;
+			DX_REQUIRE(CreateDXGIFactory1(&IID_IDXGIFactory, (void**)&factory))
+
 			IDXGIAdapter* adapter = NULL;
-			for (UINT i = 0; IDXGIFactory_EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+			for (UINT i = 0; IDXGIFactory1_EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
 				DXGI_ADAPTER_DESC desc;
 				DX_REQUIRE(IDXGIAdapter_GetDesc(adapter, &desc));
 				pInstance->graphics.d3d11.adapterLuid = desc.AdapterLuid;
 				wprintf(L"DX11 Adapter %d Name: %ls Description: %ld:%lu\n",
 						i, desc.Description, desc.AdapterLuid.HighPart,	desc.AdapterLuid.LowPart);
-				IDXGIAdapter_Release(adapter);
 				break;
 			}
-			IDXGIFactory_Release(factory);
+
+			IDXGIFactory4* factory4;
+			DX_REQUIRE(IDXGIFactory1_QueryInterface(factory, &IID_IDXGIFactory4, (void**)&factory4));
+
+			IDXGIAdapter* adapter2 = NULL;
+			IDXGIFactory4_EnumAdapterByLuid(factory4, pInstance->graphics.d3d11.adapterLuid, &IID_IDXGIAdapter, (void**)&adapter2);
+			DXGI_ADAPTER_DESC desc2;
+			DX_REQUIRE(IDXGIAdapter_GetDesc(adapter2, &desc2));
+			wprintf(L"DX11 Adapter2 Name: %ls Description: %ld:%lu\n", desc2.Description, desc2.AdapterLuid.HighPart, desc2.AdapterLuid.LowPart);
+
+
+			printf("Adapters %p == %p\n", adapter, adapter2);
+
+			IDXGIAdapter_Release(adapter);
+			IDXGIFactory1_Release(factory);
 
 			break;
 		}
@@ -834,7 +856,30 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			return XR_SUCCESS;
 		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_D3D11_KHR\n");
-			pClaimedSession->binding.d3d11 = *(XrGraphicsBindingD3D11KHR*)&createInfo->next;
+
+			XrGraphicsBindingD3D11KHR binding = *(XrGraphicsBindingD3D11KHR*)createInfo->next;
+
+			ID3D11Device*             device = binding.device;
+			printf("D3D11 Device: %p\n", device);
+			if (device == NULL) {
+				fprintf(stderr, "D3D11 Device Invalid.\n");
+				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+			}
+
+			ID3D11Device1*            device1;
+			DX_REQUIRE(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&device1))
+			printf("D3D11 Device1: %p\n", device1);
+			if (device1 == NULL) {
+				fprintf(stderr, "D3D11 Device Invalid.\n");
+				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+			}
+
+			D3D_FEATURE_LEVEL featureLevel = ID3D11Device1_GetFeatureLevel(device1);
+			printf("D3D11 Feature Level: %d\n", featureLevel);
+
+			pInstance->graphics.d3d11.device = device;
+			pInstance->graphics.d3d11.device1 = device1;
+
 			*session = (XrSession)pClaimedSession;
 			return XR_SUCCESS;
 		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR:
@@ -1008,15 +1053,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	switch (viewConfigurationType) {
 		default:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO\n");
 			*viewCountOutput = 1;
 			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			*viewCountOutput = 2;
+			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO\n");
+			// this can force it to mono
+//			*viewCountOutput = 2;
+			*viewCountOutput = 1;
 			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
 			*viewCountOutput = 4;
 			break;
 		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
 			*viewCountOutput = 1;  // not sure
 			break;
 	}
@@ -1138,7 +1189,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:
-			assert(pSwapchain->format == GL_RGBA8);
+			assert(pSwapchain->format == GL_SRGB8_ALPHA8);
 #define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
 	gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
 	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
@@ -1152,8 +1203,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 		case XR_GRAPHICS_API_D3D11_1:
 			assert(pSwapchain->format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-				printf("Importing d3d11 device: %p handle: %p type: %guid texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, &pSwapchain->color.d3d11[i]);
+				printf("Importing d3d11 device: %p handle: %p texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i],  pSwapchain->color.d3d11[i]);
+//				ID3D11Resource* resource;
+
 				DX_REQUIRE(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
+//				printf("Imported d3d11 resource: %p\n", resource);
+//				DX_REQUIRE(ID3D11Resource_QueryInterface(resource, &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
 				printf("Imported d3d11 swap texture: %p\n", pSwapchain->color.d3d11[i]);
 			}
 			break;
@@ -1173,6 +1228,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySwapchain(
 	XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1772,14 +1828,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 	return XR_SUCCESS;
 }
 
-//IDXGISwapChain* render_swapchain;
-//ID3D11Device* render_device;
-//ID3D11Device1* render_device1;
-//ID3D11DeviceContext* render_context;
-//ID3D11DeviceContext1* render_context1;
-//ID3D11RenderTargetView* render_window_rtview;
-//HANDLE render_frame_latency_wait;
-
 XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 	XrInstance                      instance,
 	XrSystemId                      systemId,
@@ -1789,11 +1837,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 
 	Instance* pInstance = (Instance*)instance;
 
-	if (pInstance->systemId != systemId)
+	if (pInstance->systemId != systemId){
+		fprintf(stderr, "Invalid System ID.");
 		return XR_ERROR_SYSTEM_INVALID;
+	}
 
 	graphicsRequirements->adapterLuid = pInstance->graphics.d3d11.adapterLuid;
 	graphicsRequirements->minFeatureLevel = pInstance->graphics.d3d11.minFeatureLevel;
+
+	printf("D3D11GraphicsRequirements LUID: %ld:%lu FeatureLevel: %d\n",
+		   graphicsRequirements->adapterLuid.HighPart, graphicsRequirements->adapterLuid.LowPart, graphicsRequirements->minFeatureLevel);
 
 	return XR_SUCCESS;
 }

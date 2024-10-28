@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
+
+#define VK_DEBUG_MEMORY_ALLOC
 
 __attribute((aligned(64))) MidVk                       midVk = {};
 __thread __attribute((aligned(64))) MidVkThreadContext threadContext = {};
@@ -443,6 +446,19 @@ void midVkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescrip
 // Memory
 //----------------------------------------------------------------------------------
 
+static void PrintFlags(VkMemoryPropertyFlags propFlags, const char* (*string_Method)(VkFlags flags))
+{
+	int index = 0;
+	while (propFlags) {
+		if (propFlags & 1) {
+			printf("%s ", string_Method(1U << index));
+		}
+		++index;
+		propFlags >>= 1;
+	}
+	printf("\n");
+}
+
 static void PrintMemoryPropertyFlags(VkMemoryPropertyFlags propFlags)
 {
 	int index = 0;
@@ -509,24 +525,25 @@ void midVkEndAllocationRequests()
 		bool            hasHostCoherent = (propFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		if (hasDeviceLocal && hasHostVisible && hasHostCoherent)
 			MIDVK_REQUIRE(vkMapMemory(midVk.context.device, deviceMemory[memTypeIndex], 0, requestedMemoryAllocSize[memTypeIndex], 0, &pMappedMemory[memTypeIndex]));
-#ifdef VKM_DEBUG_MEMORY_ALLOC
+#ifdef VK_DEBUG_MEMORY_ALLOC
 		printf("Shared MemoryType: %d Allocated: %zu Mapped %d", memTypeIndex, requestedMemoryAllocSize[memTypeIndex], pMappedMemory[memTypeIndex] != NULL);
 		PrintMemoryPropertyFlags(propFlags);
 #endif
 	}
 }
 
-void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropertyFlags propFlags, MidLocality locality, HANDLE externalHandle, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory)
+static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropertyFlags propFlags, MidLocality locality, HANDLE externalHandle, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory)
 {
 	VkPhysicalDeviceMemoryProperties memProps;
 	vkGetPhysicalDeviceMemoryProperties(midVk.context.physicalDevice, &memProps);
 	uint32_t memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
+
 #if WIN32
 	VkExportMemoryWin32HandleInfoKHR exportMemPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
 		.pNext = pDedicatedAllocInfo,
 		// This seems to not make the actual UBO read only, only the NT handle I presume
-		.dwAccess = GENERIC_READ,
+		.dwAccess = GENERIC_ALL,
 	};
 	VkImportMemoryWin32HandleInfoKHR importMemAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
@@ -535,6 +552,7 @@ void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropertyFlags 
 		.handle = externalHandle,
 	};
 #endif
+
 	VkExportMemoryAllocateInfo exportMemAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
 		.pNext = &exportMemPlatformInfo,
@@ -549,34 +567,14 @@ void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropertyFlags 
 		.memoryTypeIndex = memTypeIndex,
 	};
 	MIDVK_REQUIRE(vkAllocateMemory(midVk.context.device, &memAllocInfo, MIDVK_ALLOC, pDeviceMemory));
-#ifdef VKM_DEBUG_MEMORY_ALLOC
+
+#ifdef VK_DEBUG_MEMORY_ALLOC
 	printf("%sMemoryType: %d Allocated: %zu ", pDedicatedAllocInfo != NULL ? "Dedicated " : "", memTypeIndex, pMemReqs->size);
 	PrintMemoryPropertyFlags(propFlags);
 #endif
 }
-void vkmImportMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropertyFlags propFlags, MidLocality locality, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory)
-{
-	VkPhysicalDeviceMemoryProperties memProps;
-	vkGetPhysicalDeviceMemoryProperties(midVk.context.physicalDevice, &memProps);
-	uint32_t                         memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
-	VkImportMemoryWin32HandleInfoKHR importMemAllocInfo = {
-		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
-		.pNext = pDedicatedAllocInfo,
-		.handle = NULL,
-	};
-	VkMemoryAllocateInfo memAllocInfo = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = &importMemAllocInfo,
-		.allocationSize = pMemReqs->size,
-		.memoryTypeIndex = memTypeIndex,
-	};
-	MIDVK_REQUIRE(vkAllocateMemory(midVk.context.device, &memAllocInfo, MIDVK_ALLOC, pDeviceMemory));
-#ifdef VKM_DEBUG_MEMORY_ALLOC
-	printf("%sMemoryType: %d Allocated: %zu ", pDedicatedAllocInfo != NULL ? "Dedicated " : "", memTypeIndex, pMemReqs->size);
-	PrintMemoryPropertyFlags(propFlags);
-#endif
-}
-static void CreateAllocBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
+
+static void CreateAllocBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pMemory, VkBuffer* pBuffer)
 {
 	VkBufferCreateInfo bufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -584,29 +582,34 @@ static void CreateAllocBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize b
 		.usage = usage,
 	};
 	MIDVK_REQUIRE(vkCreateBuffer(midVk.context.device, &bufferCreateInfo, MIDVK_ALLOC, pBuffer));
+
 	VkMemoryDedicatedRequirements dedicatedReqs = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
 	VkMemoryRequirements2         memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
 	vkGetBufferMemoryRequirements2(midVk.context.device, &(VkBufferMemoryRequirementsInfo2){.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = *pBuffer}, &memReqs2);
+
 	bool requiresDedicated = dedicatedReqs.requiresDedicatedAllocation;
 	bool prefersDedicated = dedicatedReqs.prefersDedicatedAllocation;
-#ifdef VKM_DEBUG_MEMORY_ALLOC
+#ifdef VK_DEBUG_MEMORY_ALLOC
 	if (requiresDedicated)
 		printf("Dedicated allocation is required for this buffer.\n");
 	else if (prefersDedicated)
 		printf("Dedicated allocation is preferred for this buffer.\n");
 #endif
+
 	VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO, .buffer = *pBuffer};
 	// for some reason dedicated and external allocations are crashing on 4090 after important in other process, so lets just leave is that as requires to be dedicated for now
-	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, NULL,
-				   (requiresDedicated || prefersDedicated) && !MID_LOCALITY_INTERPROCESS(locality) ? &dedicatedAllocInfo : NULL,
-				   pDeviceMem);
-	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, requiresDedicated ? &dedicatedAllocInfo : NULL, pDeviceMem);
+//	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL,
+//				   (requiresDedicated || prefersDedicated) && !MID_LOCALITY_INTERPROCESS(locality) ? &dedicatedAllocInfo : NULL,
+//				   pDeviceMem);
+	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL, requiresDedicated ? &dedicatedAllocInfo : NULL, pMemory);
 }
-void CreateAllocBindBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
+
+static void CreateAllocBindBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
 {
 	CreateAllocBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
 	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, *pBuffer, *pDeviceMem, 0));
 }
+
 void midVkCreateAllocBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped)
 {
 	CreateAllocBindBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
@@ -621,25 +624,30 @@ void midVkCreateBufferSharedMemory(const MidVkRequestAllocationInfo* pRequest, V
 		.usage = pRequest->usage,
 	};
 	MIDVK_REQUIRE(vkCreateBuffer(midVk.context.device, &bufferCreateInfo, MIDVK_ALLOC, pBuffer));
+
 	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = *pBuffer};
-	VkMemoryDedicatedRequirements         dedicatedReqs = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
-	VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
+	VkMemoryDedicatedRequirements   dedicatedReqs = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
+	VkMemoryRequirements2           memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
 	vkGetBufferMemoryRequirements2(midVk.context.device, &bufMemReqInfo2, &memReqs2);
+
 	bool requiresDedicated = dedicatedReqs.requiresDedicatedAllocation;
 	bool prefersDedicated = dedicatedReqs.prefersDedicatedAllocation;
-#ifdef VKM_DEBUG_MEMORY_ALLOC
+#ifdef VK_DEBUG_MEMORY_ALLOC
 	if (requiresDedicated)
 		PANIC("Trying to allocate buffer to shared memory that requires dedicated allocation!");
 	else if (prefersDedicated)
 		printf("Warning! Trying to allocate buffer to shared memory that prefers dedicated allocation!");
 #endif
+
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 	vkGetPhysicalDeviceMemoryProperties2(midVk.context.physicalDevice, &memProps2);
 	pMemory->type = FindMemoryTypeIndex(memProps2.memoryProperties.memoryTypeCount, memProps2.memoryProperties.memoryTypes, memReqs2.memoryRequirements.memoryTypeBits, pRequest->memoryPropertyFlags);
 	pMemory->offset = requestedMemoryAllocSize[pMemory->type] + (requestedMemoryAllocSize[pMemory->type] % memReqs2.memoryRequirements.alignment);
 	pMemory->size = memReqs2.memoryRequirements.size;
+
 	requestedMemoryAllocSize[pMemory->type] += memReqs2.memoryRequirements.size;
-#ifdef VKM_DEBUG_MEMORY_ALLOC
+
+#ifdef VK_DEBUG_MEMORY_ALLOC
 	printf("Request Shared MemoryType: %d Allocation: %zu ", pMemory->type, memReqs2.memoryRequirements.size);
 	PrintMemoryPropertyFlags(pRequest->memoryPropertyFlags);
 #endif
@@ -672,6 +680,7 @@ void midVkCreateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* 
 	pMesh->indexCount = pCreateInfo->indexCount;
 	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
 	pMesh->indexOffset = vertexBufferSize;
+
 	MidVkRequestAllocationInfo AllocRequest = {
 		.memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.size = pMesh->indexOffset + indexBufferSize,
@@ -688,6 +697,7 @@ void midVkBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMe
 	VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
 	vkGetBufferMemoryRequirements2(midVk.context.device, &bufMemReqInfo2, &memReqs2);
 	REQUIRE(pMesh->sharedMemory.size == memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
+
 	// bind populate
 	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
 	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
@@ -701,6 +711,7 @@ void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh)
 	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->vertexCount;
 	pMesh->indexOffset = 0;
 	pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
+
 	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VKM_BUFFER_USAGE_MESH, MID_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
 	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
 	midVkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
@@ -714,10 +725,12 @@ static inline void vkmCmdPipelineImageBarriers(VkCommandBuffer commandBuffer, ui
 {
 	vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
+
 static inline void vkmCmdPipelineImageBarrier(VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier)
 {
 	vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
+
 static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, VkImage image, VkImageAspectFlags aspectMask, VkImageView* pImageView)
 {
 	VkImageViewCreateInfo imageViewCreateInfo = {
@@ -733,9 +746,47 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, VkImage i
 	};
 	MIDVK_REQUIRE(vkCreateImageView(midVk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, pImageView));
 }
+
 static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, MidLocality locality, HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage)
 {
 	MIDVK_REQUIRE(vkCreateImage(midVk.context.device, pImageCreateInfo, MIDVK_ALLOC, pImage));
+
+
+	// DX11 external textures may need to be dedicated, should this go here???
+	bool requiresExternalDedicated = false;
+	if (MID_LOCALITY_INTERPROCESS(locality)) {
+		VkPhysicalDeviceExternalImageFormatInfo externalImageInfo = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
+			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT,
+		};
+		VkPhysicalDeviceImageFormatInfo2 imageInfo = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+			.pNext = &externalImageInfo,
+			.format = pImageCreateInfo->format,
+			.type = pImageCreateInfo->imageType,
+			.tiling = pImageCreateInfo->tiling,
+			.usage = pImageCreateInfo->usage,
+		};
+		VkExternalImageFormatProperties externalImageProperties = {
+			.sType = VK_STRUCTURE_TYPE_EXTERNAL_IMAGE_FORMAT_PROPERTIES,
+		};
+		VkImageFormatProperties2 imageProperties = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+			.pNext = &externalImageProperties,
+		};
+		MIDVK_REQUIRE(vkGetPhysicalDeviceImageFormatProperties2(midVk.context.physicalDevice, &imageInfo, &imageProperties));
+
+		printf("externalMemoryFeatures: ");
+		PrintFlags(externalImageProperties.externalMemoryProperties.externalMemoryFeatures, string_VkExternalMemoryFeatureFlagBits);
+		printf("exportFromImportedHandleTypes: ");
+		PrintFlags(externalImageProperties.externalMemoryProperties.exportFromImportedHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
+		printf("compatibleHandleTypes: ");
+		PrintFlags(externalImageProperties.externalMemoryProperties.compatibleHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
+
+		requiresExternalDedicated = externalImageProperties.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT;
+	}
+
+
 	VkImageMemoryRequirementsInfo2 imgMemReqInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2,
 		.image = *pImage,
@@ -748,35 +799,39 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, MidL
 		.pNext = &dedicatedReqs,
 	};
 	vkGetImageMemoryRequirements2(midVk.context.device, &imgMemReqInfo2, &memReqs2);
+
 	bool requiresDedicated = dedicatedReqs.requiresDedicatedAllocation;
 	bool prefersDedicated = dedicatedReqs.prefersDedicatedAllocation;
-#ifdef VKM_DEBUG_MEMORY_ALLOC
+#ifdef VK_DEBUG_MEMORY_ALLOC
 	if (requiresDedicated)
 		printf("Dedicated allocation is required for this image.\n");
-	else if (prefersDedicated)
+	if (prefersDedicated)
 		printf("Dedicated allocation is preferred for this image.\n");
+	if (requiresExternalDedicated)
+		printf("Dedicated external allocation is required for this image.\n");
 #endif
+
 	VkMemoryDedicatedAllocateInfo dedicatedAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO,
 		.image = *pImage,
 	};
-	// for some reason dedicated and external allocations are crashing on 4090 after import in other process, so lets just leave is that as requires to be dedicated for now
-	// should this moveinto a struct?
-	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle,
-				   (requiresDedicated || prefersDedicated) && !MID_LOCALITY_INTERPROCESS(locality) ? &dedicatedAllocInfo : NULL,
-				   pMemory);
+	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, requiresDedicated || requiresExternalDedicated ? &dedicatedAllocInfo : NULL, pMemory);
 	MIDVK_REQUIRE(vkBindImageMemory(midVk.context.device, *pImage, *pMemory, 0));
 }
+
 static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, VkImageAspectFlags aspectMask, MidLocality locality, HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView)
 {
 	CreateAllocBindImage(pImageCreateInfo, locality, externalHandle, pMemory, pImage);
 	CreateImageView(pImageCreateInfo, *pImage, aspectMask, pImageView);
 }
+
 void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture)
 {
+	// this should take VkmTextureCreateInfo too
 	CreateAllocateBindImageView(&pCreateInfo->imageCreateInfo, pCreateInfo->aspectMask, pCreateInfo->locality, pCreateInfo->externalHandle, &pTexture->memory, &pTexture->image, &pTexture->view);
 	midVkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
+
 void midVkCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
 {
 	int      texChannels, width, height;
@@ -1360,7 +1415,7 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
 	switch (pCreateInfo->locality) {
 		default: break;
 		case MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
-		case MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY:
+		case MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY:  {
 #if WIN32
 			VkImportFenceWin32HandleInfoKHR importWin32HandleInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_WIN32_HANDLE_INFO_KHR,
@@ -1372,6 +1427,7 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
 			MIDVK_REQUIRE(ImportFenceWin32HandleKHR(midVk.context.device, &importWin32HandleInfo));
 #endif
 			break;
+		}
 	}
 }
 
