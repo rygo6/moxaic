@@ -191,7 +191,7 @@ void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle)
 {
-	REQUIRE(imageCount == MIDVK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
+	CHECK(imageCount != MIDVK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;

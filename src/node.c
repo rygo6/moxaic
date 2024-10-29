@@ -8,8 +8,21 @@
 #include <afunix.h>
 #include <stdio.h>
 
+
+
+#define D3D11_NO_HELPERS
+#define CINTERFACE
+#define COBJMACROS
+#define WIDL_C_INLINE_WRAPPERS
+#include <d3d11_1.h>
+#include <initguid.h>
+#include <dxgi.h>
+#include <dxgi1_4.h>
+
+
 #include <pthread.h>
 #include <assert.h>
+#include <d3d11_3.h>
 
 size_t                   nodeCount = 0;
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
@@ -40,17 +53,16 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &compositorNodeContext.pool));
+	VK_CHECK(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &compositorNodeContext.pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = compositorNodeContext.pool,
 		.commandBufferCount = 1,
 	};
-	MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &compositorNodeContext.cmd));
+	VK_CHECK(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &compositorNodeContext.cmd));
 	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorNodeContext.cmd, "CompCmd");
 
-	int result = pthread_create(&compositorNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorNodeContext);
-	REQUIRE(result == 0, "Comp Node thread creation failed!");
+	CHECK(pthread_create(&compositorNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorNodeContext), "Comp Node thread creation failed!");
 	printf("Request and Run CompNode Thread Success.\n");
 }
 
@@ -126,7 +138,7 @@ static int ReleaseNode(NodeHandle handle)
 	vkDestroySemaphore(midVk.context.device, pNodeContext->vkNodeTimeline, MIDVK_ALLOC);
 
 	// Clear compositor data
-	const VkWriteDescriptorSet writeSets[] = {
+	VkWriteDescriptorSet writeSets[] = {
 		(VkWriteDescriptorSet) {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = nodeCompositorData[handle].set,
@@ -226,13 +238,13 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
+	VK_CHECK(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = pNodeContext->pool,
 		.commandBufferCount = 1,
 	};
-	MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
+	VK_CHECK(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
 	mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->vkNodeFramebufferTextures);
@@ -288,8 +300,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 	*pNodeHandle = handle;
 
-	int result = pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeContext);
-	REQUIRE(result == 0, "Node thread creation failed!");
+	CHECK(pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeContext), "Node thread creation failed!");
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
@@ -395,7 +406,7 @@ void mxcCreateNodeRenderPass()
 			},
 		},
 	};
-	MIDVK_REQUIRE(vkCreateRenderPass2(midVk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &midVk.context.nodeRenderPass));
+	VK_CHECK(vkCreateRenderPass2(midVk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &midVk.context.nodeRenderPass));
 	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)midVk.context.nodeRenderPass, "NodeRenderPass");
 }
 void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
@@ -462,7 +473,7 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].normal.image),
 				VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].gbuffer.image, 0, MXC_NODE_GBUFFER_LEVELS),
 			};
-			MIDVK_DEVICE_FUNC(CmdPipelineBarrier2);
+			VK_DEVICE_FUNC(CmdPipelineBarrier2);
 			CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
 			midVkEndImmediateTransferCommandBuffer(cmd);
 			continue;
@@ -513,6 +524,27 @@ const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 			fprintf(stderr, "%s: %d\n", _message, WSAGetLastError()); \
 			goto Exit;                                                \
 		}                                                             \
+	}
+
+static void LogWin32Error(const char* file, const int line, HRESULT err)
+{
+	fprintf(stderr, "\n%s:%d Error! 0x%08lX\n", file, line, err);
+	char* errStr;
+	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
+		fprintf(stderr, "%s\n", errStr);
+		LocalFree(errStr);
+	}
+}
+#define REQUIRE_WIN32(condition, err)           \
+	if (__builtin_expect(!(condition), 0)) {    \
+		LogWin32Error(__FILE__, __LINE__, err); \
+		PANIC("DX ERROR");                      \
+	}
+#define DX_REQUIRE(command)               \
+	{                                     \
+		HRESULT hr = command;             \
+		REQUIRE_WIN32(SUCCEEDED(hr), hr); \
 	}
 
 static void InterprocessServerAcceptNodeConnection()
@@ -613,13 +645,37 @@ static void InterprocessServerAcceptNodeConnection()
 
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].color, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate glColor handle fail");
-			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].normal, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate normal handle fail.");
-			ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory), nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate gbuffer handle fail.");
+			ERR_CHECK(!DuplicateHandle(
+						  currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory),
+						  nodeProcessHandle, &pImportParam->framebufferHandles[i].color,
+						  0, false, DUPLICATE_SAME_ACCESS),
+					  "Duplicate glColor handle fail");
+			ERR_CHECK(!DuplicateHandle(
+						  currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory),
+						  nodeProcessHandle, &pImportParam->framebufferHandles[i].normal,
+						  0, false, DUPLICATE_SAME_ACCESS),
+					  "Duplicate normal handle fail.");
+			ERR_CHECK(!DuplicateHandle(
+						  currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory),
+						  nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer,
+						  0, false, DUPLICATE_SAME_ACCESS),
+					  "Duplicate gbuffer handle fail.");
 		}
-		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetFenceExternalHandle(pNodeContext->vkNodeFence), nodeProcessHandle, &pImportParam->nodeFenceHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate nodeFenceHandle handle fail.");
-		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline), nodeProcessHandle, &pImportParam->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate vkNodeTimeline handle fail.");
-		ERR_CHECK(!DuplicateHandle(currentHandle, midVkGetSemaphoreExternalHandle(compositorNodeContext.compTimeline), nodeProcessHandle, &pImportParam->compTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate compeTimeline handle fail.");
+		ERR_CHECK(!DuplicateHandle(
+					  currentHandle, midVkGetFenceExternalHandle(pNodeContext->vkNodeFence),
+					  nodeProcessHandle, &pImportParam->nodeFenceHandle,
+					  0, false, DUPLICATE_SAME_ACCESS),
+				  "Duplicate nodeFenceHandle handle fail.");
+		ERR_CHECK(!DuplicateHandle(
+					  currentHandle, midVkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline),
+					  nodeProcessHandle, &pImportParam->nodeTimelineHandle,
+					  0, false, DUPLICATE_SAME_ACCESS),
+				  "Duplicate vkNodeTimeline handle fail.");
+		ERR_CHECK(!DuplicateHandle(
+					  currentHandle, midVkGetSemaphoreExternalHandle(compositorNodeContext.compTimeline),
+					  nodeProcessHandle, &pImportParam->compTimelineHandle,
+					  0, false, DUPLICATE_SAME_ACCESS),
+				  "Duplicate compeTimeline handle fail.");
 
 		const uint32_t graphicsQueueIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
@@ -655,6 +711,35 @@ static void InterprocessServerAcceptNodeConnection()
 				.image = pNodeCompositorData->framebuffers[i].gBuffer,
 				MIDVK_COLOR_SUBRESOURCE_RANGE};
 		}
+	}
+
+	{
+		ID3D11Device*         renderDevice;
+		ID3D11Device1*        renderDevice1;
+		ID3D11DeviceContext*  renderContext;
+		ID3D11DeviceContext1* renderContext1;
+		D3D_FEATURE_LEVEL     featureLevel;
+		DX_REQUIRE(D3D11CreateDevice(
+			NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG,
+			(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
+			&renderDevice, &featureLevel, &renderContext))
+		assert(featureLevel == D3D_FEATURE_LEVEL_11_1);
+		DX_REQUIRE(ID3D11Device_QueryInterface(renderDevice, &IID_ID3D11Device1, (void**)&renderDevice1))
+		DX_REQUIRE(ID3D11DeviceContext_QueryInterface(renderContext, &IID_ID3D11DeviceContext1, (void**)&renderContext1))
+		printf("DX11 Adapter Feature Level: 0x%X Device: %p context %p\n", featureLevel, renderDevice, renderContext);
+
+		HANDLE handle = midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[0].color.memory);
+		ID3D11Texture2D1* texture = NULL;
+		printf("Importing d3d11 device: %p handle: %p texture: %p\n", renderDevice1, handle, texture);
+		DX_REQUIRE(ID3D11Device1_OpenSharedResource1(renderDevice1, handle, &IID_ID3D11Texture2D1, (void**)&texture));
+
+		ID3D11Debug* debug;
+		DX_REQUIRE(ID3D11Device1_QueryInterface(renderDevice1, &IID_ID3D11Debug, (void**)&debug))
+		ID3D11Debug_ReportLiveDeviceObjects(debug, D3D11_RLDO_SUMMARY);
+
+		ID3D11Debug_Release(debug);
+		ID3D11Device_Release(renderDevice);
+		ID3D11DeviceContext_Release(renderContext);
 	}
 
 	// Send shared memory handle
@@ -730,7 +815,7 @@ void mxcInitializeInterprocessServer()
 	printf("Min size of shared memory. Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
 
 	ipcServer.listenSocket = INVALID_SOCKET;
-	REQUIRE_ERR(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
+	CHECK(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
 }
 void mxcShutdownInterprocessServer()
 {
@@ -838,13 +923,13 @@ void mxcConnectInterprocessNode(bool createTestNode)
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 			.queueFamilyIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 		};
-		MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
+		VK_CHECK(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
 		const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 			.commandPool = pNodeContext->pool,
 			.commandBufferCount = 1,
 		};
-		MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
+		VK_CHECK(vkAllocateCommandBuffers(midVk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 		midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
 		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
@@ -926,8 +1011,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	// Start node thread
 	{
 		__atomic_thread_fence(__ATOMIC_RELEASE);
-		int result = pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext);
-		REQUIRE(result == 0, "Node Process Import thread creation failed!");
+		CHECK(pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
 		printf("Node Request Process Import Success.\n");
 		goto ExitSuccess;
 	}

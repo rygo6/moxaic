@@ -109,7 +109,7 @@ static void CreateCompSetLayout(MxcCompMode compMode, VkDescriptorSetLayout* pLa
 			},
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(midVk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
 }
 
 enum PipeSetCompIndices {
@@ -127,7 +127,7 @@ static void CreateCompPipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipeline
 			[PIPE_SET_COMP_NODE_INDEX] = nodeSetLayout,
 		},
 	};
-	MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, pNodePipeLayout));
+	VK_CHECK(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, pNodePipeLayout));
 }
 
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
@@ -176,7 +176,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 			.queryType = VK_QUERY_TYPE_TIMESTAMP,
 			.queryCount = 2,
 		};
-		MIDVK_REQUIRE(vkCreateQueryPool(midVk.context.device, &queryPoolCreateInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
+		VK_CHECK(vkCreateQueryPool(midVk.context.device, &queryPoolCreateInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
 
 		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -189,7 +189,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = MXC_NODE_CAPACITY},
 			},
 		};
-		MIDVK_REQUIRE(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+		VK_CHECK(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
 
 		// global set
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.globalSetLayout, &pNode->globalSet.set);
@@ -209,7 +209,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 				.descriptorSetCount = 1,
 				.pSetLayouts = &pNode->compNodeSetLayout,
 			};
-			MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, &nodeCompositorData[i].set));
+			VK_CHECK(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, &nodeCompositorData[i].set));
 			midVkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].set, CONCAT(NodeSet, i));
 			MidVkRequestAllocationInfo nodeSetAllocRequest = {
 				.memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
@@ -245,7 +245,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
 			break;
 		default: PANIC("CompMode not supported!");
 	}
-	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
+	VK_CHECK(vkBindBufferMemory(midVk.context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
 	vkUpdateDescriptorSets(midVk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably
@@ -315,21 +315,21 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 
 	// very common ones should be global to potentially share higher level cache
 	// but maybe do it anyways because it'd just be better? each func pointer is 8 bytes. 8 can fit on a cache line
-	MIDVK_DEVICE_FUNC(CmdPipelineBarrier2)
-	MIDVK_DEVICE_FUNC(ResetQueryPool)
-	MIDVK_DEVICE_FUNC(GetQueryPoolResults)
-	MIDVK_DEVICE_FUNC(CmdWriteTimestamp2)
-	MIDVK_DEVICE_FUNC(CmdBeginRenderPass)
-	MIDVK_DEVICE_FUNC(CmdBindPipeline)
-	MIDVK_DEVICE_FUNC(CmdBlitImage)
-	MIDVK_DEVICE_FUNC(CmdBindDescriptorSets)
-	MIDVK_DEVICE_FUNC(CmdBindVertexBuffers)
-	MIDVK_DEVICE_FUNC(CmdBindIndexBuffer)
-	MIDVK_DEVICE_FUNC(CmdDrawIndexed)
-	MIDVK_DEVICE_FUNC(CmdEndRenderPass)
-	MIDVK_DEVICE_FUNC(EndCommandBuffer)
-	MIDVK_DEVICE_FUNC(AcquireNextImageKHR)
-	MIDVK_DEVICE_FUNC(CmdDrawMeshTasksEXT)
+	VK_DEVICE_FUNC(CmdPipelineBarrier2)
+	VK_DEVICE_FUNC(ResetQueryPool)
+	VK_DEVICE_FUNC(GetQueryPoolResults)
+	VK_DEVICE_FUNC(CmdWriteTimestamp2)
+	VK_DEVICE_FUNC(CmdBeginRenderPass)
+	VK_DEVICE_FUNC(CmdBindPipeline)
+	VK_DEVICE_FUNC(CmdBlitImage)
+	VK_DEVICE_FUNC(CmdBindDescriptorSets)
+	VK_DEVICE_FUNC(CmdBindVertexBuffers)
+	VK_DEVICE_FUNC(CmdBindIndexBuffer)
+	VK_DEVICE_FUNC(CmdDrawIndexed)
+	VK_DEVICE_FUNC(CmdEndRenderPass)
+	VK_DEVICE_FUNC(EndCommandBuffer)
+	VK_DEVICE_FUNC(AcquireNextImageKHR)
+	VK_DEVICE_FUNC(CmdDrawMeshTasksEXT)
 
 run_loop:
 

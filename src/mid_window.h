@@ -12,15 +12,17 @@
 #ifndef MID_DEBUG
 #define MID_DEBUG
 extern void Panic(const char* file, int line, const char* message);
-#define PANIC(message) Panic(__FILE__, __LINE__, message)
-#define REQUIRE(condition, message)        \
-  if (__builtin_expect(!(condition), 0)) { \
-    PANIC(message);                        \
-  }
+#define PANIC(_message) Panic(__FILE__, __LINE__, _message)
+#define CHECK(_err, _message)                      \
+	if (__builtin_expect(!!(_err), 0)) {           \
+		fprintf(stderr, "Error Code: %d\n", _err); \
+		PANIC(_message);                           \
+	}
 #ifdef MID_WINDOW_IMPLEMENTATION
-[[noreturn]] void Panic(const char* file, int line, const char* message) {
-  fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
-  __builtin_trap();
+[[noreturn]] void Panic(const char* file, int line, const char* message)
+{
+	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
+	__builtin_trap();
 }
 #endif
 #endif
@@ -218,7 +220,7 @@ void midUpdateWindowInput() {
 }
 
 void midCreateWindow() {
-  REQUIRE(midWindow.hInstance == NULL, "Window already created!");
+  CHECK(midWindow.hInstance != NULL, "Window already created!");
   midWindow.hInstance = GetModuleHandle(NULL);
   midWindow.running = true;
   const DWORD    windowStyle = WS_OVERLAPPEDWINDOW;
@@ -229,7 +231,7 @@ void midCreateWindow() {
   midWindow.width = rect.right - rect.left;
   midWindow.height = rect.bottom - rect.top;
   midWindow.hWnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle, CW_USEDEFAULT, CW_USEDEFAULT, midWindow.width, midWindow.height, NULL, NULL, midWindow.hInstance, NULL);
-  REQUIRE(midWindow.hWnd != NULL, "Failed to create window.");
+  CHECK(midWindow.hWnd == NULL, "Failed to create window.");
   ShowWindow(midWindow.hWnd, SW_SHOW);
   UpdateWindow(midWindow.hWnd);
   QueryPerformanceFrequency((LARGE_INTEGER*)&midWindow.frequency);

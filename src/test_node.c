@@ -102,8 +102,8 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	{
 		uint64_t compositorTimelineValue;
-		MIDVK_REQUIRE(vkGetSemaphoreCounterValue(device, compTimeline, &compositorTimelineValue));
-		REQUIRE(compositorTimelineValue != 0xffffffffffffffff, "compositorTimelineValue imported as max value!");
+		VK_CHECK(vkGetSemaphoreCounterValue(device, compTimeline, &compositorTimelineValue));
+		CHECK(compositorTimelineValue == 0xffffffffffffffff, "compositorTimelineValue imported as max value!");
 		pNodeShared->compositorBaseCycleValue = compositorTimelineValue - (compositorTimelineValue % MXC_CYCLE_COUNT);
 	}
 
@@ -207,22 +207,22 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	// I probably want to be able to define this into a struct
 	// and optionally have it be a static struct
-	MIDVK_DEVICE_FUNC(ResetCommandBuffer);
-	MIDVK_DEVICE_FUNC(BeginCommandBuffer);
-	MIDVK_DEVICE_FUNC(CmdSetViewport);
-	MIDVK_DEVICE_FUNC(CmdBeginRenderPass);
-	MIDVK_DEVICE_FUNC(CmdSetScissor);
-	MIDVK_DEVICE_FUNC(CmdBindPipeline);
-	MIDVK_DEVICE_FUNC(CmdDispatch);
-	MIDVK_DEVICE_FUNC(CmdBindDescriptorSets);
-	MIDVK_DEVICE_FUNC(CmdBindVertexBuffers);
-	MIDVK_DEVICE_FUNC(CmdBindIndexBuffer);
-	MIDVK_DEVICE_FUNC(CmdDrawIndexed);
-	MIDVK_DEVICE_FUNC(CmdEndRenderPass);
-	MIDVK_DEVICE_FUNC(EndCommandBuffer);
-	MIDVK_DEVICE_FUNC(CmdPipelineBarrier2);
-	MIDVK_DEVICE_FUNC(CmdPushDescriptorSetKHR);
-	MIDVK_DEVICE_FUNC(CmdClearColorImage);
+	VK_DEVICE_FUNC(ResetCommandBuffer);
+	VK_DEVICE_FUNC(BeginCommandBuffer);
+	VK_DEVICE_FUNC(CmdSetViewport);
+	VK_DEVICE_FUNC(CmdBeginRenderPass);
+	VK_DEVICE_FUNC(CmdSetScissor);
+	VK_DEVICE_FUNC(CmdBindPipeline);
+	VK_DEVICE_FUNC(CmdDispatch);
+	VK_DEVICE_FUNC(CmdBindDescriptorSets);
+	VK_DEVICE_FUNC(CmdBindVertexBuffers);
+	VK_DEVICE_FUNC(CmdBindIndexBuffer);
+	VK_DEVICE_FUNC(CmdDrawIndexed);
+	VK_DEVICE_FUNC(CmdEndRenderPass);
+	VK_DEVICE_FUNC(EndCommandBuffer);
+	VK_DEVICE_FUNC(CmdPipelineBarrier2);
+	VK_DEVICE_FUNC(CmdPushDescriptorSetKHR);
+	VK_DEVICE_FUNC(CmdClearColorImage);
 
 run_loop:
 
@@ -423,7 +423,7 @@ static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout)
 			},
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(midVk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
 }
 
 static void CreateNodeProcessPipeLayout(VkDescriptorSetLayout nodeProcessSetLayout, VkPipelineLayout* pPipeLayout)
@@ -435,7 +435,7 @@ static void CreateNodeProcessPipeLayout(VkDescriptorSetLayout nodeProcessSetLayo
 			[PIPE_SET_NODE_PROCESS_INDEX] = nodeProcessSetLayout,
 		},
 	};
-	MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, pPipeLayout));
+	VK_CHECK(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, pPipeLayout));
 }
 static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layout, VkPipeline* pPipe)
 {
@@ -451,7 +451,7 @@ static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layou
 		},
 		.layout = layout,
 	};
-	MIDVK_REQUIRE(vkCreateComputePipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
+	VK_CHECK(vkCreateComputePipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
 	vkDestroyShaderModule(midVk.context.device, shader, MIDVK_ALLOC);
 }
 static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNode* pTestNode)
@@ -479,7 +479,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 						.layerCount = 1,
 					},
 				};
-				MIDVK_REQUIRE(vkCreateImageView(midVk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, &pTestNode->gBufferMipViews[bufferIndex][mipIndex]));
+				VK_CHECK(vkCreateImageView(midVk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, &pTestNode->gBufferMipViews[bufferIndex][mipIndex]));
 			}
 		}
 
@@ -495,7 +495,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
 			},
 		};
-		MIDVK_REQUIRE(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+		VK_CHECK(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
 
 		midVkCreateGlobalSet(&pTestNode->globalSet);
 

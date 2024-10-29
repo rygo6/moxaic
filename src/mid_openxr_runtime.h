@@ -129,10 +129,12 @@ typedef struct XrSpaceBounds {
 //} XrFrameBeginSwapPoolInfo;
 
 
-#define CHECK(_command)                          \
+#define XR_CHECK(_command)                       \
 	({                                           \
 		XrResult result = _command;              \
-		if (result != XR_SUCCESS) return result; \
+		if (__builtin_expect(!!(_command), 0)) { \
+			return result;                       \
+		}                                        \
 	})
 #define CONTAINER(_type, _capacity)                                                        \
 	typedef struct __attribute((aligned(4))) _type##Container {                            \
@@ -177,7 +179,7 @@ typedef struct Container {
 } Container;
 
 // maybe this should return the handle?
-#define ClaimHandle(_container, _pValue) CHECK(_ClaimHandle((Container*)&_container, sizeof(_container.data[0]), COUNT(_container.data), (void**)&_pValue))
+#define ClaimHandle(_container, _pValue) XR_CHECK(_ClaimHandle((Container*)&_container, sizeof(_container.data[0]), COUNT(_container.data), (void**)&_pValue))
 static XrResult _ClaimHandle(Container* pContainer, int stride, int capacity, void** ppValue)
 {
 	if (pContainer->count >= capacity) return XR_ERROR_LIMIT_REACHED;
@@ -483,7 +485,7 @@ static XrResult InitStandardBindings(XrInstance instance)
 		XrHash bindingSetHash = GetPathHash(&pInstance->paths, (const Path*)bindingSetPath);
 
 		InteractionProfile* pBindingSet;
-		CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pBindingSet, bindingSetHash));
+		XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pBindingSet, bindingSetHash));
 
 		pBindingSet->interactionProfile = bindingSetPath;
 
@@ -1204,11 +1206,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 			assert(pSwapchain->format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 				printf("Importing d3d11 device: %p handle: %p texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i],  pSwapchain->color.d3d11[i]);
-//				ID3D11Resource* resource;
-
 				DX_REQUIRE(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
-//				printf("Imported d3d11 resource: %p\n", resource);
-//				DX_REQUIRE(ID3D11Resource_QueryInterface(resource, &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
 				printf("Imported d3d11 swap texture: %p\n", pSwapchain->color.d3d11[i]);
 			}
 			break;
@@ -1446,7 +1444,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	}
 
 	Path* pPath;
-	CHECK(ClaimPath(&pInstance->paths, &pPath, pathHash));
+	XR_CHECK(ClaimPath(&pInstance->paths, &pPath, pathHash));
 	XrHandle pathHandle = GetHandle(pInstance->paths, pPath);
 	printf("Path handle claimed: %d\n", pathHandle);
 
@@ -1487,7 +1485,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 
 	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	ActionSet* pActionSet;
-	CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
+	XR_CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
 
 	pActionSet->priority = createInfo->priority;
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
@@ -1620,7 +1618,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 		ActionSet*      pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
 		XrHash          attachingActionSetHash = GetActionSetHash(&pInstance->actionSets, pAttachingActionSet);
 		ActionSetState* pClaimedActionSetState;
-		CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
+		XR_CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
 
 		pClaimedActionSetState->actionStates.count = pAttachingActionSet->Actions.count;
 		pClaimedActionSetState->actionSet = (XrActionSet)pAttachingActionSet;

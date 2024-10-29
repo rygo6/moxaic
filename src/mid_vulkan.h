@@ -98,19 +98,18 @@ extern void Panic(const char* file, int line, const char* message);
 #define MIDVK_ALLOC      NULL
 #define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
 #define MIDVK_SWAP_COUNT 2
-#define MIDVK_REQUIRE(command)                                  \
-	({                                                          \
-		VkResult result = command;                              \
-		REQUIRE(result == VK_SUCCESS, string_VkResult(result)); \
+#define VK_CHECK(command)                       \
+	({                                          \
+		VkResult result = command;              \
+		CHECK(result, string_VkResult(result)); \
 	})
 
-#define MIDVK_INSTANCE_FUNC(_func)                                                                     \
+#define VK_INSTANCE_FUNC(_func)                                                                \
 	PFN_vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(midVk.instance, "vk" #_func); \
-	REQUIRE(_func != NULL, "Couldn't load " #_func)
-
-#define MIDVK_DEVICE_FUNC(_func)                                                                           \
+	CHECK(_func == NULL, "Couldn't load " #_func)
+#define VK_DEVICE_FUNC(_func)                                                                      \
 	PFN_vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
-	REQUIRE(_func != NULL, "Couldn't load " #_func)
+	CHECK(_func == NULL, "Couldn't load " #_func)
 
 #define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
@@ -627,7 +626,7 @@ INLINE void midVkSubmitPresentCommandBuffer(
 
 		},
 	};
-	MIDVK_REQUIRE(vkQueueSubmit2(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
+	VK_CHECK(vkQueueSubmit2(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
 	VkPresentInfoKHR presentInfo = {
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
@@ -636,7 +635,7 @@ INLINE void midVkSubmitPresentCommandBuffer(
 		.pSwapchains = &chain,
 		.pImageIndices = &swapIndex,
 	};
-	MIDVK_REQUIRE(vkQueuePresentKHR(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
+	VK_CHECK(vkQueuePresentKHR(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
 }
 // todo needs PFN version
 INLINE void vkmSubmitCommandBuffer(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, uint64_t signal)
@@ -660,7 +659,7 @@ INLINE void vkmSubmitCommandBuffer(VkCommandBuffer cmd, VkQueue queue, VkSemapho
 			},
 		},
 	};
-	MIDVK_REQUIRE(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
+	VK_CHECK(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
 // todo needs PFN version
 INLINE void midVkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore timeline)
@@ -671,7 +670,7 @@ INLINE void midVkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore t
 		.pSemaphores = &timeline,
 		.pValues = &waitValue,
 	};
-	MIDVK_REQUIRE(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
+	VK_CHECK(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 // todo needs PFN version
 INLINE void midVkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
@@ -681,12 +680,12 @@ INLINE void midVkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemapho
 		.semaphore = timeline,
 		.value = signalValue,
 	};
-	MIDVK_REQUIRE(vkSignalSemaphore(device, &semaphoreSignalInfo));
+	VK_CHECK(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 
 INLINE void midVkBindBufferSharedMemory(VkBuffer buffer, MidVkSharedMemory shareMemory)
 {
-	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, buffer, deviceMemory[shareMemory.type], shareMemory.offset));
+	VK_CHECK(vkBindBufferMemory(midVk.context.device, buffer, deviceMemory[shareMemory.type], shareMemory.offset));
 }
 INLINE void* midVkSharedMemoryPointer(MidVkSharedMemory shareMemory)
 {

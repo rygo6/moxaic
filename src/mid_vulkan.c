@@ -20,13 +20,13 @@ VkDebugUtilsMessengerEXT                               debugUtilsMessenger = VK_
 static void VkmReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents)
 {
 	FILE* file = fopen(pPath, "rb");
-	REQUIRE(file != NULL, "File can't be opened!");
+	CHECK(file == NULL, "File can't be opened!");
 	fseek(file, 0, SEEK_END);
 	*pFileLength = ftell(file);
 	rewind(file);
 	*ppFileContents = malloc(*pFileLength * sizeof(char));
 	size_t readCount = fread(*ppFileContents, *pFileLength, 1, file);
-	REQUIRE(readCount > 0, "Failed to read file!");
+	CHECK(readCount == 0, "Failed to read file!");
 	fclose(file);
 }
 
@@ -53,24 +53,24 @@ VkCommandBuffer midVkBeginImmediateTransferCommandBuffer()
 		.commandBufferCount = 1,
 	};
 	VkCommandBuffer cmd;
-	MIDVK_REQUIRE(vkAllocateCommandBuffers(midVk.context.device, &allocateInfo, &cmd));
+	VK_CHECK(vkAllocateCommandBuffers(midVk.context.device, &allocateInfo, &cmd));
 	VkCommandBufferBeginInfo beginInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 	};
-	MIDVK_REQUIRE(vkBeginCommandBuffer(cmd, &beginInfo));
+	VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
 	return cmd;
 }
 void midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
 {
-	MIDVK_REQUIRE(vkEndCommandBuffer(cmd));
+	VK_CHECK(vkEndCommandBuffer(cmd));
 	VkSubmitInfo info = {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.commandBufferCount = 1,
 		.pCommandBuffers = &cmd,
 	};
-	MIDVK_REQUIRE(vkQueueSubmit(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue, 1, &info, VK_NULL_HANDLE));
-	MIDVK_REQUIRE(vkQueueWaitIdle(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue));
+	VK_CHECK(vkQueueSubmit(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue, 1, &info, VK_NULL_HANDLE));
+	VK_CHECK(vkQueueWaitIdle(midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue));
 	vkFreeCommandBuffers(midVk.context.device, midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool, 1, &cmd);
 }
 
@@ -90,7 +90,7 @@ void midVkCreateShaderModule(const char* pShaderPath, VkShaderModule* pShaderMod
 		.codeSize = size,
 		.pCode = (uint32_t*)pCode,
 	};
-	MIDVK_REQUIRE(vkCreateShaderModule(midVk.context.device, &info, MIDVK_ALLOC, pShaderModule));
+	VK_CHECK(vkCreateShaderModule(midVk.context.device, &info, MIDVK_ALLOC, pShaderModule));
 	free(pCode);
 }
 
@@ -113,7 +113,7 @@ static void CreateStdPipeLayout()
 		.setLayoutCount = MIDVK_PIPE_SET_INDEX_COUNT,
 		.pSetLayouts = pSetLayouts,
 	};
-	MIDVK_REQUIRE(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.pipeLayout));
+	VK_CHECK(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.pipeLayout));
 }
 
 #define DEFAULT_ROBUSTNESS_STATE                                                             \
@@ -252,7 +252,7 @@ void midVkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath
 		.layout = layout,
 		.renderPass = renderPass,
 	};
-	MIDVK_REQUIRE(vkCreateGraphicsPipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
+	VK_CHECK(vkCreateGraphicsPipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
 	vkDestroyShaderModule(midVk.context.device, fragShader, MIDVK_ALLOC);
 	vkDestroyShaderModule(midVk.context.device, vertShader, MIDVK_ALLOC);
 }
@@ -318,7 +318,7 @@ void midVkCreateTessPipe(const char* vertShaderPath, const char* tescShaderPath,
 		.layout = layout,
 		.renderPass = renderPass,
 	};
-	MIDVK_REQUIRE(vkCreateGraphicsPipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
+	VK_CHECK(vkCreateGraphicsPipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
 	vkDestroyShaderModule(midVk.context.device, fragShader, MIDVK_ALLOC);
 	vkDestroyShaderModule(midVk.context.device, tescShader, MIDVK_ALLOC);
 	vkDestroyShaderModule(midVk.context.device, teseShader, MIDVK_ALLOC);
@@ -370,7 +370,7 @@ void midVkCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderP
 		.layout = layout,
 		.renderPass = renderPass,
 	};
-	MIDVK_REQUIRE(vkCreateGraphicsPipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
+	VK_CHECK(vkCreateGraphicsPipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
 	vkDestroyShaderModule(midVk.context.device, fragShader, MIDVK_ALLOC);
 	vkDestroyShaderModule(midVk.context.device, taskShader, MIDVK_ALLOC);
 	vkDestroyShaderModule(midVk.context.device, meshShader, MIDVK_ALLOC);
@@ -398,7 +398,7 @@ static void CreateGlobalSetLayout()
 				VK_SHADER_STAGE_TASK_BIT_EXT,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &info, MIDVK_ALLOC, &midVk.context.basicPipeLayout.globalSetLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(midVk.context.device, &info, MIDVK_ALLOC, &midVk.context.basicPipeLayout.globalSetLayout));
 }
 static void CreateStdMaterialSetLayout()
 {
@@ -413,7 +413,7 @@ static void CreateStdMaterialSetLayout()
 			.pImmutableSamplers = &midVk.context.linearSampler,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.materialSetLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.materialSetLayout));
 }
 static void CreateStdObjectSetLayout()
 {
@@ -427,7 +427,7 @@ static void CreateStdObjectSetLayout()
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.objectSetLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, &midVk.context.basicPipeLayout.objectSetLayout));
 }
 
 // get rid of this don't wrap methods that don't actually simplify the structs
@@ -439,7 +439,7 @@ void midVkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescrip
 		.descriptorSetCount = 1,
 		.pSetLayouts = pSetLayout,
 	};
-	MIDVK_REQUIRE(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, pSet));
+	VK_CHECK(vkAllocateDescriptorSets(midVk.context.device, &allocateInfo, pSet));
 }
 
 //----------------------------------------------------------------------------------
@@ -517,14 +517,14 @@ void midVkEndAllocationRequests()
 			.allocationSize = requestedMemoryAllocSize[memTypeIndex],
 			.memoryTypeIndex = memTypeIndex,
 		};
-		MIDVK_REQUIRE(vkAllocateMemory(midVk.context.device, &memAllocInfo, MIDVK_ALLOC, &deviceMemory[memTypeIndex]));
+		VK_CHECK(vkAllocateMemory(midVk.context.device, &memAllocInfo, MIDVK_ALLOC, &deviceMemory[memTypeIndex]));
 
 		VkMemoryPropertyFlags propFlags = memProps2.memoryProperties.memoryTypes[memTypeIndex].propertyFlags;
 		bool            hasDeviceLocal = (propFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 		bool            hasHostVisible = (propFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 		bool            hasHostCoherent = (propFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 		if (hasDeviceLocal && hasHostVisible && hasHostCoherent)
-			MIDVK_REQUIRE(vkMapMemory(midVk.context.device, deviceMemory[memTypeIndex], 0, requestedMemoryAllocSize[memTypeIndex], 0, &pMappedMemory[memTypeIndex]));
+			VK_CHECK(vkMapMemory(midVk.context.device, deviceMemory[memTypeIndex], 0, requestedMemoryAllocSize[memTypeIndex], 0, &pMappedMemory[memTypeIndex]));
 #ifdef VK_DEBUG_MEMORY_ALLOC
 		printf("Shared MemoryType: %d Allocated: %zu Mapped %d", memTypeIndex, requestedMemoryAllocSize[memTypeIndex], pMappedMemory[memTypeIndex] != NULL);
 		PrintMemoryPropertyFlags(propFlags);
@@ -556,7 +556,7 @@ static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropert
 	VkExportMemoryAllocateInfo exportMemAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
 		.pNext = &exportMemPlatformInfo,
-		.handleTypes = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
+		.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT | VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 	};
 	VkMemoryAllocateInfo memAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -566,7 +566,7 @@ static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropert
 		.allocationSize = pMemReqs->size,
 		.memoryTypeIndex = memTypeIndex,
 	};
-	MIDVK_REQUIRE(vkAllocateMemory(midVk.context.device, &memAllocInfo, MIDVK_ALLOC, pDeviceMemory));
+	VK_CHECK(vkAllocateMemory(midVk.context.device, &memAllocInfo, MIDVK_ALLOC, pDeviceMemory));
 
 #ifdef VK_DEBUG_MEMORY_ALLOC
 	printf("%sMemoryType: %d Allocated: %zu ", pDedicatedAllocInfo != NULL ? "Dedicated " : "", memTypeIndex, pMemReqs->size);
@@ -581,7 +581,7 @@ static void CreateAllocBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize b
 		.size = bufferSize,
 		.usage = usage,
 	};
-	MIDVK_REQUIRE(vkCreateBuffer(midVk.context.device, &bufferCreateInfo, MIDVK_ALLOC, pBuffer));
+	VK_CHECK(vkCreateBuffer(midVk.context.device, &bufferCreateInfo, MIDVK_ALLOC, pBuffer));
 
 	VkMemoryDedicatedRequirements dedicatedReqs = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
 	VkMemoryRequirements2         memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
@@ -607,13 +607,13 @@ static void CreateAllocBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize b
 static void CreateAllocBindBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
 {
 	CreateAllocBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
-	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, *pBuffer, *pDeviceMem, 0));
+	VK_CHECK(vkBindBufferMemory(midVk.context.device, *pBuffer, *pDeviceMem, 0));
 }
 
 void midVkCreateAllocBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, MidLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped)
 {
 	CreateAllocBindBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
-	MIDVK_REQUIRE(vkMapMemory(midVk.context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
+	VK_CHECK(vkMapMemory(midVk.context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
 }
 
 void midVkCreateBufferSharedMemory(const MidVkRequestAllocationInfo* pRequest, VkBuffer* pBuffer, MidVkSharedMemory* pMemory)
@@ -623,7 +623,7 @@ void midVkCreateBufferSharedMemory(const MidVkRequestAllocationInfo* pRequest, V
 		.size = pRequest->size,
 		.usage = pRequest->usage,
 	};
-	MIDVK_REQUIRE(vkCreateBuffer(midVk.context.device, &bufferCreateInfo, MIDVK_ALLOC, pBuffer));
+	VK_CHECK(vkCreateBuffer(midVk.context.device, &bufferCreateInfo, MIDVK_ALLOC, pBuffer));
 
 	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = *pBuffer};
 	VkMemoryDedicatedRequirements   dedicatedReqs = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
@@ -657,7 +657,7 @@ static void CreateStagingBuffer(const void* srcData, VkDeviceSize bufferSize, Vk
 {
 	void* dstData;
 	CreateAllocBindBuffer(VKM_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MID_LOCALITY_CONTEXT, pStagingMemory, pStagingBuffer);
-	MIDVK_REQUIRE(vkMapMemory(midVk.context.device, *pStagingMemory, 0, bufferSize, 0, &dstData));
+	VK_CHECK(vkMapMemory(midVk.context.device, *pStagingMemory, 0, bufferSize, 0, &dstData));
 	memcpy(dstData, srcData, bufferSize);
 	vkUnmapMemory(midVk.context.device, *pStagingMemory);
 }
@@ -696,10 +696,10 @@ void midVkBindUpdateMeshSharedMemory(const VkmMeshCreateInfo* pCreateInfo, VkmMe
 	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->buffer};
 	VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
 	vkGetBufferMemoryRequirements2(midVk.context.device, &bufMemReqInfo2, &memReqs2);
-	REQUIRE(pMesh->sharedMemory.size == memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
+	CHECK(pMesh->sharedMemory.size != memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
 
 	// bind populate
-	MIDVK_REQUIRE(vkBindBufferMemory(midVk.context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
+	VK_CHECK(vkBindBufferMemory(midVk.context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
 	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
 	midVkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(MidVertex) * pMesh->vertexCount, pMesh->buffer);
 }
@@ -744,12 +744,12 @@ static void CreateImageView(const VkImageCreateInfo* pImageCreateInfo, VkImage i
 			.layerCount = pImageCreateInfo->arrayLayers,
 		},
 	};
-	MIDVK_REQUIRE(vkCreateImageView(midVk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, pImageView));
+	VK_CHECK(vkCreateImageView(midVk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, pImageView));
 }
 
 static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, MidLocality locality, HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage)
 {
-	MIDVK_REQUIRE(vkCreateImage(midVk.context.device, pImageCreateInfo, MIDVK_ALLOC, pImage));
+	VK_CHECK(vkCreateImage(midVk.context.device, pImageCreateInfo, MIDVK_ALLOC, pImage));
 
 
 	// DX11 external textures may need to be dedicated, should this go here???
@@ -757,7 +757,7 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, MidL
 	if (MID_LOCALITY_INTERPROCESS(locality)) {
 		VkPhysicalDeviceExternalImageFormatInfo externalImageInfo = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
-			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT,
+			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 		};
 		VkPhysicalDeviceImageFormatInfo2 imageInfo = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
@@ -774,7 +774,7 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, MidL
 			.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
 			.pNext = &externalImageProperties,
 		};
-		MIDVK_REQUIRE(vkGetPhysicalDeviceImageFormatProperties2(midVk.context.physicalDevice, &imageInfo, &imageProperties));
+		VK_CHECK(vkGetPhysicalDeviceImageFormatProperties2(midVk.context.physicalDevice, &imageInfo, &imageProperties));
 
 		printf("externalMemoryFeatures: ");
 		PrintFlags(externalImageProperties.externalMemoryProperties.externalMemoryFeatures, string_VkExternalMemoryFeatureFlagBits);
@@ -816,7 +816,7 @@ static void CreateAllocBindImage(const VkImageCreateInfo* pImageCreateInfo, MidL
 		.image = *pImage,
 	};
 	AllocateMemory(&memReqs2.memoryRequirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, locality, externalHandle, requiresDedicated || requiresExternalDedicated ? &dedicatedAllocInfo : NULL, pMemory);
-	MIDVK_REQUIRE(vkBindImageMemory(midVk.context.device, *pImage, *pMemory, 0));
+	VK_CHECK(vkBindImageMemory(midVk.context.device, *pImage, *pMemory, 0));
 }
 
 static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInfo, VkImageAspectFlags aspectMask, MidLocality locality, HANDLE externalHandle, VkDeviceMemory* pMemory, VkImage* pImage, VkImageView* pImageView)
@@ -836,7 +836,7 @@ void midVkCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
 {
 	int      texChannels, width, height;
 	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
-	REQUIRE(width > 0 && height > 0, "Image height or width is equal to zero.")
+	CHECK(width == 0 || height == 0, "Image height or width is equal to zero.")
 	VkDeviceSize      imageBufferSize = width * height * 4;
 	VkImageCreateInfo imageCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -905,7 +905,7 @@ void midVkCreateFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuffer
 		.height = DEFAULT_HEIGHT,
 		.layers = 1,
 	};
-	MIDVK_REQUIRE(vkCreateFramebuffer(midVk.context.device, &framebufferCreateInfo, MIDVK_ALLOC, pFramebuffer));
+	VK_CHECK(vkCreateFramebuffer(midVk.context.device, &framebufferCreateInfo, MIDVK_ALLOC, pFramebuffer));
 }
 
 void midvkCreateFramebufferTexture(uint32_t framebufferCount, MidLocality locality, MidVkFramebufferTexture* pFrameBuffers)
@@ -1052,7 +1052,7 @@ void midVkInitialize()
 			.enabledExtensionCount = COUNT(ppEnabledInstanceExtensionNames),
 			.ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
 		};
-		MIDVK_REQUIRE(vkCreateInstance(&instanceCreationInfo, MIDVK_ALLOC, &midVk.instance));
+		VK_CHECK(vkCreateInstance(&instanceCreationInfo, MIDVK_ALLOC, &midVk.instance));
 		printf("instance Vulkan API version: %d.%d.%d.%d\n",
 			   VK_API_VERSION_VARIANT(instanceCreationInfo.pApplicationInfo->apiVersion),
 			   VK_API_VERSION_MAJOR(instanceCreationInfo.pApplicationInfo->apiVersion),
@@ -1084,9 +1084,9 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 {
 	{  // PhysicalDevice
 		uint32_t deviceCount = 0;
-		MIDVK_REQUIRE(vkEnumeratePhysicalDevices(midVk.instance, &deviceCount, NULL));
+		VK_CHECK(vkEnumeratePhysicalDevices(midVk.instance, &deviceCount, NULL));
 		VkPhysicalDevice devices[deviceCount];
-		MIDVK_REQUIRE(vkEnumeratePhysicalDevices(midVk.instance, &deviceCount, devices));
+		VK_CHECK(vkEnumeratePhysicalDevices(midVk.instance, &deviceCount, devices));
 		midVk.context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this seems to be true.
 		VkPhysicalDeviceProperties2 physicalDeviceProperties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
 		vkGetPhysicalDeviceProperties2(midVk.context.physicalDevice, &physicalDeviceProperties);
@@ -1099,7 +1099,7 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 
 		printf("minUniformBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment);
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
-		REQUIRE(physicalDeviceProperties.properties.apiVersion >= MIDVK_VERSION, "Insufficient Vulkan API Version");
+		CHECK(physicalDeviceProperties.properties.apiVersion < MIDVK_VERSION, "Insufficient Vulkan API Version");
 	}
 
 	{  // Device
@@ -1201,7 +1201,7 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 			.enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
 			.ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
 		};
-		MIDVK_REQUIRE(vkCreateDevice(midVk.context.physicalDevice, &deviceCreateInfo, MIDVK_ALLOC, &midVk.context.device));
+		VK_CHECK(vkCreateDevice(midVk.context.physicalDevice, &deviceCreateInfo, MIDVK_ALLOC, &midVk.context.device));
 	}
 
 	for (int i = 0; i < VKM_QUEUE_FAMILY_TYPE_COUNT; ++i) {
@@ -1215,14 +1215,14 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 			.queueFamilyIndex = midVk.context.queueFamilies[i].index,
 		};
-		MIDVK_REQUIRE(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &midVk.context.queueFamilies[i].pool));
+		VK_CHECK(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &midVk.context.queueFamilies[i].pool));
 	}
 
 	{
 		// do I want to switch to this? probably
 #define PFN_FUNC(_func)                                                                         \
 	midVk.func._func = (PFN_##vk##_func)vkGetDeviceProcAddr(midVk.context.device, "vk" #_func); \
-	REQUIRE(midVk.func._func != NULL, "Couldn't load " #_func)
+	CHECK(midVk.func._func == NULL, "Couldn't load " #_func)
 		PFN_FUNCS
 #undef PFN_FUNC
 	}
@@ -1322,7 +1322,7 @@ void midVkCreateStdRenderPass()
 			},
 		},
 	};
-	MIDVK_REQUIRE(vkCreateRenderPass2(midVk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &midVk.context.renderPass));
+	VK_CHECK(vkCreateRenderPass2(midVk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &midVk.context.renderPass));
 	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)midVk.context.renderPass, "ContextRenderPass");
 }
 
@@ -1345,14 +1345,14 @@ void midVkCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
 		.addressModeW = pDesc->addressMode,
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 	};
-	MIDVK_REQUIRE(vkCreateSampler(midVk.context.device, &info, MIDVK_ALLOC, pSampler));
+	VK_CHECK(vkCreateSampler(midVk.context.device, &info, MIDVK_ALLOC, pSampler));
 }
 
 void midVkCreateSwap(VkSurfaceKHR surface, MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap)
 {
 	VkBool32 presentSupport = VK_FALSE;
-	MIDVK_REQUIRE(vkGetPhysicalDeviceSurfaceSupportKHR(midVk.context.physicalDevice, midVk.context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
-	REQUIRE(presentSupport, "Queue can't present to surface!")
+	VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(midVk.context.physicalDevice, midVk.context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
+	CHECK(presentSupport == VK_FALSE, "Queue can't present to surface!")
 
 	VkSwapchainCreateInfoKHR info = {
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1368,18 +1368,18 @@ void midVkCreateSwap(VkSurfaceKHR surface, MidVkQueueFamilyType presentQueueFami
 		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
 		.clipped = VK_TRUE,
 	};
-	MIDVK_REQUIRE(vkCreateSwapchainKHR(midVk.context.device, &info, MIDVK_ALLOC, &pSwap->chain));
+	VK_CHECK(vkCreateSwapchainKHR(midVk.context.device, &info, MIDVK_ALLOC, &pSwap->chain));
 
 	uint32_t swapCount;
-	MIDVK_REQUIRE(vkGetSwapchainImagesKHR(midVk.context.device, pSwap->chain, &swapCount, NULL));
-	REQUIRE(swapCount == MIDVK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
-	MIDVK_REQUIRE(vkGetSwapchainImagesKHR(midVk.context.device, pSwap->chain, &swapCount, pSwap->images));
+	VK_CHECK(vkGetSwapchainImagesKHR(midVk.context.device, pSwap->chain, &swapCount, NULL));
+	CHECK(swapCount != MIDVK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
+	VK_CHECK(vkGetSwapchainImagesKHR(midVk.context.device, pSwap->chain, &swapCount, pSwap->images));
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i)
 		midVkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
 
 	VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &acquireSwapSemaphoreCreateInfo, MIDVK_ALLOC, &pSwap->acquireSemaphore));
-	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &acquireSwapSemaphoreCreateInfo, MIDVK_ALLOC, &pSwap->renderCompleteSemaphore));
+	VK_CHECK(vkCreateSemaphore(midVk.context.device, &acquireSwapSemaphoreCreateInfo, MIDVK_ALLOC, &pSwap->acquireSemaphore));
+	VK_CHECK(vkCreateSemaphore(midVk.context.device, &acquireSwapSemaphoreCreateInfo, MIDVK_ALLOC, &pSwap->renderCompleteSemaphore));
 	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->acquireSemaphore, "SwapAcquireSemaphore");
 	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->renderCompleteSemaphore, "SwapRenderCompleteSemaphore");
 }
@@ -1410,7 +1410,7 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
 		.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
 	};
-	MIDVK_REQUIRE(vkCreateFence(midVk.context.device, &info, MIDVK_ALLOC, pFence));
+	VK_CHECK(vkCreateFence(midVk.context.device, &info, MIDVK_ALLOC, pFence));
 	midVkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
 	switch (pCreateInfo->locality) {
 		default: break;
@@ -1423,8 +1423,8 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
 				.handleType = MIDVK_EXTERNAL_FENCE_HANDLE_TYPE,
 				.handle = pCreateInfo->externalHandle,
 			};
-			MIDVK_INSTANCE_FUNC(ImportFenceWin32HandleKHR);
-			MIDVK_REQUIRE(ImportFenceWin32HandleKHR(midVk.context.device, &importWin32HandleInfo));
+			VK_INSTANCE_FUNC(ImportFenceWin32HandleKHR);
+			VK_CHECK(ImportFenceWin32HandleKHR(midVk.context.device, &importWin32HandleInfo));
 #endif
 			break;
 		}
@@ -1454,7 +1454,7 @@ void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 		.pNext = &typeInfo,
 	};
-	MIDVK_REQUIRE(vkCreateSemaphore(midVk.context.device, &info, MIDVK_ALLOC, pSemaphore));
+	VK_CHECK(vkCreateSemaphore(midVk.context.device, &info, MIDVK_ALLOC, pSemaphore));
 	midVkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
 	switch (pCreateInfo->locality) {
 		default: break;
@@ -1467,8 +1467,8 @@ void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 				.handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
 				.handle = pCreateInfo->externalHandle,
 			};
-			MIDVK_INSTANCE_FUNC(ImportSemaphoreWin32HandleKHR);
-			MIDVK_REQUIRE(ImportSemaphoreWin32HandleKHR(midVk.context.device, &importWin32HandleInfo));
+			VK_INSTANCE_FUNC(ImportSemaphoreWin32HandleKHR);
+			VK_CHECK(ImportSemaphoreWin32HandleKHR(midVk.context.device, &importWin32HandleInfo));
 #endif
 			break;
 	}
@@ -1489,44 +1489,44 @@ void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const cha
 		.objectHandle = objectHandle,
 		.pObjectName = pDebugName,
 	};
-	MIDVK_INSTANCE_FUNC(SetDebugUtilsObjectNameEXT);
-	MIDVK_REQUIRE(SetDebugUtilsObjectNameEXT(midVk.context.device, &debugInfo));
+	VK_INSTANCE_FUNC(SetDebugUtilsObjectNameEXT);
+	VK_CHECK(SetDebugUtilsObjectNameEXT(midVk.context.device, &debugInfo));
 }
 
 MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(VkDeviceMemory memory)
 {
-	MIDVK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
+	VK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
 	VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
 		.memory = memory,
 		.handleType = MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE,
 	};
 	HANDLE handle;
-	MIDVK_REQUIRE(GetMemoryWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
+	VK_CHECK(GetMemoryWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
 	return handle;
 }
 MIDVK_EXTERNAL_HANDLE midVkGetFenceExternalHandle(VkFence fence)
 {
-	MIDVK_INSTANCE_FUNC(GetFenceWin32HandleKHR);
+	VK_INSTANCE_FUNC(GetFenceWin32HandleKHR);
 	VkFenceGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_FENCE_GET_WIN32_HANDLE_INFO_KHR,
 		.fence = fence,
 		.handleType = MIDVK_EXTERNAL_FENCE_HANDLE_TYPE,
 	};
 	HANDLE handle;
-	MIDVK_REQUIRE(GetFenceWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
+	VK_CHECK(GetFenceWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
 	return handle;
 }
 MIDVK_EXTERNAL_HANDLE midVkGetSemaphoreExternalHandle(VkSemaphore semaphore)
 {
-	MIDVK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
+	VK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
 	VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
 		.semaphore = semaphore,
 		.handleType = MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE,
 	};
 	HANDLE handle;
-	MIDVK_REQUIRE(GetSemaphoreWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
+	VK_CHECK(GetSemaphoreWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
 	return handle;
 }
 
@@ -1538,7 +1538,7 @@ void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocation
 		.hinstance = hInstance,
 		.hwnd = hWnd,
 	};
-	MIDVK_INSTANCE_FUNC(CreateWin32SurfaceKHR);
-	MIDVK_REQUIRE(CreateWin32SurfaceKHR(midVk.instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
+	VK_INSTANCE_FUNC(CreateWin32SurfaceKHR);
+	VK_CHECK(CreateWin32SurfaceKHR(midVk.instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
 }
 #endif
