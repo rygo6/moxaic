@@ -109,11 +109,11 @@ static int ReleaseNode(NodeHandle handle)
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
 			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory));
-				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory));
-				CLOSE_HANDLE(midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory));
+				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory));
+				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory));
+				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory));
 			}
-			CLOSE_HANDLE(midVkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline));
+			CLOSE_HANDLE(vkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline));
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
 			// this should probably run on the node when closing, but it also seems to clean itself up fine ?
@@ -508,16 +508,17 @@ static struct {
 const static char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
 const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
-// Checks error code. Expects 0 for success.
-#define ERR_CHECK(_command, _message)                               \
+// Checks WIN32 error code. Expects 1 for success.
+#define WIN32_CHECK(_command, _message)                             \
 	{                                                               \
 		int _result = (_command);                                   \
-		if (__builtin_expect(!!(_result), 0)) {                     \
+		if (__builtin_expect(!(_result), 0)) {                      \
 			fprintf(stderr, "%s: %ld\n", _message, GetLastError()); \
 			goto Exit;                                              \
 		}                                                           \
 	}
-#define WSA_ERR_CHECK(_command, _message)                             \
+// Checks WSA error code. Expects 0 for success.
+#define WSA_CHECK(_command, _message)                                 \
 	{                                                                 \
 		int _result = (_command);                                     \
 		if (__builtin_expect(!!(_result), 0)) {                       \
@@ -561,40 +562,41 @@ static void InterprocessServerAcceptNodeConnection()
 	DWORD                  nodeProcessId = 0;
 
 	SOCKET clientSocket = accept(ipcServer.listenSocket, NULL, NULL);
-	WSA_ERR_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
+	WSA_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
 	printf("Accepted Connection.\n");
 
 	// Receive Node Ack Message
 	{
 		char buffer[sizeof(nodeIPCAckMessage)] = {};
 		int  receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
-		WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv nodeIPCAckMessage failed");
+		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv nodeIPCAckMessage failed");
 		printf("Received node ack: %s Size: %d\n", buffer, receiveLength);
-		ERR_CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
+		CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
 	}
 
 	// Send Server Ack message
 	{
 		printf("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
-		WSA_ERR_CHECK(send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0) == SOCKET_ERROR, "Send failed");
+		int sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
+		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send server ack failed");
 	}
 
 	// Receive Node Process Handle
 	{
 		int receiveLength = recv(clientSocket, (char*)&nodeProcessId, sizeof(DWORD), 0);
-		WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node process id failed");
+		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node process id failed");
 		printf("Received node process id: %lu Size: %d\n", nodeProcessId, receiveLength);
-		ERR_CHECK(nodeProcessId == 0, "Invalid node process id");
+		CHECK(nodeProcessId == 0, "Invalid node process id");
 	}
 
 	// Create shared memory
 	{
 		nodeProcessHandle = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcessId);
-		ERR_CHECK(nodeProcessHandle == INVALID_HANDLE_VALUE, "Duplicate process handle failed");
+		WIN32_CHECK(nodeProcessHandle != NULL && nodeProcessHandle != INVALID_HANDLE_VALUE, "Duplicate process handle failed");
 		externalNodeMemoryHandle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(MxcExternalNodeMemory), NULL);
-		ERR_CHECK(externalNodeMemoryHandle == NULL, "Could not create file mapping object");
+		WIN32_CHECK(externalNodeMemoryHandle != NULL, "Could not create file mapping object");
 		pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
-		ERR_CHECK(pExternalNodeMemory == NULL, "Could not map view of file");
+		WIN32_CHECK(pExternalNodeMemory != NULL, "Could not map view of file");
 		*pExternalNodeMemory = (MxcExternalNodeMemory){};
 	}
 
@@ -645,34 +647,34 @@ static void InterprocessServerAcceptNodeConnection()
 
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			ERR_CHECK(!DuplicateHandle(
-						  currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory),
+			WIN32_CHECK(DuplicateHandle(
+						  currentHandle, vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory),
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].color,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate glColor handle fail");
-			ERR_CHECK(!DuplicateHandle(
-						  currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory),
+			WIN32_CHECK(DuplicateHandle(
+						  currentHandle, vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory),
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].normal,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate normal handle fail.");
-			ERR_CHECK(!DuplicateHandle(
-						  currentHandle, midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory),
+			WIN32_CHECK(DuplicateHandle(
+						  currentHandle, vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory),
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate gbuffer handle fail.");
 		}
-		ERR_CHECK(!DuplicateHandle(
-					  currentHandle, midVkGetFenceExternalHandle(pNodeContext->vkNodeFence),
+		WIN32_CHECK(DuplicateHandle(
+					  currentHandle, vkGetFenceExternalHandle(pNodeContext->vkNodeFence),
 					  nodeProcessHandle, &pImportParam->nodeFenceHandle,
 					  0, false, DUPLICATE_SAME_ACCESS),
 				  "Duplicate nodeFenceHandle handle fail.");
-		ERR_CHECK(!DuplicateHandle(
-					  currentHandle, midVkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline),
+		WIN32_CHECK(DuplicateHandle(
+					  currentHandle, vkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline),
 					  nodeProcessHandle, &pImportParam->nodeTimelineHandle,
 					  0, false, DUPLICATE_SAME_ACCESS),
 				  "Duplicate vkNodeTimeline handle fail.");
-		ERR_CHECK(!DuplicateHandle(
-					  currentHandle, midVkGetSemaphoreExternalHandle(compositorNodeContext.compTimeline),
+		WIN32_CHECK(DuplicateHandle(
+					  currentHandle, vkGetSemaphoreExternalHandle(compositorNodeContext.compTimeline),
 					  nodeProcessHandle, &pImportParam->compTimelineHandle,
 					  0, false, DUPLICATE_SAME_ACCESS),
 				  "Duplicate compeTimeline handle fail.");
@@ -693,7 +695,8 @@ static void InterprocessServerAcceptNodeConnection()
 				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 				.dstQueueFamilyIndex = graphicsQueueIndex,
 				.image = pNodeCompositorData->framebuffers[i].color,
-				MIDVK_COLOR_SUBRESOURCE_RANGE};
+				MIDVK_COLOR_SUBRESOURCE_RANGE,
+			};
 			pNodeCompositorData->framebuffers[i].acquireBarriers[1] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -701,7 +704,8 @@ static void InterprocessServerAcceptNodeConnection()
 				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 				.dstQueueFamilyIndex = graphicsQueueIndex,
 				.image = pNodeCompositorData->framebuffers[i].normal,
-				MIDVK_COLOR_SUBRESOURCE_RANGE};
+				MIDVK_COLOR_SUBRESOURCE_RANGE,
+			};
 			pNodeCompositorData->framebuffers[i].acquireBarriers[2] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -709,45 +713,51 @@ static void InterprocessServerAcceptNodeConnection()
 				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 				.dstQueueFamilyIndex = graphicsQueueIndex,
 				.image = pNodeCompositorData->framebuffers[i].gBuffer,
-				MIDVK_COLOR_SUBRESOURCE_RANGE};
+				MIDVK_COLOR_SUBRESOURCE_RANGE,
+			};
 		}
 	}
 
 	{
-		ID3D11Device*         renderDevice;
-		ID3D11Device1*        renderDevice1;
-		ID3D11DeviceContext*  renderContext;
-		ID3D11DeviceContext1* renderContext1;
-		D3D_FEATURE_LEVEL     featureLevel;
-		DX_REQUIRE(D3D11CreateDevice(
-			NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG,
-			(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
-			&renderDevice, &featureLevel, &renderContext))
-		assert(featureLevel == D3D_FEATURE_LEVEL_11_1);
-		DX_REQUIRE(ID3D11Device_QueryInterface(renderDevice, &IID_ID3D11Device1, (void**)&renderDevice1))
-		DX_REQUIRE(ID3D11DeviceContext_QueryInterface(renderContext, &IID_ID3D11DeviceContext1, (void**)&renderContext1))
-		printf("DX11 Adapter Feature Level: 0x%X Device: %p context %p\n", featureLevel, renderDevice, renderContext);
-
-		HANDLE handle = midVkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[0].color.memory);
-		ID3D11Texture2D1* texture = NULL;
-		printf("Importing d3d11 device: %p handle: %p texture: %p\n", renderDevice1, handle, texture);
-		DX_REQUIRE(ID3D11Device1_OpenSharedResource1(renderDevice1, handle, &IID_ID3D11Texture2D1, (void**)&texture));
-
-		ID3D11Debug* debug;
-		DX_REQUIRE(ID3D11Device1_QueryInterface(renderDevice1, &IID_ID3D11Debug, (void**)&debug))
-		ID3D11Debug_ReportLiveDeviceObjects(debug, D3D11_RLDO_SUMMARY);
-
-		ID3D11Debug_Release(debug);
-		ID3D11Device_Release(renderDevice);
-		ID3D11DeviceContext_Release(renderContext);
+//		ID3D11Device*         renderDevice;
+//		ID3D11Device1*        renderDevice1;
+//		ID3D11DeviceContext*  renderContext;
+//		ID3D11DeviceContext1* renderContext1;
+//		D3D_FEATURE_LEVEL     featureLevel;
+//		DX_REQUIRE(D3D11CreateDevice(
+//			NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG,
+//			(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
+//			&renderDevice, &featureLevel, &renderContext))
+//		assert(featureLevel == D3D_FEATURE_LEVEL_11_1);
+//		DX_REQUIRE(ID3D11Device_QueryInterface(renderDevice, &IID_ID3D11Device1, (void**)&renderDevice1))
+//		DX_REQUIRE(ID3D11DeviceContext_QueryInterface(renderContext, &IID_ID3D11DeviceContext1, (void**)&renderContext1))
+//		printf("DX11 Adapter Feature Level: 0x%X Device: %p context %p\n", featureLevel, renderDevice, renderContext);
+//
+//		HANDLE handle = vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[0].color.memory);
+//		ID3D11Texture2D1* texture = NULL;
+//		printf("Importing d3d11 device: %p handle: %p texture: %p\n", renderDevice1, handle, texture);
+//		DX_REQUIRE(ID3D11Device1_OpenSharedResource1(renderDevice1, handle, &IID_ID3D11Texture2D1, (void**)&texture));
+//
+//		ID3D11Debug* debug;
+//		DX_REQUIRE(ID3D11Device1_QueryInterface(renderDevice1, &IID_ID3D11Debug, (void**)&debug))
+//		ID3D11Debug_ReportLiveDeviceObjects(debug, D3D11_RLDO_SUMMARY);
+//
+//		ID3D11Debug_Release(debug);
+//		ID3D11Device_Release(renderDevice);
+//		ID3D11DeviceContext_Release(renderContext);
 	}
 
 	// Send shared memory handle
 	{
 		HANDLE duplicatedExternalNodeMemoryHandle;
-		ERR_CHECK(!DuplicateHandle(GetCurrentProcess(), pNodeContext->exportedExternalMemoryHandle, nodeProcessHandle, &duplicatedExternalNodeMemoryHandle, 0, false, DUPLICATE_SAME_ACCESS), "Duplicate sharedMemory handle fail.");
+		WIN32_CHECK(DuplicateHandle(
+						GetCurrentProcess(), pNodeContext->exportedExternalMemoryHandle,
+						nodeProcessHandle, &duplicatedExternalNodeMemoryHandle,
+						0, false, DUPLICATE_SAME_ACCESS),
+					"Duplicate sharedMemory handle fail.");
 		printf("Sending duplicatedExternalNodeMemoryHandle: %p Size: %llu\n", duplicatedExternalNodeMemoryHandle, sizeof(HANDLE));
-		WSA_ERR_CHECK(send(clientSocket, (const char*)&duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0) == SOCKET_ERROR, "Send failed");
+		int sendResult = send(clientSocket, (const char*)&duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0);
+		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send shared memory handle failed");
 		printf("Process Node Export Success.\n");
 		goto ExitSuccess;
 	}
@@ -788,13 +798,13 @@ static void* RunInterProcessServer(void* arg)
 	// Unlink/delete sock file in case it was left from before
 	unlink(SOCKET_PATH);
 
-	ERR_CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
-	ERR_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
+	CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
+	WSA_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
 
 	ipcServer.listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
-	WSA_ERR_CHECK(ipcServer.listenSocket == INVALID_SOCKET, "Socket failed");
-	WSA_ERR_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Bind failed");
-	WSA_ERR_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
+	WSA_CHECK(ipcServer.listenSocket == INVALID_SOCKET, "Socket failed");
+	WSA_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Bind failed");
+	WSA_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
 
 	while (isRunning) {
 		InterprocessServerAcceptNodeConnection();
@@ -839,12 +849,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	// Setup and connect
 	{
 		SOCKADDR_UN address = {.sun_family = AF_UNIX};
-		ERR_CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
+		CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
 		WSADATA wsaData = {};
-		ERR_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
+		WSA_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
 		clientSocket = socket(AF_UNIX, SOCK_STREAM, 0);
-		WSA_ERR_CHECK(clientSocket == INVALID_SOCKET, "Socket creation failed");
-		WSA_ERR_CHECK(connect(clientSocket, (struct sockaddr*)&address, sizeof(address)), "Connect failed");
+		WSA_CHECK(clientSocket == INVALID_SOCKET, "Socket creation failed");
+		WSA_CHECK(connect(clientSocket, (struct sockaddr*)&address, sizeof(address)), "Connect failed");
 		printf("Connected to server.\n");
 	}
 
@@ -852,35 +862,35 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	{
 		printf("Sending node ack: %s size: %llu\n", nodeIPCAckMessage, strlen(nodeIPCAckMessage));
 		int sendResult = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
-		WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send node ack failed");
+		WSA_CHECK(sendResult == SOCKET_ERROR, "Send node ack failed");
 	}
 
 	// Receive and check ack
 	{
 		char buffer[sizeof(serverIPCAckMessage)] = {};
 		int  receiveLength = recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
-		WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv compositor ack failed");
+		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv compositor ack failed");
 		printf("Received from server: %s size: %d\n", buffer, receiveLength);
-		WSA_ERR_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
+		WSA_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
 	}
 
 	// Send process id
 	{
-		const DWORD currentProcessId = GetCurrentProcessId();
+		DWORD currentProcessId = GetCurrentProcessId();
 		printf("Sending process handle: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
 		int sendResult = send(clientSocket, (const char*)&currentProcessId, sizeof(DWORD), 0);
-		WSA_ERR_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
+		WSA_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
 	}
 
 	// Receive shared memory
 	{
 		printf("Waiting to receive externalNodeMemoryHandle.\n");
 		int receiveLength = recv(clientSocket, (char*)&externalNodeMemoryHandle, sizeof(HANDLE), 0);
-		WSA_ERR_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv externalNodeMemoryHandle failed");
+		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv externalNodeMemoryHandle failed");
 		printf("Received externalNodeMemoryHandle: %p Size: %d\n", externalNodeMemoryHandle, receiveLength);
 
 		pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
-		ERR_CHECK(pExternalNodeMemory == NULL, "Map pExternalNodeMemory failed");
+		WIN32_CHECK(pExternalNodeMemory != NULL, "Map pExternalNodeMemory failed");
 		pImportedExternalMemory = pExternalNodeMemory;
 		importedExternalMemoryHandle = externalNodeMemoryHandle;
 
@@ -893,7 +903,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 	// Request and setup handle data
 	{
-		const NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
+		NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 		pNodeContext = &nodeContexts[handle];
 		*pNodeContext = (MxcNodeContext){};
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
@@ -903,14 +913,14 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 	// Create node data
 	{
-		const MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
+		MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
 			.debugName = "CompositorTimelineSemaphoreImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.externalHandle = pImportParam->compTimelineHandle,
 		};
 		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompositorTimeline);
-		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
+		MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -918,13 +928,13 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		};
 		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
 
-		const VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 			.queueFamilyIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 		};
 		VK_CHECK(vkCreateCommandPool(midVk.context.device, &graphicsCommandPoolCreateInfo, MIDVK_ALLOC, &pNodeContext->pool));
-		const VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 			.commandPool = pNodeContext->pool,
 			.commandBufferCount = 1,
@@ -934,7 +944,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			const VkmTextureCreateInfo colorCreateInfo = {
+			VkmTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -952,7 +962,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.externalHandle = pImportParam->framebufferHandles[i].color,
 			};
 			midvkCreateTexture(&colorCreateInfo, &pFramebufferTextures[i].color);
-			const VkmTextureCreateInfo normalCreateInfo = {
+			VkmTextureCreateInfo normalCreateInfo = {
 				.debugName = "ImportedNormalFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -970,7 +980,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.externalHandle = pImportParam->framebufferHandles[i].normal,
 			};
 			midvkCreateTexture(&normalCreateInfo, &pFramebufferTextures[i].normal);
-			const VkmTextureCreateInfo gbufferCreateInfo = {
+			VkmTextureCreateInfo gbufferCreateInfo = {
 				.debugName = "ImportedGBufferFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -989,7 +999,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 			};
 			midvkCreateTexture(&gbufferCreateInfo, &pFramebufferTextures[i].gbuffer);
 			// Depth is not shared over IPC.
-			const VkmTextureCreateInfo depthCreateInfo = {
+			VkmTextureCreateInfo depthCreateInfo = {
 				.debugName = "ImportedDepthFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,

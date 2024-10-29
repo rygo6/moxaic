@@ -37,10 +37,11 @@
 #ifndef MID_DEBUG
 #define MID_DEBUG
 extern void Panic(const char* file, int line, const char* message);
-#define PANIC(message) Panic(__FILE__, __LINE__, message)
-#define REQUIRE(condition, message)          \
-	if (__builtin_expect(!(condition), 0)) { \
-		PANIC(message);                      \
+#define PANIC(_message) Panic(__FILE__, __LINE__, _message)
+#define CHECK(_err, _message)                      \
+	if (__builtin_expect(!!(_err), 0)) {           \
+		fprintf(stderr, "Error Code: %d\n", _err); \
+		PANIC(_message);                           \
 	}
 #ifdef MID_VULKAN_IMPLEMENTATION
 [[noreturn]] void Panic(const char* file, int line, const char* message)
@@ -50,15 +51,12 @@ extern void Panic(const char* file, int line, const char* message);
 }
 #endif
 #endif
-
 #ifndef CACHE_ALIGN
 #define CACHE_ALIGN __attribute((aligned(64)))
 #endif
-
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
-
 #ifndef INLINE
 #define INLINE __attribute__((always_inline)) static inline
 #endif
@@ -853,9 +851,9 @@ void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkmMesh* pMesh);
 
-MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(VkDeviceMemory memory);
-MIDVK_EXTERNAL_HANDLE midVkGetFenceExternalHandle(VkFence fence);
-MIDVK_EXTERNAL_HANDLE midVkGetSemaphoreExternalHandle(VkSemaphore semaphore);
+MIDVK_EXTERNAL_HANDLE vkGetMemoryExternalHandle(VkDeviceMemory memory);
+MIDVK_EXTERNAL_HANDLE vkGetFenceExternalHandle(VkFence fence);
+MIDVK_EXTERNAL_HANDLE vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
@@ -870,6 +868,7 @@ void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocation
 //// MidVulkan Implementation
 #ifdef MID_VULKAN_IMPLEMENTATION
 
+// todo make work!
 #ifdef WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
 {

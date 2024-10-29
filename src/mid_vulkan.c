@@ -1493,7 +1493,7 @@ void midVkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const cha
 	VK_CHECK(SetDebugUtilsObjectNameEXT(midVk.context.device, &debugInfo));
 }
 
-MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(VkDeviceMemory memory)
+MIDVK_EXTERNAL_HANDLE vkGetMemoryExternalHandle(VkDeviceMemory memory)
 {
 	VK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
 	VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
@@ -1505,7 +1505,7 @@ MIDVK_EXTERNAL_HANDLE midVkGetMemoryExternalHandle(VkDeviceMemory memory)
 	VK_CHECK(GetMemoryWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
 	return handle;
 }
-MIDVK_EXTERNAL_HANDLE midVkGetFenceExternalHandle(VkFence fence)
+MIDVK_EXTERNAL_HANDLE vkGetFenceExternalHandle(VkFence fence)
 {
 	VK_INSTANCE_FUNC(GetFenceWin32HandleKHR);
 	VkFenceGetWin32HandleInfoKHR getWin32HandleInfo = {
@@ -1517,7 +1517,7 @@ MIDVK_EXTERNAL_HANDLE midVkGetFenceExternalHandle(VkFence fence)
 	VK_CHECK(GetFenceWin32HandleKHR(midVk.context.device, &getWin32HandleInfo, &handle));
 	return handle;
 }
-MIDVK_EXTERNAL_HANDLE midVkGetSemaphoreExternalHandle(VkSemaphore semaphore)
+MIDVK_EXTERNAL_HANDLE vkGetSemaphoreExternalHandle(VkSemaphore semaphore)
 {
 	VK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
 	VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
