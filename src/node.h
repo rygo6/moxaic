@@ -1,7 +1,5 @@
 #pragma once
 
-#include "mid_vulkan.h"
-
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -10,6 +8,8 @@
 #define NOCOMM
 #include <windows.h>
 #include <assert.h>
+
+#include "mid_vulkan.h"
 
 //
 /// Constants

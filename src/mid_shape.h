@@ -10,7 +10,7 @@ void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh);
 void BindUpdateQuadPatchMesh(float size, VkmMesh* pMesh);
 void midCreateQuadPatchMesh(float size, VkmMesh* pMesh);
 
-#ifdef MID_SHAPE_IMPLEMENTATION
+#if defined(MID_SHAPE_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 void RequestSphereMeshAllocation(int slicesCount, int stackCount, VkmMesh* pMesh) {
   VkmMeshCreateInfo info = {
       .indexCount = slicesCount * stackCount * 2 * 3,

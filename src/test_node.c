@@ -1,6 +1,8 @@
-#include "test_node.h"
-#include "mid_shape.h"
 #include <assert.h>
+
+#include "mid_shape.h"
+
+#include "test_node.h"
 
 enum SetBindNodeProcessIndices {
 	SET_BIND_NODE_PROCESS_SRC_INDEX,

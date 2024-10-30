@@ -1,8 +1,3 @@
-#include "comp_node.h"
-#include "node.h"
-#include "test_node.h"
-#include "window.h"
-
 // build
 //#include "comp_node.c"
 //#include "node.c"
@@ -10,33 +5,17 @@
 //#include "window.c"
 //#include "mid_vulkan.c"
 
-#define MID_DEBUG
-[[noreturn]] void Panic(const char* file, int line, const char* message)
-{
-	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
-	__builtin_trap();
-}
-
-#define MID_OPENXR_IMPLEMENTATION
-#include "mid_openxr_runtime.h"
-
-#define MID_MATH_IMPLEMENTATION
-#include "mid_math.h"
-
-#define MID_VULKAN_IMPLEMENTATION
-#include "mid_vulkan.h"
-
-#define MID_SHAPE_IMPLEMENTATION
-#include "mid_shape.h"
-
-#define MID_WINDOW_IMPLEMENTATION
-#include "mid_window.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "mid_math.h"
+#include "mid_vulkan.h"
+#include "mid_window.h"
+
+#include "comp_node.h"
+#include "node.h"
+#include "test_node.h"
+#include "window.h"
 
 bool isCompositor = true;
 bool isRunning = true;
@@ -116,7 +95,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(midVk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);

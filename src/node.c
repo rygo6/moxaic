@@ -1,28 +1,15 @@
-#include "node.h"
-#include "test_node.h"
-#include "mid_vulkan.h"
-
 #define WIN32_LEAN_AND_MEAN
 #undef UNICODE
 #include <winsock2.h>
 #include <afunix.h>
 #include <stdio.h>
 
-
-
-#define D3D11_NO_HELPERS
-#define CINTERFACE
-#define COBJMACROS
-#define WIDL_C_INLINE_WRAPPERS
-#include <d3d11_1.h>
-#include <initguid.h>
-#include <dxgi.h>
-#include <dxgi1_4.h>
-
-
 #include <pthread.h>
 #include <assert.h>
-#include <d3d11_3.h>
+
+#include "node.h"
+#include "test_node.h"
+#include "mid_vulkan.h"
 
 size_t                   nodeCount = 0;
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};

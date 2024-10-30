@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __JETBRAINS_IDE__
+#define MID_IDE_ANALYSIS
+#endif
+
 #define MID_DEBUG
 extern void Panic(const char* file, int line, const char* message);
 #define PANIC(_message) Panic(__FILE__, __LINE__, _message)

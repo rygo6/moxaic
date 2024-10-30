@@ -1,7 +1,9 @@
+#pragma once
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
@@ -20,6 +22,8 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 
+#include <vulkan/vulkan.h>
+
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_VULKAN
 #define XR_USE_GRAPHICS_API_OPENGL
@@ -29,7 +33,7 @@
 #include <openxr/openxr_reflection.h>
 #include <openxr/openxr_loader_negotiation.h>
 
-#ifdef __JETBRAINS_IDE__
+#ifdef MID_IDE_ANALYSIS
 #undef XRAPI_CALL
 #define XRAPI_CALL
 #endif
@@ -80,6 +84,8 @@ void midXrEndFrame(XrHandle sessionHandle);
 #define MIDXR_DEFAULT_SAMPLES      1
 #define MIDXR_OPENGL_MAJOR_VERSION 4
 #define MIDXR_OPENGL_MINOR_VERSION 6
+
+#define XR_SWAP_COUNT 2
 
 //
 //// Mid OpenXR Types
@@ -1197,14 +1203,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
 	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
 	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
-			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color.gl[i].memObject, pSwapchain->color.gl[i].texture, colorHandles[i]);
 				printf("Imported gl swap texture: %d memObject: %d\n", pSwapchain->color.gl[i].texture, pSwapchain->color.gl[i].memObject);
 			}
 			break;
 		case XR_GRAPHICS_API_D3D11_1:
 			assert(pSwapchain->format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
-			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				printf("Importing d3d11 device: %p handle: %p texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i],  pSwapchain->color.d3d11[i]);
 				DX_REQUIRE(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
 				printf("Imported d3d11 swap texture: %p\n", pSwapchain->color.d3d11[i]);

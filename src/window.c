@@ -1,5 +1,6 @@
-#include "window.h"
 #include "mid_window.h"
+
+#include "window.h"
 
 MxcInput mxcInput;
 

@@ -104,7 +104,6 @@ extern double timeQueryMs;
 
 //
 //// MidWindow Implementation
-//#define MID_WINDOW_IMPLEMENTATION
 #ifdef MID_WINDOW_IMPLEMENTATION
 
 #define WIN32_LEAN_AND_MEAN
