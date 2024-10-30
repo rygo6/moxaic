@@ -88,7 +88,7 @@ typedef struct MxcCompositorNodeContext {
 	// read by multiple threads
 	VkCommandBuffer cmd;
 	VkSemaphore     compTimeline;
-	MidVkSwap       swap;
+	VkSwapContext   swap;
 
 	// cold data
 	VkCommandPool pool;
@@ -118,7 +118,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	MxcNodeCompositorSetState* pSetMapped;
 	// should make them share buffer? probably
 	VkBuffer                   SetBuffer;
-	MidVkSharedMemory          SetSharedMemory;
+	VkSharedMemory             SetSharedMemory;
 
 	CACHE_ALIGN
 	struct {
@@ -136,10 +136,10 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 //
 /// Node Types
 typedef struct MxcNodeVkFramebufferTexture {
-	VkTexture color;
-	VkTexture normal;
-	VkTexture depth;
-	VkTexture gbuffer;
+	VkDedicatedTexture color;
+	VkDedicatedTexture normal;
+	VkDedicatedTexture depth;
+	VkDedicatedTexture gbuffer;
 } MxcNodeVkFramebufferTexture;
 
 typedef unsigned int GLuint;

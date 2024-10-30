@@ -66,7 +66,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 	const VkPipeline       nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
 	const VkPipeline       nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
 
-	const uint32_t graphicsQueueIndex = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+	const uint32_t graphicsQueueIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 
 	struct {
 		VkImage     color;
@@ -415,7 +415,7 @@ static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout)
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.pImmutableSamplers = &midVk.context.linearSampler,
+				.pImmutableSamplers = &vk.context.linearSampler,
 			},
 			[SET_BIND_NODE_PROCESS_DST_INDEX] = {
 				.binding = SET_BIND_NODE_PROCESS_DST_INDEX,
@@ -425,7 +425,7 @@ static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout)
 			},
 		},
 	};
-	VK_CHECK(vkCreateDescriptorSetLayout(midVk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
 }
 
 static void CreateNodeProcessPipeLayout(VkDescriptorSetLayout nodeProcessSetLayout, VkPipelineLayout* pPipeLayout)
@@ -437,7 +437,7 @@ static void CreateNodeProcessPipeLayout(VkDescriptorSetLayout nodeProcessSetLayo
 			[PIPE_SET_NODE_PROCESS_INDEX] = nodeProcessSetLayout,
 		},
 	};
-	VK_CHECK(vkCreatePipelineLayout(midVk.context.device, &createInfo, MIDVK_ALLOC, pPipeLayout));
+	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, MIDVK_ALLOC, pPipeLayout));
 }
 static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layout, VkPipeline* pPipe)
 {
@@ -453,8 +453,8 @@ static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layou
 		},
 		.layout = layout,
 	};
-	VK_CHECK(vkCreateComputePipelines(midVk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
-	vkDestroyShaderModule(midVk.context.device, shader, MIDVK_ALLOC);
+	VK_CHECK(vkCreateComputePipelines(vk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
+	vkDestroyShaderModule(vk.context.device, shader, MIDVK_ALLOC);
 }
 static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNode* pTestNode)
 {
@@ -464,7 +464,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		CreateNodeProcessPipe("./shaders/node_process_blit_slope_average_up.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
 		CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
 
-		midVkCreateFramebuffer(midVk.context.nodeRenderPass, &pTestNode->framebuffer);
+		midVkCreateFramebuffer(vk.context.nodeRenderPass, &pTestNode->framebuffer);
 		midVkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
 
 		for (uint32_t bufferIndex = 0; bufferIndex < MIDVK_SWAP_COUNT; ++bufferIndex) {
@@ -481,7 +481,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 						.layerCount = 1,
 					},
 				};
-				VK_CHECK(vkCreateImageView(midVk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, &pTestNode->gBufferMipViews[bufferIndex][mipIndex]));
+				VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, &pTestNode->gBufferMipViews[bufferIndex][mipIndex]));
 			}
 		}
 
@@ -497,21 +497,21 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
 			},
 		};
-		VK_CHECK(vkCreateDescriptorPool(midVk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
 
 		midVkCreateGlobalSet(&pTestNode->globalSet);
 
-		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
+		midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
 		vkCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
-		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
+		midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
 		midVkCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
 
 		VkWriteDescriptorSet writeSets[] = {
 			VKM_SET_WRITE_STD_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.view),
 			VKM_SET_WRITE_STD_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer),
 		};
-		vkUpdateDescriptorSets(midVk.context.device, _countof(writeSets), writeSets, 0, NULL);
+		vkUpdateDescriptorSets(vk.context.device, _countof(writeSets), writeSets, 0, NULL);
 
 		pTestNode->sphereTransform = (MidPose){.position = {0, 0, 0}};
 		vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
@@ -521,10 +521,10 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 
 	{  // Copy needed state
 		// context is available to all now so don't need to do this
-		pTestNode->device = midVk.context.device;
-		pTestNode->nodeRenderPass = midVk.context.nodeRenderPass;
-		pTestNode->pipeLayout = midVk.context.basicPipeLayout.pipeLayout;
-		pTestNode->basicPipe = midVk.context.basicPipe;
+		pTestNode->device = vk.context.device;
+		pTestNode->nodeRenderPass = vk.context.nodeRenderPass;
+		pTestNode->pipeLayout = vk.context.basicPipeLayout.pipeLayout;
+		pTestNode->basicPipe = vk.context.basicPipe;
 	}
 }
 

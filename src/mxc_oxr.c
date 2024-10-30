@@ -159,21 +159,21 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
 			.debugName = "NodeFenceImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
-			.externalHandle = pImportParam->nodeFenceHandle,
+			.importHandle = pImportParam->nodeFenceHandle,
 		};
 		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 		const MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
 			.debugName = "CompositorTimelineSemaphoreImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-			.externalHandle = pImportParam->compTimelineHandle,
+			.importHandle = pImportParam->compTimelineHandle,
 		};
 		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompositorTimeline);
 		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreImport",
 			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-			.externalHandle = pImportParam->nodeTimelineHandle,
+			.importHandle = pImportParam->nodeTimelineHandle,
 		};
 		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
 	}
@@ -216,7 +216,7 @@ void midXrWaitFrame(XrHandle sessionHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	midVkTimelineWait(midVk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
+	midVkTimelineWait(vk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
 }
 
 // this isn't associated with sessions, its associated with instance, so sizes need to be global... ?

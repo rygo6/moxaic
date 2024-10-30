@@ -38,7 +38,7 @@ int main(void)
 		midCreateWindow();
 		midVkInitialize();
 
-		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &midVk.surfaces[0]);
+		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &vk.surfaces[0]);
 
 		MidVkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
@@ -76,7 +76,7 @@ int main(void)
 			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
 		};
-		midVkCreateSampler(&samplerCreateInfo, &midVk.context.linearSampler);
+		midVkCreateSampler(&samplerCreateInfo, &vk.context.linearSampler);
 		// standard/common rendering
 		midVkCreateStdRenderPass();
 		midVkCreateStdPipeLayout();
@@ -85,14 +85,14 @@ int main(void)
 		mxcCreateNodeRenderPass();
 		midVkCreateBasicPipe("./shaders/basic_material.vert.spv",
 							 "./shaders/basic_material.frag.spv",
-							 midVk.context.nodeRenderPass,
-							 midVk.context.basicPipeLayout.pipeLayout,
-							 &midVk.context.basicPipe);
+							 vk.context.nodeRenderPass,
+							 vk.context.basicPipeLayout.pipeLayout,
+							 &vk.context.basicPipe);
 
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");
 		isCompositor = true;
-		mxcRequestAndRunCompositorNodeThread(midVk.surfaces[0], mxcCompNodeThread);
+		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
 #define TEST_NODE
@@ -110,8 +110,8 @@ int main(void)
 
 
 	if (isCompositor) {  // Compositor Loop
-		const VkDevice device = midVk.context.device;
-		const VkQueue  graphicsQueue = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+		const VkDevice device = vk.context.device;
+		const VkQueue  graphicsQueue = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		uint64_t compositorBaseCycleValue = 0;
 		while (isRunning) {
 
@@ -165,7 +165,7 @@ int main(void)
 		}
 	} else {
 
-		const VkQueue graphicsQueue = midVk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+		const VkQueue graphicsQueue = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		while (isRunning) {
 			midUpdateWindowInput();
 			isRunning = midWindow.running;

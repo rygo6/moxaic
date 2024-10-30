@@ -3,22 +3,22 @@
 #include "mid_math.h"
 #include "mid_vulkan.h"
 
-void RequestSphereMeshAllocation(int slicesCount, int stackCount, VkmMesh* pMesh);
-void CreateSphereMesh(float radius, int slicesCount, int stackCount, VkmMesh* pMesh);
-void CreateQuadMesh(float size, VkmMesh* pMesh);
-void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh);
-void BindUpdateQuadPatchMesh(float size, VkmMesh* pMesh);
-void midCreateQuadPatchMesh(float size, VkmMesh* pMesh);
+void RequestSphereMeshAllocation(int slicesCount, int stackCount, VkMesh* pMesh);
+void CreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* pMesh);
+void CreateQuadMesh(float size, VkMesh* pMesh);
+void CreateQuadPatchMeshSharedMemory(VkMesh* pMesh);
+void BindUpdateQuadPatchMesh(float size, VkMesh* pMesh);
+void midCreateQuadPatchMesh(float size, VkMesh* pMesh);
 
 #if defined(MID_SHAPE_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
-void RequestSphereMeshAllocation(int slicesCount, int stackCount, VkmMesh* pMesh) {
+void RequestSphereMeshAllocation(int slicesCount, int stackCount, VkMesh* pMesh) {
   VkmMeshCreateInfo info = {
       .indexCount = slicesCount * stackCount * 2 * 3,
       .vertexCount = (slicesCount + 1) * (stackCount + 1),
   };
   midVkCreateMeshSharedMemory(&info, pMesh);
 }
-void CreateSphereMesh(float radius, int slicesCount, int stackCount, VkmMesh* pMesh) {
+void CreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* pMesh) {
   VkmMeshCreateInfo info = {
       .indexCount = slicesCount * stackCount * 2 * 3,
       .vertexCount = (slicesCount + 1) * (stackCount + 1),
@@ -65,7 +65,7 @@ void CreateSphereMesh(float radius, int slicesCount, int stackCount, VkmMesh* pM
   }
   vkmCreateMesh(&info, pMesh);
 }
-void CreateQuadMesh(float size, VkmMesh* pMesh) {
+void CreateQuadMesh(float size, VkMesh* pMesh) {
   uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
   MidVertex vertices[] = {
       {.position = {-size, -size, 0}, .uv = {0, 0}},
@@ -95,16 +95,16 @@ void CreateQuadMesh(float size, VkmMesh* pMesh) {
         {.position = {-size, size, 0}, .uv = {0, 1}},  \
         {.position = {size, size, 0}, .uv = {1, 1}},   \
     };
-void CreateQuadPatchMeshSharedMemory(VkmMesh* pMesh) {
+void CreateQuadPatchMeshSharedMemory(VkMesh* pMesh) {
   QUAD_PATCH_MESH_INFO
   midVkCreateMeshSharedMemory(&info, pMesh);
 }
-void BindUpdateQuadPatchMesh(float size, VkmMesh* pMesh) {
+void BindUpdateQuadPatchMesh(float size, VkMesh* pMesh) {
   QUAD_PATCH_MESH_INFO
   QUAD_PATCH_MESH_VERTICES_INDICES
   midVkBindUpdateMeshSharedMemory(&info, pMesh);
 }
-void midCreateQuadPatchMesh(float size, VkmMesh* pMesh) {
+void midCreateQuadPatchMesh(float size, VkMesh* pMesh) {
   QUAD_PATCH_MESH_INFO
   QUAD_PATCH_MESH_VERTICES_INDICES
   vkmCreateMesh(&info, pMesh);

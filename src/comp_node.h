@@ -36,10 +36,10 @@ typedef struct MxcCompNode {
 //  MidVkSharedMemory compNodeSetSharedMemory;
 //  VkBuffer          compNodeSetBuffer;
 
-  VkmMesh quadMesh;
+  VkMesh quadMesh;
 
   VkFramebuffer framebuffer;
-  MidVkFramebufferTexture framebuffers[MIDVK_SWAP_COUNT];
+  VkFramebufferTexture framebuffers[MIDVK_SWAP_COUNT];
 
 } MxcCompNode;
 
