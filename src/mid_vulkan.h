@@ -188,7 +188,7 @@ typedef struct MidVkSharedMemory {
 	VkDeviceSize    size;
 	MidVkMemoryType type;
 } MidVkSharedMemory;
-typedef struct MidVkTexture {
+typedef struct VkTexture {
 	VkImage     image;
 	VkImageView view;
 
@@ -199,7 +199,7 @@ typedef struct MidVkTexture {
 	// this is the 'cold' storage so maybe it doesn't matter
 	//  MidVkSharedMemory sharedMemory;
 	VkDeviceMemory memory;
-} MidVkTexture;
+} VkTexture;
 typedef struct VkmMeshCreateInfo {
 	uint32_t         indexCount;
 	uint32_t         vertexCount;
@@ -221,9 +221,9 @@ typedef struct VkmMesh {
 } VkmMesh;
 
 typedef struct MidVkFramebufferTexture {
-	MidVkTexture color;
-	MidVkTexture normal;
-	MidVkTexture depth;
+	VkTexture color;
+	VkTexture normal;
+	VkTexture depth;
 } MidVkFramebufferTexture;
 
 typedef struct VkmGlobalSetState {
@@ -825,15 +825,15 @@ void midVkCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler);
 
 void midVkCreateSwap(VkSurfaceKHR surface, MidVkQueueFamilyType presentQueueFamily, MidVkSwap* pSwap);
 
-typedef struct VkmTextureCreateInfo {
+typedef struct VkTextureCreateInfo {
 	const char*           debugName;
 	VkImageCreateInfo     imageCreateInfo;
 	VkImageAspectFlags    aspectMask;
 	MidLocality           locality;
 	MIDVK_EXTERNAL_HANDLE externalHandle;
-} VkmTextureCreateInfo;
-void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture);
-void midVkCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture);
+} VkTextureCreateInfo;
+void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkTexture* pTexture);
+void vkCreateTextureFromFile(const char* pPath, VkTexture* pTexture);
 
 typedef struct MidVkSemaphoreCreateInfo {
 	const char*           debugName;
@@ -1681,14 +1681,14 @@ static void CreateAllocateBindImageView(const VkImageCreateInfo* pImageCreateInf
 	CreateImageView(pImageCreateInfo, *pImage, aspectMask, pImageView);
 }
 
-void midvkCreateTexture(const VkmTextureCreateInfo* pCreateInfo, MidVkTexture* pTexture)
+void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkTexture* pTexture)
 {
 	// this should take VkmTextureCreateInfo too
 	CreateAllocateBindImageView(&pCreateInfo->imageCreateInfo, pCreateInfo->aspectMask, pCreateInfo->locality, pCreateInfo->externalHandle, &pTexture->memory, &pTexture->image, &pTexture->view);
 	midVkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
 
-void midVkCreateTextureFromFile(const char* pPath, MidVkTexture* pTexture)
+void vkCreateTextureFromFile(const char* pPath, VkTexture* pTexture)
 {
 	int      texChannels, width, height;
 	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
@@ -1767,7 +1767,7 @@ void midVkCreateFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuffer
 void midvkCreateFramebufferTexture(uint32_t framebufferCount, MidLocality locality, MidVkFramebufferTexture* pFrameBuffers)
 {
 	for (int i = 0; i < framebufferCount; ++i) {
-		VkmTextureCreateInfo colorCreateInfo = {
+		VkTextureCreateInfo colorCreateInfo = {
 			.debugName = "CompColorFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1783,8 +1783,8 @@ void midvkCreateFramebufferTexture(uint32_t framebufferCount, MidLocality locali
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
 		};
-		midvkCreateTexture(&colorCreateInfo, &pFrameBuffers[i].color);
-		VkmTextureCreateInfo normalCreateInfo = {
+		vkCreateTexture(&colorCreateInfo, &pFrameBuffers[i].color);
+		VkTextureCreateInfo normalCreateInfo = {
 			.debugName = "CompNormalFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1800,8 +1800,8 @@ void midvkCreateFramebufferTexture(uint32_t framebufferCount, MidLocality locali
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
 		};
-		midvkCreateTexture(&normalCreateInfo, &pFrameBuffers[i].normal);
-		VkmTextureCreateInfo depthCreateInfo = {
+		vkCreateTexture(&normalCreateInfo, &pFrameBuffers[i].normal);
+		VkTextureCreateInfo depthCreateInfo = {
 			.debugName = "CompDepthFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1817,7 +1817,7 @@ void midvkCreateFramebufferTexture(uint32_t framebufferCount, MidLocality locali
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.locality = locality,
 		};
-		midvkCreateTexture(&depthCreateInfo, &pFrameBuffers[i].depth);
+		vkCreateTexture(&depthCreateInfo, &pFrameBuffers[i].depth);
 	}
 }
 

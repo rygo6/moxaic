@@ -399,7 +399,7 @@ void mxcCreateNodeRenderPass()
 void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
 {
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		VkmTextureCreateInfo colorCreateInfo = {
+		VkTextureCreateInfo colorCreateInfo = {
 			.debugName = "ExportedColorFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -415,8 +415,8 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
 		};
-		midvkCreateTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].color);
-		VkmTextureCreateInfo normalCreateInfo = {
+		vkCreateTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].color);
+		VkTextureCreateInfo normalCreateInfo = {
 			.debugName = "ExportedNormalFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -432,8 +432,8 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
 		};
-		midvkCreateTexture(&normalCreateInfo, &pNodeFramebufferTextures[i].normal);
-		VkmTextureCreateInfo gbufferCreateInfo = {
+		vkCreateTexture(&normalCreateInfo, &pNodeFramebufferTextures[i].normal);
+		VkTextureCreateInfo gbufferCreateInfo = {
 			.debugName = "ExportedGBufferFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -449,7 +449,7 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = locality,
 		};
-		midvkCreateTexture(&gbufferCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
+		vkCreateTexture(&gbufferCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
 
 		// Depth is not shared over IPC.
 		if (locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
@@ -465,7 +465,7 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 			midVkEndImmediateTransferCommandBuffer(cmd);
 			continue;
 		}
-		const VkmTextureCreateInfo depthCreateInfo = {
+		const VkTextureCreateInfo depthCreateInfo = {
 			.debugName = "ImportedDepthFramebuffer",
 			.imageCreateInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -480,7 +480,7 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.locality = MID_LOCALITY_CONTEXT,
 		};
-		midvkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].depth);
+		vkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].depth);
 	}
 }
 
@@ -931,7 +931,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-			VkmTextureCreateInfo colorCreateInfo = {
+			VkTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -948,8 +948,8 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 				.externalHandle = pImportParam->framebufferHandles[i].color,
 			};
-			midvkCreateTexture(&colorCreateInfo, &pFramebufferTextures[i].color);
-			VkmTextureCreateInfo normalCreateInfo = {
+			vkCreateTexture(&colorCreateInfo, &pFramebufferTextures[i].color);
+			VkTextureCreateInfo normalCreateInfo = {
 				.debugName = "ImportedNormalFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -966,8 +966,8 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 				.externalHandle = pImportParam->framebufferHandles[i].normal,
 			};
-			midvkCreateTexture(&normalCreateInfo, &pFramebufferTextures[i].normal);
-			VkmTextureCreateInfo gbufferCreateInfo = {
+			vkCreateTexture(&normalCreateInfo, &pFramebufferTextures[i].normal);
+			VkTextureCreateInfo gbufferCreateInfo = {
 				.debugName = "ImportedGBufferFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -984,9 +984,9 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 				.externalHandle = pImportParam->framebufferHandles[i].gbuffer,
 			};
-			midvkCreateTexture(&gbufferCreateInfo, &pFramebufferTextures[i].gbuffer);
+			vkCreateTexture(&gbufferCreateInfo, &pFramebufferTextures[i].gbuffer);
 			// Depth is not shared over IPC.
-			VkmTextureCreateInfo depthCreateInfo = {
+			VkTextureCreateInfo depthCreateInfo = {
 				.debugName = "ImportedDepthFramebuffer",
 				.imageCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1001,7 +1001,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 				.locality = MID_LOCALITY_CONTEXT,
 			};
-			midvkCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
+			vkCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
 		}
 	}
 

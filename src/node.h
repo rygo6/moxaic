@@ -136,10 +136,10 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 //
 /// Node Types
 typedef struct MxcNodeVkFramebufferTexture {
-	MidVkTexture color;
-	MidVkTexture normal;
-	MidVkTexture depth;
-	MidVkTexture gbuffer;
+	VkTexture color;
+	VkTexture normal;
+	VkTexture depth;
+	VkTexture gbuffer;
 } MxcNodeVkFramebufferTexture;
 
 typedef unsigned int GLuint;

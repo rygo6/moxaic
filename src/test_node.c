@@ -502,7 +502,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		midVkCreateGlobalSet(&pTestNode->globalSet);
 
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
-		midVkCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
+		vkCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &midVk.context.basicPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
 		midVkCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MID_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
