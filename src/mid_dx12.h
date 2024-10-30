@@ -2,6 +2,10 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
+#define NOSERVICE
+#define NOCRYPT
+#define NOMCX
+#define NOGDI
 #include <windows.h>
 
 #define COBJMACROS

@@ -3,11 +3,15 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <assert.h>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
+#define NOSERVICE
+#define NOCRYPT
+#define NOMCX
+#define NOGDI
 #include <windows.h>
-#include <assert.h>
 
 #include "mid_vulkan.h"
 

@@ -514,27 +514,6 @@ const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 		}                                                             \
 	}
 
-static void LogWin32Error(const char* file, const int line, HRESULT err)
-{
-	fprintf(stderr, "\n%s:%d Error! 0x%08lX\n", file, line, err);
-	char* errStr;
-	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-		fprintf(stderr, "%s\n", errStr);
-		LocalFree(errStr);
-	}
-}
-#define REQUIRE_WIN32(condition, err)           \
-	if (__builtin_expect(!(condition), 0)) {    \
-		LogWin32Error(__FILE__, __LINE__, err); \
-		PANIC("DX ERROR");                      \
-	}
-#define DX_REQUIRE(command)               \
-	{                                     \
-		HRESULT hr = command;             \
-		REQUIRE_WIN32(SUCCEEDED(hr), hr); \
-	}
-
 static void InterprocessServerAcceptNodeConnection()
 {
 	printf("Accepting connections on: '%s'\n", SOCKET_PATH);
@@ -703,35 +682,6 @@ static void InterprocessServerAcceptNodeConnection()
 				MIDVK_COLOR_SUBRESOURCE_RANGE,
 			};
 		}
-	}
-
-	{
-//		ID3D11Device*         renderDevice;
-//		ID3D11Device1*        renderDevice1;
-//		ID3D11DeviceContext*  renderContext;
-//		ID3D11DeviceContext1* renderContext1;
-//		D3D_FEATURE_LEVEL     featureLevel;
-//		DX_REQUIRE(D3D11CreateDevice(
-//			NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, D3D11_CREATE_DEVICE_DEBUG,
-//			(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
-//			&renderDevice, &featureLevel, &renderContext))
-//		assert(featureLevel == D3D_FEATURE_LEVEL_11_1);
-//		DX_REQUIRE(ID3D11Device_QueryInterface(renderDevice, &IID_ID3D11Device1, (void**)&renderDevice1))
-//		DX_REQUIRE(ID3D11DeviceContext_QueryInterface(renderContext, &IID_ID3D11DeviceContext1, (void**)&renderContext1))
-//		printf("DX11 Adapter Feature Level: 0x%X Device: %p context %p\n", featureLevel, renderDevice, renderContext);
-//
-//		HANDLE handle = vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[0].color.memory);
-//		ID3D11Texture2D1* texture = NULL;
-//		printf("Importing d3d11 device: %p handle: %p texture: %p\n", renderDevice1, handle, texture);
-//		DX_REQUIRE(ID3D11Device1_OpenSharedResource1(renderDevice1, handle, &IID_ID3D11Texture2D1, (void**)&texture));
-//
-//		ID3D11Debug* debug;
-//		DX_REQUIRE(ID3D11Device1_QueryInterface(renderDevice1, &IID_ID3D11Debug, (void**)&debug))
-//		ID3D11Debug_ReportLiveDeviceObjects(debug, D3D11_RLDO_SUMMARY);
-//
-//		ID3D11Debug_Release(debug);
-//		ID3D11Device_Release(renderDevice);
-//		ID3D11DeviceContext_Release(renderContext);
 	}
 
 	// Send shared memory handle

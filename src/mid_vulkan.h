@@ -10,7 +10,16 @@
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
+#define NOSERVICE
+#define NOCRYPT
+#define NOMCX
+#define NOGDI
 #include <windows.h>
+
+#define COBJMACROS
+#include <dxgi1_6.h>
+#include <d3d12.h>
+
 #include <vulkan/vulkan_win32.h>
 #endif
 
@@ -35,6 +44,33 @@ extern void Panic(const char* file, int line, const char* message);
 }
 #endif
 #endif
+
+#ifdef WIN32
+#ifndef MID_WIN32_DEBUG
+#define MID_WIN32_DEBUG
+static void LogWin32Error(HRESULT err)
+{
+	fprintf(stderr, "Win32 Error Code: 0x%08lX\n", err);
+	char* errStr;
+	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
+		fprintf(stderr, "%s\n", errStr);
+		LocalFree(errStr);
+	}
+}
+#define CHECK_WIN32(condition, err)          \
+	if (__builtin_expect(!(condition), 0)) { \
+		LogWin32Error(err);                  \
+		PANIC("Win32 Error!");               \
+	}
+#define DX_CHECK(command)               \
+	({                                  \
+		HRESULT hr = command;           \
+		CHECK_WIN32(SUCCEEDED(hr), hr); \
+	})
+#endif
+#endif
+
 #ifndef CACHE_ALIGN
 #define CACHE_ALIGN __attribute((aligned(64)))
 #endif
@@ -304,7 +340,7 @@ typedef struct VkFunc {
 #undef PFN_FUNC
 } VkFunc;
 
-#define MIDVK_CONTEXT_CAPACITY 2
+#define MIDVK_CONTEXT_CAPACITY 2 // should be 1 always?
 #define MIDVK_SURFACE_CAPACITY 2
 typedef struct CACHE_ALIGN Vk {
 	VkInstance   instance;
@@ -320,6 +356,7 @@ typedef struct MidVkThreadContext {
 } MidVkThreadContext;
 extern __thread MidVkThreadContext threadContext;
 
+// move these into thread context
 extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 
@@ -838,6 +875,8 @@ typedef struct VkTextureCreateInfo {
 } VkTextureCreateInfo;
 void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture);
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
+
+void vkWin32CreateExternalTexture(const VkTextureCreateInfo* pCreateInfo, HANDLE *pHandle);
 
 typedef struct MidVkSemaphoreCreateInfo {
 	const char*           debugName;
@@ -1697,11 +1736,84 @@ void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture*
 	midVkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
 
+void vkWin32CreateExternalTexture(const VkTextureCreateInfo* pCreateInfo, HANDLE *pHandle)
+{
+	struct {
+		IDXGIFactory4* factory;
+		IDXGIAdapter1* adapter;
+		ID3D12Device*  device;
+	} d3d12;
+
+	UINT flags = DXGI_CREATE_FACTORY_DEBUG;
+	DX_CHECK(CreateDXGIFactory2(flags, &IID_IDXGIFactory4, (void**)&d3d12.factory));
+	for (UINT i = 0; IDXGIFactory4_EnumAdapters1(d3d12.factory, i, &d3d12.adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+		DXGI_ADAPTER_DESC1 desc;
+		DX_CHECK(IDXGIAdapter1_GetDesc1(d3d12.adapter, &desc));
+		wprintf(L"DX12 Adapter %d Name: %ls Description: %ld:%lu\n",
+				i, desc.Description, desc.AdapterLuid.HighPart,	desc.AdapterLuid.LowPart);
+		break; // add logic to choose?
+	}
+
+	DX_CHECK(D3D12CreateDevice((IUnknown*)d3d12.adapter, D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device, (void**)&d3d12.device));
+
+	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+	switch (pCreateInfo->imageCreateInfo.format) {
+		case VK_FORMAT_B8G8R8A8_UNORM:
+			format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			break;
+		case VK_FORMAT_B8G8R8A8_SRGB:
+			format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+			break;
+		default:
+			PANIC("Unknown vk to dx12 format conversion!");
+	}
+
+	D3D12_RESOURCE_DESC textureDesc = {
+		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+		.Alignment = 0,
+		.Width = pCreateInfo->imageCreateInfo.extent.width,
+		.Height = pCreateInfo->imageCreateInfo.extent.height,
+		.DepthOrArraySize = pCreateInfo->imageCreateInfo.arrayLayers,
+		.MipLevels = pCreateInfo->imageCreateInfo.mipLevels,
+		.Format = format,
+		.SampleDesc.Count = pCreateInfo->imageCreateInfo.samples,
+		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+		.Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS,
+	};
+	D3D12_HEAP_PROPERTIES heapProperties = {
+		.Type = D3D12_HEAP_TYPE_DEFAULT,
+	};
+	ID3D12Resource* texture;
+	DX_CHECK(ID3D12Device_CreateCommittedResource(
+		d3d12.device,
+		&heapProperties,
+		D3D12_HEAP_FLAG_SHARED,
+		&textureDesc,
+		D3D12_RESOURCE_STATE_COMMON,
+		NULL,
+		&IID_ID3D12Resource,
+		(void**)&texture));
+
+	DX_CHECK(ID3D12Device_CreateSharedHandle(
+		d3d12.device,
+		(ID3D12DeviceChild*)texture,
+		NULL,
+		GENERIC_ALL,
+		NULL,
+		pHandle));
+
+	// should I retain these somehow?
+	IDXGIFactory4_Release(d3d12.factory);
+	IDXGIAdapter1_Release(d3d12.adapter);
+	ID3D12Device_Release(d3d12.device);
+}
+
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 {
 	int      texChannels, width, height;
 	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
 	CHECK(width == 0 || height == 0, "Image height or width is equal to zero.")
+
 	VkDeviceSize      imageBufferSize = width * height * 4;
 	VkImageCreateInfo imageCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1714,10 +1826,12 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 		.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	};
 	CreateAllocateBindImageView(&imageCreateInfo, VK_IMAGE_ASPECT_COLOR_BIT, MID_LOCALITY_CONTEXT, NULL, &pTexture->memory, &pTexture->image, &pTexture->view);
+
 	VkBuffer       stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 	CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
 	stbi_image_free(pImagePixels);
+
 	VkCommandBuffer commandBuffer = midVkBeginImmediateTransferCommandBuffer();
 	vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_DST, pTexture->image));
 	VkBufferImageCopy region = {
@@ -1727,6 +1841,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 	vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_TRANSFER_READ, pTexture->image));
 	midVkEndImmediateTransferCommandBuffer(commandBuffer);
+
 	vkFreeMemory(vk.context.device, stagingBufferMemory, MIDVK_ALLOC);
 	vkDestroyBuffer(vk.context.device, stagingBuffer, MIDVK_ALLOC);
 }

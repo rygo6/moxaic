@@ -7,7 +7,12 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
+#define NOSERVICE
+#define NOCRYPT
+#define NOMCX
 #include <windows.h>
+
+#include <vulkan/vulkan.h>
 
 #define D3D11_NO_HELPERS
 #define CINTERFACE
@@ -21,8 +26,6 @@
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
 #include <GL/glext.h>
-
-#include <vulkan/vulkan.h>
 
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_VULKAN
@@ -362,9 +365,12 @@ CONTAINER(Instance, MIDXR_MAX_INSTANCES)
 #define LOG_METHOD(_name)
 #endif
 
-static void LogWin32Error(const char* file, const int line, HRESULT err)
+#ifdef WIN32
+#ifndef MID_WIN32_DEBUG
+#define MID_WIN32_DEBUG
+static void LogWin32Error(HRESULT err)
 {
-	fprintf(stderr, "\n%s:%d Error! 0x%08lX\n", file, line, err);
+	fprintf(stderr, "Win32 Error Code: 0x%08lX\n", err);
 	char* errStr;
 	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
@@ -372,16 +378,19 @@ static void LogWin32Error(const char* file, const int line, HRESULT err)
 		LocalFree(errStr);
 	}
 }
-#define REQUIRE_WIN32(condition, err)           \
-	if (__builtin_expect(!(condition), 0)) {    \
-		LogWin32Error(__FILE__, __LINE__, err); \
-		return XR_ERROR_RUNTIME_FAILURE;        \
+#define CHECK_WIN32(condition, err)          \
+	if (__builtin_expect(!(condition), 0)) { \
+		LogWin32Error(err);                  \
+		PANIC("Win32 Error!");               \
 	}
-#define DX_REQUIRE(command)               \
-	{                                     \
-		HRESULT hr = command;             \
-		REQUIRE_WIN32(SUCCEEDED(hr), hr); \
-	}
+#define DX_CHECK(command)               \
+	({                                  \
+		HRESULT hr = command;           \
+		CHECK_WIN32(SUCCEEDED(hr), hr); \
+	})
+#endif
+#endif
+
 
 static InstanceContainer instances;
 
@@ -626,12 +635,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 			pInstance->graphics.d3d11.minFeatureLevel = D3D_FEATURE_LEVEL_11_1;
 
 			IDXGIFactory1* factory = NULL;
-			DX_REQUIRE(CreateDXGIFactory1(&IID_IDXGIFactory, (void**)&factory))
+			DX_CHECK(CreateDXGIFactory1(&IID_IDXGIFactory, (void**)&factory));
 
 			IDXGIAdapter* adapter = NULL;
 			for (UINT i = 0; IDXGIFactory1_EnumAdapters(factory, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
 				DXGI_ADAPTER_DESC desc;
-				DX_REQUIRE(IDXGIAdapter_GetDesc(adapter, &desc));
+				DX_CHECK(IDXGIAdapter_GetDesc(adapter, &desc));
 				pInstance->graphics.d3d11.adapterLuid = desc.AdapterLuid;
 				wprintf(L"DX11 Adapter %d Name: %ls Description: %ld:%lu\n",
 						i, desc.Description, desc.AdapterLuid.HighPart,	desc.AdapterLuid.LowPart);
@@ -639,12 +648,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 			}
 
 			IDXGIFactory4* factory4;
-			DX_REQUIRE(IDXGIFactory1_QueryInterface(factory, &IID_IDXGIFactory4, (void**)&factory4));
+			DX_CHECK(IDXGIFactory1_QueryInterface(factory, &IID_IDXGIFactory4, (void**)&factory4));
 
 			IDXGIAdapter* adapter2 = NULL;
 			IDXGIFactory4_EnumAdapterByLuid(factory4, pInstance->graphics.d3d11.adapterLuid, &IID_IDXGIAdapter, (void**)&adapter2);
 			DXGI_ADAPTER_DESC desc2;
-			DX_REQUIRE(IDXGIAdapter_GetDesc(adapter2, &desc2));
+			DX_CHECK(IDXGIAdapter_GetDesc(adapter2, &desc2));
 			wprintf(L"DX11 Adapter2 Name: %ls Description: %ld:%lu\n", desc2.Description, desc2.AdapterLuid.HighPart, desc2.AdapterLuid.LowPart);
 
 
@@ -875,7 +884,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			}
 
 			ID3D11Device1*            device1;
-			DX_REQUIRE(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&device1))
+			DX_CHECK(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&device1));
 			printf("D3D11 Device1: %p\n", device1);
 			if (device1 == NULL) {
 				fprintf(stderr, "D3D11 Device Invalid.\n");
@@ -1212,7 +1221,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 			assert(pSwapchain->format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				printf("Importing d3d11 device: %p handle: %p texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i],  pSwapchain->color.d3d11[i]);
-				DX_REQUIRE(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
+				DX_CHECK(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
 				printf("Imported d3d11 swap texture: %p\n", pSwapchain->color.d3d11[i]);
 			}
 			break;

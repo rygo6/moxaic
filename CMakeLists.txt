@@ -40,6 +40,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         ws2_32
         dxgi
         d3d11
+        d3d12
         ${CMAKE_THREAD_LIBS_INIT}
 )
 
