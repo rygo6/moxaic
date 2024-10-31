@@ -73,7 +73,7 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 #define DEFAULT_VK_IMAGE_CREATE_INFO(_width, _height, _format, _usage) \
 	.imageCreateInfo = {                                               \
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,                  \
-		.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,                     \
+		.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,                     \
 		.imageType = VK_IMAGE_TYPE_2D,                                 \
 		.format = _format,                                             \
 		.extent = {_width, _height, 1.0f},                             \
@@ -162,20 +162,20 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 		// We import semaphores in vulkan because right now its relying on timeline semaphore for all graphics apis
 		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
 			.debugName = "NodeFenceImport",
-			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.importHandle = pImportParam->nodeFenceHandle,
 		};
 		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 		const MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
 			.debugName = "CompositorTimelineSemaphoreImport",
-			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pImportParam->compTimelineHandle,
 		};
 		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompositorTimeline);
 		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreImport",
-			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pImportParam->nodeTimelineHandle,
 		};

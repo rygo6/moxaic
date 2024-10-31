@@ -30,7 +30,7 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 {
 	MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 		.debugName = "CompTimelineSemaphore",
-		.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
+		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
 	midVkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compTimeline);
 	midVkCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
@@ -210,12 +210,12 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 	MidVkFenceCreateInfo nodeFenceCreateInfo = {
 		.debugName = "NodeFence",
-		.locality = MID_LOCALITY_CONTEXT,
+		.locality = VK_LOCALITY_CONTEXT,
 	};
 	midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 	MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
-		.locality = MID_LOCALITY_CONTEXT,
+		.locality = VK_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
 	midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
@@ -234,7 +234,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
-	mxcCreateNodeFramebuffer(MID_LOCALITY_CONTEXT, pNodeContext->vkNodeFramebufferTextures);
+	mxcCreateNodeFramebuffer(VK_LOCALITY_CONTEXT, pNodeContext->vkNodeFramebufferTextures);
 
 	MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
 	// do not clear since it is set data is prealloced
@@ -396,31 +396,40 @@ void mxcCreateNodeRenderPass()
 	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &vk.context.nodeRenderPass));
 	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
 }
-void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
+void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
 {
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-		VkTextureCreateInfo colorCreateInfo = {
-			.debugName = "ExportedColorFramebuffer",
-			.imageCreateInfo = {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
-				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+
+		VkImageCreateInfo colorCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = &(VkExternalMemoryImageCreateInfo){
+				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 			},
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.locality = locality,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 		};
-		vkCreateTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].color);
+		vkWin32CreateExternalTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].colorExternal);
+
+		VkTextureCreateInfo colorTextureCreateInfo = {
+			.debugName = "ExportedColorFramebuffer",
+			.pImageCreateInfo = &colorCreateInfo,
+			.importHandle = pNodeFramebufferTextures[i].colorExternal.handle,
+			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&colorTextureCreateInfo, &pNodeFramebufferTextures[i].color);
+
 		VkTextureCreateInfo normalCreateInfo = {
 			.debugName = "ExportedNormalFramebuffer",
-			.imageCreateInfo = {
+			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -433,11 +442,12 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 			.locality = locality,
 		};
 		vkCreateTexture(&normalCreateInfo, &pNodeFramebufferTextures[i].normal);
+
 		VkTextureCreateInfo gbufferCreateInfo = {
 			.debugName = "ExportedGBufferFramebuffer",
-			.imageCreateInfo = {
+			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? MIDVK_EXTERNAL_IMAGE_CREATE_INFO : NULL,
+				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = MXC_NODE_GBUFFER_FORMAT,
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -452,7 +462,7 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 		vkCreateTexture(&gbufferCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
 
 		// Depth is not shared over IPC.
-		if (locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == MID_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
+		if (locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
 			// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
 			VkCommandBuffer             cmd = midVkBeginImmediateTransferCommandBuffer();
 			const VkImageMemoryBarrier2 interProcessBarriers[] = {
@@ -467,7 +477,7 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 		}
 		const VkTextureCreateInfo depthCreateInfo = {
 			.debugName = "ImportedDepthFramebuffer",
-			.imageCreateInfo = {
+			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
@@ -478,7 +488,7 @@ void mxcCreateNodeFramebuffer(MidLocality locality, MxcNodeVkFramebufferTexture*
 				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-			.locality = MID_LOCALITY_CONTEXT,
+			.locality = VK_LOCALITY_CONTEXT,
 		};
 		vkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].depth);
 	}
@@ -599,17 +609,17 @@ static void InterprocessServerAcceptNodeConnection()
 	{
 		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
 			.debugName = "NodeFenceExport",
-			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
+			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 		};
 		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 		const MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
-			.locality = MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
+			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
 		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
 
-		mxcCreateNodeFramebuffer(MID_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->vkNodeFramebufferTextures);
+		mxcCreateNodeFramebuffer(VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->vkNodeFramebufferTextures);
 
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
@@ -852,14 +862,14 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	{
 		MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
 			.debugName = "CompositorTimelineSemaphoreImport",
-			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pImportParam->compTimelineHandle,
 		};
 		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompositorTimeline);
 		MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreImport",
-			.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pImportParam->nodeTimelineHandle,
 		};
@@ -883,9 +893,9 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			VkTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
-				.imageCreateInfo = {
+				.pImageCreateInfo = &(VkImageCreateInfo) {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
+					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
 					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -895,15 +905,15 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 				.importHandle = pImportParam->framebufferHandles[i].color,
 			};
 			vkCreateTexture(&colorCreateInfo, &pFramebufferTextures[i].color);
 			VkTextureCreateInfo normalCreateInfo = {
 				.debugName = "ImportedNormalFramebuffer",
-				.imageCreateInfo = {
+				.pImageCreateInfo = &(VkImageCreateInfo) {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
+					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
 					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -913,15 +923,15 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 				.importHandle = pImportParam->framebufferHandles[i].normal,
 			};
 			vkCreateTexture(&normalCreateInfo, &pFramebufferTextures[i].normal);
 			VkTextureCreateInfo gbufferCreateInfo = {
 				.debugName = "ImportedGBufferFramebuffer",
-				.imageCreateInfo = {
+				.pImageCreateInfo = &(VkImageCreateInfo) {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
+					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
 					.format = MXC_NODE_GBUFFER_FORMAT,
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -931,14 +941,14 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.usage = MXC_NODE_GBUFFER_USAGE,
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 				.importHandle = pImportParam->framebufferHandles[i].gbuffer,
 			};
 			vkCreateTexture(&gbufferCreateInfo, &pFramebufferTextures[i].gbuffer);
 			// Depth is not shared over IPC.
 			VkTextureCreateInfo depthCreateInfo = {
 				.debugName = "ImportedDepthFramebuffer",
-				.imageCreateInfo = {
+				.pImageCreateInfo = &(VkImageCreateInfo) {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
 					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
@@ -949,7 +959,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-				.locality = MID_LOCALITY_CONTEXT,
+				.locality = VK_LOCALITY_CONTEXT,
 			};
 			vkCreateTexture(&depthCreateInfo, &pFramebufferTextures[i].depth);
 		}

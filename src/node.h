@@ -144,6 +144,12 @@ typedef struct MxcNodeVkFramebufferTexture {
 	VkDedicatedTexture normal;
 	VkDedicatedTexture depth;
 	VkDedicatedTexture gbuffer;
+#if WIN32
+	VkWin32ExternalTexture colorExternal;
+	VkWin32ExternalTexture normalExternal;
+	VkWin32ExternalTexture depthExternal;
+	VkWin32ExternalTexture gbufferExternal;
+#endif
 } MxcNodeVkFramebufferTexture;
 
 typedef unsigned int GLuint;
@@ -268,7 +274,7 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
-void mxcCreateNodeFramebuffer(const MidLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures);
+void mxcCreateNodeFramebuffer(const VkLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures);
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
 
