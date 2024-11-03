@@ -152,6 +152,7 @@ static void LogWin32Error(HRESULT err)
 #define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 #define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
+// I don't think I want this?
 #define VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM                        \
 	&(VkExternalMemoryImageCreateInfo)                                \
 	{                                                                 \
@@ -1766,11 +1767,52 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		case VK_FORMAT_R8G8B8A8_UNORM:
 			format = DXGI_FORMAT_R8G8B8A8_UNORM;
 			break;
+		case VK_FORMAT_B8G8R8A8_UNORM:
+			format = DXGI_FORMAT_B8G8R8A8_UNORM;
+			break;
 		case VK_FORMAT_R8G8B8A8_SRGB:
 			format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 			break;
+		case VK_FORMAT_B8G8R8A8_SRGB:
+			format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+			break;
+		case VK_FORMAT_R16G16B16A16_SFLOAT:
+			format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+			break;
+		case VK_FORMAT_R32G32B32A32_SFLOAT:
+			format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+			break;
+		case VK_FORMAT_R32G32_SFLOAT:
+			format = DXGI_FORMAT_R32G32_FLOAT;
+			break;
+		case VK_FORMAT_D32_SFLOAT:
+			format = DXGI_FORMAT_D32_FLOAT;
+			break;
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+			format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+			break;
+		case VK_FORMAT_D16_UNORM:
+			format = DXGI_FORMAT_D16_UNORM;
+			break;
+		case VK_FORMAT_R8_UNORM:
+			format = DXGI_FORMAT_R8_UNORM;
+			break;
+		case VK_FORMAT_R16_UNORM:
+			format = DXGI_FORMAT_R16_UNORM;
+			break;
+		case VK_FORMAT_R32_SFLOAT:
+			format = DXGI_FORMAT_R32_FLOAT;
+			break;
+		case VK_FORMAT_R8G8_UNORM:
+			format = DXGI_FORMAT_R8G8_UNORM;
+			break;
+		case VK_FORMAT_R16G16_UNORM:
+			format = DXGI_FORMAT_R16G16_UNORM;
+			break;
 		default:
-			PANIC("Unknown vk to dx12 format conversion!");
+			format = DXGI_FORMAT_UNKNOWN;
+			fprintf(stderr, "Format unknown for DXGI: %s", string_VkFormat(pCreateInfo->format));
+			break;
 	}
 
 	D3D12_RESOURCE_DESC textureDesc = {
@@ -1783,10 +1825,14 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.Format = format,
 		.SampleDesc.Count = pCreateInfo->samples,
 		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-		.Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS,
+		.Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
 	};
 	D3D12_HEAP_PROPERTIES heapProperties = {
 		.Type = D3D12_HEAP_TYPE_DEFAULT,
+		.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+		.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+		.CreationNodeMask = 1,
+		.VisibleNodeMask = 1,
 	};
 	DX_CHECK(ID3D12Device_CreateCommittedResource(
 		d3d12.device,
@@ -1830,6 +1876,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 			.samples = VK_SAMPLE_COUNT_1_BIT,
 			.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		},
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 	};
 	vkCreateTexture(&createInfo, pTexture);
 

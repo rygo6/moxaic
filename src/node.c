@@ -95,11 +95,12 @@ static int ReleaseNode(NodeHandle handle)
 			}
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
-			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory));
-				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory));
-				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory));
-			}
+			// we don't want to close local handle, only the duplicated handle
+//			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+//				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory));
+//				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory));
+//				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory));
+//			}
 			CLOSE_HANDLE(vkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline));
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
@@ -295,6 +296,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 //
 /// Node Render
+// Do I want this?
 static const VkImageUsageFlags NODE_PASS_USAGES[] = {
 	[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -302,7 +304,7 @@ static const VkImageUsageFlags NODE_PASS_USAGES[] = {
 };
 void mxcCreateNodeRenderPass()
 {
-	const VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
+	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
 		.pAttachments = (VkAttachmentDescription2[]){
@@ -396,40 +398,53 @@ void mxcCreateNodeRenderPass()
 	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &vk.context.nodeRenderPass));
 	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
 }
+
+//#define D3D11_NO_HELPERS
+//#define CINTERFACE
+//#define COBJMACROS
+//#define WIDL_C_INLINE_WRAPPERS
+//#include <d3d11_1.h>
+//#include <initguid.h>
+//#include <dxgi.h>
+//#include <dxgi1_4.h>
+
 void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
 {
 	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-
-		VkImageCreateInfo colorCreateInfo = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = &(VkExternalMemoryImageCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-				.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
-			},
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
-			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-			.mipLevels = 1,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
-		};
-		vkWin32CreateExternalTexture(&colorCreateInfo, &pNodeFramebufferTextures[i].colorExternal);
-
-		VkTextureCreateInfo colorTextureCreateInfo = {
-			.debugName = "ExportedColorFramebuffer",
-			.pImageCreateInfo = &colorCreateInfo,
-			.importHandle = pNodeFramebufferTextures[i].colorExternal.handle,
-			.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-		};
-		vkCreateTexture(&colorTextureCreateInfo, &pNodeFramebufferTextures[i].color);
-
-		VkTextureCreateInfo normalCreateInfo = {
-			.debugName = "ExportedNormalFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo) {
+		{
+			VkImageCreateInfo info = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+				.pNext = &(VkExternalMemoryImageCreateInfo){
+					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				},
+				.imageType = VK_IMAGE_TYPE_2D,
+				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+				.mipLevels = 1,
+				.arrayLayers = 1,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+			};
+			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[i].colorExternal);
+			VkTextureCreateInfo textureInfo = {
+				.debugName = "ExportedColorFramebuffer",
+				.pImageCreateInfo = &info,
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.importHandle = pNodeFramebufferTextures[i].colorExternal.handle,
+				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+			};
+			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[i].color);
+		}
+
+		{
+			VkImageCreateInfo info = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+				.pNext = &(VkExternalMemoryImageCreateInfo){
+					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				},
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -437,17 +452,26 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
-			},
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.locality = locality,
-		};
-		vkCreateTexture(&normalCreateInfo, &pNodeFramebufferTextures[i].normal);
+			};
+			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[i].normalExternal);
+			VkTextureCreateInfo textureInfo = {
+				.debugName = "ExportedNormalFramebuffer",
+				.pImageCreateInfo = &info,
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.importHandle = pNodeFramebufferTextures[i].normalExternal.handle,
+				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+			};
+			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[i].normal);
+		}
 
-		VkTextureCreateInfo gbufferCreateInfo = {
-			.debugName = "ExportedGBufferFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo) {
+		{
+			VkImageCreateInfo info = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+				.pNext = &(VkExternalMemoryImageCreateInfo){
+					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				},
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = MXC_NODE_GBUFFER_FORMAT,
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
@@ -455,11 +479,18 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.usage = MXC_NODE_GBUFFER_USAGE,
-			},
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.locality = locality,
-		};
-		vkCreateTexture(&gbufferCreateInfo, &pNodeFramebufferTextures[i].gbuffer);
+			};
+			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[i].gbufferExternal);
+			VkTextureCreateInfo textureInfo = {
+				.debugName = "ExportedGBufferFramebuffer",
+				.pImageCreateInfo = &info,
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.importHandle = pNodeFramebufferTextures[i].gbufferExternal.handle,
+				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+			};
+			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[i].gbuffer);
+		}
 
 		// Depth is not shared over IPC.
 		if (locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
@@ -475,7 +506,7 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 			midVkEndImmediateTransferCommandBuffer(cmd);
 			continue;
 		}
-		const VkTextureCreateInfo depthCreateInfo = {
+		VkTextureCreateInfo depthCreateInfo = {
 			.debugName = "ImportedDepthFramebuffer",
 			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -492,6 +523,49 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 		};
 		vkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].depth);
 	}
+
+	// test code to ensure it imports into dx11
+//	{
+//		IDXGIFactory1* factory1 = NULL;
+//		DX_CHECK(CreateDXGIFactory1(&IID_IDXGIFactory, (void**)&factory1));
+//
+//		IDXGIAdapter* adapter = NULL;
+//		for (UINT i = 0; IDXGIFactory1_EnumAdapters(factory1, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+//			DXGI_ADAPTER_DESC desc;
+//			DX_CHECK(IDXGIAdapter_GetDesc(adapter, &desc));
+//			wprintf(L"DX11 Adapter %d Name: %ls LUID: %ld:%lu\n",
+//					i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
+//
+//			ID3D11Device*        device;
+//			ID3D11DeviceContext* context;
+//			D3D_FEATURE_LEVEL    featureLevel;
+//			DX_CHECK(D3D11CreateDevice(
+//				adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, D3D11_CREATE_DEVICE_DEBUG,
+//				(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
+//				&device, &featureLevel, &context));
+//			printf("XR D3D11 Device: %p\n", device);
+//			if (device == NULL) {
+//				fprintf(stderr, "Mid D3D11 Device Invalid.\n");
+//			}
+//
+//			ID3D11Device1* device1;
+//			DX_CHECK(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&device1));
+//			printf("XR D3D11 Device1: %p\n", device1);
+//			if (device1 == NULL) {
+//				fprintf(stderr, "XR D3D11 Device Invalid.\n");
+//			}
+//
+//			printf("got shared handle %p\n", pNodeFramebufferTextures[0].colorExternal.handle);
+//			ID3D11Texture2D* importedResource = NULL;
+//			DX_CHECK(ID3D11Device1_OpenSharedResource1(device1, pNodeFramebufferTextures[0].colorExternal.handle, &IID_ID3D11Texture2D, (void**)&importedResource));
+//			printf("imported texture %p\n", importedResource);
+//
+//			break;
+//		}
+//
+//		IDXGIAdapter_Release(adapter);
+//		IDXGIFactory1_Release(factory1);
+//	}
 }
 
 //
@@ -624,17 +698,17 @@ static void InterprocessServerAcceptNodeConnection()
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
 			WIN32_CHECK(DuplicateHandle(
-						  currentHandle, vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].color.memory),
+						  currentHandle, pNodeContext->vkNodeFramebufferTextures[i].colorExternal.handle,
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].color,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate glColor handle fail");
 			WIN32_CHECK(DuplicateHandle(
-						  currentHandle, vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory),
+						  currentHandle, pNodeContext->vkNodeFramebufferTextures[i].normalExternal.handle,
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].normal,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate normal handle fail.");
 			WIN32_CHECK(DuplicateHandle(
-						  currentHandle, vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory),
+						  currentHandle, pNodeContext->vkNodeFramebufferTextures[i].gbufferExternal.handle,
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate gbuffer handle fail.");
@@ -906,6 +980,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				.importHandle = pImportParam->framebufferHandles[i].color,
 			};
 			vkCreateTexture(&colorCreateInfo, &pFramebufferTextures[i].color);
@@ -924,6 +999,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				.importHandle = pImportParam->framebufferHandles[i].normal,
 			};
 			vkCreateTexture(&normalCreateInfo, &pFramebufferTextures[i].normal);
@@ -942,6 +1018,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				.importHandle = pImportParam->framebufferHandles[i].gbuffer,
 			};
 			vkCreateTexture(&gbufferCreateInfo, &pFramebufferTextures[i].gbuffer);
