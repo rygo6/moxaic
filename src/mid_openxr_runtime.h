@@ -191,7 +191,10 @@ typedef struct Container {
 #define ClaimHandle(_container, _pValue) XR_CHECK(_ClaimHandle((Container*)&_container, sizeof(_container.data[0]), COUNT(_container.data), (void**)&_pValue))
 static XrResult _ClaimHandle(Container* pContainer, int stride, int capacity, void** ppValue)
 {
-	if (pContainer->count >= capacity) return XR_ERROR_LIMIT_REACHED;
+	if (pContainer->count >= capacity) {
+		fprintf(stderr, "XR_ERROR_LIMIT_REACHED");
+		return XR_ERROR_LIMIT_REACHED;
+	}
 	const uint32_t handle = pContainer->count++;
 	*ppValue = &pContainer->data + (handle * stride);
 	return XR_SUCCESS;
@@ -220,24 +223,24 @@ typedef struct InteractionProfile {
 } InteractionProfile;
 CONTAINER_HASHED(InteractionProfile, 16)
 
-#define MIDXR_MAX_ACTIONS 16
+#define XR_MAX_ACTIONS 64
 typedef Binding* XrBinding;
-CONTAINER(XrBinding, MIDXR_MAX_ACTIONS)
+CONTAINER(XrBinding, XR_MAX_ACTIONS)
 
-#define MIDXR_MAX_SUBACTION_PATHS 2
+#define XR_MAX_SUBACTION_PATHS 2
 typedef struct Action {
 	XrActionSet        actionSet;
 	uint32_t           countSubactionPaths;
-	XrBindingContainer subactionBindings[MIDXR_MAX_SUBACTION_PATHS];
-	XrPath             subactionPaths[MIDXR_MAX_SUBACTION_PATHS];
+	XrBindingContainer subactionBindings[XR_MAX_SUBACTION_PATHS];
+	XrPath             subactionPaths[XR_MAX_SUBACTION_PATHS];
 	XrActionType       actionType;
 	char               actionName[XR_MAX_ACTION_NAME_SIZE];
 	char               localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
 } Action;
-CONTAINER(Action, MIDXR_MAX_ACTIONS)
+CONTAINER(Action, XR_MAX_ACTIONS)
 
-#define MIDXR_MAX_BOUND_ACTIONS 4
-CONTAINER(XrAction, MIDXR_MAX_BOUND_ACTIONS)
+//#define XR_MAX_BOUND_ACTIONS 4
+//CONTAINER(XrAction, XR_MAX_BOUND_ACTIONS)
 
 typedef struct SubactionState {
 	uint32_t lastSyncedPriority;
@@ -249,9 +252,9 @@ typedef struct SubactionState {
 	XrBool32 isActive;
 } SubactionState;
 typedef struct ActionState {
-	SubactionState subactionStates[MIDXR_MAX_SUBACTION_PATHS];
+	SubactionState subactionStates[XR_MAX_SUBACTION_PATHS];
 } ActionState;
-CONTAINER(ActionState, MIDXR_MAX_ACTIONS)
+CONTAINER(ActionState, XR_MAX_ACTIONS)
 
 typedef struct ActionSetState {
 	ActionStateContainer actionStates;
@@ -462,14 +465,34 @@ typedef struct BindingDefinition {
 	int (*func)(void*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
-static XrResult InitStandardBindings(XrInstance instance)
+static XrResult InitBinding(XrInstance instance, const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
 {
 	Instance* pInstance = (Instance*)instance;
 
-	{
-#define OCULUS_INTERACTION_PROFILE       "/interaction_profiles/oculus/touch_controller"
+	XrPath bindingSetPath;
+	xrStringToPath(instance, interactionProfile, &bindingSetPath);
+	XrHash bindingSetHash = GetPathHash(&pInstance->paths, (const Path*)bindingSetPath);
+
+	InteractionProfile* pBindingSet;
+	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pBindingSet, bindingSetHash));
+
+	pBindingSet->interactionProfile = bindingSetPath;
+
+	for (int i = 0; i < bindingDefinitionCount; ++i) {
+		XrPath path;
+		xrStringToPath(instance, pBindingDefinitions[i].path, &path);
+		RegisterBinding(instance, &pBindingSet->bindings, (Path*)path, pBindingDefinitions[i].func);
+	}
+
+	return XR_SUCCESS;
+}
+
+static XrResult InitStandardBindings(XrInstance instance)
+{
 #define BINDING_DEFINITION(_func, _path) (int (*)(void*)) _func, _path
-		const BindingDefinition bindingDefinitions[] = {
+
+	{
+		BindingDefinition bindingDefinitions[] = {
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
 
@@ -492,25 +515,119 @@ static XrResult InitStandardBindings(XrInstance instance)
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
-#undef BINDING_DEFINITION
+		InitBinding(instance, "/interaction_profiles/oculus/touch_controller", COUNT(bindingDefinitions), bindingDefinitions);
+	}
 
-		XrPath bindingSetPath;
-		xrStringToPath(instance, OCULUS_INTERACTION_PROFILE, &bindingSetPath);
-		XrHash bindingSetHash = GetPathHash(&pInstance->paths, (const Path*)bindingSetPath);
+	{
+		BindingDefinition bindingDefinitions[] = {
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
 
-		InteractionProfile* pBindingSet;
-		XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pBindingSet, bindingSetHash));
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
 
-		pBindingSet->interactionProfile = bindingSetPath;
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
 
-		for (int i = 0; i < COUNT(bindingDefinitions); ++i) {
-			XrPath path;
-			xrStringToPath(instance, bindingDefinitions[i].path, &path);
-			RegisterBinding(instance, &pBindingSet->bindings, (Path*)path, bindingDefinitions[i].func);
-		}
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
+		};
+		InitBinding(instance, "/interaction_profiles/microsoft/motion_controller", COUNT(bindingDefinitions), bindingDefinitions);
+	}
+
+	{
+		BindingDefinition bindingDefinitions[] = {
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
+		};
+		InitBinding(instance, "/interaction_profiles/khr/simple_controller", COUNT(bindingDefinitions), bindingDefinitions);
+	}
+
+	{
+		BindingDefinition bindingDefinitions[] = {
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
+		};
+		InitBinding(instance, "/interaction_profiles/valve/index_controller", COUNT(bindingDefinitions), bindingDefinitions);
+	}
+
+	{
+		BindingDefinition bindingDefinitions[] = {
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
+
+			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
+			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
+		};
+		InitBinding(instance, "/interaction_profiles/htc/vive_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 	return XR_SUCCESS;
+#undef BINDING_DEFINITION
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateApiLayerProperties(
@@ -686,7 +803,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
 }
 
 static XrSessionState SessionState = XR_SESSION_STATE_UNKNOWN;
-static XrSessionState PendingSessionState = XR_SESSION_STATE_IDLE;
+static XrSessionState PendingSessionState = XR_SESSION_STATE_READY;
 
 XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	XrInstance         instance,
@@ -694,22 +811,25 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 {
 	LOG_METHOD(xrPollEvent);
 
+	Instance* pInstance = (Instance*)instance;
+
 	if (SessionState != PendingSessionState) {
-		// for debugging, this needs to be manually set elsewhere
-		if (PendingSessionState == XR_SESSION_STATE_IDLE)
-			PendingSessionState = XR_SESSION_STATE_READY;
 
 		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
 
 		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
+		pEventData->session = (XrSession)&pInstance->sessions.data[0];
 		pEventData->state = PendingSessionState;
+		pEventData->time = GetXrTime();
+
+		printf("Sending Session State: %d\n", PendingSessionState);
 
 		SessionState = PendingSessionState;
 
 		return XR_SUCCESS;
 	}
 
-	return XR_EVENT_UNAVAILABLE;
+	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(
@@ -1049,7 +1169,34 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetViewConfigurationProperties(
 	XrViewConfigurationProperties* configurationProperties)
 {
 	LOG_METHOD(xrGetViewConfigurationProperties);
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+
+	Instance* pInstance = (Instance*)instance;
+
+	switch (viewConfigurationType) {
+		default:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO\n");
+			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
+			configurationProperties->fovMutable = XR_TRUE;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO\n");
+			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+			configurationProperties->fovMutable = XR_TRUE;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
+			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET;
+			configurationProperties->fovMutable = XR_TRUE;
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
+			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT;
+			configurationProperties->fovMutable = XR_TRUE;
+			break;
+	}
+
+	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
@@ -1130,7 +1277,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    {
 			const int64_t swapFormats[] = {
-				VK_FORMAT_R8G8B8A8_SRGB,
+				VK_FORMAT_R8G8B8A8_UNORM,
+//				VK_FORMAT_R8G8B8A8_SRGB,
 			};
 			*formatCountOutput = COUNT(swapFormats);
 
@@ -1146,7 +1294,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 		}
 		case XR_GRAPHICS_API_D3D11_1:   {
 			const int64_t swapFormats[] = {
-				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+				DXGI_FORMAT_R8G8B8A8_UNORM,
+//				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 			};
 			*formatCountOutput = COUNT(swapFormats);
 
@@ -1200,7 +1349,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	midXrClaimFramebufferImages(sessionHandle, MIDXR_SWAP_COUNT, colorHandles);
 
 	switch (pInstance->graphicsApi) {
-		case XR_GRAPHICS_API_OPENGL:
+		case XR_GRAPHICS_API_OPENGL: {
 			printf("Creating OpenGL Swap");
 			assert(pSwapchain->format == GL_SRGB8_ALPHA8);
 #define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
@@ -1210,21 +1359,19 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color.gl[i].memObject, pSwapchain->color.gl[i].texture, colorHandles[i]);
-				printf("Imported gl swap texture: %d memObject: %d\n", pSwapchain->color.gl[i].texture, pSwapchain->color.gl[i].memObject);
+				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwapchain->color.gl[i].texture, pSwapchain->color.gl[i].memObject);
 			}
 			break;
-		case XR_GRAPHICS_API_D3D11_1:
+		}
+		case XR_GRAPHICS_API_D3D11_1: {
 			printf("Creating D3D11 Swap\n");
-			assert(pSwapchain->format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				printf("Importing d3d11 texture device: %p handle: %p texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i],  pSwapchain->color.d3d11[i]);
 				DX_CHECK(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
-				printf("Imported d3d11 swap texture: %p\n", pSwapchain->color.d3d11[i]);
+				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i], pSwapchain->color.d3d11[i]);
 			}
 			break;
+		}
 		case XR_GRAPHICS_API_VULKAN:
-			assert(pSwapchain->format == VK_FORMAT_R8G8B8A8_SRGB);
-//			assert(pSwapchain->format == VK_FORMAT_R8G8B8A8_UNORM);
 		default:
 			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
@@ -1238,7 +1385,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySwapchain(
 	XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1261,6 +1407,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 
 	switch (images[0].type) {
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
+			printf("Enumerating gl Swapchain Images\n");
 			XrSwapchainImageOpenGLKHR* pImage = (XrSwapchainImageOpenGLKHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
 				pImage[i].image = pSwapchain->color.gl[i].texture;
@@ -1268,6 +1415,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 			break;
 		}
 		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
+			printf("Enumerating d3d11 Swapchain Images\n");
 			XrSwapchainImageD3D11KHR* pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
 				pImage[i].texture = pSwapchain->color.d3d11[i];
@@ -1443,7 +1591,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 
 	Instance* pInstance = (Instance*)instance;
 
-	const int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
+	int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (int i = 0; i < pInstance->paths.count; ++i) {
 		if (pInstance->paths.hash[i] != pathHash)
 			continue;
@@ -1452,13 +1600,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 			return XR_ERROR_PATH_INVALID;
 		}
 		*path = (XrPath)&pInstance->paths.data[i];
+		printf("Path Handle Found: %d\n    %s\n", i, pInstance->paths.data[i].string);
 		return XR_SUCCESS;
 	}
 
 	Path* pPath;
 	XR_CHECK(ClaimPath(&pInstance->paths, &pPath, pathHash));
 	XrHandle pathHandle = GetHandle(pInstance->paths, pPath);
-	printf("Path handle claimed: %d\n", pathHandle);
+	printf("Path Handle Claimed: %d\n    %s\n", pathHandle, pathString);
 
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
@@ -1522,21 +1671,36 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 
 	ActionSet* pActionSet = (ActionSet*)actionSet;
 
-	if (pActionSet->attachedToSession != NULL)
+	if (pActionSet->attachedToSession != NULL) {
+		fprintf(stderr, "XR_ERROR_ACTIONSETS_ALREADY_ATTACHED");
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
-	if (createInfo->countSubactionPaths > MIDXR_MAX_SUBACTION_PATHS)
+	}
+	if (createInfo->countSubactionPaths > XR_MAX_SUBACTION_PATHS) {
+		fprintf(stderr, "XR_ERROR_PATH_COUNT_EXCEEDED");
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
+	}
 
 	Action* pAction;
 	ClaimHandle(pActionSet->Actions, pAction);
 
-	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
-	pAction->actionType = createInfo->actionType;
-	pAction->countSubactionPaths = createInfo->countSubactionPaths;
-	memcpy(&pAction->subactionPaths, createInfo->subactionPaths, pAction->countSubactionPaths * sizeof(XrPath));
-	strncpy((char*)&pAction->localizedActionName, (const char*)&createInfo->localizedActionName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
 	pAction->actionSet = actionSet;
+	pAction->countSubactionPaths = createInfo->countSubactionPaths;
+
+	memcpy(&pAction->subactionPaths, createInfo->subactionPaths, pAction->countSubactionPaths * sizeof(XrPath));
+	pAction->actionType = createInfo->actionType;
+	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
+	strncpy((char*)&pAction->localizedActionName, (const char*)&createInfo->localizedActionName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
+
 	*action = (XrAction)pAction;
+
+	printf("	actionName: %s\n", pAction->actionName);
+	printf("	localizedActionName %s\n", pAction->localizedActionName);
+	printf("	actionType: %d\n", pAction->actionType);
+	printf("	countSubactionPaths: %d\n", pAction->countSubactionPaths);
+	for (int i = 0; i < createInfo->countSubactionPaths; ++i) {
+		Path* pPath = (Path*)pAction->subactionPaths[i];
+		printf("		subactionPath: %s\n", pPath->string);
+	}
 
 	return XR_SUCCESS;
 }
