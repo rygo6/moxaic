@@ -315,10 +315,15 @@ CONTAINER(Swapchain, 4)
 #define MIDXR_MAX_SESSIONS 4
 typedef struct Session {
 	XrInstance              instance;
+
+	XrSessionState          sessionState;
+	XrSessionState          pendingSessionState;
+
 	XrTime                  lastPredictedDisplayTime;
-	Space                   referenceSpace;
-	SwapchainContainer      Swapchains;
+
+	SwapchainContainer      swapchains;
 	ActionSetStateContainer actionSetStates;
+	Space                   referenceSpace;
 
 	XrViewConfigurationType primaryViewConfigurationType;
 	union {
@@ -332,6 +337,11 @@ CONTAINER(Session, MIDXR_MAX_SESSIONS)
 
 #define MIDXR_MAX_INSTANCES 2
 typedef struct Instance {
+// probably need this
+//	uint8_t stateQueueStart;
+//	uint8_t stateQeueEnd;
+//	uint8_t stateQueue[256];
+
 	char                        applicationName[XR_MAX_APPLICATION_NAME_SIZE];
 	XrSystemId                  systemId;
 	XrFormFactor                systemFormFactor;
@@ -802,31 +812,36 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
 	return XR_SUCCESS;
 }
 
-static XrSessionState SessionState = XR_SESSION_STATE_UNKNOWN;
-static XrSessionState PendingSessionState = XR_SESSION_STATE_READY;
-
 XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	XrInstance         instance,
 	XrEventDataBuffer* eventData)
 {
-	LOG_METHOD(xrPollEvent);
+//	LOG_METHOD(xrPollEvent);
 
-	Instance* pInstance = (Instance*)instance;
+	Instance*         pInstance = (Instance*)instance;
+	SessionContainer* pSessions = (SessionContainer*)&pInstance->sessions;
 
-	if (SessionState != PendingSessionState) {
+	for (int i = 0; i < pSessions->count; ++i) {
 
-		eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+		if (pSessions->data[i].sessionState != pSessions->data[i].pendingSessionState) {
 
-		XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
-		pEventData->session = (XrSession)&pInstance->sessions.data[0];
-		pEventData->state = PendingSessionState;
-		pEventData->time = GetXrTime();
+			eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
 
-		printf("Sending Session State: %d\n", PendingSessionState);
+			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
+			pEventData->session = (XrSession)&pInstance->sessions.data[0];
+			pEventData->state = pSessions->data[i].pendingSessionState;
+			pEventData->time = GetXrTime();
 
-		SessionState = PendingSessionState;
+			printf("xrPollEvent Sending Session State: %d\n", pSessions->data[i].pendingSessionState);
 
-		return XR_SUCCESS;
+			pSessions->data[i].sessionState = pSessions->data[i].pendingSessionState;
+
+			if (pSessions->data[i].sessionState == XR_SESSION_STATE_IDLE) {
+				pSessions->data[i].pendingSessionState = XR_SESSION_STATE_READY;
+			}
+
+			return XR_SUCCESS;
+		}
 	}
 
 	return XR_SUCCESS;
@@ -865,21 +880,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 
 	switch (getInfo->formFactor){
 		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
+			printf("XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY\n");
 			pInstance->systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 			pInstance->systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
 			*systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
-			break;
+			return XR_SUCCESS;
 		case XR_FORM_FACTOR_HANDHELD_DISPLAY:
+			printf("XR_FORM_FACTOR_HANDHELD_DISPLAY\n");
 			pInstance->systemFormFactor = XR_FORM_FACTOR_HANDHELD_DISPLAY;
 			pInstance->systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
 			*systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
-			break;
+			return XR_SUCCESS;
 		default:
+			printf("XR_ERROR_FORM_FACTOR_UNSUPPORTED\n");
 			*systemId = XR_NULL_SYSTEM_ID;
 			return XR_ERROR_FORM_FACTOR_UNSUPPORTED;
 	}
-
-	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
@@ -975,6 +991,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	Session* pClaimedSession;
 	ClaimHandle(pInstance->sessions, pClaimedSession);
 	pClaimedSession->instance = instance;
+	pClaimedSession->sessionState = XR_SESSION_STATE_UNKNOWN;
+	pClaimedSession->pendingSessionState = XR_SESSION_STATE_IDLE;
 
 	XrHandle claimedHandle = GetHandle(pInstance->sessions, pClaimedSession);
 
@@ -1041,7 +1059,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
 
 	Session* pSession = (Session*)session;
 
-	const XrReferenceSpaceType supportedSpaces[] = {
+	XrReferenceSpaceType supportedSpaces[] = {
 		XR_REFERENCE_SPACE_TYPE_VIEW,
 		XR_REFERENCE_SPACE_TYPE_LOCAL,
 		XR_REFERENCE_SPACE_TYPE_STAGE,
@@ -1090,6 +1108,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 	Session* pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
+
+	switch (referenceSpaceType) {
+
+		case XR_REFERENCE_SPACE_TYPE_VIEW:
+			printf("XR_REFERENCE_SPACE_TYPE_VIEW\n");
+			break;
+		case XR_REFERENCE_SPACE_TYPE_LOCAL:
+			printf("XR_REFERENCE_SPACE_TYPE_LOCAL\n");
+			break;
+		case XR_REFERENCE_SPACE_TYPE_STAGE:
+			printf("XR_REFERENCE_SPACE_TYPE_STAGE\n");
+			break;
+		default:
+			fprintf(stderr, "XR_ERROR_REFERENCE_SPACE_UNSUPPORTED\n");
+			return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
+	}
 
 	midXrGetReferenceSpaceBounds(sessionHandle, bounds);
 
@@ -1329,7 +1363,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	Swapchain* pSwapchain;
-	ClaimHandle(pSession->Swapchains, pSwapchain);
+	ClaimHandle(pSession->swapchains, pSwapchain);
 
 	pSwapchain->session = session;
 
@@ -1473,7 +1507,18 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	Session* pSession = (Session*)session;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 
-	printf("Session ViewConfigurationType: %d\n", beginInfo->primaryViewConfigurationType);
+	pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+
+	printf("Session ViewConfiguration: %d\n", beginInfo->primaryViewConfigurationType);
+
+	if (beginInfo->next != NULL) {
+		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
+		assert(secondBeginInfo->type == XR_TYPE_SECONDARY_VIEW_CONFIGURATION_SESSION_BEGIN_INFO_MSFT);
+		assert(secondBeginInfo->next == NULL);
+		for (int i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
+			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
+		}
+	}
 
 	return XR_SUCCESS;
 }
