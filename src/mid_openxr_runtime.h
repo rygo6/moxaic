@@ -146,101 +146,119 @@ typedef struct XrSpaceBounds {
 			return result;                     \
 		}                                      \
 	})
-#define CONTAINER(_type, _capacity)                             \
-	typedef struct __attribute((aligned(4))) _type##Container { \
-		uint32_t count;                                         \
-		_type    data[_capacity];                               \
-	} _type##Container;
 
-#define CONTAINER_HASHED(_type, _capacity)                                                            \
-	typedef struct _type##Container {                                                                 \
-		uint32_t count;                                                                               \
-		_type    data[_capacity];                                                                     \
-		XrHash   hash[_capacity];                                                                     \
-	} _type##Container;                                                                               \
-	static XrResult Claim##_type(_type##Container* p##_type##s, _type** pp##_type, XrHash hash)       \
-	{                                                                                                 \
-		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;            \
-		const uint32_t handle = p##_type##s->count++;                                                 \
-		p##_type##s->hash[handle] = hash;                                                             \
-		*pp##_type = &p##_type##s->data[handle];                                                      \
-		return XR_SUCCESS;                                                                            \
-	}                                                                                                 \
-	static inline XrHash Get##_type##Hash(const _type##Container* p##_type##s, const _type* p##_type) \
-	{                                                                                                 \
-		const int handle = p##_type - p##_type##s->data;                                              \
-		return p##_type##s->hash[handle];                                                             \
-	}                                                                                                 \
-	static inline _type* Get##_type##ByHash(_type##Container* p##_type##s, const XrHash hash)         \
-	{                                                                                                 \
-		for (int i = 0; i < p##_type##s->count; ++i) {                                                \
-			if (p##_type##s->hash[i] == hash)                                                         \
-				return &p##_type##s->data[i];                                                         \
-		}                                                                                             \
-		return NULL;                                                                                  \
+#define POOL(_type, _capacity)                             \
+	typedef struct __attribute((aligned(4))) _type##Pool { \
+		uint32_t count;                                    \
+		_type    data[_capacity];                          \
+	} _type##Pool;
+#define POOL_HASHED(_type, _capacity)                                                            \
+	typedef struct _type##Pool {                                                                 \
+		uint32_t count;                                                                          \
+		_type    data[_capacity];                                                                \
+		XrHash   hash[_capacity];                                                                \
+	} _type##Pool;                                                                               \
+	static XrResult Claim##_type(_type##Pool* p##_type##s, _type** pp##_type, XrHash hash)       \
+	{                                                                                            \
+		if (p##_type##s->count >= COUNT(p##_type##s->data)) return XR_ERROR_LIMIT_REACHED;       \
+		const uint32_t handle = p##_type##s->count++;                                            \
+		p##_type##s->hash[handle] = hash;                                                        \
+		*pp##_type = &p##_type##s->data[handle];                                                 \
+		return XR_SUCCESS;                                                                       \
+	}                                                                                            \
+	static inline XrHash Get##_type##Hash(const _type##Pool* p##_type##s, const _type* p##_type) \
+	{                                                                                            \
+		const int handle = p##_type - p##_type##s->data;                                         \
+		return p##_type##s->hash[handle];                                                        \
+	}                                                                                            \
+	static inline _type* Get##_type##ByHash(_type##Pool* p##_type##s, const XrHash hash)         \
+	{                                                                                            \
+		for (int i = 0; i < p##_type##s->count; ++i) {                                           \
+			if (p##_type##s->hash[i] == hash)                                                    \
+				return &p##_type##s->data[i];                                                    \
+		}                                                                                        \
+		return NULL;                                                                             \
 	}
 
-// ya we want to switch to do this below rather than the above macro monstrosities
-typedef struct Container {
+// We are returning pointers, not handles, and treating XrHandles as pointers
+// because when they come back from the application they immediately reference their given
+// data, which can be used as an entry point into the rest of the data structure. Also, the
+// XrHandles passed over OpenXR have to be 64-bit anyways, so we can't really save much with handles.
+
+
+// having doubt about all the below being better than macros?
+typedef struct Pool {
 	uint32_t count;
 	__attribute((aligned(8)))
-	// could maybe switch this to be handles in larger pool
 	uint8_t data;
-} Container;
-
-// maybe this should return the handle?
-#define ClaimHandle(_container, _pValue) XR_CHECK(_ClaimHandle((Container*)&_container, sizeof(_container.data[0]), COUNT(_container.data), (void**)&_pValue))
-static XrResult _ClaimHandle(Container* pContainer, int stride, int capacity, void** ppValue)
+} Pool;
+#define ClaimHandleHashed(_pool, _pValue, _hash) XR_CHECK(_ClaimHandleHashed((Pool*)&_pool, sizeof(_pool.data[0]), COUNT(_pool.data), (void**)&_pValue, _hash))
+static XrResult _ClaimHandleHashed(Pool* pPool, int stride, int capacity, void** ppValue, XrHash _hash)
 {
-	if (pContainer->count >= capacity) {
+	if (pPool->count >= capacity) {
 		fprintf(stderr, "XR_ERROR_LIMIT_REACHED");
 		return XR_ERROR_LIMIT_REACHED;
 	}
-	const uint32_t handle = pContainer->count++;
-	*ppValue = &pContainer->data + (handle * stride);
+	const uint32_t handle = pPool->count++;
+	*ppValue = &pPool->data + (handle * stride);
+	XrHash* pHashStart = (XrHash*)(&pPool->data + (capacity * stride));
+	XrHash* pHash = pHashStart + (handle * sizeof(XrHash));
+	*pHash = _hash;
 	return XR_SUCCESS;
 }
-#define GetHandle(_container, _pValue) _GetHandle((Container*)&_container, sizeof(_container.data[0]), _pValue)
-static XrHandle _GetHandle(const Container* pContainer, int stride, const void* pValue)
+#define ClaimHandle(_pool, _pValue) XR_CHECK(_ClaimHandle((Pool*)&_pool, sizeof(_pool.data[0]), COUNT(_pool.data), (void**)&_pValue))
+static XrResult _ClaimHandle(Pool* pPool, int stride, int capacity, void** ppValue)
 {
-	return (XrHandle)((pValue - (void*)&pContainer->data) / stride);
+	if (pPool->count >= capacity) {
+		fprintf(stderr, "XR_ERROR_LIMIT_REACHED");
+		return XR_ERROR_LIMIT_REACHED;
+	}
+	uint32_t handle = pPool->count++;
+	*ppValue = &pPool->data + (handle * stride);
+	return XR_SUCCESS;
 }
+#define GetHandle(_pool, _pValue) _GetHandle((Pool*)&_pool, sizeof(_pool.data[0]), _pValue)
+static XrHandle _GetHandle(const Pool* pPool, int stride, const void* pValue)
+{
+	return (XrHandle)((pValue - (void*)&pPool->data) / stride);
+}
+
 
 #define MIDXR_MAX_PATHS 128
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
-CONTAINER_HASHED(Path, MIDXR_MAX_PATHS)
+POOL_HASHED(Path, MIDXR_MAX_PATHS)
 
 typedef struct Binding {
 	XrPath path;
 	int (*func)(void*);
 } Binding;
-CONTAINER_HASHED(Binding, 16)
+POOL_HASHED(Binding, 16)
 
 typedef struct InteractionProfile {
-	XrPath           path;
-	BindingContainer bindings;
+	XrPath      path;
+	BindingPool bindings;
 } InteractionProfile;
-CONTAINER_HASHED(InteractionProfile, 16)
+POOL_HASHED(InteractionProfile, 16)
 
 #define XR_MAX_ACTIONS 64
 typedef Binding* XrBinding;
-CONTAINER(XrBinding, XR_MAX_ACTIONS)
+POOL(XrBinding, XR_MAX_ACTIONS)
 
 typedef InteractionProfile* XrInteractionProfile;
 
 #define XR_MAX_SUBACTION_PATHS 2
 typedef struct Action {
-	XrActionSet        actionSet;
-	uint32_t           countSubactionPaths;
-	XrBindingContainer subactionBindings[XR_MAX_SUBACTION_PATHS];
-	XrPath             subactionPaths[XR_MAX_SUBACTION_PATHS];
-	XrActionType       actionType;
-	char               actionName[XR_MAX_ACTION_NAME_SIZE];
-	char               localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
+	XrActionSet   actionSet;
+	uint32_t      countSubactionPaths;
+	XrBindingPool subactionBindings[XR_MAX_SUBACTION_PATHS];
+	XrPath        subactionPaths[XR_MAX_SUBACTION_PATHS];
+	XrActionType  actionType;
+	char          actionName[XR_MAX_ACTION_NAME_SIZE];
+	char          localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
 } Action;
-CONTAINER(Action, XR_MAX_ACTIONS)
+POOL(Action, XR_MAX_ACTIONS)
 
 //#define XR_MAX_BOUND_ACTIONS 4
 //CONTAINER(XrAction, XR_MAX_BOUND_ACTIONS)
@@ -257,28 +275,28 @@ typedef struct SubactionState {
 typedef struct ActionState {
 	SubactionState subactionStates[XR_MAX_SUBACTION_PATHS];
 } ActionState;
-CONTAINER(ActionState, XR_MAX_ACTIONS)
+POOL(ActionState, XR_MAX_ACTIONS)
 
 typedef struct ActionSetState {
-	ActionStateContainer actionStates;
-	XrActionSet          actionSet;
+	ActionStatePool actionStates;
+	XrActionSet     actionSet;
 } ActionSetState;
-CONTAINER_HASHED(ActionSetState, 4)
+POOL_HASHED(ActionSetState, 4)
 
 typedef struct ActionSet {
-	char            actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
-	uint32_t        priority;
-	XrSession       attachedToSession;
-	ActionContainer Actions;
+	char       actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
+	uint32_t   priority;
+	XrSession  attachedToSession;
+	ActionPool Actions;
 } ActionSet;
-CONTAINER_HASHED(ActionSet, 4)
+POOL_HASHED(ActionSet, 4)
 
 #define XR_MAX_SPACE_COUNT 4
 typedef struct Space {
 	XrReferenceSpaceType referenceSpaceType;
 	XrPosef              poseInReferenceSpace;
 } Space;
-CONTAINER(Space, XR_MAX_SPACE_COUNT)
+POOL(Space, XR_MAX_SPACE_COUNT)
 
 #define MIDXR_SWAP_COUNT 2
 typedef struct Swapchain {
@@ -303,7 +321,7 @@ typedef struct Swapchain {
 	uint32_t              arraySize;
 	uint32_t              mipCount;
 } Swapchain;
-CONTAINER(Swapchain, 4)
+POOL(Swapchain, 4)
 
 //typedef struct XrGlTexture {
 //	GLuint memObject;
@@ -329,12 +347,12 @@ typedef struct Session {
 	XrInteractionProfile activeInteractionProfile;
 	XrInteractionProfile pendingInteractionProfile;
 
-	SpaceContainer referenceSpaces;
+	SpacePool referenceSpaces;
 
 	XrTime lastPredictedDisplayTime;
 
-	SwapchainContainer      swapchains;
-	ActionSetStateContainer actionSetStates;
+	SwapchainPool      swapchains;
+	ActionSetStatePool actionSetStates;
 
 	XrViewConfigurationType primaryViewConfigurationType;
 	union {
@@ -344,7 +362,7 @@ typedef struct Session {
 	} binding;
 
 } Session;
-CONTAINER(Session, MIDXR_MAX_SESSIONS)
+POOL(Session, MIDXR_MAX_SESSIONS)
 
 #define MIDXR_MAX_INSTANCES 2
 typedef struct Instance {
@@ -353,13 +371,13 @@ typedef struct Instance {
 	//	uint8_t stateQeueEnd;
 	//	uint8_t stateQueue[256];
 
-	char                        applicationName[XR_MAX_APPLICATION_NAME_SIZE];
-	XrSystemId                  systemId;
-	XrFormFactor                systemFormFactor;
-	SessionContainer            sessions;
-	ActionSetContainer          actionSets;
-	InteractionProfileContainer interactionProfiles;
-	PathContainer               paths;
+	char                   applicationName[XR_MAX_APPLICATION_NAME_SIZE];
+	XrSystemId             systemId;
+	XrFormFactor           systemFormFactor;
+	SessionPool            sessions;
+	ActionSetPool          actionSets;
+	InteractionProfilePool interactionProfiles;
+	PathPool               paths;
 
 	XrGraphicsApi graphicsApi;
 	union {
@@ -371,7 +389,7 @@ typedef struct Instance {
 	} graphics;
 
 } Instance;
-CONTAINER(Instance, MIDXR_MAX_INSTANCES)
+POOL(Instance, MIDXR_MAX_INSTANCES)
 // only 1 probably
 //static Instance instance;
 
@@ -415,7 +433,7 @@ static void LogWin32Error(HRESULT err)
 #endif
 
 
-static InstanceContainer instances;
+static InstancePool instances;
 
 //
 //// Mid OpenXR Utility
@@ -459,24 +477,25 @@ static int OculusRightClick(float* pValue)
 //
 //// Mid OpenXR Implementation
 static XrResult RegisterBinding(
-	XrInstance        instance,
-	BindingContainer* pBindings,
-	Path*             pPath,
+	XrInstance   instance,
+	InteractionProfile* pInteractionProfile,
+	Path*        pBindingPath,
 	int (*func)(void*))
 {
 	Instance* pInstance = (Instance*)instance;
 
-	int pathHash = GetPathHash(&pInstance->paths, pPath);
-	for (int i = 0; i < pBindings->count; ++i) {
-		if (GetPathHash(&pInstance->paths, (Path*)pBindings->data[i].path) == pathHash) {
-			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pPath->string, pathHash);
+	int bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
+	for (int i = 0; i < pInteractionProfile->bindings.count; ++i) {
+		if (GetPathHash(&pInstance->paths, (Path*)pInteractionProfile->bindings.data[i].path) == bindingPathHash) {
+			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
 			return XR_ERROR_PATH_INVALID;
 		}
 	}
 
 	Binding* pBinding;
-	ClaimBinding(pBindings, &pBinding, pathHash);
-	pBinding->path = (XrPath)pPath;
+//	ClaimBinding(pBindings, &pBinding, bindingPathHash);
+	ClaimHandleHashed(pInteractionProfile->bindings, pBinding, bindingPathHash);
+	pBinding->path = (XrPath)pBindingPath;
 	pBinding->func = func;
 
 	return XR_SUCCESS;
@@ -490,19 +509,20 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 {
 	Instance* pInstance = (Instance*)instance;
 
-	XrPath bindingSetPath;
-	xrStringToPath(instance, interactionProfile, &bindingSetPath);
-	XrHash bindingSetHash = GetPathHash(&pInstance->paths, (const Path*)bindingSetPath);
+	XrPath interactionProfilePath;
+	xrStringToPath(instance, interactionProfile, &interactionProfilePath);
+	XrHash interactionProfileHash = GetPathHash(&pInstance->paths, (const Path*)interactionProfilePath);
 
-	InteractionProfile* pBindingSet;
-	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pBindingSet, bindingSetHash));
+	InteractionProfile* pInteractionProfile;
+	ClaimHandleHashed(pInstance->interactionProfiles, pInteractionProfile, interactionProfileHash);
+//	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pInteractionProfile, interactionProfileHash));
 
-	pBindingSet->path = bindingSetPath;
+	pInteractionProfile->path = interactionProfilePath;
 
 	for (int i = 0; i < bindingDefinitionCount; ++i) {
-		XrPath path;
-		xrStringToPath(instance, pBindingDefinitions[i].path, &path);
-		RegisterBinding(instance, &pBindingSet->bindings, (Path*)path, pBindingDefinitions[i].func);
+		XrPath bindingPath;
+		xrStringToPath(instance, pBindingDefinitions[i].path, &bindingPath);
+		RegisterBinding(instance, pInteractionProfile, (Path*)bindingPath, pBindingDefinitions[i].func);
 	}
 
 	return XR_SUCCESS;
@@ -830,10 +850,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	XrInstance         instance,
 	XrEventDataBuffer* eventData)
 {
-//	LOG_METHOD(xrPollEvent);
+	//	LOG_METHOD(xrPollEvent);
 
-	Instance*         pInstance = (Instance*)instance;
-	SessionContainer* pSessions = (SessionContainer*)&pInstance->sessions;
+	Instance*    pInstance = (Instance*)instance;
+	SessionPool* pSessions = (SessionPool*)&pInstance->sessions;
 
 	for (int i = 0; i < pSessions->count; ++i) {
 		Session* pSession = &pSessions->data[i];
@@ -851,8 +871,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 
 			pSession->activeSessionState = pSession->pendingSessionState;
 
+			// force through states for debugging
 			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
 				pSession->pendingSessionState = XR_SESSION_STATE_READY;
+			}
+			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
+				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
 			}
 
 			return XR_SUCCESS;
@@ -887,7 +911,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			pSession->activeInteractionProfile = pSession->pendingInteractionProfile;
 
 			InteractionProfile* pActionInteractionProfile = (InteractionProfile*)pSession->activeInteractionProfile;
-			Path* pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
+			Path*               pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
 			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
 
 			return XR_SUCCESS;
@@ -1164,7 +1188,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	*space = (XrSpace)pSpace;
 
 	// auto switch to first created space
-	if (pSession->pendingReferenceSpaceHandle == XR_HANDLE_INVALID){
+	if (pSession->pendingReferenceSpaceHandle == XR_HANDLE_INVALID) {
 		pSession->pendingReferenceSpaceHandle = GetHandle(pSession->referenceSpaces, pSpace);
 	}
 
@@ -1590,7 +1614,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	Session* pSession = (Session*)session;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 
-	pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
+	pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
 
 	printf("Session ViewConfiguration: %d\n", beginInfo->primaryViewConfigurationType);
 
@@ -1866,18 +1890,18 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 {
 	LOG_METHOD(xrSuggestInteractionProfileBindings);
 
-	Instance* pInstance = (Instance*)instance;
-	Path*     pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
-	XrHash    interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
-	printf("Binding: %s\n", pInteractionProfilePath->string);
-	const XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
-
+	Instance*           pInstance = (Instance*)instance;
+	Path*               pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
+	XrHash              interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
 	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&pInstance->interactionProfiles, interactionProfilePathHash);
 	if (pInteractionProfile == NULL) {
 		fprintf(stderr, "Could not find interaction profile binding set! %s %d\n", pInteractionProfilePath->string);
 		return XR_ERROR_PATH_UNSUPPORTED;
 	}
 
+	printf("Binding: %s\n", pInteractionProfilePath->string);
+
+	const XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		Action*    pAction = (Action*)pSuggestedBindings[i].action;
 		ActionSet* pActionSet = (ActionSet*)pAction->actionSet;
@@ -1886,12 +1910,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	}
 
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		Action*    pBindingAction = (Action*)pSuggestedBindings[i].action;
+		Action* pBindingAction = (Action*)pSuggestedBindings[i].action;
+		Path*   pBindingPath = (Path*)pSuggestedBindings[i].binding;
+		// if the pointers became 32 bit int handle, I could just use that as a hash?
+		XrHash   bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
+		Binding* pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
+
 		ActionSet* pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
-		Path*      pBindingPath = (Path*)pSuggestedBindings[i].binding;
-		// this is extremely whack
-		XrHash     bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
-		Binding*   pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
 
 		if (pBindingAction->countSubactionPaths == 0) {
 			XrBinding* pActionBinding;
@@ -1965,7 +1990,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
 	Path* pPath = (Path*)topLevelUserPath;
 	printf("xrGetCurrentInteractionProfile %s\n", pPath->string);
 
-	Session* pSession = (Session*)session;
+	Session*            pSession = (Session*)session;
 	InteractionProfile* pInteractionProfile = pSession->activeInteractionProfile;
 	interactionProfile->interactionProfile = pInteractionProfile->path;
 
@@ -2069,16 +2094,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 			ActionState* pActionState = &pActionSetState->actionStates.data[actionIndex];
 
 			for (int subActionIndex = 0; subActionIndex < pAction->countSubactionPaths; ++subActionIndex) {
-				XrBindingContainer* pSubactionBindingContainer = &pAction->subactionBindings[subActionIndex];
-				SubactionState*     pSubactionState = &pActionState->subactionStates[subActionIndex];
+				XrBindingPool*  pSubactionBindingPool = &pAction->subactionBindings[subActionIndex];
+				SubactionState* pSubactionState = &pActionState->subactionStates[subActionIndex];
 
 				if (pSubactionState->lastSyncedPriority > pActionSet->priority &&
 					pSubactionState->lastChangeTime == currentTime)
 					continue;
 
 				const float lastState = pSubactionState->currentState;
-				for (int bindingIndex = 0; bindingIndex < pSubactionBindingContainer->count; ++bindingIndex) {
-					Binding* pBinding = (Binding*)pSubactionBindingContainer->data[bindingIndex];
+				for (int bindingIndex = 0; bindingIndex < pSubactionBindingPool->count; ++bindingIndex) {
+					Binding* pBinding = (Binding*)pSubactionBindingPool->data[bindingIndex];
 					pBinding->func(pActionState);
 					pSubactionState->lastSyncedPriority = pActionSet->priority;
 					pSubactionState->lastChangeTime = currentTime;
