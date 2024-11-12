@@ -206,15 +206,16 @@ static XrResult _ClaimHandleHashed(Pool* pPool, int stride, int capacity, void**
 	*pHash = _hash;
 	return XR_SUCCESS;
 }
-#define ClaimHandle(_pool, _pValue) XR_CHECK(_ClaimHandle((Pool*)&_pool, sizeof(_pool.data[0]), COUNT(_pool.data), (void**)&_pValue))
-static XrResult _ClaimHandle(Pool* pPool, int stride, int capacity, void** ppValue)
+#define ClaimHandle(_pool, _pValue) XR_CHECK(_ClaimHandle((void*)_pool.data, sizeof(_pool.data[0]), sizeof(_pool.data), &_pool.count, (void**)&_pValue))
+static XrResult _ClaimHandle(void* pData, int stride, int capacity, uint32_t* pCount, void** ppValue)
 {
-	if (pPool->count >= capacity) {
+	if (*pCount >= (capacity / stride)) {
 		fprintf(stderr, "XR_ERROR_LIMIT_REACHED");
 		return XR_ERROR_LIMIT_REACHED;
 	}
-	uint32_t handle = pPool->count++;
-	*ppValue = &pPool->data + (handle * stride);
+	uint32_t handle = *pCount;
+	*ppValue = pData + (handle * stride);
+	*pCount = *pCount + 1;
 	return XR_SUCCESS;
 }
 #define GetHandle(_pool, _pValue) _GetHandle((Pool*)&_pool, sizeof(_pool.data[0]), _pValue)
@@ -323,17 +324,6 @@ typedef struct Swapchain {
 } Swapchain;
 POOL(Swapchain, 4)
 
-//typedef struct XrGlTexture {
-//	GLuint memObject;
-//	GLuint texture;
-//} XrGlTexture;
-//typedef struct XrGlFramebufferTexture {
-//	MxcGlTexture color;
-//	MxcGlTexture normal;
-//	MxcGlTexture depth;
-//	MxcGlTexture gbuffer;
-//} XrGlFramebufferTexture;
-
 #define MIDXR_MAX_SESSIONS 4
 typedef struct Session {
 	XrInstance instance;
@@ -348,6 +338,7 @@ typedef struct Session {
 	XrInteractionProfile pendingInteractionProfile;
 
 	SpacePool referenceSpaces;
+	SpacePool actionSpaces;
 
 	XrTime lastPredictedDisplayTime;
 
@@ -406,16 +397,19 @@ POOL(Instance, MIDXR_MAX_INSTANCES)
 #define LOG_METHOD(_name)
 #endif
 
+//#define LOG_ERROR(_format, ...) fprintf(stderr, "Error!!! " _format, __VA_ARGS__);
+#define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__);
+
 #ifdef WIN32
 #ifndef MID_WIN32_DEBUG
 #define MID_WIN32_DEBUG
 static void LogWin32Error(HRESULT err)
 {
-	fprintf(stderr, "Win32 Error Code: 0x%08lX\n", err);
+	LOG_ERROR("Win32 Error Code: 0x%08lX\n", err);
 	char* errStr;
 	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-		fprintf(stderr, "%s\n", errStr);
+		LOG_ERROR("%s\n", errStr);
 		LocalFree(errStr);
 	}
 }
@@ -487,14 +481,14 @@ static XrResult RegisterBinding(
 	int bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
 	for (int i = 0; i < pInteractionProfile->bindings.count; ++i) {
 		if (GetPathHash(&pInstance->paths, (Path*)pInteractionProfile->bindings.data[i].path) == bindingPathHash) {
-			fprintf(stderr, "Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
+			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
 			return XR_ERROR_PATH_INVALID;
 		}
 	}
 
 	Binding* pBinding;
-//	ClaimBinding(pBindings, &pBinding, bindingPathHash);
-	ClaimHandleHashed(pInteractionProfile->bindings, pBinding, bindingPathHash);
+	ClaimBinding(&pInteractionProfile->bindings, &pBinding, bindingPathHash);
+//	ClaimHandleHashed(pInteractionProfile->bindings, pBinding, bindingPathHash);
 	pBinding->path = (XrPath)pBindingPath;
 	pBinding->func = func;
 
@@ -514,8 +508,8 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 	XrHash interactionProfileHash = GetPathHash(&pInstance->paths, (const Path*)interactionProfilePath);
 
 	InteractionProfile* pInteractionProfile;
-	ClaimHandleHashed(pInstance->interactionProfiles, pInteractionProfile, interactionProfileHash);
-//	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pInteractionProfile, interactionProfileHash));
+//	ClaimHandleHashed(pInstance->interactionProfiles, pInteractionProfile, interactionProfileHash);
+	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pInteractionProfile, interactionProfileHash));
 
 	pInteractionProfile->path = interactionProfilePath;
 
@@ -701,6 +695,26 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_D3D11_ENABLE_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_D3D11_enable_SPEC_VERSION,
 		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_local_floor_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_win32_appcontainer_compatible_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_MSFT_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
+			.extensionVersion = XR_MSFT_unbounded_reference_space_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
+		},
 	};
 
 	*propertyCountOutput = COUNT(extensionProperties);
@@ -830,7 +844,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyInstance(
 	XrInstance instance)
 {
 	LOG_METHOD(xrDestroyInstance);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyInstance\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyInstance\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -863,7 +877,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
 
 			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
-			pEventData->session = (XrSession)&pSession;
+			pEventData->session = (XrSession)pSession;
 			pEventData->state = pSession->pendingSessionState;
 			pEventData->time = GetXrTime();
 
@@ -887,7 +901,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			eventData->type = XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING;
 
 			XrEventDataReferenceSpaceChangePending* pEventData = (XrEventDataReferenceSpaceChangePending*)eventData;
-			pEventData->session = (XrSession)&pSession;
+			pEventData->session = (XrSession)pSession;
 			pEventData->referenceSpaceType = pSession->referenceSpaces.data[pSession->pendingReferenceSpaceHandle].referenceSpaceType;
 			pEventData->changeTime = GetXrTime();
 			pEventData->poseValid = XR_TRUE;
@@ -906,7 +920,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
 
 			XrEventDataInteractionProfileChanged* pEventData = (XrEventDataInteractionProfileChanged*)eventData;
-			pEventData->session = (XrSession)&pSession;
+			pEventData->session = (XrSession)pSession;
 
 			pSession->activeInteractionProfile = pSession->pendingInteractionProfile;
 
@@ -918,7 +932,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 		}
 	}
 
-	return XR_SUCCESS;
+	return XR_EVENT_UNAVAILABLE;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(
@@ -927,7 +941,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(
 	char       buffer[XR_MAX_RESULT_STRING_SIZE])
 {
 	LOG_METHOD(xrResultToString);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrResultToString\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrResultToString\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -937,8 +951,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStructureTypeToString(
 	char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
 {
 	LOG_METHOD(xrStructureTypeToString);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrStructureTypeToString\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrStructureTypeToString\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+static void PrintNextChain(XrBaseInStructure* nextProperties)
+{
+	while (nextProperties != NULL) {
+		printf("NextType: %d\n", nextProperties->type);
+		nextProperties = (XrBaseInStructure*)nextProperties->next;
+	}
 }
 
 #define XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID 1
@@ -949,10 +971,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	XrSystemId*            systemId)
 {
 	LOG_METHOD(xrGetSystem);
+	PrintNextChain((XrBaseInStructure*)getInfo->next);
 
 	Instance* pInstance = (Instance*)instance;
-
-	assert(getInfo->next == NULL);
 
 	switch (getInfo->formFactor) {
 		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
@@ -980,6 +1001,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 	XrSystemProperties* properties)
 {
 	LOG_METHOD(xrGetSystemProperties);
+	PrintNextChain((XrBaseInStructure*)properties->next);
 
 	switch (systemId) {
 		case XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID:
@@ -991,13 +1013,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 			properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
-
-			assert(properties->next == NULL);
-			XrBaseInStructure* nextProperties = (XrBaseInStructure*)properties->next;
-			while (nextProperties != NULL) {
-				printf("Next Properties: %d\n", nextProperties->type);
-				nextProperties = (XrBaseInStructure*)nextProperties->next;
-			}
 
 			break;
 		case XR_HANDHELD_DISPLAY_SYSTEM_ID:
@@ -1097,7 +1112,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			XrGraphicsBindingD3D11KHR binding = *(XrGraphicsBindingD3D11KHR*)createInfo->next;
 
 			if (binding.device == NULL) {
-				fprintf(stderr, "XR D3D11 Device Invalid.\n");
+				LOG_ERROR("XR D3D11 Device Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
@@ -1105,7 +1120,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			DX_CHECK(ID3D11Device_QueryInterface(binding.device, &IID_ID3D11Device1, (void**)&device1));
 			printf("XR D3D11 Device1: %p\n", device1);
 			if (device1 == NULL) {
-				fprintf(stderr, "XR D3D11 Device Invalid.\n");
+				LOG_ERROR("XR D3D11 Device Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
@@ -1131,7 +1146,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySession(
 	XrSession session)
 {
 	LOG_METHOD(xrDestroySession);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySession\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySession\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1174,13 +1189,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	const XrReferenceSpaceCreateInfo* createInfo,
 	XrSpace*                          space)
 {
-	LOG_METHOD(xrCreateReferenceSpace);
+	printf("xrCreateReferenceSpace %d\n", createInfo->referenceSpaceType);
 
 	Session* pSession = (Session*)session;
 
 	Space* pSpace;
 	ClaimHandle(pSession->referenceSpaces, pSpace);
-
 
 	pSpace->referenceSpaceType = createInfo->referenceSpaceType;
 	pSpace->poseInReferenceSpace = createInfo->poseInReferenceSpace;
@@ -1190,6 +1204,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	// auto switch to first created space
 	if (pSession->pendingReferenceSpaceHandle == XR_HANDLE_INVALID) {
 		pSession->pendingReferenceSpaceHandle = GetHandle(pSession->referenceSpaces, pSpace);
+		printf("Set pendingReferenceSpaceHandle %d\n", pSpace->referenceSpaceType);
 	}
 
 	return XR_SUCCESS;
@@ -1224,7 +1239,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 			printf("XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT\n");
 			break;
 		default:
-			fprintf(stderr, "XR_ERROR_REFERENCE_SPACE_UNSUPPORTED\n");
+			LOG_ERROR("XR_ERROR_REFERENCE_SPACE_UNSUPPORTED\n");
 			return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
 	}
 
@@ -1247,6 +1262,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
 	XrSpace*                       space)
 {
 	LOG_METHOD(xrCreateActionSpace);
+
+	Session* pSession = (Session*)session;
+
+	Space* actionSpace;
+	ClaimHandle(pSession->actionSpaces, actionSpace);
+
+	*space = (XrSpace)actionSpace;
+
 	return XR_SUCCESS;
 }
 
@@ -1264,7 +1287,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpace(
 	XrSpace space)
 {
 	LOG_METHOD(xrDestroySpace);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySpace\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySpace\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1355,11 +1378,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
 			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO\n");
-#ifdef XR_FORCE_STEREO_TO_MONO
-			*viewCountOutput = 1;
-#else
 			*viewCountOutput = 2;
-#endif
 			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
 			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
@@ -1396,65 +1415,46 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 
+#define TRANSFER_SWAP_FORMATS                     \
+	*formatCountOutput = COUNT(swapFormats);      \
+	if (formats == NULL)                          \
+		return XR_SUCCESS;                        \
+	if (formatCapacityInput < COUNT(swapFormats)) \
+		return XR_ERROR_SIZE_INSUFFICIENT;        \
+	for (int i = 0; i < COUNT(swapFormats); ++i)  \
+		formats[i] = swapFormats[i];
+
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
-			const int64_t swapFormats[] = {
+			int64_t swapFormats[] = {
 				GL_SRGB8_ALPHA8,
 				//				GL_SRGB8,
 			};
-			*formatCountOutput = COUNT(swapFormats);
-
-			if (formats == NULL)
-				return XR_SUCCESS;
-			if (formatCapacityInput < COUNT(swapFormats))
-				return XR_ERROR_SIZE_INSUFFICIENT;
-
-			for (int i = 0; i < COUNT(swapFormats); ++i)
-				formats[i] = swapFormats[i];
-
-			break;
+			TRANSFER_SWAP_FORMATS
+			return XR_SUCCESS;
 		}
-		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    {
-			const int64_t swapFormats[] = {
+			int64_t swapFormats[] = {
 				VK_FORMAT_R8G8B8A8_UNORM,
 				//				VK_FORMAT_R8G8B8A8_SRGB,
 			};
-			*formatCountOutput = COUNT(swapFormats);
-
-			if (formats == NULL)
-				return XR_SUCCESS;
-			if (formatCapacityInput < COUNT(swapFormats))
-				return XR_ERROR_SIZE_INSUFFICIENT;
-
-			for (int i = 0; i < COUNT(swapFormats); ++i)
-				formats[i] = swapFormats[i];
-
-			break;
+			TRANSFER_SWAP_FORMATS
+			return XR_SUCCESS;
 		}
 		case XR_GRAPHICS_API_D3D11_1: {
-			const int64_t swapFormats[] = {
+			int64_t swapFormats[] = {
 				DXGI_FORMAT_R8G8B8A8_UNORM,
 				//				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 			};
-			*formatCountOutput = COUNT(swapFormats);
-
-			if (formats == NULL)
-				return XR_SUCCESS;
-			if (formatCapacityInput < COUNT(swapFormats))
-				return XR_ERROR_SIZE_INSUFFICIENT;
-
-			for (int i = 0; i < COUNT(swapFormats); ++i)
-				formats[i] = swapFormats[i];
-
-			break;
+			TRANSFER_SWAP_FORMATS
+			return XR_SUCCESS;
 		}
 		default:
-			fprintf(stderr, "xrEnumerateSwapchainFormats Graphics API not supported.");
+			LOG_ERROR("xrEnumerateSwapchainFormats Graphics API not supported.");
 			return XR_ERROR_RUNTIME_FAILURE;
 	}
 
-	return XR_SUCCESS;
+#undef TRANSFER_SWAP_FORMATS
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
@@ -1525,7 +1525,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySwapchain(
 	XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySwapchain\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySwapchain\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1564,7 +1564,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 			break;
 		}
 		default:
-			fprintf(stderr, "Swap type not currently supported\n");
+			LOG_ERROR("Swap type not currently supported\n");
 			return XR_ERROR_HANDLE_INVALID;
 	}
 
@@ -1634,7 +1634,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndSession(
 	XrSession session)
 {
 	LOG_METHOD(xrEndSession);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrEndSession\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrEndSession\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1642,7 +1642,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrRequestExitSession(
 	XrSession session)
 {
 	LOG_METHOD(xrRequestExitSession);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrRequestExitSession\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrRequestExitSession\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1711,11 +1711,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 			*viewCountOutput = 1;
 			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-#ifdef XR_FORCE_STEREO_TO_MONO
-			*viewCountOutput = 1;
-#else
 			*viewCountOutput = 2;
-#endif
 			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
 			*viewCountOutput = 4;
@@ -1753,7 +1749,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 		if (pInstance->paths.hash[i] != pathHash)
 			continue;
 		if (strncmp(pInstance->paths.data[i].string, pathString, XR_MAX_PATH_LENGTH)) {
-			fprintf(stderr, "Path Hash Collision! %s | %s\n", pInstance->paths.data[i].string, pathString);
+			LOG_ERROR("Path Hash Collision! %s | %s\n", pInstance->paths.data[i].string, pathString);
 			return XR_ERROR_PATH_INVALID;
 		}
 		*path = (XrPath)&pInstance->paths.data[i];
@@ -1817,7 +1813,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyActionSet(
 	XrActionSet actionSet)
 {
 	LOG_METHOD(xrDestroyActionSet);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyActionSet\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyActionSet\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1831,11 +1827,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	ActionSet* pActionSet = (ActionSet*)actionSet;
 
 	if (pActionSet->attachedToSession != NULL) {
-		fprintf(stderr, "XR_ERROR_ACTIONSETS_ALREADY_ATTACHED");
+		LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED");
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
 	}
 	if (createInfo->countSubactionPaths > XR_MAX_SUBACTION_PATHS) {
-		fprintf(stderr, "XR_ERROR_PATH_COUNT_EXCEEDED");
+		LOG_ERROR("XR_ERROR_PATH_COUNT_EXCEEDED");
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
 	}
 
@@ -1868,7 +1864,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyAction(
 	XrAction action)
 {
 	LOG_METHOD(xrDestroyAction);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyAction\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyAction\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -1895,7 +1891,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	XrHash              interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
 	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&pInstance->interactionProfiles, interactionProfilePathHash);
 	if (pInteractionProfile == NULL) {
-		fprintf(stderr, "Could not find interaction profile binding set! %s %d\n", pInteractionProfilePath->string);
+		LOG_ERROR("Could not find interaction profile binding set! %s %d\n", pInteractionProfilePath->string);
 		return XR_ERROR_PATH_UNSUPPORTED;
 	}
 
@@ -2047,7 +2043,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 		}
 	}
 
-	fprintf(stderr, "%s subaction on %s not bound l\n", pGetActionSubactionPath->string, pGetAction->actionName);
+	LOG_ERROR("%s subaction on %s not bound l\n", pGetActionSubactionPath->string, pGetAction->actionName);
 	return XR_EVENT_UNAVAILABLE;
 }
 
@@ -2057,7 +2053,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(
 	XrActionStateVector2f*      state)
 {
 	LOG_METHOD(xrGetActionStateVector2f);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrGetActionStateVector2f\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetActionStateVector2f\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2067,7 +2063,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(
 	XrActionStatePose*          state)
 {
 	LOG_METHOD(xrGetActionStatePose);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrGetActionStatePose\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetActionStatePose\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2125,7 +2121,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateBoundSourcesForAction(
 	XrPath*                                     sources)
 {
 	LOG_METHOD(xrEnumerateBoundSourcesForAction);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrEnumerateBoundSourcesForAction\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrEnumerateBoundSourcesForAction\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2137,7 +2133,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInputSourceLocalizedName(
 	char*                                    buffer)
 {
 	LOG_METHOD(xrGetInputSourceLocalizedName);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrGetInputSourceLocalizedName\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetInputSourceLocalizedName\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2147,7 +2143,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(
 	const XrHapticBaseHeader* hapticFeedback)
 {
 	LOG_METHOD(xrApplyHapticFeedback);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrApplyHapticFeedback\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrApplyHapticFeedback\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2156,7 +2152,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(
 	const XrHapticActionInfo* hapticActionInfo)
 {
 	LOG_METHOD(xrStopHapticFeedback);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrStopHapticFeedback\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrStopHapticFeedback\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2165,7 +2161,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetDebugUtilsObjectNameEXT(
 	const XrDebugUtilsObjectNameInfoEXT* nameInfo)
 {
 	LOG_METHOD(xrSessionBeginDebugUtilsLabelRegionEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2175,7 +2171,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateDebugUtilsMessengerEXT(
 	XrDebugUtilsMessengerEXT*                 messenger)
 {
 	LOG_METHOD(xrSessionBeginDebugUtilsLabelRegionEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2183,7 +2179,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyDebugUtilsMessengerEXT(
 	XrDebugUtilsMessengerEXT messenger)
 {
 	LOG_METHOD(xrSessionBeginDebugUtilsLabelRegionEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2194,7 +2190,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSubmitDebugUtilsMessageEXT(
 	const XrDebugUtilsMessengerCallbackDataEXT* callbackData)
 {
 	LOG_METHOD(xrSessionBeginDebugUtilsLabelRegionEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2203,7 +2199,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSessionBeginDebugUtilsLabelRegionEXT(
 	const XrDebugUtilsLabelEXT* labelInfo)
 {
 	LOG_METHOD(xrSessionBeginDebugUtilsLabelRegionEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSessionBeginDebugUtilsLabelRegionEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2211,7 +2207,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSessionEndDebugUtilsLabelRegionEXT(
 	XrSession session)
 {
 	LOG_METHOD(xrSessionEndDebugUtilsLabelRegionEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrSessionEndDebugUtilsLabelRegionEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSessionEndDebugUtilsLabelRegionEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2220,7 +2216,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSessionInsertDebugUtilsLabelEXT(
 	const XrDebugUtilsLabelEXT* labelInfo)
 {
 	LOG_METHOD(xrSessionInsertDebugUtilsLabelEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrSessionInsertDebugUtilsLabelEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSessionInsertDebugUtilsLabelEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2249,7 +2245,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 	Instance* pInstance = (Instance*)instance;
 
 	if (pInstance->systemId != systemId) {
-		fprintf(stderr, "Invalid System ID.");
+		LOG_ERROR("Invalid System ID.");
 		return XR_ERROR_SYSTEM_INVALID;
 	}
 
@@ -2268,7 +2264,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateHandTrackerEXT(
 	XrHandTrackerEXT*                 handTracker)
 {
 	LOG_METHOD(xrCreateHandTrackerEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrCreateHandTrackerEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrCreateHandTrackerEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2276,7 +2272,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyHandTrackerEXT(
 	XrHandTrackerEXT handTracker)
 {
 	LOG_METHOD(xrDestroyHandTrackerEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyHandTrackerEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyHandTrackerEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2286,7 +2282,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateHandJointsEXT(
 	XrHandJointLocationsEXT*         locations)
 {
 	LOG_METHOD(xrLocateHandJointsEXT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrLocateHandJointsEXT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrLocateHandJointsEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2296,7 +2292,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorMSFT(
 	XrSpatialAnchorMSFT*                 anchor)
 {
 	LOG_METHOD(xrCreateSpatialAnchorMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSpatialAnchorMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSpatialAnchorMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2306,7 +2302,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorSpaceMSFT(
 	XrSpace*                                  space)
 {
 	LOG_METHOD(xrCreateSpatialAnchorSpaceMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSpatialAnchorSpaceMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSpatialAnchorSpaceMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2314,7 +2310,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpatialAnchorMSFT(
 	XrSpatialAnchorMSFT anchor)
 {
 	LOG_METHOD(xrDestroySpatialAnchorMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySpatialAnchorMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySpatialAnchorMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2326,7 +2322,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSceneComputeFeaturesMSFT(
 	XrSceneComputeFeatureMSFT* features)
 {
 	LOG_METHOD(xrEnumerateSceneComputeFeaturesMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrEnumerateSceneComputeFeaturesMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrEnumerateSceneComputeFeaturesMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2336,7 +2332,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneObserverMSFT(
 	XrSceneObserverMSFT*                 sceneObserver)
 {
 	LOG_METHOD(xrCreateSceneObserverMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSceneObserverMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSceneObserverMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2344,7 +2340,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneObserverMSFT(
 	XrSceneObserverMSFT sceneObserver)
 {
 	LOG_METHOD(xrDestroySceneObserverMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySceneObserverMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySceneObserverMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2354,7 +2350,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneMSFT(
 	XrSceneMSFT*                 scene)
 {
 	LOG_METHOD(xrCreateSceneMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSceneMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrCreateSceneMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2362,7 +2358,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneMSFT(
 	XrSceneMSFT scene)
 {
 	LOG_METHOD(xrDestroySceneMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySceneMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySceneMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2371,7 +2367,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrComputeNewSceneMSFT(
 	const XrNewSceneComputeInfoMSFT* computeInfo)
 {
 	LOG_METHOD(xrComputeNewSceneMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrComputeNewSceneMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrComputeNewSceneMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2380,7 +2376,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComputeStateMSFT(
 	XrSceneComputeStateMSFT* state)
 {
 	LOG_METHOD(xrGetSceneComputeStateMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrGetSceneComputeStateMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetSceneComputeStateMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2390,7 +2386,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComponentsMSFT(
 	XrSceneComponentsMSFT*              components)
 {
 	LOG_METHOD(xrGetSceneComponentsMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrGetSceneComponentsMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetSceneComponentsMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2400,7 +2396,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSceneComponentsMSFT(
 	XrSceneComponentLocationsMSFT*         locations)
 {
 	LOG_METHOD(xrLocateSceneComponentsMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrLocateSceneComponentsMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrLocateSceneComponentsMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2410,7 +2406,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneMeshBuffersMSFT(
 	XrSceneMeshBuffersMSFT*              buffers)
 {
 	LOG_METHOD(xrGetSceneMeshBuffersMSFT);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrGetSceneMeshBuffersMSFT\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetSceneMeshBuffersMSFT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2420,7 +2416,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrConvertWin32PerformanceCounterToTimeKHR(
 	XrTime*              time)
 {
 	LOG_METHOD(xrConvertWin32PerformanceCounterToTimeKHR);
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED xrConvertWin32PerformanceCounterToTimeKHR\n");
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrConvertWin32PerformanceCounterToTimeKHR\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2526,7 +2522,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 
 #undef CHECK_PROC_ADDR
 
-	fprintf(stderr, "XR_ERROR_FUNCTION_UNSUPPORTED %s\n", name);
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED %s\n", name);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -2549,7 +2545,7 @@ XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
 		runtimeRequest->structType != XR_LOADER_INTERFACE_STRUCT_RUNTIME_REQUEST ||
 		runtimeRequest->structVersion != XR_RUNTIME_INFO_STRUCT_VERSION ||
 		runtimeRequest->structSize != sizeof(XrNegotiateRuntimeRequest)) {
-		fprintf(stderr, "xrNegotiateLoaderRuntimeInterface fail\n");
+		LOG_ERROR("xrNegotiateLoaderRuntimeInterface fail\n");
 		return XR_ERROR_INITIALIZATION_FAILED;
 	}
 
