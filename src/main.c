@@ -17,6 +17,7 @@
 #include "test_node.h"
 #include "window.h"
 
+MxcView compositorView = MXC_VIEW_STEREO;
 bool isCompositor = true;
 bool isRunning = true;
 

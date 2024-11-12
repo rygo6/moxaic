@@ -22,12 +22,19 @@ extern void Panic(const char* file, int line, const char* message);
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #define CONCAT(_a, _b) #_a #_b
 
-#define DEFAULT_WIDTH  1024
+#define DEFAULT_WIDTH  (1024 * compositorView)
 #define DEFAULT_HEIGHT 1024
 
 #define HOT    __attribute__((hot))
 #define INLINE __attribute__((always_inline)) static inline
 
+typedef enum MxcView {
+	MXC_VIEW_UNINITIALIZED = 0,
+	MXC_VIEW_MONO = 1,
+	MXC_VIEW_STEREO = 2,
+} MxcView;
+
+extern MxcView compositorView;
 extern bool isCompositor;
 
 extern bool isRunning;
@@ -42,7 +49,7 @@ typedef enum MxcCycle {
   MXC_CYCLE_UPDATE_NODE_STATES,   // update state for nodes to render
   MXC_CYCLE_COMPOSITOR_RECORD,     // recording compositor commands
   MXC_CYCLE_RENDER_COMPOSITE,     // compositor render
-  MXC_CYCLE_COUNT
+  MXC_CYCLE_COUNT,
 } MxcCycle;
 
 // Think I like this?

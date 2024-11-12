@@ -221,7 +221,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 		}
 
 		midvkCreateFramebufferTexture(MIDVK_SWAP_COUNT, VK_LOCALITY_CONTEXT, pNode->framebuffers);
-		midVkCreateFramebuffer(vk.context.renderPass, &pNode->framebuffer);
+		vkCreateBasicFramebuffer(vk.context.renderPass, &pNode->framebuffer);
 		midVkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer");  // should be moved into method? probably
 	}
 

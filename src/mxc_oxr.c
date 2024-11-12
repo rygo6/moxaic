@@ -227,12 +227,12 @@ void midXrWaitFrame(XrHandle sessionHandle)
 void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView)
 {
 	*pView = (XrViewConfigurationView){
-		.recommendedImageRectWidth = MIDXR_DEFAULT_WIDTH,
-		.maxImageRectWidth = MIDXR_DEFAULT_WIDTH,
-		.recommendedImageRectHeight = MIDXR_DEFAULT_HEIGHT,
-		.maxImageRectHeight = MIDXR_DEFAULT_HEIGHT,
-		.recommendedSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
-		.maxSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+		.recommendedImageRectWidth = XR_DEFAULT_WIDTH,
+		.maxImageRectWidth = XR_DEFAULT_WIDTH,
+		.recommendedImageRectHeight = XR_DEFAULT_HEIGHT,
+		.maxImageRectHeight = XR_DEFAULT_HEIGHT,
+		.recommendedSwapchainSampleCount = XR_DEFAULT_SAMPLES,
+		.maxSwapchainSampleCount = XR_DEFAULT_SAMPLES,
 	};
 }
 
@@ -285,7 +285,9 @@ void midXrBeginFrame(XrHandle sessionHandle)
 
 void midXrEndFrame(XrHandle sessionHandle)
 {
+	printf("incrementing handle %d\n", sessionHandle);
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	__atomic_fetch_add(&pNodeShared->timelineValue, 1, __ATOMIC_RELEASE);
+	printf("incremented %llu\n", pNodeShared->timelineValue);
 }

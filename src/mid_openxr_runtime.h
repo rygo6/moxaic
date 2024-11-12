@@ -84,13 +84,14 @@ void midXrEndFrame(XrHandle sessionHandle);
 //// Mid OpenXR Constants
 #define XR_FORCE_STEREO_TO_MONO
 
-#define MIDXR_DEFAULT_WIDTH        1024
-#define MIDXR_DEFAULT_HEIGHT       1024
-#define MIDXR_DEFAULT_SAMPLES      1
-#define MIDXR_OPENGL_MAJOR_VERSION 4
-#define MIDXR_OPENGL_MINOR_VERSION 6
+#define XR_DEFAULT_WIDTH           1024
+#define XR_DEFAULT_HEIGHT          1024
+#define XR_DEFAULT_SAMPLES         1
 
 #define XR_SWAP_COUNT 2
+
+#define XR_OPENGL_MAJOR_VERSION    4
+#define XR_OPENGL_MINOR_VERSION    6
 
 //
 //// Mid OpenXR Types
@@ -1009,8 +1010,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicHMD", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-			properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
-			properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
+			properties->graphicsProperties.maxSwapchainImageWidth = XR_DEFAULT_WIDTH;
+			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
 
@@ -1020,8 +1021,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicHandheld", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-			properties->graphicsProperties.maxSwapchainImageWidth = DEFAULT_WIDTH;
-			properties->graphicsProperties.maxSwapchainImageHeight = DEFAULT_HEIGHT;
+			properties->graphicsProperties.maxSwapchainImageWidth = XR_DEFAULT_WIDTH;
+			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
 			break;
@@ -1392,12 +1393,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 
 	for (int i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
 		views[i] = (XrViewConfigurationView){
-			.recommendedImageRectWidth = MIDXR_DEFAULT_WIDTH,
-			.maxImageRectWidth = MIDXR_DEFAULT_WIDTH,
-			.recommendedImageRectHeight = MIDXR_DEFAULT_HEIGHT,
-			.maxImageRectHeight = MIDXR_DEFAULT_HEIGHT,
-			.recommendedSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
-			.maxSwapchainSampleCount = MIDXR_DEFAULT_SAMPLES,
+			.recommendedImageRectWidth = XR_DEFAULT_WIDTH,
+			.maxImageRectWidth = XR_DEFAULT_WIDTH,
+			.recommendedImageRectHeight = XR_DEFAULT_HEIGHT,
+			.maxImageRectHeight = XR_DEFAULT_HEIGHT,
+			.recommendedSwapchainSampleCount = XR_DEFAULT_SAMPLES,
+			.maxSwapchainSampleCount = XR_DEFAULT_SAMPLES,
 		};
 	};
 
@@ -2227,7 +2228,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 {
 	LOG_METHOD(xrGetOpenGLGraphicsRequirementsKHR);
 
-	const XrVersion openglApiVersion = XR_MAKE_VERSION(MIDXR_OPENGL_MAJOR_VERSION, MIDXR_OPENGL_MINOR_VERSION, 0);
+	const XrVersion openglApiVersion = XR_MAKE_VERSION(XR_OPENGL_MAJOR_VERSION, XR_OPENGL_MINOR_VERSION, 0);
 	*graphicsRequirements = (XrGraphicsRequirementsOpenGLKHR){
 		.minApiVersionSupported = openglApiVersion,
 		.maxApiVersionSupported = openglApiVersion,

@@ -310,7 +310,7 @@ void mxcCreateNodeRenderPass()
 		.pAttachments = (VkAttachmentDescription2[]){
 			[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -321,7 +321,7 @@ void mxcCreateNodeRenderPass()
 			},
 			[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -332,7 +332,7 @@ void mxcCreateNodeRenderPass()
 			},
 			[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -399,18 +399,9 @@ void mxcCreateNodeRenderPass()
 	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
 }
 
-//#define D3D11_NO_HELPERS
-//#define CINTERFACE
-//#define COBJMACROS
-//#define WIDL_C_INLINE_WRAPPERS
-//#include <d3d11_1.h>
-//#include <initguid.h>
-//#include <dxgi.h>
-//#include <dxgi1_4.h>
-
 void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
 {
-	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+	for (int swapIndex = 0; swapIndex < MIDVK_SWAP_COUNT; ++swapIndex) {
 		{
 			VkImageCreateInfo info = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -419,23 +410,23 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				},
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+				.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 			};
-			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[i].colorExternal);
+			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[swapIndex].colorExternal);
 			VkTextureCreateInfo textureInfo = {
 				.debugName = "ExportedColorFramebuffer",
 				.pImageCreateInfo = &info,
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.importHandle = pNodeFramebufferTextures[i].colorExternal.handle,
+				.importHandle = pNodeFramebufferTextures[swapIndex].colorExternal.handle,
 				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			};
-			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[i].color);
+			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[swapIndex].color);
 		}
 
 		{
@@ -446,23 +437,23 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				},
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = NODE_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+				.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 			};
-			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[i].normalExternal);
+			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[swapIndex].normalExternal);
 			VkTextureCreateInfo textureInfo = {
 				.debugName = "ExportedNormalFramebuffer",
 				.pImageCreateInfo = &info,
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.importHandle = pNodeFramebufferTextures[i].normalExternal.handle,
+				.importHandle = pNodeFramebufferTextures[swapIndex].normalExternal.handle,
 				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			};
-			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[i].normal);
+			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[swapIndex].normal);
 		}
 
 		{
@@ -480,16 +471,16 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.usage = MXC_NODE_GBUFFER_USAGE,
 			};
-			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[i].gbufferExternal);
+			vkWin32CreateExternalTexture(&info, &pNodeFramebufferTextures[swapIndex].gbufferExternal);
 			VkTextureCreateInfo textureInfo = {
 				.debugName = "ExportedGBufferFramebuffer",
 				.pImageCreateInfo = &info,
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.importHandle = pNodeFramebufferTextures[i].gbufferExternal.handle,
+				.importHandle = pNodeFramebufferTextures[swapIndex].gbufferExternal.handle,
 				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			};
-			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[i].gbuffer);
+			vkCreateTexture(&textureInfo, &pNodeFramebufferTextures[swapIndex].gbuffer);
 		}
 
 		// Depth is not shared over IPC.
@@ -497,9 +488,9 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 			// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
 			VkCommandBuffer             cmd = midVkBeginImmediateTransferCommandBuffer();
 			const VkImageMemoryBarrier2 interProcessBarriers[] = {
-				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].color.image),
-				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].normal.image),
-				VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[i].gbuffer.image, 0, MXC_NODE_GBUFFER_LEVELS),
+				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[swapIndex].color.image),
+				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[swapIndex].normal.image),
+				VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pNodeFramebufferTextures[swapIndex].gbuffer.image, 0, MXC_NODE_GBUFFER_LEVELS),
 			};
 			VK_DEVICE_FUNC(CmdPipelineBarrier2);
 			CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
@@ -511,17 +502,17 @@ void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* 
 			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+				.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.locality = VK_LOCALITY_CONTEXT,
 		};
-		vkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[i].depth);
+		vkCreateTexture(&depthCreateInfo, &pNodeFramebufferTextures[swapIndex].depth);
 	}
 
 	// test code to ensure it imports into dx11
@@ -971,12 +962,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+					.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+					.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
@@ -990,12 +981,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+					.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+					.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
@@ -1028,12 +1019,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.pImageCreateInfo = &(VkImageCreateInfo) {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+					.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+					.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 				.locality = VK_LOCALITY_CONTEXT,

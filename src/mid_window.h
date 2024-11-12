@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// this seems a bit ridiculous, probably want to verify
 #define WIN32_LEAN_AND_MEAN
 #define NOGDICAPMASKS     // CC_*, LC_*, PC_*, CP_*, TC_*, RC_
 #define NOVIRTUALKEYCODES // VK_*
@@ -45,6 +46,46 @@
 #define NOMCX             // Modem Configuration Extensions
 #define NOGDI
 #include <windows.h>
+#undef NOGDICAPMASKS
+#undef NOVIRTUALKEYCODES
+#undef NOWINMESSAGES
+#undef NOWINSTYLES
+#undef NOSYSMETRICS
+#undef NOMENUS
+#undef NOICONS
+#undef NOKEYSTATES
+#undef NOSYSCOMMANDS
+#undef NORASTEROPS
+#undef NOSHOWWINDOW
+#undef OEMRESOURCE
+#undef NOATOM
+#undef NOCLIPBOARD
+#undef NOCOLOR
+#undef NOCTLMGR
+#undef NODRAWTEXT
+#undef NOGDI
+#undef NOKERNEL
+#undef NOUSER
+#undef NONLS
+#undef NOMB
+#undef NOMEMMGR
+#undef NOMETAFILE
+#undef NOMINMAX
+#undef NOMSG
+#undef NOOPENFILE
+#undef NOSCROLL
+#undef NOSERVICE
+#undef NOSOUND
+#undef NOTEXTMETRIC
+#undef NOWH
+#undef NOWINOFFSETS
+#undef NOCOMM
+#undef NOKANJI
+#undef NOHELP
+#undef NOPROFILER
+#undef NODEFERWINDOWPOS
+#undef NOMCX
+#undef NOGDI
 
 //
 //// Debug
@@ -68,8 +109,12 @@ extern void Panic(const char* file, int line, const char* message);
 
 //
 //// MidWindow Header
+#ifndef DEFAULT_WIDTH
 #define DEFAULT_WIDTH  1024
+#endif
+#ifndef DEFAULT_WIDTH
 #define DEFAULT_HEIGHT 1024
+#endif
 
 typedef struct MidWindow {
   HINSTANCE hInstance;
