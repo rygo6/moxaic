@@ -22,7 +22,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #define CONCAT(_a, _b) #_a #_b
 
-#define DEFAULT_WIDTH  (1024 * compositorView)
+#define DEFAULT_WIDTH 1024
 #define DEFAULT_HEIGHT 1024
 
 #define HOT    __attribute__((hot))

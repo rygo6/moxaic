@@ -274,7 +274,7 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
-void mxcCreateNodeFramebuffer(const VkLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures);
+void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, MxcNodeVkFramebufferTexture* pFramebufferTextures);
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
 

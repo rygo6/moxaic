@@ -9,11 +9,6 @@
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
-#define NOCOMM
-#define NOSERVICE
-#define NOCRYPT
-#define NOMCX
-#define NOGDI
 #include <windows.h>
 
 #define COBJMACROS
@@ -852,7 +847,7 @@ typedef struct VkFramebufferTextureCreateInfo {
 	VkExtent3D extent;
 	VkLocality locality;
 } VkFramebufferTextureCreateInfo;
-void vkCreateFramebufferTexture(VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, VkFramebufferTexture* pFrameBuffers);
+void vkCreateFramebufferTexture(const VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, VkFramebufferTexture* pFrameBuffers);
 void vkCreateBasicFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
 void midVkCreateStdRenderPass();
 void midVkCreateStdPipeLayout();
@@ -1944,7 +1939,7 @@ void vkCreateBasicFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuff
 	VK_CHECK(vkCreateFramebuffer(vk.context.device, &framebufferCreateInfo, MIDVK_ALLOC, pFramebuffer));
 }
 
-void vkCreateFramebufferTexture(VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, VkFramebufferTexture* pFrameBuffers)
+void vkCreateFramebufferTexture(const VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, VkFramebufferTexture* pFrameBuffers)
 {
 	for (int i = 0; i < framebufferCount; ++i) {
 		VkTextureCreateInfo colorCreateInfo = {
@@ -2428,6 +2423,7 @@ void midVkCreateStdPipeLayout()
 	CreateStdPipeLayout();
 }
 
+// vkCreateExternalFence???
 void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
 {
 #if WIN32
