@@ -33,7 +33,7 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
 	midVkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compTimeline);
-	midVkCreateSwap(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
+	vkCreateSwapContext(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -47,7 +47,7 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.commandBufferCount = 1,
 	};
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorNodeContext.cmd));
-	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorNodeContext.cmd, "CompCmd");
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorNodeContext.cmd, "CompCmd");
 
 	CHECK(pthread_create(&compositorNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorNodeContext), "Comp Node thread creation failed!");
 	printf("Request and Run CompNode Thread Success.\n");
@@ -164,7 +164,7 @@ static int ReleaseNode(NodeHandle handle)
 	vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
 	// destroy images... this will eventually just return back to some pool
-	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 		vkDestroyImageView(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.view, MIDVK_ALLOC);
 		vkDestroyImage(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.image, MIDVK_ALLOC);
 		vkFreeMemory(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.memory, MIDVK_ALLOC);
@@ -233,7 +233,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 		.commandBufferCount = 1,
 	};
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
-	midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
 	mxcCreateNodeFramebuffer(VK_LOCALITY_CONTEXT, pNodeContext->vkNodeFramebufferTextures);
 
@@ -241,7 +241,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	// do not clear since it is set data is prealloced
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
-	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].vkNodeFramebufferTextures[i].color.image;
 		pNodeCompositorData->framebuffers[i].normal = nodeContexts[handle].vkNodeFramebufferTextures[i].normal.image;
 		pNodeCompositorData->framebuffers[i].gBuffer = nodeContexts[handle].vkNodeFramebufferTextures[i].gbuffer.image;
@@ -396,12 +396,12 @@ void mxcCreateNodeRenderPass()
 		},
 	};
 	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, MIDVK_ALLOC, &vk.context.nodeRenderPass));
-	midVkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
+	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
 }
 
 void mxcCreateNodeFramebuffer(VkLocality locality, MxcNodeVkFramebufferTexture* pNodeFramebufferTextures)
 {
-	for (int swapIndex = 0; swapIndex < MIDVK_SWAP_COUNT; ++swapIndex) {
+	for (int swapIndex = 0; swapIndex < VK_SWAP_COUNT; ++swapIndex) {
 		{
 			VkImageCreateInfo info = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -687,7 +687,7 @@ static void InterprocessServerAcceptNodeConnection()
 		mxcCreateNodeFramebuffer(VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE, pNodeContext->vkNodeFramebufferTextures);
 
 		const HANDLE currentHandle = GetCurrentProcess();
-		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 			WIN32_CHECK(DuplicateHandle(
 						  currentHandle, pNodeContext->vkNodeFramebufferTextures[i].colorExternal.handle,
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].color,
@@ -722,7 +722,7 @@ static void InterprocessServerAcceptNodeConnection()
 
 		const uint32_t graphicsQueueIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
-		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 			pNodeCompositorData->framebuffers[i].color = pNodeContext->vkNodeFramebufferTextures[i].color.image;
 			pNodeCompositorData->framebuffers[i].normal = pNodeContext->vkNodeFramebufferTextures[i].normal.image;
 			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image;
@@ -776,7 +776,7 @@ static void InterprocessServerAcceptNodeConnection()
 
 Exit:
 	if (pImportParam != NULL) {
-		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 			if (pImportParam->framebufferHandles[i].color != INVALID_HANDLE_VALUE)
 				CloseHandle(pImportParam->framebufferHandles[i].color);
 			if (pImportParam->framebufferHandles[i].normal != INVALID_HANDLE_VALUE)
@@ -952,10 +952,10 @@ void mxcConnectInterprocessNode(bool createTestNode)
 			.commandBufferCount = 1,
 		};
 		VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
-		midVkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
+		vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
 		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
-		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 			VkTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
 				.pImageCreateInfo = &(VkImageCreateInfo) {

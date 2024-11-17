@@ -10,7 +10,7 @@ typedef struct MxcTestNode {
   VkPipeline       basicPipe;
 
   VkFramebuffer             framebuffer;
-  VkImageView               gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
+  VkImageView               gBufferMipViews[VK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 
   VkDescriptorSetLayout nodeProcessSetLayout;
   VkPipelineLayout      nodeProcessPipeLayout;

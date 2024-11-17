@@ -72,7 +72,7 @@ typedef struct MxcImportParam {
 		HANDLE color;
 		HANDLE normal;
 		HANDLE gbuffer;
-	} framebufferHandles[MIDVK_SWAP_COUNT];
+	} framebufferHandles[VK_SWAP_COUNT];
 	HANDLE nodeFenceHandle;
 	HANDLE nodeTimelineHandle;
 	HANDLE compTimelineHandle;
@@ -134,7 +134,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 		VkImageView           normalView;
 		VkImageView           gBufferView;
 		VkImageMemoryBarrier2 acquireBarriers[3];
-	} framebuffers[MIDVK_SWAP_COUNT];
+	} framebuffers[VK_SWAP_COUNT];
 } MxcNodeCompositorData;
 
 //
@@ -175,8 +175,8 @@ typedef struct MxcNodeContext {
 
 	// this should be a pool of swaps shared by all nodes
 	// unless it can import an image fast enough on the fly, maybe it can? CEF does
-	MxcNodeGlFramebufferTexture glNodeFramebufferTextures[MIDVK_SWAP_COUNT];
-	MxcNodeVkFramebufferTexture vkNodeFramebufferTextures[MIDVK_SWAP_COUNT];
+	MxcNodeGlFramebufferTexture glNodeFramebufferTextures[VK_SWAP_COUNT];
+	MxcNodeVkFramebufferTexture vkNodeFramebufferTextures[VK_SWAP_COUNT];
 
 	// I'm not actually 100% sure if I want this
 	VkFence vkNodeFence;

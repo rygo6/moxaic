@@ -88,7 +88,7 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
 	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 
-		for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 			switch (graphicsApi){
 				case XR_GRAPHICS_API_OPENGL: {
 //					DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures[i].color.memObject, pGlFramebufferTextures[i].color.texture, pImportParam->framebufferHandles[i].color)
@@ -195,7 +195,7 @@ void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle)
 {
-	CHECK(imageCount != MIDVK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
+	CHECK(imageCount != VK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
@@ -207,13 +207,18 @@ void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE*
 	}
 }
 
-void midXrAcquireSwapchainImage(XrHandle sessionHandle, uint32_t* pIndex)
+void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	int framebufferIndex = pNodeShared->timelineValue % MIDVK_SWAP_COUNT;
+	int framebufferIndex = pNodeShared->timelineValue % VK_SWAP_COUNT;
 	*pIndex = framebufferIndex;
+}
+
+void xrWaitSwapPoolImage(XrHandle sessionHandle, uint32_t index)
+{
+
 }
 
 void midXrWaitFrame(XrHandle sessionHandle)

@@ -84,11 +84,11 @@ int main(void)
 
 		// this need to ge in node create
 		mxcCreateNodeRenderPass();
-		midVkCreateBasicPipe("./shaders/basic_material.vert.spv",
-							 "./shaders/basic_material.frag.spv",
-							 vk.context.nodeRenderPass,
-							 vk.context.basicPipeLayout.pipeLayout,
-							 &vk.context.basicPipe);
+		vkCreateBasicPipe("./shaders/basic_material.vert.spv",
+						  "./shaders/basic_material.frag.spv",
+						  vk.context.nodeRenderPass,
+						  vk.context.basicPipeLayout.pipeLayout,
+						  &vk.context.basicPipe);
 
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");
@@ -96,7 +96,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);

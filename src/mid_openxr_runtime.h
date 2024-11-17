@@ -73,7 +73,7 @@ void midXrInitialize(XrGraphicsApi graphicsApi);
 void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle);
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
-void midXrAcquireSwapchainImage(XrHandle sessionHandle, uint32_t* pIndex);
+void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex);
 void midXrWaitFrame(XrHandle sessionHandle);
 void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView);
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
@@ -124,14 +124,6 @@ typedef struct XrSpaceBounds {
 //	XrRect2Di          imageRect;
 //	uint32_t       imageArrayIndex;
 //} XrFrameEndInfo;
-
-//typedef struct XrSubView {
-//	XrStructureType    type;
-//	void* XR_MAY_ALIAS next;
-//	XrRect2Di          imageRect;
-//	uint32_t       imageArrayIndex;
-//} XrSubView;
-
 
 // maybe?
 //typedef struct XrFrameBeginSwapPoolInfo {
@@ -763,7 +755,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 	midXrInitialize(pInstance->graphicsApi);
 
 	switch (pInstance->graphicsApi) {
-		case XR_GRAPHICS_API_OPENGL:
+		case XR_GRAPHICS_API_OPENGL: {
 			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
 			if (!gl.CreateMemoryObjectsEXT) {
 				printf("Failed to load glCreateMemoryObjectsEXT\n");
@@ -780,65 +772,55 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 			if (!gl.TextureStorageMem2DEXT) {
 				printf("Failed to load glTextureStorageMem2DEXT\n");
 			}
-			break;
-		case XR_GRAPHICS_API_OPENGL_ES: break;
-		case XR_GRAPHICS_API_VULKAN:    break;
+			return XR_SUCCESS;
+		}
 		case XR_GRAPHICS_API_D3D11_1:   {
-
-			pInstance->graphics.d3d11.featureLevel = D3D_FEATURE_LEVEL_11_1;
-
 			IDXGIFactory1* factory1 = NULL;
 			DX_CHECK(CreateDXGIFactory1(&IID_IDXGIFactory, (void**)&factory1));
 
+			// We aren't iterating, and just going with the first, but we might want to iterate somehow at some point
+			// but the proper adapter seems to always be the first
 			IDXGIAdapter* adapter = NULL;
 			for (UINT i = 0; IDXGIFactory1_EnumAdapters(factory1, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
 				DXGI_ADAPTER_DESC desc;
 				DX_CHECK(IDXGIAdapter_GetDesc(adapter, &desc));
-				pInstance->graphics.d3d11.adapterLuid = desc.AdapterLuid;
 				wprintf(L"DX11 Adapter %d Name: %ls LUID: %ld:%lu\n",
 						i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
 
-				// debug device
-				//				ID3D11Device*        device;
-				//				ID3D11DeviceContext* context;
-				//				DX_CHECK(D3D11CreateDevice(
-				//					adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, D3D11_CREATE_DEVICE_DEBUG,
-				//					(D3D_FEATURE_LEVEL[]) {D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
-				//					&device, &pInstance->graphics.d3d11.featureLevel, &context));
-				//				printf("XR D3D11 Device: %p\n", device);
-				//				if (device == NULL) {
-				//					fprintf(stderr, "Mid D3D11 Device Invalid.\n");
-				//					return XR_ERROR_GRAPHICS_DEVICE_INVALID;
-				//				}
-				//
-				//				ID3D11Device1*            device1;
-				//				DX_CHECK(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&device1));
-				//				printf("XR D3D11 Device1: %p\n", device1);
-				//				if (device1 == NULL) {
-				//					fprintf(stderr, "XR D3D11 Device Invalid.\n");
-				//					return XR_ERROR_GRAPHICS_DEVICE_INVALID;
-				//				}
-				//
-				//				D3D_FEATURE_LEVEL featureLevel = ID3D11Device1_GetFeatureLevel(device1);
-				//				printf("D3D11 Feature Level: %d\n", featureLevel);
-				//
-				////				pInstance->graphics.d3d11.device = device;
-				////				pInstance->graphics.d3d11.device1 = device1;
-				//
-				//				printf("Device: %p Context: %p\n", device, context);
+				// Check device
+				ID3D11Device*        device;
+				ID3D11DeviceContext* context;
+				D3D_FEATURE_LEVEL featureLevel;
+				DX_CHECK(D3D11CreateDevice(
+					adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, D3D11_CREATE_DEVICE_DEBUG,
+					(D3D_FEATURE_LEVEL[]) {D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
+					&device, &featureLevel, &context));
+				printf("XR D3D11 Device: %p %d\n", device, featureLevel);
+				if (device == NULL || featureLevel < D3D_FEATURE_LEVEL_11_1) {
+					LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrCreateInstance XR D3D11 Device Invalid\n");
+					ID3D11Device_Release(device);
+					ID3D11DeviceContext_Release(context);
+					return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+				}
 
+				pInstance->graphics.d3d11.adapterLuid = desc.AdapterLuid;
+				pInstance->graphics.d3d11.featureLevel = featureLevel;
+
+				ID3D11Device_Release(device);
+				ID3D11DeviceContext_Release(context);
 				break;
 			}
 
 			IDXGIAdapter_Release(adapter);
 			IDXGIFactory1_Release(factory1);
-
-			break;
+			return XR_SUCCESS;
 		}
-		case XR_GRAPHICS_API_COUNT: break;
+		case XR_GRAPHICS_API_OPENGL_ES:
+		case XR_GRAPHICS_API_VULKAN:
+		default:
+			LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED\n");
+			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 	}
-
-	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroyInstance(
@@ -964,8 +946,12 @@ static void PrintNextChain(XrBaseInStructure* nextProperties)
 	}
 }
 
-#define XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID 1
-#define XR_HANDHELD_DISPLAY_SYSTEM_ID     2
+typedef enum SystemId {
+	SYSTEM_ID_DESKTOP_VR_MONO,
+	SYSTEM_ID_HMD_VR_STEREO,
+	SYSTEM_ID_HANDHELD_AR,
+	SYSTEM_ID_COUNT,
+} SystemId;
 XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	XrInstance             instance,
 	const XrSystemGetInfo* getInfo,
@@ -980,14 +966,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
 			printf("XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY\n");
 			pInstance->systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
-			pInstance->systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
-			*systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
+			pInstance->systemId = SYSTEM_ID_HMD_VR_STEREO;
+			*systemId = SYSTEM_ID_HMD_VR_STEREO;
 			return XR_SUCCESS;
 		case XR_FORM_FACTOR_HANDHELD_DISPLAY:
 			printf("XR_FORM_FACTOR_HANDHELD_DISPLAY\n");
 			pInstance->systemFormFactor = XR_FORM_FACTOR_HANDHELD_DISPLAY;
-			pInstance->systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
-			*systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
+			pInstance->systemId = SYSTEM_ID_HANDHELD_AR;
+			*systemId = SYSTEM_ID_HANDHELD_AR;
 			return XR_SUCCESS;
 		default:
 			printf("XR_ERROR_FORM_FACTOR_UNSUPPORTED\n");
@@ -1004,9 +990,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 	LOG_METHOD(xrGetSystemProperties);
 	PrintNextChain((XrBaseInStructure*)properties->next);
 
-	switch (systemId) {
-		case XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID:
-			properties->systemId = XR_HEAD_MOUNTED_DISPLAY_SYSTEM_ID;
+	switch ((SystemId)systemId) {
+		default:
+			return XR_ERROR_HANDLE_INVALID;
+		case SYSTEM_ID_DESKTOP_VR_MONO:
+			properties->systemId = SYSTEM_ID_DESKTOP_VR_MONO;
+			properties->vendorId = 0;
+			strncpy(properties->systemName, "MoxaicDesktop", XR_MAX_SYSTEM_NAME_SIZE);
+			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
+			properties->graphicsProperties.maxSwapchainImageWidth = XR_DEFAULT_WIDTH;
+			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
+			properties->trackingProperties.orientationTracking = XR_TRUE;
+			properties->trackingProperties.positionTracking = XR_TRUE;
+			return XR_SUCCESS;
+		case SYSTEM_ID_HMD_VR_STEREO:
+			properties->systemId = SYSTEM_ID_HMD_VR_STEREO;
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicHMD", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
@@ -1014,10 +1012,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
-
-			break;
-		case XR_HANDHELD_DISPLAY_SYSTEM_ID:
-			properties->systemId = XR_HANDHELD_DISPLAY_SYSTEM_ID;
+			return XR_SUCCESS;
+		case SYSTEM_ID_HANDHELD_AR:
+			properties->systemId = SYSTEM_ID_HANDHELD_AR;
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicHandheld", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
@@ -1025,12 +1022,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
-			break;
-		default:
-			return XR_ERROR_HANDLE_INVALID;
+			return XR_SUCCESS;
 	}
-
-	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
@@ -1060,7 +1053,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
 	switch (viewConfigurationType) {
-
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
@@ -1107,7 +1099,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			pClaimedSession->binding.gl = *(XrGraphicsBindingOpenGLWin32KHR*)&createInfo->next;
 			*session = (XrSession)pClaimedSession;
 			return XR_SUCCESS;
-		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR:
+		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR: {
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_D3D11_KHR\n");
 
 			XrGraphicsBindingD3D11KHR binding = *(XrGraphicsBindingD3D11KHR*)createInfo->next;
@@ -1133,13 +1125,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 
 			*session = (XrSession)pClaimedSession;
 			return XR_SUCCESS;
-		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR:
+		}
+		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: {
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR\n");
 			pClaimedSession->binding.vk = *(XrGraphicsBindingVulkanKHR*)&createInfo->next;
 			*session = (XrSession)pClaimedSession;
 			return XR_SUCCESS;
-		default:
+		}
+		default: {
+			LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
 			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+		}
 	}
 }
 
@@ -1167,7 +1163,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
 		XR_REFERENCE_SPACE_TYPE_STAGE,
 		XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR,
 		XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT,
-
 	};
 
 	*spaceCountOutput = COUNT(supportedSpaces);
@@ -1219,11 +1214,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 	LOG_METHOD(xrGetReferenceSpaceBoundsRect);
 
 	Session*  pSession = (Session*)session;
+
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	switch (referenceSpaceType) {
-
 		case XR_REFERENCE_SPACE_TYPE_VIEW:
 			printf("XR_REFERENCE_SPACE_TYPE_VIEW\n");
 			break;
@@ -1281,6 +1276,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(
 	XrSpaceLocation* location)
 {
 	LOG_METHOD(xrLocateSpace);
+	PrintNextChain((XrBaseInStructure*)location);
+
+	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
+							  XR_SPACE_LOCATION_POSITION_VALID_BIT |
+							  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
+							  XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+	location->pose.orientation = (XrQuaternionf){0, 0, 0, 1};
+	location->pose.position = (XrVector3f){0, 0, 0};
+
 	return XR_SUCCESS;
 }
 
@@ -1301,27 +1305,47 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurations(
 {
 	LOG_METHOD(xrEnumerateViewConfigurations);
 
-	const XrViewConfigurationType modes[] = {
-		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
-		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-		//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET,
-		//		XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT,
-		//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO,
-	};
-
-	*viewConfigurationTypeCountOutput = COUNT(modes);
-
-	if (viewConfigurationTypes == NULL)
-		return XR_SUCCESS;
-
-	if (viewConfigurationTypeCapacityInput < COUNT(modes))
-		return XR_ERROR_SIZE_INSUFFICIENT;
-
-	for (int i = 0; i < COUNT(modes); ++i) {
-		viewConfigurationTypes[i] = modes[i];
+#define TRANSFER_MODES                                     \
+	*viewConfigurationTypeCountOutput = COUNT(modes);      \
+	if (viewConfigurationTypes == NULL)                    \
+		return XR_SUCCESS;                                 \
+	if (viewConfigurationTypeCapacityInput < COUNT(modes)) \
+		return XR_ERROR_SIZE_INSUFFICIENT;                 \
+	for (int i = 0; i < COUNT(modes); ++i) {               \
+		viewConfigurationTypes[i] = modes[i];              \
 	}
 
-	return XR_SUCCESS;
+	switch ((SystemId)systemId) {
+		case SYSTEM_ID_DESKTOP_VR_MONO: {
+			XrViewConfigurationType modes[] = {
+				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
+			};
+			TRANSFER_MODES
+			return XR_SUCCESS;
+		}
+		case SYSTEM_ID_HMD_VR_STEREO: {
+			XrViewConfigurationType modes[] = {
+				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+				//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET,
+				//		XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT,
+				//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO,
+			};
+			TRANSFER_MODES
+			return XR_SUCCESS;
+		}
+		case SYSTEM_ID_HANDHELD_AR: {
+			XrViewConfigurationType modes[] = {
+				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
+			};
+			TRANSFER_MODES
+			return XR_SUCCESS;
+		}
+		default:
+			LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
+			return XR_ERROR_SYSTEM_INVALID;
+	}
+
+#undef TRANSFER_MODES
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetViewConfigurationProperties(
@@ -1492,7 +1516,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			printf("Creating OpenGL Swap");
-			assert(pSwapchain->format == GL_SRGB8_ALPHA8);
+
 #define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
 	gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
 	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
@@ -1502,14 +1526,18 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color.gl[i].memObject, pSwapchain->color.gl[i].texture, colorHandles[i]);
 				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwapchain->color.gl[i].texture, pSwapchain->color.gl[i].memObject);
 			}
+#undef DEFAULT_IMAGE_CREATE_INFO
+
 			break;
 		}
 		case XR_GRAPHICS_API_D3D11_1: {
 			printf("Creating D3D11 Swap\n");
+
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				DX_CHECK(ID3D11Device1_OpenSharedResource1(pInstance->graphics.d3d11.device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
 				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", pInstance->graphics.d3d11.device1, colorHandles[i], pSwapchain->color.d3d11[i]);
 			}
+
 			break;
 		}
 		case XR_GRAPHICS_API_VULKAN:
@@ -1518,7 +1546,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	}
 
 	*swapchain = (XrSwapchain)pSwapchain;
-
 	return XR_SUCCESS;
 }
 
@@ -1582,9 +1609,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
 	Instance*  pInstance = (Instance*)pSession->instance;
+	// handles could still be 32 bit offsets?
 	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
 
-	midXrAcquireSwapchainImage(sessionHandle, &pSwapchain->swapIndex);
+	xrClaimSwapPoolImage(sessionHandle, &pSwapchain->swapIndex);
 	*index = pSwapchain->swapIndex;
 
 	return XR_SUCCESS;

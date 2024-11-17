@@ -77,8 +77,8 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 		VkImageView normalView;
 		VkImageView depthView;
 		VkImageView gBufferView;
-	} framebufferImages[MIDVK_SWAP_COUNT];
-	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+	} framebufferImages[VK_SWAP_COUNT];
+	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 		framebufferImages[i].color = pNodeContext->vkNodeFramebufferTextures[i].color.image;
 		framebufferImages[i].normal = pNodeContext->vkNodeFramebufferTextures[i].normal.image;
 		framebufferImages[i].gBuffer = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image;
@@ -88,7 +88,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 		framebufferImages[i].depthView = pNodeContext->vkNodeFramebufferTextures[i].depth.view;
 		framebufferImages[i].gBufferView = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view;
 	}
-	VkImageView gBufferMipViews[MIDVK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
+	VkImageView gBufferMipViews[VK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 	memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
 
 	const uint32_t     sphereIndexCount = pNode->sphereMesh.indexCount;
@@ -111,11 +111,11 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	assert(__atomic_always_lock_free(sizeof(pNodeShared->timelineValue), &pNodeShared->timelineValue));
 
-	VkImageMemoryBarrier2 acquireBarriers[MIDVK_SWAP_COUNT][3];
+	VkImageMemoryBarrier2 acquireBarriers[VK_SWAP_COUNT][3];
 	uint32_t              acquireBarrierCount = 0;
-	VkImageMemoryBarrier2 releaseBarriers[MIDVK_SWAP_COUNT][3];
+	VkImageMemoryBarrier2 releaseBarriers[VK_SWAP_COUNT][3];
 	uint32_t              releaseBarrierCount = 0;
-	for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
+	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 		switch (pNodeContext->type) {
 			case MXC_NODE_TYPE_THREAD:
 				// Acquire not needed from thread.
@@ -236,7 +236,7 @@ run_loop:
 	ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	BeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
-	const int framebufferIndex = nodeTimelineValue % MIDVK_SWAP_COUNT;
+	const int framebufferIndex = nodeTimelineValue % VK_SWAP_COUNT;
 
 	{
 		VkViewport viewport = {
@@ -465,9 +465,9 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
 
 		vkCreateBasicFramebuffer(vk.context.nodeRenderPass, &pTestNode->framebuffer);
-		midVkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
+		vkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
 
-		for (uint32_t bufferIndex = 0; bufferIndex < MIDVK_SWAP_COUNT; ++bufferIndex) {
+		for (uint32_t bufferIndex = 0; bufferIndex < VK_SWAP_COUNT; ++bufferIndex) {
 			for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
 				VkImageViewCreateInfo imageViewCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,

@@ -39,7 +39,7 @@ typedef struct MxcCompNode {
   VkMesh quadMesh;
 
   VkFramebuffer framebuffer;
-  VkFramebufferTexture framebuffers[MIDVK_SWAP_COUNT];
+  VkFramebufferTexture framebuffers[VK_SWAP_COUNT];
 
 } MxcCompNode;
 
