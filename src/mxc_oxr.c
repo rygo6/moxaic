@@ -25,7 +25,7 @@ void midXrInitialize(XrGraphicsApi graphicsApi)
 	// and run compute shaders. It would certainly simplify the code. However it may be more
 	// performant to run such processes in local graphics context of OGL or DX11. For now
 	// we are just relying on vulkan to simplify
-	midVkInitialize();
+	vkInitializeInstance();
 	const MidVkContextCreateInfo contextCreateInfo = {
 		// this should probably send physical device to set here to match compositor
 		.queueFamilyCreateInfos = {
@@ -211,9 +211,7 @@ void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	int framebufferIndex = pNodeShared->timelineValue % VK_SWAP_COUNT;
-	*pIndex = framebufferIndex;
+	*pIndex = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE) % VK_SWAP_COUNT;
 }
 
 void xrWaitSwapPoolImage(XrHandle sessionHandle, uint32_t index)
@@ -249,14 +247,23 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 	pView->pose.position = *(XrVector3f*)&pNodeShared->cameraPos.position;
 	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
 
+//	quat inverseRotation = QuatInverse(pNodeShared->cameraPos.rotation);
+//	pView->pose.orientation = *(XrQuaternionf*)&inverseRotation;
+
 	float fovX = pNodeShared->globalSetState.proj.c0.r0;
 	float fovY = pNodeShared->globalSetState.proj.c1.r1;
 	float angleX = atan(1.0f / fovX);
 	float angleY = atan(1.0f / fovY);
-	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
-	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
-	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
-	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
+
+	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
+	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
+	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
+	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
+
+//	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
+//	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
+//	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
+//	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
 
 	int width = pNodeShared->globalSetState.framebufferSize.x;
 	int height = pNodeShared->globalSetState.framebufferSize.y;
@@ -290,9 +297,9 @@ void midXrBeginFrame(XrHandle sessionHandle)
 
 void midXrEndFrame(XrHandle sessionHandle)
 {
-	printf("incrementing handle %d\n", sessionHandle);
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	__atomic_fetch_add(&pNodeShared->timelineValue, 1, __ATOMIC_RELEASE);
-	printf("incremented %llu\n", pNodeShared->timelineValue);
+	uint64_t newTimelineValue = __atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELEASE);
+//	printf("incremented %llu\n", newTimelineValue);
+	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }

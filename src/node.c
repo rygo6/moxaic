@@ -207,7 +207,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	pNodeShared->camera.zNear = 0.1f;
 	pNodeShared->camera.zFar = 100.0f;
 	pNodeShared->compositorRadius = 0.5;
-	pNodeShared->compositorCycleSkip = 16;
+	pNodeShared->compositorCycleSkip = 4;
 
 	MidVkFenceCreateInfo nodeFenceCreateInfo = {
 		.debugName = "NodeFence",
@@ -612,7 +612,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShared->camera.zNear = 0.1f;
 		pNodeShared->camera.zFar = 100.0f;
 		pNodeShared->compositorRadius = 0.5;
-		pNodeShared->compositorCycleSkip = 16;
+		pNodeShared->compositorCycleSkip = 4;
 
 		const NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 		pNodeCompositorData = &nodeCompositorData[handle];

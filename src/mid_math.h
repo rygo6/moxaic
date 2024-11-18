@@ -294,6 +294,18 @@ MATH_INLINE void QuatMul(quat src, quat mul, quat* pDst) {
   pDst->y = src.w * mul.y + src.y * mul.w + src.z * mul.x - src.x * mul.z;
   pDst->z = src.w * mul.z + src.z * mul.w + src.x * mul.y - src.y * mul.x;
 }
+MATH_INLINE quat QuatInverse(quat q) {
+	// is this correct?
+	float magnitudeSquared = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
+
+	if (magnitudeSquared == 0.0) {
+		fprintf(stderr, "quat mag is zero cannot invert.n");
+		return (quat){0, 0, 0, 0};
+	}
+
+	quat conjugate = {q.w, -q.x, -q.y, -q.z};
+	return (quat) {conjugate.vec / magnitudeSquared};
+}
 MATH_INLINE vec4 Vec4MulMat4(mat4 m, vec4 v) {
   // todo SIMDIZE
   vec4 out;

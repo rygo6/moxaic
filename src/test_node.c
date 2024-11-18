@@ -513,7 +513,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		};
 		vkUpdateDescriptorSets(vk.context.device, _countof(writeSets), writeSets, 0, NULL);
 
-		pTestNode->sphereTransform = (MidPose){.position = {0, 0, 0}};
+		pTestNode->sphereTransform = (MidPose){.position = {0, 0, -4}};
 		vkmUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
 
 		CreateSphereMesh(0.5, 32, 32, &pTestNode->sphereMesh);

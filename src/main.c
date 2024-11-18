@@ -37,7 +37,7 @@ int main(void)
 
 	{  // Initialize
 		midCreateWindow();
-		midVkInitialize();
+		vkInitializeInstance();
 
 		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &vk.surfaces[0]);
 

@@ -192,7 +192,7 @@ typedef enum VkLocality {
 typedef struct MidPose {
 	vec3 position;
 	vec3 euler;
-	vec4 rotation;
+	quat rotation;
 } MidPose;
 typedef struct MidVertex {
 	vec3 position;
@@ -813,7 +813,7 @@ typedef struct VkmInitializeDesc {
 	bool enableValidationMessages;
 	bool enablePerformanceMessages;
 } VkmInitializeDesc;
-void midVkInitialize();
+void vkInitializeInstance();
 
 typedef enum VkmSupport {
 	VKM_SUPPORT_OPTIONAL,
@@ -2051,7 +2051,7 @@ static uint32_t FindQueueIndex(VkPhysicalDevice physicalDevice, const VkmQueueFa
 	return -1;
 }
 
-void midVkInitialize()
+void vkInitializeInstance()
 {
 	{
 		const char* ppEnabledLayerNames[] = {
