@@ -224,7 +224,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 
 		VkFramebufferTextureCreateInfo framebufferInfo = {
 			.locality = VK_LOCALITY_CONTEXT,
-			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT}
+			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1}
 		};
 		vkCreateFramebufferTexture(&framebufferInfo, VK_SWAP_COUNT, pNode->framebuffers);
 		vkCreateBasicFramebuffer(vk.context.renderPass, &pNode->framebuffer);

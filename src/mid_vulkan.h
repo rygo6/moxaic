@@ -90,6 +90,7 @@ static void LogWin32Error(HRESULT err)
 
 #ifndef PFN_FUNCS
 #define PFN_FUNCS                     \
+	PFN_FUNC(WaitSemaphores)          \
 	PFN_FUNC(ResetCommandBuffer)      \
 	PFN_FUNC(BeginCommandBuffer)      \
 	PFN_FUNC(CmdSetViewport)          \
@@ -331,19 +332,15 @@ typedef struct MidVkBasic {
 	VkRenderPass         renderPass;
 } MidVkBasic;
 
-typedef struct VkFunc {
-#define PFN_FUNC(_func) PFN_vk##_func _func;
-	PFN_FUNCS
-#undef PFN_FUNC
-} VkFunc;
-
 #define MIDVK_CONTEXT_CAPACITY 2 // should be 1 always?
 #define MIDVK_SURFACE_CAPACITY 2
 typedef struct CACHE_ALIGN Vk {
 	VkInstance   instance;
 	VkContext    context;
 	VkSurfaceKHR surfaces[MIDVK_SURFACE_CAPACITY];
-	VkFunc       func;
+#define PFN_FUNC(_func) PFN_vk##_func _func;
+	PFN_FUNCS
+#undef PFN_FUNC
 } Vk;
 extern Vk vk;
 
@@ -1675,12 +1672,12 @@ static void CreateAllocImage(const VkTextureCreateInfo* pCreateInfo, VkDedicated
 		};
 		VK_CHECK(vkGetPhysicalDeviceImageFormatProperties2(vk.context.physicalDevice, &imageInfo, &imageProperties));
 
-		printf("externalMemoryFeatures: ");
-		PrintFlags(externalImageProperties.externalMemoryProperties.externalMemoryFeatures, string_VkExternalMemoryFeatureFlagBits);
-		printf("exportFromImportedHandleTypes: ");
-		PrintFlags(externalImageProperties.externalMemoryProperties.exportFromImportedHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
-		printf("compatibleHandleTypes: ");
-		PrintFlags(externalImageProperties.externalMemoryProperties.compatibleHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
+//		printf("externalMemoryFeatures: ");
+//		PrintFlags(externalImageProperties.externalMemoryProperties.externalMemoryFeatures, string_VkExternalMemoryFeatureFlagBits);
+//		printf("exportFromImportedHandleTypes: ");
+//		PrintFlags(externalImageProperties.externalMemoryProperties.exportFromImportedHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
+//		printf("compatibleHandleTypes: ");
+//		PrintFlags(externalImageProperties.externalMemoryProperties.compatibleHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
 
 		requiresExternalDedicated = externalImageProperties.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT;
 	}
@@ -2251,9 +2248,9 @@ void midVkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 
 	{
 		// do I want to switch to this? probably
-#define PFN_FUNC(_func)                                                                         \
-	vk.func._func = (PFN_##vk##_func)vkGetDeviceProcAddr(vk.context.device, "vk" #_func); \
-	CHECK(vk.func._func == NULL, "Couldn't load " #_func)
+#define PFN_FUNC(_func)                                                              \
+	vk._func = (PFN_##vk##_func)vkGetDeviceProcAddr(vk.context.device, "vk" #_func); \
+	CHECK(vk._func == NULL, "Couldn't load " #_func)
 		PFN_FUNCS
 #undef PFN_FUNC
 	}

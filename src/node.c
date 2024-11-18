@@ -646,7 +646,7 @@ static void InterprocessServerAcceptNodeConnection()
 		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
 
 		VkFramebufferTextureCreateInfo framebufferInfo = {
-			.extent = {DEFAULT_WIDTH * compositorView, DEFAULT_HEIGHT},
+			.extent = {DEFAULT_WIDTH * compositorView, DEFAULT_HEIGHT, 1},
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 		};
 		mxcCreateNodeFramebuffer(&framebufferInfo, VK_SWAP_COUNT, pNodeContext->vkNodeFramebufferTextures);

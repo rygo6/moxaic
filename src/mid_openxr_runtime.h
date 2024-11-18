@@ -873,18 +873,26 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	for (int i = 0; i < pSessions->count; ++i) {
 		Session* pSession = &pSessions->data[i];
 
-		if (pSession->activeInteractionProfile != pSession->pendingInteractionProfile) {
+		if (pSession->activeSessionState != pSession->pendingSessionState) {
 
-			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
+			eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
 
-			XrEventDataInteractionProfileChanged* pEventData = (XrEventDataInteractionProfileChanged*)eventData;
+			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
 			pEventData->session = (XrSession)pSession;
+			pEventData->state = pSession->pendingSessionState;
+			pEventData->time = GetXrTime();
 
-			pSession->activeInteractionProfile = pSession->pendingInteractionProfile;
+			printf("XrEventDataSessionStateChanged: %d\n", pEventData->state);
 
-			InteractionProfile* pActionInteractionProfile = (InteractionProfile*)pSession->activeInteractionProfile;
-			Path*               pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
-			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
+			pSession->activeSessionState = pSession->pendingSessionState;
+
+			// force through states for debugging
+			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
+				pSession->pendingSessionState = XR_SESSION_STATE_READY;
+			}
+			//			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
+			//				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+			//			}
 
 			return XR_SUCCESS;
 		}
@@ -908,26 +916,18 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			return XR_SUCCESS;
 		}
 
-		if (pSession->activeSessionState != pSession->pendingSessionState) {
+		if (pSession->activeInteractionProfile != pSession->pendingInteractionProfile) {
 
-			eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
+			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
 
-			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
+			XrEventDataInteractionProfileChanged* pEventData = (XrEventDataInteractionProfileChanged*)eventData;
 			pEventData->session = (XrSession)pSession;
-			pEventData->state = pSession->pendingSessionState;
-			pEventData->time = GetXrTime();
 
-			printf("XrEventDataSessionStateChanged: %d\n", pEventData->state);
+			pSession->activeInteractionProfile = pSession->pendingInteractionProfile;
 
-			pSession->activeSessionState = pSession->pendingSessionState;
-
-			// force through states for debugging
-			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
-				pSession->pendingSessionState = XR_SESSION_STATE_READY;
-			}
-//			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
-//				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
-//			}
+			InteractionProfile* pActionInteractionProfile = (InteractionProfile*)pSession->activeInteractionProfile;
+			Path*               pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
+			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
 
 			return XR_SUCCESS;
 		}

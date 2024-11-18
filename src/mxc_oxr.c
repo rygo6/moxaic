@@ -211,7 +211,8 @@ void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	*pIndex = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE) % VK_SWAP_COUNT;
+	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
+	*pIndex = timelineValue % VK_SWAP_COUNT;
 }
 
 void xrWaitSwapPoolImage(XrHandle sessionHandle, uint32_t index)
@@ -223,7 +224,18 @@ void midXrWaitFrame(XrHandle sessionHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	midVkTimelineWait(vk.context.device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, pNodeContext->vkCompositorTimeline);
+
+//	uint64_t compositorTimelineValue;
+//	VK_CHECK(vkGetSemaphoreCounterValue(vk.context.device, pNodeContext->vkCompositorTimeline, &compositorTimelineValue));
+//	printf("compositorTimelineValue %llu\n", compositorTimelineValue);
+
+	VkSemaphoreWaitInfo semaphoreWaitInfo = {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+		.semaphoreCount = 1,
+		.pSemaphores = (VkSemaphore[]){pNodeContext->vkCompositorTimeline},
+		.pValues = (uint64_t[]){pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD},
+	};
+	VK_CHECK(vk.WaitSemaphores(vk.context.device, &semaphoreWaitInfo, UINT64_MAX));
 }
 
 // this isn't associated with sessions, its associated with instance, so sizes need to be global... ?
@@ -252,6 +264,8 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 
 	float fovX = pNodeShared->globalSetState.proj.c0.r0;
 	float fovY = pNodeShared->globalSetState.proj.c1.r1;
+//	float fovX = pNodeShared->globalSetState.invProj.c0.r0;
+//	float fovY = pNodeShared->globalSetState.invProj.c1.r1;
 	float angleX = atan(1.0f / fovX);
 	float angleY = atan(1.0f / fovY);
 
