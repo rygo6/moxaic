@@ -11,9 +11,17 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#define D3D11
 #define COBJMACROS
+#if defined(D3D11)
+#include <dxgi1_6.h>
+#include <d3d11.h>
+#include <d3d11_1.h>
+#include <d3d11_4.h>
+#elif defined(D3D12)
 #include <dxgi1_6.h>
 #include <d3d12.h>
+#endif
 
 #include <vulkan/vulkan_win32.h>
 #endif
@@ -22,6 +30,8 @@
 
 //
 //// Mid Common Utility
+#define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__);
+
 #ifndef MID_DEBUG
 #define MID_DEBUG
 extern void Panic(const char* file, int line, const char* message);
@@ -872,7 +882,11 @@ void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture*
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
 
 typedef struct VkWin32ExternalTexture {
+#if defined(D3D11)
+	ID3D11Texture2D* texture;
+#elif defined(D3D12)
 	ID3D12Resource* texture;
+#endif
 	HANDLE handle;
 } VkWin32ExternalTexture;
 void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture);
@@ -1739,10 +1753,165 @@ void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture*
 static struct {
 	IDXGIFactory4* factory;
 	IDXGIAdapter1* adapter;
+} dxgi;
+#if defined(D3D11)
+static struct {
+	ID3D11DeviceContext* context;
+	ID3D11Device1*  device1;
+} d3d11;
+#elif defined(D3D12)
+static struct {
 	ID3D12Device*  device;
 } d3d12;
+#endif
+static DXGI_FORMAT VkToDXGIFormat(VkFormat format)
+{
+	switch (format) {
+		case VK_FORMAT_R8_UNORM: return DXGI_FORMAT_R8_UNORM;
+		case VK_FORMAT_R8_SNORM: return DXGI_FORMAT_R8_SNORM;
+		case VK_FORMAT_R8_UINT:  return DXGI_FORMAT_R8_UINT;
+		case VK_FORMAT_R8_SINT:  return DXGI_FORMAT_R8_SINT;
+
+		case VK_FORMAT_R16_UNORM:  return DXGI_FORMAT_R16_UNORM;
+		case VK_FORMAT_R16_SNORM:  return DXGI_FORMAT_R16_SNORM;
+		case VK_FORMAT_R16_UINT:   return DXGI_FORMAT_R16_UINT;
+		case VK_FORMAT_R16_SINT:   return DXGI_FORMAT_R16_SINT;
+		case VK_FORMAT_R16_SFLOAT: return DXGI_FORMAT_R16_FLOAT;
+		case VK_FORMAT_R8G8_UNORM: return DXGI_FORMAT_R8G8_UNORM;
+		case VK_FORMAT_R8G8_SNORM: return DXGI_FORMAT_R8G8_SNORM;
+		case VK_FORMAT_R8G8_UINT:  return DXGI_FORMAT_R8G8_UINT;
+		case VK_FORMAT_R8G8_SINT:  return DXGI_FORMAT_R8G8_SINT;
+
+		case VK_FORMAT_R32_UINT:       return DXGI_FORMAT_R32_UINT;
+		case VK_FORMAT_R32_SINT:       return DXGI_FORMAT_R32_SINT;
+		case VK_FORMAT_R32_SFLOAT:     return DXGI_FORMAT_R32_FLOAT;
+		case VK_FORMAT_R16G16_UNORM:   return DXGI_FORMAT_R16G16_UNORM;
+		case VK_FORMAT_R16G16_SNORM:   return DXGI_FORMAT_R16G16_SNORM;
+		case VK_FORMAT_R16G16_UINT:    return DXGI_FORMAT_R16G16_UINT;
+		case VK_FORMAT_R16G16_SINT:    return DXGI_FORMAT_R16G16_SINT;
+		case VK_FORMAT_R16G16_SFLOAT:  return DXGI_FORMAT_R16G16_FLOAT;
+		case VK_FORMAT_R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM;
+		case VK_FORMAT_R8G8B8A8_SRGB:  return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		case VK_FORMAT_R8G8B8A8_SNORM: return DXGI_FORMAT_R8G8B8A8_SNORM;
+		case VK_FORMAT_R8G8B8A8_UINT:  return DXGI_FORMAT_R8G8B8A8_UINT;
+		case VK_FORMAT_R8G8B8A8_SINT:  return DXGI_FORMAT_R8G8B8A8_SINT;
+		case VK_FORMAT_B8G8R8A8_UNORM: return DXGI_FORMAT_B8G8R8A8_UNORM;
+		case VK_FORMAT_B8G8R8A8_SRGB:  return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+
+		case VK_FORMAT_R32G32_UINT:         return DXGI_FORMAT_R32G32_UINT;
+		case VK_FORMAT_R32G32_SINT:         return DXGI_FORMAT_R32G32_SINT;
+		case VK_FORMAT_R32G32_SFLOAT:       return DXGI_FORMAT_R32G32_FLOAT;
+		case VK_FORMAT_R16G16B16A16_UNORM:  return DXGI_FORMAT_R16G16B16A16_UNORM;
+		case VK_FORMAT_R16G16B16A16_SNORM:  return DXGI_FORMAT_R16G16B16A16_SNORM;
+		case VK_FORMAT_R16G16B16A16_UINT:   return DXGI_FORMAT_R16G16B16A16_UINT;
+		case VK_FORMAT_R16G16B16A16_SINT:   return DXGI_FORMAT_R16G16B16A16_SINT;
+		case VK_FORMAT_R16G16B16A16_SFLOAT: return DXGI_FORMAT_R16G16B16A16_FLOAT;
+
+		case VK_FORMAT_R32G32B32_UINT:   return DXGI_FORMAT_R32G32B32_UINT;
+		case VK_FORMAT_R32G32B32_SINT:   return DXGI_FORMAT_R32G32B32_SINT;
+		case VK_FORMAT_R32G32B32_SFLOAT: return DXGI_FORMAT_R32G32B32_FLOAT;
+
+		case VK_FORMAT_R32G32B32A32_UINT:   return DXGI_FORMAT_R32G32B32A32_UINT;
+		case VK_FORMAT_R32G32B32A32_SINT:   return DXGI_FORMAT_R32G32B32A32_SINT;
+		case VK_FORMAT_R32G32B32A32_SFLOAT: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+		case VK_FORMAT_D16_UNORM:          return DXGI_FORMAT_D16_UNORM;
+		case VK_FORMAT_D32_SFLOAT:         return DXGI_FORMAT_D32_FLOAT;
+		case VK_FORMAT_D24_UNORM_S8_UINT:  return DXGI_FORMAT_D24_UNORM_S8_UINT;
+		case VK_FORMAT_D32_SFLOAT_S8_UINT: return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+
+		case VK_FORMAT_BC1_RGB_UNORM_BLOCK:  return DXGI_FORMAT_BC1_UNORM;
+		case VK_FORMAT_BC1_RGB_SRGB_BLOCK:   return DXGI_FORMAT_BC1_UNORM_SRGB;
+		case VK_FORMAT_BC1_RGBA_UNORM_BLOCK: return DXGI_FORMAT_BC1_UNORM;
+		case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:  return DXGI_FORMAT_BC1_UNORM_SRGB;
+		case VK_FORMAT_BC2_UNORM_BLOCK:      return DXGI_FORMAT_BC2_UNORM;
+		case VK_FORMAT_BC2_SRGB_BLOCK:       return DXGI_FORMAT_BC2_UNORM_SRGB;
+		case VK_FORMAT_BC3_UNORM_BLOCK:      return DXGI_FORMAT_BC3_UNORM;
+		case VK_FORMAT_BC3_SRGB_BLOCK:       return DXGI_FORMAT_BC3_UNORM_SRGB;
+		case VK_FORMAT_BC4_UNORM_BLOCK:      return DXGI_FORMAT_BC4_UNORM;
+		case VK_FORMAT_BC4_SNORM_BLOCK:      return DXGI_FORMAT_BC4_SNORM;
+		case VK_FORMAT_BC5_UNORM_BLOCK:      return DXGI_FORMAT_BC5_UNORM;
+		case VK_FORMAT_BC5_SNORM_BLOCK:      return DXGI_FORMAT_BC5_SNORM;
+		case VK_FORMAT_BC6H_UFLOAT_BLOCK:    return DXGI_FORMAT_BC6H_UF16;
+		case VK_FORMAT_BC6H_SFLOAT_BLOCK:    return DXGI_FORMAT_BC6H_SF16;
+		case VK_FORMAT_BC7_UNORM_BLOCK:      return DXGI_FORMAT_BC7_UNORM;
+		case VK_FORMAT_BC7_SRGB_BLOCK:       return DXGI_FORMAT_BC7_UNORM_SRGB;
+
+		case VK_FORMAT_B5G6R5_UNORM_PACK16:      return DXGI_FORMAT_B5G6R5_UNORM;
+		case VK_FORMAT_B5G5R5A1_UNORM_PACK16:    return DXGI_FORMAT_B5G5R5A1_UNORM;
+		case VK_FORMAT_B4G4R4A4_UNORM_PACK16:    return DXGI_FORMAT_B4G4R4A4_UNORM;
+		case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return DXGI_FORMAT_R10G10B10A2_UNORM;
+
+		default: return DXGI_FORMAT_UNKNOWN;
+	}
+}
+
 void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture)
 {
+	if (dxgi.adapter == NULL) {
+		UINT flags = DXGI_CREATE_FACTORY_DEBUG;
+		DX_CHECK(CreateDXGIFactory2(flags, &IID_IDXGIFactory4, (void**)&dxgi.factory));
+		for (UINT i = 0; IDXGIFactory4_EnumAdapters1(dxgi.factory, i, &dxgi.adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+			DXGI_ADAPTER_DESC1 desc;
+			DX_CHECK(IDXGIAdapter1_GetDesc1(dxgi.adapter, &desc));
+			wprintf(L"DX12 Adapter %d Name: %ls Description: %ld:%lu\n",
+					i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
+			break;  // add logic to choose?
+		}
+	}
+
+#if defined(D3D11)
+	if (d3d11.device1 == NULL) {
+		D3D_FEATURE_LEVEL featuresLevels[] = {
+			D3D_FEATURE_LEVEL_11_1,
+			D3D_FEATURE_LEVEL_11_0,
+		};
+		D3D_FEATURE_LEVEL featureLevel;
+		ID3D11Device*  device;
+		DX_CHECK(D3D11CreateDevice(
+			(IDXGIAdapter*)dxgi.adapter,
+			D3D_DRIVER_TYPE_UNKNOWN,
+			NULL,
+			D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+			featuresLevels,
+			COUNT(featuresLevels),
+			D3D11_SDK_VERSION,
+			&device,
+			&featureLevel,
+			&d3d11.context));
+		if (device == NULL || featureLevel < D3D_FEATURE_LEVEL_11_1) {
+			PANIC("Could not get D3D11.1 device\n");
+		}
+		DX_CHECK(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&d3d11.device1));
+		if (d3d11.device1 == NULL) {
+			PANIC("Could not get D3D11.1 device\n");
+		}
+	}
+
+	D3D11_TEXTURE2D_DESC desc = {
+		.Width = pCreateInfo->extent.width,
+		.Height = pCreateInfo->extent.height,
+		.MipLevels = pCreateInfo->mipLevels,
+		.ArraySize = pCreateInfo->arrayLayers,
+		.Format = VkToDXGIFormat(pCreateInfo->format),
+		.SampleDesc.Count = pCreateInfo->samples,
+		.SampleDesc.Quality = 0,
+		.Usage = D3D11_USAGE_DEFAULT,
+		.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
+		.CPUAccessFlags = 0,
+		.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX,
+	};
+	DX_CHECK(ID3D11Device1_CreateTexture2D(d3d11.device1, &desc, NULL, &pTexture->texture));
+	IDXGIResource1* dxgiResource1 = NULL;
+	DX_CHECK(ID3D11Texture2D_QueryInterface(pTexture->texture, &IID_IDXGIResource1, (void**)&dxgiResource1));
+	DX_CHECK(IDXGIResource1_CreateSharedHandle(dxgiResource1, NULL, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, NULL, &pTexture->handle));
+
+//	IDXGIAdapter_Release(d3d11.adapter);
+//	IDXGIFactory_Release(d3d11.factory);
+//	ID3D11Device1_Release(d3d11.device1);
+//	ID3D11DeviceContext_Release(d3d11.context);
+
+#elif defined(D3D12)
 	if (d3d12.device == NULL) {
 		UINT flags = DXGI_CREATE_FACTORY_DEBUG;
 		DX_CHECK(CreateDXGIFactory2(flags, &IID_IDXGIFactory4, (void**)&d3d12.factory));
@@ -1756,59 +1925,6 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		DX_CHECK(D3D12CreateDevice((IUnknown*)d3d12.adapter, D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device, (void**)&d3d12.device));
 	}
 
-	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-	switch (pCreateInfo->format) {
-		case VK_FORMAT_R8G8B8A8_UNORM:
-			format = DXGI_FORMAT_R8G8B8A8_UNORM;
-			break;
-		case VK_FORMAT_B8G8R8A8_UNORM:
-			format = DXGI_FORMAT_B8G8R8A8_UNORM;
-			break;
-		case VK_FORMAT_R8G8B8A8_SRGB:
-			format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-			break;
-		case VK_FORMAT_B8G8R8A8_SRGB:
-			format = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-			break;
-		case VK_FORMAT_R16G16B16A16_SFLOAT:
-			format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-			break;
-		case VK_FORMAT_R32G32B32A32_SFLOAT:
-			format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-			break;
-		case VK_FORMAT_R32G32_SFLOAT:
-			format = DXGI_FORMAT_R32G32_FLOAT;
-			break;
-		case VK_FORMAT_D32_SFLOAT:
-			format = DXGI_FORMAT_D32_FLOAT;
-			break;
-		case VK_FORMAT_D24_UNORM_S8_UINT:
-			format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-			break;
-		case VK_FORMAT_D16_UNORM:
-			format = DXGI_FORMAT_D16_UNORM;
-			break;
-		case VK_FORMAT_R8_UNORM:
-			format = DXGI_FORMAT_R8_UNORM;
-			break;
-		case VK_FORMAT_R16_UNORM:
-			format = DXGI_FORMAT_R16_UNORM;
-			break;
-		case VK_FORMAT_R32_SFLOAT:
-			format = DXGI_FORMAT_R32_FLOAT;
-			break;
-		case VK_FORMAT_R8G8_UNORM:
-			format = DXGI_FORMAT_R8G8_UNORM;
-			break;
-		case VK_FORMAT_R16G16_UNORM:
-			format = DXGI_FORMAT_R16G16_UNORM;
-			break;
-		default:
-			format = DXGI_FORMAT_UNKNOWN;
-			fprintf(stderr, "Format unknown for DXGI: %s", string_VkFormat(pCreateInfo->format));
-			break;
-	}
-
 	D3D12_RESOURCE_DESC textureDesc = {
 		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 		.Alignment = 0,
@@ -1816,7 +1932,7 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.Height = pCreateInfo->extent.height,
 		.DepthOrArraySize = pCreateInfo->arrayLayers,
 		.MipLevels = pCreateInfo->mipLevels,
-		.Format = format,
+		.Format = VkToDXGIFormat(pCreateInfo->format),
 		.SampleDesc.Count = pCreateInfo->samples,
 		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
 		.Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
@@ -1850,6 +1966,7 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 //	IDXGIFactory4_Release(d3d12.factory);
 //	IDXGIAdapter1_Release(d3d12.adapter);
 //	ID3D12Device_Release(d3d12.device);
+#endif
 }
 
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)

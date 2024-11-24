@@ -17,17 +17,22 @@ add_executable(${TARGET_NAME}
 
 set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.290.0")
 # make switch not compile oxr into main comp app
-set(OPENXR_SDK_PATH "C:/OpenXRSDK/OpenXR.Loader.1.1.38")
+#set(OPENXR_SDK_PATH "C:/OpenXRSDK/OpenXR.Loader.1.1.38")
+
+set(OPENXR_SDK_INCLUDE_PATH "C:/OpenXRSDK/openxr_loader_windows-1.1.42/include")
+set(OPENXR_SDK_LINK_PATH "C:/OpenXRSDK/openxr_loader_windows-1.1.42/x64/bin")
 
 target_link_directories(${TARGET_NAME} PUBLIC
         "${VULKAN_SDK_PATH}/Lib"
-        "${OPENXR_SDK_PATH}/native/x64/release/bin"
+#        "${OPENXR_SDK_PATH}/native/x64/release/bin"
+        "${OPENXR_SDK_LINK_PATH}"
 )
 target_include_directories(${TARGET_NAME} PUBLIC
         src
         third_party
         "${VULKAN_SDK_PATH}/Include"
-        "${OPENXR_SDK_PATH}/Include"
+#        "${OPENXR_SDK_PATH}/Include"
+        "${OPENXR_SDK_INCLUDE_PATH}"
 )
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)

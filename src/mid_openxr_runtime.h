@@ -302,9 +302,13 @@ typedef struct Swapchain {
 		struct {
 			GLuint texture;
 			GLuint memObject;
-		} gl[MIDXR_SWAP_COUNT];
-		ID3D11Texture2D* d3d11[MIDXR_SWAP_COUNT];
-	} color;
+		} gl;
+		struct {
+			ID3D11Texture2D* texture;
+			IDXGIKeyedMutex* keyedMutex;
+//			ID3D11RenderTargetView* rtView;
+		} d3d11;
+	} color[MIDXR_SWAP_COUNT];
 
 	XrSwapchainUsageFlags usageFlags;
 	int64_t               format;
@@ -346,6 +350,7 @@ typedef struct Session {
 		} gl;
 		struct {
 			ID3D11Device1* device1;
+			ID3D11DeviceContext1* context1;
 		} d3d11;
 		struct {
 			VkInstance       instance;
@@ -416,7 +421,7 @@ POOL(Instance, MIDXR_MAX_INSTANCES)
 #define MID_WIN32_DEBUG
 static void LogWin32Error(HRESULT err)
 {
-	LOG_ERROR("Win32 Error Code: 0x%08lX\n", err);
+	LOG_ERROR("Win32 Code: 0x%08lX\n", err);
 	char* errStr;
 	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
@@ -482,9 +487,9 @@ static int OculusRightClick(float* pValue)
 //
 //// Mid OpenXR Implementation
 static XrResult RegisterBinding(
-	XrInstance   instance,
+	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
-	Path*        pBindingPath,
+	Path*               pBindingPath,
 	int (*func)(void*))
 {
 	Instance* pInstance = (Instance*)instance;
@@ -499,7 +504,7 @@ static XrResult RegisterBinding(
 
 	Binding* pBinding;
 	ClaimBinding(&pInteractionProfile->bindings, &pBinding, bindingPathHash);
-//	ClaimHandleHashed(pInteractionProfile->bindings, pBinding, bindingPathHash);
+	//	ClaimHandleHashed(pInteractionProfile->bindings, pBinding, bindingPathHash);
 	pBinding->path = (XrPath)pBindingPath;
 	pBinding->func = func;
 
@@ -519,7 +524,7 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 	XrHash interactionProfileHash = GetPathHash(&pInstance->paths, (const Path*)interactionProfilePath);
 
 	InteractionProfile* pInteractionProfile;
-//	ClaimHandleHashed(pInstance->interactionProfiles, pInteractionProfile, interactionProfileHash);
+	//	ClaimHandleHashed(pInstance->interactionProfiles, pInteractionProfile, interactionProfileHash);
 	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pInteractionProfile, interactionProfileHash));
 
 	pInteractionProfile->path = interactionProfilePath;
@@ -696,11 +701,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 	LOG_METHOD(xrEnumerateInstanceExtensionProperties);
 
 	XrExtensionProperties extensionProperties[] = {
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
-			.extensionVersion = XR_KHR_opengl_enable_SPEC_VERSION,
-		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
+//			.extensionVersion = XR_KHR_opengl_enable_SPEC_VERSION,
+//		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
 			.extensionName = XR_KHR_D3D11_ENABLE_EXTENSION_NAME,
@@ -708,24 +713,29 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
-			.extensionVersion = XR_EXT_local_floor_SPEC_VERSION,
+			.extensionName = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION,
 		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME,
-			.extensionVersion = XR_EXT_win32_appcontainer_compatible_SPEC_VERSION,
-		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_MSFT_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
-			.extensionVersion = XR_MSFT_unbounded_reference_space_SPEC_VERSION,
-		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
-			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
-		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
+//			.extensionVersion = XR_EXT_local_floor_SPEC_VERSION,
+//		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME,
+//			.extensionVersion = XR_EXT_win32_appcontainer_compatible_SPEC_VERSION,
+//		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_MSFT_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
+//			.extensionVersion = XR_MSFT_unbounded_reference_space_SPEC_VERSION,
+//		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
+//			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
+//		},
 	};
 
 	*propertyCountOutput = COUNT(extensionProperties);
@@ -792,7 +802,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 			}
 			return XR_SUCCESS;
 		}
-		case XR_GRAPHICS_API_D3D11_1:   {
+		case XR_GRAPHICS_API_D3D11_1: {
 			IDXGIFactory1* factory1 = NULL;
 			DX_CHECK(CreateDXGIFactory1(&IID_IDXGIFactory, (void**)&factory1));
 
@@ -808,10 +818,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 				// Check device
 				ID3D11Device*        device;
 				ID3D11DeviceContext* context;
-				D3D_FEATURE_LEVEL featureLevel;
+				D3D_FEATURE_LEVEL    featureLevel;
 				DX_CHECK(D3D11CreateDevice(
 					adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, D3D11_CREATE_DEVICE_DEBUG,
-					(D3D_FEATURE_LEVEL[]) {D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
+					(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
 					&device, &featureLevel, &context));
 				printf("XR D3D11 Device: %p %d\n", device, featureLevel);
 				if (device == NULL || featureLevel < D3D_FEATURE_LEVEL_11_1) {
@@ -936,14 +946,24 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	return XR_EVENT_UNAVAILABLE;
 }
 
+#define TRANSFER_NAME(_type, _) \
+	case _type: strncpy(buffer, #_type, XR_MAX_RESULT_STRING_SIZE); break;
+
 XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(
 	XrInstance instance,
 	XrResult   value,
 	char       buffer[XR_MAX_RESULT_STRING_SIZE])
 {
-	LOG_METHOD(xrResultToString);
-	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrResultToString\n");
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+//	LOG_METHOD(xrResultToString);
+
+	switch (value) {
+		XR_LIST_ENUM_XrResult(TRANSFER_NAME);
+		default:
+			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
+	}
+	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
+
+	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrStructureTypeToString(
@@ -951,9 +971,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStructureTypeToString(
 	XrStructureType value,
 	char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
 {
-	LOG_METHOD(xrStructureTypeToString);
-	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrStructureTypeToString\n");
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+//	LOG_METHOD(xrStructureTypeToString);
+
+	switch (value) {
+		XR_LIST_ENUM_XrStructureType(TRANSFER_NAME);
+		default:
+			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
+	}
+	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
+
+	return XR_SUCCESS;
 }
 
 static void PrintNextChain(const XrBaseInStructure* nextProperties)
@@ -1073,8 +1100,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
 	switch (viewConfigurationType) {
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+//		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
 		default:
 			for (int i = 0; i < COUNT(modes); ++i) {
 				environmentBlendModes[i] = modes[i];
@@ -1145,7 +1172,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			printf("D3D11 Feature Level: %d\n", featureLevel);
 			assert(D3D_FEATURE_LEVEL_11_1 == featureLevel);
 
+			ID3D11DeviceContext1* context1;
+			ID3D11Device1_GetImmediateContext1(device1, &context1);
+			printf("XR D3D11 Context1: %p\n", context1);
+			if (context1 == NULL) {
+				LOG_ERROR("XR D3D11 Context Invalid.\n");
+				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+			}
+
 			pClaimedSession->binding.d3d11.device1 = device1;
+			pClaimedSession->binding.d3d11.context1 = context1;
 
 			*session = (XrSession)pClaimedSession;
 			return XR_SUCCESS;
@@ -1244,7 +1280,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 {
 	LOG_METHOD(xrGetReferenceSpaceBoundsRect);
 
-	Session*  pSession = (Session*)session;
+	Session* pSession = (Session*)session;
 
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
@@ -1402,16 +1438,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetViewConfigurationProperties(
 			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
 			configurationProperties->fovMutable = XR_TRUE;
 			break;
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
-			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET;
-			configurationProperties->fovMutable = XR_TRUE;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
-			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT;
-			configurationProperties->fovMutable = XR_TRUE;
-			break;
+//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+//			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
+//			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET;
+//			configurationProperties->fovMutable = XR_TRUE;
+//			break;
+//		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+//			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
+//			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT;
+//			configurationProperties->fovMutable = XR_TRUE;
+//			break;
 	}
 
 	return XR_SUCCESS;
@@ -1437,14 +1473,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO\n");
 			*viewCountOutput = 2;
 			break;
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
-			*viewCountOutput = 4;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
-			*viewCountOutput = 1;  // not sure
-			break;
+//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+//			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
+//			*viewCountOutput = 4;
+//			break;
+//		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+//			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
+//			*viewCountOutput = 1;  // not sure
+//			break;
 	}
 
 	for (int i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
@@ -1490,7 +1526,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 			TRANSFER_SWAP_FORMATS
 			return XR_SUCCESS;
 		}
-		case XR_GRAPHICS_API_VULKAN:    {
+		case XR_GRAPHICS_API_VULKAN: {
 			int64_t swapFormats[] = {
 				VK_FORMAT_R8G8B8A8_UNORM,
 				//				VK_FORMAT_R8G8B8A8_SRGB,
@@ -1556,8 +1592,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color.gl[i].memObject, pSwapchain->color.gl[i].texture, colorHandles[i]);
-				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwapchain->color.gl[i].texture, pSwapchain->color.gl[i].memObject);
+				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color[i].gl.memObject, pSwapchain->color[i].gl.texture, colorHandles[i]);
+				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwapchain->color[i].gl.texture, pSwapchain->color[i].gl.memObject);
 			}
 
 #undef DEFAULT_IMAGE_CREATE_INFO
@@ -1568,8 +1604,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 
 			ID3D11Device1* device1 = pSession->binding.d3d11.device1;
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				DX_CHECK(ID3D11Device1_OpenSharedResource1(device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color.d3d11[i]));
-				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device1, colorHandles[i], pSwapchain->color.d3d11[i]);
+				DX_CHECK(ID3D11Device1_OpenSharedResource1(device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color[i].d3d11.texture));
+				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device1, colorHandles[i], pSwapchain->color[i].d3d11.texture);
+
+//				ID3D11RenderTargetView* renderTargetView = NULL;
+//				DX_CHECK(ID3D11Device1_CreateRenderTargetView(device1, (ID3D11Resource*)pSwapchain->color[i].d3d11.texture, NULL, &pSwapchain->color[i].d3d11.rtView));
+
+				IDXGIKeyedMutex* keyedMutex = NULL;
+				ID3D11Texture2D_QueryInterface(pSwapchain->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwapchain->color[i].d3d11.keyedMutex);
 			}
 
 			break;
@@ -1614,7 +1656,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 			XrSwapchainImageOpenGLKHR* pImage = (XrSwapchainImageOpenGLKHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
 				assert(pImage[i].next == NULL);
-				pImage[i].image = pSwapchain->color.gl[i].texture;
+				pImage[i].image = pSwapchain->color[i].gl.texture;
 			}
 			break;
 		}
@@ -1623,7 +1665,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 			XrSwapchainImageD3D11KHR* pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < MIDXR_SWAP_COUNT; ++i) {
 				assert(pImage[i].next == NULL);
-				pImage[i].texture = pSwapchain->color.d3d11[i];
+				pImage[i].texture = pSwapchain->color[i].d3d11.texture;
 			}
 			break;
 		}
@@ -1647,7 +1689,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	Session*   pSession = (Session*)pSwapchain->session;
 	Instance*  pInstance = (Instance*)pSession->instance;
 	// handles could still be 32 bit offsets?
-	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	xrClaimSwapPoolImage(sessionHandle, &pSwapchain->swapIndex);
 	*index = pSwapchain->swapIndex;
@@ -1662,6 +1704,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
 	LOG_METHOD_ONCE(xrWaitSwapchainImage);
 	PrintNextChain(waitInfo->next);
 
+	Swapchain* pSwapchain = (Swapchain*)swapchain;
+	Session*   pSession = (Session*)pSwapchain->session;
+
+		IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
+		IDXGIKeyedMutex_AcquireSync(keyedMutex, 1, INFINITE);
+
+//	ID3D11RenderTargetView* acquireRTView[] = {pSwapchain->color[pSwapchain->swapIndex].d3d11.rtView};
+//	ID3D11DeviceContext1_OMSetRenderTargets(pSession->binding.d3d11.context1, 1, acquireRTView, NULL);
+
 	return XR_SUCCESS;
 }
 
@@ -1671,6 +1722,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
 {
 	LOG_METHOD_ONCE(xrReleaseSwapchainImage);
 	PrintNextChain(releaseInfo->next);
+
+	Swapchain* pSwapchain = (Swapchain*)swapchain;
+	Session*   pSession = (Session*)pSwapchain->session;
+
+	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
+	IDXGIKeyedMutex_ReleaseSync(keyedMutex, 1);
+
+//	ID3D11RenderTargetView* nullRTView[] = {NULL};
+//	ID3D11DeviceContext1_OMSetRenderTargets(pSession->binding.d3d11.context1, 1, nullRTView, NULL);
 
 	return XR_SUCCESS;
 }
@@ -1687,14 +1747,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
 	printf("primaryViewConfigurationType: %d\n", pSession->primaryViewConfigurationType);
 
-	if (beginInfo->next != NULL) {
-		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
-		assert(secondBeginInfo->type == XR_TYPE_SECONDARY_VIEW_CONFIGURATION_SESSION_BEGIN_INFO_MSFT);
-		assert(secondBeginInfo->next == NULL);
-		for (int i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
-			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
-		}
-	}
+//	if (beginInfo->next != NULL) {
+//		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
+//		assert(secondBeginInfo->type == XR_TYPE_SECONDARY_VIEW_CONFIGURATION_SESSION_BEGIN_INFO_MSFT);
+//		assert(secondBeginInfo->next == NULL);
+//		for (int i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
+//			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
+//		}
+//	}
 
 	return XR_SUCCESS;
 }
@@ -1757,6 +1817,37 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	LOG_METHOD_ONCE(xrEndFrame);
 	PrintNextChain(frameEndInfo->next);
 
+	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
+		switch (frameEndInfo->layers[layer]->type) {
+			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
+				XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)&frameEndInfo->layers[layer];
+				printf("XR_TYPE_COMPOSITION_LAYER_PROJECTION viewCount: %d\n", pProjectionLayer->viewCount);
+
+				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
+					switch (pProjectionLayer->views[layer].type) {
+						case XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW: {
+							printf("XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW\n");
+							break;
+						}
+						default: {
+							LOG_ERROR("Unknown Composition Layer View %d", pProjectionLayer->views[layer].type);
+							break;
+						}
+					}
+				}
+
+				break;
+			}
+			case XR_TYPE_COMPOSITION_LAYER_QUAD: {
+				printf("XR_TYPE_COMPOSITION_LAYER_QUAD");
+			}
+			default: {
+				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
+				break;
+			}
+		}
+	}
+
 	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
@@ -1792,17 +1883,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
 			*viewCountOutput = 4;
 			break;
-		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			*viewCountOutput = 1;  // not sure
-			break;
+//		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+//			*viewCountOutput = 1;  // not sure
+//			break;
 	}
 
 	if (views == NULL)
 		return XR_SUCCESS;
 
-	Session*       pSession = (Session*)session;
-	Instance*      pInstance = (Instance*)pSession->instance;
-	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
+	Session*  pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	for (int i = 0; i < viewCapacityInput; ++i) {
 		midXrGetView(sessionHandle, i, &views[i]);
@@ -1816,7 +1907,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	const char* pathString,
 	XrPath*     path)
 {
-//	LOG_METHOD(xrStringToPath);
+	//	LOG_METHOD(xrStringToPath);
 
 	Instance* pInstance = (Instance*)instance;
 
@@ -1852,7 +1943,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 	uint32_t*  bufferCountOutput,
 	char*      buffer)
 {
-//	LOG_METHOD(xrPathToString);
+	//	LOG_METHOD(xrPathToString);
 
 	Instance* pInstance = (Instance*)instance;  // check its in instance ?
 	Path*     pPath = (Path*)path;
@@ -2548,9 +2639,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	const char*         name,
 	PFN_xrVoidFunction* function)
 {
-//	#ifdef ENABLE_DEBUG_LOG_METHOD
-//		printf("xrGetInstanceProcAddr: %s\n", name);
-//	#endif
+	//	#ifdef ENABLE_DEBUG_LOG_METHOD
+	//		printf("xrGetInstanceProcAddr: %s\n", name);
+	//	#endif
 
 #define CHECK_PROC_ADDR(_name)                                    \
 	if (strncmp(name, #_name, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \

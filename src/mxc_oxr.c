@@ -269,8 +269,8 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 	float angleX = atan(1.0f / fovX);
 	float angleY = atan(1.0f / fovY);
 
-	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
-	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
+	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
+	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
 	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
 	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
 

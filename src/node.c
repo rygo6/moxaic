@@ -236,7 +236,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
 	VkFramebufferTextureCreateInfo framebufferInfo = {
-		.extent = {DEFAULT_WIDTH * compositorView, DEFAULT_HEIGHT},
+		.extent = {DEFAULT_WIDTH * compositorView, DEFAULT_HEIGHT, 1},
 		.locality = VK_LOCALITY_CONTEXT,
 	};
 	mxcCreateNodeFramebuffer(&framebufferInfo, VK_SWAP_COUNT, pNodeContext->vkNodeFramebufferTextures);
@@ -405,13 +405,19 @@ void mxcCreateNodeRenderPass()
 
 void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, MxcNodeVkFramebufferTexture* pFramebufferTextures)
 {
+#if defined(D3D11)
+	#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT
+#elif defined(D3D12)
+	#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
+#endif
+
 	for (int swapIndex = 0; swapIndex < framebufferCount; ++swapIndex) {
 		{
 			VkImageCreateInfo info = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = &(VkExternalMemoryImageCreateInfo){
 					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+					.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 				},
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
@@ -427,7 +433,7 @@ void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo,
 				.pImageCreateInfo = &info,
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.importHandle = pFramebufferTextures[swapIndex].colorExternal.handle,
-				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			};
 			vkCreateTexture(&textureInfo, &pFramebufferTextures[swapIndex].color);
@@ -438,7 +444,7 @@ void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo,
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = &(VkExternalMemoryImageCreateInfo){
 					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+					.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 				},
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
@@ -454,7 +460,7 @@ void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo,
 				.pImageCreateInfo = &info,
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.importHandle = pFramebufferTextures[swapIndex].normalExternal.handle,
-				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			};
 			vkCreateTexture(&textureInfo, &pFramebufferTextures[swapIndex].normal);
@@ -465,7 +471,7 @@ void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo,
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = &(VkExternalMemoryImageCreateInfo){
 					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-					.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+					.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 				},
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = MXC_NODE_GBUFFER_FORMAT,
@@ -481,7 +487,7 @@ void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo,
 				.pImageCreateInfo = &info,
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.importHandle = pFramebufferTextures[swapIndex].gbufferExternal.handle,
-				.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+				.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			};
 			vkCreateTexture(&textureInfo, &pFramebufferTextures[swapIndex].gbuffer);
