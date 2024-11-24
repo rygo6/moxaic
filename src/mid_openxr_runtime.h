@@ -305,7 +305,7 @@ typedef struct Swapchain {
 		} gl;
 		struct {
 			ID3D11Texture2D* texture;
-			IDXGIKeyedMutex* keyedMutex;
+//			IDXGIKeyedMutex* keyedMutex;
 //			ID3D11RenderTargetView* rtView;
 		} d3d11;
 	} color[MIDXR_SWAP_COUNT];
@@ -711,11 +711,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_D3D11_ENABLE_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_D3D11_enable_SPEC_VERSION,
 		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME,
-			.extensionVersion = XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION,
-		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME,
+//			.extensionVersion = XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION,
+//		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
@@ -900,31 +900,34 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
 				pSession->pendingSessionState = XR_SESSION_STATE_READY;
 			}
-			//			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
-			//				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
-			//			}
+			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
+				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+			}
+			if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE) {
+				pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
+			}
 
 			return XR_SUCCESS;
 		}
 
-		if (pSession->activeReferenceSpaceHandle != pSession->pendingReferenceSpaceHandle) {
-
-			eventData->type = XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING;
-
-			XrEventDataReferenceSpaceChangePending* pEventData = (XrEventDataReferenceSpaceChangePending*)eventData;
-			pEventData->session = (XrSession)pSession;
-			pEventData->referenceSpaceType = pSession->referenceSpaces.data[pSession->pendingReferenceSpaceHandle].referenceSpaceType;
-			pEventData->changeTime = GetXrTime();
-			pEventData->poseValid = XR_TRUE;
-			// this is not correct, supposed to be origin of new space in space of prior space
-			pEventData->poseInPreviousSpace = pSession->referenceSpaces.data[pSession->pendingReferenceSpaceHandle].poseInReferenceSpace;
-
-			printf("XrEventDataReferenceSpaceChangePending: %d\n", pEventData->referenceSpaceType);
-
-			pSession->activeReferenceSpaceHandle = pSession->pendingReferenceSpaceHandle;
-
-			return XR_SUCCESS;
-		}
+//		if (pSession->activeReferenceSpaceHandle != pSession->pendingReferenceSpaceHandle) {
+//
+//			eventData->type = XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING;
+//
+//			XrEventDataReferenceSpaceChangePending* pEventData = (XrEventDataReferenceSpaceChangePending*)eventData;
+//			pEventData->session = (XrSession)pSession;
+//			pEventData->referenceSpaceType = pSession->referenceSpaces.data[pSession->pendingReferenceSpaceHandle].referenceSpaceType;
+//			pEventData->changeTime = GetXrTime();
+//			pEventData->poseValid = XR_TRUE;
+//			// this is not correct, supposed to be origin of new space in space of prior space
+//			pEventData->poseInPreviousSpace = pSession->referenceSpaces.data[pSession->pendingReferenceSpaceHandle].poseInReferenceSpace;
+//
+//			printf("XrEventDataReferenceSpaceChangePending: %d\n", pEventData->referenceSpaceType);
+//
+//			pSession->activeReferenceSpaceHandle = pSession->pendingReferenceSpaceHandle;
+//
+//			return XR_SUCCESS;
+//		}
 
 		if (pSession->activeInteractionProfile != pSession->pendingInteractionProfile) {
 
@@ -1325,7 +1328,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
 	XrSpace*                       space)
 {
 	LOG_METHOD_ONCE(xrCreateActionSpace);
-	PrintNextChain(createInfo->next);
+	assert(createInfo->next == NULL);
 
 	Session* pSession = (Session*)session;
 
@@ -1344,7 +1347,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(
 	XrSpaceLocation* location)
 {
 	LOG_METHOD_ONCE(xrLocateSpace);
-	PrintNextChain(location->next);
+	assert(location->next == NULL);
 
 	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
 							  XR_SPACE_LOCATION_POSITION_VALID_BIT |
@@ -1606,12 +1609,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				DX_CHECK(ID3D11Device1_OpenSharedResource1(device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color[i].d3d11.texture));
 				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device1, colorHandles[i], pSwapchain->color[i].d3d11.texture);
-
-//				ID3D11RenderTargetView* renderTargetView = NULL;
 //				DX_CHECK(ID3D11Device1_CreateRenderTargetView(device1, (ID3D11Resource*)pSwapchain->color[i].d3d11.texture, NULL, &pSwapchain->color[i].d3d11.rtView));
-
-				IDXGIKeyedMutex* keyedMutex = NULL;
-				ID3D11Texture2D_QueryInterface(pSwapchain->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwapchain->color[i].d3d11.keyedMutex);
+//				DX_CHECK(ID3D11Texture2D_QueryInterface(pSwapchain->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwapchain->color[i].d3d11.keyedMutex));
 			}
 
 			break;
@@ -1702,13 +1701,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
 	const XrSwapchainImageWaitInfo* waitInfo)
 {
 	LOG_METHOD_ONCE(xrWaitSwapchainImage);
-	PrintNextChain(waitInfo->next);
+	assert(waitInfo->next == NULL);
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
 
-		IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
-		IDXGIKeyedMutex_AcquireSync(keyedMutex, 1, INFINITE);
+//	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
+//	IDXGIKeyedMutex_AcquireSync(keyedMutex, 1, INFINITE);
 
 //	ID3D11RenderTargetView* acquireRTView[] = {pSwapchain->color[pSwapchain->swapIndex].d3d11.rtView};
 //	ID3D11DeviceContext1_OMSetRenderTargets(pSession->binding.d3d11.context1, 1, acquireRTView, NULL);
@@ -1721,13 +1720,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
 	const XrSwapchainImageReleaseInfo* releaseInfo)
 {
 	LOG_METHOD_ONCE(xrReleaseSwapchainImage);
-	PrintNextChain(releaseInfo->next);
+	assert(releaseInfo->next == NULL);
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
 
-	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
-	IDXGIKeyedMutex_ReleaseSync(keyedMutex, 1);
+//	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
+//	IDXGIKeyedMutex_ReleaseSync(keyedMutex, 0);
 
 //	ID3D11RenderTargetView* nullRTView[] = {NULL};
 //	ID3D11DeviceContext1_OMSetRenderTargets(pSession->binding.d3d11.context1, 1, nullRTView, NULL);
@@ -1744,7 +1743,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 
 	Session* pSession = (Session*)session;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
-	pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+//	pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
 	printf("primaryViewConfigurationType: %d\n", pSession->primaryViewConfigurationType);
 
 //	if (beginInfo->next != NULL) {
@@ -1793,7 +1792,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 
 	XrTime currentTime = GetXrTime();
 
-	frameState->predictedDisplayPeriod = currentTime - pSession->lastPredictedDisplayTime;
+	frameState->predictedDisplayPeriod = 11111111; // 90hz
 	frameState->predictedDisplayTime = currentTime;
 	frameState->shouldRender = XR_TRUE;
 
@@ -1820,13 +1819,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
 		switch (frameEndInfo->layers[layer]->type) {
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
-				XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)&frameEndInfo->layers[layer];
-				printf("XR_TYPE_COMPOSITION_LAYER_PROJECTION viewCount: %d\n", pProjectionLayer->viewCount);
+				XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
+				assert(pProjectionLayer->viewCount == 2);
 
 				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
 					switch (pProjectionLayer->views[layer].type) {
 						case XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW: {
-							printf("XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW\n");
 							break;
 						}
 						default: {
@@ -1852,6 +1850,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 	midXrEndFrame(sessionHandle);
+
+	if (pSession->activeSessionState == XR_SESSION_STATE_READY)
+		pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
 
 	return XR_SUCCESS;
 }
@@ -2161,6 +2162,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
 	XrPath                     topLevelUserPath,
 	XrInteractionProfileState* interactionProfile)
 {
+	assert(interactionProfile->next == NULL);
+
 	Path* pPath = (Path*)topLevelUserPath;
 	printf("xrGetCurrentInteractionProfile %s\n", pPath->string);
 
@@ -2170,8 +2173,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
 
 	Path* pInteractionProfilePath = (Path*)pInteractionProfile->path;
 	printf("Found InteractionProfile %s\n", pInteractionProfilePath->string);
-
-	assert(interactionProfile->next == NULL);
 
 	return XR_SUCCESS;
 }
@@ -2258,6 +2259,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	PrintNextChain(syncInfo->next);
 
 	Session*  pSession = (Session*)session;
+
+	return XR_SESSION_NOT_FOCUSED;
+
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrTime    currentTime = GetXrTime();
 
