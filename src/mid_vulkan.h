@@ -901,12 +901,12 @@ typedef struct MidVkSemaphoreCreateInfo {
 } MidVkSemaphoreCreateInfo;
 void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
 
-typedef struct MidVkFenceCreateInfo {
+typedef struct VkExternalFenceCreateInfo {
 	const char*           debugName;
 	VkLocality            locality;
 	VK_EXTERNAL_HANDLE_PLATFORM importHandle;
-} MidVkFenceCreateInfo;
-void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence);
+} VkExternalFenceCreateInfo;
+void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence);
 
 void vkmCreateMesh(const VkmMeshCreateInfo* pCreateInfo, VkMesh* pMesh);
 
@@ -2536,7 +2536,7 @@ void midVkCreateStdPipeLayout()
 }
 
 // vkCreateExternalFence???
-void midVkCreateFence(const MidVkFenceCreateInfo* pCreateInfo, VkFence* pFence)
+void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence)
 {
 #if WIN32
 	VkExportFenceWin32HandleInfoKHR exportPlatformInfo = {

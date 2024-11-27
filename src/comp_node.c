@@ -257,7 +257,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
 		// should I make them all share the same buffer? probably
 		midVkBindBufferSharedMemory(nodeCompositorData[i].SetBuffer, nodeCompositorData[i].SetSharedMemory);
 		vkUpdateDescriptorSets(vk.context.device, 1, &SET_WRITE_COMP_BUFFER(nodeCompositorData[i].set, nodeCompositorData[i].SetBuffer), 0, NULL);
-		nodeCompositorData[i].pSetMapped = midVkSharedMemoryPointer(nodeCompositorData[i].SetSharedMemory);
+		nodeCompositorData[i].pNodeSetMapped = midVkSharedMemoryPointer(nodeCompositorData[i].SetSharedMemory);
 	}
 }
 
@@ -354,8 +354,7 @@ run_loop:
 
 			// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 			// shared: 569 - semaphore: 315416 ratio: 554.333919
-			__atomic_thread_fence(__ATOMIC_ACQUIRE);
-			uint64_t nodeTimelineValue = pNodeShared->timelineValue;
+			uint64_t nodeTimelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 
 			// I don't like this but it waits until the node renders something. Prediction should be okay here.
 			if (nodeTimelineValue < 1)
@@ -374,11 +373,15 @@ run_loop:
 			nodeCompositorData[i].lastTimelineSwap = nodeTimelineValue;
 
 			{  // Acquire new framebuffers from node
+
+				// this needs better logic or 2 swap count enforced
+				// the inverse of node timeline is the framebuffer index to display
+				// while the non-inverse is the framebuffer to be rendered into
+				// we want to keep this index a function of the timeline value to evade needing any other index list
 				int nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
 				CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].acquireBarriers);
 
-				// these could be pre-recorded too,
-				// no these need to be pushed otherwise cant destroy them
+				// These will end up being updated from a framebuffer pool so they need to be written each switch
 				VkWriteDescriptorSet writeSets[] = {
 					SET_WRITE_COMP_COLOR(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].colorView),
 					SET_WRITE_COMP_NORMAL(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].normalView),
@@ -389,12 +392,12 @@ run_loop:
 
 			{  // Calc new node uniform and shared data
 
-				// move the global set state that was previously used to render into the node set state to use in comp
+				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
 				memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
 				nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->ulScreenUV;
 				nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->lrScreenUV;
 
-				memcpy(nodeCompositorData[i].pSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
+				memcpy(nodeCompositorData[i].pNodeSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
 
 				float radius = pNodeShared->compositorRadius;
 
@@ -459,14 +462,13 @@ run_loop:
 			for (int i = 0; i < nodeCount; ++i) {
 				MxcNodeShared* pNodeShared = activeNodesShared[i];
 
-				__atomic_thread_fence(__ATOMIC_ACQUIRE);
-				uint64_t nodeCurrentTimelineSignal = pNodeShared->timelineValue;
-
+				// find a way to get rid of this load and check
+				uint64_t nodeCurrentTimelineSignal = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 				// I don't like this but it waits until the node renders something. Prediction should be okay here.
 				if (nodeCurrentTimelineSignal < 1)
 					continue;
 
-				int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % VK_SWAP_COUNT);
+//				int nodeFramebufferIndex = !(nodeCurrentTimelineSignal % VK_SWAP_COUNT);
 
 				CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &nodeCompositorData[i].set, 0, NULL);
 
@@ -505,16 +507,18 @@ run_loop:
 
 		compositorBaseCycleValue += MXC_CYCLE_COUNT;
 
-		midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compTimeline);
+		{ // wait for end and output query, probably don't need this wait if not querying?
+			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compTimeline);
 
-		{  // update timequery
-			uint64_t timestampsNS[2];
-			GetQueryPoolResults(device, timeQueryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-			double timestampsMS[2];
-			for (uint32_t i = 0; i < 2; ++i) {
-				timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+			{  // update timequery
+				uint64_t timestampsNS[2];
+				GetQueryPoolResults(device, timeQueryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+				double timestampsMS[2];
+				for (uint32_t i = 0; i < 2; ++i) {
+					timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+				}
+				timeQueryMs = timestampsMS[1] - timestampsMS[0];
 			}
-			timeQueryMs = timestampsMS[1] - timestampsMS[0];
 		}
 	}
 

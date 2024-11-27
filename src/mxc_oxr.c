@@ -151,7 +151,7 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 //					midvkCreateTexture(&depthCreateInfo, &pVkFramebufferTextures[i].depth);
 					break;
 				}
-				case XR_GRAPHICS_API_D3D11_1: {
+				case XR_GRAPHICS_API_D3D11_4: {
 					break;
 				}
 				default:
@@ -160,26 +160,31 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 		}
 
 		// We import semaphores in vulkan because right now its relying on timeline semaphore for all graphics apis
-		const MidVkFenceCreateInfo nodeFenceCreateInfo = {
-			.debugName = "NodeFenceImport",
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
-			.importHandle = pImportParam->nodeFenceHandle,
-		};
-		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
-		const MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
+//		MidVkFenceCreateInfo nodeFenceCreateInfo = {
+//			.debugName = "NodeFenceImport",
+//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+//			.importHandle = pImportParam->nodeFenceHandle,
+//		};
+//		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
+		MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
 			.debugName = "CompositorTimelineSemaphoreImport",
 			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pImportParam->compTimelineHandle,
 		};
 		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompositorTimeline);
-		const MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
-			.debugName = "NodeTimelineSemaphoreImport",
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-			.importHandle = pImportParam->nodeTimelineHandle,
-		};
-		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
+//		MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
+//			.debugName = "NodeTimelineSemaphoreImport",
+//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+//			.importHandle = pImportParam->nodeTimelineHandle,
+//		};
+//		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
+
+		uint64_t compositorTimelineValue;
+		VK_CHECK(vkGetSemaphoreCounterValue(vk.context.device, pNodeContext->vkCompositorTimeline, &compositorTimelineValue));
+		CHECK(compositorTimelineValue == 0xffffffffffffffff, "compositorTimelineValue imported as max value!");
+		pNodeShared->compositorBaseCycleValue = compositorTimelineValue - (compositorTimelineValue % MXC_CYCLE_COUNT);
 	}
 }
 
@@ -191,6 +196,14 @@ void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 
 	// we just assume depth is the same, and treat this like a cube
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
+}
+
+void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
+	*pHandle = pImportParam->nodeFenceHandle;
 }
 
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle)
@@ -211,8 +224,9 @@ void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
-	*pIndex = timelineValue % VK_SWAP_COUNT;
+	*pIndex = (timelineValue % VK_SWAP_COUNT);
 }
 
 void xrWaitSwapPoolImage(XrHandle sessionHandle, uint32_t index)
@@ -232,23 +246,11 @@ void midXrWaitFrame(XrHandle sessionHandle)
 	VkSemaphoreWaitInfo semaphoreWaitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
+		// do we want to consider not accessing Context to have more compacted data type?
 		.pSemaphores = (VkSemaphore[]){pNodeContext->vkCompositorTimeline},
 		.pValues = (uint64_t[]){pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD},
 	};
 	VK_CHECK(vk.WaitSemaphores(vk.context.device, &semaphoreWaitInfo, UINT64_MAX));
-}
-
-// this isn't associated with sessions, its associated with instance, so sizes need to be global... ?
-void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView)
-{
-	*pView = (XrViewConfigurationView){
-		.recommendedImageRectWidth = XR_DEFAULT_WIDTH,
-		.maxImageRectWidth = XR_DEFAULT_WIDTH,
-		.recommendedImageRectHeight = XR_DEFAULT_HEIGHT,
-		.maxImageRectHeight = XR_DEFAULT_HEIGHT,
-		.recommendedSwapchainSampleCount = XR_DEFAULT_SAMPLES,
-		.maxSwapchainSampleCount = XR_DEFAULT_SAMPLES,
-	};
 }
 
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
@@ -313,7 +315,7 @@ void midXrEndFrame(XrHandle sessionHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	uint64_t newTimelineValue = __atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELEASE);
-//	printf("incremented %llu\n", newTimelineValue);
+
+	 __atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELAXED);
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }

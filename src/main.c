@@ -148,15 +148,13 @@ int main(void)
 			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
 
 			compositorBaseCycleValue += MXC_CYCLE_COUNT;
-			__atomic_thread_fence(__ATOMIC_RELEASE); // should use atomic add ?
 
 			__atomic_thread_fence(__ATOMIC_ACQUIRE);
-			const int swapIndex = compositorNodeContext.swapIndex;
 			midVkSubmitPresentCommandBuffer(compositorNodeContext.cmd,
 											compositorNodeContext.swap.chain,
 											compositorNodeContext.swap.acquireSemaphore,
 											compositorNodeContext.swap.renderCompleteSemaphore,
-											swapIndex,
+											compositorNodeContext.swapIndex,
 											compositorNodeContext.compTimeline,
 											compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 

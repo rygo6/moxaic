@@ -49,14 +49,14 @@ enum PipeSetNodeProcessIndices {
 
 void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode)
 {
-	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	MxcNodeShared* const pNodeShared = pNodeContext->pNodeShared;
 
 	const VkCommandBuffer cmd = pNodeContext->cmd;
 	const VkRenderPass    nodeRenderPass = pNode->nodeRenderPass;
 	const VkFramebuffer   framebuffer = pNode->framebuffer;
 
-	VkmGlobalSetState*    pGlobalSetMapped = pNode->globalSet.pMapped;
-	const VkDescriptorSet globalSet = pNode->globalSet.set;
+	VkmGlobalSetState* const pGlobalSetMapped = pNode->globalSet.pMapped;
+	const VkDescriptorSet    globalSet = pNode->globalSet.set;
 
 	const VkDescriptorSet  checkerMaterialSet = pNode->checkerMaterialSet;
 	const VkDescriptorSet  sphereObjectSet = pNode->sphereObjectSet;
@@ -100,6 +100,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	const VkSemaphore compTimeline = pNodeContext->vkCompositorTimeline;
 	const VkSemaphore nodeTimeline = pNodeContext->vkNodeTimeline;
+
 	uint64_t nodeTimelineValue = 0;
 
 	{
@@ -202,8 +203,10 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
 				};
 				break;
-			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED: PANIC("Shouldn't be rendering an exported node from this process.");
-			default:                                         PANIC("nodeType not supported");
+			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
+				PANIC("Shouldn't be rendering an exported node from this process.");
+			default:
+				PANIC("nodeType not supported");
 		}
 	}
 
@@ -383,13 +386,16 @@ run_loop:
 	EndCommandBuffer(cmd);
 
 	nodeTimelineValue++;
-	mxcQueueNodeCommandBuffer((MxcQueuedNodeCommandBuffer){.cmd = cmd, .nodeTimeline = nodeTimeline, .nodeTimelineSignalValue = nodeTimelineValue});
+	mxcQueueNodeCommandBuffer((MxcQueuedNodeCommandBuffer){
+		.cmd = cmd,
+		.nodeTimeline = nodeTimeline,
+		.nodeTimelineSignalValue = nodeTimelineValue,
+	});
 	midVkTimelineWait(device, nodeTimelineValue, nodeTimeline);
 
 	// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 	// shared: 569 - semaphore: 315416 ratio: 554.333919
-	pNodeShared->timelineValue = nodeTimelineValue;
-	__atomic_thread_fence(__ATOMIC_RELEASE);
+	__atomic_store_n(&pNodeShared->timelineValue, nodeTimelineValue, __ATOMIC_RELEASE);
 
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 

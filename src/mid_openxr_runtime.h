@@ -35,6 +35,8 @@
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_reflection.h>
 #include <openxr/openxr_loader_negotiation.h>
+#include <d3d11_3.h>
+#include <d3d11_4.h>
 
 #ifdef MID_IDE_ANALYSIS
 #undef XRAPI_CALL
@@ -65,7 +67,7 @@ typedef enum XrGraphicsApi {
 	XR_GRAPHICS_API_OPENGL,
 	XR_GRAPHICS_API_OPENGL_ES,
 	XR_GRAPHICS_API_VULKAN,
-	XR_GRAPHICS_API_D3D11_1,
+	XR_GRAPHICS_API_D3D11_4,
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
@@ -73,9 +75,9 @@ void midXrInitialize(XrGraphicsApi graphicsApi);
 void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle);
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
+void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle);
 void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex);
 void midXrWaitFrame(XrHandle sessionHandle);
-void midXrGetViewConfiguration(XrHandle sessionHandle, int viewIndex, XrViewConfigurationView* pView);
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
 void midXrBeginFrame(XrHandle sessionHandle);
 void midXrEndFrame(XrHandle sessionHandle);
@@ -306,7 +308,7 @@ typedef struct Swapchain {
 		struct {
 			ID3D11Texture2D* texture;
 //			IDXGIKeyedMutex* keyedMutex;
-//			ID3D11RenderTargetView* rtView;
+			ID3D11RenderTargetView* rtView;
 		} d3d11;
 	} color[MIDXR_SWAP_COUNT];
 
@@ -319,7 +321,8 @@ typedef struct Swapchain {
 	uint32_t              arraySize;
 	uint32_t              mipCount;
 } Swapchain;
-POOL(Swapchain, 4)
+// I don't think I actually need a pool? Just one per session, and it has to switch
+POOL(Swapchain, 2)
 
 #define MIDXR_MAX_SESSIONS 4
 typedef struct Session {
@@ -349,8 +352,9 @@ typedef struct Session {
 			HGLRC hGLRC;
 		} gl;
 		struct {
-			ID3D11Device1* device1;
-			ID3D11DeviceContext1* context1;
+			ID3D11Device5* device5;
+			ID3D11DeviceContext4* context4;
+			ID3D11Fence* fence;
 		} d3d11;
 		struct {
 			VkInstance       instance;
@@ -773,7 +777,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
 			pInstance->graphicsApi = XR_GRAPHICS_API_OPENGL;
 		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
-			pInstance->graphicsApi = XR_GRAPHICS_API_D3D11_1;
+			pInstance->graphicsApi = XR_GRAPHICS_API_D3D11_4;
 	}
 
 	strncpy((char*)&pInstance->applicationName, (const char*)&createInfo->applicationInfo, XR_MAX_APPLICATION_NAME_SIZE);
@@ -802,7 +806,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 			}
 			return XR_SUCCESS;
 		}
-		case XR_GRAPHICS_API_D3D11_1: {
+		case XR_GRAPHICS_API_D3D11_4: {
 			IDXGIFactory1* factory1 = NULL;
 			DX_CHECK(CreateDXGIFactory1(&IID_IDXGIFactory, (void**)&factory1));
 
@@ -823,6 +827,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 					adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, D3D11_CREATE_DEVICE_DEBUG,
 					(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
 					&device, &featureLevel, &context));
+
 				printf("XR D3D11 Device: %p %d\n", device, featureLevel);
 				if (device == NULL || featureLevel < D3D_FEATURE_LEVEL_11_1) {
 					LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrCreateInstance XR D3D11 Device Invalid\n");
@@ -841,6 +846,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateInstance(
 
 			IDXGIAdapter_Release(adapter);
 			IDXGIFactory1_Release(factory1);
+
 			return XR_SUCCESS;
 		}
 		case XR_GRAPHICS_API_OPENGL_ES:
@@ -900,12 +906,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
 				pSession->pendingSessionState = XR_SESSION_STATE_READY;
 			}
-			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
-				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
-			}
-			if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE) {
-				pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
-			}
+//			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
+//				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+//			}
+//			if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE) {
+//				pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
+//			}
 
 			return XR_SUCCESS;
 		}
@@ -1005,20 +1011,18 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	const XrSystemGetInfo* getInfo,
 	XrSystemId*            systemId)
 {
-	LOG_METHOD(xrGetSystem);
+	LOG_METHOD_ONCE(xrGetSystem);
 	PrintNextChain((XrBaseInStructure*)getInfo->next);
 
 	Instance* pInstance = (Instance*)instance;
 
 	switch (getInfo->formFactor) {
 		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
-			printf("XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY\n");
 			pInstance->systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 			pInstance->systemId = SYSTEM_ID_HMD_VR_STEREO;
 			*systemId = SYSTEM_ID_HMD_VR_STEREO;
 			return XR_SUCCESS;
 		case XR_FORM_FACTOR_HANDHELD_DISPLAY:
-			printf("XR_FORM_FACTOR_HANDHELD_DISPLAY\n");
 			pInstance->systemFormFactor = XR_FORM_FACTOR_HANDHELD_DISPLAY;
 			pInstance->systemId = SYSTEM_ID_HANDHELD_AR;
 			*systemId = SYSTEM_ID_HANDHELD_AR;
@@ -1142,6 +1146,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	// these should be the same but probably want to get these handles better...
 	assert(createdHandle == claimedHandle);
 
+	HANDLE fenceHandle;
+	midXrClaimFence(claimedHandle, &fenceHandle);
+
 	switch (*(XrStructureType*)createInfo->next) {
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR: {
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR\n");
@@ -1158,35 +1165,46 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			XrGraphicsBindingD3D11KHR* binding = (XrGraphicsBindingD3D11KHR*)createInfo->next;
 
 			printf("XR D3D11 Device: %p\n", binding->device);
+			// do I need cleanup goto? maybe. Probably
 			if (binding->device == NULL) {
 				LOG_ERROR("XR D3D11 Device Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
-			ID3D11Device1* device1;
-			DX_CHECK(ID3D11Device_QueryInterface(binding->device, &IID_ID3D11Device1, (void**)&device1));
-			printf("XR D3D11 Device1: %p\n", device1);
-			if (device1 == NULL) {
-				LOG_ERROR("XR D3D11 Device Invalid.\n");
+			ID3D11Device5* device5;
+			DX_CHECK(ID3D11Device_QueryInterface(binding->device, &IID_ID3D11Device5, (void**)&device5));
+			printf("XR D3D11 Device5: %p\n", device5);
+			if (device5 == NULL) {
+				LOG_ERROR("XR D3D11 Device5 Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
-			D3D_FEATURE_LEVEL featureLevel = ID3D11Device1_GetFeatureLevel(device1);
-			printf("D3D11 Feature Level: %d\n", featureLevel);
-			assert(D3D_FEATURE_LEVEL_11_1 == featureLevel);
+			ID3D11DeviceContext* context;
+			ID3D11Device5_GetImmediateContext(device5, &context);
+			ID3D11DeviceContext4* context4;
+			DX_CHECK(ID3D11DeviceContext_QueryInterface(context, &IID_ID3D11DeviceContext4, (void**)&context4));
+			printf("XR D3D11 Context4: %p\n", context4);
+			if (context4 == NULL) {
+				LOG_ERROR("XR D3D11 Context4 Invalid.\n");
+				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+			}
+			ID3D11DeviceContext_Release(context);
 
-			ID3D11DeviceContext1* context1;
-			ID3D11Device1_GetImmediateContext1(device1, &context1);
-			printf("XR D3D11 Context1: %p\n", context1);
-			if (context1 == NULL) {
-				LOG_ERROR("XR D3D11 Context Invalid.\n");
+			ID3D11Fence* fence;
+			printf("XR D3D11 Fence Handle: %p\n", fenceHandle);
+			ID3D11Device5_OpenSharedFence(device5, fenceHandle, &IID_ID3D11Fence, (void**)&fence);
+			printf("XR D3D11 Fence: %p\n", fence);
+			if (fence == NULL) {
+				LOG_ERROR("XR D3D11 Fence Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
-			pClaimedSession->binding.d3d11.device1 = device1;
-			pClaimedSession->binding.d3d11.context1 = context1;
+			pClaimedSession->binding.d3d11.device5 = device5;
+			pClaimedSession->binding.d3d11.context4 = context4;
+			pClaimedSession->binding.d3d11.fence = fence;
 
 			*session = (XrSession)pClaimedSession;
+
 			return XR_SUCCESS;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: {
@@ -1537,7 +1555,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 			TRANSFER_SWAP_FORMATS
 			return XR_SUCCESS;
 		}
-		case XR_GRAPHICS_API_D3D11_1: {
+		case XR_GRAPHICS_API_D3D11_4: {
 			int64_t swapFormats[] = {
 				DXGI_FORMAT_R8G8B8A8_UNORM,
 				//				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
@@ -1593,23 +1611,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
 	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
 	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
-
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color[i].gl.memObject, pSwapchain->color[i].gl.texture, colorHandles[i]);
 				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwapchain->color[i].gl.texture, pSwapchain->color[i].gl.memObject);
 			}
-
 #undef DEFAULT_IMAGE_CREATE_INFO
+
 			break;
 		}
-		case XR_GRAPHICS_API_D3D11_1: {
+		case XR_GRAPHICS_API_D3D11_4: {
 			printf("Creating D3D11 Swap\n");
 
-			ID3D11Device1* device1 = pSession->binding.d3d11.device1;
+			ID3D11Device5* device5 = pSession->binding.d3d11.device5;
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				DX_CHECK(ID3D11Device1_OpenSharedResource1(device1, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color[i].d3d11.texture));
-				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device1, colorHandles[i], pSwapchain->color[i].d3d11.texture);
-//				DX_CHECK(ID3D11Device1_CreateRenderTargetView(device1, (ID3D11Resource*)pSwapchain->color[i].d3d11.texture, NULL, &pSwapchain->color[i].d3d11.rtView));
+				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color[i].d3d11.texture));
+				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device5, colorHandles[i], pSwapchain->color[i].d3d11.texture);
+//				DX_CHECK(ID3D11Device5_CreateRenderTargetView(device5, (ID3D11Resource*)pSwapchain->color[i].d3d11.texture, NULL, &pSwapchain->color[i].d3d11.rtView));
 //				DX_CHECK(ID3D11Texture2D_QueryInterface(pSwapchain->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwapchain->color[i].d3d11.keyedMutex));
 			}
 
@@ -1710,7 +1727,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
 //	IDXGIKeyedMutex_AcquireSync(keyedMutex, 1, INFINITE);
 
 //	ID3D11RenderTargetView* acquireRTView[] = {pSwapchain->color[pSwapchain->swapIndex].d3d11.rtView};
-//	ID3D11DeviceContext1_OMSetRenderTargets(pSession->binding.d3d11.context1, 1, acquireRTView, NULL);
+//	ID3D11DeviceContext4_OMSetRenderTargets(pSession->binding.d3d11.context4, 1, acquireRTView, NULL);
 
 	return XR_SUCCESS;
 }
@@ -1729,7 +1746,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
 //	IDXGIKeyedMutex_ReleaseSync(keyedMutex, 0);
 
 //	ID3D11RenderTargetView* nullRTView[] = {NULL};
-//	ID3D11DeviceContext1_OMSetRenderTargets(pSession->binding.d3d11.context1, 1, nullRTView, NULL);
+//	ID3D11DeviceContext4_OMSetRenderTargets(pSession->binding.d3d11.context4, 1, nullRTView, NULL);
 
 	return XR_SUCCESS;
 }
@@ -1743,8 +1760,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 
 	Session* pSession = (Session*)session;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
-//	pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
-	printf("primaryViewConfigurationType: %d\n", pSession->primaryViewConfigurationType);
 
 //	if (beginInfo->next != NULL) {
 //		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
@@ -1782,7 +1797,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	XrFrameState*          frameState)
 {
 	LOG_METHOD_ONCE(xrWaitFrame);
-	PrintNextChain(frameWaitInfo->next);
+	assert(frameWaitInfo->next == NULL);
 
 	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
@@ -1792,9 +1807,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 
 	XrTime currentTime = GetXrTime();
 
-	frameState->predictedDisplayPeriod = 11111111; // 90hz
+	frameState->predictedDisplayPeriod = 11111111;  // 90hz
 	frameState->predictedDisplayTime = currentTime;
-	frameState->shouldRender = XR_TRUE;
+	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
+							   pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
 
 	return XR_SUCCESS;
 }
@@ -1804,7 +1820,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 	const XrFrameBeginInfo* frameBeginInfo)
 {
 	LOG_METHOD_ONCE(xrBeginFrame);
-	PrintNextChain(frameBeginInfo->next);
+	assert(frameBeginInfo->next == NULL);
 
 	return XR_SUCCESS;
 }
@@ -1814,8 +1830,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	const XrFrameEndInfo* frameEndInfo)
 {
 	LOG_METHOD_ONCE(xrEndFrame);
-	PrintNextChain(frameEndInfo->next);
+	assert(frameEndInfo->next == NULL);
 
+	// honestly not sure what do with this all yet, its just for debug
 	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
 		switch (frameEndInfo->layers[layer]->type) {
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
@@ -1851,8 +1868,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 	midXrEndFrame(sessionHandle);
 
+	// You wait till first end frame to say synchronized
 	if (pSession->activeSessionState == XR_SESSION_STATE_READY)
 		pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+
+	// These progressions are really just for debug right now
+	if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+		pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+
+	if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
+		pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
 
 	return XR_SUCCESS;
 }

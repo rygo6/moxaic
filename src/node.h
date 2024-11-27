@@ -115,14 +115,14 @@ typedef struct MxcNodeCompositorSetState {
 	vec2 lrUV;
 } MxcNodeCompositorSetState;
 typedef struct CACHE_ALIGN MxcNodeCompositorData {
-	MxcNodeCompositorSetState nodeSetState;
-	MidPose                   rootPose;
-	uint64_t                  lastTimelineSwap;
+	MxcNodeCompositorSetState  nodeSetState;
+	MidPose                    rootPose;
+	uint64_t                   lastTimelineSwap;
 	VkDescriptorSet            set;
-	MxcNodeCompositorSetState* pSetMapped;
+	MxcNodeCompositorSetState* pNodeSetMapped;
 	// should make them share buffer? probably
-	VkBuffer                   SetBuffer;
-	VkSharedMemory             SetSharedMemory;
+	VkBuffer       SetBuffer;
+	VkSharedMemory SetSharedMemory;
 
 	CACHE_ALIGN
 	struct {

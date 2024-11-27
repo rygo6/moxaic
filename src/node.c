@@ -207,13 +207,13 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	pNodeShared->camera.zNear = 0.1f;
 	pNodeShared->camera.zFar = 100.0f;
 	pNodeShared->compositorRadius = 0.5;
-	pNodeShared->compositorCycleSkip = 4;
+	pNodeShared->compositorCycleSkip = 16;
 
-	MidVkFenceCreateInfo nodeFenceCreateInfo = {
+	VkExternalFenceCreateInfo nodeFenceCreateInfo = {
 		.debugName = "NodeFence",
 		.locality = VK_LOCALITY_CONTEXT,
 	};
-	midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
+	vkCreateExternalFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 	MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
 		.locality = VK_LOCALITY_CONTEXT,
@@ -618,7 +618,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShared->camera.zNear = 0.1f;
 		pNodeShared->camera.zFar = 100.0f;
 		pNodeShared->compositorRadius = 0.5;
-		pNodeShared->compositorCycleSkip = 4;
+		pNodeShared->compositorCycleSkip = 16;
 
 		const NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 		pNodeCompositorData = &nodeCompositorData[handle];
@@ -639,11 +639,11 @@ static void InterprocessServerAcceptNodeConnection()
 
 	// Create node data
 	{
-		MidVkFenceCreateInfo nodeFenceCreateInfo = {
+		VkExternalFenceCreateInfo nodeFenceCreateInfo = {
 			.debugName = "NodeFenceExport",
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 		};
-		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
+		vkCreateExternalFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 		MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
