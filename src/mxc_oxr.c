@@ -1,45 +1,15 @@
 #include "node.h"
-#include "test_node.h"
 
 #include "mid_openxr_runtime.h"
 #include "mid_vulkan.h"
 
 #define WIN32_LEAN_AND_MEAN
-#define NOCOMM
-#define NOSERVICE
-#define NOCRYPT
-#define NOMCX
-#define NOGDI
 #include <windows.h>
-
-#define GL_GLEXT_PROTOTYPES
-#include <GL/gl.h>
-#include <GL/glext.h>
 
 void midXrInitialize(XrGraphicsApi graphicsApi)
 {
 	printf("Initializing Moxaic OpenXR Node.\n");
 	isCompositor = false;
-
-	// Debating if each node should have a vulkan instance to read timeline semaphore
-	// and run compute shaders. It would certainly simplify the code. However it may be more
-	// performant to run such processes in local graphics context of OGL or DX11. For now
-	// we are just relying on vulkan to simplify
-	vkInitializeInstance();
-	const MidVkContextCreateInfo contextCreateInfo = {
-		// this should probably send physical device to set here to match compositor
-		.queueFamilyCreateInfos = {
-			[VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
-				.supportsGraphics = VKM_SUPPORT_NO,
-				.supportsCompute = VKM_SUPPORT_YES,
-				.supportsTransfer = VKM_SUPPORT_YES,
-				.globalPriority = VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_EXT,
-				.queueCount = 1,
-				.pQueuePriorities = (float[]){1.0f},
-			},
-		},
-	};
-	midVkCreateContext(&contextCreateInfo);
 	mxcConnectInterprocessNode(false);
 }
 
@@ -59,133 +29,6 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 
 	// openxr session = moxaic node
 	*pSessionHandle = nodeHandle;
-
-	// compositor should not allocate framebuffers and other data until this point
-	// as it needs to allocate them per node/session
-
-	// Import framebuffers. These should really be a pool across all sessions
-	{
-		const int                    width = DEFAULT_WIDTH;
-		const int                    height = DEFAULT_HEIGHT;
-//		MxcNodeVkFramebufferTexture* pVkFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
-//		MxcNodeGlFramebufferTexture* pGlFramebufferTextures = pNodeContext->glNodeFramebufferTextures;
-
-#define DEFAULT_VK_IMAGE_CREATE_INFO(_width, _height, _format, _usage) \
-	.imageCreateInfo = {                                               \
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,                  \
-		.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,                     \
-		.imageType = VK_IMAGE_TYPE_2D,                                 \
-		.format = _format,                                             \
-		.extent = {_width, _height, 1.0f},                             \
-		.mipLevels = 1,                                                \
-		.arrayLayers = 1,                                              \
-		.samples = VK_SAMPLE_COUNT_1_BIT,                              \
-		.usage = _usage,                                               \
-	}
-#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                   \
-	gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
-	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
-	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
-	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
-
-		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-			switch (graphicsApi){
-				case XR_GRAPHICS_API_OPENGL: {
-//					DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures[i].color.memObject, pGlFramebufferTextures[i].color.texture, pImportParam->framebufferHandles[i].color)
-					//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->normal.memObject, pGlFramebufferTextures->normal.texture,  pImportParam->framebufferHandles[i].normal);
-					//			DEFAULT_IMAGE_CREATE_INFO(width, height, GL_RGBA8, pGlFramebufferTextures->color.memObject, pGlFramebufferTextures->color.texture,  pImportParam->framebufferHandles[i].color);
-					break;
-				}
-				case XR_GRAPHICS_API_OPENGL_ES: break;
-				case XR_GRAPHICS_API_VULKAN: {
-//					const VkmTextureCreateInfo colorCreateInfo = {
-//						.debugName = "ImportedColorFramebuffer",
-//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-//						.externalHandle = pImportParam->framebufferHandles[i].color,
-//						DEFAULT_VK_IMAGE_CREATE_INFO(width, height, MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX], MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX]),
-//					};
-//					midvkCreateTexture(&colorCreateInfo, &pVkFramebufferTextures[i].color);
-//					const VkmTextureCreateInfo normalCreateInfo = {
-//						.debugName = "ImportedNormalFramebuffer",
-//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-//						.externalHandle = pImportParam->framebufferHandles[i].normal,
-//						DEFAULT_VK_IMAGE_CREATE_INFO(width, height, MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX], MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX]),
-//					};
-//					midvkCreateTexture(&normalCreateInfo, &pVkFramebufferTextures[i].normal);
-//					const VkmTextureCreateInfo gbufferCreateInfo = {
-//						.debugName = "ImportedGBufferFramebuffer",
-//						.imageCreateInfo = {
-//							.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-//							.pNext = MIDVK_EXTERNAL_IMAGE_CREATE_INFO,
-//							.imageType = VK_IMAGE_TYPE_2D,
-//							.format = MXC_NODE_GBUFFER_FORMAT,
-//							.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-//							.mipLevels = MXC_NODE_GBUFFER_LEVELS,
-//							.arrayLayers = 1,
-//							.samples = VK_SAMPLE_COUNT_1_BIT,
-//							.usage = MXC_NODE_GBUFFER_USAGE,
-//						},
-//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//						.locality = MID_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-//						.externalHandle = pImportParam->framebufferHandles[i].gbuffer,
-//					};
-//					midvkCreateTexture(&gbufferCreateInfo, &pVkFramebufferTextures[i].gbuffer);
-//					// Depth is not shared over IPC.
-//					const VkmTextureCreateInfo depthCreateInfo = {
-//						.debugName = "ImportedDepthFramebuffer",
-//						.imageCreateInfo = {
-//							.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-//							.imageType = VK_IMAGE_TYPE_2D,
-//							.format = MIDVK_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
-//							.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-//							.mipLevels = 1,
-//							.arrayLayers = 1,
-//							.samples = VK_SAMPLE_COUNT_1_BIT,
-//							.usage = MIDVK_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
-//						},
-//						.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-//						.locality = MID_LOCALITY_CONTEXT,
-//					};
-//					midvkCreateTexture(&depthCreateInfo, &pVkFramebufferTextures[i].depth);
-					break;
-				}
-				case XR_GRAPHICS_API_D3D11_4: {
-					break;
-				}
-				default:
-					PANIC("Graphics API not supported");
-			}
-		}
-
-		// We import semaphores in vulkan because right now its relying on timeline semaphore for all graphics apis
-//		MidVkFenceCreateInfo nodeFenceCreateInfo = {
-//			.debugName = "NodeFenceImport",
-//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
-//			.importHandle = pImportParam->nodeFenceHandle,
-//		};
-//		midVkCreateFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
-		MidVkSemaphoreCreateInfo compTimelineCreateInfo = {
-			.debugName = "CompositorTimelineSemaphoreImport",
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
-			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-			.importHandle = pImportParam->compTimelineHandle,
-		};
-		midVkCreateSemaphore(&compTimelineCreateInfo, &pNodeContext->vkCompositorTimeline);
-//		MidVkSemaphoreCreateInfo nodeTimelineCreateInfo = {
-//			.debugName = "NodeTimelineSemaphoreImport",
-//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-//			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-//			.importHandle = pImportParam->nodeTimelineHandle,
-//		};
-//		midVkCreateSemaphore(&nodeTimelineCreateInfo, &pNodeContext->vkNodeTimeline);
-
-		uint64_t compositorTimelineValue;
-		VK_CHECK(vkGetSemaphoreCounterValue(vk.context.device, pNodeContext->vkCompositorTimeline, &compositorTimelineValue));
-		CHECK(compositorTimelineValue == 0xffffffffffffffff, "compositorTimelineValue imported as max value!");
-		pNodeShared->compositorBaseCycleValue = compositorTimelineValue - (compositorTimelineValue % MXC_CYCLE_COUNT);
-	}
 }
 
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
@@ -203,7 +46,7 @@ void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle)
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
-	*pHandle = pImportParam->nodeFenceHandle;
+	*pHandle = pImportParam->compTimelineHandle;
 }
 
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle)
@@ -224,33 +67,16 @@ void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 	*pIndex = (timelineValue % VK_SWAP_COUNT);
 }
 
-void xrWaitSwapPoolImage(XrHandle sessionHandle, uint32_t index)
-{
-
-}
-
-void midXrWaitFrame(XrHandle sessionHandle)
+void xrStepWaitValue(XrHandle sessionHandle, uint64_t* pWaitValue)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-
-//	uint64_t compositorTimelineValue;
-//	VK_CHECK(vkGetSemaphoreCounterValue(vk.context.device, pNodeContext->vkCompositorTimeline, &compositorTimelineValue));
-//	printf("compositorTimelineValue %llu\n", compositorTimelineValue);
-
-	VkSemaphoreWaitInfo semaphoreWaitInfo = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-		.semaphoreCount = 1,
-		// do we want to consider not accessing Context to have more compacted data type?
-		.pSemaphores = (VkSemaphore[]){pNodeContext->vkCompositorTimeline},
-		.pValues = (uint64_t[]){pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD},
-	};
-	VK_CHECK(vk.WaitSemaphores(vk.context.device, &semaphoreWaitInfo, UINT64_MAX));
+	*pWaitValue = *pWaitValue - (*pWaitValue % MXC_CYCLE_COUNT);
+	*pWaitValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD;
 }
 
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
@@ -315,7 +141,6 @@ void midXrEndFrame(XrHandle sessionHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-
 	 __atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELAXED);
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }

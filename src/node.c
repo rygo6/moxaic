@@ -639,17 +639,22 @@ static void InterprocessServerAcceptNodeConnection()
 
 	// Create node data
 	{
-		VkExternalFenceCreateInfo nodeFenceCreateInfo = {
-			.debugName = "NodeFenceExport",
-			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
-		};
-		vkCreateExternalFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
+		// I don't think I need the node timeline?!
+
 		MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
 		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
+
+//		vkWin32CreateExternalFence(&pNodeContext->nodeFenceExternal);
+//		VkExternalFenceCreateInfo nodeFenceCreateInfo = {
+//			.debugName = "NodeFenceExport",
+//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//			.importHandle = pNodeContext->nodeFenceExternal.handle,
+//		};
+//		vkCreateExternalFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 
 		VkFramebufferTextureCreateInfo framebufferInfo = {
 			.extent = {DEFAULT_WIDTH * compositorView, DEFAULT_HEIGHT, 1},
@@ -675,11 +680,11 @@ static void InterprocessServerAcceptNodeConnection()
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate gbuffer handle fail.");
 		}
-		WIN32_CHECK(DuplicateHandle(
-					  currentHandle, vkGetFenceExternalHandle(pNodeContext->vkNodeFence),
-					  nodeProcessHandle, &pImportParam->nodeFenceHandle,
-					  0, false, DUPLICATE_SAME_ACCESS),
-				  "Duplicate nodeFenceHandle handle fail.");
+//		WIN32_CHECK(DuplicateHandle(
+//					  currentHandle, pNodeContext->nodeFenceExternal.handle,
+//					  nodeProcessHandle, &pImportParam->nodeFenceHandle,
+//					  0, false, DUPLICATE_SAME_ACCESS),
+//				  "Duplicate nodeFenceHandle handle fail.");
 		WIN32_CHECK(DuplicateHandle(
 					  currentHandle, vkGetSemaphoreExternalHandle(pNodeContext->vkNodeTimeline),
 					  nodeProcessHandle, &pImportParam->nodeTimelineHandle,

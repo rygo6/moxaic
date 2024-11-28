@@ -77,7 +77,7 @@ void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
 void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle);
 void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex);
-void midXrWaitFrame(XrHandle sessionHandle);
+void xrStepWaitValue(XrHandle sessionHandle, uint64_t* pWaitValue);
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
 void midXrBeginFrame(XrHandle sessionHandle);
 void midXrEndFrame(XrHandle sessionHandle);
@@ -325,8 +325,11 @@ typedef struct Swapchain {
 POOL(Swapchain, 2)
 
 #define MIDXR_MAX_SESSIONS 4
+// this layout is awful from a DOD perspective can I make it less awful?
 typedef struct Session {
 	XrInstance instance;
+
+	bool running;
 
 	XrSessionState activeSessionState;
 	XrSessionState pendingSessionState;
@@ -340,10 +343,12 @@ typedef struct Session {
 	SpacePool referenceSpaces;
 	SpacePool actionSpaces;
 
-	XrTime lastPredictedDisplayTime;
+	XrTime lastDisplayTime;
 
 	SwapchainPool      swapchains;
 	ActionSetStatePool actionSetStates;
+
+	uint64_t waitValue;
 
 	XrViewConfigurationType primaryViewConfigurationType;
 	union {
@@ -465,14 +470,17 @@ XrTime GetXrTime()
 {
 	LARGE_INTEGER frequency;
 	LARGE_INTEGER counter;
-	if (!QueryPerformanceFrequency(&frequency)) {
+	if (!QueryPerformanceFrequency(&frequency))
 		return 0;
-	}
-	if (!QueryPerformanceCounter(&counter)) {
+	if (!QueryPerformanceCounter(&counter))
 		return 0;
-	}
 	uint64_t nanoseconds = (uint64_t)((counter.QuadPart * 1e9) / frequency.QuadPart);
 	return nanoseconds;
+}
+
+XrTime HzToXrTime(double hz)
+{
+	return (XrTime)((1.0 / hz) * 1e9);
 }
 
 //
@@ -903,15 +911,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			pSession->activeSessionState = pSession->pendingSessionState;
 
 			// force through states for debugging
-			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
-				pSession->pendingSessionState = XR_SESSION_STATE_READY;
-			}
+//			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
+//				pSession->pendingSessionState = XR_SESSION_STATE_READY;
+//			}
 //			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
 //				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
 //			}
-//			if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE) {
-//				pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
-//			}
+			if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE) {
+				pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
+			}
 
 			return XR_SUCCESS;
 		}
@@ -1133,13 +1141,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 
 	Session* pClaimedSession;
 	ClaimHandle(pInstance->sessions, pClaimedSession);
-
-	pClaimedSession->instance = instance;
-	pClaimedSession->activeSessionState = XR_SESSION_STATE_UNKNOWN;
-	pClaimedSession->pendingSessionState = XR_SESSION_STATE_IDLE;
-	pClaimedSession->activeReferenceSpaceHandle = XR_HANDLE_INVALID;
-	pClaimedSession->pendingReferenceSpaceHandle = XR_HANDLE_INVALID;
-
 	XrHandle claimedHandle = GetHandle(pInstance->sessions, pClaimedSession);
 
 	printf("CreatedHandle %d ClaimedHandle %d\n", createdHandle, claimedHandle);
@@ -1158,7 +1159,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			pClaimedSession->binding.gl.hGLRC = binding->hGLRC;
 
 			*session = (XrSession)pClaimedSession;
-			return XR_SUCCESS;
+			break;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR: {
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_D3D11_KHR\n");
@@ -1205,7 +1206,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 
 			*session = (XrSession)pClaimedSession;
 
-			return XR_SUCCESS;
+			break;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: {
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR\n");
@@ -1218,13 +1219,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			pClaimedSession->binding.vk.queueIndex = binding->queueIndex;
 
 			*session = (XrSession)pClaimedSession;
-			return XR_SUCCESS;
 		}
 		default: {
 			LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
 			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 		}
 	}
+
+
+	pClaimedSession->instance = instance;
+	pClaimedSession->activeSessionState = XR_SESSION_STATE_IDLE;
+	pClaimedSession->pendingSessionState = XR_SESSION_STATE_READY;
+	pClaimedSession->activeReferenceSpaceHandle = XR_HANDLE_INVALID;
+	pClaimedSession->pendingReferenceSpaceHandle = XR_HANDLE_INVALID;
+
+	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroySession(
@@ -1759,7 +1768,23 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	PrintNextChain(beginInfo->next);
 
 	Session* pSession = (Session*)session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	pSession->running = true;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
+
+	switch (pInstance->graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL:    break;
+		case XR_GRAPHICS_API_OPENGL_ES: break;
+		case XR_GRAPHICS_API_VULKAN:    break;
+		case XR_GRAPHICS_API_D3D11_4:   {
+			pSession->waitValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
+			printf("xrBeginSession Read waitValue %llu\n", pSession->waitValue);
+			break;
+		}
+		default:
+			LOG_ERROR("Graphics API not supported.\n");
+			return XR_ERROR_RUNTIME_FAILURE;
+	}
 
 //	if (beginInfo->next != NULL) {
 //		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
@@ -1803,14 +1828,36 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
-	midXrWaitFrame(sessionHandle);
+	if (!pSession->running)
+		return XR_ERROR_SESSION_NOT_RUNNING;
+
+	xrStepWaitValue(sessionHandle, &pSession->waitValue);
+
+	switch (pInstance->graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL:    break;
+		case XR_GRAPHICS_API_OPENGL_ES: break;
+		case XR_GRAPHICS_API_VULKAN:    break;
+		case XR_GRAPHICS_API_D3D11_4:   {
+			ID3D11DeviceContext4_Wait(pSession->binding.d3d11.context4, pSession->binding.d3d11.fence, pSession->waitValue);
+			break;
+		}
+		default:
+			LOG_ERROR("Graphics API not supported.\n");
+			return XR_ERROR_RUNTIME_FAILURE;
+	}
 
 	XrTime currentTime = GetXrTime();
 
-	frameState->predictedDisplayPeriod = 11111111;  // 90hz
+	XrTime deltaTime = currentTime - pSession->lastDisplayTime;
+
+	XrTime hz = HzToXrTime(90);
+	frameState->predictedDisplayPeriod = hz;  // 90hz
 	frameState->predictedDisplayTime = currentTime;
 	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
 							   pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
+
+	printf("predictedDisplayTime %llu %llu\n", frameState->predictedDisplayTime, hz);
+	printf("deltaTime %llu\n", deltaTime);
 
 	return XR_SUCCESS;
 }
@@ -1831,6 +1878,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 {
 	LOG_METHOD_ONCE(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
+
+	printf("displayTime %llu\n", frameEndInfo->displayTime);
 
 	// honestly not sure what do with this all yet, its just for debug
 	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
@@ -1866,6 +1915,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+
+	pSession->lastDisplayTime = frameEndInfo->displayTime;
+
 	midXrEndFrame(sessionHandle);
 
 	// You wait till first end frame to say synchronized
@@ -1875,9 +1927,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	// These progressions are really just for debug right now
 	if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
 		pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
-
-	if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
-		pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
 
 	return XR_SUCCESS;
 }
@@ -1891,7 +1940,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 	XrView*                 views)
 {
 	LOG_METHOD_ONCE(xrLocateViews);
-	PrintNextChain(views->next);
+	assert(views->next == NULL);
 
 	viewState->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT |
 								XR_VIEW_STATE_POSITION_VALID_BIT |

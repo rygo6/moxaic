@@ -175,11 +175,15 @@ typedef struct MxcNodeContext {
 
 	// this should be a pool of swaps shared by all nodes
 	// unless it can import an image fast enough on the fly, maybe it can? CEF does
-	MxcNodeGlFramebufferTexture glNodeFramebufferTextures[VK_SWAP_COUNT];
 	MxcNodeVkFramebufferTexture vkNodeFramebufferTextures[VK_SWAP_COUNT];
 
 	// I'm not actually 100% sure if I want this
 	VkFence vkNodeFence;
+#if WIN32
+	VkWin32ExternalFence nodeFenceExternal;
+#endif
+
+	// I don't think I need the node timeline...
 	VkSemaphore vkNodeTimeline;
 	VkSemaphore vkCompositorTimeline;
 

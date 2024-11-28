@@ -11,8 +11,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#define D3D11
-//#define D3D12
+//#define D3D11
+#define D3D12
 #define COBJMACROS
 #if defined(D3D11)
 #include <dxgi1_6.h>
@@ -881,6 +881,12 @@ typedef struct VkTextureCreateInfo {
 } VkTextureCreateInfo;
 void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture);
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
+
+typedef struct VkWin32ExternalFence {
+	ID3D12Fence* fence;
+	HANDLE handle;
+} VkWin32ExternalFence;
+void vkWin32CreateExternalFence(VkWin32ExternalFence *pFence);
 
 typedef struct VkWin32ExternalTexture {
 #if defined(D3D11)
@@ -1848,7 +1854,7 @@ static DXGI_FORMAT VkToDXGIFormat(VkFormat format)
 	}
 }
 
-void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture)
+static void CheckDXGI()
 {
 	if (dxgi.adapter == NULL) {
 		UINT flags = DXGI_CREATE_FACTORY_DEBUG;
@@ -1860,8 +1866,34 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 					i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
 			break;  // add logic to choose?
 		}
-	}
 
+#if defined(D3D12)
+		DX_CHECK(D3D12CreateDevice((IUnknown*)dxgi.adapter, D3D_FEATURE_LEVEL_11_1, &IID_ID3D12Device, (void**)&d3d12.device));
+#endif
+	}
+}
+
+void vkWin32CreateExternalFence(VkWin32ExternalFence *pFence)
+{
+	CheckDXGI();
+	DX_CHECK(ID3D12Device_CreateFence(
+		d3d12.device,
+		0,
+		D3D12_FENCE_FLAG_SHARED,
+		&IID_ID3D12Fence,
+		(void**)&pFence->fence));
+	DX_CHECK(ID3D12Device_CreateSharedHandle(
+		d3d12.device,
+		(ID3D12DeviceChild*)pFence->fence,
+		NULL,
+		GENERIC_ALL,
+		NULL,
+		&pFence->handle));
+}
+
+void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture)
+{
+	CheckDXGI();
 #if defined(D3D11)
 	if (d3d11.device1 == NULL) {
 		D3D_FEATURE_LEVEL featuresLevels[] = {
@@ -1919,10 +1951,6 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 //	ID3D11DeviceContext_Release(d3d11.context);
 
 #elif defined(D3D12)
-	if (d3d12.device == NULL) {
-		DX_CHECK(D3D12CreateDevice((IUnknown*)dxgi.adapter, D3D_FEATURE_LEVEL_11_0, &IID_ID3D12Device, (void**)&d3d12.device));
-	}
-
 	D3D12_RESOURCE_DESC textureDesc = {
 		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 		.Alignment = 0,
@@ -1951,7 +1979,6 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		NULL,
 		&IID_ID3D12Resource,
 		(void**)&pTexture->texture));
-
 	DX_CHECK(ID3D12Device_CreateSharedHandle(
 		d3d12.device,
 		(ID3D12DeviceChild*)pTexture->texture,
@@ -2469,6 +2496,7 @@ void midVkCreateStdRenderPass()
 	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.renderPass, "ContextRenderPass");
 }
 
+// probably get rid of these, don't create wrappers to single methods
 void midVkCreateSampler(const VkmSamplerCreateInfo* pDesc, VkSampler* pSampler)
 {
 	VkSamplerCreateInfo info = {
@@ -2535,7 +2563,6 @@ void midVkCreateStdPipeLayout()
 	CreateStdPipeLayout();
 }
 
-// vkCreateExternalFence???
 void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence)
 {
 #if WIN32
@@ -2555,7 +2582,7 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 		.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
 	};
 	VK_CHECK(vkCreateFence(vk.context.device, &info, MIDVK_ALLOC, pFence));
-	vkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
+//	vkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
 	switch (pCreateInfo->locality) {
 		default: break;
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
