@@ -468,7 +468,6 @@ static uint32_t CalcDJB2(const char* str, int max)
 
 XrTime GetXrTime()
 {
-	return 0;
 	LARGE_INTEGER frequency;
 	LARGE_INTEGER counter;
 	if (!QueryPerformanceFrequency(&frequency))
@@ -1776,11 +1775,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	PrintNextChain(beginInfo->next);
 
 	Session*  pSession = (Session*)session;
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+
+	if (pSession->activeSessionState != XR_SESSION_STATE_READY){
+		LOG_ERROR("XR_ERROR_SESSION_NOT_READY\n");
+		return XR_ERROR_SESSION_NOT_READY;
+	}
+
+	if (pSession->running){
+		LOG_ERROR("XR_ERROR_SESSION_RUNNING\n");
+		return XR_ERROR_SESSION_RUNNING;
+	}
 
 	pSession->running = true;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
+
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
@@ -1836,11 +1846,13 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	assert(frameWaitInfo->next == NULL);
 
 	Session*  pSession = (Session*)session;
+	if (!pSession->running) {
+		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
+		return XR_ERROR_SESSION_NOT_RUNNING;
+	}
+
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
-
-	if (!pSession->running)
-		return XR_ERROR_SESSION_NOT_RUNNING;
 
 	uint64_t timelineValue;
 	xrFrameBeginTimelineValue(sessionHandle, &timelineValue);
@@ -1850,8 +1862,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
+			// only causes GPU to wait
 //			ID3D11DeviceContext4_Wait(pSession->binding.d3d11.context4, pSession->binding.d3d11.fence, pSession->waitValue);
 
+			// causes CPU to wait
 			HANDLE eventHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 			if (!eventHandle) {
 				LOG_ERROR("Failed to create event handle.\n");
@@ -1868,12 +1882,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	}
 
 	XrTime currentTime = GetXrTime();
-
 	XrTime deltaTime = currentTime - pSession->lastDisplayTime;
-
-	XrTime hz = HzToXrTime(90);
-	frameState->predictedDisplayPeriod = hz;  // 90hz
-	frameState->predictedDisplayTime = currentTime;
+	XrTime hz = HzToXrTime(240);
+	frameState->predictedDisplayPeriod = hz;
+	frameState->predictedDisplayTime = currentTime + hz;
 	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
 							   pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
 
@@ -1890,6 +1902,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 	LOG_METHOD_ONCE(xrBeginFrame);
 	assert(frameBeginInfo->next == NULL);
 
+	Session*  pSession = (Session*)session;
+	if (!pSession->running) {
+		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
+		return XR_ERROR_SESSION_NOT_RUNNING;
+	}
+
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+
 	return XR_SUCCESS;
 }
 
@@ -1900,46 +1921,47 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	LOG_METHOD_ONCE(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
 
-//	printf("displayTime %llu\n", frameEndInfo->displayTime);
-
-	// honestly not sure what do with this all yet, its just for debug
-	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
-		switch (frameEndInfo->layers[layer]->type) {
-			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
-				XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
-				assert(pProjectionLayer->viewCount == 2);
-
-				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
-					switch (pProjectionLayer->views[layer].type) {
-						case XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW: {
-							break;
-						}
-						default: {
-							LOG_ERROR("Unknown Composition Layer View %d", pProjectionLayer->views[layer].type);
-							break;
-						}
-					}
-				}
-
-				break;
-			}
-			case XR_TYPE_COMPOSITION_LAYER_QUAD: {
-				printf("XR_TYPE_COMPOSITION_LAYER_QUAD");
-			}
-			default: {
-				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
-				break;
-			}
-		}
+	Session*  pSession = (Session*)session;
+	if (!pSession->running) {
+		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
+		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
 
-	Session*  pSession = (Session*)session;
+	// honestly not sure what do with this all yet, its just for debug
+//	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
+//		switch (frameEndInfo->layers[layer]->type) {
+//			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
+//				XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
+//				assert(pProjectionLayer->viewCount == 2);
+//
+//				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
+//					switch (pProjectionLayer->views[layer].type) {
+//						case XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW: {
+//							break;
+//						}
+//						default: {
+//							LOG_ERROR("Unknown Composition Layer View %d", pProjectionLayer->views[layer].type);
+//							break;
+//						}
+//					}
+//				}
+//
+//				break;
+//			}
+//			case XR_TYPE_COMPOSITION_LAYER_QUAD: {
+//				printf("XR_TYPE_COMPOSITION_LAYER_QUAD");
+//			}
+//			default: {
+//				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
+//				break;
+//			}
+//		}
+//	}
+
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	pSession->lastDisplayTime = frameEndInfo->displayTime;
-
-//	xrProgressTimelineValue(sessionHandle);
 
 	// You wait till first end frame to say synchronized
 	if (pSession->activeSessionState == XR_SESSION_STATE_READY)
@@ -2282,7 +2304,19 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateBoolean(
 	LOG_METHOD_ONCE(xrGetActionStateBoolean);
 	PrintNextChain(getInfo->next);
 
-	return XR_SUCCESS;
+	Action*    pGetAction = (Action*)getInfo->action;
+	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
+	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
+
+	printf("Action: %s\n", pGetAction->actionName);
+
+//	state->lastChangeTime = GetXrTime();
+//	state->changedSinceLastSync = true;
+//	state->currentState = true;
+//	state->isActive = true;
+
+	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
@@ -2296,6 +2330,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	Action*    pGetAction = (Action*)getInfo->action;
 	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
 	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
+
+	printf("Action: %s\n", pGetAction->actionName);
 
 	Session*        pSession = (Session*)session;
 	Instance*       pInstance = (Instance*)pSession->instance;
@@ -2322,8 +2358,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 		}
 	}
 
-	LOG_ERROR("%s subaction on %s not bound l\n", pGetActionSubactionPath->string, pGetAction->actionName);
-	return XR_EVENT_UNAVAILABLE;
+	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(
@@ -2332,9 +2368,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(
 	XrActionStateVector2f*      state)
 {
 	LOG_METHOD(xrGetActionStateVector2f);
-	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetActionStateVector2f\n");
-
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(
@@ -2343,9 +2378,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(
 	XrActionStatePose*          state)
 {
 	LOG_METHOD(xrGetActionStatePose);
-	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetActionStatePose\n");
-
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
@@ -2357,7 +2391,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 
 	Session*  pSession = (Session*)session;
 
-	return XR_SESSION_NOT_FOCUSED;
+	if (pSession->activeSessionState != XR_SESSION_STATE_FOCUSED)
+		return XR_SESSION_NOT_FOCUSED;
 
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrTime    currentTime = GetXrTime();
