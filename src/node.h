@@ -59,6 +59,8 @@ typedef struct MxcNodeShared {
 	MidPose           cameraPos;
 	MidCamera         camera;
 
+	bool swapClaimed[VK_SWAP_COUNT];
+
 	// read every cycle, occasional write
 	float compositorRadius;
 	int   compositorCycleSkip;

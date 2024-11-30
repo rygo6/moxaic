@@ -63,20 +63,47 @@ void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE*
 	}
 }
 
-void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex)
+void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
-	*pIndex = (timelineValue % VK_SWAP_COUNT);
+	uint8_t index = (timelineValue % VK_SWAP_COUNT);
+	*pIndex = index;
+//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], true, __ATOMIC_RELEASE);
+//	assert(priorIndex == false);
 }
 
-void xrStepWaitValue(XrHandle sessionHandle, uint64_t* pWaitValue)
+void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	*pWaitValue = *pWaitValue - (*pWaitValue % MXC_CYCLE_COUNT);
-	*pWaitValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD;
+	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
+//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_RELEASE);
+//	assert(priorIndex == true);
+}
+
+void xrSetInitialTimelineValue(XrHandle sessionHandle, uint64_t timelineValue)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	timelineValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
+	pNodeShared->compositorBaseCycleValue = timelineValue + (MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip * 2);
+}
+
+void xrFrameBeginTimelineValue(XrHandle sessionHandle, uint64_t* pTimelineValue)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
+}
+
+void xrProgressTimelineValue(XrHandle sessionHandle)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	__atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELAXED);
+	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
 
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
@@ -99,8 +126,11 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 
 	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
 	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
-	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
-	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
+	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
+	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
+
+	pView->fov.angleLeft += viewIndex;
+	pView->fov.angleRight += viewIndex;
 
 //	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
 //	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
@@ -126,6 +156,8 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 		}
 	}
 
+//	printf("%f %f %f %f\n",pView->fov.angleLeft, pView->fov.angleRight, pView->fov.angleUp, pView->fov.angleDown);
+
 	//	float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
 //	pView->fov.angleLeft = -halfAngle;
 //	pView->fov.angleRight = halfAngle;
@@ -135,12 +167,4 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 
 void midXrBeginFrame(XrHandle sessionHandle)
 {
-}
-
-void midXrEndFrame(XrHandle sessionHandle)
-{
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
-	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	 __atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELAXED);
-	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }

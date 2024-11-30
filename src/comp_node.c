@@ -378,8 +378,15 @@ run_loop:
 				// the inverse of node timeline is the framebuffer index to display
 				// while the non-inverse is the framebuffer to be rendered into
 				// we want to keep this index a function of the timeline value to evade needing any other index list
-				int nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
+				uint8_t nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
 				CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].acquireBarriers);
+
+//				bool exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_ACQ_REL);
+//				assert(!exchangedSwap);
+
+//				uint8_t priorNodeFramebufferIndex = !(nodeCompositorData[i].lastTimelineSwap % VK_SWAP_COUNT);
+//				uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_ACQ_REL);
+//				assert(priorExchangedSwap);
 
 				// These will end up being updated from a framebuffer pool so they need to be written each switch
 				VkWriteDescriptorSet writeSets[] = {

@@ -76,11 +76,13 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle);
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
 void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle);
-void xrClaimSwapPoolImage(XrHandle sessionHandle, uint32_t* pIndex);
-void xrStepWaitValue(XrHandle sessionHandle, uint64_t* pWaitValue);
+void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex);
+void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index);
+void xrSetInitialTimelineValue(XrHandle sessionHandle, uint64_t timelineValue);
+void xrFrameBeginTimelineValue(XrHandle sessionHandle, uint64_t* pTimelineValue);
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
 void midXrBeginFrame(XrHandle sessionHandle);
-void midXrEndFrame(XrHandle sessionHandle);
+void xrProgressTimelineValue(XrHandle sessionHandle);
 
 //
 //// Mid OpenXR Constants
@@ -299,7 +301,7 @@ typedef struct Swapchain {
 	// we should replace XrHandle pointers with uint16_t handle offsets
 	XrSession session;
 
-	uint32_t swapIndex;
+	uint8_t swapIndex;
 	union {
 		struct {
 			GLuint texture;
@@ -347,8 +349,6 @@ typedef struct Session {
 
 	SwapchainPool      swapchains;
 	ActionSetStatePool actionSetStates;
-
-	uint64_t waitValue;
 
 	XrViewConfigurationType primaryViewConfigurationType;
 	union {
@@ -468,6 +468,7 @@ static uint32_t CalcDJB2(const char* str, int max)
 
 XrTime GetXrTime()
 {
+	return 0;
 	LARGE_INTEGER frequency;
 	LARGE_INTEGER counter;
 	if (!QueryPerformanceFrequency(&frequency))
@@ -1731,6 +1732,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 //	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
 //	IDXGIKeyedMutex_AcquireSync(keyedMutex, 1, INFINITE);
@@ -1750,6 +1753,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
+	Instance*   pInstance = (Instance*)pSession->instance;
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+
+	xrReleaseSwapPoolImage(sessionHandle, pSwapchain->swapIndex);
+//	xrProgressTimelineValue(sessionHandle);
 
 //	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
 //	IDXGIKeyedMutex_ReleaseSync(keyedMutex, 0);
@@ -1767,8 +1775,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	LOG_METHOD_ONCE(xrBeginSession);
 	PrintNextChain(beginInfo->next);
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+
 	pSession->running = true;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 
@@ -1777,8 +1787,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
-			pSession->waitValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
-			printf("xrBeginSession Read waitValue %llu\n", pSession->waitValue);
+			uint64_t timelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
+			printf("xrBeginSession Read timelineValue %llu\n", timelineValue);
+			xrSetInitialTimelineValue(sessionHandle, timelineValue);
 			break;
 		}
 		default:
@@ -1831,14 +1842,24 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	if (!pSession->running)
 		return XR_ERROR_SESSION_NOT_RUNNING;
 
-	xrStepWaitValue(sessionHandle, &pSession->waitValue);
+	uint64_t timelineValue;
+	xrFrameBeginTimelineValue(sessionHandle, &timelineValue);
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
-			ID3D11DeviceContext4_Wait(pSession->binding.d3d11.context4, pSession->binding.d3d11.fence, pSession->waitValue);
+//			ID3D11DeviceContext4_Wait(pSession->binding.d3d11.context4, pSession->binding.d3d11.fence, pSession->waitValue);
+
+			HANDLE eventHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+			if (!eventHandle) {
+				LOG_ERROR("Failed to create event handle.\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+			DX_CHECK(ID3D11Fence_SetEventOnCompletion(pSession->binding.d3d11.fence, timelineValue, eventHandle));
+			WaitForSingleObject(eventHandle, INFINITE);
+
 			break;
 		}
 		default:
@@ -1856,8 +1877,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
 							   pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
 
-	printf("predictedDisplayTime %llu %llu\n", frameState->predictedDisplayTime, hz);
-	printf("deltaTime %llu\n", deltaTime);
+//	printf("predictedDisplayTime %llu %llu\n", frameState->predictedDisplayTime, hz);
+//	printf("deltaTime %llu\n", deltaTime);
 
 	return XR_SUCCESS;
 }
@@ -1879,7 +1900,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	LOG_METHOD_ONCE(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
 
-	printf("displayTime %llu\n", frameEndInfo->displayTime);
+//	printf("displayTime %llu\n", frameEndInfo->displayTime);
 
 	// honestly not sure what do with this all yet, its just for debug
 	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
@@ -1918,7 +1939,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 
 	pSession->lastDisplayTime = frameEndInfo->displayTime;
 
-	midXrEndFrame(sessionHandle);
+//	xrProgressTimelineValue(sessionHandle);
 
 	// You wait till first end frame to say synchronized
 	if (pSession->activeSessionState == XR_SESSION_STATE_READY)
@@ -1927,6 +1948,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	// These progressions are really just for debug right now
 	if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
 		pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+
+	xrProgressTimelineValue(sessionHandle);
 
 	return XR_SUCCESS;
 }

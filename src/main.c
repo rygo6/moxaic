@@ -109,7 +109,6 @@ int main(void)
 #endif
 	}
 
-
 	if (isCompositor) {  // Compositor Loop
 		const VkDevice device = vk.context.device;
 		const VkQueue  graphicsQueue = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
