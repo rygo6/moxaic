@@ -60,11 +60,17 @@ static NodeHandle RequestLocalNodeHandle()
 	activeNodesShared[handle] = &nodesShared[handle];
 	return handle;
 }
-NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared)
+NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
 	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
 	activeNodesShared[handle] = pNodeShared;
 	return handle;
+}
+void ReleaseNode(NodeHandle handle)
+{
+	assert(nodeContexts[handle].type != MXC_NODE_TYPE_NONE);
+	int newCount = __atomic_sub_fetch(&nodeCount, 1, __ATOMIC_RELEASE);
+	printf("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
 #define CLOSE_HANDLE(_handle)                                                     \
@@ -72,11 +78,11 @@ NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared)
 		DWORD dwError = GetLastError();                                           \
 		printf("Could not close (%s) object handle (%lu).\n", #_handle, dwError); \
 	}
-static int ReleaseNode(NodeHandle handle)
+static int CleanupNode(NodeHandle handle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[handle];
-	int newCount = __atomic_sub_fetch(&nodeCount, 1, __ATOMIC_RELEASE);
-	printf("Releasing Node %d. Count %d.\n", handle, newCount);
+
+	ReleaseNode(handle);
 
 //	{ as long as mxcInterprocessQueuePoll is called after waiting on MXC_CYCLE_PROCESS_INPUT we don't have to wait here
 //		// we need to wait one cycle to get the compositor cmd buffer cleared
@@ -826,6 +832,11 @@ void mxcShutdownInterprocessServer()
 
 void mxcConnectInterprocessNode(bool createTestNode)
 {
+	if (pImportedExternalMemory != NULL && importedExternalMemoryHandle != NULL) {
+		printf("IPC already connected, skipping.\n");
+		return;
+	}
+
 	printf("Connecting on: '%s'\n", SOCKET_PATH);
 	MxcNodeContext*        pNodeContext = NULL;
 	MxcImportParam*        pImportParam = NULL;
@@ -1036,7 +1047,7 @@ void mxcShutdownInterprocessNode()
 void mxcInterprocessTargetNodeClosed(const NodeHandle handle)
 {
 	printf("Closing %d\n", handle);
-	ReleaseNode(handle);
+	CleanupNode(handle);
 }
 
 const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {

@@ -6,14 +6,15 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-void midXrInitialize(XrGraphicsApi graphicsApi)
+void midXrInitialize()
 {
 	printf("Initializing Moxaic OpenXR Node.\n");
 	isCompositor = false;
 	mxcConnectInterprocessNode(false);
 }
 
-void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
+// shoul dbe claim node? that introduces non-oxr terms into this though
+void xrClaimSession(XrHandle* pSessionHandle)
 {
 	printf("Creating Moxaic OpenXR Session.\n");
 
@@ -29,6 +30,13 @@ void midXrCreateSession(XrGraphicsApi graphicsApi, XrHandle* pSessionHandle)
 
 	// openxr session = moxaic node
 	*pSessionHandle = nodeHandle;
+}
+
+void xrReleaseSession(XrHandle sessionHandle)
+{
+	printf("Releasing Moxaic OpenXR Session.\n");
+	NodeHandle nodeHandle = sessionHandle;
+	ReleaseNode(nodeHandle);
 }
 
 void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)

@@ -18,6 +18,7 @@
 //
 /// Constants
 typedef enum MxcNodeType {
+	MXC_NODE_TYPE_NONE,
 	MXC_NODE_TYPE_THREAD,
 	MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED,
 	MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED,
@@ -283,6 +284,7 @@ void mxcCreateNodeRenderPass();
 void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, MxcNodeVkFramebufferTexture* pFramebufferTextures);
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
+void ReleaseNode(NodeHandle handle);
 
 //
 /// Process IPC
