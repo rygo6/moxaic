@@ -438,7 +438,7 @@ typedef struct ActionSet {
 } ActionSet;
 POOL_HASHED(ActionSet, 4)
 
-#define XR_MAX_SPACE_COUNT 4
+#define XR_MAX_SPACE_COUNT 32
 typedef struct Space {
 	XrReferenceSpaceType referenceSpaceType;
 	XrPosef              poseInReferenceSpace;
@@ -482,6 +482,7 @@ typedef struct Session {
 	XrInstance instance;
 
 	bool running;
+	bool exiting;
 
 	XrSessionState activeSessionState;
 	XrSessionState pendingSessionState;
@@ -569,13 +570,13 @@ PoolMemory poolMemory;
 
 #define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
-#define LOG_METHOD(_name) printf("%lu:%lu: " #_name "\n", GetCurrentProcessId(), GetCurrentThreadId())
-#define LOG_METHOD_ONCE(_name)     \
+#define LOG_METHOD(_enum) printf("%lu:%lu: " #_enum "\n", GetCurrentProcessId(), GetCurrentThreadId())
+#define LOG_METHOD_ONCE(_enum)     \
 	{                              \
 		static int logged = false; \
 		if (!logged) {             \
-			logged = true;         \
-			LOG_METHOD(_name);     \
+			logged = false;         \
+			LOG_METHOD(_enum);     \
 		}                          \
 	}
 #else
@@ -1037,11 +1038,26 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
 	return XR_SUCCESS;
 }
 
+#define STRING_ENUM_CASE(_enum, _value) case _value: { return #_enum; }
+#define STRING_ENUM_METHOD(_enum)                             \
+	const char* string_##_enum(_enum val)                     \
+	{                                                         \
+		switch (val) {                                        \
+			XR_LIST_ENUM_##_enum(STRING_ENUM_CASE) default:   \
+			{                                                 \
+				assert(false && #_enum " string not found."); \
+				return "N/A";                                 \
+			}                                                 \
+		}                                                     \
+	}
+
+STRING_ENUM_METHOD(XrSessionState)
+
 XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 	XrInstance         instance,
 	XrEventDataBuffer* eventData)
 {
-	//	LOG_METHOD(xrPollEvent);
+	LOG_METHOD(xrPollEvent);
 
 	Instance*    pInstance = (Instance*)instance;
 	SessionPool* pSessions = (SessionPool*)&pInstance->sessions;
@@ -1058,23 +1074,112 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 
 			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
 			pEventData->session = (XrSession)pSession;
-			pEventData->state = pSession->pendingSessionState;
 			pEventData->time = GetXrTime();
 
-			printf("XrEventDataSessionStateChanged: %d\n", pEventData->state);
+			// Must cycle through Focus, Visible, Synchronized if exiting.
+			if (pSession->exiting) {
 
-			pSession->activeSessionState = pSession->pendingSessionState;
+				switch (pSession->activeSessionState) {
+					case XR_SESSION_STATE_FOCUSED:
+					case XR_SESSION_STATE_VISIBLE:
+					case XR_SESSION_STATE_READY:
+				}
 
-			// Force to ready immediately. Is there a better place to put this?
-			if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
-				pSession->pendingSessionState = XR_SESSION_STATE_READY;
+				if (pSession->activeSessionState == XR_SESSION_STATE_FOCUSED)
+					pSession->activeSessionState = XR_SESSION_STATE_VISIBLE;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
+					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_READY)
+					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+					pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING) {
+					if (pSession->running)
+						return XR_EVENT_UNAVAILABLE; // must wait for Idle
+					else {
+						pSession->activeSessionState = XR_SESSION_STATE_IDLE;
+						pSession->pendingSessionState = XR_SESSION_STATE_EXITING;
+					}
+				} else if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
+					if (pSession->running) {
+						pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
+					} else {
+						pSession->activeSessionState = XR_SESSION_STATE_EXITING;
+					}
+				}
+
+				pEventData->state = pSession->activeSessionState;
+				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				return XR_SUCCESS;
 			}
 
-			// Synchronize after first frame to get all state replicated from compositor first.
-			//			if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED) {
-			//				pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
-			//			}
+			if (!pSession->running) {
 
+				if (pSession->pendingSessionState == XR_SESSION_STATE_IDLE) {
+
+					if (pSession->activeSessionState == XR_SESSION_STATE_UNKNOWN) {
+						pSession->activeSessionState = XR_SESSION_STATE_IDLE;
+						// Immediately progress Idle to Ready when starting
+						pSession->pendingSessionState = XR_SESSION_STATE_READY;
+					} else if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING)
+						pSession->activeSessionState = XR_SESSION_STATE_IDLE;
+
+				} else {
+					pSession->activeSessionState = pSession->pendingSessionState;
+				}
+
+				pEventData->state = pSession->activeSessionState;
+				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				return XR_SUCCESS;
+			}
+
+			// Must cycle through Focus, Visible, Synchronized if going to idle.
+			if (pSession->pendingSessionState == XR_SESSION_STATE_IDLE) {
+
+				if (pSession->activeSessionState == XR_SESSION_STATE_FOCUSED)
+					pSession->activeSessionState = XR_SESSION_STATE_VISIBLE;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
+					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+					pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING)
+					pSession->activeSessionState = XR_SESSION_STATE_IDLE;
+
+				pEventData->state = pSession->activeSessionState;
+				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				return XR_SUCCESS;
+			}
+
+			// Must cycle through Focus, Visible, Synchronized if stopping.
+			if (pSession->pendingSessionState == XR_SESSION_STATE_STOPPING) {
+
+				if (pSession->activeSessionState == XR_SESSION_STATE_FOCUSED)
+					pSession->activeSessionState = XR_SESSION_STATE_VISIBLE;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_READY)
+					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
+					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+					pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
+
+				pEventData->state = pSession->activeSessionState;
+				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				return XR_SUCCESS;
+			}
+
+			// Must ensure stopping does not switch back to Ready after going Idle
+			if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING) {
+				pSession->activeSessionState = pSession->pendingSessionState;
+				pEventData->state = pSession->activeSessionState ;
+				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				return XR_SUCCESS;
+			}
+
+			pSession->activeSessionState = pSession->pendingSessionState;
+			pEventData->state = pSession->activeSessionState ;
+			printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+
+			// Forcing to focused for now, but should happen after some user input probably
 			if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE) {
 				pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
 			}
@@ -1990,14 +2095,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 
 	Session* pSession = (Session*)session;
 
-	if (pSession->activeSessionState != XR_SESSION_STATE_READY) {
-		LOG_ERROR("XR_ERROR_SESSION_NOT_READY\n");
-		return XR_ERROR_SESSION_NOT_READY;
-	}
-
 	if (pSession->running) {
 		LOG_ERROR("XR_ERROR_SESSION_RUNNING\n");
 		return XR_ERROR_SESSION_RUNNING;
+	}
+
+	if (pSession->activeSessionState != XR_SESSION_STATE_READY) {
+		LOG_ERROR("XR_ERROR_SESSION_NOT_READY\n");
+		return XR_ERROR_SESSION_NOT_READY;
 	}
 
 	pSession->running = true;
@@ -2050,8 +2155,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndSession(
 		return XR_ERROR_SESSION_NOT_STOPPING;
 	}
 
-	pSession->running = false;
 	pSession->pendingSessionState = XR_SESSION_STATE_IDLE;
+	pSession->running = false;
 
 	return XR_SUCCESS;
 }
@@ -2062,7 +2167,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrRequestExitSession(
 	LOG_METHOD(xrRequestExitSession);
 
 	Session* pSession = (Session*)session;
+
+	if (!pSession->running) {
+		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
+		return XR_ERROR_SESSION_NOT_RUNNING;
+	}
+
 	pSession->pendingSessionState = XR_SESSION_STATE_EXITING;
+	pSession->exiting = true;
 
 	return XR_SUCCESS;
 }
@@ -3061,9 +3173,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	const char*         name,
 	PFN_xrVoidFunction* function)
 {
-#define CHECK_PROC_ADDR(_name)                                    \
-	if (strncmp(name, #_name, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
-		*function = (PFN_xrVoidFunction)_name;                    \
+#define CHECK_PROC_ADDR(_enum)                                    \
+	if (strncmp(name, #_enum, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
+		*function = (PFN_xrVoidFunction)_enum;                    \
 		return XR_SUCCESS;                                        \
 	}
 
