@@ -1839,20 +1839,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 	Session*  pSession = (Session*)session;
 	Instance* pInstance = (Instance*)pSession->instance;
 
-#define TRANSFER_SWAP_FORMATS                     \
-	*formatCountOutput = COUNT(swapFormats);      \
-	if (formats == NULL)                          \
-		return XR_SUCCESS;                        \
-	if (formatCapacityInput < COUNT(swapFormats)) \
-		return XR_ERROR_SIZE_INSUFFICIENT;        \
-	for (int i = 0; i < COUNT(swapFormats); ++i)  \
-		formats[i] = swapFormats[i];
+#define TRANSFER_SWAP_FORMATS                               \
+	*formatCountOutput = COUNT(swapFormats);                \
+	if (formats == NULL)                                    \
+		return XR_SUCCESS;                                  \
+	if (formatCapacityInput < COUNT(swapFormats))           \
+		return XR_ERROR_SIZE_INSUFFICIENT;                  \
+	for (int i = 0; i < COUNT(swapFormats); ++i) {          \
+		printf("Enumerating Format: %llu\n", swapFormats[i]); \
+		formats[i] = swapFormats[i];                        \
+	}
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			int64_t swapFormats[] = {
 				GL_SRGB8_ALPHA8,
-				//				GL_SRGB8,
+				GL_SRGB8,
 			};
 			TRANSFER_SWAP_FORMATS
 			return XR_SUCCESS;
@@ -1860,7 +1862,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 		case XR_GRAPHICS_API_VULKAN: {
 			int64_t swapFormats[] = {
 				VK_FORMAT_R8G8B8A8_UNORM,
-				//				VK_FORMAT_R8G8B8A8_SRGB,
+				VK_FORMAT_R8G8B8A8_SRGB,
 			};
 			TRANSFER_SWAP_FORMATS
 			return XR_SUCCESS;
@@ -1868,7 +1870,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 		case XR_GRAPHICS_API_D3D11_4: {
 			int64_t swapFormats[] = {
 				DXGI_FORMAT_R8G8B8A8_UNORM,
-				//				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 			};
 			TRANSFER_SWAP_FORMATS
 			return XR_SUCCESS;
