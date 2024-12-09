@@ -1,5 +1,6 @@
 #pragma once
 
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,8 @@
 #define NOCRYPT
 #define NOMCX
 #include <windows.h>
+#include <windows.h>
+#include <synchapi.h>
 
 #include <vulkan/vulkan.h>
 
@@ -83,10 +86,11 @@ void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle);
 void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex);
 void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index);
 void xrSetInitialTimelineValue(XrHandle sessionHandle, uint64_t timelineValue);
-void xrFrameBeginTimelineValue(XrHandle sessionHandle, uint64_t* pTimelineValue);
+void xrFrameBeginTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue);
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
 void midXrBeginFrame(XrHandle sessionHandle);
-void xrProgressTimelineValue(XrHandle sessionHandle);
+void xrProgressTimelineValue(XrHandle sessionHandle, bool synchronized);
+XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized);
 
 //
 //// Mid OpenXR Constants
@@ -479,10 +483,9 @@ POOL(Swapchain, 2)
 // this layout is awful from a DOD perspective can I make it less awful?
 typedef struct Session {
 	XrInstance instance;
+	XrSystemId systemId;
 
 	bool running;
-	bool frameBegan;
-	bool framedWaited;
 	bool exiting;
 
 	XrSessionState activeSessionState;
@@ -497,9 +500,15 @@ typedef struct Session {
 	SpacePool referenceSpaces;
 	SpacePool actionSpaces;
 
+	XrTime frameWaited;
+	XrTime frameBegan;
+	XrTime frameEnded;
+
 	// CTS seems to need 3 retained displayTimes to pass.
 	XrTime predictedDisplayTimes[3];
-	XrTime priorEndDisplayTime;
+	XrTime lastBeginDisplayTime;
+	XrTime lastDisplayTime;
+	uint32_t synchronizedFrameCount;
 
 	SwapchainPool      swapchains;
 	ActionSetStatePool actionSetStates;
@@ -573,13 +582,13 @@ PoolMemory poolMemory;
 
 #define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
-#define LOG_METHOD(_enum) printf("%lu:%lu: " #_enum "\n", GetCurrentProcessId(), GetCurrentThreadId())
-#define LOG_METHOD_ONCE(_enum)     \
+#define LOG_METHOD(_method) printf("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
+#define LOG_METHOD_ONCE(_method)   \
 	{                              \
 		static int logged = false; \
 		if (!logged) {             \
 			logged = true;         \
-			LOG_METHOD(_enum);     \
+			LOG_METHOD(_method);   \
 		}                          \
 	}
 #else
@@ -627,21 +636,57 @@ static uint32_t CalcDJB2(const char* str, int max)
 	return hash;
 }
 
-XrTime GetXrTime()
+static double MillisecondsToSeconds(double milliseconds )
 {
-	LARGE_INTEGER frequency;
-	LARGE_INTEGER counter;
-	if (!QueryPerformanceFrequency(&frequency))
-		return 0;
-	if (!QueryPerformanceCounter(&counter))
-		return 0;
-	uint64_t nanoseconds = (uint64_t)((counter.QuadPart * 1e9) / frequency.QuadPart);
-	return nanoseconds;
+	return milliseconds / 1000.0;
 }
 
-XrTime HzToXrTime(double hz)
+static double xrTimeToMilliseconds(XrTime nanoseconds)
 {
-	return (XrTime)((1.0 / hz) * 1e9);
+	return (double)nanoseconds / 1000000.0;
+}
+
+static XrTime xrGetTime()
+{
+	LARGE_INTEGER qpc;
+	QueryPerformanceCounter(&qpc);
+
+	static double secondsToNanos = 1e9;
+	static LARGE_INTEGER frequency = {0};
+	if (frequency.QuadPart == 0) {
+		QueryPerformanceFrequency(&frequency);
+	}
+
+	double seconds = (double)qpc.QuadPart / (double)frequency.QuadPart;
+	XrTime xrTime = (XrTime)(seconds * secondsToNanos);
+
+	return xrTime;
+}
+
+static XrTime HzToXrTime(double hz)
+{
+	return (XrTime)(hz / 1e9);
+}
+
+static inline XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
+{
+	while (1) {
+		XrTime currentTime = __atomic_load_n(pSharedTime, __ATOMIC_ACQUIRE);
+		if (currentTime >= waitTime) {
+			return XR_SUCCESS;
+		}
+
+		printf("XrTime needs waiting!\n");
+		if (!WaitOnAddress(pSharedTime, &currentTime, sizeof(XrTime), INFINITE)) {
+			return XR_TIMEOUT_EXPIRED;
+		}
+	}
+}
+
+static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
+{
+	__atomic_store_n(pSharedTime, signalTime, __ATOMIC_RELEASE);
+	WakeByAddressAll(pSharedTime);
 }
 
 //
@@ -1041,14 +1086,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProperties(
 	return XR_SUCCESS;
 }
 
-#define STRING_ENUM_CASE(_enum, _value) case _value: { return #_enum; }
-#define STRING_ENUM_METHOD(_enum)                             \
-	const char* string_##_enum(_enum val)                     \
+#define STRING_ENUM_CASE(_method, _value) case _value: { return #_method; }
+#define STRING_ENUM_METHOD(_method)                             \
+	const char* string_##_method(_method val)                     \
 	{                                                         \
 		switch (val) {                                        \
-			XR_LIST_ENUM_##_enum(STRING_ENUM_CASE) default:   \
+			XR_LIST_ENUM_##_method(STRING_ENUM_CASE) default:   \
 			{                                                 \
-				assert(false && #_enum " string not found."); \
+				assert(false && #_method " string not found."); \
 				return "N/A";                                 \
 			}                                                 \
 		}                                                     \
@@ -1077,7 +1122,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 
 			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
 			pEventData->session = (XrSession)pSession;
-			pEventData->time = GetXrTime();
+			pEventData->time = xrGetTime();
 
 			// Must cycle through Focus, Visible, Synchronized if exiting.
 			if (pSession->exiting) {
@@ -1275,9 +1320,8 @@ static void PrintNextChain(const XrBaseInStructure* nextProperties)
 }
 
 typedef enum SystemId {
-	SYSTEM_ID_DESKTOP_VR_MONO,
-	SYSTEM_ID_HMD_VR_STEREO,
-	SYSTEM_ID_HANDHELD_AR,
+	SYSTEM_ID_HANDHELD_AR = 1,
+	SYSTEM_ID_HMD_VR_STEREO = 2,
 	SYSTEM_ID_COUNT,
 } SystemId;
 XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
@@ -1319,8 +1363,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 	switch ((SystemId)systemId) {
 		default:
 			return XR_ERROR_HANDLE_INVALID;
-		case SYSTEM_ID_DESKTOP_VR_MONO:
-			properties->systemId = SYSTEM_ID_DESKTOP_VR_MONO;
+		case SYSTEM_ID_HANDHELD_AR:
+			properties->systemId = SYSTEM_ID_HANDHELD_AR;
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicDesktop", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
@@ -1333,16 +1377,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 			properties->systemId = SYSTEM_ID_HMD_VR_STEREO;
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicHMD", XR_MAX_SYSTEM_NAME_SIZE);
-			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-			properties->graphicsProperties.maxSwapchainImageWidth = XR_DEFAULT_WIDTH;
-			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
-			properties->trackingProperties.orientationTracking = XR_TRUE;
-			properties->trackingProperties.positionTracking = XR_TRUE;
-			return XR_SUCCESS;
-		case SYSTEM_ID_HANDHELD_AR:
-			properties->systemId = SYSTEM_ID_HANDHELD_AR;
-			properties->vendorId = 0;
-			strncpy(properties->systemName, "MoxaicHandheld", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
 			properties->graphicsProperties.maxSwapchainImageWidth = XR_DEFAULT_WIDTH;
 			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
@@ -1523,6 +1557,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 
 
 	pClaimedSession->instance = instance;
+	pClaimedSession->systemId = createInfo->systemId;
 	pClaimedSession->activeSessionState = XR_SESSION_STATE_UNKNOWN;
 	pClaimedSession->pendingSessionState = XR_SESSION_STATE_IDLE;
 	pClaimedSession->activeReferenceSpaceHandle = XR_HANDLE_INVALID;
@@ -1715,7 +1750,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurations(
 	}
 
 	switch ((SystemId)systemId) {
-		case SYSTEM_ID_DESKTOP_VR_MONO: {
+		case SYSTEM_ID_HANDHELD_AR: {
 			XrViewConfigurationType modes[] = {
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
 			};
@@ -1725,16 +1760,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurations(
 		case SYSTEM_ID_HMD_VR_STEREO: {
 			XrViewConfigurationType modes[] = {
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-				//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET,
-				//		XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT,
-				//		XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO,
-			};
-			TRANSFER_MODES
-			return XR_SUCCESS;
-		}
-		case SYSTEM_ID_HANDHELD_AR: {
-			XrViewConfigurationType modes[] = {
-				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
 			};
 			TRANSFER_MODES
 			return XR_SUCCESS;
@@ -1794,12 +1819,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 {
 	LOG_METHOD(xrEnumerateViewConfigurationViews);
 
+	// this needs to be based on systemId
+
 	switch (viewConfigurationType) {
 		default:
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO\n");
-			*viewCountOutput = 1;
-			break;
+//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+//			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO\n");
+//			*viewCountOutput = 1;
+//			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
 			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO\n");
 			*viewCountOutput = 2;
@@ -1911,6 +1938,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	}
 
 	Session*  pSession = (Session*)session;
+
+	int expectedWidth = XR_DEFAULT_WIDTH * SYSTEM_ID_HMD_VR_STEREO;
+	int expectedHeight = XR_DEFAULT_HEIGHT;
+	if (createInfo->width != expectedWidth ||
+		createInfo->height != expectedHeight) {
+		LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED %d %d\n", expectedWidth, expectedHeight);
+		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
+	}
+
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
@@ -2032,7 +2068,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	uint32_t*                          index)
 {
 	LOG_METHOD_ONCE(xrAcquireSwapchainImage);
-	PrintNextChain(acquireInfo->next);
+	assert(acquireInfo->next == NULL);
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
@@ -2121,9 +2157,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
-			uint64_t timelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
-			printf("xrBeginSession Read timelineValue %llu\n", timelineValue);
-			xrSetInitialTimelineValue(sessionHandle, timelineValue);
+//			uint64_t timelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
+//			printf("xrBeginSession Read timelineValue %llu\n", timelineValue);
+//			xrSetInitialTimelineValue(sessionHandle, timelineValue);
 			break;
 		}
 		default:
@@ -2189,7 +2225,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	const XrFrameWaitInfo* frameWaitInfo,
 	XrFrameState*          frameState)
 {
-	LOG_METHOD(xrWaitFrame);
+	LOG_METHOD_ONCE(xrWaitFrame);
 
 	if (frameWaitInfo != NULL)
 		assert(frameWaitInfo->next == NULL);
@@ -2200,22 +2236,34 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
 
-	pSession->framedWaited = true;
+	XrTimeWaitWin32(&pSession->frameBegan, pSession->frameWaited);
 
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
+	if (pSession->lastDisplayTime == 0) {
+		uint64_t initialTimelineValue;
+		switch (pInstance->graphicsApi) {
+			case XR_GRAPHICS_API_D3D11_4:
+				initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
+				break;
+			default:
+				LOG_ERROR("Graphics API not supported.\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+		}
+		printf("Setting initial timeline value %llu\n", initialTimelineValue);
+		xrSetInitialTimelineValue(sessionHandle, initialTimelineValue);
+	}
+
+	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 	uint64_t timelineValue;
-	xrFrameBeginTimelineValue(sessionHandle, &timelineValue);
+	xrFrameBeginTimelineValue(sessionHandle, synchronized, &timelineValue);
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
-			// only causes GPU to wait
-			// ID3D11DeviceContext4_Wait(pSession->binding.d3d11.context4, pSession->binding.d3d11.fence, pSession->waitValue);
-
 			// causes CPU to wait
 			HANDLE eventHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 			if (!eventHandle) {
@@ -2232,19 +2280,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 			return XR_ERROR_RUNTIME_FAILURE;
 	}
 
-	XrTime currentTime = GetXrTime();
-	XrTime deltaTime = currentTime - pSession->priorEndDisplayTime;
-	XrTime hz = HzToXrTime(240);
-	frameState->predictedDisplayPeriod = hz;
-	frameState->predictedDisplayTime = currentTime + hz;
-//	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
-//							   pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
-	frameState->shouldRender = XR_TRUE;
+	XrTime currentTime = xrGetTime();
+	XrTime lastFrameTime = pSession->lastDisplayTime == 0 ? currentTime : pSession->lastDisplayTime;
+	XrTime frameInterval = xrGetFrameInterval(sessionHandle, synchronized);
+
+	frameState->predictedDisplayPeriod = frameInterval;
+	frameState->predictedDisplayTime = lastFrameTime + frameInterval;
+	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
+							   pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
 
 	memmove(&pSession->predictedDisplayTimes[1], &pSession->predictedDisplayTimes[0], sizeof(pSession->predictedDisplayTimes[0]) * (COUNT(pSession->predictedDisplayTimes) - 1));
 	pSession->predictedDisplayTimes[0] = frameState->predictedDisplayTime;
+	pSession->lastBeginDisplayTime = currentTime;
 
-//	printf("xrWaitFrame predictedDisplayTime: %llu\n", frameState->predictedDisplayTime);
+//	printf("xrWaitFrame predictedDisplayPeriod: %llu predictedDisplayTime: %llu\n", frameState->predictedDisplayPeriod, frameState->predictedDisplayTime);
+
+	__atomic_add_fetch(&pSession->frameWaited, 1, __ATOMIC_RELEASE);
 
 	return XR_SUCCESS;
 }
@@ -2253,7 +2304,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 	XrSession               session,
 	const XrFrameBeginInfo* frameBeginInfo)
 {
-	LOG_METHOD(xrBeginFrame);
+	LOG_METHOD_ONCE(xrBeginFrame);
 
 	if (frameBeginInfo != NULL)
 		assert(frameBeginInfo->next == NULL);
@@ -2263,40 +2314,56 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
-	if (!pSession->framedWaited) {
+	if (pSession->frameWaited == pSession->frameEnded || pSession->frameWaited == pSession->frameBegan) {
 		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID \n");
 		return XR_ERROR_CALL_ORDER_INVALID;
 	}
-	if (pSession->frameBegan) {
-		pSession->framedWaited = false;
-		LOG_ERROR("XR_FRAME_DISCARDED  \n");
-		return XR_FRAME_DISCARDED;
+
+	bool discardFrame = false;
+	bool frameWaitCalled = pSession->frameBegan < pSession->frameWaited;
+	bool frameEndCalled = pSession->frameEnded == pSession->frameWaited - 1;
+	if (frameWaitCalled && frameEndCalled) {
+
+		XrTimeWaitWin32(&pSession->frameEnded, pSession->frameBegan);
+
+	} else {
+
+		LOG_ERROR("XR_FRAME_DISCARDED\n");
+		discardFrame = true;
+
 	}
 
-	pSession->frameBegan = true;
-	pSession->framedWaited = false;
+	XrTimeSignalWin32(&pSession->frameBegan, pSession->frameWaited);
 
-	return XR_SUCCESS;
+	return discardFrame ? XR_FRAME_DISCARDED : XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	XrSession             session,
 	const XrFrameEndInfo* frameEndInfo)
 {
-	LOG_METHOD(xrEndFrame);
+	LOG_METHOD_ONCE(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
 
 	Session* pSession = (Session*)session;
-	if (!pSession->running) {
+
+	if (!pSession->running || pSession->activeSessionState == XR_SESSION_STATE_IDLE ||  pSession->activeSessionState == XR_SESSION_STATE_EXITING) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
-	if (!pSession->frameBegan) {
-		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID \n");
-		return XR_ERROR_CALL_ORDER_INVALID ;
+	if (frameEndInfo->displayTime <= 0 ) {
+		LOG_ERROR("XR_ERROR_TIME_INVALID \n");
+		return XR_ERROR_TIME_INVALID ;
 	}
+	if (pSession->frameBegan == pSession->frameEnded) {
+		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID \n");
+		return XR_ERROR_CALL_ORDER_INVALID;
+	}
+
 	bool displayTimeFound = false;
 	for (int i = 0; i < COUNT(pSession->predictedDisplayTimes); ++i) {
+		if (i > 0)
+			printf("MISSED FRAME END TIME\n");
 		if (pSession->predictedDisplayTimes[i] == frameEndInfo->displayTime) {
 			displayTimeFound = true;
 			break;
@@ -2343,22 +2410,41 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 		}
 	}
 
-	pSession->frameBegan = false;
-	pSession->priorEndDisplayTime = frameEndInfo->displayTime;
-	pSession->priorEndDisplayTime = 0;
+	Instance* pInstance = (Instance*)pSession->instance;
+	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+
+	XrTime currenTime = xrGetTime();
+
+	XrTime delta = currenTime - pSession->lastBeginDisplayTime;
+	double deltaMs = xrTimeToMilliseconds(delta);
+	double fps = 1.0 / MillisecondsToSeconds(deltaMs);
+
+	XrTime discrepancy = currenTime - frameEndInfo->displayTime;
+	double discrepancyMs = xrTimeToMilliseconds(discrepancy);
+	XrTime frameInterval = xrGetFrameInterval(sessionHandle, synchronized);
+	if (discrepancy > frameInterval) {
+		printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
+		pSession->synchronizedFrameCount = 0;
+		pSession->lastDisplayTime = 0;
+	} else {
+		pSession->synchronizedFrameCount++;
+		pSession->lastDisplayTime = currenTime;
+	}
+
+	printf("xrEndFrame discrepancy: %f deltaMs: %f fps: %f sync: %d\n", discrepancyMs, deltaMs, fps, pSession->synchronizedFrameCount);
 
 	// You wait till first end frame to say synchronized
-	if (pSession->activeSessionState == XR_SESSION_STATE_READY)
+	if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->synchronizedFrameCount > 4)
 		pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
 
 	// These progressions are really just for debug right now
 	if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
 		pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
 
+	xrProgressTimelineValue(sessionHandle, synchronized);
 
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
-	xrProgressTimelineValue(sessionHandle);
+	XrTimeSignalWin32(&pSession->frameEnded, pSession->frameBegan);
 
 	return XR_SUCCESS;
 }
@@ -2603,7 +2689,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 			ClaimHandle(pBindingAction->subactionBindings[0], pActionBinding);
 			*pActionBinding = pBinding;
 
-			printf("Bound Action: %s BindingPath: %s No Subaction\n", pBindingAction->actionName, pBindingPath->string);
+//			printf("Bound Action: %s BindingPath: %s No Subaction\n", pBindingAction->actionName, pBindingPath->string);
 			continue;
 		}
 
@@ -2616,7 +2702,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 			ClaimHandle(pBindingAction->subactionBindings[subactionIndex], pActionBinding);
 			*pActionBinding = pBinding;
 
-			printf("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pBindingAction->actionName, pBindingPath->string, subactionIndex, pActionSubPath->string);
+//			printf("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pBindingAction->actionName, pBindingPath->string, subactionIndex, pActionSubPath->string);
 		}
 	}
 
@@ -2695,7 +2781,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateBoolean(
 	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
 	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
 
-	printf("Action: %s\n", pGetAction->actionName);
+//	LOG_METHOD_LOOP("Action: %s\n", pGetAction->actionName);
 
 	//	state->lastChangeTime = GetXrTime();
 	//	state->changedSinceLastSync = true;
@@ -2718,7 +2804,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
 	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
 
-	printf("Action: %s\n", pGetAction->actionName);
+//	printf("Action: %s\n", pGetAction->actionName);
 
 	Session*        pSession = (Session*)session;
 	Instance*       pInstance = (Instance*)pSession->instance;
@@ -2782,7 +2868,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 		return XR_SESSION_NOT_FOCUSED;
 
 	Instance* pInstance = (Instance*)pSession->instance;
-	XrTime    currentTime = GetXrTime();
+	XrTime    currentTime = xrGetTime();
 
 	for (int sessionIndex = 0; sessionIndex < pSession->actionSetStates.count; ++sessionIndex) {
 		ActionSet*      pActionSet = (ActionSet*)syncInfo->activeActionSets[sessionIndex].actionSet;
@@ -3214,9 +3300,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	const char*         name,
 	PFN_xrVoidFunction* function)
 {
-#define CHECK_PROC_ADDR(_enum)                                    \
-	if (strncmp(name, #_enum, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
-		*function = (PFN_xrVoidFunction)_enum;                    \
+#define CHECK_PROC_ADDR(_method)                                    \
+	if (strncmp(name, #_method, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
+		*function = (PFN_xrVoidFunction)_method;                    \
 		return XR_SUCCESS;                                        \
 	}
 

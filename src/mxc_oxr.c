@@ -91,27 +91,46 @@ void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
 //	assert(priorIndex == true);
 }
 
+// not full sure if this should be done!?
+#define UNSYNCED_FRAME_SKIP 16
+
 void xrSetInitialTimelineValue(XrHandle sessionHandle, uint64_t timelineValue)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	timelineValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
-	pNodeShared->compositorBaseCycleValue = timelineValue + (MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip * 2);
+	pNodeShared->compositorBaseCycleValue = timelineValue + (MXC_CYCLE_COUNT * 4);
 }
 
-void xrFrameBeginTimelineValue(XrHandle sessionHandle, uint64_t* pTimelineValue)
+void xrFrameBeginTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
 }
 
-void xrProgressTimelineValue(XrHandle sessionHandle)
+void xrProgressTimelineValue(XrHandle sessionHandle, bool synchronized)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
+	__atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELAXED);
+	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * (synchronized ? pNodeShared->compositorCycleSkip : UNSYNCED_FRAME_SKIP);
+}
+
+static XrTime HzToXrTime(double hz)
+{
+	double seconds = 1.0 / hz;
+	return (XrTime)(seconds * 1e9);
+}
+
+XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	__atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELAXED);
-	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
+	double hz = 240.0 / (double)(synchronized ? pNodeShared->compositorCycleSkip : UNSYNCED_FRAME_SKIP);
+	XrTime hzTime = HzToXrTime(hz);
+//	printf("xrGetFrameInterval compositorCycleSkip: %d hz: %f hzTime: %llu\n", pNodeShared->compositorCycleSkip, hz, hzTime);
+	return hzTime;
 }
 
 void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
@@ -127,6 +146,8 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 
 	float fovX = pNodeShared->globalSetState.proj.c0.r0;
 	float fovY = pNodeShared->globalSetState.proj.c1.r1;
+
+	/// flip these verticlaly to fix?!
 //	float fovX = pNodeShared->globalSetState.invProj.c0.r0;
 //	float fovY = pNodeShared->globalSetState.invProj.c1.r1;
 	float angleX = atan(1.0f / fovX);
