@@ -504,6 +504,9 @@ typedef struct Session {
 	XrInteractionProfile activeInteractionProfile;
 	XrInteractionProfile pendingInteractionProfile;
 
+	XrBool32 activeIsUserPresent;
+	XrBool32 pendingIsUserPresent;
+
 	SpacePool referenceSpaces;
 	SpacePool actionSpaces;
 
@@ -929,7 +932,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 {
 	LOG_METHOD(xrEnumerateInstanceExtensionProperties);
 
-	XrExtensionProperties extensionProperties[] = {
+	XrExtensionProperties supportedProperties[] = {
+		// graphics API
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
 			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
@@ -940,42 +944,98 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_D3D11_ENABLE_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_D3D11_enable_SPEC_VERSION,
 		},
+
+		// expected by unity
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME,
-			.extensionVersion = XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION,
+			.extensionName = XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_visibility_mask_SPEC_VERSION,
 		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
-			.extensionVersion = XR_EXT_local_floor_SPEC_VERSION,
+			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_user_presence_SPEC_VERSION,
 		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME,
-			.extensionVersion = XR_EXT_win32_appcontainer_compatible_SPEC_VERSION,
-		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_MSFT_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
-			.extensionVersion = XR_MSFT_unbounded_reference_space_SPEC_VERSION,
+			.extensionName = XR_EXT_CONFORMANCE_AUTOMATION_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_conformance_automation_SPEC_VERSION,
 		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
 			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
 		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
+			.extensionVersion = XR_VARJO_quad_views_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_MSFT_SECONDARY_VIEW_CONFIGURATION_EXTENSION_NAME,
+			.extensionVersion = XR_MSFT_secondary_view_configuration_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_eye_gaze_interaction_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_MSFT_HAND_INTERACTION_EXTENSION_NAME,
+			.extensionVersion = XR_MSFT_hand_interaction_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_MSFT_FIRST_PERSON_OBSERVER_EXTENSION_NAME,
+			.extensionVersion = XR_MSFT_first_person_observer_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_META_PERFORMANCE_METRICS_EXTENSION_NAME,
+			.extensionVersion = XR_META_performance_metrics_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_PERFORMANCE_SETTINGS_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_performance_settings_SPEC_VERSION,
+		},
+
+		// chrome wants these? or I think its just some steamvr had but im not sure of the necessity
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME,
+//			.extensionVersion = XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION,
+//		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
+//			.extensionVersion = XR_EXT_local_floor_SPEC_VERSION,
+//		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME,
+//			.extensionVersion = XR_EXT_win32_appcontainer_compatible_SPEC_VERSION,
+//		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_MSFT_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
+//			.extensionVersion = XR_MSFT_unbounded_reference_space_SPEC_VERSION,
+//		},
 	};
 
-	*propertyCountOutput = COUNT(extensionProperties);
+	*propertyCountOutput = COUNT(supportedProperties);
 
 	if (!properties)
 		return XR_SUCCESS;
 
-	if (propertyCapacityInput != COUNT(extensionProperties))
+	if (propertyCapacityInput != COUNT(supportedProperties))
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	memcpy(properties, &extensionProperties, sizeof(XrExtensionProperties) * propertyCapacityInput);
+	int supportedSize = sizeof(supportedProperties);
+	int testSize = sizeof(XrExtensionProperties) * propertyCapacityInput;
+	memcpy(properties, supportedProperties,  sizeof(XrExtensionProperties) * propertyCapacityInput);
 
 	return XR_SUCCESS;
 }
@@ -1280,6 +1340,21 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(
 			InteractionProfile* pActionInteractionProfile = (InteractionProfile*)pSession->activeInteractionProfile;
 			Path*               pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
 			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
+
+			return XR_SUCCESS;
+		}
+
+		if (pSession->activeIsUserPresent != pSession->pendingIsUserPresent) {
+
+			eventData->type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT;
+
+			XrEventDataUserPresenceChangedEXT* pEventData = (XrEventDataUserPresenceChangedEXT*)eventData;
+			pEventData->session = (XrSession)pSession;
+			pEventData->isUserPresent = pSession->pendingIsUserPresent;
+
+			pSession->activeIsUserPresent = pSession->pendingIsUserPresent;
+
+			printf("XrEventDataUserPresenceChangedEXT %d\n", pSession->activeIsUserPresent);
 
 			return XR_SUCCESS;
 		}
@@ -1589,6 +1664,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	pClaimedSession->pendingSessionState = XR_SESSION_STATE_IDLE;
 	pClaimedSession->activeReferenceSpaceHandle = XR_HANDLE_INVALID;
 	pClaimedSession->pendingReferenceSpaceHandle = XR_HANDLE_INVALID;
+	pClaimedSession->activeIsUserPresent = XR_FALSE;
+	pClaimedSession->pendingIsUserPresent = XR_TRUE;
 
 	return XR_SUCCESS;
 }
@@ -2701,7 +2778,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	pAction->actionSet = actionSet;
 	pAction->countSubactionPaths = createInfo->countSubactionPaths;
 
-	memcpy(&pAction->subactionPaths, createInfo->subactionPaths, pAction->countSubactionPaths * sizeof(XrPath));
+	memcpy(pAction->subactionPaths, createInfo->subactionPaths, pAction->countSubactionPaths * sizeof(XrPath));
 	pAction->actionType = createInfo->actionType;
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
 	strncpy((char*)&pAction->localizedActionName, (const char*)&createInfo->localizedActionName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
@@ -2852,7 +2929,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
 	printf("xrGetCurrentInteractionProfile %s\n", pPath->string);
 
 	Session*            pSession = (Session*)session;
-	InteractionProfile* pInteractionProfile = pSession->activeInteractionProfile;
+	// application might set interaction profile then immediately call thigs without letting xrPollEvent update activeInteractionProfile
+	InteractionProfile* pInteractionProfile = pSession->activeInteractionProfile != NULL ?
+												  pSession->activeInteractionProfile :
+												  pSession->pendingInteractionProfile;
 	interactionProfile->interactionProfile = pInteractionProfile->path;
 
 	Path* pInteractionProfilePath = (Path*)pInteractionProfile->path;
@@ -3042,6 +3122,112 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(
 	LOG_METHOD(xrStopHapticFeedback);
 
 	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrStopHapticFeedback\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetVisibilityMaskKHR(
+	XrSession               session,
+	XrViewConfigurationType viewConfigurationType,
+	uint32_t                viewIndex,
+	XrVisibilityMaskTypeKHR visibilityMaskType,
+	XrVisibilityMaskKHR*    visibilityMask)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetVisibilityMaskKHR\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceActiveEXT(
+	XrSession session,
+	XrPath    interactionProfile,
+	XrPath    topLevelPath,
+	XrBool32  isActive)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSetInputDeviceActiveEXT\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateBoolEXT(
+	XrSession session,
+	XrPath    topLevelPath,
+	XrPath    inputSourcePath,
+	XrBool32  state)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSetInputDeviceActiveEXT\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateFloatEXT(
+	XrSession session,
+	XrPath    topLevelPath,
+	XrPath    inputSourcePath,
+	float     state)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSetInputDeviceStateFloatEXT\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateVector2fEXT(
+	XrSession  session,
+	XrPath     topLevelPath,
+	XrPath     inputSourcePath,
+	XrVector2f state)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSetInputDeviceStateVector2fEXT\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceLocationEXT(
+	XrSession session,
+	XrPath    topLevelPath,
+	XrPath    inputSourcePath,
+	XrSpace   space,
+	XrPosef   pose)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSetInputDeviceLocationEXT\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumeratePerformanceMetricsCounterPathsMETA(
+	XrInstance instance,
+	uint32_t   counterPathCapacityInput,
+	uint32_t*  counterPathCountOutput,
+	XrPath*    counterPaths)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrEnumeratePerformanceMetricsCounterPathsMETA\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetPerformanceMetricsStateMETA(
+	XrSession                            session,
+	const XrPerformanceMetricsStateMETA* state)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrSetPerformanceMetricsStateMETA\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetPerformanceMetricsStateMETA(
+	XrSession                      session,
+	XrPerformanceMetricsStateMETA* state)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetPerformanceMetricsStateMETA\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrQueryPerformanceMetricsCounterMETA(
+	XrSession                        session,
+	XrPath                           counterPath,
+	XrPerformanceMetricsCounterMETA* counter)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrQueryPerformanceMetricsCounterMETA\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrPerfSettingsSetPerformanceLevelEXT(
+	XrSession               session,
+	XrPerfSettingsDomainEXT domain,
+	XrPerfSettingsLevelEXT  level)
+{
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrPerfSettingsSetPerformanceLevelEXT\n");
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
@@ -3398,6 +3584,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 		return XR_SUCCESS;                                        \
 	}
 
+	// openxr standard procs
 	CHECK_PROC_ADDR(xrGetInstanceProcAddr)
 	CHECK_PROC_ADDR(xrEnumerateApiLayerProperties)
 	CHECK_PROC_ADDR(xrEnumerateInstanceExtensionProperties)
@@ -3453,6 +3640,23 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrGetInputSourceLocalizedName)
 	CHECK_PROC_ADDR(xrApplyHapticFeedback)
 	CHECK_PROC_ADDR(xrStopHapticFeedback)
+
+	// openxr extension procs
+	CHECK_PROC_ADDR(xrGetVisibilityMaskKHR)
+
+	CHECK_PROC_ADDR(xrSetInputDeviceActiveEXT)
+	CHECK_PROC_ADDR(xrSetInputDeviceStateBoolEXT)
+	CHECK_PROC_ADDR(xrSetInputDeviceStateFloatEXT)
+	CHECK_PROC_ADDR(xrSetInputDeviceStateVector2fEXT)
+	CHECK_PROC_ADDR(xrSetInputDeviceLocationEXT)
+
+	CHECK_PROC_ADDR(xrEnumeratePerformanceMetricsCounterPathsMETA)
+	CHECK_PROC_ADDR(xrSetPerformanceMetricsStateMETA)
+	CHECK_PROC_ADDR(xrGetPerformanceMetricsStateMETA)
+	CHECK_PROC_ADDR(xrQueryPerformanceMetricsCounterMETA)
+
+	CHECK_PROC_ADDR(xrPerfSettingsSetPerformanceLevelEXT)
+
 
 //	CHECK_PROC_ADDR(xrSetDebugUtilsObjectNameEXT)
 //	CHECK_PROC_ADDR(xrCreateDebugUtilsMessengerEXT)
