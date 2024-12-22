@@ -46,6 +46,7 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         dxgi
         d3d11
         d3d12
+        synchronization
         ${CMAKE_THREAD_LIBS_INIT}
 )
 

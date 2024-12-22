@@ -213,7 +213,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	pNodeShared->camera.zNear = 0.1f;
 	pNodeShared->camera.zFar = 100.0f;
 	pNodeShared->compositorRadius = 0.5;
-	pNodeShared->compositorCycleSkip = 16;
+	pNodeShared->compositorCycleSkip = 8;
 
 	VkExternalFenceCreateInfo nodeFenceCreateInfo = {
 		.debugName = "NodeFence",
@@ -268,7 +268,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			.image = pNodeCompositorData->framebuffers[i].color,
-			MIDVK_COLOR_SUBRESOURCE_RANGE,
+			VK_COLOR_SUBRESOURCE_RANGE,
 		};
 		pNodeCompositorData->framebuffers[i].acquireBarriers[1] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -280,7 +280,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			.image = pNodeCompositorData->framebuffers[i].normal,
-			MIDVK_COLOR_SUBRESOURCE_RANGE,
+			VK_COLOR_SUBRESOURCE_RANGE,
 		};
 		pNodeCompositorData->framebuffers[i].acquireBarriers[2] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -292,7 +292,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			.image = pNodeCompositorData->framebuffers[i].gBuffer,
-			MIDVK_COLOR_SUBRESOURCE_RANGE,
+			VK_COLOR_SUBRESOURCE_RANGE,
 		};
 	}
 
@@ -624,7 +624,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShared->camera.zNear = 0.1f;
 		pNodeShared->camera.zFar = 100.0f;
 		pNodeShared->compositorRadius = 0.5;
-		pNodeShared->compositorCycleSkip = 16;
+		pNodeShared->compositorCycleSkip = 8;
 
 		const NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 		pNodeCompositorData = &nodeCompositorData[handle];
@@ -645,22 +645,12 @@ static void InterprocessServerAcceptNodeConnection()
 
 	// Create node data
 	{
-		// I don't think I need the node timeline?!
-
 		MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
 		midVkCreateSemaphore(&semaphoreCreateInfo, &pNodeContext->vkNodeTimeline);
-
-//		vkWin32CreateExternalFence(&pNodeContext->nodeFenceExternal);
-//		VkExternalFenceCreateInfo nodeFenceCreateInfo = {
-//			.debugName = "NodeFenceExport",
-//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-//			.importHandle = pNodeContext->nodeFenceExternal.handle,
-//		};
-//		vkCreateExternalFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
 
 		VkFramebufferTextureCreateInfo framebufferInfo = {
 			.extent = {DEFAULT_WIDTH * compositorView, DEFAULT_HEIGHT, 1},
@@ -702,41 +692,71 @@ static void InterprocessServerAcceptNodeConnection()
 					  0, false, DUPLICATE_SAME_ACCESS),
 				  "Duplicate compeTimeline handle fail.");
 
-		const uint32_t graphicsQueueIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
-		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
+		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);\
+
+		uint32_t graphicsQueueIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+
 		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
+
 			pNodeCompositorData->framebuffers[i].color = pNodeContext->vkNodeFramebufferTextures[i].color.image;
 			pNodeCompositorData->framebuffers[i].normal = pNodeContext->vkNodeFramebufferTextures[i].normal.image;
 			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image;
 			pNodeCompositorData->framebuffers[i].colorView = pNodeContext->vkNodeFramebufferTextures[i].color.view;
 			pNodeCompositorData->framebuffers[i].normalView = pNodeContext->vkNodeFramebufferTextures[i].normal.view;
 			pNodeCompositorData->framebuffers[i].gBufferView = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view;
+
+#define ACQUIRE_BARRIER                                      \
+	.srcStageMask = VK_PIPELINE_STAGE_2_NONE,                \
+	.srcAccessMask = VK_ACCESS_2_NONE,                       \
+	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                    \
+	.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
+	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
+	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
+	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,         \
+	.dstQueueFamilyIndex = graphicsQueueIndex,               \
+	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
+
 			pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-				.dstQueueFamilyIndex = graphicsQueueIndex,
 				.image = pNodeCompositorData->framebuffers[i].color,
-				MIDVK_COLOR_SUBRESOURCE_RANGE,
+				ACQUIRE_BARRIER,
 			};
 			pNodeCompositorData->framebuffers[i].acquireBarriers[1] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-				.dstQueueFamilyIndex = graphicsQueueIndex,
 				.image = pNodeCompositorData->framebuffers[i].normal,
-				MIDVK_COLOR_SUBRESOURCE_RANGE,
+				ACQUIRE_BARRIER,
 			};
 			pNodeCompositorData->framebuffers[i].acquireBarriers[2] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-				.dstQueueFamilyIndex = graphicsQueueIndex,
 				.image = pNodeCompositorData->framebuffers[i].gBuffer,
-				MIDVK_COLOR_SUBRESOURCE_RANGE,
+				ACQUIRE_BARRIER,
+			};
+
+#define RELEASE_BARRIER                                      \
+	.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
+	.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
+	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
+	.dstStageMask = VK_PIPELINE_STAGE_2_NONE,                \
+	.dstAccessMask = VK_ACCESS_2_NONE,                       \
+	.newLayout = VK_IMAGE_LAYOUT_GENERAL,                    \
+	.srcQueueFamilyIndex = graphicsQueueIndex,               \
+	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,         \
+	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
+
+			pNodeCompositorData->framebuffers[i].releaseBarriers[0] = (VkImageMemoryBarrier2){
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pNodeCompositorData->framebuffers[i].color,
+				RELEASE_BARRIER,
+			};
+			pNodeCompositorData->framebuffers[i].releaseBarriers[1] = (VkImageMemoryBarrier2){
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pNodeCompositorData->framebuffers[i].normal,
+				RELEASE_BARRIER,
+			};
+			pNodeCompositorData->framebuffers[i].releaseBarriers[2] = (VkImageMemoryBarrier2){
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pNodeCompositorData->framebuffers[i].gBuffer,
+				RELEASE_BARRIER,
 			};
 		}
 	}

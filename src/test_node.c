@@ -127,10 +127,12 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					IMAGE_BARRIER_DST_NODE_RELEASE,
 					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[i].gBuffer,
-					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
+
 				break;
 			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
+
 				acquireBarrierCount = 3;
 				acquireBarriers[i][0] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -166,8 +168,9 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 					.dstQueueFamilyIndex = graphicsQueueIndex,
 					.image = framebufferImages[i].gBuffer,
-					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
+
 				releaseBarrierCount = 3;
 				releaseBarriers[i][0] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -178,7 +181,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.srcQueueFamilyIndex = graphicsQueueIndex,
 					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 					.image = framebufferImages[i].color,
-					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
 				releaseBarriers[i][1] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -189,7 +192,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.srcQueueFamilyIndex = graphicsQueueIndex,
 					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 					.image = framebufferImages[i].normal,
-					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
 				releaseBarriers[i][2] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -200,8 +203,9 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.srcQueueFamilyIndex = graphicsQueueIndex,
 					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 					.image = framebufferImages[i].gBuffer,
-					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
+
 				break;
 			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
 				PANIC("Shouldn't be rendering an exported node from this process.");
@@ -289,10 +293,10 @@ run_loop:
 				MIDVK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
 				MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				.image = framebufferImages[framebufferIndex].gBuffer,
-				.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 			};
 			CmdPipelineImageBarrier2(cmd, &clearBarrier);
-			CmdClearColorImage(cmd, framebufferImages[framebufferIndex].gBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &MXC_NODE_CLEAR_COLOR, 1, &MIDVK_COLOR_SUBRESOURCE_RANGE);
+			CmdClearColorImage(cmd, framebufferImages[framebufferIndex].gBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &MXC_NODE_CLEAR_COLOR, 1, &VK_COLOR_SUBRESOURCE_RANGE);
 			VkImageMemoryBarrier2 beginComputeBarriers[] = {
 				// could technically alter shader to take VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL and not need this, can different mips be in different layouts?
 				{
@@ -301,7 +305,7 @@ run_loop:
 					IMAGE_BARRIER_SRC_NODE_FINISH_RENDERPASS,
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ,
 					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					.subresourceRange = MIDVK_DEPTH_SUBRESOURCE_RANGE,
+					.subresourceRange = VK_DEPTH_SUBRESOURCE_RANGE,
 				},
 				{
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -309,7 +313,7 @@ run_loop:
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
-					.subresourceRange = MIDVK_COLOR_SUBRESOURCE_RANGE,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				},
 			};
 			CmdPipelineImageBarriers2(cmd, COUNT(beginComputeBarriers), beginComputeBarriers);

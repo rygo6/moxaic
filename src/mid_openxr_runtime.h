@@ -77,19 +77,26 @@ typedef enum XrGraphicsApi {
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
-void midXrInitialize();
-void xrClaimSession(XrHandle* pSessionHandle);
-void xrReleaseSession(XrHandle sessionHandle);
-void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
-void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
-void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle);
-void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex);
-void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index);
-void xrSetInitialTimelineValue(XrHandle sessionHandle, uint64_t timelineValue);
-void xrFrameBeginTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue);
-void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
-void midXrBeginFrame(XrHandle sessionHandle);
-void xrProgressTimelineValue(XrHandle sessionHandle, bool synchronized);
+void   midXrInitialize();
+void   xrClaimSession(XrHandle* pSessionHandle);
+void   xrReleaseSession(XrHandle sessionHandle);
+void   midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
+void   midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
+
+void   xrGetSessionFence(XrHandle sessionHandle, HANDLE* pHandle);
+void   xrSetSessionTimelineValue(XrHandle sessionHandle, uint64_t timelineValue);
+
+void   xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex);
+void   xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index);
+
+void   xrGetCompositorTimeline(XrHandle sessionHandle, HANDLE* pHandle);
+void   xrSetInitialCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue);
+void   xrGetCompositorTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue);
+void   xrProgressCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue, bool synchronized);
+
+void   midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView);
+void   midXrBeginFrame(XrHandle sessionHandle);
+
 XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized);
 
 //
@@ -461,7 +468,7 @@ typedef struct Swapchain {
 		} gl;
 		struct {
 			ID3D11Texture2D* texture;
-			//			IDXGIKeyedMutex* keyedMutex;
+			IDXGIKeyedMutex* keyedMutex;
 			ID3D11RenderTargetView* rtView;
 		} d3d11;
 	} color[XR_SWAP_COUNT];
@@ -510,6 +517,8 @@ typedef struct Session {
 	XrTime lastDisplayTime;
 	uint32_t synchronizedFrameCount;
 
+	uint64_t sessionTimelineValue;
+
 	SwapchainPool      swapchains;
 	ActionSetStatePool actionSetStates;
 
@@ -522,7 +531,8 @@ typedef struct Session {
 		struct {
 			ID3D11Device5*        device5;
 			ID3D11DeviceContext4* context4;
-			ID3D11Fence*          fence;
+			ID3D11Fence*          compositorFence;
+			ID3D11Fence*          sessionFence;
 		} d3d11;
 		struct {
 			VkInstance       instance;
@@ -670,6 +680,7 @@ static XrTime HzToXrTime(double hz)
 
 static inline XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
 {
+	// this should be pthreads since it doesnt happen that much and cross platform is probably fine
 	while (1) {
 		XrTime currentTime = __atomic_load_n(pSharedTime, __ATOMIC_ACQUIRE);
 		if (currentTime >= waitTime) {
@@ -919,47 +930,50 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
 	LOG_METHOD(xrEnumerateInstanceExtensionProperties);
 
 	XrExtensionProperties extensionProperties[] = {
-		//		{
-		//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-		//			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
-		//			.extensionVersion = XR_KHR_opengl_enable_SPEC_VERSION,
-		//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_OPENGL_ENABLE_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_opengl_enable_SPEC_VERSION,
+		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
 			.extensionName = XR_KHR_D3D11_ENABLE_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_D3D11_enable_SPEC_VERSION,
 		},
-		//		{
-		//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-		//			.extensionName = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME,
-		//			.extensionVersion = XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION,
-		//		},
-		//		{
-		//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-		//			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
-		//			.extensionVersion = XR_EXT_local_floor_SPEC_VERSION,
-		//		},
-		//		{
-		//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-		//			.extensionName = XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME,
-		//			.extensionVersion = XR_EXT_win32_appcontainer_compatible_SPEC_VERSION,
-		//		},
-		//		{
-		//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-		//			.extensionName = XR_MSFT_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
-		//			.extensionVersion = XR_MSFT_unbounded_reference_space_SPEC_VERSION,
-		//		},
-		//		{
-		//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-		//			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
-		//			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
-		//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_win32_convert_performance_counter_time_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_local_floor_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_WIN32_APPCONTAINER_COMPATIBLE_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_win32_appcontainer_compatible_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_MSFT_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
+			.extensionVersion = XR_MSFT_unbounded_reference_space_SPEC_VERSION,
+		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
+		},
 	};
 
 	*propertyCountOutput = COUNT(extensionProperties);
 
 	if (!properties)
 		return XR_SUCCESS;
+
+	if (propertyCapacityInput != COUNT(extensionProperties))
+		return XR_ERROR_SIZE_INSUFFICIENT;
 
 	memcpy(properties, &extensionProperties, sizeof(XrExtensionProperties) * propertyCapacityInput);
 
@@ -1471,8 +1485,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	// these should be the same but probably want to get these handles better...
 	assert(externalSessionHandle == sessionHandle);
 
-	HANDLE fenceHandle;
-	midXrClaimFence(sessionHandle, &fenceHandle);
+	HANDLE compositorFenceHandle;
+	xrGetCompositorTimeline(sessionHandle, &compositorFenceHandle);
+
+	HANDLE sessionFenceHandle;
+	xrGetSessionFence(sessionHandle, &sessionFenceHandle);
 
 	if (createInfo->next == NULL) {
 		LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
@@ -1520,18 +1537,28 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 			}
 			ID3D11DeviceContext_Release(context);
 
-			ID3D11Fence* fence;
-			printf("XR D3D11 Fence Handle: %p\n", fenceHandle);
-			ID3D11Device5_OpenSharedFence(device5, fenceHandle, &IID_ID3D11Fence, (void**)&fence);
-			printf("XR D3D11 Fence: %p\n", fence);
-			if (fence == NULL) {
-				LOG_ERROR("XR D3D11 Fence Invalid.\n");
+			ID3D11Fence* compositorFence;
+			printf("XR D3D11 Compositor Fence Handle: %p\n", compositorFenceHandle);
+			ID3D11Device5_OpenSharedFence(device5, compositorFenceHandle, &IID_ID3D11Fence, (void**)&compositorFence);
+			printf("XR D3D11 Compositor Fence: %p\n", compositorFence);
+			if (compositorFence == NULL) {
+				LOG_ERROR("XR D3D11 Compositor Fence Invalid.\n");
+				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+			}
+
+			ID3D11Fence* sessionFence;
+			printf("XR D3D11 Session Fence Handle: %p\n", sessionFenceHandle);
+			ID3D11Device5_OpenSharedFence(device5, sessionFenceHandle, &IID_ID3D11Fence, (void**)&sessionFence);
+			printf("XR D3D11 Session Fence: %p\n", sessionFence);
+			if (sessionFence == NULL) {
+				LOG_ERROR("XR D3D11 Session Fence Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
 			pClaimedSession->binding.d3d11.device5 = device5;
 			pClaimedSession->binding.d3d11.context4 = context4;
-			pClaimedSession->binding.d3d11.fence = fence;
+			pClaimedSession->binding.d3d11.compositorFence = compositorFence;
+			pClaimedSession->binding.d3d11.sessionFence = sessionFence;
 
 			*session = (XrSession)pClaimedSession;
 
@@ -1991,8 +2018,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color[i].d3d11.texture));
 				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device5, colorHandles[i], pSwapchain->color[i].d3d11.texture);
-				//				DX_CHECK(ID3D11Device5_CreateRenderTargetView(device5, (ID3D11Resource*)pSwapchain->color[i].d3d11.texture, NULL, &pSwapchain->color[i].d3d11.rtView));
-				//				DX_CHECK(ID3D11Texture2D_QueryInterface(pSwapchain->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwapchain->color[i].d3d11.keyedMutex));
+//				D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {
+//					.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+//					.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D,
+//					.Texture2D.MipSlice = 0,
+//				};
+//				DX_CHECK(ID3D11Device5_CreateRenderTargetView(device5, (ID3D11Resource*)pSwapchain->color[i].d3d11.texture, &rtvDesc, &pSwapchain->color[i].d3d11.rtView));
+//				DX_CHECK(ID3D11Texture2D_QueryInterface(pSwapchain->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwapchain->color[i].d3d11.keyedMutex));
+//				IDXGIKeyedMutex_AcquireSync(pSwapchain->color[i].d3d11.keyedMutex, 0, INFINITE);
 			}
 
 			break;
@@ -2073,10 +2106,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
 	Instance*  pInstance = (Instance*)pSession->instance;
-	// handles could still be 32 bit offsets?
-	XrHandle sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	xrClaimSwapPoolImage(sessionHandle, &pSwapchain->swapIndex);
+
 	*index = pSwapchain->swapIndex;
 
 	return XR_SUCCESS;
@@ -2094,11 +2127,16 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
 	Instance*  pInstance = (Instance*)pSession->instance;
 	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
 
-	//	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
-	//	IDXGIKeyedMutex_AcquireSync(keyedMutex, 1, INFINITE);
+	ID3D11DeviceContext4*   context4 = pSession->binding.d3d11.context4;
 
-	//	ID3D11RenderTargetView* acquireRTView[] = {pSwapchain->color[pSwapchain->swapIndex].d3d11.rtView};
-	//	ID3D11DeviceContext4_OMSetRenderTargets(pSession->binding.d3d11.context4, 1, acquireRTView, NULL);
+//	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
+//
+//	ID3D11DeviceContext4_Flush(context4);
+//	IDXGIKeyedMutex_ReleaseSync(keyedMutex, 0);
+
+//	ID3D11RenderTargetView* rtView = pSwapchain->color[pSwapchain->swapIndex].d3d11.rtView;
+//	ID3D11DeviceContext4_OMSetRenderTargets(context4, 1, &rtView, NULL);
+//	ID3D11DeviceContext4_ClearRenderTargetView(context4, rtView, (float[]){0.0f, 0.0f, 0.0f, 0.0f});
 
 	return XR_SUCCESS;
 }
@@ -2116,13 +2154,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
 	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	xrReleaseSwapPoolImage(sessionHandle, pSwapchain->swapIndex);
-	//	xrProgressTimelineValue(sessionHandle);
 
-	//	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
-	//	IDXGIKeyedMutex_ReleaseSync(keyedMutex, 0);
+	ID3D11DeviceContext4*   context4 = pSession->binding.d3d11.context4;
 
-	//	ID3D11RenderTargetView* nullRTView[] = {NULL};
-	//	ID3D11DeviceContext4_OMSetRenderTargets(pSession->binding.d3d11.context4, 1, nullRTView, NULL);
+//	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
+//
+//	ID3D11DeviceContext4_Flush(context4);
+//	IDXGIKeyedMutex_AcquireSync(keyedMutex, 0, INFINITE);
+
+//	ID3D11RenderTargetView* nullRTView[] = {NULL};
+//	ID3D11DeviceContext4_OMSetRenderTargets(context4, 1, nullRTView, NULL);
+
 
 	return XR_SUCCESS;
 }
@@ -2152,29 +2194,24 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
-	switch (pInstance->graphicsApi) {
-		case XR_GRAPHICS_API_OPENGL:    break;
-		case XR_GRAPHICS_API_OPENGL_ES: break;
-		case XR_GRAPHICS_API_VULKAN:    break;
-		case XR_GRAPHICS_API_D3D11_4:   {
-//			uint64_t timelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
-//			printf("xrBeginSession Read timelineValue %llu\n", timelineValue);
-//			xrSetInitialTimelineValue(sessionHandle, timelineValue);
-			break;
-		}
-		default:
-			LOG_ERROR("Graphics API not supported.\n");
-			return XR_ERROR_RUNTIME_FAILURE;
-	}
+//	switch (pInstance->graphicsApi) {
+//		case XR_GRAPHICS_API_OPENGL:    break;
+//		case XR_GRAPHICS_API_OPENGL_ES: break;
+//		case XR_GRAPHICS_API_VULKAN:    break;
+//		case XR_GRAPHICS_API_D3D11_4:   break;
+//		default:
+//			LOG_ERROR("Graphics API not supported.\n");
+//			return XR_ERROR_RUNTIME_FAILURE;
+//	}
 
-	//	if (beginInfo->next != NULL) {
-	//		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
-	//		assert(secondBeginInfo->type == XR_TYPE_SECONDARY_VIEW_CONFIGURATION_SESSION_BEGIN_INFO_MSFT);
-	//		assert(secondBeginInfo->next == NULL);
-	//		for (int i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
-	//			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
-	//		}
-	//	}
+	if (beginInfo->next != NULL) {
+		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
+		assert(secondBeginInfo->type == XR_TYPE_SECONDARY_VIEW_CONFIGURATION_SESSION_BEGIN_INFO_MSFT);
+		assert(secondBeginInfo->next == NULL);
+		for (int i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
+			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
+		}
+	}
 
 	return XR_SUCCESS;
 }
@@ -2245,33 +2282,38 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 		uint64_t initialTimelineValue;
 		switch (pInstance->graphicsApi) {
 			case XR_GRAPHICS_API_D3D11_4:
-				initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.fence);
+				initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
 				break;
 			default:
 				LOG_ERROR("Graphics API not supported.\n");
 				return XR_ERROR_RUNTIME_FAILURE;
 		}
-		printf("Setting initial timeline value %llu\n", initialTimelineValue);
-		xrSetInitialTimelineValue(sessionHandle, initialTimelineValue);
+		xrSetInitialCompositorTimelineValue(sessionHandle, initialTimelineValue);
 	}
 
 	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
-	uint64_t timelineValue;
-	xrFrameBeginTimelineValue(sessionHandle, synchronized, &timelineValue);
+	uint64_t compositorTimelineValue;
+	xrGetCompositorTimelineValue(sessionHandle, synchronized, &compositorTimelineValue);
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
-			// causes CPU to wait
+			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
+			ID3D11Fence*          compositorFence = pSession->binding.d3d11.compositorFence;
+
+			ID3D11DeviceContext4_Flush(context4);
+			ID3D11DeviceContext4_Wait(context4, compositorFence, compositorTimelineValue);
+
 			HANDLE eventHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 			if (!eventHandle) {
 				LOG_ERROR("Failed to create event handle.\n");
 				return XR_ERROR_RUNTIME_FAILURE;
 			}
-			DX_CHECK(ID3D11Fence_SetEventOnCompletion(pSession->binding.d3d11.fence, timelineValue, eventHandle));
+			DX_CHECK(ID3D11Fence_SetEventOnCompletion(compositorFence, compositorTimelineValue, eventHandle));
 			WaitForSingleObject(eventHandle, INFINITE);
+			CloseHandle(eventHandle);
 
 			break;
 		}
@@ -2293,7 +2335,10 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	pSession->predictedDisplayTimes[0] = frameState->predictedDisplayTime;
 	pSession->lastBeginDisplayTime = currentTime;
 
-//	printf("xrWaitFrame predictedDisplayPeriod: %llu predictedDisplayTime: %llu\n", frameState->predictedDisplayPeriod, frameState->predictedDisplayTime);
+
+	double frameIntervalMs = xrTimeToMilliseconds(frameInterval);
+	double fps = 1.0 / MillisecondsToSeconds(frameIntervalMs);
+	printf("xrWaitFrame frameIntervalMs: %f fps: %f\n", frameIntervalMs, fps);
 
 	__atomic_add_fetch(&pSession->frameWaited, 1, __ATOMIC_RELEASE);
 
@@ -2412,39 +2457,86 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 
 	Instance* pInstance = (Instance*)pSession->instance;
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
-	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+	bool      synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 
-	XrTime currenTime = xrGetTime();
+	{
+		XrTime timeBeforeWait = xrGetTime();
 
-	XrTime delta = currenTime - pSession->lastBeginDisplayTime;
-	double deltaMs = xrTimeToMilliseconds(delta);
-	double fps = 1.0 / MillisecondsToSeconds(deltaMs);
+		pSession->sessionTimelineValue++;
+		uint64_t sessionTimelineValue = pSession->sessionTimelineValue;
 
-	XrTime discrepancy = currenTime - frameEndInfo->displayTime;
-	double discrepancyMs = xrTimeToMilliseconds(discrepancy);
-	XrTime frameInterval = xrGetFrameInterval(sessionHandle, synchronized);
-	if (discrepancy > frameInterval) {
-		printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
-		pSession->synchronizedFrameCount = 0;
-		pSession->lastDisplayTime = 0;
-	} else {
-		pSession->synchronizedFrameCount++;
-		pSession->lastDisplayTime = currenTime;
+		ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
+		ID3D11Fence*          sessionFence = pSession->binding.d3d11.sessionFence;
+
+		ID3D11DeviceContext4_Flush(context4);
+		ID3D11DeviceContext4_Signal(context4, sessionFence, sessionTimelineValue);
+		ID3D11DeviceContext4_Wait(context4, sessionFence, sessionTimelineValue);
+
+		// causes CPU to wait
+		HANDLE eventHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+		if (!eventHandle) {
+			LOG_ERROR("Failed to create event handle.\n");
+			return XR_ERROR_RUNTIME_FAILURE;
+		}
+		DX_CHECK(ID3D11Fence_SetEventOnCompletion(sessionFence, sessionTimelineValue, eventHandle));
+		WaitForSingleObject(eventHandle, INFINITE);
+		CloseHandle(eventHandle);
+
+		xrSetSessionTimelineValue(sessionHandle, sessionTimelineValue);
+
+//		XrTime timeAfterWait = xrGetTime();
+//		XrTime waitTime = timeAfterWait - timeBeforeWait;
+//		double waitTimeMs = xrTimeToMilliseconds(waitTime);
+//		printf("sessionTimelineValue: %llu waitTimeMs: %f\n", sessionTimelineValue, waitTimeMs);
 	}
 
-	printf("xrEndFrame discrepancy: %f deltaMs: %f fps: %f sync: %d\n", discrepancyMs, deltaMs, fps, pSession->synchronizedFrameCount);
+	{
+		XrTime currenTime = xrGetTime();
 
-	// You wait till first end frame to say synchronized
-	if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->synchronizedFrameCount > 4)
-		pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+		XrTime delta = currenTime - pSession->lastBeginDisplayTime;
+		double deltaMs = xrTimeToMilliseconds(delta);
+		double fps = 1.0 / MillisecondsToSeconds(deltaMs);
 
-	// These progressions are really just for debug right now
-	if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
-		pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+		XrTime discrepancy = currenTime - frameEndInfo->displayTime;
+		double discrepancyMs = xrTimeToMilliseconds(discrepancy);
+		XrTime frameInterval = xrGetFrameInterval(sessionHandle, synchronized);
 
-	xrProgressTimelineValue(sessionHandle, synchronized);
+		if (discrepancy > 0) {
+			printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
+			pSession->synchronizedFrameCount = 0;
 
-	XrTimeSignalWin32(&pSession->frameEnded, pSession->frameBegan);
+			uint64_t initialTimelineValue;
+			switch (pInstance->graphicsApi) {
+				case XR_GRAPHICS_API_D3D11_4:
+					initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
+					break;
+				default:
+					LOG_ERROR("Graphics API not supported.\n");
+					return XR_ERROR_RUNTIME_FAILURE;
+			}
+			xrSetInitialCompositorTimelineValue(sessionHandle, initialTimelineValue);
+
+		} else {
+			pSession->synchronizedFrameCount++;
+		}
+
+		pSession->lastDisplayTime = currenTime;
+
+		printf("xrEndFrame discrepancy: %f deltaMs: %f fps: %f sync: %d\n", discrepancyMs, deltaMs, fps, pSession->synchronizedFrameCount);
+
+		// You wait till first end frame to say synchronized
+		if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->synchronizedFrameCount > 4)
+			pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+
+		if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+			pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+
+		//	if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
+		//		pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
+
+		xrProgressCompositorTimelineValue(sessionHandle, 0, synchronized);
+		XrTimeSignalWin32(&pSession->frameEnded, pSession->frameBegan);
+	}
 
 	return XR_SUCCESS;
 }

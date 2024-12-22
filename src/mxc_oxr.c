@@ -49,7 +49,22 @@ void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
 }
 
-void midXrClaimFence(XrHandle sessionHandle, HANDLE* pHandle)
+void xrGetSessionFence(XrHandle sessionHandle, HANDLE* pHandle)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
+	*pHandle = pImportParam->nodeTimelineHandle;
+}
+
+void xrSetSessionTimelineValue(XrHandle sessionHandle, uint64_t timelineValue)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
+	__atomic_store_n(&pNodeShared->timelineValue, timelineValue, __ATOMIC_RELEASE);
+}
+
+void xrGetCompositorTimeline(XrHandle sessionHandle, HANDLE* pHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
@@ -78,8 +93,9 @@ void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex)
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 	uint8_t index = (timelineValue % VK_SWAP_COUNT);
 	*pIndex = index;
-//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], true, __ATOMIC_RELEASE);
-//	assert(priorIndex == false);
+//	printf("Claiming swap index %d timeline %llu\n", index, timelineValue);
+	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], true, __ATOMIC_SEQ_CST);
+	assert(priorIndex == false);
 }
 
 void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
@@ -87,34 +103,35 @@ void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
-//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_RELEASE);
-//	assert(priorIndex == true);
+//	printf("Releasing swap index %d timeline %llu\n", index, timelineValue);
+	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_SEQ_CST);
+	assert(priorIndex == true);
 }
 
 // not full sure if this should be done!?
-#define UNSYNCED_FRAME_SKIP 16
+//#define UNSYNCED_FRAME_SKIP 16
 
-void xrSetInitialTimelineValue(XrHandle sessionHandle, uint64_t timelineValue)
+void xrSetInitialCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	timelineValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
-	pNodeShared->compositorBaseCycleValue = timelineValue + (MXC_CYCLE_COUNT * 4);
+	pNodeShared->compositorBaseCycleValue = timelineValue + MXC_CYCLE_COUNT;
+	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
 }
 
-void xrFrameBeginTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue)
+void xrGetCompositorTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
 }
 
-void xrProgressTimelineValue(XrHandle sessionHandle, bool synchronized)
+void xrProgressCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue, bool synchronized)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
-	__atomic_add_fetch(&pNodeShared->timelineValue, 1, __ATOMIC_RELAXED);
-	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * (synchronized ? pNodeShared->compositorCycleSkip : UNSYNCED_FRAME_SKIP);
+	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
 
 static XrTime HzToXrTime(double hz)
@@ -127,7 +144,7 @@ XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	double hz = 240.0 / (double)(synchronized ? pNodeShared->compositorCycleSkip : UNSYNCED_FRAME_SKIP);
+	double hz = 240.0 / (double)(pNodeShared->compositorCycleSkip);
 	XrTime hzTime = HzToXrTime(hz);
 //	printf("xrGetFrameInterval compositorCycleSkip: %d hz: %f hzTime: %llu\n", pNodeShared->compositorCycleSkip, hz, hzTime);
 	return hzTime;

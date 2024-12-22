@@ -11,8 +11,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-//#define D3D11
-#define D3D12
+#define D3D11
+//#define D3D12
 #define COBJMACROS
 #if defined(D3D11)
 #include <dxgi1_6.h>
@@ -168,8 +168,8 @@ static void LogWin32Error(HRESULT err)
 		.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM,       \
 	}
 
-#define MIDVK_COLOR_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
-#define MIDVK_DEPTH_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
+#define VK_COLOR_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
+#define VK_DEPTH_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
 
 //----------------------------------------------------------------------------------
 // Mid Types
@@ -881,12 +881,6 @@ typedef struct VkTextureCreateInfo {
 } VkTextureCreateInfo;
 void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture);
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
-
-typedef struct VkWin32ExternalFence {
-	ID3D12Fence* fence;
-	HANDLE handle;
-} VkWin32ExternalFence;
-void vkWin32CreateExternalFence(VkWin32ExternalFence *pFence);
 
 typedef struct VkWin32ExternalTexture {
 #if defined(D3D11)
@@ -1872,7 +1866,7 @@ static void CheckDXGI()
 		for (UINT i = 0; IDXGIFactory4_EnumAdapters1(dxgi.factory, i, &dxgi.adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
 			DXGI_ADAPTER_DESC1 desc;
 			DX_CHECK(IDXGIAdapter1_GetDesc1(dxgi.adapter, &desc));
-			wprintf(L"DX12 Adapter %d Name: %ls Description: %ld:%lu\n",
+			wprintf(L"DXGI Adapter %d Name: %ls Description: %ld:%lu\n",
 					i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
 			break;  // add logic to choose?
 		}
@@ -1883,35 +1877,14 @@ static void CheckDXGI()
 	}
 }
 
-void vkWin32CreateExternalFence(VkWin32ExternalFence *pFence)
-{
-	CheckDXGI();
-	DX_CHECK(ID3D12Device_CreateFence(
-		d3d12.device,
-		0,
-		D3D12_FENCE_FLAG_SHARED,
-		&IID_ID3D12Fence,
-		(void**)&pFence->fence));
-	DX_CHECK(ID3D12Device_CreateSharedHandle(
-		d3d12.device,
-		(ID3D12DeviceChild*)pFence->fence,
-		NULL,
-		GENERIC_ALL,
-		NULL,
-		&pFence->handle));
-}
-
 void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture)
 {
 	CheckDXGI();
 #if defined(D3D11)
 	if (d3d11.device1 == NULL) {
-		D3D_FEATURE_LEVEL featuresLevels[] = {
-			D3D_FEATURE_LEVEL_11_1,
-			D3D_FEATURE_LEVEL_11_0,
-		};
+		D3D_FEATURE_LEVEL featuresLevels[] = {D3D_FEATURE_LEVEL_11_1};
 		D3D_FEATURE_LEVEL featureLevel;
-		ID3D11Device*  device;
+		ID3D11Device*     device;
 		DX_CHECK(D3D11CreateDevice(
 			(IDXGIAdapter*)dxgi.adapter,
 			D3D_DRIVER_TYPE_UNKNOWN,
@@ -1943,7 +1916,7 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.Usage = D3D11_USAGE_DEFAULT,
 		.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
 		.CPUAccessFlags = 0,
-		.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED,
+		.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX,
 	};
 	DX_CHECK(ID3D11Device1_CreateTexture2D(d3d11.device1, &desc, NULL, &pTexture->texture));
 	IDXGIResource1* dxgiResource1 = NULL;
@@ -1951,9 +1924,9 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 	DX_CHECK(IDXGIResource1_CreateSharedHandle(dxgiResource1, NULL, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, NULL, &pTexture->handle));
 	IDXGIResource1_Release(dxgiResource1);
 
-//	DX_CHECK(ID3D11Texture2D_QueryInterface(pTexture->texture, &IID_IDXGIKeyedMutex, (void**)&pTexture->keyedMutex));
-//	IDXGIKeyedMutex_AcquireSync(pTexture->keyedMutex, 0, INFINITE);
-//	IDXGIKeyedMutex_ReleaseSync(pTexture->keyedMutex, 1);
+	DX_CHECK(ID3D11Texture2D_QueryInterface(pTexture->texture, &IID_IDXGIKeyedMutex, (void**)&pTexture->keyedMutex));
+	IDXGIKeyedMutex_AcquireSync(pTexture->keyedMutex, 0, INFINITE);
+	IDXGIKeyedMutex_ReleaseSync(pTexture->keyedMutex, 0);
 
 //	IDXGIAdapter_Release(d3d11.adapter);
 //	IDXGIFactory_Release(d3d11.factory);
@@ -1986,7 +1959,7 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		&heapProperties,
 		D3D12_HEAP_FLAG_SHARED,
 		&textureDesc,
-		D3D12_RESOURCE_STATE_COMMON,
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
 		NULL,
 		&IID_ID3D12Resource,
 		(void**)&pTexture->texture));

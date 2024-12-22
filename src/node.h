@@ -63,9 +63,9 @@ typedef struct MxcNodeShared {
 	bool swapClaimed[VK_SWAP_COUNT];
 
 	// read every cycle, occasional write
-	float compositorRadius;
-	int   compositorCycleSkip;
-	int   compositorBaseCycleValue;
+	float    compositorRadius;
+	int      compositorCycleSkip;
+	uint64_t compositorBaseCycleValue;
 
 	MxcRingBuffer targetQueue;
 
@@ -120,7 +120,7 @@ typedef struct MxcNodeCompositorSetState {
 typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	MxcNodeCompositorSetState  nodeSetState;
 	MidPose                    rootPose;
-	uint64_t                   lastTimelineSwap;
+	uint64_t                   lastTimelineValue;
 	VkDescriptorSet            set;
 	MxcNodeCompositorSetState* pNodeSetMapped;
 	// should make them share buffer? probably
@@ -137,6 +137,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 		VkImageView           normalView;
 		VkImageView           gBufferView;
 		VkImageMemoryBarrier2 acquireBarriers[3];
+		VkImageMemoryBarrier2 releaseBarriers[3];
 	} framebuffers[VK_SWAP_COUNT];
 } MxcNodeCompositorData;
 
@@ -182,9 +183,6 @@ typedef struct MxcNodeContext {
 
 	// I'm not actually 100% sure if I want this
 	VkFence vkNodeFence;
-#if WIN32
-	VkWin32ExternalFence nodeFenceExternal;
-#endif
 
 	// I don't think I need the node timeline...
 	VkSemaphore vkNodeTimeline;

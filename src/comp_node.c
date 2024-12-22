@@ -349,28 +349,30 @@ run_loop:
 		midVkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 		vkmCmdResetBegin(cmd);
 
-		for (int i = 0; i < nodeCount; ++i) {
-			MxcNodeShared* pNodeShared = activeNodesShared[i];
+		for (int nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex) {
+			MxcNodeShared* pNodeShared = activeNodesShared[nodeIndex];
 
 			// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 			// shared: 569 - semaphore: 315416 ratio: 554.333919
 			uint64_t nodeTimelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
+//			uint64_t nodeTimelineValue;
+//			vkGetSemaphoreCounterValue(device, nodeContexts[nodeIndex].vkNodeTimeline, &nodeTimelineValue);
 
 			// I don't like this but it waits until the node renders something. Prediction should be okay here.
 			if (nodeTimelineValue < 1)
 				continue;
 
+//			printf("signaled comp: %llu UPDATE_NODE_STATE\n", compositorBaseCycleValue);
+
 			// We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
-			memcpy(&nodeCompositorData[i].rootPose, &pNodeShared->rootPose, sizeof(MidPose));
+			memcpy(&nodeCompositorData[nodeIndex].rootPose, &pNodeShared->rootPose, sizeof(MidPose));
 			//nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
 
 			// update node model mat... this should happen every frame so user can move it in comp
-			nodeCompositorData[i].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[i].rootPose.position, nodeCompositorData[i].rootPose.rotation);
+			nodeCompositorData[nodeIndex].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[nodeIndex].rootPose.position, nodeCompositorData[nodeIndex].rootPose.rotation);
 
-			if (nodeTimelineValue <= nodeCompositorData[i].lastTimelineSwap)
+			if (nodeTimelineValue <= nodeCompositorData[nodeIndex].lastTimelineValue)
 				continue;
-
-			nodeCompositorData[i].lastTimelineSwap = nodeTimelineValue;
 
 			{  // Acquire new framebuffers from node
 
@@ -378,44 +380,48 @@ run_loop:
 				// the inverse of node timeline is the framebuffer index to display
 				// while the non-inverse is the framebuffer to be rendered into
 				// we want to keep this index a function of the timeline value to evade needing any other index list
+				if (nodeCompositorData[nodeIndex].lastTimelineValue > 0) {
+					uint8_t priorNodeFramebufferIndex = !(nodeCompositorData[nodeIndex].lastTimelineValue % VK_SWAP_COUNT);
+//					CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[nodeIndex].framebuffers[priorNodeFramebufferIndex].releaseBarriers);
+					uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_SEQ_CST);
+					assert(priorExchangedSwap);
+				}
+
 				uint8_t nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
-				CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].acquireBarriers);
-
-//				bool exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_ACQ_REL);
-//				assert(!exchangedSwap);
-
-//				uint8_t priorNodeFramebufferIndex = !(nodeCompositorData[i].lastTimelineSwap % VK_SWAP_COUNT);
-//				uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_ACQ_REL);
-//				assert(priorExchangedSwap);
+				CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].acquireBarriers);
+				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
+				assert(!exchangedSwap);
 
 				// These will end up being updated from a framebuffer pool so they need to be written each switch
 				VkWriteDescriptorSet writeSets[] = {
-					SET_WRITE_COMP_COLOR(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].colorView),
-					SET_WRITE_COMP_NORMAL(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].normalView),
-					SET_WRITE_COMP_GBUFFER(nodeCompositorData[i].set, nodeCompositorData[i].framebuffers[nodeFramebufferIndex].gBufferView),
+					SET_WRITE_COMP_COLOR(nodeCompositorData[nodeIndex].set, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].colorView),
+					SET_WRITE_COMP_NORMAL(nodeCompositorData[nodeIndex].set, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].normalView),
+					SET_WRITE_COMP_GBUFFER(nodeCompositorData[nodeIndex].set, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].gBufferView),
 				};
 				vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 			}
 
+			nodeCompositorData[nodeIndex].lastTimelineValue = nodeTimelineValue;
+
 			{  // Calc new node uniform and shared data
 
 				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
-				memcpy(&nodeCompositorData[i].nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
-				nodeCompositorData[i].nodeSetState.ulUV = pNodeShared->ulScreenUV;
-				nodeCompositorData[i].nodeSetState.lrUV = pNodeShared->lrScreenUV;
+				memcpy(&nodeCompositorData[nodeIndex].nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
+				nodeCompositorData[nodeIndex].nodeSetState.ulUV = pNodeShared->ulScreenUV;
+				nodeCompositorData[nodeIndex].nodeSetState.lrUV = pNodeShared->lrScreenUV;
 
-				memcpy(nodeCompositorData[i].pNodeSetMapped, &nodeCompositorData[i].nodeSetState, sizeof(MxcNodeCompositorSetState));
+				memcpy(nodeCompositorData[nodeIndex].pNodeSetMapped, &nodeCompositorData[nodeIndex].nodeSetState, sizeof(MxcNodeCompositorSetState));
 
 				float radius = pNodeShared->compositorRadius;
 
 				vec4 ulbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
-				vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulbModel);
+				vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, ulbModel);
 				vec4 ulbClip = Vec4MulMat4(globalSetState.view, ulbWorld);
 				vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
 				vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
 				vec4 ulfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-				vec4 ulfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, ulfModel);
+				vec4 ulfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, ulfModel);
 				vec4 ulfClip = Vec4MulMat4(globalSetState.view, ulfWorld);
 				vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulfClip));
 				vec2 ulfUV = Vec2Clamp(UVFromNDC(ulfNDC), 0.0f, 1.0f);
@@ -423,13 +429,13 @@ run_loop:
 				vec2 ulUV = Vec2Min(ulfUV, ulbUV);
 
 				vec4 lrbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
-				vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrbModel);
+				vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, lrbModel);
 				vec4 lrbClip = Vec4MulMat4(globalSetState.view, lrbWorld);
 				vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrbClip));
 				vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
 
 				vec4 lrfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
-				vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[i].nodeSetState.model, lrfModel);
+				vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, lrfModel);
 				vec4 lrfClip = Vec4MulMat4(globalSetState.view, lrfWorld);
 				vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrfClip));
 				vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);
@@ -471,6 +477,9 @@ run_loop:
 
 				// find a way to get rid of this load and check
 				uint64_t nodeCurrentTimelineSignal = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
+//				uint64_t nodeCurrentTimelineSignal;
+//				vkGetSemaphoreCounterValue(device, nodeContexts[i].vkNodeTimeline, &nodeCurrentTimelineSignal);
+
 				// I don't like this but it waits until the node renders something. Prediction should be okay here.
 				if (nodeCurrentTimelineSignal < 1)
 					continue;
