@@ -39,7 +39,7 @@ int main(void)
 		midCreateWindow();
 		vkInitializeInstance();
 
-		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, MIDVK_ALLOC, &vk.surfaces[0]);
+		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
 
 		MidVkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
@@ -116,7 +116,7 @@ int main(void)
 		while (isRunning) {
 
 			// we may not have to even wait... this could go faster
-			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compTimeline);
+			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorNodeContext.compositorTimeline);
 
 			// interprocess polling could be a different thread?
 			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
@@ -129,7 +129,7 @@ int main(void)
 			__atomic_thread_fence(__ATOMIC_RELEASE);
 
 			// signal input ready to process!
-			midVkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compTimeline);
+			midVkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorNodeContext.compositorTimeline);
 
 			// MXC_CYCLE_COMPOSITOR_RECORD occurs here
 
@@ -144,7 +144,7 @@ int main(void)
 			//      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
 			// wait for recording to be done
-			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compTimeline);
+			midVkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorNodeContext.compositorTimeline);
 
 			compositorBaseCycleValue += MXC_CYCLE_COUNT;
 
@@ -154,7 +154,7 @@ int main(void)
 											compositorNodeContext.swap.acquireSemaphore,
 											compositorNodeContext.swap.renderCompleteSemaphore,
 											compositorNodeContext.swapIndex,
-											compositorNodeContext.compTimeline,
+											compositorNodeContext.compositorTimeline,
 											compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
 			// Try submitting nodes before waiting to update window again.

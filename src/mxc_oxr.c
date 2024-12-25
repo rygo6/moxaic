@@ -49,7 +49,7 @@ void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
 }
 
-void xrGetSessionFence(XrHandle sessionHandle, HANDLE* pHandle)
+void xrGetSessionTimeline(XrHandle sessionHandle, HANDLE* pHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
@@ -69,7 +69,7 @@ void xrGetCompositorTimeline(XrHandle sessionHandle, HANDLE* pHandle)
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
-	*pHandle = pImportParam->compTimelineHandle;
+	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle)
@@ -94,8 +94,8 @@ void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex)
 	uint8_t index = (timelineValue % VK_SWAP_COUNT);
 	*pIndex = index;
 //	printf("Claiming swap index %d timeline %llu\n", index, timelineValue);
-	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], true, __ATOMIC_SEQ_CST);
-	assert(priorIndex == false);
+//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], true, __ATOMIC_SEQ_CST);
+//	assert(priorIndex == false);
 }
 
 void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
@@ -104,8 +104,8 @@ void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 //	printf("Releasing swap index %d timeline %llu\n", index, timelineValue);
-	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_SEQ_CST);
-	assert(priorIndex == true);
+//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_SEQ_CST);
+//	assert(priorIndex == true);
 }
 
 // not full sure if this should be done!?
@@ -117,7 +117,7 @@ void xrSetInitialCompositorTimelineValue(XrHandle sessionHandle, uint64_t timeli
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	timelineValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
 	pNodeShared->compositorBaseCycleValue = timelineValue + MXC_CYCLE_COUNT;
-	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
+//	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
 }
 
 void xrGetCompositorTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue)
@@ -150,7 +150,16 @@ XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized)
 	return hzTime;
 }
 
-void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
+void xrGetHeadPose(XrHandle sessionHandle, XrPosef* pPose)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+
+	pPose->position = *(XrVector3f*)&pNodeShared->cameraPos.position;
+	pPose->orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
+}
+
+void xrGetEyeView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
@@ -175,13 +184,8 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
 	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
 
-	pView->fov.angleLeft += viewIndex;
-	pView->fov.angleRight += viewIndex;
-
-//	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
-//	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
-//	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
-//	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
+	pView->fov.angleLeft += viewIndex * 10;
+	pView->fov.angleRight += viewIndex * 10;
 
 	int width = pNodeShared->globalSetState.framebufferSize.x;
 	int height = pNodeShared->globalSetState.framebufferSize.y;
@@ -209,8 +213,4 @@ void midXrGetView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 //	pView->fov.angleRight = halfAngle;
 //	pView->fov.angleUp = halfAngle;
 //	pView->fov.angleDown = -halfAngle;
-}
-
-void midXrBeginFrame(XrHandle sessionHandle)
-{
 }

@@ -109,7 +109,7 @@ static void CreateCompSetLayout(MxcCompMode compMode, VkDescriptorSetLayout* pLa
 			},
 		},
 	};
-	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &nodeSetLayoutCreateInfo, VK_ALLOC, pLayout));
 }
 
 enum PipeSetCompIndices {
@@ -127,7 +127,7 @@ static void CreateCompPipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipeline
 			[PIPE_SET_COMP_NODE_INDEX] = nodeSetLayout,
 		},
 	};
-	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, MIDVK_ALLOC, pNodePipeLayout));
+	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pNodePipeLayout));
 }
 
 void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
@@ -177,7 +177,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 				.queryType = VK_QUERY_TYPE_TIMESTAMP,
 				.queryCount = 2,
 			};
-			VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, MIDVK_ALLOC, &pNode->timeQueryPool));
+			VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, VK_ALLOC, &pNode->timeQueryPool));
 
 			VkDescriptorPoolCreateInfo poolInfo = {
 				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -190,7 +190,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 					{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = MXC_NODE_CAPACITY},
 				},
 			};
-			VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+			VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
 
 			// global set
 			midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pNode->globalSet.set);
@@ -257,7 +257,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
 		// should I make them all share the same buffer? probably
 		midVkBindBufferSharedMemory(nodeCompositorData[i].SetBuffer, nodeCompositorData[i].SetSharedMemory);
 		vkUpdateDescriptorSets(vk.context.device, 1, &SET_WRITE_COMP_BUFFER(nodeCompositorData[i].set, nodeCompositorData[i].SetBuffer), 0, NULL);
-		nodeCompositorData[i].pNodeSetMapped = midVkSharedMemoryPointer(nodeCompositorData[i].SetSharedMemory);
+		nodeCompositorData[i].pSetMapped = midVkSharedMemoryPointer(nodeCompositorData[i].SetSharedMemory);
 	}
 }
 
@@ -294,7 +294,7 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 	const VkDeviceSize quadVertexOffset = pNode->quadMesh.vertexOffset;
 
 	uint64_t          compositorBaseCycleValue = 0;
-	const VkSemaphore compTimeline = pNodeContext->compTimeline;
+	const VkSemaphore compTimeline = pNodeContext->compositorTimeline;
 
 	const VkSwapContext swap = pNodeContext->swap;
 
@@ -369,7 +369,7 @@ run_loop:
 			//nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
 
 			// update node model mat... this should happen every frame so user can move it in comp
-			nodeCompositorData[nodeIndex].nodeSetState.model = Mat4FromPosRot(nodeCompositorData[nodeIndex].rootPose.position, nodeCompositorData[nodeIndex].rootPose.rotation);
+			nodeCompositorData[nodeIndex].setState.model = Mat4FromPosRot(nodeCompositorData[nodeIndex].rootPose.position, nodeCompositorData[nodeIndex].rootPose.rotation);
 
 			if (nodeTimelineValue <= nodeCompositorData[nodeIndex].lastTimelineValue)
 				continue;
@@ -383,14 +383,14 @@ run_loop:
 				if (nodeCompositorData[nodeIndex].lastTimelineValue > 0) {
 					uint8_t priorNodeFramebufferIndex = !(nodeCompositorData[nodeIndex].lastTimelineValue % VK_SWAP_COUNT);
 //					CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[nodeIndex].framebuffers[priorNodeFramebufferIndex].releaseBarriers);
-					uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_SEQ_CST);
-					assert(priorExchangedSwap);
+//					uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_SEQ_CST);
+//					assert(priorExchangedSwap);
 				}
 
 				uint8_t nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
 				CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].acquireBarriers);
-				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
-				assert(!exchangedSwap);
+//				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
+//				assert(!exchangedSwap);
 
 				// These will end up being updated from a framebuffer pool so they need to be written each switch
 				VkWriteDescriptorSet writeSets[] = {
@@ -406,22 +406,22 @@ run_loop:
 			{  // Calc new node uniform and shared data
 
 				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
-				memcpy(&nodeCompositorData[nodeIndex].nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
-				nodeCompositorData[nodeIndex].nodeSetState.ulUV = pNodeShared->ulScreenUV;
-				nodeCompositorData[nodeIndex].nodeSetState.lrUV = pNodeShared->lrScreenUV;
+				memcpy(&nodeCompositorData[nodeIndex].setState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
+				nodeCompositorData[nodeIndex].setState.ulUV = pNodeShared->ulScreenUV;
+				nodeCompositorData[nodeIndex].setState.lrUV = pNodeShared->lrScreenUV;
 
-				memcpy(nodeCompositorData[nodeIndex].pNodeSetMapped, &nodeCompositorData[nodeIndex].nodeSetState, sizeof(MxcNodeCompositorSetState));
+				memcpy(nodeCompositorData[nodeIndex].pSetMapped, &nodeCompositorData[nodeIndex].setState, sizeof(MxcNodeCompositorSetState));
 
 				float radius = pNodeShared->compositorRadius;
 
 				vec4 ulbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
-				vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, ulbModel);
+				vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, ulbModel);
 				vec4 ulbClip = Vec4MulMat4(globalSetState.view, ulbWorld);
 				vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
 				vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
 				vec4 ulfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-				vec4 ulfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, ulfModel);
+				vec4 ulfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, ulfModel);
 				vec4 ulfClip = Vec4MulMat4(globalSetState.view, ulfWorld);
 				vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulfClip));
 				vec2 ulfUV = Vec2Clamp(UVFromNDC(ulfNDC), 0.0f, 1.0f);
@@ -429,13 +429,13 @@ run_loop:
 				vec2 ulUV = Vec2Min(ulfUV, ulbUV);
 
 				vec4 lrbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
-				vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, lrbModel);
+				vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, lrbModel);
 				vec4 lrbClip = Vec4MulMat4(globalSetState.view, lrbWorld);
 				vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrbClip));
 				vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
 
 				vec4 lrfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
-				vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].nodeSetState.model, lrfModel);
+				vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, lrfModel);
 				vec4 lrfClip = Vec4MulMat4(globalSetState.view, lrfWorld);
 				vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrfClip));
 				vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);

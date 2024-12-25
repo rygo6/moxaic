@@ -8,9 +8,9 @@
 layout(location = 0) out vec3 outNormal;
 layout(location = 1) out vec2 outUV;
 
-float doubleWide = 2.0f;
+float doubleWide = 1.0f;
 bool clipped = false;
-bool yFlipped = true;
+bool yFlipped = false;
 
 void main() {
     const vec4 originClipPos = nodeUBO.viewProj * nodeUBO.model * vec4(0,0,0,1);
@@ -27,8 +27,8 @@ void main() {
     outNormal = inNormal;
 
     vec2 finalUV = clipped ? vec2(scaledUV.x / doubleWide, scaledUV.y) : vec2(inUV.x / doubleWide, inUV.y);
-//    if (yFlipped) {
-//        finalUV.y = 1.0 - finalUV.y;
-//    }
+    if (yFlipped) {
+        finalUV.y = 1.0 - finalUV.y;
+    }
     outUV = finalUV;
 }

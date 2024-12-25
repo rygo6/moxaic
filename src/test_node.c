@@ -98,8 +98,8 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 
 	const VkDevice device = pNode->device;
 
-	const VkSemaphore compTimeline = pNodeContext->vkCompositorTimeline;
-	const VkSemaphore nodeTimeline = pNodeContext->vkNodeTimeline;
+	const VkSemaphore compTimeline = pNodeContext->compositorTimeline;
+	const VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
 
 	uint64_t nodeTimelineValue = 0;
 
@@ -125,7 +125,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 					IMAGE_BARRIER_DST_NODE_RELEASE,
-					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[i].gBuffer,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
@@ -291,7 +291,7 @@ run_loop:
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				MIDVK_IMAGE_BARRIER_SRC_UNDEFINED,
 				MIDVK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
-				MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				.image = framebufferImages[framebufferIndex].gBuffer,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 			};
@@ -304,14 +304,14 @@ run_loop:
 					.image = framebufferImages[framebufferIndex].depth,
 					IMAGE_BARRIER_SRC_NODE_FINISH_RENDERPASS,
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ,
-					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.subresourceRange = VK_DEPTH_SUBRESOURCE_RANGE,
 				},
 				{
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					MIDVK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				},
@@ -332,7 +332,7 @@ run_loop:
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ,
-					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i - 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
 				},
@@ -340,7 +340,7 @@ run_loop:
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_READ,
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
 				},
@@ -362,7 +362,7 @@ run_loop:
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ,
-					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
 				},
@@ -370,7 +370,7 @@ run_loop:
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_READ,
 					MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-					MIDVK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i - 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
 				},
@@ -435,7 +435,7 @@ static void CreateNodeProcessSetLayout(VkDescriptorSetLayout* pLayout)
 			},
 		},
 	};
-	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &nodeSetLayoutCreateInfo, MIDVK_ALLOC, pLayout));
+	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &nodeSetLayoutCreateInfo, VK_ALLOC, pLayout));
 }
 
 static void CreateNodeProcessPipeLayout(VkDescriptorSetLayout nodeProcessSetLayout, VkPipelineLayout* pPipeLayout)
@@ -447,7 +447,7 @@ static void CreateNodeProcessPipeLayout(VkDescriptorSetLayout nodeProcessSetLayo
 			[PIPE_SET_NODE_PROCESS_INDEX] = nodeProcessSetLayout,
 		},
 	};
-	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, MIDVK_ALLOC, pPipeLayout));
+	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
 }
 static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layout, VkPipeline* pPipe)
 {
@@ -463,8 +463,8 @@ static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layou
 		},
 		.layout = layout,
 	};
-	VK_CHECK(vkCreateComputePipelines(vk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, MIDVK_ALLOC, pPipe));
-	vkDestroyShaderModule(vk.context.device, shader, MIDVK_ALLOC);
+	VK_CHECK(vkCreateComputePipelines(vk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VK_ALLOC, pPipe));
+	vkDestroyShaderModule(vk.context.device, shader, VK_ALLOC);
 }
 static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNode* pTestNode)
 {
@@ -491,7 +491,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 						.layerCount = 1,
 					},
 				};
-				VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, MIDVK_ALLOC, &pTestNode->gBufferMipViews[bufferIndex][mipIndex]));
+				VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, VK_ALLOC, &pTestNode->gBufferMipViews[bufferIndex][mipIndex]));
 			}
 		}
 
@@ -507,7 +507,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
 			},
 		};
-		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &descriptorPoolCreateInfo, MIDVK_ALLOC, &threadContext.descriptorPool));
+		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &descriptorPoolCreateInfo, VK_ALLOC, &threadContext.descriptorPool));
 
 		midVkCreateGlobalSet(&pTestNode->globalSet);
 

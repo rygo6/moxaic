@@ -17,18 +17,6 @@
 
 //
 /// Constants
-typedef enum MxcNodeType {
-	MXC_NODE_TYPE_NONE,
-	MXC_NODE_TYPE_THREAD,
-	MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_OPENGL_EXPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_OPENGL_IMPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_EXPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_IMPORTED,
-	MXC_NODE_TYPE_COUNT
-} MxcNodeType;
-
 #define MXC_NODE_GBUFFER_FORMAT VK_FORMAT_R32_SFLOAT
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
 #define MXC_NODE_GBUFFER_LEVELS 10
@@ -48,6 +36,26 @@ typedef struct MxcRingBuffer {
 
 //
 /// Shared Types
+typedef enum MxcNodeType {
+	MXC_NODE_TYPE_NONE,
+	MXC_NODE_TYPE_THREAD,
+	MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_OPENGL_EXPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_OPENGL_IMPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_EXPORTED,
+	MXC_NODE_TYPE_INTERPROCESS_IMPORTED,
+	MXC_NODE_TYPE_COUNT
+} MxcNodeType;
+
+typedef enum MxcSwapType {
+	MXC_SWAP_TYPE_MONO,
+	MXC_SWAP_TYPE_STEREO,
+	MXC_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
+	MXC_SWAP_TYPE_STEREO_DOUBLE_WIDE,
+	MXC_SWAP_TYPE_COUNT,
+} MxcSwapType;
+
 typedef struct MxcNodeShared {
 	// read/write every cycle
 
@@ -70,31 +78,37 @@ typedef struct MxcNodeShared {
 	MxcRingBuffer targetQueue;
 
 } MxcNodeShared;
+
 typedef struct MxcImportParam {
 	struct {
 		HANDLE color;
 		HANDLE normal;
 		HANDLE gbuffer;
 	} framebufferHandles[VK_SWAP_COUNT];
-	HANDLE nodeFenceHandle;
+
+//	HANDLE nodeFenceHandle;
 	HANDLE nodeTimelineHandle;
-	HANDLE compTimelineHandle;
+	HANDLE compositorTimelineHandle;
 } MxcImportParam;
 typedef struct MxcExternalNodeMemory {
 	// these needs to turn into array so one process can share chunk of shared memory
+	// is that good for security though?
+
 	MxcNodeShared shared;
 	MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
 //
 /// Compositor Types
+
+// Data for the compositor
 typedef struct MxcCompositorNodeContext {
 	// read multiple threads, write 1 thread
 	uint32_t swapIndex;
 
 	// read by multiple threads
 	VkCommandBuffer cmd;
-	VkSemaphore     compTimeline;
+	VkSemaphore     compositorTimeline;
 	VkSwapContext   swap;
 
 	// cold data
@@ -102,6 +116,7 @@ typedef struct MxcCompositorNodeContext {
 	pthread_t     threadId;
 
 } MxcCompositorNodeContext;
+
 typedef struct MxcNodeCompositorSetState {
 	mat4 model;
 
@@ -117,12 +132,17 @@ typedef struct MxcNodeCompositorSetState {
 	vec2 ulUV;
 	vec2 lrUV;
 } MxcNodeCompositorSetState;
+
+// Data compositor needs for each node
 typedef struct CACHE_ALIGN MxcNodeCompositorData {
-	MxcNodeCompositorSetState  nodeSetState;
+
 	MidPose                    rootPose;
 	uint64_t                   lastTimelineValue;
+
+	// Does it actually make difference to keep local copy?
+	MxcNodeCompositorSetState  setState;
+	MxcNodeCompositorSetState* pSetMapped;
 	VkDescriptorSet            set;
-	MxcNodeCompositorSetState* pNodeSetMapped;
 	// should make them share buffer? probably
 	VkBuffer       SetBuffer;
 	VkSharedMemory SetSharedMemory;
@@ -139,6 +159,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 		VkImageMemoryBarrier2 acquireBarriers[3];
 		VkImageMemoryBarrier2 releaseBarriers[3];
 	} framebuffers[VK_SWAP_COUNT];
+
 } MxcNodeCompositorData;
 
 //
@@ -170,6 +191,7 @@ typedef struct MxcNodeGlFramebufferTexture {
 
 typedef struct MxcNodeContext {
 	MxcNodeType type;
+	MxcSwapType swapType;
 
 	VkCommandPool   pool;
 	VkCommandBuffer cmd;
@@ -182,15 +204,11 @@ typedef struct MxcNodeContext {
 	MxcNodeVkFramebufferTexture vkNodeFramebufferTextures[VK_SWAP_COUNT];
 
 	// I'm not actually 100% sure if I want this
-	VkFence vkNodeFence;
+//	VkFence vkNodeFence;
 
 	// I don't think I need the node timeline...
-	VkSemaphore vkNodeTimeline;
-	VkSemaphore vkCompositorTimeline;
-
-	// debating if this should be an option
-//	GLuint glCompTimeline;
-//	GLuint glNodeTimeline;
+	VkSemaphore nodeTimeline;
+	VkSemaphore compositorTimeline;
 
 	// MXC_NODE_TYPE_THREAD
 	pthread_t       threadId;
@@ -204,6 +222,17 @@ typedef struct MxcNodeContext {
 	MxcExternalNodeMemory* pExportedExternalMemory;
 
 } MxcNodeContext;
+
+
+//typedef struct {
+//	bool occupied : 1;
+//} Slot;
+//
+//#define SWAP_POOL_MAX_SIZE 256
+//typedef struct MxcNodeSwapPool {
+//	Slot slots[SWAP_POOL_MAX_SIZE];
+//	MxcNodeVkFramebufferTexture texture;
+//} MxcNodeSwapPool;
 
 //
 //// Node State
@@ -225,7 +254,7 @@ extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
 
-
+//MxcNodeSwapPool nodeSwapPool[MXC_SWAP_TYPE_COUNT];
 
 //
 //// Compositor State
