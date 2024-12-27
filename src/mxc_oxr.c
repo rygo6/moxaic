@@ -155,8 +155,14 @@ void xrGetHeadPose(XrHandle sessionHandle, XrPosef* pPose)
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 
-	pPose->position = *(XrVector3f*)&pNodeShared->cameraPos.position;
-	pPose->orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
+	mat4 invView = pNodeShared->globalSetState.invView;
+	invView = Mat4YInvert(invView);
+	invView = Mat4XInvert(invView);
+	quat rotation = RotFromMat4(invView);
+	vec3 position = PosFromMat4(invView);
+
+	pPose->position = *(XrVector3f*)&position;
+	pPose->orientation = *(XrQuaternionf*)&rotation;
 }
 
 void xrGetEyeView(XrHandle sessionHandle, int viewIndex, XrView* pView)
@@ -164,53 +170,59 @@ void xrGetEyeView(XrHandle sessionHandle, int viewIndex, XrView* pView)
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 
-	pView->pose.position = *(XrVector3f*)&pNodeShared->cameraPos.position;
-	pView->pose.orientation = *(XrQuaternionf*)&pNodeShared->cameraPos.rotation;
+	mat4 invView = pNodeShared->globalSetState.invView;
+	invView = Mat4YInvert(invView);
+	invView = Mat4XInvert(invView);
+	quat rotation = RotFromMat4(invView);
+	vec3 position = PosFromMat4(invView);
 
-//	quat inverseRotation = QuatInverse(pNodeShared->cameraPos.rotation);
-//	pView->pose.orientation = *(XrQuaternionf*)&inverseRotation;
+	pView->pose.position = *(XrVector3f*)&position;
+	pView->pose.orientation = *(XrQuaternionf*)&rotation;
 
-	float fovX = pNodeShared->globalSetState.proj.c0.r0;
-	float fovY = pNodeShared->globalSetState.proj.c1.r1;
-
-	/// flip these verticlaly to fix?!
-//	float fovX = pNodeShared->globalSetState.invProj.c0.r0;
-//	float fovY = pNodeShared->globalSetState.invProj.c1.r1;
+	mat4 proj = pNodeShared->globalSetState.proj;
+	float fovX = proj.c0.r0;
+	float fovY = proj.c1.r1;
 	float angleX = atan(1.0f / fovX);
 	float angleY = atan(1.0f / fovY);
 
 	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x);
 	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x);
-	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
-	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
+	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y);
+	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y);
 
-	pView->fov.angleLeft += viewIndex * 10;
-	pView->fov.angleRight += viewIndex * 10;
+	// do I need to worry about this?
+//	pView->fov.angleLeft = Lerp(-angleX, angleX, pNodeShared->ulScreenUV.x) * (viewProj.c2.r0 - 1.0f);
+//	pView->fov.angleRight = Lerp(-angleX, angleX, pNodeShared->lrScreenUV.x) * (viewProj.c2.r0 + 1.0f);
+//	pView->fov.angleUp = Lerp(-angleY, angleY, pNodeShared->ulScreenUV.y) * (viewProj.c2.r1 + 1.0f);
+//	pView->fov.angleDown = Lerp(-angleY, angleY, pNodeShared->lrScreenUV.y) * (viewProj.c2.r1 - 1.0f);
+
+//		float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
+//		pView->fov.angleLeft = -halfAngle;
+//		pView->fov.angleRight = halfAngle;
+//		pView->fov.angleUp = halfAngle;
+//		pView->fov.angleDown = -halfAngle;
 
 	int width = pNodeShared->globalSetState.framebufferSize.x;
 	int height = pNodeShared->globalSetState.framebufferSize.y;
 
 	// do this? the app could calculate the subimage and pass it back with endframe info
-	// but xrEnumerateViewConfigurationViews instance based, not session based, so it can't be relied on
-	// to get expected frame size
-	// but I can get the different swap sizes via midXrClaimGlSwapchain
-	// then have it calculate clip size off XrSpace and pass back the clipping size in end frame
+	// but xrEnumerateViewConfigurationViews instance based, not session based, so it can't be relied on to get expected frame size
+	// visibility mask is not checked every render, so that cannot be used
+	// only way to control rendered area every frame by existing standard is changing the swap size
+	// We could use foveation? Not all foveration APIs offer explicitly width height.
+	// We might actually need swaps of different sizes, and different heights/widths
+	// We do need an in-spec solution if this is to work with everything initally
 	if (pView->next != NULL) {
-		switch (*(XrStructureTypeExt*)pView->next) {
+		XrStructureTypeExt* type = (XrStructureTypeExt*)pView->next;
+		switch (*type) {
 			case XR_TYPE_SUB_VIEW: {
 				XrSubView* pSubView = (XrSubView*)pView->next;
 				pSubView->imageRect.extent.width = width;
 				pSubView->imageRect.extent.height = height;
 				break;
 			}
+			default:
+				printf("EyeView->Next Unknown: %d\n", *type);
 		}
 	}
-
-//	printf("%f %f %f %f\n",pView->fov.angleLeft, pView->fov.angleRight, pView->fov.angleUp, pView->fov.angleDown);
-
-	//	float halfAngle = MID_DEG_TO_RAD(pNodeShared->camera.yFOV) * 0.5f;
-//	pView->fov.angleLeft = -halfAngle;
-//	pView->fov.angleRight = halfAngle;
-//	pView->fov.angleUp = halfAngle;
-//	pView->fov.angleDown = -halfAngle;
 }

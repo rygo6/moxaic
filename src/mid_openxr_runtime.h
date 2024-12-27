@@ -647,6 +647,8 @@ static void LogWin32Error(HRESULT err)
 
 #define XR_EXPORT XRAPI_ATTR XrResult XRAPI_CALL
 
+#define PI 3.14159265358979323846
+
 	//static InstancePool instances;
 
 //
@@ -1551,7 +1553,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
 	switch (viewConfigurationType) {
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
 		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
 		default:
 			for (int i = 0; i < COUNT(modes); ++i) {
@@ -1910,7 +1912,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurations(
 		}
 		case SYSTEM_ID_HMD_VR_STEREO: {
 			XrViewConfigurationType modes[] = {
+				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+//				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET,
+//				XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT,
+//				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO,
 			};
 			TRANSFER_MODES
 			return XR_SUCCESS;
@@ -1938,25 +1944,20 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetViewConfigurationProperties(
 
 	Instance* pInstance = (Instance*)instance;
 
-	// needs to depend on systemid somehow
 	switch (viewConfigurationType) {
-//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-//			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO\n");
-//			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
-//			configurationProperties->fovMutable = XR_TRUE;
-//			return XR_SUCCESS;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO;
+			configurationProperties->fovMutable = XR_TRUE;
+			return XR_SUCCESS;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO\n");
 			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
 			configurationProperties->fovMutable = XR_TRUE;
 			return XR_SUCCESS;
-//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-//			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
-//			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET;
-//			configurationProperties->fovMutable = XR_TRUE;
-//			return XR_SUCCESS;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET;
+			configurationProperties->fovMutable = XR_TRUE;
+			return XR_SUCCESS;
 		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
 			configurationProperties->viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT;
 			configurationProperties->fovMutable = XR_TRUE;
 			return XR_SUCCESS;
@@ -1974,24 +1975,38 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	XrViewConfigurationView* views)
 {
 	LOG_METHOD(xrEnumerateViewConfigurationViews);
+	LOG("%s\n", string_XrViewConfigurationType(viewConfigurationType));
 
-	// this needs to be based on systemId
+	switch ((SystemId)systemId) {
+		case SYSTEM_ID_HANDHELD_AR:
+
+			switch (viewConfigurationType) {
+				case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+				case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+				case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+					return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+				default:
+					break;
+			}
+
+		case SYSTEM_ID_HMD_VR_STEREO:
+			break;
+		default:
+			return XR_ERROR_SYSTEM_INVALID;
+	};
+
 	switch (viewConfigurationType) {
-//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-//			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO\n");
-//			*viewCountOutput = 1;
-//			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+			*viewCountOutput = 1;
+			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO\n");
 			*viewCountOutput = 2;
 			break;
-//		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-//			printf("XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET\n");
-//			*viewCountOutput = 4;
-//			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+			*viewCountOutput = 4;
+			break;
 		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			printf("XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT\n");
-			*viewCountOutput = 1;  // not sure
+			*viewCountOutput = 1;
 			break;
 		default:
 			return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
@@ -2723,7 +2738,14 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 
 	for (int i = 0; i < viewCapacityInput; ++i) {
 		xrGetEyeView(sessionHandle, i, &views[i]);
-//		printf("%d %f %f %f %f\n", i, views[i].fov.angleLeft, views[i].fov.angleRight, views[i].fov.angleUp, views[i].fov.angleDown);
+
+		// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices
+		// unless all the angles are negative.
+		// I probably don't wna to do this, I probably want to use symmetrical angles with a render mask
+		views[i].fov.angleUp -= views[i].fov.angleUp > 0 ? PI * 2 : 0;
+		views[i].fov.angleDown -= views[i].fov.angleDown > 0 ? PI * 2 : 0;
+		views[i].fov.angleLeft -= views[i].fov.angleLeft > 0 ? PI * 2 : 0;
+		views[i].fov.angleRight -= views[i].fov.angleLeft > 0 ? PI * 2 : 0;
 	}
 
 	return XR_SUCCESS;
@@ -3206,7 +3228,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetVisibilityMaskKHR(
 	XrVisibilityMaskKHR*    visibilityMask)
 {
 	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetVisibilityMaskKHR\n");
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+	return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceActiveEXT(
