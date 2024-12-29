@@ -1,5 +1,6 @@
 #pragma once
 
+#include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,6 +67,7 @@
 
 //
 //// Mid OpenXR
+typedef float    XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
 typedef uint32_t XrHash;
 typedef uint32_t XrHandle;
 #define XR_HANDLE_INVALID -1
@@ -95,8 +97,15 @@ void xrSetInitialCompositorTimelineValue(XrHandle sessionHandle, uint64_t timeli
 void xrGetCompositorTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue);
 void xrProgressCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue, bool synchronized);
 
-void xrGetHeadPose(XrHandle sessionHandle, XrPosef* pPose);
-void xrGetEyeView(uint32_t sessionHandle, int viewIndex, XrView* pView);
+void xrGetHeadPose(XrHandle sessionHandle, XrMat4* pInvView);
+
+typedef struct XrEyeView {
+	XrMat4 invView;
+	XrMat4 proj;
+	XrVector2f upperLeftClip;
+	XrVector2f lowerRightClip;
+} XrEyeView;
+void xrGetEyeView(XrHandle sessionHandle, uint8_t viewIndex, XrEyeView *pEyeView);
 
 XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized);
 
@@ -599,11 +608,14 @@ typedef struct Instance {
 #ifdef MID_OPENXR_IMPLEMENTATION
 
 static struct {
+	// more should be in here
 	Instance instance;
 } xr;
 
 PoolMemory poolMemory;
 
+//
+//// MidOpenXR Debug
 #define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
 #define LOG_METHOD(_method) printf("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
@@ -646,10 +658,6 @@ static void LogWin32Error(HRESULT err)
 #endif
 
 #define XR_EXPORT XRAPI_ATTR XrResult XRAPI_CALL
-
-#define PI 3.14159265358979323846
-
-	//static InstancePool instances;
 
 //
 //// Mid OpenXR Utility
@@ -763,7 +771,75 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 }
 
 //
-//// Mid Device Input Funcs
+//// MidOpenXR Math
+#define PI 3.14159265358979323846
+
+static inline XrQuaternionf xrRotFromMat4(XrMat4 m)
+{
+	XrQuaternionf q;
+	float trace = m[0] + m[5] + m[10];  // m00 + m11 + m22
+	if (trace > 0) {
+		float s = 0.5f / sqrtf(trace + 1.0f);
+		q.w = 0.25f / s;
+		q.x = (m[6] - m[9]) * s;    // m12 - m21
+		q.y = (m[8] - m[2]) * s;    // m20 - m02
+		q.z = (m[1] - m[4]) * s;    // m01 - m10
+	}
+	else if (m[0] > m[5] && m[0] > m[10]) {    // m00 largest
+		float s = 2.0f * sqrtf(1.0f + m[0] - m[5] - m[10]);
+		q.w = (m[6] - m[9]) / s;    // m12 - m21
+		q.x = 0.25f * s;
+		q.y = (m[4] + m[1]) / s;    // m10 + m01
+		q.z = (m[8] + m[2]) / s;    // m20 + m02
+	}
+	else if (m[5] > m[10]) {    // m11 largest
+		float s = 2.0f * sqrtf(1.0f + m[5] - m[0] - m[10]);
+		q.w = (m[8] - m[2]) / s;    // m20 - m02
+		q.x = (m[4] + m[1]) / s;    // m10 + m01
+		q.y = 0.25f * s;
+		q.z = (m[9] + m[6]) / s;    // m21 + m12
+	}
+	else {    // m22 largest
+		float s = 2.0f * sqrtf(1.0f + m[10] - m[0] - m[5]);
+		q.w = (m[1] - m[4]) / s;    // m01 - m10
+		q.x = (m[8] + m[2]) / s;    // m20 + m02
+		q.y = (m[9] + m[6]) / s;    // m21 + m12
+		q.z = 0.25f * s;
+	}
+	return q;
+}
+static inline XrVector3f xrPosFromMat4(XrMat4 m)
+{
+	float w = m[15];    // m33 (c3r3)
+	return (XrVector3f){
+		m[12] / w,      // m30 (c3r0)
+		m[13] / w,      // m31 (c3r1)
+		m[14] / w       // m32 (c3r2)
+	};
+}
+static inline XrMat4 xrMat4YInvert(XrMat4 m)
+{
+	m[1] = -m[1];    // c0r1
+	m[5] = -m[5];    // c1r1
+	m[9] = -m[9];    // c2r1
+	m[13] = -m[13];  // c3r1
+	return m;
+}
+static inline XrMat4 xrMat4XInvert(XrMat4 m)
+{
+	m[0] = -m[0];    // c0r0
+	m[4] = -m[4];    // c1r0
+	m[8] = -m[8];    // c2r0
+	m[12] = -m[12];  // c3r0
+	return m;
+}
+static inline float xrFloatLerp(float a, float b, float t)
+{
+	return a + t * (b - a);
+}
+
+//
+//// Device Input Funcs
 static int OculusLeftClick(float* pValue)
 {
 	*pValue = 100;
@@ -776,7 +852,7 @@ static int OculusRightClick(float* pValue)
 }
 
 //
-//// Mid OpenXR Implementation
+//// Implementation
 static XrResult RegisterBinding(
 	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
@@ -1858,7 +1934,22 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(
 							  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
 							  XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
 
-	xrGetHeadPose(sessionHandle, &location->pose);
+	XrMat4 invView;
+	xrGetHeadPose(sessionHandle, &invView);
+
+	switch (pInstance->graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL:    break;
+		case XR_GRAPHICS_API_OPENGL_ES: break;
+		case XR_GRAPHICS_API_VULKAN:    break;
+		case XR_GRAPHICS_API_D3D11_4:
+			invView = xrMat4YInvert(invView);
+			invView = xrMat4XInvert(invView);
+			break;
+		default: break;
+	}
+
+	location->pose.orientation = xrRotFromMat4(invView);
+	location->pose.position = xrPosFromMat4(invView);
 
 	if (location->next != NULL) {
 		switch (*(XrStructureType*)location->next) {
@@ -2737,15 +2828,66 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
 
 	for (int i = 0; i < viewCapacityInput; ++i) {
-		xrGetEyeView(sessionHandle, i, &views[i]);
+		XrEyeView eyeView;
+		xrGetEyeView(sessionHandle, i, &eyeView);
 
-		// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices
-		// unless all the angles are negative.
-		// I probably don't wna to do this, I probably want to use symmetrical angles with a render mask
-		views[i].fov.angleUp -= views[i].fov.angleUp > 0 ? PI * 2 : 0;
-		views[i].fov.angleDown -= views[i].fov.angleDown > 0 ? PI * 2 : 0;
-		views[i].fov.angleLeft -= views[i].fov.angleLeft > 0 ? PI * 2 : 0;
-		views[i].fov.angleRight -= views[i].fov.angleLeft > 0 ? PI * 2 : 0;
+		float fovX = eyeView.proj[0];   // c0r0
+		float fovY = eyeView.proj[5];   // c1r1
+		float angleX = atan(1.0f / fovX);
+		float angleY = atan(1.0f / fovY);
+
+		float angleLeft = xrFloatLerp(-angleX, angleX, eyeView.upperLeftClip.x);
+		float angleRight = xrFloatLerp(-angleX, angleX, eyeView.lowerRightClip.x);
+		float angleUp = xrFloatLerp(-angleY, angleY, eyeView.upperLeftClip.y);
+		float angleDown = xrFloatLerp(-angleY, angleY, eyeView.lowerRightClip.y);
+
+		switch (pInstance->graphicsApi) {
+			case XR_GRAPHICS_API_OPENGL:    break;
+			case XR_GRAPHICS_API_OPENGL_ES: break;
+			case XR_GRAPHICS_API_VULKAN:    break;
+			case XR_GRAPHICS_API_D3D11_4:
+				// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices
+				// unless all the angles are negative.
+				// I probably don't wna to do this, I probably want to use symmetrical angles with a render mask
+				angleUp -= angleUp > 0 ? PI * 2 : 0;
+				angleDown -= angleDown > 0 ? PI * 2 : 0;
+				angleLeft -= angleLeft > 0 ? PI * 2 : 0;
+				angleRight -= angleLeft > 0 ? PI * 2 : 0;
+
+				// DX is inverted
+				eyeView.invView = xrMat4YInvert(eyeView.invView);
+				eyeView.invView = xrMat4XInvert(eyeView.invView);
+				break;
+			default: break;
+		}
+
+		views[i].pose.orientation =  xrRotFromMat4(eyeView.invView);
+		views[i].pose.position = xrPosFromMat4(eyeView.invView);
+		views[i].fov.angleLeft = angleLeft;
+		views[i].fov.angleRight = angleRight;
+		views[i].fov.angleUp = angleUp;
+		views[i].fov.angleDown = angleDown;
+
+		// do this? the app could calculate the subimage and pass it back with endframe info
+		// but xrEnumerateViewConfigurationViews instance based, not session based, so it can't be relied on to get expected frame size
+		// visibility mask is not checked every render, so that cannot be used
+		// only way to control rendered area every frame by existing standard is changing the swap size
+		// We could use foveation? Not all foveation APIs offer explicit width height.
+		// We might actually need swaps of different sizes, and different heights/widths
+		// We do need an in-spec solution if this is to work with everything initially
+		if (views[i].next != NULL) {
+			XrStructureTypeExt* type = (XrStructureTypeExt*)views[i].next;
+			switch (*type) {
+				case XR_TYPE_SUB_VIEW: {
+					XrSubView* pSubView = (XrSubView*)views[i].next;
+					pSubView->imageRect.extent.width = eyeView.upperLeftClip.x - eyeView.lowerRightClip.x;
+					pSubView->imageRect.extent.height = eyeView.upperLeftClip.y - eyeView.lowerRightClip.y;
+					break;
+				}
+				default:
+					printf("EyeView->Next Unknown: %d\n", *type);
+			}
+		}
 	}
 
 	return XR_SUCCESS;
