@@ -273,42 +273,61 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 		pNodeCompositorData->framebuffers[i].colorView = nodeContexts[handle].swaps[i].color.view;
 		pNodeCompositorData->framebuffers[i].normalView = nodeContexts[handle].swaps[i].normal.view;
 		pNodeCompositorData->framebuffers[i].gBufferView = nodeContexts[handle].swaps[i].gbuffer.view;
+
+#define ACQUIRE_BARRIER                                                      \
+	.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,                    \
+	.srcAccessMask = VK_ACCESS_2_NONE,                                       \
+	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
+					VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
+					VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
+	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
+	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   \
+	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   \
+	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,                          \
+	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
 		pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-			.srcAccessMask = VK_ACCESS_2_NONE,
-			.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			.image = pNodeCompositorData->framebuffers[i].color,
-			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+			ACQUIRE_BARRIER,
 		};
 		pNodeCompositorData->framebuffers[i].acquireBarriers[1] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-			.srcAccessMask = VK_ACCESS_2_NONE,
-			.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			.image = pNodeCompositorData->framebuffers[i].normal,
-			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+			ACQUIRE_BARRIER,
 		};
 		pNodeCompositorData->framebuffers[i].acquireBarriers[2] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-			.srcAccessMask = VK_ACCESS_2_NONE,
-			.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			.image = pNodeCompositorData->framebuffers[i].gBuffer,
-			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+			ACQUIRE_BARRIER,
 		};
+#undef ACQUIRE_BARRIER
+
+#define RELEASE_BARRIER                                      \
+	.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
+	.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
+	.dstStageMask = VK_PIPELINE_STAGE_2_NONE,                \
+	.dstAccessMask = VK_ACCESS_2_NONE,                       \
+	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
+	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
+	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,          \
+	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
+		pNodeCompositorData->framebuffers[i].releaseBarriers[0] = (VkImageMemoryBarrier2){
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = pNodeCompositorData->framebuffers[i].color,
+			RELEASE_BARRIER,
+		};
+		pNodeCompositorData->framebuffers[i].releaseBarriers[1] = (VkImageMemoryBarrier2){
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = pNodeCompositorData->framebuffers[i].normal,
+			RELEASE_BARRIER,
+		};
+		pNodeCompositorData->framebuffers[i].releaseBarriers[2] = (VkImageMemoryBarrier2){
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = pNodeCompositorData->framebuffers[i].gBuffer,
+			RELEASE_BARRIER,
+		};
+#undef RELEASE_BARRIER
 	}
 
 	*pNodeHandle = handle;
@@ -743,14 +762,13 @@ static void InterprocessServerAcceptNodeConnection()
 #define ACQUIRE_BARRIER                                      \
 	.srcStageMask = VK_PIPELINE_STAGE_2_NONE,                \
 	.srcAccessMask = VK_ACCESS_2_NONE,                       \
-	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                    \
 	.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
 	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
+	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
 	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,         \
 	.dstQueueFamilyIndex = graphicsQueueIndex,               \
 	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
-
 			pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pNodeCompositorData->framebuffers[i].color,
@@ -766,18 +784,18 @@ static void InterprocessServerAcceptNodeConnection()
 				.image = pNodeCompositorData->framebuffers[i].gBuffer,
 				ACQUIRE_BARRIER,
 			};
+#undef ACQUIRE_BARRIER
 
 #define RELEASE_BARRIER                                      \
 	.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
 	.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
-	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
 	.dstStageMask = VK_PIPELINE_STAGE_2_NONE,                \
 	.dstAccessMask = VK_ACCESS_2_NONE,                       \
-	.newLayout = VK_IMAGE_LAYOUT_GENERAL,                    \
+	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
+	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                    \
 	.srcQueueFamilyIndex = graphicsQueueIndex,               \
 	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,         \
 	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
-
 			pNodeCompositorData->framebuffers[i].releaseBarriers[0] = (VkImageMemoryBarrier2){
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pNodeCompositorData->framebuffers[i].color,
@@ -793,6 +811,7 @@ static void InterprocessServerAcceptNodeConnection()
 				.image = pNodeCompositorData->framebuffers[i].gBuffer,
 				RELEASE_BARRIER,
 			};
+#undef RELEASE_BARRIER
 		}
 	}
 

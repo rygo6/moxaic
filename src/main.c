@@ -23,6 +23,7 @@ bool isRunning = true;
 
 int main(void)
 {
+	// we should make this to some kind of tests class
 //	MxcSwapInfo info = {
 //		.yScale = MXC_SWAP_SCALE_FULL,
 //		.xScale = MXC_SWAP_SCALE_FULL,

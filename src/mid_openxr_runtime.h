@@ -796,7 +796,7 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 //
 //// MidOpenXR Math
 #define PI 3.14159265358979323846
-
+// I prolly just want to make a depenedency on mid math
 static inline XrQuaternionf xrRotFromMat4(XrMat4 m)
 {
 	XrQuaternionf q;

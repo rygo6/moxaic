@@ -362,16 +362,16 @@ run_loop:
 			if (nodeTimelineValue < 1)
 				continue;
 
-//			printf("signaled comp: %llu UPDATE_NODE_STATE\n", compositorBaseCycleValue);
+			auto pNodeCompositorData = &nodeCompositorData[nodeIndex];
 
 			// We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
-			memcpy(&nodeCompositorData[nodeIndex].rootPose, &pNodeShared->rootPose, sizeof(MidPose));
+			memcpy(&pNodeCompositorData->rootPose, &pNodeShared->rootPose, sizeof(MidPose));
 			//nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
 
 			// update node model mat... this should happen every frame so user can move it in comp
-			nodeCompositorData[nodeIndex].setState.model = Mat4FromPosRot(nodeCompositorData[nodeIndex].rootPose.position, nodeCompositorData[nodeIndex].rootPose.rotation);
+			pNodeCompositorData->setState.model = Mat4FromPosRot(pNodeCompositorData->rootPose.position, pNodeCompositorData->rootPose.rotation);
 
-			if (nodeTimelineValue <= nodeCompositorData[nodeIndex].lastTimelineValue)
+			if (nodeTimelineValue <= pNodeCompositorData->lastTimelineValue)
 				continue;
 
 			{  // Acquire new framebuffers from node
@@ -380,48 +380,50 @@ run_loop:
 				// the inverse of node timeline is the framebuffer index to display
 				// while the non-inverse is the framebuffer to be rendered into
 				// we want to keep this index a function of the timeline value to evade needing any other index list
-				if (nodeCompositorData[nodeIndex].lastTimelineValue > 0) {
-					uint8_t priorNodeFramebufferIndex = !(nodeCompositorData[nodeIndex].lastTimelineValue % VK_SWAP_COUNT);
-//					CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[nodeIndex].framebuffers[priorNodeFramebufferIndex].releaseBarriers);
+				if (pNodeCompositorData->lastTimelineValue > 0) {
+					uint8_t priorNodeFramebufferIndex = !(pNodeCompositorData->lastTimelineValue % VK_SWAP_COUNT);
+					auto pPriorFramebuffers = &pNodeCompositorData->framebuffers[priorNodeFramebufferIndex];
+					CmdPipelineImageBarriers2(cmd, COUNT(pPriorFramebuffers->releaseBarriers), pPriorFramebuffers->releaseBarriers);
 //					uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_SEQ_CST);
 //					assert(priorExchangedSwap);
 				}
 
 				uint8_t nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
-				CmdPipelineImageBarriers2(cmd, 3, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].acquireBarriers);
+				auto pFramebuffers = &pNodeCompositorData->framebuffers[nodeFramebufferIndex];
+				CmdPipelineImageBarriers2(cmd, COUNT(pFramebuffers->acquireBarriers), pFramebuffers->acquireBarriers);
 //				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
 //				assert(!exchangedSwap);
 
 				// These will end up being updated from a framebuffer pool so they need to be written each switch
 				VkWriteDescriptorSet writeSets[] = {
-					SET_WRITE_COMP_COLOR(nodeCompositorData[nodeIndex].set, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].colorView),
-					SET_WRITE_COMP_NORMAL(nodeCompositorData[nodeIndex].set, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].normalView),
-					SET_WRITE_COMP_GBUFFER(nodeCompositorData[nodeIndex].set, nodeCompositorData[nodeIndex].framebuffers[nodeFramebufferIndex].gBufferView),
+					SET_WRITE_COMP_COLOR(pNodeCompositorData->set, pFramebuffers->colorView),
+					SET_WRITE_COMP_NORMAL(pNodeCompositorData->set, pFramebuffers->normalView),
+					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pFramebuffers->gBufferView),
 				};
 				vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 			}
 
-			nodeCompositorData[nodeIndex].lastTimelineValue = nodeTimelineValue;
+			pNodeCompositorData->lastTimelineValue = nodeTimelineValue;
 
 			{  // Calc new node uniform and shared data
 
 				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
-				memcpy(&nodeCompositorData[nodeIndex].setState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
-				nodeCompositorData[nodeIndex].setState.ulUV = pNodeShared->ulScreenUV;
-				nodeCompositorData[nodeIndex].setState.lrUV = pNodeShared->lrScreenUV;
+				memcpy(&pNodeCompositorData->setState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
+				pNodeCompositorData->setState.ulUV = pNodeShared->ulScreenUV;
+				pNodeCompositorData->setState.lrUV = pNodeShared->lrScreenUV;
 
-				memcpy(nodeCompositorData[nodeIndex].pSetMapped, &nodeCompositorData[nodeIndex].setState, sizeof(MxcNodeCompositorSetState));
+				memcpy(pNodeCompositorData->pSetMapped, &pNodeCompositorData->setState, sizeof(MxcNodeCompositorSetState));
 
 				float radius = pNodeShared->compositorRadius;
 
 				vec4 ulbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
-				vec4 ulbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, ulbModel);
+				vec4 ulbWorld = Vec4MulMat4(pNodeCompositorData->setState.model, ulbModel);
 				vec4 ulbClip = Vec4MulMat4(globalSetState.view, ulbWorld);
 				vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulbClip));
 				vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
 
 				vec4 ulfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-				vec4 ulfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, ulfModel);
+				vec4 ulfWorld = Vec4MulMat4(pNodeCompositorData->setState.model, ulfModel);
 				vec4 ulfClip = Vec4MulMat4(globalSetState.view, ulfWorld);
 				vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, ulfClip));
 				vec2 ulfUV = Vec2Clamp(UVFromNDC(ulfNDC), 0.0f, 1.0f);
@@ -429,13 +431,13 @@ run_loop:
 				vec2 ulUV = Vec2Min(ulfUV, ulbUV);
 
 				vec4 lrbModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
-				vec4 lrbWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, lrbModel);
+				vec4 lrbWorld = Vec4MulMat4(pNodeCompositorData->setState.model, lrbModel);
 				vec4 lrbClip = Vec4MulMat4(globalSetState.view, lrbWorld);
 				vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrbClip));
 				vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
 
 				vec4 lrfModel = Vec4Rot(globalCameraPose.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
-				vec4 lrfWorld = Vec4MulMat4(nodeCompositorData[nodeIndex].setState.model, lrfModel);
+				vec4 lrfWorld = Vec4MulMat4(pNodeCompositorData->setState.model, lrfModel);
 				vec4 lrfClip = Vec4MulMat4(globalSetState.view, lrfWorld);
 				vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globalSetState.proj, lrfClip));
 				vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);
