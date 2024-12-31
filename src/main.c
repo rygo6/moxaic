@@ -23,6 +23,40 @@ bool isRunning = true;
 
 int main(void)
 {
+//	MxcSwapInfo info = {
+//		.yScale = MXC_SWAP_SCALE_FULL,
+//		.xScale = MXC_SWAP_SCALE_FULL,
+//		.type = MXC_SWAP_TYPE_SINGLE,
+//	};
+//
+//	swap_index_t swapsIndices[256];
+//	int index = 0;
+//	for (int i = 0; i < 260; ++i){
+//		printf("Trying claim %d\n", i);
+//		int newSwap = mxcClaimSwap(&info);
+//		if (newSwap != -1) {
+//			swapsIndices[index] = newSwap;
+//			index++;
+//		}
+//	}
+//
+//	for (int i = 10; i < 256; i += 8){
+//		printf("Trying release %d\n", i);
+//		mxcReleaseSwap(&info, swapsIndices[i]);
+//	}
+//
+//	index = 0;
+//	for (int i = 0; i < 260; ++i){
+//		printf("Trying claim %d\n", i);
+//		int newSwap = mxcClaimSwap(&info);
+//		if (newSwap != -1) {
+//			swapsIndices[index] = newSwap;
+//			index++;
+//		}
+//	}
+//
+//	return 0;
+
 	//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 	//    HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 	//    if (vulkanLibrary == NULL) {
@@ -120,7 +154,7 @@ int main(void)
 
 			// interprocess polling could be a different thread?
 			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
-			mxcInterprocessQueuePoll();
+			mxcIpcFuncQueuePoll();
 
 			// somewhere input state needs to be copied to a node and only update when it knows the node needs it
 			midUpdateWindowInput();

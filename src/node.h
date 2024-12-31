@@ -6,14 +6,10 @@
 #include <assert.h>
 
 #define WIN32_LEAN_AND_MEAN
-#define NOCOMM
-#define NOSERVICE
-#define NOCRYPT
-#define NOMCX
-#define NOGDI
 #include <windows.h>
 
 #include "mid_vulkan.h"
+#include "mid_bit.h"
 
 //
 /// Constants
@@ -49,33 +45,45 @@ typedef enum MxcNodeType {
 } MxcNodeType;
 
 typedef enum MxcSwapType {
-	MXC_SWAP_TYPE_MONO,
-	MXC_SWAP_TYPE_STEREO,
-	MXC_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
-	MXC_SWAP_TYPE_STEREO_DOUBLE_WIDE,
+	MXC_SWAP_TYPE_SINGLE,
+	MXC_SWAP_TYPE_TEXTURE_ARRAY,
+	MXC_SWAP_TYPE_DOUBLE_WIDE,
 	MXC_SWAP_TYPE_COUNT,
 } MxcSwapType;
+typedef enum MxcSwapUsage {
+	MXC_SWAP_USAGE_COLOR,
+	MXC_SWAP_USAGE_DEPTH,
+	MXC_SWAP_USAGE_COUNT,
+} MxcSwapUsage;
+typedef enum MxcSwapScale {
+	MXC_SWAP_SCALE_FULL,
+	MXC_SWAP_SCALE_HALF,
+	MXC_SWAP_SCALE_QUARTER,
+	MXC_SWAP_SCALE_COUNT,
+} MxcSwapScale;
 
 typedef struct MxcNodeShared {
 	// read/write every cycle
-
 	VkmGlobalSetState globalSetState;
-	// bounds?
 	vec2              ulScreenUV;
 	vec2              lrScreenUV;
 	uint64_t          timelineValue;
+
+	// I don't think I need this either?
 	MidPose           rootPose;
-	MidPose           cameraPos;
+
+	// I don't think I need this?
+	// should maybe in context?
 	MidCamera         camera;
 
-	bool swapClaimed[VK_SWAP_COUNT];
-
 	// read every cycle, occasional write
+	int      leftSwapIndex;
+	int      rightSwapIndex;
 	float    compositorRadius;
 	int      compositorCycleSkip;
 	uint64_t compositorBaseCycleValue;
 
-	MxcRingBuffer targetQueue;
+	MxcRingBuffer ipcFuncQueue;
 
 } MxcNodeShared;
 
@@ -86,14 +94,13 @@ typedef struct MxcImportParam {
 		HANDLE gbuffer;
 	} framebufferHandles[VK_SWAP_COUNT];
 
-//	HANDLE nodeFenceHandle;
 	HANDLE nodeTimelineHandle;
 	HANDLE compositorTimelineHandle;
 } MxcImportParam;
+
 typedef struct MxcExternalNodeMemory {
 	// these needs to turn into array so one process can share chunk of shared memory
 	// is that good for security though?
-
 	MxcNodeShared shared;
 	MxcImportParam importParam;
 } MxcExternalNodeMemory;
@@ -143,7 +150,9 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	MxcNodeCompositorSetState  setState;
 	MxcNodeCompositorSetState* pSetMapped;
 	VkDescriptorSet            set;
+
 	// should make them share buffer? probably
+//	VkSharedBuffer       SetBuffer;
 	VkBuffer       SetBuffer;
 	VkSharedMemory SetSharedMemory;
 
@@ -164,30 +173,29 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
 //
 /// Node Types
-typedef struct MxcNodeVkFramebufferTexture {
+typedef uint16_t swap_index_t;
+typedef struct MxcSwapInfo {
+	MxcSwapType  type   : 4;
+	MxcSwapUsage usage  : 4;
+	MxcSwapScale xScale : 4;
+	MxcSwapScale yScale : 4;
+} MxcSwapInfo;
+
+typedef struct MxcSwap {
+
 	VkDedicatedTexture color;
 	VkDedicatedTexture normal;
 	VkDedicatedTexture depth;
 	VkDedicatedTexture gbuffer;
+
 #if WIN32
 	VkWin32ExternalTexture colorExternal;
 	VkWin32ExternalTexture normalExternal;
 	VkWin32ExternalTexture depthExternal;
 	VkWin32ExternalTexture gbufferExternal;
 #endif
-} MxcNodeVkFramebufferTexture;
 
-typedef unsigned int GLuint;
-typedef struct MxcGlTexture {
-	GLuint memObject;
-	GLuint texture;
-} MxcGlTexture;
-typedef struct MxcNodeGlFramebufferTexture {
-	MxcGlTexture color;
-	MxcGlTexture normal;
-	MxcGlTexture depth;
-	MxcGlTexture gbuffer;
-} MxcNodeGlFramebufferTexture;
+} MxcSwap;
 
 typedef struct MxcNodeContext {
 	MxcNodeType type;
@@ -201,7 +209,7 @@ typedef struct MxcNodeContext {
 
 	// this should be a pool of swaps shared by all nodes
 	// unless it can import an image fast enough on the fly, maybe it can? CEF does
-	MxcNodeVkFramebufferTexture vkNodeFramebufferTextures[VK_SWAP_COUNT];
+	MxcSwap swaps[VK_SWAP_COUNT];
 
 	// I'm not actually 100% sure if I want this
 //	VkFence vkNodeFence;
@@ -223,16 +231,17 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-
-//typedef struct {
-//	bool occupied : 1;
-//} Slot;
 //
-//#define SWAP_POOL_MAX_SIZE 256
-//typedef struct MxcNodeSwapPool {
-//	Slot slots[SWAP_POOL_MAX_SIZE];
-//	MxcNodeVkFramebufferTexture texture;
-//} MxcNodeSwapPool;
+//// Swap Pool
+
+typedef bitset64_t swap_bitset_t;
+typedef struct MxcNodeSwapPool {
+	swap_bitset_t occupied;
+	swap_bitset_t created;
+	MxcSwap       swaps[BITNSIZE(swap_bitset_t)];
+} MxcNodeSwapPool;
+
+extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
 
 //
 //// Node State
@@ -250,11 +259,9 @@ extern size_t nodeCount;
 // Cold storage for all node data
 extern MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY];
 // Could be missing if node is external process
-extern MxcNodeShared nodesShared[MXC_NODE_CAPACITY];
+extern MxcNodeShared localNodesShared[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
-
-//MxcNodeSwapPool nodeSwapPool[MXC_SWAP_TYPE_COUNT];
 
 //
 //// Compositor State
@@ -308,64 +315,75 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
-void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, MxcNodeVkFramebufferTexture* pFramebufferTextures);
+void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap);
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
 void ReleaseNode(NodeHandle handle);
 
+static MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index)
+{
+	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+	assert(index < COUNT(pPool->swaps));
+	return &pPool->swaps[index];
+}
+
+static int mxcClaimSwap(const MxcSwapInfo* pInfo)
+{
+	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+
+	int i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
+	if (i == -1) {
+		LOG_ERROR("Ran out of occupied claiming swap!\n")
+		return -1;
+	}
+
+	BITSET(pPool->occupied, i);
+	printf("Claimed swap %d\n", i);
+
+	if (!BITTEST(pPool->created, i)) {
+		BITSET(pPool->created, i);
+		VkFramebufferTextureCreateInfo textureCreateInfo = {
+			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+			.locality = VK_LOCALITY_CONTEXT,
+		};
+//		mxcCreateSwap(pInfo, &textureCreateInfo, &pPool->swaps[i]);
+		printf("Created Swap. Index: %d Width: %d Height: %d\n", i, textureCreateInfo.extent.width, textureCreateInfo.extent.height);
+	}
+
+	return i;
+}
+
+static void mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index)
+{
+	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+	assert(index < COUNT(pPool->swaps));
+	BITCLEAR(pPool->occupied, index);
+	printf("Releasing swap %d\n", index);
+}
+
 //
-/// Process IPC
+/// Process Connection
 void mxcInitializeInterprocessServer();
 void mxcShutdownInterprocessServer();
 void mxcConnectInterprocessNode(bool createTestNode);
 void mxcShutdownInterprocessNode();
 
 //
-/// Process IPC Targets
-void mxcInterprocessTargetNodeClosed(const NodeHandle handle);
-
-typedef void (*MxcInterProcessFuncPtr)(const NodeHandle);
-typedef enum MxcInterprocessTarget {
+/// Process IPC Funcs
+typedef void (*MxcIpcFuncPtr)(const NodeHandle);
+typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_NODE_CLOSED,
+	MXC_INTERPROCESS_TARGET_CLAIM_SWAP,
 	MXC_INTERPROCESS_TARGET_COUNT,
-} MxcInterprocessTarget;
+} MxcIpcFunc;
 _Static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
-extern const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[];
+extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
-static inline int mxcInterprocessEnqueue(MxcRingBuffer* pBuffer, const MxcInterprocessTarget target)
-{
-	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	const MxcRingBufferHandle head = pBuffer->head;
-	const MxcRingBufferHandle tail = pBuffer->tail;
-	if (head + 1 == tail) {
-		fprintf(stderr, "Ring buffer wrapped!");
-		return 1;
-	}
-	pBuffer->targets[head] = target;
-	pBuffer->head = (head + 1) % MXC_RING_BUFFER_CAPACITY;
-	__atomic_thread_fence(__ATOMIC_RELEASE);
-	return 0;
-}
-static inline int mxcInterprocessDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle)
-{
-	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	const MxcRingBufferHandle head = pBuffer->head;
-	const MxcRingBufferHandle tail = pBuffer->tail;
-	if (head == tail)
-		return 1;
+int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, const MxcIpcFunc target);
+int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
 
-	printf("IPC Polling %d %d...\n", head, tail);
-	MxcInterprocessTarget target = (MxcInterprocessTarget)(pBuffer->targets[tail]);
-	pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
-	__atomic_thread_fence(__ATOMIC_RELEASE);
-
-	printf("Calling IPC Target %d...\n", target);
-	MXC_INTERPROCESS_TARGET_FUNC[target](nodeHandle);
-	return 0;
-}
-static inline void mxcInterprocessQueuePoll()
+static inline void mxcIpcFuncQueuePoll()
 {
-	for (int i = 0; i < nodeCount; ++i) {
-		mxcInterprocessDequeue(&activeNodesShared[i]->targetQueue, i);
-	}
+	for (int i = 0; i < nodeCount; ++i)
+		mxcIpcDequeue(&activeNodesShared[i]->ipcFuncQueue, i);
 }

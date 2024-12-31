@@ -11,6 +11,8 @@
 #include "test_node.h"
 #include "mid_vulkan.h"
 
+MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
+
 // Compositor and Node Process both use
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
 
@@ -21,7 +23,7 @@ MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY] = {};
 
 // Only used for local thread nodes. Node from other process will use shared memory.
 // Maybe I could just always make it use shared memory for consistency’s sake?
-MxcNodeShared nodesShared[MXC_NODE_CAPACITY] = {};
+MxcNodeShared localNodesShared[MXC_NODE_CAPACITY] = {};
 
 // Compositor state in Compositor Process
 MxcCompositorNodeContext compositorNodeContext = {};
@@ -65,8 +67,8 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 static NodeHandle RequestLocalNodeHandle()
 {
 	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
-	nodesShared[handle] = (MxcNodeShared){};
-	activeNodesShared[handle] = &nodesShared[handle];
+	localNodesShared[handle] = (MxcNodeShared){};
+	activeNodesShared[handle] = &localNodesShared[handle];
 	return handle;
 }
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
@@ -180,21 +182,21 @@ static int CleanupNode(NodeHandle handle)
 
 	// destroy images... this will eventually just return back to some pool
 	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-		vkDestroyImageView(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.view, VK_ALLOC);
-		vkDestroyImage(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.image, VK_ALLOC);
-		vkFreeMemory(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].color.memory, VK_ALLOC);
+		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].color.view, VK_ALLOC);
+		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].color.image, VK_ALLOC);
+		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].color.memory, VK_ALLOC);
 
-		vkDestroyImageView(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].normal.view, VK_ALLOC);
-		vkDestroyImage(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].normal.image, VK_ALLOC);
-		vkFreeMemory(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].normal.memory, VK_ALLOC);
+		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].normal.view, VK_ALLOC);
+		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].normal.image, VK_ALLOC);
+		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].normal.memory, VK_ALLOC);
 
-		vkDestroyImageView(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].depth.view, VK_ALLOC);
-		vkDestroyImage(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].depth.image, VK_ALLOC);
-		vkFreeMemory(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].depth.memory, VK_ALLOC);
+		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].depth.view, VK_ALLOC);
+		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].depth.image, VK_ALLOC);
+		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].depth.memory, VK_ALLOC);
 
-		vkDestroyImageView(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view, VK_ALLOC);
-		vkDestroyImage(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image, VK_ALLOC);
-		vkFreeMemory(vk.context.device, pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory, VK_ALLOC);
+		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].gbuffer.view, VK_ALLOC);
+		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].gbuffer.image, VK_ALLOC);
+		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].gbuffer.memory, VK_ALLOC);
 	}
 
 	return 0;
@@ -213,14 +215,15 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	// maybe have the thread allocate this and submit it once ready to get rid of < 1 check
 	// then could also get rid of pNodeContext->pNodeShared?
 	// no how would something on another process do that
-	MxcNodeShared* pNodeShared = &nodesShared[handle];
+	MxcNodeShared* pNodeShared = &localNodesShared[handle];
 	*pNodeShared = (MxcNodeShared){};
 	pNodeContext->pNodeShared = pNodeShared;
 	pNodeShared->rootPose.rotation = QuatFromEuler(pNodeShared->rootPose.euler);
-	pNodeShared->cameraPos.rotation = QuatFromEuler(pNodeShared->cameraPos.euler);
+
 	pNodeShared->camera.yFOV = 45.0f;
 	pNodeShared->camera.zNear = 0.1f;
 	pNodeShared->camera.zFar = 100.0f;
+
 	pNodeShared->compositorRadius = 0.5;
 	pNodeShared->compositorCycleSkip = 8;
 
@@ -255,7 +258,8 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 		.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 		.locality = VK_LOCALITY_CONTEXT,
 	};
-	mxcCreateNodeFramebuffer(&framebufferInfo, VK_SWAP_COUNT, pNodeContext->vkNodeFramebufferTextures);
+	for (int i = 0; i < VK_SWAP_COUNT; ++i)
+		mxcCreateSwap(NULL, &framebufferInfo, &pNodeContext->swaps[i]);
 
 	MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
 	// do not clear since set data is prealloced
@@ -263,12 +267,12 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].vkNodeFramebufferTextures[i].color.image;
-		pNodeCompositorData->framebuffers[i].normal = nodeContexts[handle].vkNodeFramebufferTextures[i].normal.image;
-		pNodeCompositorData->framebuffers[i].gBuffer = nodeContexts[handle].vkNodeFramebufferTextures[i].gbuffer.image;
-		pNodeCompositorData->framebuffers[i].colorView = nodeContexts[handle].vkNodeFramebufferTextures[i].color.view;
-		pNodeCompositorData->framebuffers[i].normalView = nodeContexts[handle].vkNodeFramebufferTextures[i].normal.view;
-		pNodeCompositorData->framebuffers[i].gBufferView = nodeContexts[handle].vkNodeFramebufferTextures[i].gbuffer.view;
+		pNodeCompositorData->framebuffers[i].color = nodeContexts[handle].swaps[i].color.image;
+		pNodeCompositorData->framebuffers[i].normal = nodeContexts[handle].swaps[i].normal.image;
+		pNodeCompositorData->framebuffers[i].gBuffer = nodeContexts[handle].swaps[i].gbuffer.image;
+		pNodeCompositorData->framebuffers[i].colorView = nodeContexts[handle].swaps[i].color.view;
+		pNodeCompositorData->framebuffers[i].normalView = nodeContexts[handle].swaps[i].normal.view;
+		pNodeCompositorData->framebuffers[i].gBufferView = nodeContexts[handle].swaps[i].gbuffer.view;
 		pNodeCompositorData->framebuffers[i].acquireBarriers[0] = (VkImageMemoryBarrier2){
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -420,7 +424,7 @@ void mxcCreateNodeRenderPass()
 	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
 }
 
-void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, MxcNodeVkFramebufferTexture* pFramebufferTextures)
+void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap)
 {
 #if defined(D3D11)
 	#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT
@@ -428,119 +432,120 @@ void mxcCreateNodeFramebuffer(const VkFramebufferTextureCreateInfo* pCreateInfo,
 	#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
 #endif
 
-	for (int swapIndex = 0; swapIndex < framebufferCount; ++swapIndex) {
-		{
-			VkImageCreateInfo info = {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = &(VkExternalMemoryImageCreateInfo){
-					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-					.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-				},
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
-				.extent = pCreateInfo->extent,
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
-			};
-			vkWin32CreateExternalTexture(&info, &pFramebufferTextures[swapIndex].colorExternal);
-			VkTextureCreateInfo textureInfo = {
-				.debugName = "ExportedColorFramebuffer",
-				.pImageCreateInfo = &info,
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.importHandle = pFramebufferTextures[swapIndex].colorExternal.handle,
-				.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-			};
-			vkCreateTexture(&textureInfo, &pFramebufferTextures[swapIndex].color);
-		}
-
-		{
-			VkImageCreateInfo info = {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = &(VkExternalMemoryImageCreateInfo){
-					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-					.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-				},
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
-				.extent = pCreateInfo->extent,
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
-			};
-			vkWin32CreateExternalTexture(&info, &pFramebufferTextures[swapIndex].normalExternal);
-			VkTextureCreateInfo textureInfo = {
-				.debugName = "ExportedNormalFramebuffer",
-				.pImageCreateInfo = &info,
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.importHandle = pFramebufferTextures[swapIndex].normalExternal.handle,
-				.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-			};
-			vkCreateTexture(&textureInfo, &pFramebufferTextures[swapIndex].normal);
-		}
-
-		{
-			VkImageCreateInfo info = {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = &(VkExternalMemoryImageCreateInfo){
-					.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-					.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-				},
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MXC_NODE_GBUFFER_FORMAT,
-				.extent = pCreateInfo->extent,
-				.mipLevels = MXC_NODE_GBUFFER_LEVELS,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MXC_NODE_GBUFFER_USAGE,
-			};
-			vkWin32CreateExternalTexture(&info, &pFramebufferTextures[swapIndex].gbufferExternal);
-			VkTextureCreateInfo textureInfo = {
-				.debugName = "ExportedGBufferFramebuffer",
-				.pImageCreateInfo = &info,
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.importHandle = pFramebufferTextures[swapIndex].gbufferExternal.handle,
-				.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-			};
-			vkCreateTexture(&textureInfo, &pFramebufferTextures[swapIndex].gbuffer);
-		}
-
-		// Depth is not shared over IPC but we probably want to at some point
-		if (pCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || pCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
-			// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
-			VkImageMemoryBarrier2 interProcessBarriers[] = {
-				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pFramebufferTextures[swapIndex].color.image),
-				VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pFramebufferTextures[swapIndex].normal.image),
-				VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pFramebufferTextures[swapIndex].gbuffer.image, 0, MXC_NODE_GBUFFER_LEVELS),
-			};
-			VK_DEVICE_FUNC(CmdPipelineBarrier2);
-			VkCommandBuffer cmd = midVkBeginImmediateTransferCommandBuffer();
-			CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
-			midVkEndImmediateTransferCommandBuffer(cmd);
-			continue;
-		}
-		VkTextureCreateInfo depthCreateInfo = {
-			.debugName = "ImportedDepthFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
-				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+	{
+		VkImageCreateInfo info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = &(VkExternalMemoryImageCreateInfo){
+				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
-			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-			.locality = VK_LOCALITY_CONTEXT,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+			.extent = pTextureCreateInfo->extent,
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
 		};
-		vkCreateTexture(&depthCreateInfo, &pFramebufferTextures[swapIndex].depth);
+		vkWin32CreateExternalTexture(&info, &pSwap->colorExternal);
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedColorFramebuffer",
+			.pImageCreateInfo = &info,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.importHandle = pSwap->colorExternal.handle,
+			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->color);
 	}
+
+	{
+		VkImageCreateInfo info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = &(VkExternalMemoryImageCreateInfo){
+				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			},
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+			.extent = pTextureCreateInfo->extent,
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+		};
+		vkWin32CreateExternalTexture(&info, &pSwap->normalExternal);
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedNormalFramebuffer",
+			.pImageCreateInfo = &info,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.importHandle = pSwap->normalExternal.handle,
+			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->normal);
+	}
+
+	{
+		VkImageCreateInfo info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = &(VkExternalMemoryImageCreateInfo){
+				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			},
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = MXC_NODE_GBUFFER_FORMAT,
+			.extent = pTextureCreateInfo->extent,
+			.mipLevels = MXC_NODE_GBUFFER_LEVELS,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = MXC_NODE_GBUFFER_USAGE,
+		};
+		vkWin32CreateExternalTexture(&info, &pSwap->gbufferExternal);
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedGBufferFramebuffer",
+			.pImageCreateInfo = &info,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.importHandle = pSwap->gbufferExternal.handle,
+			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->gbuffer);
+	}
+
+	// If exporting, transition to interprocess state and skip depth creation since depth is not sent over IPC currently
+	if (pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
+		// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
+		VkImageMemoryBarrier2 interProcessBarriers[] = {
+			VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pSwap->color.image),
+			VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pSwap->normal.image),
+			VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pSwap->gbuffer.image, 0, MXC_NODE_GBUFFER_LEVELS),
+		};
+		VK_DEVICE_FUNC(CmdPipelineBarrier2);
+		VkCommandBuffer cmd = midVkBeginImmediateTransferCommandBuffer();
+		CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
+		midVkEndImmediateTransferCommandBuffer(cmd);
+
+		return;
+	}
+
+	VkTextureCreateInfo depthCreateInfo = {
+		.debugName = "ImportedDepthFramebuffer",
+		.pImageCreateInfo = &(VkImageCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+		},
+		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+		.locality = VK_LOCALITY_CONTEXT,
+	};
+	vkCreateTexture(&depthCreateInfo, &pSwap->depth);
+
 }
 
 //
@@ -630,7 +635,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pImportParam = &pExternalNodeMemory->importParam;
 		pNodeShared = &pExternalNodeMemory->shared;
 		pNodeShared->rootPose.rotation = QuatFromEuler(pNodeShared->rootPose.euler);
-		pNodeShared->cameraPos.rotation = QuatFromEuler(pNodeShared->cameraPos.euler);
+
 		pNodeShared->camera.yFOV = 45.0f;
 		pNodeShared->camera.zNear = 0.1f;
 		pNodeShared->camera.zFar = 100.0f;
@@ -645,7 +650,7 @@ static void InterprocessServerAcceptNodeConnection()
 		*pNodeContext = (MxcNodeContext){};
 		pNodeContext->compositorTimeline = compositorNodeContext.compositorTimeline;
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED;
-		pNodeContext->swapType = MXC_SWAP_TYPE_STEREO;
+		pNodeContext->swapType = MXC_SWAP_TYPE_SINGLE;
 		pNodeContext->processId = nodeProcessId;
 		pNodeContext->processHandle = nodeProcessHandle;
 		pNodeContext->exportedExternalMemoryHandle = externalNodeMemoryHandle;
@@ -666,22 +671,23 @@ static void InterprocessServerAcceptNodeConnection()
 
 		// we aren't going to make framebuffers here, it needs to first extablish with the app to know what cateogry of framebuffer to make
 		switch (pNodeContext->swapType) {
-			case MXC_SWAP_TYPE_MONO:                 break;
-			case MXC_SWAP_TYPE_STEREO:               {
+			case MXC_SWAP_TYPE_SINGLE:               {
 				VkFramebufferTextureCreateInfo framebufferInfo = {
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 					.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 				};
-				mxcCreateNodeFramebuffer(&framebufferInfo, VK_SWAP_COUNT, pNodeContext->vkNodeFramebufferTextures);
+				for (int i = 0; i < VK_SWAP_COUNT; ++i)
+					mxcCreateSwap(NULL, &framebufferInfo, &pNodeContext->swaps[i]);
 				break;
 			}
-			case MXC_SWAP_TYPE_STEREO_TEXTURE_ARRAY: break;
-			case MXC_SWAP_TYPE_STEREO_DOUBLE_WIDE:   {
+			case MXC_SWAP_TYPE_TEXTURE_ARRAY: break;
+			case MXC_SWAP_TYPE_DOUBLE_WIDE:   {
 				VkFramebufferTextureCreateInfo framebufferInfo = {
 					.extent = {DEFAULT_WIDTH * 2, DEFAULT_HEIGHT, 1},
 					.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 				};
-				mxcCreateNodeFramebuffer(&framebufferInfo, VK_SWAP_COUNT, pNodeContext->vkNodeFramebufferTextures);
+				for (int i = 0; i < VK_SWAP_COUNT; ++i)
+					mxcCreateSwap(NULL, &framebufferInfo, &pNodeContext->swaps[i]);
 				break;
 				}
 			default: PANIC("Swap Type not supported.");
@@ -690,17 +696,17 @@ static void InterprocessServerAcceptNodeConnection()
 		const HANDLE currentHandle = GetCurrentProcess();
 		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 			WIN32_CHECK(DuplicateHandle(
-						  currentHandle, pNodeContext->vkNodeFramebufferTextures[i].colorExternal.handle,
+						  currentHandle, pNodeContext->swaps[i].colorExternal.handle,
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].color,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate glColor handle fail");
 			WIN32_CHECK(DuplicateHandle(
-						  currentHandle, pNodeContext->vkNodeFramebufferTextures[i].normalExternal.handle,
+						  currentHandle, pNodeContext->swaps[i].normalExternal.handle,
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].normal,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate normal handle fail.");
 			WIN32_CHECK(DuplicateHandle(
-						  currentHandle, pNodeContext->vkNodeFramebufferTextures[i].gbufferExternal.handle,
+						  currentHandle, pNodeContext->swaps[i].gbufferExternal.handle,
 						  nodeProcessHandle, &pImportParam->framebufferHandles[i].gbuffer,
 						  0, false, DUPLICATE_SAME_ACCESS),
 					  "Duplicate gbuffer handle fail.");
@@ -727,12 +733,12 @@ static void InterprocessServerAcceptNodeConnection()
 
 		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 
-			pNodeCompositorData->framebuffers[i].color = pNodeContext->vkNodeFramebufferTextures[i].color.image;
-			pNodeCompositorData->framebuffers[i].normal = pNodeContext->vkNodeFramebufferTextures[i].normal.image;
-			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image;
-			pNodeCompositorData->framebuffers[i].colorView = pNodeContext->vkNodeFramebufferTextures[i].color.view;
-			pNodeCompositorData->framebuffers[i].normalView = pNodeContext->vkNodeFramebufferTextures[i].normal.view;
-			pNodeCompositorData->framebuffers[i].gBufferView = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view;
+			pNodeCompositorData->framebuffers[i].color = pNodeContext->swaps[i].color.image;
+			pNodeCompositorData->framebuffers[i].normal = pNodeContext->swaps[i].normal.image;
+			pNodeCompositorData->framebuffers[i].gBuffer = pNodeContext->swaps[i].gbuffer.image;
+			pNodeCompositorData->framebuffers[i].colorView = pNodeContext->swaps[i].color.view;
+			pNodeCompositorData->framebuffers[i].normalView = pNodeContext->swaps[i].normal.view;
+			pNodeCompositorData->framebuffers[i].gBufferView = pNodeContext->swaps[i].gbuffer.view;
 
 #define ACQUIRE_BARRIER                                      \
 	.srcStageMask = VK_PIPELINE_STAGE_2_NONE,                \
@@ -990,7 +996,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 		vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
-		MxcNodeVkFramebufferTexture* pFramebufferTextures = pNodeContext->vkNodeFramebufferTextures;
+		MxcSwap* pFramebufferTextures = pNodeContext->swaps;
 		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 			VkTextureCreateInfo colorCreateInfo = {
 				.debugName = "ImportedColorFramebuffer",
@@ -1089,16 +1095,71 @@ void mxcShutdownInterprocessNode()
 {
 	for (int i = 0; i < nodeCount; ++i) {
 		// make another queue to evade ptr?
-		mxcInterprocessEnqueue(&activeNodesShared[i]->targetQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
+		mxcIpcFuncEnqueue(&activeNodesShared[i]->ipcFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 	}
 }
 
-void mxcInterprocessTargetNodeClosed(const NodeHandle handle)
+//
+//// IPC
+
+int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, const MxcIpcFunc target)
+{
+	__atomic_thread_fence(__ATOMIC_ACQUIRE);
+	const MxcRingBufferHandle head = pBuffer->head;
+	const MxcRingBufferHandle tail = pBuffer->tail;
+	if (head + 1 == tail) {
+		fprintf(stderr, "Ring buffer wrapped!");
+		return 1;
+	}
+	pBuffer->targets[head] = target;
+	pBuffer->head = (head + 1) % MXC_RING_BUFFER_CAPACITY;
+	__atomic_thread_fence(__ATOMIC_RELEASE);
+	return 0;
+}
+
+int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle)
+{
+	__atomic_thread_fence(__ATOMIC_ACQUIRE);
+	const MxcRingBufferHandle head = pBuffer->head;
+	const MxcRingBufferHandle tail = pBuffer->tail;
+	if (head == tail)
+		return 1;
+
+	printf("IPC Polling %d %d...\n", head, tail);
+	MxcIpcFunc target = (MxcIpcFunc)(pBuffer->targets[tail]);
+	pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
+	__atomic_thread_fence(__ATOMIC_RELEASE);
+
+	printf("Calling IPC Target %d...\n", target);
+	MXC_IPC_FUNCS[target](nodeHandle);
+	return 0;
+}
+
+static void ipcFuncNodeClosed(const NodeHandle handle)
 {
 	printf("Closing %d\n", handle);
 	CleanupNode(handle);
 }
+static void ipcFuncClaimSwap(const NodeHandle handle)
+{
+	printf("Claiming swap for %d\n", handle);
 
-const MxcInterProcessFuncPtr MXC_INTERPROCESS_TARGET_FUNC[] = {
-	[MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcInterProcessFuncPtr const)mxcInterprocessTargetNodeClosed,
+	MxcNodeContext* pNodeContext = &nodeContexts[handle];
+	MxcNodeShared* pNodeShared = activeNodesShared[handle];
+
+	MxcSwapInfo info = {
+		.yScale = MXC_SWAP_SCALE_FULL,
+		.xScale = MXC_SWAP_SCALE_FULL,
+		.type = MXC_SWAP_TYPE_SINGLE,
+	};
+	int newSwap = mxcClaimSwap(&info);
+//	if (newSwap != -1) {
+//		pNodeContext->pExportedExternalMemory->importParam.
+//
+//	}
+}
+const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
+	[MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcIpcFuncPtr const)ipcFuncNodeClosed,
+	[MXC_INTERPROCESS_TARGET_CLAIM_SWAP] = (MxcIpcFuncPtr const)ipcFuncClaimSwap,
 };
+

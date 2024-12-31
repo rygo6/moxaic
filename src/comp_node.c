@@ -316,7 +316,7 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 
 	// just making sure atomics are only using barriers, not locks
 	for (int i = 0; i < nodeCount; ++i) {
-		assert(__atomic_always_lock_free(sizeof(nodesShared[i].timelineValue), &nodesShared[i].timelineValue));
+		assert(__atomic_always_lock_free(sizeof(localNodesShared[i].timelineValue), &localNodesShared[i].timelineValue));
 	}
 
 	// very common ones should be global to potentially share higher level cache
@@ -445,7 +445,6 @@ run_loop:
 				vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 
 				// maybe I should only copy camera pos info and generate matrix on other thread? oxr only wants the pose
-				pNodeShared->cameraPos = globalCameraPose;
 				pNodeShared->camera = globalCamera;
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShared->globalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));

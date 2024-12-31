@@ -79,14 +79,14 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 		VkImageView gBufferView;
 	} framebufferImages[VK_SWAP_COUNT];
 	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-		framebufferImages[i].color = pNodeContext->vkNodeFramebufferTextures[i].color.image;
-		framebufferImages[i].normal = pNodeContext->vkNodeFramebufferTextures[i].normal.image;
-		framebufferImages[i].gBuffer = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.image;
-		framebufferImages[i].depth = pNodeContext->vkNodeFramebufferTextures[i].depth.image;
-		framebufferImages[i].colorView = pNodeContext->vkNodeFramebufferTextures[i].color.view;
-		framebufferImages[i].normalView = pNodeContext->vkNodeFramebufferTextures[i].normal.view;
-		framebufferImages[i].depthView = pNodeContext->vkNodeFramebufferTextures[i].depth.view;
-		framebufferImages[i].gBufferView = pNodeContext->vkNodeFramebufferTextures[i].gbuffer.view;
+		framebufferImages[i].color = pNodeContext->swaps[i].color.image;
+		framebufferImages[i].normal = pNodeContext->swaps[i].normal.image;
+		framebufferImages[i].gBuffer = pNodeContext->swaps[i].gbuffer.image;
+		framebufferImages[i].depth = pNodeContext->swaps[i].depth.image;
+		framebufferImages[i].colorView = pNodeContext->swaps[i].color.view;
+		framebufferImages[i].normalView = pNodeContext->swaps[i].normal.view;
+		framebufferImages[i].depthView = pNodeContext->swaps[i].depth.view;
+		framebufferImages[i].gBufferView = pNodeContext->swaps[i].gbuffer.view;
 	}
 	VkImageView gBufferMipViews[VK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 	memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
@@ -481,7 +481,7 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 			for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
 				VkImageViewCreateInfo imageViewCreateInfo = {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-					.image = pTestNodeContext->vkNodeFramebufferTextures[bufferIndex].gbuffer.image,
+					.image = pTestNodeContext->swaps[bufferIndex].gbuffer.image,
 					.viewType = VK_IMAGE_VIEW_TYPE_2D,
 					.format = MXC_NODE_GBUFFER_FORMAT,
 					.subresourceRange = {

@@ -271,6 +271,7 @@ typedef struct VkMesh {
 
 typedef struct VkFramebufferTexture {
 	VkDedicatedTexture color;
+	// do I need normal?
 	VkDedicatedTexture normal;
 	VkDedicatedTexture depth;
 } VkFramebufferTexture;

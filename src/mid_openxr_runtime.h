@@ -476,7 +476,7 @@ typedef struct Space {
 POOL(Space, XR_MAX_SPACE_COUNT)
 
 typedef struct Swapchain {
-	// we should replace XrHandle pointers with uint16_t handle offsets
+	// we should replace XrHandle pointers with uint16_t handle offsets maybe?
 	XrSession session;
 
 	uint8_t swapIndex;
@@ -487,8 +487,8 @@ typedef struct Swapchain {
 		} gl;
 		struct {
 			ID3D11Texture2D* texture;
-			IDXGIKeyedMutex* keyedMutex;
-			ID3D11RenderTargetView* rtView;
+//			IDXGIKeyedMutex* keyedMutex;
+//			ID3D11RenderTargetView* rtView;
 		} d3d11;
 	} color[XR_SWAP_COUNT];
 
@@ -657,7 +657,7 @@ static void LogWin32Error(HRESULT err)
 #endif
 #endif
 
-#define XR_EXPORT XRAPI_ATTR XrResult XRAPI_CALL
+#define XR_PROC XRAPI_ATTR XrResult XRAPI_CALL
 
 //
 //// Mid OpenXR Utility
@@ -740,6 +740,7 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 
 STRING_ENUM_TYPE(XrReferenceSpaceType)
 STRING_ENUM_TYPE(XrViewConfigurationType)
+STRING_ENUM_TYPE(XrVisibilityMaskTypeKHR)
 
 #undef ENUM_NAME_CASE
 #undef STRING_ENUM_TYPE
@@ -757,10 +758,32 @@ static const char* string_XrStructureType(XrStructureType type)
 }
 #undef PRINT_STRUCT_TYPE_NAME
 
-#define FORMAT_QUAT     "{x: %.3f, y: %.3f, z: %.3f, w: %.3f}"
-#define EXPAND_QUAT(_q) _q.x, _q.y, _q.z, _q.w
-#define FORMAT_VEC3     "{x: %.3f, y: %.3f, z: %.3f}"
-#define EXPAND_VEC3(_q) _q.x, _q.y, _q.z
+
+#define STR(s) #s
+#define XSTR(s) STR(s)
+#define DOT(_) ._
+#define COMMA ,
+
+#define FORMAT_F(_) _: %.3f
+#define BRACES(_, _f) { _(_f) }
+#define LIST_STRUCT(_) XR_LIST_STRUCT_##_
+#define FORMAT_STRUCT_F(_) "%s: " XSTR(BRACES(LIST_STRUCT(_), FORMAT_F))
+
+// do I want to do this? maybe
+#define format_XrQuaternionf FORMAT_STRUCT_F(XrQuaternionf)
+#define expand_XrQuaternionf(_) #_ XR_LIST_STRUCT_XrQuaternionf(COMMA _ DOT)
+
+
+//#define FORMAT_QUAT_F     "{x: %.3f, y: %.3f, z: %.3f, w: %.3f}"
+//#define EXPAND_QUAT(_v)   _v.x, _v.y, _v.z, _v.w
+#define FORMAT_VEC3_F     "{x: %.3f, y: %.3f, z: %.3f}"
+#define EXPAND_VEC3(_v)   _v.x, _v.y, _v.z
+#define FORMAT_OFFSET_I   "{x: %d, y: %d}"
+#define EXPAND_OFFSET(_o) _o.x, _o.y
+#define FORMAT_EXTENT_I   "{width: %d, height: %d}"
+#define EXPAND_EXTENT(_e) _e.width, _e.height
+#define FORMAT_RECT_I     FORMAT_OFFSET_I FORMAT_EXTENT_I
+#define EXPAND_RECT(_r)   EXPAND_OFFSET(_r.offset), EXPAND_EXTENT(_r.extent)
 
 static void LogNextChain(const XrBaseInStructure* nextProperties)
 {
@@ -1050,7 +1073,7 @@ static XrResult InitStandardBindings(XrInstance instance)
 #undef BINDING_DEFINITION
 }
 
-XR_EXPORT xrEnumerateApiLayerProperties(
+XR_PROC xrEnumerateApiLayerProperties(
 	uint32_t              propertyCapacityInput,
 	uint32_t*             propertyCountOutput,
 	XrApiLayerProperties* properties)
@@ -1059,7 +1082,7 @@ XR_EXPORT xrEnumerateApiLayerProperties(
 	return XR_SUCCESS;
 }
 
-XR_EXPORT xrEnumerateInstanceExtensionProperties(
+XR_PROC xrEnumerateInstanceExtensionProperties(
 	const char*            layerName,
 	uint32_t               propertyCapacityInput,
 	uint32_t*              propertyCountOutput,
@@ -1080,12 +1103,18 @@ XR_EXPORT xrEnumerateInstanceExtensionProperties(
 			.extensionVersion = XR_KHR_D3D11_enable_SPEC_VERSION,
 		},
 
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_META_RECOMMENDED_LAYER_RESOLUTION_EXTENSION_NAME,
+			.extensionVersion = XR_META_recommended_layer_resolution_SPEC_VERSION,
+		},
+
 		// expected by unity
-//		{
-//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-//			.extensionName = XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
-//			.extensionVersion = XR_KHR_visibility_mask_SPEC_VERSION,
-//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_visibility_mask_SPEC_VERSION,
+		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
@@ -1101,11 +1130,11 @@ XR_EXPORT xrEnumerateInstanceExtensionProperties(
 //			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
 //			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
 //		},
-//		{
-//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-//			.extensionName = XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
-//			.extensionVersion = XR_VARJO_quad_views_SPEC_VERSION,
-//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
+			.extensionVersion = XR_VARJO_quad_views_SPEC_VERSION,
+		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
 			.extensionName = XR_MSFT_SECONDARY_VIEW_CONFIGURATION_EXTENSION_NAME,
@@ -1182,7 +1211,7 @@ static struct {
 	PFNGLTEXTURESTORAGEMEM2DEXTPROC     TextureStorageMem2DEXT;
 } gl;
 
-XR_EXPORT xrCreateInstance(
+XR_PROC xrCreateInstance(
 	const XrInstanceCreateInfo* createInfo,
 	XrInstance*                 instance)
 {
@@ -1245,21 +1274,17 @@ XR_EXPORT xrCreateInstance(
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
-			if (!gl.CreateMemoryObjectsEXT) {
-				printf("Failed to load glCreateMemoryObjectsEXT\n");
-			}
+			if (!gl.CreateMemoryObjectsEXT)
+				LOG_ERROR("Failed to load glCreateMemoryObjectsEXT\n");
 			gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
-			if (!gl.ImportMemoryWin32HandleEXT) {
-				printf("Failed to load glImportMemoryWin32HandleEXT\n");
-			}
+			if (!gl.ImportMemoryWin32HandleEXT)
+				LOG_ERROR("Failed to load glImportMemoryWin32HandleEXT\n");
 			gl.CreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
-			if (!gl.CreateTextures) {
-				printf("Failed to load glCreateTextures\n");
-			}
+			if (!gl.CreateTextures)
+				LOG_ERROR("Failed to load glCreateTextures\n");
 			gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
-			if (!gl.TextureStorageMem2DEXT) {
-				printf("Failed to load glTextureStorageMem2DEXT\n");
-			}
+			if (!gl.TextureStorageMem2DEXT)
+				LOG_ERROR("Failed to load glTextureStorageMem2DEXT\n");
 			return XR_SUCCESS;
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
@@ -1273,7 +1298,7 @@ XR_EXPORT xrCreateInstance(
 	}
 }
 
-XR_EXPORT xrDestroyInstance(
+XR_PROC xrDestroyInstance(
 	XrInstance instance)
 {
 	LOG_METHOD(xrDestroyInstance);
@@ -1283,7 +1308,7 @@ XR_EXPORT xrDestroyInstance(
 	return XR_SUCCESS;
 }
 
-XR_EXPORT xrGetInstanceProperties(
+XR_PROC xrGetInstanceProperties(
 	XrInstance            instance,
 	XrInstanceProperties* instanceProperties)
 {
@@ -1310,7 +1335,7 @@ XR_EXPORT xrGetInstanceProperties(
 
 STRING_ENUM_METHOD(XrSessionState)
 
-XR_EXPORT xrPollEvent(
+XR_PROC xrPollEvent(
 	XrInstance         instance,
 	XrEventDataBuffer* eventData)
 {
@@ -1501,7 +1526,7 @@ XR_EXPORT xrPollEvent(
 #define TRANSFER_ENUM_NAME(_type, _) \
 	case _type: strncpy(buffer, #_type, XR_MAX_RESULT_STRING_SIZE); break;
 
-XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(
+XR_PROC xrResultToString(
 	XrInstance instance,
 	XrResult   value,
 	char       buffer[XR_MAX_RESULT_STRING_SIZE])
@@ -1517,7 +1542,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrResultToString(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrStructureTypeToString(
+XR_PROC xrStructureTypeToString(
 	XrInstance      instance,
 	XrStructureType value,
 	char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
@@ -1538,7 +1563,7 @@ typedef enum SystemId {
 	SYSTEM_ID_HMD_VR_STEREO = 2,
 	SYSTEM_ID_COUNT,
 } SystemId;
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
+XR_PROC xrGetSystem(
 	XrInstance             instance,
 	const XrSystemGetInfo* getInfo,
 	XrSystemId*            systemId)
@@ -1566,7 +1591,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(
 	}
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
+XR_PROC xrGetSystemProperties(
 	XrInstance          instance,
 	XrSystemId          systemId,
 	XrSystemProperties* properties)
@@ -1600,7 +1625,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
 	}
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
+XR_PROC xrEnumerateEnvironmentBlendModes(
 	XrInstance              instance,
 	XrSystemId              systemId,
 	XrViewConfigurationType viewConfigurationType,
@@ -1641,7 +1666,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
+XR_PROC xrCreateSession(
 	XrInstance                 instance,
 	const XrSessionCreateInfo* createInfo,
 	XrSession*                 session)
@@ -1795,7 +1820,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSession(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroySession(
+XR_PROC xrDestroySession(
 	XrSession session)
 {
 	LOG_METHOD(xrDestroySession);
@@ -1810,7 +1835,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySession(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
+XR_PROC xrEnumerateReferenceSpaces(
 	XrSession             session,
 	uint32_t              spaceCapacityInput,
 	uint32_t*             spaceCountOutput,
@@ -1843,15 +1868,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateReferenceSpaces(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
+XR_PROC xrCreateReferenceSpace(
 	XrSession                         session,
 	const XrReferenceSpaceCreateInfo* createInfo,
 	XrSpace*                          space)
 {
-	LOG("xrCreateReferenceSpace %s pos: " FORMAT_VEC3 " rot: " FORMAT_QUAT "\n",
+	LOG("xrCreateReferenceSpace %s pos: " FORMAT_VEC3_F format_XrQuaternionf "\n",
 		string_XrReferenceSpaceType(createInfo->referenceSpaceType),
 		EXPAND_VEC3(createInfo->poseInReferenceSpace.position),
-		EXPAND_QUAT(createInfo->poseInReferenceSpace.orientation));
+		expand_XrQuaternionf(createInfo->poseInReferenceSpace.orientation));
 
 	Session* pSession = (Session*)session;
 
@@ -1872,7 +1897,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
+XR_PROC xrGetReferenceSpaceBoundsRect(
 	XrSession            session,
 	XrReferenceSpaceType referenceSpaceType,
 	XrExtent2Df*         bounds)
@@ -1890,7 +1915,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 	return XR_SUCCESS;
 }
 
-//XRAPI_ATTR XrResult XRAPI_CALL xrSetReferenceSpaceBoundsRect(
+//XR_PROC xrSetReferenceSpaceBoundsRect(
 //	XrSession            session,
 //	XrReferenceSpaceType referenceSpaceType,
 //	XrExtent2Df          bounds)
@@ -1898,7 +1923,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetReferenceSpaceBoundsRect(
 //	return XR_SUCCESS;
 //}
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
+XR_PROC xrCreateActionSpace(
 	XrSession                      session,
 	const XrActionSpaceCreateInfo* createInfo,
 	XrSpace*                       space)
@@ -1916,7 +1941,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSpace(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(
+XR_PROC xrLocateSpace(
 	XrSpace          space,
 	XrSpace          baseSpace,
 	XrTime           time,
@@ -1966,7 +1991,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSpace(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpace(
+XR_PROC xrDestroySpace(
 	XrSpace space)
 {
 	LOG_METHOD(xrDestroySpace);
@@ -1974,7 +1999,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpace(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurations(
+XR_PROC xrEnumerateViewConfigurations(
 	XrInstance               instance,
 	XrSystemId               systemId,
 	uint32_t                 viewConfigurationTypeCapacityInput,
@@ -2020,7 +2045,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurations(
 #undef TRANSFER_MODES
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetViewConfigurationProperties(
+XR_PROC xrGetViewConfigurationProperties(
 	XrInstance                     instance,
 	XrSystemId                     systemId,
 	XrViewConfigurationType        viewConfigurationType,
@@ -2057,7 +2082,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetViewConfigurationProperties(
 	}
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
+XR_PROC xrEnumerateViewConfigurationViews(
 	XrInstance               instance,
 	XrSystemId               systemId,
 	XrViewConfigurationType  viewConfigurationType,
@@ -2117,7 +2142,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateViewConfigurationViews(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
+XR_PROC xrEnumerateSwapchainFormats(
 	XrSession session,
 	uint32_t  formatCapacityInput,
 	uint32_t* formatCountOutput,
@@ -2172,7 +2197,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainFormats(
 #undef TRANSFER_SWAP_FORMATS
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
+XR_PROC xrCreateSwapchain(
 	XrSession                    session,
 	const XrSwapchainCreateInfo* createInfo,
 	XrSwapchain*                 swapchain)
@@ -2284,7 +2309,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSwapchain(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroySwapchain(
+XR_PROC xrDestroySwapchain(
 	XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
@@ -2292,7 +2317,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySwapchain(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
+XR_PROC xrEnumerateSwapchainImages(
 	XrSwapchain                 swapchain,
 	uint32_t                    imageCapacityInput,
 	uint32_t*                   imageCountOutput,
@@ -2301,6 +2326,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 	LOG_METHOD_ONCE(xrEnumerateSwapchainImages);
 
 	*imageCountOutput = XR_SWAP_COUNT;
+
 	if (images == NULL)
 		return XR_SUCCESS;
 
@@ -2340,7 +2366,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSwapchainImages(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
+XR_PROC xrAcquireSwapchainImage(
 	XrSwapchain                        swapchain,
 	const XrSwapchainImageAcquireInfo* acquireInfo,
 	uint32_t*                          index)
@@ -2360,7 +2386,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSwapchainImage(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
+XR_PROC xrWaitSwapchainImage(
 	XrSwapchain                     swapchain,
 	const XrSwapchainImageWaitInfo* waitInfo)
 {
@@ -2386,7 +2412,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitSwapchainImage(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
+XR_PROC xrReleaseSwapchainImage(
 	XrSwapchain                        swapchain,
 	const XrSwapchainImageReleaseInfo* releaseInfo)
 {
@@ -2414,7 +2440,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSwapchainImage(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
+XR_PROC xrBeginSession(
 	XrSession                 session,
 	const XrSessionBeginInfo* beginInfo)
 {
@@ -2461,7 +2487,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginSession(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEndSession(
+XR_PROC xrEndSession(
 	XrSession session)
 {
 	LOG_METHOD(xrEndSession);
@@ -2484,7 +2510,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndSession(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrRequestExitSession(
+XR_PROC xrRequestExitSession(
 	XrSession session)
 {
 	LOG_METHOD(xrRequestExitSession);
@@ -2502,7 +2528,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrRequestExitSession(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
+XR_PROC xrWaitFrame(
 	XrSession              session,
 	const XrFrameWaitInfo* frameWaitInfo,
 	XrFrameState*          frameState)
@@ -2590,7 +2616,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrWaitFrame(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
+XR_PROC xrBeginFrame(
 	XrSession               session,
 	const XrFrameBeginInfo* frameBeginInfo)
 {
@@ -2628,7 +2654,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrBeginFrame(
 	return discardFrame ? XR_FRAME_DISCARDED : XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
+XR_PROC xrEndFrame(
 	XrSession             session,
 	const XrFrameEndInfo* frameEndInfo)
 {
@@ -2673,25 +2699,19 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 
 		switch (frameEndInfo->layers[layer]->type) {
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
-				XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
+				auto pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
 				assert(pProjectionLayer->viewCount == 2);
 
 				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
-					switch (pProjectionLayer->views[layer].type) {
-						case XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW: {
-							break;
-						}
-						default: {
-							LOG_ERROR("Unknown Composition Layer View %d", pProjectionLayer->views[layer].type);
-							break;
-						}
-					}
+					auto pView = &pProjectionLayer->views[view];
+					assert(pView->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW);
+//					printf("subImage %d " FORMAT_RECT_I "\n", pView->subImage.imageArrayIndex, EXPAND_RECT(pView->subImage.imageRect));
 				}
 
 				break;
 			}
 			case XR_TYPE_COMPOSITION_LAYER_QUAD: {
-				printf("XR_TYPE_COMPOSITION_LAYER_QUAD");
+				LOG("XR_TYPE_COMPOSITION_LAYER_QUAD");
 			}
 			default: {
 				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
@@ -2787,7 +2807,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEndFrame(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
+XR_PROC xrLocateViews(
 	XrSession               session,
 	const XrViewLocateInfo* viewLocateInfo,
 	XrViewState*            viewState,
@@ -2893,7 +2913,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateViews(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
+XR_PROC xrStringToPath(
 	XrInstance  instance,
 	const char* pathString,
 	XrPath*     path)
@@ -2927,7 +2947,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStringToPath(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
+XR_PROC xrPathToString(
 	XrInstance instance,
 	XrPath     path,
 	uint32_t   bufferCapacityInput,
@@ -2945,7 +2965,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPathToString(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
+XR_PROC xrCreateActionSet(
 	XrInstance                   instance,
 	const XrActionSetCreateInfo* createInfo,
 	XrActionSet*                 actionSet)
@@ -2971,7 +2991,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateActionSet(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroyActionSet(
+XR_PROC xrDestroyActionSet(
 	XrActionSet actionSet)
 {
 	LOG_METHOD(xrDestroyActionSet);
@@ -2979,7 +2999,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyActionSet(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
+XR_PROC xrCreateAction(
 	XrActionSet               actionSet,
 	const XrActionCreateInfo* createInfo,
 	XrAction*                 action)
@@ -3026,7 +3046,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateAction(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroyAction(
+XR_PROC xrDestroyAction(
 	XrAction action)
 {
 	LOG_METHOD(xrDestroyAction);
@@ -3047,7 +3067,7 @@ static int CompareSubPath(const char* pSubPath, const char* pPath)
 
 	return 0;
 }
-XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
+XR_PROC xrSuggestInteractionProfileBindings(
 	XrInstance                                  instance,
 	const XrInteractionProfileSuggestedBinding* suggestedBindings)
 {
@@ -3107,7 +3127,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSuggestInteractionProfileBindings(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
+XR_PROC xrAttachSessionActionSets(
 	XrSession                            session,
 	const XrSessionActionSetsAttachInfo* attachInfo)
 {
@@ -3147,7 +3167,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrAttachSessionActionSets(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
+XR_PROC xrGetCurrentInteractionProfile(
 	XrSession                  session,
 	XrPath                     topLevelUserPath,
 	XrInteractionProfileState* interactionProfile)
@@ -3170,7 +3190,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetCurrentInteractionProfile(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateBoolean(
+XR_PROC xrGetActionStateBoolean(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateBoolean*       state)
@@ -3193,7 +3213,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateBoolean(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
+XR_PROC xrGetActionStateFloat(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state)
@@ -3236,7 +3256,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateFloat(
 	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(
+XR_PROC xrGetActionStateVector2f(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateVector2f*      state)
@@ -3246,7 +3266,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStateVector2f(
 	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(
+XR_PROC xrGetActionStatePose(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStatePose*          state)
@@ -3256,7 +3276,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetActionStatePose(
 	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
+XR_PROC xrSyncActions(
 	XrSession                session,
 	const XrActionsSyncInfo* syncInfo)
 {
@@ -3315,7 +3335,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSyncActions(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateBoundSourcesForAction(
+XR_PROC xrEnumerateBoundSourcesForAction(
 	XrSession                                   session,
 	const XrBoundSourcesForActionEnumerateInfo* enumerateInfo,
 	uint32_t                                    sourceCapacityInput,
@@ -3328,7 +3348,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateBoundSourcesForAction(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetInputSourceLocalizedName(
+XR_PROC xrGetInputSourceLocalizedName(
 	XrSession                                session,
 	const XrInputSourceLocalizedNameGetInfo* getInfo,
 	uint32_t                                 bufferCapacityInput,
@@ -3341,7 +3361,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInputSourceLocalizedName(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(
+XR_PROC xrApplyHapticFeedback(
 	XrSession                 session,
 	const XrHapticActionInfo* hapticActionInfo,
 	const XrHapticBaseHeader* hapticFeedback)
@@ -3352,7 +3372,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrApplyHapticFeedback(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(
+XR_PROC xrStopHapticFeedback(
 	XrSession                 session,
 	const XrHapticActionInfo* hapticActionInfo)
 {
@@ -3362,18 +3382,112 @@ XRAPI_ATTR XrResult XRAPI_CALL xrStopHapticFeedback(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetVisibilityMaskKHR(
+XR_PROC xrGetVisibilityMaskKHR(
 	XrSession               session,
 	XrViewConfigurationType viewConfigurationType,
 	uint32_t                viewIndex,
 	XrVisibilityMaskTypeKHR visibilityMaskType,
 	XrVisibilityMaskKHR*    visibilityMask)
 {
-	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetVisibilityMaskKHR\n");
-	return XR_SUCCESS;
+	LOG_METHOD(xrGetVisibilityMaskKHR);
+	printf("%s %d %s\n",
+		   string_XrViewConfigurationType(viewConfigurationType),
+		   viewIndex,
+		   string_XrVisibilityMaskTypeKHR(visibilityMaskType));
+
+	// this is such an easy way to look stuff up, should I really change it to handles?
+	Session* pSession = (Session*)session;
+
+	switch (viewConfigurationType) {
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+		default:
+			break;
+	}
+
+	float      extent = 0.5f;
+	XrVector2f innerVertices[] = {
+		{-extent, -extent},  // 0
+		{extent, -extent},   // 1
+		{extent, extent},    // 2
+		{-extent, extent},   // 3
+	};
+	constexpr XrVector2f outerVertices[] = {
+		{-1, -1},  // 4
+		{1, -1},   // 5
+		{1, 1},    // 6
+		{-1, 1},   // 7
+	};
+	//	7			6
+	//		3	2
+	//
+	//		0	1
+	//	4			5
+
+#define CHECK_CAPACITY                                                              \
+	if (visibilityMask->vertexCapacityInput == 0 ||                                 \
+		visibilityMask->vertices == nullptr ||                                      \
+		visibilityMask->indexCapacityInput == 0 ||                                  \
+		visibilityMask->indices == nullptr) {                                       \
+		return XR_SUCCESS;                                                          \
+	}                                                                               \
+	if (visibilityMask->vertexCapacityInput != visibilityMask->vertexCountOutput || \
+		visibilityMask->indexCapacityInput != visibilityMask->indexCountOutput) {   \
+		LOG_ERROR("XR_ERROR_SIZE_INSUFFICIENT\n");                                  \
+		return XR_ERROR_SIZE_INSUFFICIENT;                                          \
+	}
+
+	switch (visibilityMaskType) {
+		case XR_VISIBILITY_MASK_TYPE_HIDDEN_TRIANGLE_MESH_KHR:
+		case XR_VISIBILITY_MASK_TYPE_VISIBLE_TRIANGLE_MESH_KHR: {
+
+			uint32_t indices[] = {
+				0, 7, 4,
+				0, 3, 7,
+				1, 4, 5,
+				1, 0, 4,
+				2, 5, 6,
+				2, 1, 5,
+				3, 6, 7,
+				3, 2, 6,
+			};
+			static_assert(COUNT(indices) == (COUNT(innerVertices) + COUNT(outerVertices))* 3);
+			visibilityMask->vertexCountOutput = COUNT(innerVertices) + COUNT(outerVertices);
+			visibilityMask->indexCountOutput = COUNT(indices);
+
+			CHECK_CAPACITY
+
+			memcpy(visibilityMask->vertices, innerVertices, sizeof(innerVertices));
+			memcpy(visibilityMask->vertices + COUNT(innerVertices), outerVertices, sizeof(innerVertices));
+			memcpy(visibilityMask->indices, indices, sizeof(indices));
+
+			return XR_SUCCESS;
+		}
+		case XR_VISIBILITY_MASK_TYPE_LINE_LOOP_KHR: {
+
+			uint32_t indices[] = {0, 1, 2, 3};
+			static_assert(COUNT(indices) == COUNT(innerVertices));
+			visibilityMask->vertexCountOutput = COUNT(innerVertices);
+			visibilityMask->indexCountOutput = COUNT(indices);
+
+			CHECK_CAPACITY
+
+			memcpy(visibilityMask->vertices, innerVertices, sizeof(innerVertices));
+			memcpy(visibilityMask->indices, indices, sizeof(indices));
+
+			return XR_SUCCESS;
+		}
+		default:
+			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE\n");
+			return XR_ERROR_VALIDATION_FAILURE;
+	}
+
+#undef CHECK_CAPACITY
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceActiveEXT(
+XR_PROC xrSetInputDeviceActiveEXT(
 	XrSession session,
 	XrPath    interactionProfile,
 	XrPath    topLevelPath,
@@ -3383,7 +3497,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceActiveEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateBoolEXT(
+XR_PROC xrSetInputDeviceStateBoolEXT(
 	XrSession session,
 	XrPath    topLevelPath,
 	XrPath    inputSourcePath,
@@ -3393,7 +3507,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateBoolEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateFloatEXT(
+XR_PROC xrSetInputDeviceStateFloatEXT(
 	XrSession session,
 	XrPath    topLevelPath,
 	XrPath    inputSourcePath,
@@ -3403,7 +3517,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateFloatEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateVector2fEXT(
+XR_PROC xrSetInputDeviceStateVector2fEXT(
 	XrSession  session,
 	XrPath     topLevelPath,
 	XrPath     inputSourcePath,
@@ -3413,7 +3527,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceStateVector2fEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceLocationEXT(
+XR_PROC xrSetInputDeviceLocationEXT(
 	XrSession session,
 	XrPath    topLevelPath,
 	XrPath    inputSourcePath,
@@ -3424,7 +3538,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetInputDeviceLocationEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumeratePerformanceMetricsCounterPathsMETA(
+XR_PROC xrEnumeratePerformanceMetricsCounterPathsMETA(
 	XrInstance instance,
 	uint32_t   counterPathCapacityInput,
 	uint32_t*  counterPathCountOutput,
@@ -3434,7 +3548,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumeratePerformanceMetricsCounterPathsMETA(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetPerformanceMetricsStateMETA(
+XR_PROC xrSetPerformanceMetricsStateMETA(
 	XrSession                            session,
 	const XrPerformanceMetricsStateMETA* state)
 {
@@ -3442,7 +3556,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetPerformanceMetricsStateMETA(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetPerformanceMetricsStateMETA(
+XR_PROC xrGetPerformanceMetricsStateMETA(
 	XrSession                      session,
 	XrPerformanceMetricsStateMETA* state)
 {
@@ -3450,7 +3564,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetPerformanceMetricsStateMETA(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrQueryPerformanceMetricsCounterMETA(
+XR_PROC xrQueryPerformanceMetricsCounterMETA(
 	XrSession                        session,
 	XrPath                           counterPath,
 	XrPerformanceMetricsCounterMETA* counter)
@@ -3459,7 +3573,15 @@ XRAPI_ATTR XrResult XRAPI_CALL xrQueryPerformanceMetricsCounterMETA(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrPerfSettingsSetPerformanceLevelEXT(
+XR_PROC xrGetRecommendedLayerResolutionMETA(
+	XrSession                                   session,
+	const XrRecommendedLayerResolutionGetInfoMETA* info,
+	XrRecommendedLayerResolutionMETA*           resolution) {
+	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrGetRecommendedLayerResolutionMETA\n");
+	return XR_ERROR_FUNCTION_UNSUPPORTED;
+}
+
+XR_PROC xrPerfSettingsSetPerformanceLevelEXT(
 	XrSession               session,
 	XrPerfSettingsDomainEXT domain,
 	XrPerfSettingsLevelEXT  level)
@@ -3468,7 +3590,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPerfSettingsSetPerformanceLevelEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetDebugUtilsObjectNameEXT(
+XR_PROC xrSetDebugUtilsObjectNameEXT(
 	XrInstance                           instance,
 	const XrDebugUtilsObjectNameInfoEXT* nameInfo)
 {
@@ -3478,7 +3600,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSetDebugUtilsObjectNameEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateDebugUtilsMessengerEXT(
+XR_PROC xrCreateDebugUtilsMessengerEXT(
 	XrInstance                                instance,
 	const XrDebugUtilsMessengerCreateInfoEXT* createInfo,
 	XrDebugUtilsMessengerEXT*                 messenger)
@@ -3489,7 +3611,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateDebugUtilsMessengerEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroyDebugUtilsMessengerEXT(
+XR_PROC xrDestroyDebugUtilsMessengerEXT(
 	XrDebugUtilsMessengerEXT messenger)
 {
 	LOG_METHOD(xrDestroyDebugUtilsMessengerEXT);
@@ -3498,7 +3620,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyDebugUtilsMessengerEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSubmitDebugUtilsMessageEXT(
+XR_PROC xrSubmitDebugUtilsMessageEXT(
 	XrInstance                                  instance,
 	XrDebugUtilsMessageSeverityFlagsEXT         messageSeverity,
 	XrDebugUtilsMessageTypeFlagsEXT             messageTypes,
@@ -3510,7 +3632,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSubmitDebugUtilsMessageEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSessionBeginDebugUtilsLabelRegionEXT(
+XR_PROC xrSessionBeginDebugUtilsLabelRegionEXT(
 	XrSession                   session,
 	const XrDebugUtilsLabelEXT* labelInfo)
 {
@@ -3520,7 +3642,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSessionBeginDebugUtilsLabelRegionEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSessionEndDebugUtilsLabelRegionEXT(
+XR_PROC xrSessionEndDebugUtilsLabelRegionEXT(
 	XrSession session)
 {
 	LOG_METHOD(xrSessionEndDebugUtilsLabelRegionEXT);
@@ -3529,7 +3651,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSessionEndDebugUtilsLabelRegionEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSessionInsertDebugUtilsLabelEXT(
+XR_PROC xrSessionInsertDebugUtilsLabelEXT(
 	XrSession                   session,
 	const XrDebugUtilsLabelEXT* labelInfo)
 {
@@ -3539,7 +3661,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrSessionInsertDebugUtilsLabelEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
+XR_PROC xrGetOpenGLGraphicsRequirementsKHR(
 	XrInstance                       instance,
 	XrSystemId                       systemId,
 	XrGraphicsRequirementsOpenGLKHR* graphicsRequirements)
@@ -3555,7 +3677,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetOpenGLGraphicsRequirementsKHR(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
+XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 	XrInstance                      instance,
 	XrSystemId                      systemId,
 	XrGraphicsRequirementsD3D11KHR* graphicsRequirements)
@@ -3631,7 +3753,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetD3D11GraphicsRequirementsKHR(
 	return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateHandTrackerEXT(
+XR_PROC xrCreateHandTrackerEXT(
 	XrSession                         session,
 	const XrHandTrackerCreateInfoEXT* createInfo,
 	XrHandTrackerEXT*                 handTracker)
@@ -3642,7 +3764,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateHandTrackerEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroyHandTrackerEXT(
+XR_PROC xrDestroyHandTrackerEXT(
 	XrHandTrackerEXT handTracker)
 {
 	LOG_METHOD(xrDestroyHandTrackerEXT);
@@ -3651,7 +3773,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroyHandTrackerEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrLocateHandJointsEXT(
+XR_PROC xrLocateHandJointsEXT(
 	XrHandTrackerEXT                 handTracker,
 	const XrHandJointsLocateInfoEXT* locateInfo,
 	XrHandJointLocationsEXT*         locations)
@@ -3662,7 +3784,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateHandJointsEXT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorMSFT(
+XR_PROC xrCreateSpatialAnchorMSFT(
 	XrSession                            session,
 	const XrSpatialAnchorCreateInfoMSFT* createInfo,
 	XrSpatialAnchorMSFT*                 anchor)
@@ -3673,7 +3795,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorSpaceMSFT(
+XR_PROC xrCreateSpatialAnchorSpaceMSFT(
 	XrSession                                 session,
 	const XrSpatialAnchorSpaceCreateInfoMSFT* createInfo,
 	XrSpace*                                  space)
@@ -3684,7 +3806,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSpatialAnchorSpaceMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpatialAnchorMSFT(
+XR_PROC xrDestroySpatialAnchorMSFT(
 	XrSpatialAnchorMSFT anchor)
 {
 	LOG_METHOD(xrDestroySpatialAnchorMSFT);
@@ -3693,7 +3815,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySpatialAnchorMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSceneComputeFeaturesMSFT(
+XR_PROC xrEnumerateSceneComputeFeaturesMSFT(
 	XrInstance                 instance,
 	XrSystemId                 systemId,
 	uint32_t                   featureCapacityInput,
@@ -3706,7 +3828,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSceneComputeFeaturesMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneObserverMSFT(
+XR_PROC xrCreateSceneObserverMSFT(
 	XrSession                            session,
 	const XrSceneObserverCreateInfoMSFT* createInfo,
 	XrSceneObserverMSFT*                 sceneObserver)
@@ -3717,7 +3839,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneObserverMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneObserverMSFT(
+XR_PROC xrDestroySceneObserverMSFT(
 	XrSceneObserverMSFT sceneObserver)
 {
 	LOG_METHOD(xrDestroySceneObserverMSFT);
@@ -3726,7 +3848,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneObserverMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneMSFT(
+XR_PROC xrCreateSceneMSFT(
 	XrSceneObserverMSFT          sceneObserver,
 	const XrSceneCreateInfoMSFT* createInfo,
 	XrSceneMSFT*                 scene)
@@ -3737,7 +3859,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneMSFT(
+XR_PROC xrDestroySceneMSFT(
 	XrSceneMSFT scene)
 {
 	LOG_METHOD(xrDestroySceneMSFT);
@@ -3746,7 +3868,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrComputeNewSceneMSFT(
+XR_PROC xrComputeNewSceneMSFT(
 	XrSceneObserverMSFT              sceneObserver,
 	const XrNewSceneComputeInfoMSFT* computeInfo)
 {
@@ -3756,7 +3878,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrComputeNewSceneMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComputeStateMSFT(
+XR_PROC xrGetSceneComputeStateMSFT(
 	XrSceneObserverMSFT      sceneObserver,
 	XrSceneComputeStateMSFT* state)
 {
@@ -3766,7 +3888,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComputeStateMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComponentsMSFT(
+XR_PROC xrGetSceneComponentsMSFT(
 	XrSceneMSFT                         scene,
 	const XrSceneComponentsGetInfoMSFT* getInfo,
 	XrSceneComponentsMSFT*              components)
@@ -3777,7 +3899,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneComponentsMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrLocateSceneComponentsMSFT(
+XR_PROC xrLocateSceneComponentsMSFT(
 	XrSceneMSFT                            scene,
 	const XrSceneComponentsLocateInfoMSFT* locateInfo,
 	XrSceneComponentLocationsMSFT*         locations)
@@ -3788,7 +3910,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateSceneComponentsMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneMeshBuffersMSFT(
+XR_PROC xrGetSceneMeshBuffersMSFT(
 	XrSceneMSFT                          scene,
 	const XrSceneMeshBuffersGetInfoMSFT* getInfo,
 	XrSceneMeshBuffersMSFT*              buffers)
@@ -3799,7 +3921,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSceneMeshBuffersMSFT(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrConvertWin32PerformanceCounterToTimeKHR(
+XR_PROC xrConvertWin32PerformanceCounterToTimeKHR(
 	XrInstance           instance,
 	const LARGE_INTEGER* performanceCounter,
 	XrTime*              time)
@@ -3810,7 +3932,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrConvertWin32PerformanceCounterToTimeKHR(
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
+XR_PROC xrGetInstanceProcAddr(
 	XrInstance          instance,
 	const char*         name,
 	PFN_xrVoidFunction* function)
@@ -3892,6 +4014,8 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrGetPerformanceMetricsStateMETA)
 	CHECK_PROC_ADDR(xrQueryPerformanceMetricsCounterMETA)
 
+	CHECK_PROC_ADDR(xrGetRecommendedLayerResolutionMETA)
+
 	CHECK_PROC_ADDR(xrPerfSettingsSetPerformanceLevelEXT)
 
 
@@ -3926,11 +4050,11 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 
 #undef CHECK_PROC_ADDR
 
-//	LOG_ERROR("xrGetInstanceProcAddr XR_ERROR_FUNCTION_UNSUPPORTED %s\n", name);
+	LOG_ERROR("xrGetInstanceProcAddr XR_ERROR_FUNCTION_UNSUPPORTED %s\n", name);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 
-XRAPI_ATTR XrResult EXPORT XRAPI_CALL xrNegotiateLoaderRuntimeInterface(
+XR_PROC EXPORT xrNegotiateLoaderRuntimeInterface(
 	const XrNegotiateLoaderInfo* loaderInfo,
 	XrNegotiateRuntimeRequest*   runtimeRequest)
 {
