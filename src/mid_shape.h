@@ -12,14 +12,14 @@ void midCreateQuadPatchMesh(float size, VkMesh* pMesh);
 
 #if defined(MID_SHAPE_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 void RequestSphereMeshAllocation(int slicesCount, int stackCount, VkMesh* pMesh) {
-  VkmMeshCreateInfo info = {
+	VkMeshCreateInfo info = {
       .indexCount = slicesCount * stackCount * 2 * 3,
       .vertexCount = (slicesCount + 1) * (stackCount + 1),
   };
   midVkCreateMeshSharedMemory(&info, pMesh);
 }
 void CreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* pMesh) {
-  VkmMeshCreateInfo info = {
+	VkMeshCreateInfo info = {
       .indexCount = slicesCount * stackCount * 2 * 3,
       .vertexCount = (slicesCount + 1) * (stackCount + 1),
   };
@@ -73,7 +73,7 @@ void CreateQuadMesh(float size, VkMesh* pMesh) {
       {.position = {-size, size, 0}, .uv = {0, 1}},
       {.position = {size, size, 0}, .uv = {1, 1}},
   };
-  VkmMeshCreateInfo info = {
+  VkMeshCreateInfo info = {
       .indexCount = 6,
       .vertexCount = 4,
       .pIndices = indices,
@@ -82,8 +82,8 @@ void CreateQuadMesh(float size, VkMesh* pMesh) {
   vkmCreateMesh(&info, pMesh);
 }
 
-  #define QUAD_PATCH_MESH_INFO \
-    VkmMeshCreateInfo info = { \
+  #define QUAD_PATCH_MESH_INFO  \
+	VkMeshCreateInfo info = { \
         .indexCount = 6,       \
         .vertexCount = 4,      \
     };

@@ -55,7 +55,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 	const VkRenderPass    nodeRenderPass = pNode->nodeRenderPass;
 	const VkFramebuffer   framebuffer = pNode->framebuffer;
 
-	VkmGlobalSetState* const pGlobalSetMapped = pNode->globalSet.pMapped;
+	VkGlobalSetState* const pGlobalSetMapped = pNode->globalSet.pMapped;
 	const VkDescriptorSet    globalSet = pNode->globalSet.set;
 
 	const VkDescriptorSet  checkerMaterialSet = pNode->checkerMaterialSet;
@@ -66,7 +66,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 	const VkPipeline       nodeProcessBlitMipAveragePipe = pNode->nodeProcessBlitMipAveragePipe;
 	const VkPipeline       nodeProcessBlitDownPipe = pNode->nodeProcessBlitDownPipe;
 
-	const uint32_t graphicsQueueIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+	const uint32_t graphicsQueueIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 
 	struct {
 		VkImage     color;
@@ -238,7 +238,7 @@ run_loop:
 	midVkTimelineWait(device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	memcpy(pGlobalSetMapped, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
+	memcpy(pGlobalSetMapped, (void*)&pNodeShared->globalSetState, sizeof(VkGlobalSetState));
 
 	ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	BeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
@@ -272,9 +272,9 @@ run_loop:
 
 		// this is really all that'd be user exposed....
 		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_INDEX_GLOBAL, 1, &globalSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_INDEX_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, MIDVK_PIPE_SET_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_GLOBAL, 1, &globalSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
 
 		CmdBindVertexBuffers(cmd, 0, 1, (VkBuffer[]){sphereBuffer}, (VkDeviceSize[]){sphereVertexOffset});
 		CmdBindIndexBuffer(cmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
@@ -452,7 +452,7 @@ static void CreateNodeProcessPipeLayout(VkDescriptorSetLayout nodeProcessSetLayo
 static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule shader;
-	midVkCreateShaderModule(shaderPath, &shader);
+	vkCreateShaderModuleFromPath(shaderPath, &shader);
 	VkComputePipelineCreateInfo pipelineInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 		.stage = {
@@ -509,17 +509,17 @@ static void mxcCreateTestNode(const MxcNodeContext* pTestNodeContext, MxcTestNod
 		};
 		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &descriptorPoolCreateInfo, VK_ALLOC, &threadContext.descriptorPool));
 
-		midVkCreateGlobalSet(&pTestNode->globalSet);
+		vkCreateGlobalSet(&pTestNode->globalSet);
 
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
 		vkCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
 
 		midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
-		midVkCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkmStdObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
+		midVkCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkObjectSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pTestNode->sphereObjectSetMemory, &pTestNode->sphereObjectSetBuffer, (void**)&pTestNode->pSphereObjectSetMapped);
 
 		VkWriteDescriptorSet writeSets[] = {
-			VKM_SET_WRITE_STD_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.view),
-			VKM_SET_WRITE_STD_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer),
+			KM_SET_WRITE_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.view),
+			VK_SET_WRITE_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer),
 		};
 		vkUpdateDescriptorSets(vk.context.device, _countof(writeSets), writeSets, 0, NULL);
 

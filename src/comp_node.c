@@ -149,22 +149,22 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 				CreateQuadMesh(0.5f, &pNode->quadMesh);
 				break;
 			case MXC_COMP_MODE_TESS:
-				vkCreateTessPipe("./shaders/tess_comp.vert.spv",
-								 "./shaders/tess_comp.tesc.spv",
-								 "./shaders/tess_comp.tese.spv",
-								 "./shaders/tess_comp.frag.spv",
-								 vk.context.renderPass,
-								 pNode->compNodePipeLayout,
-								 &pNode->compNodePipe);
+				vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
+											  "./shaders/tess_comp.tesc.spv",
+											  "./shaders/tess_comp.tese.spv",
+											  "./shaders/tess_comp.frag.spv",
+											  vk.context.renderPass,
+											  pNode->compNodePipeLayout,
+											  &pNode->compNodePipe);
 				CreateQuadPatchMeshSharedMemory(&pNode->quadMesh);
 				break;
 			case MXC_COMP_MODE_TASK_MESH:
-				vkCreateTaskMeshPipe("./shaders/mesh_comp.task.spv",
-									 "./shaders/mesh_comp.mesh.spv",
-									 "./shaders/mesh_comp.frag.spv",
-									 vk.context.renderPass,
-									 pNode->compNodePipeLayout,
-									 &pNode->compNodePipe);
+				vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
+										  "./shaders/mesh_comp.mesh.spv",
+										  "./shaders/mesh_comp.frag.spv",
+										  vk.context.renderPass,
+										  pNode->compNodePipeLayout,
+										  &pNode->compNodePipe);
 				CreateQuadMesh(0.5f, &pNode->quadMesh);
 				break;
 			default: PANIC("CompMode not supported!");
@@ -196,7 +196,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 			midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pNode->globalSet.set);
 			VkRequestAllocationInfo requestInfo = {
 				.memoryPropertyFlags = VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-				.size = sizeof(VkmGlobalSetState),
+				.size = sizeof(VkGlobalSetState),
 				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			};
 			vkCreateBufferSharedMemory(&requestInfo, &pNode->globalSet.buffer, &pNode->globalSet.sharedMemory);
@@ -222,11 +222,11 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 			vkCreateBufferSharedMemory(&requestInfo, &nodeCompositorData[i].SetBuffer, &nodeCompositorData[i].SetSharedMemory);
 		}
 
-		VkFramebufferTextureCreateInfo framebufferInfo = {
+		VkBasicFramebufferTextureCreateInfo framebufferInfo = {
 			.locality = VK_LOCALITY_CONTEXT,
 			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1}
 		};
-		vkCreateFramebufferTexture(&framebufferInfo, VK_SWAP_COUNT, pNode->framebuffers);
+		vkCreateBasicFramebufferTextures(&framebufferInfo, VK_SWAP_COUNT, pNode->framebuffers);
 		vkCreateBasicFramebuffer(vk.context.renderPass, &pNode->framebuffer);
 		vkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "CompFramebuffer");  // should be moved into method? probably
 	}
@@ -252,7 +252,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
 		default: PANIC("CompMode not supported!");
 	}
 	VK_CHECK(vkBindBufferMemory(vk.context.device, pNode->globalSet.buffer, deviceMemory[pNode->globalSet.sharedMemory.type], pNode->globalSet.sharedMemory.offset));
-	vkUpdateDescriptorSets(vk.context.device, 1, &VKM_SET_WRITE_STD_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
+	vkUpdateDescriptorSets(vk.context.device, 1, &VK_SET_WRITE_GLOBAL_BUFFER(pNode->globalSet.set, pNode->globalSet.buffer), 0, NULL);
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably
 		midVkBindBufferSharedMemory(nodeCompositorData[i].SetBuffer, nodeCompositorData[i].SetSharedMemory);
@@ -281,8 +281,8 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 		.euler = {0.0f, 0.0f, 0.0f},
 	};
 	globalCameraPose.rotation = QuatFromEuler(globalCameraPose.euler);
-	VkmGlobalSetState  globalSetState = {};
-	VkmGlobalSetState* pGlobalSetMapped = midVkSharedMemoryPointer(pNode->globalSet.sharedMemory);
+	VkGlobalSetState  globalSetState = {};
+	VkGlobalSetState* pGlobalSetMapped = midVkSharedMemoryPointer(pNode->globalSet.sharedMemory);
 	vkmUpdateGlobalSetViewProj(globalCamera, globalCameraPose, &globalSetState, pGlobalSetMapped);
 
 	const VkPipelineLayout compNodePipeLayout = pNode->compNodePipeLayout;
@@ -408,7 +408,7 @@ run_loop:
 			{  // Calc new node uniform and shared data
 
 				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
-				memcpy(&pNodeCompositorData->setState.view, (void*)&pNodeShared->globalSetState, sizeof(VkmGlobalSetState));
+				memcpy(&pNodeCompositorData->setState.view, (void*)&pNodeShared->globalSetState, sizeof(VkGlobalSetState));
 				pNodeCompositorData->setState.ulUV = pNodeShared->ulScreenUV;
 				pNodeCompositorData->setState.lrUV = pNodeShared->lrScreenUV;
 
@@ -449,7 +449,7 @@ run_loop:
 				// maybe I should only copy camera pos info and generate matrix on other thread? oxr only wants the pose
 				pNodeShared->camera = globalCamera;
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
-				memcpy(&pNodeShared->globalSetState, &globalSetState, sizeof(VkmGlobalSetState) - sizeof(ivec2));
+				memcpy(&pNodeShared->globalSetState, &globalSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
 				pNodeShared->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
 				pNodeShared->ulScreenUV = ulUV;
 				pNodeShared->lrScreenUV = lrUV;
@@ -465,7 +465,7 @@ run_loop:
 			ResetQueryPool(device, timeQueryPool, 0, 2);
 			CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-			CmdBeginRenderPass(cmd, renderPass, framebuffer, MIDVK_PASS_CLEAR_COLOR,
+			CmdBeginRenderPass(cmd, renderPass, framebuffer, VK_PASS_CLEAR_COLOR,
 							   compositorFramebufferViews[compositorFramebufferIndex].color,
 							   compositorFramebufferViews[compositorFramebufferIndex].normal,
 							   compositorFramebufferViews[compositorFramebufferIndex].depth);

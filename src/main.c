@@ -78,7 +78,7 @@ int main(void)
 
 		MidVkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
-				[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
+				[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
 					.supportsGraphics = VKM_SUPPORT_YES,
 					.supportsCompute = VKM_SUPPORT_YES,
 					.supportsTransfer = VKM_SUPPORT_YES,
@@ -86,7 +86,7 @@ int main(void)
 					.queueCount = 1,
 					.pQueuePriorities = (float[]){1.0f},
 				},
-				[VKM_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
+				[VK_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = {
 					.supportsGraphics = VKM_SUPPORT_NO,
 					.supportsCompute = VKM_SUPPORT_YES,
 					.supportsTransfer = VKM_SUPPORT_YES,
@@ -94,7 +94,7 @@ int main(void)
 					.queueCount = 1,
 					.pQueuePriorities = (float[]){1.0f},
 				},
-				[VKM_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = {
+				[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = {
 					.supportsGraphics = VKM_SUPPORT_NO,
 					.supportsCompute = VKM_SUPPORT_NO,
 					.supportsTransfer = VKM_SUPPORT_YES,
@@ -103,19 +103,19 @@ int main(void)
 				},
 			},
 		};
-		midVkCreateContext(&contextCreateInfo);
+		vkCreateContext(&contextCreateInfo);
 
 		// these probably should go elsewhere ?
 		// global samplers
-		VkmSamplerCreateInfo samplerCreateInfo = {
+		VkBasicSamplerCreateInfo samplerCreateInfo = {
 			.filter = VK_FILTER_LINEAR,
 			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
 		};
-		midVkCreateSampler(&samplerCreateInfo, &vk.context.linearSampler);
+		vkCreateBasicSampler(&samplerCreateInfo, &vk.context.linearSampler);
 		// standard/common rendering
-		midVkCreateStdRenderPass();
-		midVkCreateStdPipeLayout();
+		vkCreateBasicRenderPass();
+		vkCreateBasicPipeLayout();
 
 		// this need to ge in node create
 		mxcCreateNodeRenderPass();
@@ -146,7 +146,7 @@ int main(void)
 
 	if (isCompositor) {  // Compositor Loop
 		const VkDevice device = vk.context.device;
-		const VkQueue  graphicsQueue = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+		const VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		uint64_t compositorBaseCycleValue = 0;
 		while (isRunning) {
 
@@ -198,7 +198,7 @@ int main(void)
 		}
 	} else {
 
-		const VkQueue graphicsQueue = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+		const VkQueue graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		while (isRunning) {
 			midUpdateWindowInput();
 			isRunning = midWindow.running;

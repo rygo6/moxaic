@@ -44,12 +44,12 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
 	midVkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compositorTimeline);
-	vkCreateSwapContext(surface, VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
+	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-		.queueFamilyIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorNodeContext.pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
@@ -243,7 +243,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-		.queueFamilyIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeContext->pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
@@ -254,7 +254,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
 
-	VkFramebufferTextureCreateInfo framebufferInfo = {
+	VkBasicFramebufferTextureCreateInfo framebufferInfo = {
 		.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 		.locality = VK_LOCALITY_CONTEXT,
 	};
@@ -342,9 +342,9 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 /// Node Render
 // Do I want this?
 static const VkImageUsageFlags NODE_PASS_USAGES[] = {
-	[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-	[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-	[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+	[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 };
 void mxcCreateNodeRenderPass()
 {
@@ -352,9 +352,9 @@ void mxcCreateNodeRenderPass()
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
 		.pAttachments = (VkAttachmentDescription2[]){
-			[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {
+			[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -363,9 +363,9 @@ void mxcCreateNodeRenderPass()
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
-			[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = {
+			[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -374,9 +374,9 @@ void mxcCreateNodeRenderPass()
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
-			[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = {
+			[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -393,22 +393,22 @@ void mxcCreateNodeRenderPass()
 				.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 				.colorAttachmentCount = 2,
 				.pColorAttachments = (VkAttachmentReference2[]){
-					[MIDVK_PASS_ATTACHMENT_COLOR_INDEX] = {
+					[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = {
 						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = MIDVK_PASS_ATTACHMENT_COLOR_INDEX,
+						.attachment = VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
-					[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = {
+					[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = {
 						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = MIDVK_PASS_ATTACHMENT_NORMAL_INDEX,
+						.attachment = VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
 				},
 				.pDepthStencilAttachment = &(VkAttachmentReference2){
 					.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-					.attachment = MIDVK_PASS_ATTACHMENT_DEPTH_INDEX,
+					.attachment = VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX,
 					.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 				},
@@ -443,7 +443,7 @@ void mxcCreateNodeRenderPass()
 	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
 }
 
-void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap)
+void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap)
 {
 #if defined(D3D11)
 	#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT
@@ -459,12 +459,12 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInf
 				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
 			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
 			.extent = pTextureCreateInfo->extent,
 			.mipLevels = 1,
 			.arrayLayers = 1,
 			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
 		};
 		vkWin32CreateExternalTexture(&info, &pSwap->colorExternal);
 		VkTextureCreateInfo textureInfo = {
@@ -486,12 +486,12 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInf
 				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
 			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
 			.extent = pTextureCreateInfo->extent,
 			.mipLevels = 1,
 			.arrayLayers = 1,
 			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
 		};
 		vkWin32CreateExternalTexture(&info, &pSwap->normalExternal);
 		VkTextureCreateInfo textureInfo = {
@@ -575,12 +575,12 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInf
 		.pImageCreateInfo = &(VkImageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 			.mipLevels = 1,
 			.arrayLayers = 1,
 			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 		},
 		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 		.locality = VK_LOCALITY_CONTEXT,
@@ -713,7 +713,7 @@ static void InterprocessServerAcceptNodeConnection()
 		// we aren't going to make framebuffers here, it needs to first extablish with the app to know what cateogry of framebuffer to make
 		switch (pNodeContext->swapType) {
 			case MXC_SWAP_TYPE_SINGLE:               {
-				VkFramebufferTextureCreateInfo framebufferInfo = {
+				VkBasicFramebufferTextureCreateInfo framebufferInfo = {
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 					.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 				};
@@ -723,7 +723,7 @@ static void InterprocessServerAcceptNodeConnection()
 			}
 			case MXC_SWAP_TYPE_TEXTURE_ARRAY: break;
 			case MXC_SWAP_TYPE_DOUBLE_WIDE:   {
-				VkFramebufferTextureCreateInfo framebufferInfo = {
+				VkBasicFramebufferTextureCreateInfo framebufferInfo = {
 					.extent = {DEFAULT_WIDTH * 2, DEFAULT_HEIGHT, 1},
 					.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 				};
@@ -770,7 +770,7 @@ static void InterprocessServerAcceptNodeConnection()
 
 		pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);\
 
-		uint32_t graphicsQueueIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+		uint32_t graphicsQueueIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 
 		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 
@@ -1026,7 +1026,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-			.queueFamilyIndex = vk.context.queueFamilies[VKM_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+			.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 		};
 		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeContext->pool));
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
@@ -1045,12 +1045,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_COLOR_INDEX],
+					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
@@ -1064,12 +1064,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX],
+					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
@@ -1102,12 +1102,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 				.pImageCreateInfo = &(VkImageCreateInfo) {
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_BASIC_PASS_FORMATS[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_BASIC_PASS_USAGES[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX],
+					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 				.locality = VK_LOCALITY_CONTEXT,

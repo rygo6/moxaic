@@ -64,7 +64,7 @@ typedef enum MxcSwapScale {
 
 typedef struct MxcNodeShared {
 	// read/write every cycle
-	VkmGlobalSetState globalSetState;
+	VkGlobalSetState  globalSetState;
 	vec2              ulScreenUV;
 	vec2              lrScreenUV;
 	uint64_t          timelineValue;
@@ -315,7 +315,7 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
-void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap);
+void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap);
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
 void ReleaseNode(NodeHandle handle);
@@ -342,7 +342,7 @@ static int mxcClaimSwap(const MxcSwapInfo* pInfo)
 
 	if (!BITTEST(pPool->created, i)) {
 		BITSET(pPool->created, i);
-		VkFramebufferTextureCreateInfo textureCreateInfo = {
+		VkBasicFramebufferTextureCreateInfo textureCreateInfo = {
 			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 			.locality = VK_LOCALITY_CONTEXT,
 		};

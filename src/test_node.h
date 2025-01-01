@@ -19,7 +19,7 @@ typedef struct MxcTestNode {
 
   VkDevice device;
 
-  VkmGlobalSet globalSet;
+  VkGlobalSet globalSet;
 
   VkDescriptorSet checkerMaterialSet;
   VkDescriptorSet sphereObjectSet;
@@ -29,8 +29,8 @@ typedef struct MxcTestNode {
   VkMesh       sphereMesh;
   MidPose      sphereTransform;
 
-  VkmStdObjectSetState  sphereObjectState;
-  VkmStdObjectSetState* pSphereObjectSetMapped;
+  VkObjectSetState      sphereObjectState;
+  VkObjectSetState* pSphereObjectSetMapped;
   VkDeviceMemory        sphereObjectSetMemory;
   VkBuffer              sphereObjectSetBuffer;
 

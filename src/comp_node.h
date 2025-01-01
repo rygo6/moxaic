@@ -30,7 +30,7 @@ typedef struct MxcCompNode {
 
   VkQueryPool timeQueryPool;
 
-  VkmGlobalSet    globalSet;
+  VkGlobalSet globalSet;
 //  VkDescriptorSet compNodeSet;
 
 //  MidVkSharedMemory compNodeSetSharedMemory;
@@ -39,7 +39,7 @@ typedef struct MxcCompNode {
   VkMesh quadMesh;
 
   VkFramebuffer framebuffer;
-  VkFramebufferTexture framebuffers[VK_SWAP_COUNT];
+  VkBasicFramebufferTexture framebuffers[VK_SWAP_COUNT];
 
 } MxcCompNode;
 
