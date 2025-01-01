@@ -513,9 +513,28 @@ run_loop:
 			AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compositorNodeContext.swapIndex);
 			__atomic_thread_fence(__ATOMIC_RELEASE);
 			VkImage swapImage = swap.images[compositorNodeContext.swapIndex];
-			CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED, VKM_IMG_BARRIER_BLIT_DST, swapImage));
+
+			VkImageMemoryBarrier2 beginBlitBarrier = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = swapImage,
+				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT,
+				VK_IMAGE_BARRIER_DST_BLIT,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			};
+			CmdPipelineImageBarrier2(cmd, &beginBlitBarrier);
+
 			CmdBlitImageFullScreen(cmd, compositorFramebufferColorImages[compositorFramebufferIndex], swapImage);
-			CmdPipelineImageBarrier2(cmd, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_BLIT_DST, VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE, swapImage));
+
+			VkImageMemoryBarrier2 endBlitBarrier = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = swapImage,
+				VK_IMAGE_BARRIER_SRC_BLIT,
+				VK_IMAGE_BARRIER_DST_PRESENT,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			};
+			CmdPipelineImageBarrier2(cmd, &endBlitBarrier);
 		}
 
 		EndCommandBuffer(cmd);

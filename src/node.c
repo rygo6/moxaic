@@ -534,11 +534,33 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkFramebufferTextureCreateInf
 
 	// If exporting, transition to interprocess state and skip depth creation since depth is not sent over IPC currently
 	if (pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
+
 		// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
 		VkImageMemoryBarrier2 interProcessBarriers[] = {
-			VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pSwap->color.image),
-			VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pSwap->normal.image),
-			VKM_COLOR_IMAGE_BARRIER_MIPS(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ, pSwap->gbuffer.image, 0, MXC_NODE_GBUFFER_LEVELS),
+			{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pSwap->color.image,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pSwap->normal.image,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pSwap->gbuffer.image,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			},
 		};
 		VK_DEVICE_FUNC(CmdPipelineBarrier2);
 		VkCommandBuffer cmd = midVkBeginImmediateTransferCommandBuffer();

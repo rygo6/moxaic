@@ -123,7 +123,7 @@ void mxcTestNodeRun(const MxcNodeContext* pNodeContext, const MxcTestNode* pNode
 				releaseBarrierCount = 1;
 				releaseBarriers[i][0] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 					IMAGE_BARRIER_DST_NODE_RELEASE,
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[i].gBuffer,
@@ -289,8 +289,8 @@ run_loop:
 		{
 			VkImageMemoryBarrier2 clearBarrier = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				MIDVK_IMAGE_BARRIER_SRC_UNDEFINED,
-				MIDVK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				.image = framebufferImages[framebufferIndex].gBuffer,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
@@ -303,14 +303,14 @@ run_loop:
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.image = framebufferImages[framebufferIndex].depth,
 					IMAGE_BARRIER_SRC_NODE_FINISH_RENDERPASS,
-					MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ,
+					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.subresourceRange = VK_DEPTH_SUBRESOURCE_RANGE,
 				},
 				{
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					MIDVK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
-					MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
+					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
@@ -330,16 +330,16 @@ run_loop:
 			VkImageMemoryBarrier2 barriers[] = {
 				{
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-					MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ,
+					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i - 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
 				},
 				{
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-					MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
@@ -360,16 +360,16 @@ run_loop:
 			VkImageMemoryBarrier2 barriers[] = {
 				{
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-					MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ,
+					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
 				},
 				{
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					MIDVK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-					MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 					.image = framebufferImages[framebufferIndex].gBuffer,
 					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i - 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},

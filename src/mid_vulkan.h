@@ -367,7 +367,7 @@ extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 
 //----------------------------------------------------------------------------------
-// Render
+// Basic RenderPass
 //----------------------------------------------------------------------------------
 typedef enum MidVkPassAttachmentIndices {
 	MIDVK_PASS_ATTACHMENT_COLOR_INDEX,
@@ -391,8 +391,7 @@ static const VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	[MIDVK_PASS_ATTACHMENT_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	[MIDVK_PASS_ATTACHMENT_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 };
-#define MIDVK_PASS_CLEAR_COLOR \
-	(VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
+#define MIDVK_PASS_CLEAR_COLOR 	(VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
 #define VKM_SET_BIND_STD_GLOBAL_BUFFER 0
 #define VKM_SET_WRITE_STD_GLOBAL_BUFFER(global_set, global_set_buffer) \
@@ -437,131 +436,73 @@ static const VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 		},                                                          \
 	}
 
-
-// old image barriers
-// I think I might just want to get rid of all of this?? Maybe it's useful
-// I wonder if its bad to have these stored static? stack won't let them go
-// todo ya we are getitng rid of all of this
-typedef struct MidVkSrcDstImageBarrier {
-	VkPipelineStageFlagBits2 stageMask;
-	VkAccessFlagBits2        accessMask;
-	VkImageLayout            layout;
-} MidVkSrcDstImageBarrier;
-static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_UNDEFINED = &(const MidVkSrcDstImageBarrier){
-	.stageMask = VK_PIPELINE_STAGE_2_NONE,
-	.accessMask = VK_ACCESS_2_NONE,
-	.layout = VK_IMAGE_LAYOUT_UNDEFINED,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMAGE_BARRIER_COLOR_ATTACHMENT_UNDEFINED = &(const MidVkSrcDstImageBarrier){
-	.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-	.accessMask = VK_ACCESS_2_NONE,
-	.layout = VK_IMAGE_LAYOUT_UNDEFINED,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_EXTERNAL_ACQUIRE_SHADER_READ = &(const MidVkSrcDstImageBarrier){
-	.stageMask = VK_PIPELINE_STAGE_2_NONE,
-	.accessMask = VK_ACCESS_2_NONE,
-	.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_PRESENT_BLIT_RELEASE = &(const MidVkSrcDstImageBarrier){
-	.stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
-	.accessMask = VK_ACCESS_2_NONE,
-	.layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_DST = &(const MidVkSrcDstImageBarrier){
-	.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-	.accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
-	.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_BLIT_DST = &(const MidVkSrcDstImageBarrier){
-	.stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
-	.accessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
-	.layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-};
-static const MidVkSrcDstImageBarrier* VKM_IMG_BARRIER_TRANSFER_READ = &(const MidVkSrcDstImageBarrier){
-	.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-	.accessMask = VK_ACCESS_2_MEMORY_READ_BIT,
-	.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-};
-#define VKM_COLOR_IMAGE_BARRIER(src, dst, barrier_image)     \
-	(const VkImageMemoryBarrier2)                            \
-	{                                                        \
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,   \
-		.srcStageMask = src->stageMask,                      \
-		.srcAccessMask = src->accessMask,                    \
-		.dstStageMask = dst->stageMask,                      \
-		.dstAccessMask = dst->accessMask,                    \
-		.oldLayout = src->layout,                            \
-		.newLayout = dst->layout,                            \
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,      \
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,      \
-		.image = barrier_image,                              \
-		.subresourceRange = (const VkImageSubresourceRange){ \
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,         \
-			.levelCount = 1,                                 \
-			.layerCount = 1,                                 \
-		},                                                   \
-	}
-#define VKM_COLOR_IMAGE_BARRIER_MIPS(src, dst, barrier_image, base_mip_level, level_count) \
-	(const VkImageMemoryBarrier2)                                                          \
-	{                                                                                      \
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,                                 \
-		.srcStageMask = src->stageMask,                                                    \
-		.srcAccessMask = src->accessMask,                                                  \
-		.dstStageMask = dst->stageMask,                                                    \
-		.dstAccessMask = dst->accessMask,                                                  \
-		.oldLayout = src->layout,                                                          \
-		.newLayout = dst->layout,                                                          \
-		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                    \
-		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,                                    \
-		.image = barrier_image,                                                            \
-		.subresourceRange = (const VkImageSubresourceRange){                               \
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,                                       \
-			.baseMipLevel = base_mip_level,                                                \
-			.levelCount = level_count,                                                     \
-			.layerCount = 1,                                                               \
-		},                                                                                 \
-	}
-
 //----------------------------------------------------------------------------------
 // Image Barriers
 //----------------------------------------------------------------------------------
 
-#define MIDVK_IMAGE_BARRIER_SRC_UNDEFINED     \
+#define VK_IMAGE_BARRIER_SRC_UNDEFINED        \
 	.srcStageMask = VK_PIPELINE_STAGE_2_NONE, \
 	.srcAccessMask = VK_ACCESS_2_NONE,        \
 	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
 
-#define MIDVK_IMAGE_BARRIER_SRC_TRANSFER_WRITE           \
+#define VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ \
+	.dstStageMask = VK_PIPELINE_STAGE_2_NONE,    \
+	.dstAccessMask = VK_ACCESS_2_NONE,           \
+	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+
+#define VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE              \
 	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
 	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-#define MIDVK_IMAGE_BARRIER_DST_TRANSFER_WRITE           \
+#define VK_IMAGE_BARRIER_DST_TRANSFER_WRITE              \
 	.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
 	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 
-#define MIDVK_IMAGE_BARRIER_SRC_COMPUTE_READ                \
+#define VK_IMAGE_BARRIER_SRC_COMPUTE_READ                   \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
 	.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,           \
 	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
-#define MIDVK_IMAGE_BARRIER_DST_COMPUTE_READ                \
+#define VK_IMAGE_BARRIER_DST_COMPUTE_READ                   \
 	.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
 	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,           \
 	.newLayout = VK_IMAGE_LAYOUT_GENERAL
-#define MIDVK_IMAGE_BARRIER_SRC_COMPUTE_WRITE               \
+#define VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE                  \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
 	.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
 	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
-#define MIDVK_IMAGE_BARRIER_DST_COMPUTE_WRITE               \
+#define VK_IMAGE_BARRIER_DST_COMPUTE_WRITE                  \
 	.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
 	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
 	.newLayout = VK_IMAGE_LAYOUT_GENERAL
+
+#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT                        \
+	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
+	.srcAccessMask = VK_ACCESS_2_NONE,                               \
+	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
+
+#define VK_IMAGE_BARRIER_SRC_BLIT                        \
+	.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,        \
+	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
+	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+#define VK_IMAGE_BARRIER_DST_BLIT                        \
+	.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,        \
+	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
+	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+
+#define VK_IMAGE_BARRIER_DST_PRESENT          \
+	.dstStageMask = VK_PIPELINE_STAGE_2_NONE, \
+	.dstAccessMask = VK_ACCESS_2_NONE,        \
+	.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 
 #define VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED       \
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
 	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
 
+#define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE \
+	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
 
+// we want to move these to PFN struct
 //----------------------------------------------------------------------------------
 // Inline Methods
 //----------------------------------------------------------------------------------
@@ -2008,13 +1949,33 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	stbi_image_free(pImagePixels);
 
 	VkCommandBuffer commandBuffer = midVkBeginImmediateTransferCommandBuffer();
-	vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMAGE_BARRIER_UNDEFINED, VKM_IMG_BARRIER_TRANSFER_DST, pTexture->image));
+
+	VkImageMemoryBarrier2 beginCopyBarrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = pTexture->image,
+		VK_IMAGE_BARRIER_SRC_UNDEFINED,
+		VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
+		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+	};
+	vkmCmdPipelineImageBarriers(commandBuffer, 1, &beginCopyBarrier);
+
 	VkBufferImageCopy region = {
 		.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
 		.imageExtent = {width, height, 1},
 	};
 	vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-	vkmCmdPipelineImageBarriers(commandBuffer, 1, &VKM_COLOR_IMAGE_BARRIER(VKM_IMG_BARRIER_TRANSFER_DST, VKM_IMG_BARRIER_TRANSFER_READ, pTexture->image));
+
+	VkImageMemoryBarrier2 endCopyBarrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = pTexture->image,
+		VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
+		VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+	};
+	vkmCmdPipelineImageBarriers(commandBuffer, 1, &endCopyBarrier);
+
 	midVkEndImmediateTransferCommandBuffer(commandBuffer);
 
 	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
