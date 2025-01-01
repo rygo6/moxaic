@@ -11,15 +11,21 @@
 #include "mid_vulkan.h"
 #include "mid_bit.h"
 
-//
-/// Constants
+
+////
+//// Constants
+////
+
 #define MXC_NODE_GBUFFER_FORMAT VK_FORMAT_R32_SFLOAT
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
 #define MXC_NODE_GBUFFER_LEVELS 10
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 
-//
-/// IPC Types
+
+////
+//// IPC Types
+////
+
 typedef uint8_t MxcRingBufferHandle;
 #define MXC_RING_BUFFER_CAPACITY 256
 #define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
@@ -30,11 +36,15 @@ typedef struct MxcRingBuffer {
 	MxcRingBufferHandle targets[MXC_RING_BUFFER_CAPACITY];
 } MxcRingBuffer;
 
-//
-/// Shared Types
+
+////
+//// Shared Types
+////
+
 typedef enum MxcNodeType {
 	MXC_NODE_TYPE_NONE,
 	MXC_NODE_TYPE_THREAD,
+	// don't think api matters anymore?
 	MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED,
 	MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED,
 	MXC_NODE_TYPE_INTERPROCESS_OPENGL_EXPORTED,
@@ -105,8 +115,10 @@ typedef struct MxcExternalNodeMemory {
 	MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
-//
-/// Compositor Types
+
+////
+//// Compositor Types
+////
 
 // Data for the compositor
 typedef struct MxcCompositorNodeContext {
@@ -171,8 +183,11 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
 } MxcNodeCompositorData;
 
-//
-/// Node Types
+
+////
+//// Node Types
+////
+
 typedef uint16_t swap_index_t;
 typedef struct MxcSwapInfo {
 	MxcSwapType  type   : 4;
@@ -231,8 +246,10 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-//
+
+////
 //// Swap Pool
+////
 
 typedef bitset64_t swap_bitset_t;
 typedef struct MxcNodeSwapPool {
@@ -243,8 +260,10 @@ typedef struct MxcNodeSwapPool {
 
 extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
 
-//
+
+////
 //// Node State
+////
 
 // I am presuming a node simply won't need to have as many thread nodes within it
 #if defined(MOXAIC_COMPOSITOR)
@@ -263,8 +282,10 @@ extern MxcNodeShared localNodesShared[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
 
-//
+
+////
 //// Compositor State
+////
 
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
@@ -276,8 +297,11 @@ extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 extern MxcCompositorNodeContext compositorNodeContext;
 //#endif
 
-//
-/// Node Queue
+
+////
+//// Node Queue
+////
+
 // This could be a MidVK construct
 typedef struct MxcQueuedNodeCommandBuffer {
 	VkCommandBuffer cmd;
@@ -361,15 +385,21 @@ static void mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index)
 	printf("Releasing swap %d\n", index);
 }
 
-//
-/// Process Connection
+
+////
+//// Process Connection
+////
+
 void mxcInitializeInterprocessServer();
 void mxcShutdownInterprocessServer();
 void mxcConnectInterprocessNode(bool createTestNode);
 void mxcShutdownInterprocessNode();
 
-//
-/// Process IPC Funcs
+
+////
+//// Process IPC Funcs
+////
+
 typedef void (*MxcIpcFuncPtr)(const NodeHandle);
 typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_NODE_CLOSED,

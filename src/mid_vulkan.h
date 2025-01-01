@@ -320,6 +320,7 @@ typedef struct VkContext {
 	VkmQueueFamily   queueFamilies[VK_QUEUE_FAMILY_TYPE_COUNT];
 
 	// these shouldn't be here? no they shouldn't
+	// move into MidVkBasicPipe
 	VkBasicPipeLayout    basicPipeLayout;
 	VkPipeline           basicPipe;
 	VkSampler            linearSampler;
@@ -330,12 +331,12 @@ typedef struct VkContext {
 
 } VkContext;
 
-//typedef struct MidVkBasic {
-//	VkBasicPipeLayout    basicPipeLayout;
-//	VkPipeline           basicPipe;
-//	VkSampler            linearSampler;
-//	VkRenderPass         renderPass;
-//} MidVkBasic;
+typedef struct MidVkBasicPipe {
+	VkBasicPipeLayout layout;
+	VkPipeline        pipe;
+	VkSampler         linearSampler;
+	VkRenderPass      pass;
+} MidVkBasicPipe;
 
 //#define VK_CONTEXT_CAPACITY    2 // should be 1 always?
 #define VK_SURFACE_CAPACITY    2
