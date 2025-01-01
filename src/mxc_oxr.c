@@ -150,20 +150,21 @@ XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized)
 	return hzTime;
 }
 
-void xrGetHeadPose(XrHandle sessionHandle, XrMat4* pInvView)
+void xrGetHeadPose(XrHandle sessionHandle, XrVector3f* pEuler, XrVector3f* pPos)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
-	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	*pInvView = pNodeShared->globalSetState.invView.mat;
+	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
+	*pEuler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
+	*pPos = *(XrVector3f*)&pNodeShared->cameraPose.position;
 }
 
 void xrGetEyeView(XrHandle sessionHandle, uint8_t viewIndex, XrEyeView *pEyeView)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-
-	pEyeView->invView = *(XrMat4*)&pNodeShared->globalSetState.invView;
-	pEyeView->proj = *(XrMat4*)&pNodeShared->globalSetState.proj;
+	pEyeView->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
+	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
+	pEyeView->fovRad = (XrVector2f){pNodeShared->camera.yFovRad, pNodeShared->camera.yFovRad};
 	pEyeView->upperLeftClip = *(XrVector2f*)&pNodeShared->ulScreenUV;
 	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->lrScreenUV;
 }

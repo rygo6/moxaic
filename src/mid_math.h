@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define MID_PI               3.14159265358979323846f
-#define MID_DEG_TO_RAD(_deg) (_deg * (MID_PI / 180.0f))
-#define MID_RAD_TO_DEG(_rad) (_rad * (180.0f / MID_PI))
+#define PI                 3.14159265358979323846f
+#define RAD_FROM_DEG(_deg) (_deg * (PI / 180.0f))
+#define DEG_FROM_RAD(_rad) (_rad * (180.0f / PI))
 
 #define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
 SIMD_TYPE(float, float2, 2);
@@ -335,14 +335,15 @@ typedef struct mat4_proj_packed {
 } mat4_proj_packed;
 
 // Perspective matrix in Vulkan Reverse Z
-MATH_INLINE void vkmMat4Perspective(float yFOV, float aspect, float zNear, float zFar, mat4* pDstMat4)
+MATH_INLINE mat4 Mat4PerspectiveVulkanReverseZ(float yFovRad, float aspect, float zNear, float zFar)
 {
-	const float tanHalfYFOV = tan(yFOV / 2.0f);
-	*pDstMat4 = (mat4){.c0 = {.r0 = 1.0f / (aspect * tanHalfYFOV)},
-					   .c1 = {.r1 = 1.0f / tanHalfYFOV},
-					   .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
-					   .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
+	const float tanHalfYFov = tan(yFovRad / 2.0f);
+	return (mat4){.c0 = {.r0 = 1.0f / (aspect * tanHalfYFov)},
+				  .c1 = {.r1 = 1.0f / tanHalfYFov},
+				  .c2 = {.r2 = zNear / (zFar - zNear), .r3 = -1.0f},
+				  .c3 = {.r2 = -(zNear * zFar) / (zNear - zFar)}};
 }
+
 MATH_INLINE vec3 Vec3Cross(float3_vec l, float3_vec r)
 {
 	return (vec3){l[Y] * r[Z] - r[Y] * l[Z],

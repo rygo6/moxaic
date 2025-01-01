@@ -272,7 +272,7 @@ void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const Mxc
 	const VkDescriptorSet globalSet = pNode->globalSet.set;
 
 	MidCamera globalCamera = {
-		.yFOV = 45.0f,
+		.yFovRad = RAD_FROM_DEG(45.0f),
 		.zNear = 0.1f,
 		.zFar = 100.0f,
 	};
@@ -446,8 +446,10 @@ run_loop:
 
 				vec2 diff = {.vec = lrUV.vec - ulUV.vec};
 
-				// maybe I should only copy camera pos info and generate matrix on other thread? oxr only wants the pose
+				// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
+				pNodeShared->cameraPose = globalCameraPose;
 				pNodeShared->camera = globalCamera;
+
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShared->globalSetState, &globalSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
 				pNodeShared->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};

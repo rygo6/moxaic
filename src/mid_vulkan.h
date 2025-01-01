@@ -214,7 +214,7 @@ typedef struct MidVertex {
 typedef struct MidCamera {
 	float   zNear;
 	float   zFar;
-	float   yFOV;
+	float   yFovRad;
 } MidCamera;
 
 //----------------------------------------------------------------------------------
@@ -685,7 +685,7 @@ INLINE void* midVkSharedMemoryPointer(VkSharedMemory shareMemory)
 INLINE void vkmUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
 	pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
-	vkmMat4Perspective(camera.yFOV, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar, &pState->proj);
+	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar);
 	pState->invProj = Mat4Inv(pState->proj);
 	pState->invView = Mat4FromPosRot(cameraPose.position, cameraPose.rotation);
 	pState->view = Mat4Inv(pState->invView);

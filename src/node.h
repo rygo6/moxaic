@@ -84,6 +84,7 @@ typedef struct MxcNodeShared {
 
 	// I don't think I need this?
 	// should maybe in context?
+	MidPose           cameraPose;
 	MidCamera         camera;
 
 	// read every cycle, occasional write

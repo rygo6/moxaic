@@ -97,11 +97,12 @@ void xrSetInitialCompositorTimelineValue(XrHandle sessionHandle, uint64_t timeli
 void xrGetCompositorTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue);
 void xrProgressCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue, bool synchronized);
 
-void xrGetHeadPose(XrHandle sessionHandle, XrMat4* pInvView);
+void xrGetHeadPose(XrHandle sessionHandle, XrVector3f* pEuler, XrVector3f* pPos);
 
 typedef struct XrEyeView {
-	XrMat4 invView;
-	XrMat4 proj;
+	XrVector3f euler;
+	XrVector3f position;
+	XrVector2f fovRad;
 	XrVector2f upperLeftClip;
 	XrVector2f lowerRightClip;
 } XrEyeView;
@@ -840,26 +841,87 @@ static inline XrVector3f xrPosFromMat4(XrMat4 m)
 		m[14] / w       // m32 (c3r2)
 	};
 }
-static inline XrMat4 xrMat4YInvert(XrMat4 m)
+static inline XrQuaternionf xrQuaternionFromEuler(XrVector3f euler)
 {
-	m[1] = -m[1];    // c0r1
-	m[5] = -m[5];    // c1r1
-	m[9] = -m[9];    // c2r1
-	m[13] = -m[13];  // c3r1
-	return m;
+	XrVector3f c, s;
+	c.x = cos(euler.x * 0.5f);
+	c.y = cos(euler.y * 0.5f);
+	c.z = cos(euler.z * 0.5f);
+	s.x = sin(euler.x * 0.5f);
+	s.y = sin(euler.y * 0.5f);
+	s.z = sin(euler.z * 0.5f);
+
+	XrQuaternionf out;
+	out.w = c.x * c.y * c.z + s.x * s.y * s.z;
+	out.x = s.x * c.y * c.z - c.x * s.y * s.z;
+	out.y = c.x * s.y * c.z + s.x * c.y * s.z;
+	out.z = c.x * c.y * s.z - s.x * s.y * c.z;
+	return out;
 }
-static inline XrMat4 xrMat4XInvert(XrMat4 m)
+static inline XrMat4 xrMat4XInvertPos(XrMat4 m)
 {
-	m[0] = -m[0];    // c0r0
-	m[4] = -m[4];    // c1r0
-	m[8] = -m[8];    // c2r0
 	m[12] = -m[12];  // c3r0
 	return m;
 }
+static inline XrMat4 xrMat4YInvertPos(XrMat4 m)
+{
+	m[13] = -m[13];  // c3r1
+	return m;
+}
+static inline XrMat4 xrMat4ZInvertPos(XrMat4 m)
+{
+	m[14] = -m[14];  // c3r2
+	return m;
+}
+static inline XrMat4 xrMat4MirrorXRot(XrMat4 m) {
+	// Get local X axis (first column of rotation part)
+	float local_x[3] = {
+		m[0],  // c0r0
+		m[1],  // c0r1
+		m[2]   // c0r2
+	};
+
+	// Create reflection matrix that mirrors across plane perpendicular to local X
+	// Householder reflection formula: I - 2(v⊗v)
+	// Negate the rotational part except for components along local X
+
+	m[4] -= 2.0f * local_x[0] * local_x[1];  // c1r0
+	m[5] -= 2.0f * local_x[1] * local_x[1];  // c1r1
+	m[6] -= 2.0f * local_x[2] * local_x[1];  // c1r2
+
+	m[8] -= 2.0f * local_x[0] * local_x[2];  // c2r0
+	m[9] -= 2.0f * local_x[1] * local_x[2];  // c2r1
+	m[10] -= 2.0f * local_x[2] * local_x[2]; // c2r2
+	return m;
+}
+static inline XrMat4 xrMat4InvertXRot(XrMat4 m) {
+	m[1] = -m[1];    // c0r1 (Y component of first column)
+	m[2] = -m[2];    // c0r2 (Z component of first column)
+
+	m[5] = -m[5];    // c1r1 (Y component of second column)
+	m[6] = -m[6];    // c1r2 (Z component of second column)
+
+	m[9] = -m[9];    // c2r1 (Y component of third column)
+	m[10] = -m[10];  // c2r2 (Z component of third column)
+	return m;
+}
+static inline XrMat4 xrMat4InvertYRot(XrMat4 m) {
+	m[0] = -m[0];  // c0r0
+	m[8] = -m[8];  // c2r0
+}
+static inline XrMat4 xrMat4InvertZRot(XrMat4 m) {
+	m[0] = -m[0];  // c0r0
+	m[4] = -m[4];  // c1r0
+}
+
+#define XR_CONVERT_DX11_POSITION(_) _.y = -_.y
+#define XR_CONVERT_DX11_EULER(_) _.x = -_.x
+
 static inline float xrFloatLerp(float a, float b, float t)
 {
 	return a + t * (b - a);
 }
+
 
 //
 //// Device Input Funcs
@@ -1959,22 +2021,23 @@ XR_PROC xrLocateSpace(
 							  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
 							  XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
 
-	XrMat4 invView;
-	xrGetHeadPose(sessionHandle, &invView);
+	XrVector3f euler;
+	XrVector3f pos;
+	xrGetHeadPose(sessionHandle, &euler, &pos);
 
 	switch (pInstance->graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:
-			invView = xrMat4YInvert(invView);
-			invView = xrMat4XInvert(invView);
+			XR_CONVERT_DX11_EULER(euler);
+			XR_CONVERT_DX11_POSITION(pos);
 			break;
 		default: break;
 	}
 
-	location->pose.orientation = xrRotFromMat4(invView);
-	location->pose.position = xrPosFromMat4(invView);
+	location->pose.orientation = xrQuaternionFromEuler(euler);
+	location->pose.position = pos;
 
 	if (location->next != NULL) {
 		switch (*(XrStructureType*)location->next) {
@@ -2851,38 +2914,48 @@ XR_PROC xrLocateViews(
 		XrEyeView eyeView;
 		xrGetEyeView(sessionHandle, i, &eyeView);
 
-		float fovX = eyeView.proj[0];   // c0r0
-		float fovY = eyeView.proj[5];   // c1r1
-		float angleX = atan(1.0f / fovX);
-		float angleY = atan(1.0f / fovY);
-
-		float angleLeft = xrFloatLerp(-angleX, angleX, eyeView.upperLeftClip.x);
-		float angleRight = xrFloatLerp(-angleX, angleX, eyeView.lowerRightClip.x);
-		float angleUp = xrFloatLerp(-angleY, angleY, eyeView.upperLeftClip.y);
-		float angleDown = xrFloatLerp(-angleY, angleY, eyeView.lowerRightClip.y);
-
 		switch (pInstance->graphicsApi) {
 			case XR_GRAPHICS_API_OPENGL:    break;
 			case XR_GRAPHICS_API_OPENGL_ES: break;
 			case XR_GRAPHICS_API_VULKAN:    break;
 			case XR_GRAPHICS_API_D3D11_4:
-				// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices
-				// unless all the angles are negative.
-				// I probably don't wna to do this, I probably want to use symmetrical angles with a render mask
-				angleUp -= angleUp > 0 ? PI * 2 : 0;
-				angleDown -= angleDown > 0 ? PI * 2 : 0;
-				angleLeft -= angleLeft > 0 ? PI * 2 : 0;
-				angleRight -= angleLeft > 0 ? PI * 2 : 0;
-
-				// DX is inverted
-				eyeView.invView = xrMat4YInvert(eyeView.invView);
-				eyeView.invView = xrMat4XInvert(eyeView.invView);
+				XR_CONVERT_DX11_EULER(eyeView.euler);
+				XR_CONVERT_DX11_POSITION(eyeView.position);
 				break;
 			default: break;
 		}
 
-		views[i].pose.orientation =  xrRotFromMat4(eyeView.invView);
-		views[i].pose.position = xrPosFromMat4(eyeView.invView);
+		float fovHalfXRad = eyeView.fovRad.x / 2.0f;
+		float fovHalfYRad = eyeView.fovRad.y / 2.0f;
+		float angleLeft = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.upperLeftClip.x);
+		float angleRight = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.lowerRightClip.x);
+		float angleUp;
+		float angleDown;
+
+		switch (pInstance->graphicsApi) {
+			default:
+			case XR_GRAPHICS_API_OPENGL:
+			case XR_GRAPHICS_API_OPENGL_ES:
+			case XR_GRAPHICS_API_VULKAN:
+				angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.upperLeftClip.y);
+				angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.lowerRightClip.y);
+				break;
+			case XR_GRAPHICS_API_D3D11_4:
+				// DX11 Y needs to invert
+				angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.upperLeftClip.y);
+				angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.lowerRightClip.y);
+
+				// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices unless all the angles are negative.
+				angleUp -= PI * 2;
+				angleDown -= PI * 2;
+				angleLeft -= PI * 2;
+				angleRight -= PI * 2;
+
+				break;
+		}
+
+		views[i].pose.orientation = xrQuaternionFromEuler(eyeView.euler);
+		views[i].pose.position = eyeView.position;
 		views[i].fov.angleLeft = angleLeft;
 		views[i].fov.angleRight = angleRight;
 		views[i].fov.angleUp = angleUp;
@@ -3407,7 +3480,7 @@ XR_PROC xrGetVisibilityMaskKHR(
 			break;
 	}
 
-	float      extent = 0.5f;
+	float      extent = 1.0f;
 	XrVector2f innerVertices[] = {
 		{-extent, -extent},  // 0
 		{extent, -extent},   // 1

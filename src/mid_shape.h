@@ -42,8 +42,8 @@ void CreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* pMe
   MidVertex   vertices[info.vertexCount];
   float slices = (float)slicesCount;
   float stacks = (float)stackCount;
-  float dtheta = 2.0f * MID_PI / slices;
-  float dphi = MID_PI / stacks;
+  float dtheta = 2.0f * PI / slices;
+  float dphi = PI / stacks;
   int         vertex = 0;
   for (int i = 0; +i <= stackCount; i++) {
     float fi = (float)i;
