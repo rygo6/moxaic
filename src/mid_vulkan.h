@@ -31,7 +31,7 @@
 
 //
 //// Mid Common Utility
-#define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__);
+#define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__)
 
 #ifndef MID_DEBUG
 #define MID_DEBUG

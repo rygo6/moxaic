@@ -42,6 +42,8 @@
 #include <d3d11_3.h>
 #include <d3d11_4.h>
 
+#include "mid_bit.h"
+
 #ifdef MID_IDE_ANALYSIS
 #undef XRAPI_CALL
 #define XRAPI_CALL
@@ -81,9 +83,13 @@ typedef enum XrGraphicsApi {
 } XrGraphicsApi;
 
 void midXrInitialize();
-void xrClaimSession(XrHandle* pSessionHandle);
+
+// Session may claim an index from implementation or reference state in the implementation
+typedef uint16_t XrSessionIndex;
+void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
+
 void xrReleaseSession(XrHandle sessionHandle);
-void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
+void xrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
 void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
 
 void xrGetSessionTimeline(uint32_t sessionHandle, HANDLE* pHandle);
@@ -170,10 +176,17 @@ typedef enum XrSwapType {
 //} XrFrameBeginSwapPoolInfo;
 
 
-typedef struct Slot {
+typedef struct SlubSlot {
 	bool occupied : 1;
-} Slot;
+} SlubSlot;
 
+
+typedef bitset64_t slab_bitset_t;
+#define SLAB(_type, _capacity)          \
+	typedef struct _type##Pool {        \
+		slab_bitset_t slots[_capacity]; \
+		_type         data[_capacity];  \
+	} _type##Pool;
 
 #define XR_CHECK(_command)                     \
 	({                                         \
@@ -185,7 +198,7 @@ typedef struct Slot {
 
 #define POOL(_type, _capacity)                             \
 	typedef struct __attribute((aligned(4))) _type##Pool { \
-		Slot  slots[_capacity];                            \
+		SlubSlot slots[_capacity];                            \
 		_type data[_capacity];                             \
 	} _type##Pool;
 
@@ -227,14 +240,14 @@ typedef struct Slot {
 #define CACHE_SIZE 64
 typedef struct __attribute((aligned(CACHE_SIZE))) {
 	uint8_t data[CACHE_SIZE];
-} MemoryBlock;
+} SlubBlock;
 
 #define POOL_BLOCK_COUNT 1U << 16
-typedef uint16_t BlockHandle;
+typedef uint16_t SlubHandle;
 typedef struct {
-	Slot        slots[POOL_BLOCK_COUNT];
-	MemoryBlock blocks[POOL_BLOCK_COUNT];
-} PoolMemory;
+	SlubSlot    slots[POOL_BLOCK_COUNT];
+	SlubBlock   blocks[POOL_BLOCK_COUNT];
+} SlubMemory;
 
 typedef struct {
 	// explore 24 and 20 bit hashes
@@ -244,27 +257,27 @@ typedef struct {
 #define POOL_HANDLE_MAX_CAPACITY 1U << 8
 typedef uint8_t PoolHandle;
 typedef struct {
-	Slot        slots[POOL_HANDLE_MAX_CAPACITY];
-	BlockHandle blockHandles[POOL_HANDLE_MAX_CAPACITY];
+	SlubSlot    slots[POOL_HANDLE_MAX_CAPACITY];
+	SlubHandle  handles[POOL_HANDLE_MAX_CAPACITY];
 	Hash        hashes[POOL_HANDLE_MAX_CAPACITY];
 	size_t      blockSize;
 } HashedPool;
 
 #define POOL_STRUCT(_type, _capacity)                                                                                  \
 	typedef struct {                                                                                                   \
-		Slot        slots[_capacity];                                                                                  \
-		BlockHandle blockHandles[_capacity];                                                                           \
-		Hash        hashes[_capacity];                                                                                 \
+		SlubSlot   slots[_capacity];                                                                                   \
+		SlubHandle handles[_capacity];                                                                                 \
+		Hash       hashes[_capacity];                                                                                  \
 	} _type##HashedPool;                                                                                               \
 	_Static_assert(_capacity <= POOL_HANDLE_MAX_CAPACITY, #_type " " #_capacity " exceeds POOL_HANDLE_MAX_CAPACITY."); \
 	static inline void ClaimSessionPoolHandle(_type##HashedPool* pPool, PoolHandle* pPoolHandle)                       \
 	{                                                                                                                  \
-		ClaimPoolHandle(sizeof(_type), _capacity, pPool->slots, pPool->blockHandles, pPool->hashes, pPoolHandle);      \
+		ClaimPoolHandle(sizeof(_type), _capacity, pPool->slots, pPool->handles, pPool->hashes, pPoolHandle);           \
 	}
 
-extern PoolMemory poolMemory;
+extern SlubMemory poolMemory;
 
-static XrResult ClaimBlockHandle(size_t size, BlockHandle* pBlockHandle)
+static XrResult ClaimBlockHandle(size_t size, SlubHandle* pBlockHandle)
 {
 	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
 	uint32_t blockCount = (size / CACHE_SIZE) + 1;
@@ -295,7 +308,7 @@ static XrResult ClaimBlockHandle(size_t size, BlockHandle* pBlockHandle)
 	printf("Found blockHandle %d\n", blockHandle);
 	return XR_SUCCESS;
 }
-static void ReleaseBlockHandle(size_t size, BlockHandle blockHandle)
+static void ReleaseBlockHandle(size_t size, SlubHandle blockHandle)
 {
 	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
 	uint8_t blockCount = (size / CACHE_SIZE) + 1;
@@ -307,7 +320,7 @@ static void ReleaseBlockHandle(size_t size, BlockHandle blockHandle)
 	}
 }
 
-static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, Slot* pSlots, BlockHandle* pBlockHandles, Hash* pHashes, PoolHandle* pPoolHandle)
+static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle* pPoolHandle)
 {
 	uint32_t poolHandle = UINT32_MAX;
 	for (int i = 0; i < poolCapacity; ++i) {
@@ -325,7 +338,7 @@ static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, Slot* pSlots, B
 		return XR_ERROR_LIMIT_REACHED;
 	}
 
-	BlockHandle blockHandle;
+	SlubHandle blockHandle;
 	if (ClaimBlockHandle(blockSize, &blockHandle) != XR_SUCCESS) {
 		return XR_ERROR_LIMIT_REACHED;
 	}
@@ -337,7 +350,7 @@ static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, Slot* pSlots, B
 	printf("Found PoolHandle %d\n", poolHandle);
 	return XR_SUCCESS;
 }
-static XrResult ReleasePoolHandle(int blockSize, Slot* pSlots, BlockHandle* pBlockHandles, Hash* pHashes, PoolHandle poolHandle)
+static XrResult ReleasePoolHandle(int blockSize, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle poolHandle)
 {
 	assert(pSlots[poolHandle].occupied);
 
@@ -365,7 +378,7 @@ static XrResult ReleasePoolHandle(int blockSize, Slot* pSlots, BlockHandle* pBlo
 //	return XR_SUCCESS;
 //}
 #define ClaimHandle(_pool, _pValue) XR_CHECK(_ClaimHandle(_pool.slots, _pool.data, sizeof(_pool.data[0]), COUNT(_pool.slots), (void**)&_pValue))
-static XrResult _ClaimHandle(Slot* pSlots, void* pData, int stride, int capacity, void** ppValue)
+static XrResult _ClaimHandle(SlubSlot* pSlots, void* pData, int stride, int capacity, void** ppValue)
 {
 	uint32_t handle = UINT32_MAX;
 	for (int i = 0; i < capacity; ++i) {
@@ -387,7 +400,7 @@ static XrResult _ClaimHandle(Slot* pSlots, void* pData, int stride, int capacity
 	return XR_SUCCESS;
 }
 #define ReleaseHandle(_pool, _handle) XR_CHECK(_ReleaseHandle(_pool.slots, _handle))
-static XrResult _ReleaseHandle(Slot* pSlots, XrHandle handle)
+static XrResult _ReleaseHandle(SlubSlot* pSlots, XrHandle handle)
 {
 	assert(pSlots[handle].occupied == true);
 	pSlots[handle].occupied = false;
@@ -399,24 +412,38 @@ static XrHandle _GetHandle(void* pData, int stride, const void* pValue)
 	return (XrHandle)((pValue - pData) / stride);
 }
 
+typedef uint8_t BlockHandle;
 
-#define MIDXR_MAX_PATHS 128
+#define SLAB_DECL(_, n)                         \
+	typedef struct _##Slab {                 \
+		BITSET_DECL(occupied, n); \
+		XrHash hashes[n];         \
+		_      blocks[n];         \
+	} _##Slab;
+
+#define XR_MAX_PATHS 256
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
-POOL_HASHED(Path, MIDXR_MAX_PATHS)
+POOL_HASHED(Path, XR_MAX_PATHS)
+SLAB_DECL(Path, XR_MAX_PATHS)
 
+
+#define XR_MAX_BINDINGS 16
 typedef struct Binding {
 	XrPath path;
 	int (*func)(void*);
 } Binding;
 POOL_HASHED(Binding, 16)
+SLAB_DECL(Binding, XR_MAX_BINDINGS)
+
 
 typedef struct InteractionProfile {
 	XrPath      path;
 	BindingPool bindings;
 } InteractionProfile;
 POOL_HASHED(InteractionProfile, 16)
+
 
 #define XR_MAX_ACTIONS 64
 typedef Binding* XrBinding;
@@ -509,7 +536,9 @@ POOL(Swapchain, 2)
 #define MIDXR_MAX_SESSIONS 4
 // this layout is awful from a DOD perspective can I make it less awful?
 typedef struct Session {
-	XrInstance instance;
+	XrSessionIndex index;
+
+//	XrInstance instance;
 	XrSystemId systemId;
 	XrSwapType swapType;
 
@@ -546,6 +575,8 @@ typedef struct Session {
 	SwapchainPool      swapchains;
 	ActionSetStatePool actionSetStates;
 
+//	ActionSetStatePool attachedActionSetStates;
+
 	XrViewConfigurationType primaryViewConfigurationType;
 	union {
 		struct {
@@ -569,9 +600,14 @@ typedef struct Session {
 
 } Session;
 POOL(Session, MIDXR_MAX_SESSIONS)
-//POOL_STRUCT(Session, MIDXR_MAX_SESSIONS);
+POOL_STRUCT(Session, MIDXR_MAX_SESSIONS);
 
-#define MIDXR_MAX_INSTANCES 2
+typedef struct SessionSlab {
+	bitset64_t occupied;
+	Session    slabs[BITNSIZE(bitset64_t)];
+} SessionSlab;
+
+
 typedef struct Instance {
 	// probably need this
 	//	uint8_t stateQueueStart;
@@ -584,13 +620,10 @@ typedef struct Instance {
 	XrFormFactor systemFormFactor;
 	SessionPool  sessions;
 
-//	SessionHashedPool sessions2;
-
 	ActionSetPool          actionSets;
 	InteractionProfilePool interactionProfiles;
 	PathPool               paths;
 
-	// not sure if I shold support only one graphics api per instance?
 	XrGraphicsApi graphicsApi;
 	union {
 		struct {
@@ -600,20 +633,53 @@ typedef struct Instance {
 	} graphics;
 
 } Instance;
-//POOL(Instance, MIDXR_MAX_INSTANCES)
-
-// I think I want to put all of the above in an arena pool
 
 //
 //// MidOpenXR Implementation
 #ifdef MID_OPENXR_IMPLEMENTATION
 
 static struct {
-	// more should be in here
 	Instance instance;
+	SessionSlab sessions;
+	PathSlab paths;
 } xr;
 
-PoolMemory poolMemory;
+SlubMemory poolMemory;
+
+
+#define CLAIM_SESSION() ClaimBlock(sizeof(xr.paths.occupied), &xr.paths.blocks)
+#define CLAIM_PATH(_hash) ClaimHashedBlock(sizeof(xr.paths.occupied), &xr.paths.blocks, &xr.paths.hashes, _hash)
+#define FIND_PATH(_hash) FindBlockByHash(sizeof(xr.paths.hashes), &xr.paths.hashes, _hash)
+
+static int ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet)
+{
+	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
+	if (i == -1) return -1;
+	BITSET(pOccupiedSet, i);
+	return i;
+}
+static int ClaimHashedBlock(int occupiedCount, bitset_t* pOccupiedSet, uint32_t* pHashes, uint32_t hash)
+{
+	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
+	if (i == -1) return -1;
+	BITSET(pOccupiedSet, i);
+	pHashes[i] = hash;
+	return i;
+}
+static int FindBlockByHash(int hashCount, uint32_t* pHashes, uint32_t hash)
+{
+	for (int i = 0; i < hashCount; ++i) {
+		if (pHashes[i] == hash)
+			return i;
+	}
+	return -1;
+}
+static void ReleaseBlock(int occupiedCount, bitset_t* pOccupiedSet, int handle)
+{
+	assert(handle < occupiedCount);
+	BITCLEAR(pOccupiedSet, handle);
+}
+
 
 //
 //// MidOpenXR Debug
@@ -914,8 +980,8 @@ static inline XrMat4 xrMat4InvertZRot(XrMat4 m) {
 	m[4] = -m[4];  // c1r0
 }
 
-#define XR_CONVERT_DX11_POSITION(_) _.y = -_.y
-#define XR_CONVERT_DX11_EULER(_) _.x = -_.x
+#define XR_CONVERT_DD11_POSITION(_) _.y = -_.y
+#define XR_CONVERT_D3D11_EULER(_) _.x = -_.x
 
 static inline float xrFloatLerp(float a, float b, float t)
 {
@@ -1753,30 +1819,21 @@ XR_PROC xrCreateSession(
 		return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
 	}
 
-	XrHandle externalSessionHandle;
-	xrClaimSession(&externalSessionHandle);
-
-//	PoolHandle sessionHandle;
-//	ClaimSessionPoolHandle(&pInstance->sessions2, &sessionHandle);
-//	BlockHandle blockHandle = pInstance->sessions2.blockHandles[sessionHandle];
-//	Session* pSession = (Session*)&poolMemory.blocks[blockHandle];
-
+	XrSessionIndex sessionIndex;
+	xrClaimSessionIndex(&sessionIndex);
+	printf("Claimed SessionIndex %d\n", sessionIndex);
 
 	Session* pClaimedSession;
 	ClaimHandle(pInstance->sessions, pClaimedSession);
 	*pClaimedSession = (Session){};
 
-	XrHandle sessionHandle = GetHandle(pInstance->sessions, pClaimedSession);
-
-	printf("CreatedHandle %d ClaimedHandle %d\n", externalSessionHandle, sessionHandle);
-	// these should be the same but probably want to get these handles better...
-	assert(externalSessionHandle == sessionHandle);
+	pClaimedSession->index = sessionIndex;
 
 	HANDLE compositorFenceHandle;
-	xrGetCompositorTimeline(sessionHandle, &compositorFenceHandle);
+	xrGetCompositorTimeline(sessionIndex, &compositorFenceHandle);
 
 	HANDLE sessionFenceHandle;
-	xrGetSessionTimeline(sessionHandle, &sessionFenceHandle);
+	xrGetSessionTimeline(sessionIndex, &sessionFenceHandle);
 
 	if (createInfo->next == NULL) {
 		LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
@@ -1870,7 +1927,6 @@ XR_PROC xrCreateSession(
 	}
 
 
-	pClaimedSession->instance = instance;
 	pClaimedSession->systemId = createInfo->systemId;
 	pClaimedSession->activeSessionState = XR_SESSION_STATE_UNKNOWN;
 	pClaimedSession->pendingSessionState = XR_SESSION_STATE_IDLE;
@@ -1888,9 +1944,8 @@ XR_PROC xrDestroySession(
 	LOG_METHOD(xrDestroySession);
 
 	Session* pSession = (Session*)session;
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
-	ReleaseHandle(pInstance->sessions, sessionHandle);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
+	ReleaseHandle(xr.instance.sessions, sessionHandle);
 
 	xrReleaseSession(sessionHandle);
 
@@ -1967,10 +2022,9 @@ XR_PROC xrGetReferenceSpaceBoundsRect(
 	LOG_METHOD(xrGetReferenceSpaceBoundsRect);
 
 	Session* pSession = (Session*)session;
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
-	midXrGetReferenceSpaceBounds(sessionHandle, bounds);
+	xrGetReferenceSpaceBounds(sessionHandle, bounds);
 
 	printf("xrGetReferenceSpaceBoundsRect %s width: %f height: %f\n", string_XrReferenceSpaceType(referenceSpaceType), bounds->width, bounds->height);
 
@@ -2013,8 +2067,7 @@ XR_PROC xrLocateSpace(
 
 	Space* pSpace = (Space*)space;
 	Session* pSession = (Session*)pSpace->session;
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
 							  XR_SPACE_LOCATION_POSITION_VALID_BIT |
@@ -2025,13 +2078,13 @@ XR_PROC xrLocateSpace(
 	XrVector3f pos;
 	xrGetHeadPose(sessionHandle, &euler, &pos);
 
-	switch (pInstance->graphicsApi) {
+	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:
-			XR_CONVERT_DX11_EULER(euler);
-			XR_CONVERT_DX11_POSITION(pos);
+			XR_CONVERT_D3D11_EULER(euler);
+			XR_CONVERT_DD11_POSITION(pos);
 			break;
 		default: break;
 	}
@@ -2214,7 +2267,6 @@ XR_PROC xrEnumerateSwapchainFormats(
 	LOG_METHOD(xrEnumerateSwapchainFormats);
 
 	Session*  pSession = (Session*)session;
-	Instance* pInstance = (Instance*)pSession->instance;
 
 #define TRANSFER_SWAP_FORMATS                               \
 	*formatCountOutput = COUNT(swapFormats);                \
@@ -2227,7 +2279,7 @@ XR_PROC xrEnumerateSwapchainFormats(
 		formats[i] = swapFormats[i];                        \
 	}
 
-	switch (pInstance->graphicsApi) {
+	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			int64_t swapFormats[] = {
 				GL_SRGB8_ALPHA8,
@@ -2307,8 +2359,7 @@ XR_PROC xrCreateSwapchain(
 		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	Swapchain* pSwapchain;
 	ClaimHandle(pSession->swapchains, pSwapchain);
@@ -2327,7 +2378,7 @@ XR_PROC xrCreateSwapchain(
 	HANDLE colorHandles[XR_SWAP_COUNT];
 	midXrClaimFramebufferImages(sessionHandle, XR_SWAP_COUNT, colorHandles);
 
-	switch (pInstance->graphicsApi) {
+	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			printf("Creating OpenGL Swap");
 
@@ -2439,8 +2490,7 @@ XR_PROC xrAcquireSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
-	Instance*  pInstance = (Instance*)pSession->instance;
-	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle   sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	xrClaimSwapPoolImage(sessionHandle, &pSwapchain->swapIndex);
 
@@ -2458,8 +2508,7 @@ XR_PROC xrWaitSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
-	Instance*  pInstance = (Instance*)pSession->instance;
-	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle   sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	ID3D11DeviceContext4*   context4 = pSession->binding.d3d11.context4;
 
@@ -2484,8 +2533,7 @@ XR_PROC xrReleaseSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
-	Instance*  pInstance = (Instance*)pSession->instance;
-	XrHandle   sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle   sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	xrReleaseSwapPoolImage(sessionHandle, pSwapchain->swapIndex);
 
@@ -2525,8 +2573,7 @@ XR_PROC xrBeginSession(
 	pSession->running = true;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 //	switch (pInstance->graphicsApi) {
 //		case XR_GRAPHICS_API_OPENGL:    break;
@@ -2609,12 +2656,11 @@ XR_PROC xrWaitFrame(
 
 	XrTimeWaitWin32(&pSession->frameBegan, pSession->frameWaited);
 
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	if (pSession->lastDisplayTime == 0) {
 		uint64_t initialTimelineValue;
-		switch (pInstance->graphicsApi) {
+		switch (xr.instance.graphicsApi) {
 			case XR_GRAPHICS_API_D3D11_4:
 				initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
 				break;
@@ -2629,7 +2675,7 @@ XR_PROC xrWaitFrame(
 	uint64_t compositorTimelineValue;
 	xrGetCompositorTimelineValue(sessionHandle, synchronized, &compositorTimelineValue);
 
-	switch (pInstance->graphicsApi) {
+	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
@@ -2783,8 +2829,7 @@ XR_PROC xrEndFrame(
 		}
 	}
 
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 	bool      synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 
 	{
@@ -2834,7 +2879,7 @@ XR_PROC xrEndFrame(
 			pSession->synchronizedFrameCount = 0;
 
 			uint64_t initialTimelineValue;
-			switch (pInstance->graphicsApi) {
+			switch (xr.instance.graphicsApi) {
 				case XR_GRAPHICS_API_D3D11_4:
 					initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
 					break;
@@ -2907,20 +2952,19 @@ XR_PROC xrLocateViews(
 		return XR_SUCCESS;
 
 	Session*  pSession = (Session*)session;
-	Instance* pInstance = (Instance*)pSession->instance;
-	XrHandle  sessionHandle = GetHandle(pInstance->sessions, pSession);
+	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	for (int i = 0; i < viewCapacityInput; ++i) {
 		XrEyeView eyeView;
 		xrGetEyeView(sessionHandle, i, &eyeView);
 
-		switch (pInstance->graphicsApi) {
+		switch (xr.instance.graphicsApi) {
 			case XR_GRAPHICS_API_OPENGL:    break;
 			case XR_GRAPHICS_API_OPENGL_ES: break;
 			case XR_GRAPHICS_API_VULKAN:    break;
 			case XR_GRAPHICS_API_D3D11_4:
-				XR_CONVERT_DX11_EULER(eyeView.euler);
-				XR_CONVERT_DX11_POSITION(eyeView.position);
+				XR_CONVERT_D3D11_EULER(eyeView.euler);
+				XR_CONVERT_DD11_POSITION(eyeView.position);
 				break;
 			default: break;
 		}
@@ -2932,7 +2976,7 @@ XR_PROC xrLocateViews(
 		float angleUp;
 		float angleDown;
 
-		switch (pInstance->graphicsApi) {
+		switch (xr.instance.graphicsApi) {
 			default:
 			case XR_GRAPHICS_API_OPENGL:
 			case XR_GRAPHICS_API_OPENGL_ES:
@@ -3147,10 +3191,9 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	LOG_METHOD(xrSuggestInteractionProfileBindings);
 	LogNextChain(suggestedBindings->next);
 
-	Instance*           pInstance = (Instance*)instance;
 	Path*               pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
-	XrHash              interactionProfilePathHash = GetPathHash(&pInstance->paths, pInteractionProfilePath);
-	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&pInstance->interactionProfiles, interactionProfilePathHash);
+	XrHash              interactionProfilePathHash = GetPathHash(&xr.instance.paths, pInteractionProfilePath);
+	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&xr.instance.interactionProfiles, interactionProfilePathHash);
 	if (pInteractionProfile == NULL) {
 		LOG_ERROR("Could not find interaction profile binding set! %s %d\n", pInteractionProfilePath->string);
 		return XR_ERROR_PATH_UNSUPPORTED;
@@ -3169,11 +3212,12 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		Action* pBindingAction = (Action*)pSuggestedBindings[i].action;
 		Path*   pBindingPath = (Path*)pSuggestedBindings[i].binding;
-		// if the pointers became 32 bit int handle, I could just use that as a hash?
-		XrHash   bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
-		Binding* pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
 
 		ActionSet* pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
+
+		// if the pointers became 32 bit int handle, I could just use that as a hash?
+		XrHash   bindingPathHash = GetPathHash(&xr.instance.paths, pBindingPath);
+		Binding* pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
 
 		if (pBindingAction->countSubactionPaths == 0) {
 			XrBinding* pActionBinding;
@@ -3212,10 +3256,10 @@ XR_PROC xrAttachSessionActionSets(
 	if (pSession->actionSetStates.count != 0)
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
 
-	Instance* pInstance = (Instance*)pSession->instance;
+
 	for (int i = 0; i < attachInfo->countActionSets; ++i) {
 		ActionSet* pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
-		XrHash     attachingActionSetHash = GetActionSetHash(&pInstance->actionSets, pAttachingActionSet);
+		XrHash     attachingActionSetHash = GetActionSetHash(&xr.instance.actionSets, pAttachingActionSet);
 
 		ActionSetState* pClaimedActionSetState;
 		XR_CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
@@ -3231,9 +3275,9 @@ XR_PROC xrAttachSessionActionSets(
 	if (pSession->pendingInteractionProfile == NULL) {
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 		XrPath interactionProfilePath;
-		xrStringToPath(pSession->instance, XR_DEFAULT_INTERACTION_PROFILE, &interactionProfilePath);
-		XrHash              interactionProfilePathHash = GetPathHash(&pInstance->paths, (Path*)interactionProfilePath);
-		InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&pInstance->interactionProfiles, interactionProfilePathHash);
+		xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &interactionProfilePath);
+		XrHash              interactionProfilePathHash = GetPathHash(&xr.instance.paths, (Path*)interactionProfilePath);
+		InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&xr.instance.interactionProfiles, interactionProfilePathHash);
 		pSession->pendingInteractionProfile = pInteractionProfile;
 	}
 
@@ -3295,14 +3339,13 @@ XR_PROC xrGetActionStateFloat(
 	LogNextChain(getInfo->next);
 
 	Action*    pGetAction = (Action*)getInfo->action;
-	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
 	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
 
-//	printf("Action: %s\n", pGetAction->actionName);
+	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
+
+	XrHash     getActionSetHash = GetActionSetHash(&xr.instance.actionSets, pGetActionSet);
 
 	Session*        pSession = (Session*)session;
-	Instance*       pInstance = (Instance*)pSession->instance;
-	XrHash          getActionSetHash = GetActionSetHash(&pInstance->actionSets, pGetActionSet);
 	ActionSetState* pGetActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, getActionSetHash);
 
 	XrHandle     getActionHandle = GetHandle(pGetActionSet->Actions, pGetAction);
@@ -3364,26 +3407,27 @@ XR_PROC xrSyncActions(
 	// short ciruit for now
 	return XR_SUCCESS;
 
-	Instance* pInstance = (Instance*)pSession->instance;
 	XrTime    currentTime = xrGetTime();
 
-	for (int sessionIndex = 0; sessionIndex < pSession->actionSetStates.count; ++sessionIndex) {
-		ActionSet*      pActionSet = (ActionSet*)syncInfo->activeActionSets[sessionIndex].actionSet;
-		XrHash          actionSetHash = GetActionSetHash(&pInstance->actionSets, pActionSet);
-		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, actionSetHash);
+	for (int activeSetIndex = 0; activeSetIndex < syncInfo->countActiveActionSets; ++activeSetIndex) {
+
+		ActionSet* pActiveActionSet = (ActionSet*)syncInfo->activeActionSets[activeSetIndex].actionSet;
+		XrHash     activeActionSetHash = GetActionSetHash(&xr.instance.actionSets, pActiveActionSet);
+
+		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, activeActionSetHash);
 
 		if (pActionSetState == NULL)
 			continue;
 
-		for (int actionIndex = 0; actionIndex < COUNT(pActionSet->Actions.slots); ++actionIndex) {
-			Action*      pAction = &pActionSet->Actions.data[actionIndex];
+		for (int actionIndex = 0; actionIndex < COUNT(pActiveActionSet->Actions.slots); ++actionIndex) {
+			Action*      pAction = &pActiveActionSet->Actions.data[actionIndex];
 			ActionState* pActionState = &pActionSetState->states[actionIndex];
 
 			for (int subActionIndex = 0; subActionIndex < pAction->countSubactionPaths; ++subActionIndex) {
 				XrBindingPool*  pSubactionBindingPool = &pAction->subactionBindings[subActionIndex];
 				SubactionState* pSubactionState = &pActionState->subactionStates[subActionIndex];
 
-				if (pSubactionState->lastSyncedPriority > pActionSet->priority &&
+				if (pSubactionState->lastSyncedPriority > pActiveActionSet->priority &&
 					pSubactionState->lastChangeTime == currentTime)
 					continue;
 
@@ -3396,7 +3440,7 @@ XR_PROC xrSyncActions(
 
 					Binding* pBinding = (Binding*)pSubactionBindingPool->data[bindingIndex];
 					pBinding->func(pActionState);
-					pSubactionState->lastSyncedPriority = pActionSet->priority;
+					pSubactionState->lastSyncedPriority = pActiveActionSet->priority;
 					pSubactionState->lastChangeTime = currentTime;
 					pSubactionState->isActive = XR_TRUE;
 					pSubactionState->changedSinceLastSync = pSubactionState->currentState != lastState;

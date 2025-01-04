@@ -13,8 +13,8 @@ void midXrInitialize()
 	mxcConnectInterprocessNode(false);
 }
 
-// shoul dbe claim node? that introduces non-oxr terms into this though
-void xrClaimSession(XrHandle* pSessionHandle)
+// maybe should be external handle?
+void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 {
 	printf("Creating Moxaic OpenXR Session.\n");
 
@@ -29,7 +29,7 @@ void xrClaimSession(XrHandle* pSessionHandle)
 	printf("Importing node handle %d as OpenXR session\n", nodeHandle);
 
 	// openxr session = moxaic node
-	*pSessionHandle = nodeHandle;
+	*sessionIndex = nodeHandle;
 }
 
 void xrReleaseSession(XrHandle sessionHandle)
@@ -39,7 +39,7 @@ void xrReleaseSession(XrHandle sessionHandle)
 	ReleaseNode(nodeHandle);
 }
 
-void midXrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
+void xrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;

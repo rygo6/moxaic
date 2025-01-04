@@ -358,7 +358,7 @@ static int mxcClaimSwap(const MxcSwapInfo* pInfo)
 
 	int i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
 	if (i == -1) {
-		LOG_ERROR("Ran out of occupied claiming swap!\n")
+		LOG_ERROR("Ran out of occupied claiming swap!\n");
 		return -1;
 	}
 

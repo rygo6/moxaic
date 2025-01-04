@@ -22,6 +22,9 @@ DEFINE_BITSET_N(512);
 // 512 size bitset is 1 cache line.
 static_assert(sizeof(bitset512_t) == 64, "");
 
+#define DECL_CONCAT(a, b, c) a##b##c
+#define BITSET_DECL(_, n) DECL_CONCAT(bitset, n, _t) _
+
 static inline int BitScanFirstZero(size_t setCount, bitset_t* pSet)
 {
 	int i = 0;
