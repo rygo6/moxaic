@@ -182,24 +182,23 @@ typedef struct SlubSlot {
 
 
 typedef bitset64_t slab_bitset_t;
-#define SLAB(_type, _capacity)          \
-	typedef struct _type##Pool {        \
-		slab_bitset_t slots[_capacity]; \
-		_type         data[_capacity];  \
-	} _type##Pool;
 
-#define XR_CHECK(_command)                     \
-	({                                         \
-		XrResult result = _command;            \
-		if (__builtin_expect(!!(result), 0)) { \
-			return result;                     \
-		}                                      \
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+
+#define XR_UNQUALIFIED_FAILED(result) ((result) != 0)
+#define XR_CHECK(_command)                             \
+	({                                                 \
+		XrResult result = _command;                    \
+		if (UNLIKELY(XR_UNQUALIFIED_FAILED(result))) { \
+			return result;                             \
+		}                                              \
 	})
 
 #define POOL(_type, _capacity)                             \
 	typedef struct __attribute((aligned(4))) _type##Pool { \
-		SlubSlot slots[_capacity];                            \
-		_type data[_capacity];                             \
+		SlubSlot slots[_capacity];                         \
+		_type    data[_capacity];                          \
 	} _type##Pool;
 
 
@@ -412,38 +411,59 @@ static XrHandle _GetHandle(void* pData, int stride, const void* pValue)
 	return (XrHandle)((pValue - pData) / stride);
 }
 
-typedef uint8_t BlockHandle;
+typedef uint16_t block_handle;
+typedef uint32_t block_key;
 
-#define SLAB_DECL(_, n)                         \
-	typedef struct _##Slab {                 \
+#define SLAB(_, n)           \
+	typedef struct _##Slab {      \
 		BITSET_DECL(occupied, n); \
-		XrHash hashes[n];         \
-		_      blocks[n];         \
+		block_key keys[n];     \
+		_          blocks[n];     \
 	} _##Slab;
 
-#define XR_MAX_PATHS 256
+typedef struct MapBase {
+	uint32_t   count;
+	block_key* keys;
+} MapBase;
+#define MAP(n)                   \
+	struct {                     \
+		uint32_t     count;      \
+		block_key    keys[n];    \
+		block_handle handles[n]; \
+	}
+
+typedef struct SetBase {
+	uint32_t      count;
+	block_handle* handles;
+} SetBase;
+#define SET(n)                   \
+	struct {                     \
+		uint32_t     count;      \
+		block_handle handles[n]; \
+	}
+
+
+#define XR_PATH_CAPACITY 256
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
-POOL_HASHED(Path, XR_MAX_PATHS)
-SLAB_DECL(Path, XR_MAX_PATHS)
+SLAB(Path, XR_PATH_CAPACITY)
 
-
+#define XR_BINDINGS_CAPACITY 16
 #define XR_MAX_BINDINGS 16
 typedef struct Binding {
 	XrPath path;
 	int (*func)(void*);
 } Binding;
-POOL_HASHED(Binding, 16)
-SLAB_DECL(Binding, XR_MAX_BINDINGS)
+SLAB(Binding, XR_BINDINGS_CAPACITY)
 
-
+#define XR_INTERACTION_PROFILE_CAPACITY 16
 typedef struct InteractionProfile {
-	XrPath      path;
-	BindingPool bindings;
+	XrPath     path;
+	// does this need to be a map?
+	MAP(XR_MAX_BINDINGS) bindings;
 } InteractionProfile;
-POOL_HASHED(InteractionProfile, 16)
-
+POOL_HASHED(InteractionProfile, XR_INTERACTION_PROFILE_CAPACITY)
 
 #define XR_MAX_ACTIONS 64
 typedef Binding* XrBinding;
@@ -622,7 +642,7 @@ typedef struct Instance {
 
 	ActionSetPool          actionSets;
 	InteractionProfilePool interactionProfiles;
-	PathPool               paths;
+//	PathPool               paths;
 
 	XrGraphicsApi graphicsApi;
 	union {
@@ -642,37 +662,69 @@ static struct {
 	Instance instance;
 	SessionSlab sessions;
 	PathSlab paths;
+	BindingSlab bindings;
 } xr;
 
 SlubMemory poolMemory;
 
+#define MAP_NOT_FOUND 10100
+#define OUT_OF_SPACE -10100
+#define SUCCESS 0
 
-#define CLAIM_SESSION() ClaimBlock(sizeof(xr.paths.occupied), &xr.paths.blocks)
-#define CLAIM_PATH(_hash) ClaimHashedBlock(sizeof(xr.paths.occupied), &xr.paths.blocks, &xr.paths.hashes, _hash)
-#define FIND_PATH(_hash) FindBlockByHash(sizeof(xr.paths.hashes), &xr.paths.hashes, _hash)
-
-static int ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet)
+static inline int MapAdd(int capacity, MapBase* pMap, uint32_t key, block_handle handle)
 {
-	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
-	if (i == -1) return -1;
-	BITSET(pOccupiedSet, i);
-	return i;
+	if (pMap->count == capacity)
+		return OUT_OF_SPACE;
+
+	pMap->keys[pMap->count] = key;
+
+	block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
+	pHandles[pMap->count] = handle;
+
+	pMap->count++;
+
+	return SUCCESS;
 }
-static int ClaimHashedBlock(int occupiedCount, bitset_t* pOccupiedSet, uint32_t* pHashes, uint32_t hash)
+#define MAP_ADD(map, key, handle) MapAdd(COUNT(map.keys), (MapBase*)&map, key, handle)
+static inline int MapFind(int capacity, MapBase* pMap, block_key key, block_handle* pHandle)
+{
+	for (int i = 0; i < pMap->count; ++i) {
+		if (pMap->keys[i] == key) {
+			block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
+			*pHandle = pHandles[i];
+			return SUCCESS;
+		}
+	}
+	return MAP_NOT_FOUND;
+}
+#define MAP_FIND(map, key, pHandle) MapFind(COUNT(map.keys), (MapBase*)&map, key, pHandle)
+
+static int ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_handle* pHandle)
 {
 	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
-	if (i == -1) return -1;
+	if (i == -1) return XR_ERROR_LIMIT_REACHED;
+	BITSET(pOccupiedSet, i);
+	*pHandle = i;
+	return XR_SUCCESS;
+}
+static int ClaimHashedBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash, block_handle* pHandle)
+{
+	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
+	if (i == -1) return XR_ERROR_LIMIT_REACHED;
 	BITSET(pOccupiedSet, i);
 	pHashes[i] = hash;
-	return i;
+	*pHandle = i;
+	return XR_SUCCESS;
 }
-static int FindBlockByHash(int hashCount, uint32_t* pHashes, uint32_t hash)
+static int FindBlockByHash(int hashCount, block_key* pHashes, block_key hash, block_handle* pHandle)
 {
 	for (int i = 0; i < hashCount; ++i) {
-		if (pHashes[i] == hash)
-			return i;
+		if (pHashes[i] == hash) {
+			*pHandle = i;
+			return XR_SUCCESS;
+		}
 	}
-	return -1;
+	return XR_ERROR_LIMIT_REACHED;
 }
 static void ReleaseBlock(int occupiedCount, bitset_t* pOccupiedSet, int handle)
 {
@@ -680,6 +732,47 @@ static void ReleaseBlock(int occupiedCount, bitset_t* pOccupiedSet, int handle)
 	BITCLEAR(pOccupiedSet, handle);
 }
 
+// I think I might prefer these be universal defines I pass the slab to
+#define BLOCK_METHODS_DECL(type, slab)                                                                       \
+	static inline int type##ClaimBlock(block_key hash, block_handle* pHandle)                                \
+	{                                                                                                        \
+		return ClaimHashedBlock(sizeof(slab.occupied), (bitset_t*)&slab.occupied, slab.keys, hash, pHandle); \
+	}                                                                                                        \
+	static inline int type##FindBlockByHash(block_key hash, block_handle* pHandle)                           \
+	{                                                                                                        \
+		return FindBlockByHash(sizeof(slab.keys), slab.keys, hash, pHandle);                                 \
+	}                                                                                                        \
+	static inline int type##Handle(type* p)                                                                  \
+	{                                                                                                        \
+		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks));                                    \
+		return (block_handle)(p - slab.blocks);                                                              \
+	}                                                                                                        \
+	static inline void type##Release(type* p)                                                                \
+	{                                                                                                        \
+		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks));                                    \
+		BITCLEAR(slab.occupied, (p - slab.blocks));                                                          \
+	}                                                                                                        \
+
+#define SLAB_HANDLE(slab, p)                                              \
+	({                                                                    \
+		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks)); \
+		(block_handle)(p - slab.blocks);                                  \
+	})
+#define SLAB_KEY(slab, p)                                                \
+	({                                                                    \
+		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks)); \
+		slab.keys[p - slab.blocks];                                       \
+	})
+#define SLAB_PTR_FROM_HANDLE(slab, handle)                  \
+	({                                                      \
+		assert(handle >= 0 && handle < COUNT(slab.blocks)); \
+		&slab.blocks[handle];                               \
+	})
+
+BLOCK_METHODS_DECL(Path, xr.paths)
+BLOCK_METHODS_DECL(Binding, xr.bindings)
+
+#undef BLOCK_METHODS_DECL
 
 //
 //// MidOpenXR Debug
@@ -1010,21 +1103,25 @@ static XrResult RegisterBinding(
 	Path*               pBindingPath,
 	int (*func)(void*))
 {
-	Instance* pInstance = (Instance*)instance;
+	block_key bindingPathHash = SLAB_KEY(xr.paths, pBindingPath);
+	for (int i = 0; i < COUNT(xr.bindings.blocks); ++i) {
+		if (!BITTEST(xr.bindings.occupied, i))
+			continue;
+		if (SLAB_KEY(xr.paths, (Path*)xr.bindings.blocks[i].path) != bindingPathHash)
+			continue;
 
-	int bindingPathHash = GetPathHash(&pInstance->paths, pBindingPath);
-	for (int i = 0; i < pInteractionProfile->bindings.count; ++i) {
-		if (GetPathHash(&pInstance->paths, (Path*)pInteractionProfile->bindings.data[i].path) == bindingPathHash) {
-			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
-			return XR_ERROR_PATH_INVALID;
-		}
+		LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
+		return XR_ERROR_PATH_INVALID;
 	}
 
-	Binding* pBinding;
-	ClaimBinding(&pInteractionProfile->bindings, &pBinding, bindingPathHash);
-	//	ClaimHandleHashed(pInteractionProfile->bindings, pBinding, bindingPathHash);
+	block_handle bindingHandle;
+	XR_CHECK(BindingClaimBlock(bindingPathHash, &bindingHandle));
+//	auto pBinding = BindingPtrFromHandle(bindingHandle);
+	auto pBinding = SLAB_PTR_FROM_HANDLE(xr.bindings, bindingHandle);
 	pBinding->path = (XrPath)pBindingPath;
 	pBinding->func = func;
+
+	XR_CHECK(MAP_ADD(pInteractionProfile->bindings, bindingPathHash, bindingHandle));
 
 	return XR_SUCCESS;
 }
@@ -1039,18 +1136,17 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 
 	XrPath interactionProfilePath;
 	xrStringToPath(instance, interactionProfile, &interactionProfilePath);
-	XrHash interactionProfileHash = GetPathHash(&pInstance->paths, (const Path*)interactionProfilePath);
 
+	auto interactionProfilePathHash = SLAB_KEY(xr.paths, (Path*)interactionProfilePath);
 	InteractionProfile* pInteractionProfile;
-	//	ClaimHandleHashed(pInstance->interactionProfiles, pInteractionProfile, interactionProfileHash);
-	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pInteractionProfile, interactionProfileHash));
+	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pInteractionProfile, interactionProfilePathHash));
 
 	pInteractionProfile->path = interactionProfilePath;
 
 	for (int i = 0; i < bindingDefinitionCount; ++i) {
 		XrPath bindingPath;
 		xrStringToPath(instance, pBindingDefinitions[i].path, &bindingPath);
-		RegisterBinding(instance, pInteractionProfile, (Path*)bindingPath, pBindingDefinitions[i].func);
+		XR_CHECK(RegisterBinding(instance, pInteractionProfile, (Path*)bindingPath, pBindingDefinitions[i].func));
 	}
 
 	return XR_SUCCESS;
@@ -3039,26 +3135,26 @@ XR_PROC xrStringToPath(
 
 	Instance* pInstance = (Instance*)instance;
 
-	int pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
-	for (int i = 0; i < pInstance->paths.count; ++i) {
-		if (pInstance->paths.hash[i] != pathHash)
+	block_key pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
+	for (int i = 0; i < XR_PATH_CAPACITY; ++i) {
+		if (xr.paths.keys[i] != pathHash)
 			continue;
-		if (strncmp(pInstance->paths.data[i].string, pathString, XR_MAX_PATH_LENGTH)) {
-			LOG_ERROR("Path Hash Collision! %s | %s\n", pInstance->paths.data[i].string, pathString);
+		if (strncmp(xr.paths.blocks[i].string, pathString, XR_MAX_PATH_LENGTH)) {
+			LOG_ERROR("Path Hash Collision! %s | %s\n", xr.paths.blocks[i].string, pathString);
 			return XR_ERROR_PATH_INVALID;
 		}
-		*path = (XrPath)&pInstance->paths.data[i];
-		//		printf("Path Handle Found: %d\n    %s\n", i, pInstance->paths.data[i].string);
+		printf("Path Handle Found: %d\n    %s\n", i, xr.paths.blocks[i].string);
+		*path = (XrPath)&xr.paths.blocks[i];
 		return XR_SUCCESS;
 	}
 
-	Path* pPath;
-	XR_CHECK(ClaimPath(&pInstance->paths, &pPath, pathHash));
-	XrHandle pathHandle = GetHandle(pInstance->paths, pPath);
-	//	printf("Path Handle Claimed: %d\n    %s\n", pathHandle, pathString);
+	block_handle handle;
+	XR_CHECK(PathClaimBlock(pathHash, &handle));
 
+	auto pPath = SLAB_PTR_FROM_HANDLE(xr.paths, handle);
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
+
 	*path = (XrPath)pPath;
 
 	return XR_SUCCESS;
@@ -3191,8 +3287,9 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	LOG_METHOD(xrSuggestInteractionProfileBindings);
 	LogNextChain(suggestedBindings->next);
 
-	Path*               pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
-	XrHash              interactionProfilePathHash = GetPathHash(&xr.instance.paths, pInteractionProfilePath);
+	Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
+	block_key interactionProfilePathHash = SLAB_KEY(xr.paths, pInteractionProfilePath);
+
 	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&xr.instance.interactionProfiles, interactionProfilePathHash);
 	if (pInteractionProfile == NULL) {
 		LOG_ERROR("Could not find interaction profile binding set! %s %d\n", pInteractionProfilePath->string);
@@ -3216,8 +3313,12 @@ XR_PROC xrSuggestInteractionProfileBindings(
 		ActionSet* pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
 
 		// if the pointers became 32 bit int handle, I could just use that as a hash?
-		XrHash   bindingPathHash = GetPathHash(&xr.instance.paths, pBindingPath);
-		Binding* pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
+//		auto bindingPathHash = PathHash(pBindingPath);
+		auto bindingPathHash = SLAB_KEY(xr.paths, pBindingPath);
+//		Binding* pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
+		block_handle bindingHandle;
+		MAP_FIND(pInteractionProfile->bindings, bindingPathHash, &bindingHandle);
+		auto pBinding = SLAB_PTR_FROM_HANDLE(xr.bindings, bindingHandle);
 
 		if (pBindingAction->countSubactionPaths == 0) {
 			XrBinding* pActionBinding;
@@ -3276,7 +3377,7 @@ XR_PROC xrAttachSessionActionSets(
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 		XrPath interactionProfilePath;
 		xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &interactionProfilePath);
-		XrHash              interactionProfilePathHash = GetPathHash(&xr.instance.paths, (Path*)interactionProfilePath);
+		auto interactionProfilePathHash = SLAB_KEY(xr.paths, (Path*)interactionProfilePath);
 		InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&xr.instance.interactionProfiles, interactionProfilePathHash);
 		pSession->pendingInteractionProfile = pInteractionProfile;
 	}
