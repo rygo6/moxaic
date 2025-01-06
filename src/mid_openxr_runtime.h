@@ -88,22 +88,22 @@ void midXrInitialize();
 typedef uint16_t XrSessionIndex;
 void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
 
-void xrReleaseSession(XrHandle sessionHandle);
-void xrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds);
-void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle);
+void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
+void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
+void xrClaimFramebufferImages(XrSessionIndex sessionIndex, int imageCount, HANDLE* pHandle);
 
-void xrGetSessionTimeline(uint32_t sessionHandle, HANDLE* pHandle);
-void xrSetSessionTimelineValue(XrHandle sessionHandle, uint64_t timelineValue);
+void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
+void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
 
-void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex);
-void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index);
+void xrClaimSwapPoolImage(XrSessionIndex sessionIndex, uint8_t* pIndex);
+void xrReleaseSwapPoolImage(XrSessionIndex sessionIndex, uint8_t index);
 
-void xrGetCompositorTimeline(XrHandle sessionHandle, HANDLE* pHandle);
-void xrSetInitialCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue);
-void xrGetCompositorTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue);
-void xrProgressCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue, bool synchronized);
+void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
+void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
+void xrGetCompositorTimelineValue(XrSessionIndex sessionIndex, bool synchronized, uint64_t* pTimelineValue);
+void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue, bool synchronized);
 
-void xrGetHeadPose(XrHandle sessionHandle, XrVector3f* pEuler, XrVector3f* pPos);
+void xrGetHeadPose(XrSessionIndex sessionIndex, XrVector3f* pEuler, XrVector3f* pPos);
 
 typedef struct XrEyeView {
 	XrVector3f euler;
@@ -112,9 +112,9 @@ typedef struct XrEyeView {
 	XrVector2f upperLeftClip;
 	XrVector2f lowerRightClip;
 } XrEyeView;
-void xrGetEyeView(XrHandle sessionHandle, uint8_t viewIndex, XrEyeView *pEyeView);
+void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView);
 
-XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized);
+XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized);
 
 //
 //// Mid OpenXR Constants
@@ -236,130 +236,131 @@ typedef bitset64_t slab_bitset_t;
 // XrHandles passed over OpenXR have to be 64-bit anyways, so we can't really save much with handles.
 
 
-#define CACHE_SIZE 64
-typedef struct __attribute((aligned(CACHE_SIZE))) {
-	uint8_t data[CACHE_SIZE];
-} SlubBlock;
-
-#define POOL_BLOCK_COUNT 1U << 16
-typedef uint16_t SlubHandle;
-typedef struct {
-	SlubSlot    slots[POOL_BLOCK_COUNT];
-	SlubBlock   blocks[POOL_BLOCK_COUNT];
-} SlubMemory;
-
-typedef struct {
-	// explore 24 and 20 bit hashes
-	uint32_t value;
-} Hash;
-
-#define POOL_HANDLE_MAX_CAPACITY 1U << 8
-typedef uint8_t PoolHandle;
-typedef struct {
-	SlubSlot    slots[POOL_HANDLE_MAX_CAPACITY];
-	SlubHandle  handles[POOL_HANDLE_MAX_CAPACITY];
-	Hash        hashes[POOL_HANDLE_MAX_CAPACITY];
-	size_t      blockSize;
-} HashedPool;
-
-#define POOL_STRUCT(_type, _capacity)                                                                                  \
-	typedef struct {                                                                                                   \
-		SlubSlot   slots[_capacity];                                                                                   \
-		SlubHandle handles[_capacity];                                                                                 \
-		Hash       hashes[_capacity];                                                                                  \
-	} _type##HashedPool;                                                                                               \
-	_Static_assert(_capacity <= POOL_HANDLE_MAX_CAPACITY, #_type " " #_capacity " exceeds POOL_HANDLE_MAX_CAPACITY."); \
-	static inline void ClaimSessionPoolHandle(_type##HashedPool* pPool, PoolHandle* pPoolHandle)                       \
-	{                                                                                                                  \
-		ClaimPoolHandle(sizeof(_type), _capacity, pPool->slots, pPool->handles, pPool->hashes, pPoolHandle);           \
-	}
-
-extern SlubMemory poolMemory;
-
-static XrResult ClaimBlockHandle(size_t size, SlubHandle* pBlockHandle)
-{
-	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
-	uint32_t blockCount = (size / CACHE_SIZE) + 1;
-	printf("Scanning blockCount size %d\n", blockCount);
-
-	uint32_t  requiredBlockCount = blockCount;
-	uint32_t  blockHandle = UINT32_MAX;
-	for (int i = 0; i < POOL_BLOCK_COUNT; ++i) {
-		if (poolMemory.slots[i].occupied) {
-			requiredBlockCount = blockCount;
-			continue;
-		}
-
-		if (--requiredBlockCount != 0)
-			continue;
-
-		blockHandle = i;
-		break;
-	}
-
-	if (blockHandle == UINT32_MAX) {
-		LOG_ERROR("Couldn't find required blockCount size.\n");
-		return XR_ERROR_LIMIT_REACHED;
-	}
-
-	*pBlockHandle = blockHandle;
-
-	printf("Found blockHandle %d\n", blockHandle);
-	return XR_SUCCESS;
-}
-static void ReleaseBlockHandle(size_t size, SlubHandle blockHandle)
-{
-	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
-	uint8_t blockCount = (size / CACHE_SIZE) + 1;
-	printf("Releasing blockCount size %d\n", blockCount);
-
-	for (int i = 0; i < blockCount; ++i) {
-		assert((blockHandle + i) < POOL_BLOCK_COUNT);
-		poolMemory.slots[blockHandle + i].occupied = false;
-	}
-}
-
-static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle* pPoolHandle)
-{
-	uint32_t poolHandle = UINT32_MAX;
-	for (int i = 0; i < poolCapacity; ++i) {
-		if (pSlots[i].occupied) {
-			continue;
-		}
-
-		pSlots[i].occupied = true;
-		poolHandle = i;
-		break;
-	}
-
-	if (poolHandle == UINT32_MAX) {
-		LOG_ERROR("Couldn't find available handle.\n");
-		return XR_ERROR_LIMIT_REACHED;
-	}
-
-	SlubHandle blockHandle;
-	if (ClaimBlockHandle(blockSize, &blockHandle) != XR_SUCCESS) {
-		return XR_ERROR_LIMIT_REACHED;
-	}
-
-	pBlockHandles[poolHandle] = blockHandle;
-
-	*pPoolHandle = poolHandle;
-
-	printf("Found PoolHandle %d\n", poolHandle);
-	return XR_SUCCESS;
-}
-static XrResult ReleasePoolHandle(int blockSize, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle poolHandle)
-{
-	assert(pSlots[poolHandle].occupied);
-
-	ReleaseBlockHandle(blockSize, pBlockHandles[poolHandle]);
-	pSlots[poolHandle].occupied = false;
-	pHashes[poolHandle].value = 0;
-
-	printf("Released PoolHandle %d\n", poolHandle);
-	return XR_SUCCESS;
-}
+// I don't know if wnat a SLUB... SLAB might be better in all scenarios? Maybe a SLUB for a the bigger, fewer, allocs?
+//#define CACHE_SIZE 64
+//typedef struct __attribute((aligned(CACHE_SIZE))) {
+//	uint8_t data[CACHE_SIZE];
+//} SlubBlock;
+//
+//#define POOL_BLOCK_COUNT 1U << 16
+//typedef uint16_t SlubHandle;
+//typedef struct {
+//	SlubSlot    slots[POOL_BLOCK_COUNT];
+//	SlubBlock   blocks[POOL_BLOCK_COUNT];
+//} SlubMemory;
+//
+//typedef struct {
+//	// explore 24 and 20 bit hashes
+//	uint32_t value;
+//} Hash;
+//
+//#define POOL_HANDLE_MAX_CAPACITY 1U << 8
+//typedef uint8_t PoolHandle;
+//typedef struct {
+//	SlubSlot    slots[POOL_HANDLE_MAX_CAPACITY];
+//	SlubHandle  handles[POOL_HANDLE_MAX_CAPACITY];
+//	Hash        hashes[POOL_HANDLE_MAX_CAPACITY];
+//	size_t      blockSize;
+//} HashedPool;
+//
+//#define POOL_STRUCT(_type, _capacity)                                                                                  \
+//	typedef struct {                                                                                                   \
+//		SlubSlot   slots[_capacity];                                                                                   \
+//		SlubHandle handles[_capacity];                                                                                 \
+//		Hash       hashes[_capacity];                                                                                  \
+//	} _type##HashedPool;                                                                                               \
+//	_Static_assert(_capacity <= POOL_HANDLE_MAX_CAPACITY, #_type " " #_capacity " exceeds POOL_HANDLE_MAX_CAPACITY."); \
+//	static inline void ClaimSessionPoolHandle(_type##HashedPool* pPool, PoolHandle* pPoolHandle)                       \
+//	{                                                                                                                  \
+//		ClaimPoolHandle(sizeof(_type), _capacity, pPool->slots, pPool->handles, pPool->hashes, pPoolHandle);           \
+//	}
+//
+//extern SlubMemory poolMemory;
+//
+//static XrResult ClaimBlockHandle(size_t size, SlubHandle* pBlockHandle)
+//{
+//	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
+//	uint32_t blockCount = (size / CACHE_SIZE) + 1;
+//	printf("Scanning blockCount size %d\n", blockCount);
+//
+//	uint32_t  requiredBlockCount = blockCount;
+//	uint32_t  blockHandle = UINT32_MAX;
+//	for (int i = 0; i < POOL_BLOCK_COUNT; ++i) {
+//		if (poolMemory.slots[i].occupied) {
+//			requiredBlockCount = blockCount;
+//			continue;
+//		}
+//
+//		if (--requiredBlockCount != 0)
+//			continue;
+//
+//		blockHandle = i;
+//		break;
+//	}
+//
+//	if (blockHandle == UINT32_MAX) {
+//		LOG_ERROR("Couldn't find required blockCount size.\n");
+//		return XR_ERROR_LIMIT_REACHED;
+//	}
+//
+//	*pBlockHandle = blockHandle;
+//
+//	printf("Found blockHandle %d\n", blockHandle);
+//	return XR_SUCCESS;
+//}
+//static void ReleaseBlockHandle(size_t size, SlubHandle blockHandle)
+//{
+//	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
+//	uint8_t blockCount = (size / CACHE_SIZE) + 1;
+//	printf("Releasing blockCount size %d\n", blockCount);
+//
+//	for (int i = 0; i < blockCount; ++i) {
+//		assert((blockHandle + i) < POOL_BLOCK_COUNT);
+//		poolMemory.slots[blockHandle + i].occupied = false;
+//	}
+//}
+//
+//static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle* pPoolHandle)
+//{
+//	uint32_t poolHandle = UINT32_MAX;
+//	for (int i = 0; i < poolCapacity; ++i) {
+//		if (pSlots[i].occupied) {
+//			continue;
+//		}
+//
+//		pSlots[i].occupied = true;
+//		poolHandle = i;
+//		break;
+//	}
+//
+//	if (poolHandle == UINT32_MAX) {
+//		LOG_ERROR("Couldn't find available handle.\n");
+//		return XR_ERROR_LIMIT_REACHED;
+//	}
+//
+//	SlubHandle blockHandle;
+//	if (ClaimBlockHandle(blockSize, &blockHandle) != XR_SUCCESS) {
+//		return XR_ERROR_LIMIT_REACHED;
+//	}
+//
+//	pBlockHandles[poolHandle] = blockHandle;
+//
+//	*pPoolHandle = poolHandle;
+//
+//	printf("Found PoolHandle %d\n", poolHandle);
+//	return XR_SUCCESS;
+//}
+//static XrResult ReleasePoolHandle(int blockSize, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle poolHandle)
+//{
+//	assert(pSlots[poolHandle].occupied);
+//
+//	ReleaseBlockHandle(blockSize, pBlockHandles[poolHandle]);
+//	pSlots[poolHandle].occupied = false;
+//	pHashes[poolHandle].value = 0;
+//
+//	printf("Released PoolHandle %d\n", poolHandle);
+//	return XR_SUCCESS;
+//}
 
 
 //#define ClaimHandleHashed(_pool, _pValue, _hash) XR_CHECK(_ClaimHandleHashed((Pool*)&_pool, sizeof(_pool.data[0]), COUNT(_pool.data), (void**)&_pValue, _hash))
@@ -411,21 +412,28 @@ static XrHandle _GetHandle(void* pData, int stride, const void* pValue)
 	return (XrHandle)((pValue - pData) / stride);
 }
 
+////
+//// Slab Types
+////
+#define BLOCK_HANDLE_INVALID -1
 typedef uint16_t block_handle;
 typedef uint32_t block_key;
 
-#define SLAB(_, n)           \
+#define SLAB(_, n)                \
 	typedef struct _##Slab {      \
 		BITSET_DECL(occupied, n); \
-		block_key keys[n];     \
-		_          blocks[n];     \
+		block_key keys[n];        \
+		_         blocks[n];      \
 	} _##Slab;
 
+////
+//// Map Types
+////
 typedef struct MapBase {
-	uint32_t   count;
-	block_key* keys;
+	uint32_t  count;
+	block_key keys[];
 } MapBase;
-#define MAP(n)                   \
+#define MAP_DECL(n)              \
 	struct {                     \
 		uint32_t     count;      \
 		block_key    keys[n];    \
@@ -436,20 +444,22 @@ typedef struct SetBase {
 	uint32_t      count;
 	block_handle* handles;
 } SetBase;
-#define SET(n)                   \
+#define SET_DECL(n)              \
 	struct {                     \
 		uint32_t     count;      \
 		block_handle handles[n]; \
 	}
 
-
+////
+//// OpenXR Types
+////
 #define XR_PATH_CAPACITY 256
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
 SLAB(Path, XR_PATH_CAPACITY)
 
-#define XR_BINDINGS_CAPACITY 16
+#define XR_BINDINGS_CAPACITY 256
 #define XR_MAX_BINDINGS 16
 typedef struct Binding {
 	XrPath path;
@@ -459,17 +469,15 @@ SLAB(Binding, XR_BINDINGS_CAPACITY)
 
 #define XR_INTERACTION_PROFILE_CAPACITY 16
 typedef struct InteractionProfile {
-	XrPath     path;
-	// does this need to be a map?
-	MAP(XR_MAX_BINDINGS) bindings;
+	XrPath path;
+	MAP_DECL(XR_MAX_BINDINGS) bindings;
 } InteractionProfile;
-POOL_HASHED(InteractionProfile, XR_INTERACTION_PROFILE_CAPACITY)
+SLAB(InteractionProfile, XR_INTERACTION_PROFILE_CAPACITY)
+typedef InteractionProfile* XrInteractionProfile;
 
 #define XR_MAX_ACTIONS 64
 typedef Binding* XrBinding;
 POOL(XrBinding, XR_MAX_ACTIONS)
-
-typedef InteractionProfile* XrInteractionProfile;
 
 #define XR_MAX_SUBACTION_PATHS 2
 typedef struct Action {
@@ -553,12 +561,11 @@ typedef struct Swapchain {
 // I don't think I actually need a pool? Just one per session, and it has to switch
 POOL(Swapchain, 2)
 
-#define MIDXR_MAX_SESSIONS 4
+#define XR_SESSIONS_CAPACITY 4
 // this layout is awful from a DOD perspective can I make it less awful?
 typedef struct Session {
 	XrSessionIndex index;
 
-//	XrInstance instance;
 	XrSystemId systemId;
 	XrSwapType swapType;
 
@@ -619,31 +626,19 @@ typedef struct Session {
 	} binding;
 
 } Session;
-POOL(Session, MIDXR_MAX_SESSIONS)
-POOL_STRUCT(Session, MIDXR_MAX_SESSIONS);
-
-typedef struct SessionSlab {
-	bitset64_t occupied;
-	Session    slabs[BITNSIZE(bitset64_t)];
-} SessionSlab;
-
+SLAB(Session, XR_BINDINGS_CAPACITY)
 
 typedef struct Instance {
-	// probably need this
-	//	uint8_t stateQueueStart;
-	//	uint8_t stateQeueEnd;
-	//	uint8_t stateQueue[256];
-
+	// System
 	XrApplicationInfo applicationInfo;
+	XrSystemId        systemId;
+	XrFormFactor      systemFormFactor;
 
-	XrSystemId   systemId;
-	XrFormFactor systemFormFactor;
-	SessionPool  sessions;
+	// Interaction
+	ActionSetPool actionSets;
+	MAP_DECL(XR_INTERACTION_PROFILE_CAPACITY) interactionProfiles;
 
-	ActionSetPool          actionSets;
-	InteractionProfilePool interactionProfiles;
-//	PathPool               paths;
-
+	// Graphics
 	XrGraphicsApi graphicsApi;
 	union {
 		struct {
@@ -659,120 +654,101 @@ typedef struct Instance {
 #ifdef MID_OPENXR_IMPLEMENTATION
 
 static struct {
-	Instance instance;
-	SessionSlab sessions;
-	PathSlab paths;
-	BindingSlab bindings;
+	Instance               instance;
+	SessionSlab            sessions;
+	PathSlab               paths;
+	BindingSlab            bindings;
+	InteractionProfileSlab interactionProfiles;
 } xr;
 
-SlubMemory poolMemory;
-
-#define MAP_NOT_FOUND 10100
-#define OUT_OF_SPACE -10100
-#define SUCCESS 0
+////
+//// MAP
+////
 
 static inline int MapAdd(int capacity, MapBase* pMap, uint32_t key, block_handle handle)
 {
-	if (pMap->count == capacity)
-		return OUT_OF_SPACE;
+	int index = pMap->count;
+	if (index == capacity)
+		return BLOCK_HANDLE_INVALID;
 
-	pMap->keys[pMap->count] = key;
+	pMap->keys[index] = key;
 
 	block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
-	pHandles[pMap->count] = handle;
+	pHandles[index] = handle;
 
 	pMap->count++;
 
-	return SUCCESS;
+	return index;
 }
-#define MAP_ADD(map, key, handle) MapAdd(COUNT(map.keys), (MapBase*)&map, key, handle)
-static inline int MapFind(int capacity, MapBase* pMap, block_key key, block_handle* pHandle)
+
+static inline int MapFind(int capacity, MapBase* pMap, block_key key)
 {
 	for (int i = 0; i < pMap->count; ++i) {
 		if (pMap->keys[i] == key) {
 			block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
-			*pHandle = pHandles[i];
-			return SUCCESS;
+			return pHandles[i];
 		}
 	}
-	return MAP_NOT_FOUND;
+	return BLOCK_HANDLE_INVALID;
 }
-#define MAP_FIND(map, key, pHandle) MapFind(COUNT(map.keys), (MapBase*)&map, key, pHandle)
 
-static int ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_handle* pHandle)
+#define MAP_ADD(map, key, handle) MapAdd(COUNT(map.keys), (MapBase*)&map, key, handle)
+#define MAP_FIND(map, key) MapFind(COUNT(map.keys), (MapBase*)&map, key)
+
+////
+//// SLAB
+////
+
+static int ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash)
 {
 	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
-	if (i == -1) return XR_ERROR_LIMIT_REACHED;
-	BITSET(pOccupiedSet, i);
-	*pHandle = i;
-	return XR_SUCCESS;
-}
-static int ClaimHashedBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash, block_handle* pHandle)
-{
-	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
-	if (i == -1) return XR_ERROR_LIMIT_REACHED;
+	if (i == -1) return i;
 	BITSET(pOccupiedSet, i);
 	pHashes[i] = hash;
-	*pHandle = i;
-	return XR_SUCCESS;
+	return i;
 }
-static int FindBlockByHash(int hashCount, block_key* pHashes, block_key hash, block_handle* pHandle)
+static int FindBlockByHash(int hashCount, block_key* pHashes, block_key hash)
 {
 	for (int i = 0; i < hashCount; ++i) {
-		if (pHashes[i] == hash) {
-			*pHandle = i;
-			return XR_SUCCESS;
-		}
+		if (pHashes[i] == hash)
+			return i;
 	}
-	return XR_ERROR_LIMIT_REACHED;
-}
-static void ReleaseBlock(int occupiedCount, bitset_t* pOccupiedSet, int handle)
-{
-	assert(handle < occupiedCount);
-	BITCLEAR(pOccupiedSet, handle);
+	return -1;
 }
 
-// I think I might prefer these be universal defines I pass the slab to
-#define BLOCK_METHODS_DECL(type, slab)                                                                       \
-	static inline int type##ClaimBlock(block_key hash, block_handle* pHandle)                                \
-	{                                                                                                        \
-		return ClaimHashedBlock(sizeof(slab.occupied), (bitset_t*)&slab.occupied, slab.keys, hash, pHandle); \
-	}                                                                                                        \
-	static inline int type##FindBlockByHash(block_key hash, block_handle* pHandle)                           \
-	{                                                                                                        \
-		return FindBlockByHash(sizeof(slab.keys), slab.keys, hash, pHandle);                                 \
-	}                                                                                                        \
-	static inline int type##Handle(type* p)                                                                  \
-	{                                                                                                        \
-		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks));                                    \
-		return (block_handle)(p - slab.blocks);                                                              \
-	}                                                                                                        \
-	static inline void type##Release(type* p)                                                                \
-	{                                                                                                        \
-		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks));                                    \
-		BITCLEAR(slab.occupied, (p - slab.blocks));                                                          \
-	}                                                                                                        \
-
-#define SLAB_HANDLE(slab, p)                                              \
-	({                                                                    \
-		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks)); \
-		(block_handle)(p - slab.blocks);                                  \
+#define SLAB_CLAIM(slab, hash)                                                                       \
+	({                                                                                               \
+		int _handle = ClaimBlock(sizeof(slab.occupied), (bitset_t*)&slab.occupied, slab.keys, hash); \
+		assert(_handle >= 0 && #slab ": Claiming handle. Out of capacity.");                         \
+		(block_handle) _handle;                                                                      \
 	})
-#define SLAB_KEY(slab, p)                                                \
-	({                                                                    \
-		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks)); \
-		slab.keys[p - slab.blocks];                                       \
+#define SLAB_RELEASE(slab, handle)                                                                                          \
+	({                                                                                                                      \
+		assert(handle >= 0 && handle < slab.blocks + COUNT(slab.blocks) && #slab ": Releasing SLAB Handle. Out of range."); \
+		assert(BITSET(slab.occupied, handle) && #slab ": Releasing SLAB handle. Should be occupied.");                      \
+		BITCLEAR(slab.occupied, (int)handle);                                                                               \
 	})
-#define SLAB_PTR_FROM_HANDLE(slab, handle)                  \
-	({                                                      \
-		assert(handle >= 0 && handle < COUNT(slab.blocks)); \
-		&slab.blocks[handle];                               \
+#define SLAB_FIND(slab, hash)                                \
+	({                                                       \
+		assert(hash != 0);                                   \
+		FindBlockByHash(sizeof(slab.keys), slab.keys, hash); \
+	})
+#define SLAB_HANDLE(slab, p)                                                                                              \
+	({                                                                                                                    \
+		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks) && #slab ": Getting SLAB handle. Out of range."); \
+		(block_handle)(p - slab.blocks);                                                                                  \
+	})
+#define SLAB_KEY(slab, p)                                                                                              \
+	({                                                                                                                 \
+		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks) && #slab ": Getting SLAB key. Out of range."); \
+		slab.keys[p - slab.blocks];                                                                                    \
+	})
+#define SLAB_PTR(slab, handle)                                                               \
+	({                                                                                                   \
+		assert(handle >= 0 && handle < COUNT(slab.blocks) && #slab ": Getting SLAB ptr. Out of range."); \
+		&slab.blocks[handle];                                                                            \
 	})
 
-BLOCK_METHODS_DECL(Path, xr.paths)
-BLOCK_METHODS_DECL(Binding, xr.bindings)
-
-#undef BLOCK_METHODS_DECL
 
 //
 //// MidOpenXR Debug
@@ -1104,24 +1080,19 @@ static XrResult RegisterBinding(
 	int (*func)(void*))
 {
 	block_key bindingPathHash = SLAB_KEY(xr.paths, pBindingPath);
-	for (int i = 0; i < COUNT(xr.bindings.blocks); ++i) {
-		if (!BITTEST(xr.bindings.occupied, i))
-			continue;
-		if (SLAB_KEY(xr.paths, (Path*)xr.bindings.blocks[i].path) != bindingPathHash)
-			continue;
-
-		LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
-		return XR_ERROR_PATH_INVALID;
+	for (int i = 0; i < pInteractionProfile->bindings.count; ++i) {
+		if (pInteractionProfile->bindings.keys[i] == bindingPathHash) {
+			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
+			return XR_ERROR_PATH_INVALID;
+		}
 	}
 
-	block_handle bindingHandle;
-	XR_CHECK(BindingClaimBlock(bindingPathHash, &bindingHandle));
-//	auto pBinding = BindingPtrFromHandle(bindingHandle);
-	auto pBinding = SLAB_PTR_FROM_HANDLE(xr.bindings, bindingHandle);
+	block_handle bindingHandle = SLAB_CLAIM(xr.bindings, bindingPathHash);
+	auto pBinding = SLAB_PTR(xr.bindings, bindingHandle);
 	pBinding->path = (XrPath)pBindingPath;
 	pBinding->func = func;
 
-	XR_CHECK(MAP_ADD(pInteractionProfile->bindings, bindingPathHash, bindingHandle));
+	MAP_ADD(pInteractionProfile->bindings, bindingPathHash, bindingHandle);
 
 	return XR_SUCCESS;
 }
@@ -1136,10 +1107,10 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 
 	XrPath interactionProfilePath;
 	xrStringToPath(instance, interactionProfile, &interactionProfilePath);
-
 	auto interactionProfilePathHash = SLAB_KEY(xr.paths, (Path*)interactionProfilePath);
-	InteractionProfile* pInteractionProfile;
-	XR_CHECK(ClaimInteractionProfile(&pInstance->interactionProfiles, &pInteractionProfile, interactionProfilePathHash));
+
+	auto interactionProfileHandle  = SLAB_CLAIM(xr.interactionProfiles, interactionProfilePathHash);
+	auto pInteractionProfile = SLAB_PTR(xr.interactionProfiles, interactionProfileHandle);
 
 	pInteractionProfile->path = interactionProfilePath;
 
@@ -1565,14 +1536,11 @@ XR_PROC xrPollEvent(
 {
 	LOG_METHOD_ONCE(xrPollEvent);
 
-	Instance*    pInstance = (Instance*)instance;
-	SessionPool* pSessions = (SessionPool*)&pInstance->sessions;
-
-	for (int i = 0; i < COUNT(pSessions->slots); ++i) {
-		if (!pSessions->slots[i].occupied)
+	for (int i = 0; i < XR_SESSIONS_CAPACITY; ++i) {
+		if (!BITSET(xr.sessions.occupied, i))
 			continue;
 
-		Session* pSession = &pSessions->data[i];
+		Session* pSession = &xr.sessions.blocks[i];
 
 		if (pSession->activeSessionState != pSession->pendingSessionState) {
 
@@ -1919,8 +1887,8 @@ XR_PROC xrCreateSession(
 	xrClaimSessionIndex(&sessionIndex);
 	printf("Claimed SessionIndex %d\n", sessionIndex);
 
-	Session* pClaimedSession;
-	ClaimHandle(pInstance->sessions, pClaimedSession);
+	auto claimedSessionHandle = SLAB_CLAIM(xr.sessions, sessionIndex);
+	auto pClaimedSession = SLAB_PTR(xr.sessions, claimedSessionHandle);
 	*pClaimedSession = (Session){};
 
 	pClaimedSession->index = sessionIndex;
@@ -2039,11 +2007,11 @@ XR_PROC xrDestroySession(
 {
 	LOG_METHOD(xrDestroySession);
 
-	Session* pSession = (Session*)session;
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
-	ReleaseHandle(xr.instance.sessions, sessionHandle);
+	auto pSession = (Session*)session;
+	auto sessionHandle = SLAB_HANDLE(xr.sessions, pSession);
+	SLAB_RELEASE(xr.sessions, sessionHandle);
 
-	xrReleaseSession(sessionHandle);
+	xrReleaseSessionIndex(sessionHandle);
 
 	return XR_SUCCESS;
 }
@@ -2118,9 +2086,8 @@ XR_PROC xrGetReferenceSpaceBoundsRect(
 	LOG_METHOD(xrGetReferenceSpaceBoundsRect);
 
 	Session* pSession = (Session*)session;
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
-	xrGetReferenceSpaceBounds(sessionHandle, bounds);
+	xrGetReferenceSpaceBounds(pSession->index, bounds);
 
 	printf("xrGetReferenceSpaceBoundsRect %s width: %f height: %f\n", string_XrReferenceSpaceType(referenceSpaceType), bounds->width, bounds->height);
 
@@ -2163,7 +2130,6 @@ XR_PROC xrLocateSpace(
 
 	Space* pSpace = (Space*)space;
 	Session* pSession = (Session*)pSpace->session;
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
 							  XR_SPACE_LOCATION_POSITION_VALID_BIT |
@@ -2172,7 +2138,7 @@ XR_PROC xrLocateSpace(
 
 	XrVector3f euler;
 	XrVector3f pos;
-	xrGetHeadPose(sessionHandle, &euler, &pos);
+	xrGetHeadPose(pSession->index, &euler, &pos);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
@@ -2455,8 +2421,6 @@ XR_PROC xrCreateSwapchain(
 		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
-
 	Swapchain* pSwapchain;
 	ClaimHandle(pSession->swapchains, pSwapchain);
 
@@ -2472,7 +2436,7 @@ XR_PROC xrCreateSwapchain(
 	pSwapchain->mipCount = createInfo->mipCount;
 
 	HANDLE colorHandles[XR_SWAP_COUNT];
-	midXrClaimFramebufferImages(sessionHandle, XR_SWAP_COUNT, colorHandles);
+	xrClaimFramebufferImages(pSession->index, XR_SWAP_COUNT, colorHandles);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -2586,9 +2550,8 @@ XR_PROC xrAcquireSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
-	XrHandle   sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
-	xrClaimSwapPoolImage(sessionHandle, &pSwapchain->swapIndex);
+	xrClaimSwapPoolImage(pSession->index, &pSwapchain->swapIndex);
 
 	*index = pSwapchain->swapIndex;
 
@@ -2604,7 +2567,6 @@ XR_PROC xrWaitSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
-	XrHandle   sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	ID3D11DeviceContext4*   context4 = pSession->binding.d3d11.context4;
 
@@ -2629,9 +2591,8 @@ XR_PROC xrReleaseSwapchainImage(
 
 	Swapchain* pSwapchain = (Swapchain*)swapchain;
 	Session*   pSession = (Session*)pSwapchain->session;
-	XrHandle   sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
-	xrReleaseSwapPoolImage(sessionHandle, pSwapchain->swapIndex);
+	xrReleaseSwapPoolImage(pSession->index, pSwapchain->swapIndex);
 
 	ID3D11DeviceContext4*   context4 = pSession->binding.d3d11.context4;
 
@@ -2642,7 +2603,6 @@ XR_PROC xrReleaseSwapchainImage(
 
 //	ID3D11RenderTargetView* nullRTView[] = {NULL};
 //	ID3D11DeviceContext4_OMSetRenderTargets(context4, 1, nullRTView, NULL);
-
 
 	return XR_SUCCESS;
 }
@@ -2668,8 +2628,6 @@ XR_PROC xrBeginSession(
 
 	pSession->running = true;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
-
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 //	switch (pInstance->graphicsApi) {
 //		case XR_GRAPHICS_API_OPENGL:    break;
@@ -2752,8 +2710,6 @@ XR_PROC xrWaitFrame(
 
 	XrTimeWaitWin32(&pSession->frameBegan, pSession->frameWaited);
 
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
-
 	if (pSession->lastDisplayTime == 0) {
 		uint64_t initialTimelineValue;
 		switch (xr.instance.graphicsApi) {
@@ -2764,12 +2720,12 @@ XR_PROC xrWaitFrame(
 				LOG_ERROR("Graphics API not supported.\n");
 				return XR_ERROR_RUNTIME_FAILURE;
 		}
-		xrSetInitialCompositorTimelineValue(sessionHandle, initialTimelineValue);
+		xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
 	}
 
 	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 	uint64_t compositorTimelineValue;
-	xrGetCompositorTimelineValue(sessionHandle, synchronized, &compositorTimelineValue);
+	xrGetCompositorTimelineValue(pSession->index, synchronized, &compositorTimelineValue);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
@@ -2800,7 +2756,7 @@ XR_PROC xrWaitFrame(
 
 	XrTime currentTime = xrGetTime();
 	XrTime lastFrameTime = pSession->lastDisplayTime == 0 ? currentTime : pSession->lastDisplayTime;
-	XrTime frameInterval = xrGetFrameInterval(sessionHandle, synchronized);
+	XrTime frameInterval = xrGetFrameInterval(pSession->index, synchronized);
 
 	frameState->predictedDisplayPeriod = frameInterval;
 	frameState->predictedDisplayTime = lastFrameTime + frameInterval;
@@ -2810,7 +2766,6 @@ XR_PROC xrWaitFrame(
 	memmove(&pSession->predictedDisplayTimes[1], &pSession->predictedDisplayTimes[0], sizeof(pSession->predictedDisplayTimes[0]) * (COUNT(pSession->predictedDisplayTimes) - 1));
 	pSession->predictedDisplayTimes[0] = frameState->predictedDisplayTime;
 	pSession->lastBeginDisplayTime = currentTime;
-
 
 //	double frameIntervalMs = xrTimeToMilliseconds(frameInterval);
 //	double fps = 1.0 / MillisecondsToSeconds(frameIntervalMs);
@@ -2925,8 +2880,7 @@ XR_PROC xrEndFrame(
 		}
 	}
 
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
-	bool      synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 
 	{
 		XrTime timeBeforeWait = xrGetTime();
@@ -2951,7 +2905,7 @@ XR_PROC xrEndFrame(
 		WaitForSingleObject(eventHandle, INFINITE);
 		CloseHandle(eventHandle);
 
-		xrSetSessionTimelineValue(sessionHandle, sessionTimelineValue);
+		xrSetSessionTimelineValue(pSession->index, sessionTimelineValue);
 
 //		XrTime timeAfterWait = xrGetTime();
 //		XrTime waitTime = timeAfterWait - timeBeforeWait;
@@ -2968,7 +2922,7 @@ XR_PROC xrEndFrame(
 
 		XrTime discrepancy = currenTime - frameEndInfo->displayTime;
 		double discrepancyMs = xrTimeToMilliseconds(discrepancy);
-		XrTime frameInterval = xrGetFrameInterval(sessionHandle, synchronized);
+		XrTime frameInterval = xrGetFrameInterval(pSession->index, synchronized);
 
 		if (discrepancy > 0) {
 //			printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
@@ -2983,7 +2937,7 @@ XR_PROC xrEndFrame(
 					LOG_ERROR("Graphics API not supported.\n");
 					return XR_ERROR_RUNTIME_FAILURE;
 			}
-			xrSetInitialCompositorTimelineValue(sessionHandle, initialTimelineValue);
+			xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
 
 		} else {
 			pSession->synchronizedFrameCount++;
@@ -3004,7 +2958,7 @@ XR_PROC xrEndFrame(
 		//	if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
 		//		pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
 
-		xrProgressCompositorTimelineValue(sessionHandle, 0, synchronized);
+		xrProgressCompositorTimelineValue(pSession->index, 0, synchronized);
 		XrTimeSignalWin32(&pSession->frameEnded, pSession->frameBegan);
 	}
 
@@ -3048,11 +3002,10 @@ XR_PROC xrLocateViews(
 		return XR_SUCCESS;
 
 	Session*  pSession = (Session*)session;
-	XrHandle  sessionHandle = GetHandle(xr.instance.sessions, pSession);
 
 	for (int i = 0; i < viewCapacityInput; ++i) {
 		XrEyeView eyeView;
-		xrGetEyeView(sessionHandle, i, &eyeView);
+		xrGetEyeView(pSession->index, i, &eyeView);
 
 		switch (xr.instance.graphicsApi) {
 			case XR_GRAPHICS_API_OPENGL:    break;
@@ -3148,10 +3101,8 @@ XR_PROC xrStringToPath(
 		return XR_SUCCESS;
 	}
 
-	block_handle handle;
-	XR_CHECK(PathClaimBlock(pathHash, &handle));
-
-	auto pPath = SLAB_PTR_FROM_HANDLE(xr.paths, handle);
+	auto handle = SLAB_CLAIM(xr.paths, pathHash);
+	auto pPath = SLAB_PTR(xr.paths, handle);
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
 
@@ -3290,15 +3241,16 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
 	block_key interactionProfilePathHash = SLAB_KEY(xr.paths, pInteractionProfilePath);
 
-	InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&xr.instance.interactionProfiles, interactionProfilePathHash);
-	if (pInteractionProfile == NULL) {
+	auto interactionProfileHandle = SLAB_FIND(xr.interactionProfiles, interactionProfilePathHash);
+	if (interactionProfileHandle == BLOCK_HANDLE_INVALID) {
 		LOG_ERROR("Could not find interaction profile binding set! %s %d\n", pInteractionProfilePath->string);
 		return XR_ERROR_PATH_UNSUPPORTED;
 	}
 
+	auto pInteractionProfile = SLAB_PTR(xr.interactionProfiles, interactionProfileHandle);
 	printf("Binding: %s\n", pInteractionProfilePath->string);
 
-	const XrActionSuggestedBinding* pSuggestedBindings = suggestedBindings->suggestedBindings;
+	auto pSuggestedBindings = suggestedBindings->suggestedBindings;
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		Action*    pAction = (Action*)pSuggestedBindings[i].action;
 		ActionSet* pActionSet = (ActionSet*)pAction->actionSet;
@@ -3313,12 +3265,12 @@ XR_PROC xrSuggestInteractionProfileBindings(
 		ActionSet* pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
 
 		// if the pointers became 32 bit int handle, I could just use that as a hash?
-//		auto bindingPathHash = PathHash(pBindingPath);
-		auto bindingPathHash = SLAB_KEY(xr.paths, pBindingPath);
-//		Binding* pBinding = GetBindingByHash(&pInteractionProfile->bindings, bindingPathHash);
-		block_handle bindingHandle;
-		MAP_FIND(pInteractionProfile->bindings, bindingPathHash, &bindingHandle);
-		auto pBinding = SLAB_PTR_FROM_HANDLE(xr.bindings, bindingHandle);
+		block_key bindingPathHash = SLAB_KEY(xr.paths, pBindingPath);
+		int bindingHandle = MAP_FIND(pInteractionProfile->bindings, bindingPathHash);
+		if (bindingHandle == BLOCK_HANDLE_INVALID)
+			continue;
+
+		auto pBinding = SLAB_PTR(xr.bindings, bindingHandle);
 
 		if (pBindingAction->countSubactionPaths == 0) {
 			XrBinding* pActionBinding;
@@ -3375,11 +3327,18 @@ XR_PROC xrAttachSessionActionSets(
 
 	if (pSession->pendingInteractionProfile == NULL) {
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
+
 		XrPath interactionProfilePath;
 		xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &interactionProfilePath);
-		auto interactionProfilePathHash = SLAB_KEY(xr.paths, (Path*)interactionProfilePath);
-		InteractionProfile* pInteractionProfile = GetInteractionProfileByHash(&xr.instance.interactionProfiles, interactionProfilePathHash);
-		pSession->pendingInteractionProfile = pInteractionProfile;
+		block_key interactionProfilePathHash = SLAB_KEY(xr.paths, (Path*)interactionProfilePath);
+
+		int interactionProfileHandle = SLAB_FIND(xr.interactionProfiles, interactionProfilePathHash);
+		if (interactionProfileHandle == BLOCK_HANDLE_INVALID) {
+			LOG_ERROR("XR_ERROR_HANDLE_INVALID\n");
+			return XR_ERROR_HANDLE_INVALID;
+		}
+
+		pSession->pendingInteractionProfile = SLAB_PTR(xr.interactionProfiles, interactionProfileHandle);
 	}
 
 	return XR_SUCCESS;

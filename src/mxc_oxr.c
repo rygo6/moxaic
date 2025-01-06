@@ -32,16 +32,16 @@ void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 	*sessionIndex = nodeHandle;
 }
 
-void xrReleaseSession(XrHandle sessionHandle)
+void xrReleaseSessionIndex(XrSessionIndex sessionIndex)
 {
 	printf("Releasing Moxaic OpenXR Session.\n");
-	NodeHandle nodeHandle = sessionHandle;
+	NodeHandle nodeHandle = sessionIndex;
 	ReleaseNode(nodeHandle);
 }
 
-void xrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
+void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	float radius = pNodeShared->compositorRadius * 2.0f;
 
@@ -49,33 +49,33 @@ void xrGetReferenceSpaceBounds(XrHandle sessionHandle, XrExtent2Df* pBounds)
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
 }
 
-void xrGetSessionTimeline(XrHandle sessionHandle, HANDLE* pHandle)
+void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 	*pHandle = pImportParam->nodeTimelineHandle;
 }
 
-void xrSetSessionTimelineValue(XrHandle sessionHandle, uint64_t timelineValue)
+void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	__atomic_store_n(&pNodeShared->timelineValue, timelineValue, __ATOMIC_RELEASE);
 }
 
-void xrGetCompositorTimeline(XrHandle sessionHandle, HANDLE* pHandle)
+void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
-void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE* pHandle)
+void xrClaimFramebufferImages(XrSessionIndex sessionIndex, int imageCount, HANDLE* pHandle)
 {
 	CHECK(imageCount != VK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 
 	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
@@ -86,9 +86,9 @@ void midXrClaimFramebufferImages(XrHandle sessionHandle, int imageCount, HANDLE*
 	}
 }
 
-void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex)
+void xrClaimSwapPoolImage(XrSessionIndex sessionIndex, uint8_t* pIndex)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 	uint8_t index = (timelineValue % VK_SWAP_COUNT);
@@ -98,9 +98,9 @@ void xrClaimSwapPoolImage(XrHandle sessionHandle, uint8_t* pIndex)
 //	assert(priorIndex == false);
 }
 
-void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
+void xrReleaseSwapPoolImage(XrSessionIndex sessionIndex, uint8_t index)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 //	printf("Releasing swap index %d timeline %llu\n", index, timelineValue);
@@ -111,25 +111,25 @@ void xrReleaseSwapPoolImage(XrHandle sessionHandle, uint8_t index)
 // not full sure if this should be done!?
 //#define UNSYNCED_FRAME_SKIP 16
 
-void xrSetInitialCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue)
+void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	timelineValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
 	pNodeShared->compositorBaseCycleValue = timelineValue + MXC_CYCLE_COUNT;
 //	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
 }
 
-void xrGetCompositorTimelineValue(XrHandle sessionHandle, bool synchronized, uint64_t* pTimelineValue)
+void xrGetCompositorTimelineValue(XrSessionIndex sessionIndex, bool synchronized, uint64_t* pTimelineValue)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
 }
 
-void xrProgressCompositorTimelineValue(XrHandle sessionHandle, uint64_t timelineValue, bool synchronized)
+void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue, bool synchronized)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
@@ -140,9 +140,9 @@ static XrTime HzToXrTime(double hz)
 	return (XrTime)(seconds * 1e9);
 }
 
-XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized)
+XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	double hz = 240.0 / (double)(pNodeShared->compositorCycleSkip);
 	XrTime hzTime = HzToXrTime(hz);
@@ -150,17 +150,17 @@ XrTime xrGetFrameInterval(XrHandle sessionHandle, bool synchronized)
 	return hzTime;
 }
 
-void xrGetHeadPose(XrHandle sessionHandle, XrVector3f* pEuler, XrVector3f* pPos)
+void xrGetHeadPose(XrSessionIndex sessionIndex, XrVector3f* pEuler, XrVector3f* pPos)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	*pEuler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	*pPos = *(XrVector3f*)&pNodeShared->cameraPose.position;
 }
 
-void xrGetEyeView(XrHandle sessionHandle, uint8_t viewIndex, XrEyeView *pEyeView)
+void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionHandle];
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	pEyeView->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
