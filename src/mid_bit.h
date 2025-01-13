@@ -12,6 +12,7 @@
 
 typedef unsigned char bitset_t;
 
+// so I can make this SIMD by doing four comparisons at once
 #define DEFINE_BITSET_N(_size) typedef unsigned char bitset##_size##_t __attribute__((vector_size(sizeof(bitset_t) * BITNSLOTS(_size))));
 DEFINE_BITSET_N(8);
 DEFINE_BITSET_N(16);
@@ -33,3 +34,6 @@ static inline int BitScanFirstZero(size_t setCount, bitset_t* pSet)
 			break;
 	return i == setCount ? -1 : __builtin_ctz(~pSet[i]) + (i * CHAR_BIT);
 }
+
+//typedef unsigned char nibset_t;
+//#define NIBSET_DECL

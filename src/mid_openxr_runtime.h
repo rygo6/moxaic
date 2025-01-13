@@ -71,7 +71,7 @@
 //// Mid OpenXR
 typedef float    XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
 typedef uint32_t XrHash;
-typedef uint32_t XrHandle;
+typedef uint32_t Handle_dep;
 #define XR_HANDLE_INVALID -1
 
 typedef enum XrGraphicsApi {
@@ -400,31 +400,67 @@ static XrResult _ClaimHandle(SlubSlot* pSlots, void* pData, int stride, int capa
 	return XR_SUCCESS;
 }
 #define ReleaseHandle(_pool, _handle) XR_CHECK(_ReleaseHandle(_pool.slots, _handle))
-static XrResult _ReleaseHandle(SlubSlot* pSlots, XrHandle handle)
+static XrResult _ReleaseHandle(SlubSlot* pSlots, Handle_dep handle)
 {
 	assert(pSlots[handle].occupied == true);
 	pSlots[handle].occupied = false;
 	return XR_SUCCESS;
 }
 #define GetHandle(_pool, _pValue) _GetHandle(_pool.data, sizeof(_pool.data[0]), _pValue)
-static XrHandle _GetHandle(void* pData, int stride, const void* pValue)
+static Handle_dep _GetHandle(void* pData, int stride, const void* pValue)
 {
-	return (XrHandle)((pValue - pData) / stride);
+	return (Handle_dep)((pValue - pData) / stride);
 }
 
 ////
 //// Slab Types
 ////
-#define BLOCK_HANDLE_INVALID -1
+
+typedef uint16_t map_handle;
+typedef uint16_t map_key;
+
 typedef uint16_t block_handle;
 typedef uint32_t block_key;
 
-#define SLAB(_, n)                \
-	typedef struct _##Slab {      \
+#define HANDLE_INDEX_BIT_COUNT 12
+#define HANDLE_INDEX_MASK      0x0FFF
+#define HANDLE_INDEX_MAX       ((1u << HANDLE_INDEX_BIT_COUNT) - 1)
+
+#define HANDLE_INDEX(handle) (handle & HANDLE_INDEX_MASK)
+
+#define HANDLE_GENERATION_BIT_COUNT 4
+#define HANDLE_GENERATION_MASK      0xF000
+#define HANDLE_GENERATION_MAX       ((1u << HANDLE_GENERATION_BIT_COUNT) - 1)
+
+#define HANDLE_GENERATION(handle)            ((handle & HANDLE_GENERATION_MASK) >> HANDLE_INDEX_BIT_COUNT)
+#define HANDLE_GENERATION_SET(handle, value) (value << HANDLE_INDEX_BIT_COUNT) | HANDLE_INDEX(handle)
+
+#define HANDLE_GENERATION_INVALID 0
+
+// 0 generation to signify it as invalid. Max index to make it assert errors if still used.
+#define HANDLE_INVALID ((0 & HANDLE_GENERATION_MASK) | (UINT16_MAX & HANDLE_INDEX_MASK))
+
+#define HANDLE_VALID(handle) (HANDLE_GENERATION(handle) != HANDLE_GENERATION_INVALID)
+
+static inline block_handle HandleGenerationIncrement(block_handle h)
+{
+	uint8_t g = HANDLE_GENERATION(h);
+	g = g == HANDLE_GENERATION_MAX ? 1 : (g + 1) & 0xF;
+	return HANDLE_GENERATION_SET(h, g);
+}
+
+#define HANDLE_GENERATION_INCREMENT(handle) ({          \
+	uint8_t g = HANDLE_GENERATION(handle);              \
+	g = g == HANDLE_GENERATION_MAX ? 1 : (g + 1) & 0xF; \
+	HANDLE_GENERATION_SET(handle, g);                   \
+})
+
+#define SLAB_DECL(type, n)        \
+	struct {                      \
 		BITSET_DECL(occupied, n); \
 		block_key keys[n];        \
-		_         blocks[n];      \
-	} _##Slab;
+		type      blocks[n];      \
+	}
 
 ////
 //// Map Types
@@ -432,6 +468,8 @@ typedef uint32_t block_key;
 typedef struct MapBase {
 	uint32_t  count;
 	block_key keys[];
+	// keys could be any size
+//	block_handle handles[];
 } MapBase;
 #define MAP_DECL(n)              \
 	struct {                     \
@@ -457,45 +495,25 @@ typedef struct SetBase {
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
-SLAB(Path, XR_PATH_CAPACITY)
 
 #define XR_BINDINGS_CAPACITY 256
-#define XR_MAX_BINDINGS 16
 typedef struct Binding {
-	XrPath path;
+	block_handle hPath;
 	int (*func)(void*);
 } Binding;
-SLAB(Binding, XR_BINDINGS_CAPACITY)
 
+#define XR_MAX_BINDINGS      16
 #define XR_INTERACTION_PROFILE_CAPACITY 16
 typedef struct InteractionProfile {
 	XrPath path;
 	MAP_DECL(XR_MAX_BINDINGS) bindings;
 } InteractionProfile;
-SLAB(InteractionProfile, XR_INTERACTION_PROFILE_CAPACITY)
 typedef InteractionProfile* XrInteractionProfile;
 
-#define XR_MAX_ACTIONS 64
-typedef Binding* XrBinding;
-POOL(XrBinding, XR_MAX_ACTIONS)
-
-#define XR_MAX_SUBACTION_PATHS 2
-typedef struct Action {
-	XrActionSet   actionSet;
-	uint32_t      countSubactionPaths;
-	XrBindingPool subactionBindings[XR_MAX_SUBACTION_PATHS];
-	XrPath        subactionPaths[XR_MAX_SUBACTION_PATHS];
-	XrActionType  actionType;
-	char          actionName[XR_MAX_ACTION_NAME_SIZE];
-	char          localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
-} Action;
-POOL(Action, XR_MAX_ACTIONS)
-
-//#define XR_MAX_BOUND_ACTIONS 4
-//CONTAINER(XrAction, XR_MAX_BOUND_ACTIONS)
-
+#define XR_SUBACTION_CAPACITY 256
 typedef struct SubactionState {
-	uint32_t lastSyncedPriority;
+	// need to understand this priority again
+//	uint32_t lastSyncedPriority;
 
 	// actual layout from OXR to memcpy
 	float    currentState;
@@ -503,25 +521,33 @@ typedef struct SubactionState {
 	XrTime   lastChangeTime;
 	XrBool32 isActive;
 } SubactionState;
-typedef struct ActionState {
-	SubactionState subactionStates[XR_MAX_SUBACTION_PATHS];
-} ActionState;
-POOL(ActionState, XR_MAX_ACTIONS)
 
-typedef struct ActionSetState {
-	//	ActionStatePool actionStates;
-	ActionState states[XR_MAX_ACTIONS];
-	XrActionSet actionSet;
-} ActionSetState;
-POOL_HASHED(ActionSetState, 4)
+#define XR_MAX_SUBACTION_PATHS 2
+#define XR_ACTION_CAPACITY 128
+typedef struct Action {
+	block_handle hActionSet;
 
+	uint32_t     countSubactions;
+	block_handle hSubactionStates[XR_MAX_SUBACTION_PATHS];
+	block_handle hSubactionBindings[XR_MAX_SUBACTION_PATHS];
+	block_handle hSubactionPaths[XR_MAX_SUBACTION_PATHS];
+
+	XrActionType  actionType;
+	char          actionName[XR_MAX_ACTION_NAME_SIZE];
+	char          localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
+} Action;
+
+#define XR_ACTION_SET_CAPACITY 64
+#define XR_ACTION_SET_MAP_CAPACITY 64
 typedef struct ActionSet {
-	char       actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
 	uint32_t   priority;
-	XrSession  attachedToSession;
-	ActionPool Actions;
+	block_handle  attachedToSession;
+
+	MAP_DECL(XR_ACTION_SET_MAP_CAPACITY) actions;
+	MAP_DECL(XR_ACTION_SET_MAP_CAPACITY) states;
+
+	char actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
 } ActionSet;
-POOL_HASHED(ActionSet, 4)
 
 #define XR_MAX_SPACE_COUNT 32
 typedef struct Space {
@@ -531,6 +557,7 @@ typedef struct Space {
 } Space;
 POOL(Space, XR_MAX_SPACE_COUNT)
 
+#define XR_SWAPCHAIN_CAPACITY 8
 typedef struct Swapchain {
 	// we should replace XrHandle pointers with uint16_t handle offsets maybe?
 	XrSession session;
@@ -561,7 +588,7 @@ typedef struct Swapchain {
 // I don't think I actually need a pool? Just one per session, and it has to switch
 POOL(Swapchain, 2)
 
-#define XR_SESSIONS_CAPACITY 4
+#define XR_SESSIONS_CAPACITY 8
 // this layout is awful from a DOD perspective can I make it less awful?
 typedef struct Session {
 	XrSessionIndex index;
@@ -575,11 +602,12 @@ typedef struct Session {
 	XrSessionState activeSessionState;
 	XrSessionState pendingSessionState;
 
-	XrHandle activeReferenceSpaceHandle;
-	XrHandle pendingReferenceSpaceHandle;
+	Handle_dep activeReferenceSpaceHandle;
+	Handle_dep pendingReferenceSpaceHandle;
 
-	XrInteractionProfile activeInteractionProfile;
-	XrInteractionProfile pendingInteractionProfile;
+	// should be handles
+	block_handle hActiveInteractionProfile;
+	block_handle hPendingInteractionProfile;
 
 	XrBool32 activeIsUserPresent;
 	XrBool32 pendingIsUserPresent;
@@ -600,8 +628,10 @@ typedef struct Session {
 	uint64_t sessionTimelineValue;
 
 	SwapchainPool      swapchains;
-	ActionSetStatePool actionSetStates;
 
+	MAP_DECL(XR_ACTION_SET_MAP_CAPACITY) actionSets;
+
+//	ActionSetStatePool actionSetStates;
 //	ActionSetStatePool attachedActionSetStates;
 
 	XrViewConfigurationType primaryViewConfigurationType;
@@ -626,7 +656,6 @@ typedef struct Session {
 	} binding;
 
 } Session;
-SLAB(Session, XR_BINDINGS_CAPACITY)
 
 typedef struct Instance {
 	// System
@@ -635,7 +664,7 @@ typedef struct Instance {
 	XrFormFactor      systemFormFactor;
 
 	// Interaction
-	ActionSetPool actionSets;
+//	ActionSetPool actionSets;
 	MAP_DECL(XR_INTERACTION_PROFILE_CAPACITY) interactionProfiles;
 
 	// Graphics
@@ -654,34 +683,37 @@ typedef struct Instance {
 #ifdef MID_OPENXR_IMPLEMENTATION
 
 static struct {
-	Instance               instance;
-	SessionSlab            sessions;
-	PathSlab               paths;
-	BindingSlab            bindings;
-	InteractionProfileSlab interactionProfiles;
+	Instance instance;
 } xr;
+
+/// maybe want to call this block pool since its technically not a SLAB
+static struct {
+	SLAB_DECL(Session, XR_SESSIONS_CAPACITY) session;
+	SLAB_DECL(Path, XR_PATH_CAPACITY) path;
+	SLAB_DECL(Binding, XR_BINDINGS_CAPACITY) binding;
+	SLAB_DECL(InteractionProfile, XR_INTERACTION_PROFILE_CAPACITY) profile;
+	SLAB_DECL(ActionSet, XR_ACTION_CAPACITY) actionSet;
+	SLAB_DECL(Action, XR_ACTION_CAPACITY) action;
+	SLAB_DECL(SubactionState, XR_SUBACTION_CAPACITY) state;
+} slab;
 
 ////
 //// MAP
 ////
 
-static inline int MapAdd(int capacity, MapBase* pMap, uint32_t key, block_handle handle)
+static inline map_handle MapAdd(int capacity, MapBase* pMap, block_handle handle, map_key key)
 {
-	int index = pMap->count;
-	if (index == capacity)
-		return BLOCK_HANDLE_INVALID;
-
-	pMap->keys[index] = key;
-
+	int i = pMap->count;
+	if (i == capacity)
+		return HANDLE_INVALID;
 	block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
-	pHandles[index] = handle;
-
+	pHandles[i] = handle;
+	pMap->keys[i] = key;
 	pMap->count++;
-
-	return index;
+	return HANDLE_GENERATION_INCREMENT(i);
 }
 
-static inline int MapFind(int capacity, MapBase* pMap, block_key key)
+static inline map_handle MapFind(int capacity, MapBase* pMap, map_key key)
 {
 	for (int i = 0; i < pMap->count; ++i) {
 		if (pMap->keys[i] == key) {
@@ -689,44 +721,45 @@ static inline int MapFind(int capacity, MapBase* pMap, block_key key)
 			return pHandles[i];
 		}
 	}
-	return BLOCK_HANDLE_INVALID;
+	return HANDLE_INVALID;
 }
 
-#define MAP_ADD(map, key, handle) MapAdd(COUNT(map.keys), (MapBase*)&map, key, handle)
+#define MAP_ADD(map, handle, key) MapAdd(COUNT(map.keys), (MapBase*)&map, handle, key)
 #define MAP_FIND(map, key) MapFind(COUNT(map.keys), (MapBase*)&map, key)
 
 ////
 //// SLAB
 ////
 
-static int ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash)
+static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash)
 {
 	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
-	if (i == -1) return i;
+	if (i == -1) return HANDLE_INVALID;
 	BITSET(pOccupiedSet, i);
 	pHashes[i] = hash;
-	return i;
+//	return HANDLE_GENERATION_INCREMENT(i);
+	return HandleGenerationIncrement(i);
 }
-static int FindBlockByHash(int hashCount, block_key* pHashes, block_key hash)
+static block_handle FindBlockByHash(int hashCount, block_key* pHashes, block_key hash)
 {
 	for (int i = 0; i < hashCount; ++i) {
 		if (pHashes[i] == hash)
 			return i;
 	}
-	return -1;
+	return HANDLE_INVALID;
 }
 
-#define SLAB_CLAIM(slab, hash)                                                                       \
-	({                                                                                               \
-		int _handle = ClaimBlock(sizeof(slab.occupied), (bitset_t*)&slab.occupied, slab.keys, hash); \
-		assert(_handle >= 0 && #slab ": Claiming handle. Out of capacity.");                         \
-		(block_handle) _handle;                                                                      \
+#define SLAB_CLAIM(slab, key)                                                                       \
+	({                                                                                              \
+		int _handle = ClaimBlock(sizeof(slab.occupied), (bitset_t*)&slab.occupied, slab.keys, key); \
+		assert(_handle >= 0 && #slab ": Claiming handle. Out of capacity.");                        \
+		(block_handle) _handle;                                                                     \
 	})
-#define SLAB_RELEASE(slab, handle)                                                                                          \
-	({                                                                                                                      \
-		assert(handle >= 0 && handle < slab.blocks + COUNT(slab.blocks) && #slab ": Releasing SLAB Handle. Out of range."); \
-		assert(BITSET(slab.occupied, handle) && #slab ": Releasing SLAB handle. Should be occupied.");                      \
-		BITCLEAR(slab.occupied, (int)handle);                                                                               \
+#define SLAB_RELEASE(slab, handle)                                                                                                                      \
+	({                                                                                                                                                  \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < slab.blocks + COUNT(slab.blocks) && #slab ": Releasing SLAB Handle. Out of range."); \
+		assert(BITSET(slab.occupied, HANDLE_INDEX(handle)) && #slab ": Releasing SLAB handle. Should be occupied.");                                    \
+		BITCLEAR(slab.occupied, (int)HANDLE_INDEX(handle));                                                                                             \
 	})
 #define SLAB_FIND(slab, hash)                                \
 	({                                                       \
@@ -743,15 +776,22 @@ static int FindBlockByHash(int hashCount, block_key* pHashes, block_key hash)
 		assert(p >= slab.blocks && p < slab.blocks + COUNT(slab.blocks) && #slab ": Getting SLAB key. Out of range."); \
 		slab.keys[p - slab.blocks];                                                                                    \
 	})
-#define SLAB_PTR(slab, handle)                                                               \
-	({                                                                                                   \
-		assert(handle >= 0 && handle < COUNT(slab.blocks) && #slab ": Getting SLAB ptr. Out of range."); \
-		&slab.blocks[handle];                                                                            \
+#define SLAB_PTR(slab, handle)                                                                                                       \
+	({                                                                                                                               \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(slab.blocks) && #slab ": Getting SLAB ptr. Out of range."); \
+		&slab.blocks[HANDLE_INDEX(handle)];                                                                                          \
 	})
 
+#define CHECK_HANDLE(handle, error)    \
+	if (!HANDLE_VALID(handle)) { \
+		LOG_ERROR(#error "\n");        \
+		return error;                  \
+	}
 
-//
+////
 //// MidOpenXR Debug
+////
+
 #define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
 #define LOG_METHOD(_method) printf("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
@@ -1079,20 +1119,20 @@ static XrResult RegisterBinding(
 	Path*               pBindingPath,
 	int (*func)(void*))
 {
-	block_key bindingPathHash = SLAB_KEY(xr.paths, pBindingPath);
+	auto bindPathHash = SLAB_KEY(slab.path, pBindingPath);
 	for (int i = 0; i < pInteractionProfile->bindings.count; ++i) {
-		if (pInteractionProfile->bindings.keys[i] == bindingPathHash) {
-			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindingPathHash);
+		if (pInteractionProfile->bindings.keys[i] == bindPathHash) {
+			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindPathHash);
 			return XR_ERROR_PATH_INVALID;
 		}
 	}
 
-	block_handle bindingHandle = SLAB_CLAIM(xr.bindings, bindingPathHash);
-	auto pBinding = SLAB_PTR(xr.bindings, bindingHandle);
-	pBinding->path = (XrPath)pBindingPath;
-	pBinding->func = func;
+	auto hBind = SLAB_CLAIM(slab.binding, bindPathHash);
+	auto pBind = SLAB_PTR(slab.binding, hBind);
+	pBind->hPath = SLAB_HANDLE(slab.path, pBindingPath);
+	pBind->func = func;
 
-	MAP_ADD(pInteractionProfile->bindings, bindingPathHash, bindingHandle);
+	MAP_ADD(pInteractionProfile->bindings, hBind, bindPathHash);
 
 	return XR_SUCCESS;
 }
@@ -1107,10 +1147,10 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 
 	XrPath interactionProfilePath;
 	xrStringToPath(instance, interactionProfile, &interactionProfilePath);
-	auto interactionProfilePathHash = SLAB_KEY(xr.paths, (Path*)interactionProfilePath);
+	auto interactionProfilePathHash = SLAB_KEY(slab.path, (Path*)interactionProfilePath);
 
-	auto interactionProfileHandle  = SLAB_CLAIM(xr.interactionProfiles, interactionProfilePathHash);
-	auto pInteractionProfile = SLAB_PTR(xr.interactionProfiles, interactionProfileHandle);
+	auto interactionProfileHandle  = SLAB_CLAIM(slab.profile, interactionProfilePathHash);
+	auto pInteractionProfile = SLAB_PTR(slab.profile, interactionProfileHandle);
 
 	pInteractionProfile->path = interactionProfilePath;
 
@@ -1537,10 +1577,10 @@ XR_PROC xrPollEvent(
 	LOG_METHOD_ONCE(xrPollEvent);
 
 	for (int i = 0; i < XR_SESSIONS_CAPACITY; ++i) {
-		if (!BITSET(xr.sessions.occupied, i))
+		if (!BITSET(slab.session.occupied, i))
 			continue;
 
-		Session* pSession = &xr.sessions.blocks[i];
+		Session* pSession = &slab.session.blocks[i];
 
 		if (pSession->activeSessionState != pSession->pendingSessionState) {
 
@@ -1680,17 +1720,16 @@ XR_PROC xrPollEvent(
 			return XR_SUCCESS;
 		}
 
-		if (pSession->activeInteractionProfile != pSession->pendingInteractionProfile) {
+		if (pSession->hActiveInteractionProfile != pSession->hPendingInteractionProfile) {
 
 			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
-
-			XrEventDataInteractionProfileChanged* pEventData = (XrEventDataInteractionProfileChanged*)eventData;
+			auto pEventData = (XrEventDataInteractionProfileChanged*)eventData;
 			pEventData->session = (XrSession)pSession;
 
-			pSession->activeInteractionProfile = pSession->pendingInteractionProfile;
+			pSession->hActiveInteractionProfile = pSession->hPendingInteractionProfile;
 
-			InteractionProfile* pActionInteractionProfile = (InteractionProfile*)pSession->activeInteractionProfile;
-			Path*               pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
+			auto pActionInteractionProfile = SLAB_PTR(slab.profile, pSession->hActiveInteractionProfile);
+			auto pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
 			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
 
 			return XR_SUCCESS;
@@ -1887,8 +1926,8 @@ XR_PROC xrCreateSession(
 	xrClaimSessionIndex(&sessionIndex);
 	printf("Claimed SessionIndex %d\n", sessionIndex);
 
-	auto claimedSessionHandle = SLAB_CLAIM(xr.sessions, sessionIndex);
-	auto pClaimedSession = SLAB_PTR(xr.sessions, claimedSessionHandle);
+	auto claimedSessionHandle = SLAB_CLAIM(slab.session, sessionIndex);
+	auto pClaimedSession = SLAB_PTR(slab.session, claimedSessionHandle);
 	*pClaimedSession = (Session){};
 
 	pClaimedSession->index = sessionIndex;
@@ -1996,6 +2035,8 @@ XR_PROC xrCreateSession(
 	pClaimedSession->pendingSessionState = XR_SESSION_STATE_IDLE;
 	pClaimedSession->activeReferenceSpaceHandle = XR_HANDLE_INVALID;
 	pClaimedSession->pendingReferenceSpaceHandle = XR_HANDLE_INVALID;
+	pClaimedSession->hActiveInteractionProfile = HANDLE_INVALID;
+	pClaimedSession->hPendingInteractionProfile = HANDLE_INVALID;
 	pClaimedSession->activeIsUserPresent = XR_FALSE;
 	pClaimedSession->pendingIsUserPresent = XR_TRUE;
 
@@ -2008,8 +2049,8 @@ XR_PROC xrDestroySession(
 	LOG_METHOD(xrDestroySession);
 
 	auto pSession = (Session*)session;
-	auto sessionHandle = SLAB_HANDLE(xr.sessions, pSession);
-	SLAB_RELEASE(xr.sessions, sessionHandle);
+	auto sessionHandle = SLAB_HANDLE(slab.session, pSession);
+	SLAB_RELEASE(slab.session, sessionHandle);
 
 	xrReleaseSessionIndex(sessionHandle);
 
@@ -3079,30 +3120,39 @@ XR_PROC xrLocateViews(
 	return XR_SUCCESS;
 }
 
+#define CHECK_INSTANCE                          \
+	if (&xr.instance != (Instance*)instance) {  \
+		LOG_ERROR("XR_ERROR_HANDLE_INVALID\n"); \
+		return XR_ERROR_HANDLE_INVALID;         \
+	}
+
 XR_PROC xrStringToPath(
 	XrInstance  instance,
 	const char* pathString,
 	XrPath*     path)
 {
-	//	LOG_METHOD(xrStringToPath);
+	LOG_METHOD_ONCE(xrStringToPath);
+	CHECK_INSTANCE
 
-	Instance* pInstance = (Instance*)instance;
-
-	block_key pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
+	auto pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (int i = 0; i < XR_PATH_CAPACITY; ++i) {
-		if (xr.paths.keys[i] != pathHash)
+		if (slab.path.keys[i] != pathHash)
 			continue;
-		if (strncmp(xr.paths.blocks[i].string, pathString, XR_MAX_PATH_LENGTH)) {
-			LOG_ERROR("Path Hash Collision! %s | %s\n", xr.paths.blocks[i].string, pathString);
+		if (strncmp(slab.path.blocks[i].string, pathString, XR_MAX_PATH_LENGTH)) {
+			LOG_ERROR("Path Hash Collision! %s | %s\n", slab.path.blocks[i].string, pathString);
 			return XR_ERROR_PATH_INVALID;
 		}
-		printf("Path Handle Found: %d\n    %s\n", i, xr.paths.blocks[i].string);
-		*path = (XrPath)&xr.paths.blocks[i];
+		printf("Path Handle Found: %d\n    %s\n", i, slab.path.blocks[i].string);
+		*path = (XrPath)&slab.path.blocks[i];
 		return XR_SUCCESS;
 	}
 
-	auto handle = SLAB_CLAIM(xr.paths, pathHash);
-	auto pPath = SLAB_PTR(xr.paths, handle);
+	auto hPath = SLAB_CLAIM(slab.path, pathHash);
+	CHECK_HANDLE(hPath, XR_ERROR_PATH_COUNT_EXCEEDED);
+
+	auto i = HANDLE_INDEX(hPath);
+
+	auto pPath = SLAB_PTR(slab.path, hPath);
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
 
@@ -3118,13 +3168,27 @@ XR_PROC xrPathToString(
 	uint32_t*  bufferCountOutput,
 	char*      buffer)
 {
-	//	LOG_METHOD(xrPathToString);
+	LOG_METHOD_ONCE(xrPathToString);
+	CHECK_INSTANCE
 
-	Instance* pInstance = (Instance*)instance;  // check its in instance ?
-	Path*     pPath = (Path*)path;
+	auto pPath = (Path*)path;
 
-	strncpy(buffer, pPath->string, bufferCapacityInput < XR_MAX_PATH_LENGTH ? bufferCapacityInput : XR_MAX_PATH_LENGTH);
-	*bufferCountOutput = strlen(buffer);
+	*bufferCountOutput = strlen(pPath->string) + 1;
+
+	if (buffer == NULL)
+		return XR_SUCCESS;
+
+	if (bufferCapacityInput > XR_MAX_PATH_LENGTH) {
+		LOG_ERROR("XR_ERROR_VALIDATION_FAILURE\n");
+		return XR_ERROR_VALIDATION_FAILURE;
+	}
+
+	if (bufferCapacityInput < *bufferCountOutput) {
+		LOG_ERROR("XR_ERROR_SIZE_INSUFFICIENT\n");
+		return XR_ERROR_SIZE_INSUFFICIENT;
+	}
+
+	strncpy(buffer, pPath->string, *bufferCountOutput);
 
 	return XR_SUCCESS;
 }
@@ -3140,18 +3204,24 @@ XR_PROC xrCreateActionSet(
 #endif
 	assert(createInfo->next == NULL);
 
-	Instance* pInstance = (Instance*)instance;
+	block_key actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 
-	XrHash     actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
-	ActionSet* pActionSet;
-	XR_CHECK(ClaimActionSet(&pInstance->actionSets, &pActionSet, actionSetNameHash));
+	auto hFoundActionSet = SLAB_FIND(slab.actionSet, actionSetNameHash);
+	CHECK_HANDLE(hFoundActionSet, XR_ERROR_LOCALIZED_NAME_DUPLICATED);
+
+	auto hActionSet = SLAB_CLAIM(slab.actionSet, actionSetNameHash);
+	CHECK_HANDLE(hActionSet, XR_ERROR_LIMIT_REACHED);
+
+	auto pActionSet = SLAB_PTR(slab.actionSet, hActionSet);
+	*pActionSet = (ActionSet){};
 
 	pActionSet->priority = createInfo->priority;
+	pActionSet->attachedToSession = HANDLE_INVALID;
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
+
 	*actionSet = (XrActionSet)pActionSet;
 
 	printf("Created ActionSet with %s\n", createInfo->actionSetName);
-
 	return XR_SUCCESS;
 }
 
@@ -3174,25 +3244,27 @@ XR_PROC xrCreateAction(
 #endif
 	assert(createInfo->next == NULL);
 
-	ActionSet* pActionSet = (ActionSet*)actionSet;
+	auto pActionSet = (ActionSet*)actionSet;
+	auto hActionSet = SLAB_HANDLE(slab.actionSet, pActionSet);
+	CHECK_HANDLE(hActionSet, XR_ERROR_VALIDATION_FAILURE);
 
-	if (pActionSet->attachedToSession != NULL) {
-		LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED");
-		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
-	}
+	CHECK_HANDLE(pActionSet->attachedToSession, XR_ERROR_ACTIONSETS_ALREADY_ATTACHED);
+
 	if (createInfo->countSubactionPaths > XR_MAX_SUBACTION_PATHS) {
 		LOG_ERROR("XR_ERROR_PATH_COUNT_EXCEEDED");
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
 	}
 
-	Action* pAction;
-	ClaimHandle(pActionSet->Actions, pAction);
+	block_handle actionHandle = SLAB_CLAIM(slab.action, 0);
+	CHECK_HANDLE(actionHandle, XR_ERROR_LIMIT_REACHED);
+	Action* pAction = SLAB_PTR(slab.action, actionHandle);
+	*pAction = (Action){};
 
-	pAction->actionSet = actionSet;
-	pAction->countSubactionPaths = createInfo->countSubactionPaths;
-
-	memcpy(pAction->subactionPaths, createInfo->subactionPaths, pAction->countSubactionPaths * sizeof(XrPath));
+	pAction->hActionSet = hActionSet;
 	pAction->actionType = createInfo->actionType;
+	pAction->countSubactions = createInfo->countSubactionPaths;
+	for (int i = 0; i < createInfo->countSubactionPaths; ++i)
+		pAction->hSubactionPaths[i] = SLAB_HANDLE(slab.path, (Path*)createInfo->subactionPaths[i]);
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
 	strncpy((char*)&pAction->localizedActionName, (const char*)&createInfo->localizedActionName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
 
@@ -3228,70 +3300,79 @@ static int CompareSubPath(const char* pSubPath, const char* pPath)
 		pSubPath++;
 		pPath++;
 	}
-
 	return 0;
 }
+
 XR_PROC xrSuggestInteractionProfileBindings(
 	XrInstance                                  instance,
 	const XrInteractionProfileSuggestedBinding* suggestedBindings)
 {
 	LOG_METHOD(xrSuggestInteractionProfileBindings);
 	LogNextChain(suggestedBindings->next);
+	assert(suggestedBindings->next == NULL);
+	CHECK_INSTANCE
 
-	Path*  pInteractionProfilePath = (Path*)suggestedBindings->interactionProfile;
-	block_key interactionProfilePathHash = SLAB_KEY(xr.paths, pInteractionProfilePath);
+	auto pProfilePath = (Path*)suggestedBindings->interactionProfile;
+	auto profilePathHash = SLAB_KEY(slab.path, pProfilePath);
 
-	auto interactionProfileHandle = SLAB_FIND(xr.interactionProfiles, interactionProfilePathHash);
-	if (interactionProfileHandle == BLOCK_HANDLE_INVALID) {
-		LOG_ERROR("Could not find interaction profile binding set! %s %d\n", pInteractionProfilePath->string);
-		return XR_ERROR_PATH_UNSUPPORTED;
+	auto hProfile = SLAB_FIND(slab.profile, profilePathHash);
+	CHECK_HANDLE(hProfile, XR_ERROR_PATH_UNSUPPORTED);
+
+	auto pProfile = SLAB_PTR(slab.profile, hProfile);
+	printf("Binding: %s\n", pProfilePath->string);
+
+	const auto pSuggestions = suggestedBindings->suggestedBindings;
+
+	// Pre-emptively check everything so you don't end up with a half finished binding suggestion that breaks things.
+	// Since this method is rarely run the overhead should be fine.
+	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
+		auto pAct = (Action*)pSuggestions[i].action;
+		auto pActSet = SLAB_PTR(slab.actionSet, pAct->hActionSet);
+		CHECK_HANDLE(pActSet->attachedToSession, XR_ERROR_ACTIONSETS_ALREADY_ATTACHED);
+		// Might want to check if there is space too?
 	}
 
-	auto pInteractionProfile = SLAB_PTR(xr.interactionProfiles, interactionProfileHandle);
-	printf("Binding: %s\n", pInteractionProfilePath->string);
-
-	auto pSuggestedBindings = suggestedBindings->suggestedBindings;
+	int actsBound = 0;
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		Action*    pAction = (Action*)pSuggestedBindings[i].action;
-		ActionSet* pActionSet = (ActionSet*)pAction->actionSet;
-		if (pActionSet->attachedToSession != NULL)
-			return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
-	}
+		auto        pAct = (Action*)pSuggestions[i].action;
+		auto        pBindPath = (Path*)pSuggestions[i].binding;
 
-	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		Action* pBindingAction = (Action*)pSuggestedBindings[i].action;
-		Path*   pBindingPath = (Path*)pSuggestedBindings[i].binding;
-
-		ActionSet* pBindingActionSet = (ActionSet*)pBindingAction->actionSet;
-
-		// if the pointers became 32 bit int handle, I could just use that as a hash?
-		block_key bindingPathHash = SLAB_KEY(xr.paths, pBindingPath);
-		int bindingHandle = MAP_FIND(pInteractionProfile->bindings, bindingPathHash);
-		if (bindingHandle == BLOCK_HANDLE_INVALID)
-			continue;
-
-		auto pBinding = SLAB_PTR(xr.bindings, bindingHandle);
-
-		if (pBindingAction->countSubactionPaths == 0) {
-			XrBinding* pActionBinding;
-			ClaimHandle(pBindingAction->subactionBindings[0], pActionBinding);
-			*pActionBinding = pBinding;
-
-//			printf("Bound Action: %s BindingPath: %s No Subaction\n", pBindingAction->actionName, pBindingPath->string);
+		auto bindPathHash = SLAB_KEY(slab.path, pBindPath);
+		auto hMapBind = MAP_FIND(pProfile->bindings, bindPathHash);
+		if (!HANDLE_VALID(hMapBind)) {
+			printf("Could not find suggested Binding: %s on InteractionProfile: %s\n", pBindPath->string, pProfilePath->string);
 			continue;
 		}
 
-		for (int subactionIndex = 0; subactionIndex < pBindingAction->countSubactionPaths; ++subactionIndex) {
-			Path* pActionSubPath = (Path*)pBindingAction->subactionPaths[subactionIndex];
-			if (!CompareSubPath(pActionSubPath->string, pBindingPath->string))
+		auto hBind = pProfile->bindings.handles[hMapBind];
+		auto pBind = SLAB_PTR(slab.binding, hBind);
+
+		if (pAct->countSubactions == 0) {
+
+			pAct->hSubactionBindings[0] = hBind;
+
+			printf("Bound Action: %s BindingPath: %s No Subaction\n", pAct->actionName, pBindPath->string);
+			actsBound++;
+
+			continue;
+		}
+
+		for (int subactionIndex = 0; subactionIndex < pAct->countSubactions; ++subactionIndex) {
+
+			auto pSubactPath = SLAB_PTR(slab.path, pAct->hSubactionPaths[subactionIndex]);
+			if (!CompareSubPath(pSubactPath->string, pBindPath->string))
 				continue;
 
-			XrBinding* pActionBinding;
-			ClaimHandle(pBindingAction->subactionBindings[subactionIndex], pActionBinding);
-			*pActionBinding = pBinding;
+			pAct->hSubactionBindings[subactionIndex] = hBind;
 
-//			printf("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pBindingAction->actionName, pBindingPath->string, subactionIndex, pActionSubPath->string);
+			printf("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pAct->actionName, pBindPath->string, subactionIndex, pSubactPath->string);
+			actsBound++;
 		}
+	}
+
+	if (actsBound == 0) {
+		LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+		return XR_ERROR_PATH_UNSUPPORTED;
 	}
 
 	return XR_SUCCESS;
@@ -3303,42 +3384,40 @@ XR_PROC xrAttachSessionActionSets(
 {
 	LOG_METHOD(xrAttachSessionActionSets);
 	LogNextChain(attachInfo->next);
+	assert(attachInfo->next == NULL);
 
-	Session* pSession = (Session*)session;
+	auto pSess = (Session*)session;
+	auto hSess = SLAB_HANDLE(slab.session, pSess);
 
-	if (pSession->actionSetStates.count != 0)
+	if (pSess->actionSets.count != 0) {
+		LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED\n");
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
-
-
-	for (int i = 0; i < attachInfo->countActionSets; ++i) {
-		ActionSet* pAttachingActionSet = (ActionSet*)attachInfo->actionSets[i];
-		XrHash     attachingActionSetHash = GetActionSetHash(&xr.instance.actionSets, pAttachingActionSet);
-
-		ActionSetState* pClaimedActionSetState;
-		XR_CHECK(ClaimActionSetState(&pSession->actionSetStates, &pClaimedActionSetState, attachingActionSetHash));
-
-//		pClaimedActionSetState->actionStates.slots = pAttachingActionSet->Actions.slots;
-		pClaimedActionSetState->actionSet = (XrActionSet)pAttachingActionSet;
-
-		pAttachingActionSet->attachedToSession = session;
-
-		printf("Attached ActionSet %s\n", pAttachingActionSet->actionSetName);
 	}
 
-	if (pSession->pendingInteractionProfile == NULL) {
+	for (int i = 0; i < attachInfo->countActionSets; ++i) {
+		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
+		auto hActSet = SLAB_HANDLE(slab.actionSet, pActSet);
+		CHECK_HANDLE(hActSet, XR_ERROR_HANDLE_INVALID);
+
+		auto actSetHash = SLAB_KEY(slab.actionSet, pActSet);
+		MAP_ADD(pSess->actionSets, hActSet, actSetHash);
+
+		memset(&pActSet->states, 0, sizeof(pActSet->states));
+
+		pActSet->attachedToSession = hSess;
+		printf("Attached ActionSet %s\n", pActSet->actionSetName);
+	}
+
+	if (!HANDLE_VALID(pSess->hPendingInteractionProfile)) {
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 
-		XrPath interactionProfilePath;
-		xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &interactionProfilePath);
-		block_key interactionProfilePathHash = SLAB_KEY(xr.paths, (Path*)interactionProfilePath);
+		XrPath profilePath;
+		xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &profilePath);
+		auto profileHash = SLAB_KEY(slab.path, (Path*)profilePath);
+		auto hProfile = SLAB_FIND(slab.profile, profileHash);
+		CHECK_HANDLE(hProfile, XR_ERROR_HANDLE_INVALID);
 
-		int interactionProfileHandle = SLAB_FIND(xr.interactionProfiles, interactionProfilePathHash);
-		if (interactionProfileHandle == BLOCK_HANDLE_INVALID) {
-			LOG_ERROR("XR_ERROR_HANDLE_INVALID\n");
-			return XR_ERROR_HANDLE_INVALID;
-		}
-
-		pSession->pendingInteractionProfile = SLAB_PTR(xr.interactionProfiles, interactionProfileHandle);
+		pSess->hPendingInteractionProfile = hProfile;
 	}
 
 	return XR_SUCCESS;
@@ -3349,20 +3428,18 @@ XR_PROC xrGetCurrentInteractionProfile(
 	XrPath                     topLevelUserPath,
 	XrInteractionProfileState* interactionProfile)
 {
+	auto pPath = (Path*)topLevelUserPath;
+	LOG("xrGetCurrentInteractionProfile %s\n", pPath->string);
 	assert(interactionProfile->next == NULL);
 
-	Path* pPath = (Path*)topLevelUserPath;
-	printf("xrGetCurrentInteractionProfile %s\n", pPath->string);
-
-	Session*            pSession = (Session*)session;
-	// application might set interaction profile then immediately call thigs without letting xrPollEvent update activeInteractionProfile
-	InteractionProfile* pInteractionProfile = pSession->activeInteractionProfile != NULL ?
-												  pSession->activeInteractionProfile :
-												  pSession->pendingInteractionProfile;
-	interactionProfile->interactionProfile = pInteractionProfile->path;
-
-	Path* pInteractionProfilePath = (Path*)pInteractionProfile->path;
-	printf("Found InteractionProfile %s\n", pInteractionProfilePath->string);
+	// application might set interaction profile then immediately call things without letting xrPollEvent update activeInteractionProfile
+	auto pSess = (Session*)session;
+	if (HANDLE_VALID(pSess->hActiveInteractionProfile))
+		interactionProfile->interactionProfile = (XrPath)SLAB_PTR(slab.profile, pSess->hActiveInteractionProfile);
+	else if (HANDLE_VALID(pSess->hPendingInteractionProfile))
+		interactionProfile->interactionProfile = (XrPath)SLAB_PTR(slab.profile, pSess->hPendingInteractionProfile);
+	else
+		interactionProfile->interactionProfile = XR_NULL_HANDLE;
 
 	return XR_SUCCESS;
 }
@@ -3375,11 +3452,12 @@ XR_PROC xrGetActionStateBoolean(
 	LOG_METHOD_ONCE(xrGetActionStateBoolean);
 	LogNextChain(getInfo->next);
 
-	Action*    pGetAction = (Action*)getInfo->action;
-	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
-	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
+	auto pGetAct = (Action*)getInfo->action;
+	auto pGetActSubPath = (Path*)getInfo->subactionPath;
+	auto hGetActSet = pGetAct->hActionSet;
+	auto pGetActSet = SLAB_PTR(slab.actionSet, hGetActSet);
 
-//	LOG_METHOD_LOOP("Action: %s\n", pGetAction->actionName);
+	//	LOG_METHOD_LOOP("Action: %s\n", pGetAction->actionName);
 
 	//	state->lastChangeTime = GetXrTime();
 	//	state->changedSinceLastSync = true;
@@ -3398,31 +3476,31 @@ XR_PROC xrGetActionStateFloat(
 	LOG_METHOD_ONCE(xrGetActionStateFloat);
 	LogNextChain(getInfo->next);
 
-	Action*    pGetAction = (Action*)getInfo->action;
-	ActionSet* pGetActionSet = (ActionSet*)pGetAction->actionSet;
+	auto pSess = (Session*)session;
+	auto pAct = (Action*)getInfo->action;
+	auto pSubactPath = (Path*)getInfo->subactionPath;
+	auto hSubactPath = SLAB_HANDLE(slab.path, pSubactPath);
 
-	Path*      pGetActionSubactionPath = (Path*)getInfo->subactionPath;
+	auto pActSet = SLAB_PTR(slab.actionSet, pAct->hActionSet);
+	auto actSetHash = SLAB_KEY(slab.actionSet, pActSet);
 
-	XrHash     getActionSetHash = GetActionSetHash(&xr.instance.actionSets, pGetActionSet);
+	if (pSubactPath == NULL) {
+		auto hState = pAct->hSubactionPaths[0];
+		auto pState = SLAB_PTR(slab.state, hState);
 
-	Session*        pSession = (Session*)session;
-	ActionSetState* pGetActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, getActionSetHash);
-
-	XrHandle     getActionHandle = GetHandle(pGetActionSet->Actions, pGetAction);
-	ActionState* pGetActionState = &pGetActionSetState->states[getActionHandle];
-
-	if (pGetActionSubactionPath == NULL) {
-		memcpy(&state->currentState, &pGetActionState->subactionStates[0].currentState, sizeof(ActionState));
-		pGetActionState->subactionStates[0].changedSinceLastSync = false;
+		memcpy(&state->currentState, &pState->currentState, sizeof(SubactionState));
+		pState->changedSinceLastSync = false;
 
 		return XR_SUCCESS;
 	}
 
-	for (int i = 0; i < pGetAction->countSubactionPaths; ++i) {
-		const Path* pSubPath = (Path*)pGetAction->subactionPaths[i];
-		if (pGetActionSubactionPath == pSubPath) {
-			memcpy(&state->currentState, &pGetActionState->subactionStates[i].currentState, sizeof(ActionState));
-			pGetActionState->subactionStates[i].changedSinceLastSync = false;
+	for (int i = 0; i < pAct->countSubactions; ++i) {
+		if (hSubactPath == pAct->hSubactionPaths[i]) {
+			auto hState = pAct->hSubactionPaths[i];
+			auto pState = SLAB_PTR(slab.state, hState);
+
+			memcpy(&state->currentState, &pState->currentState, sizeof(SubactionState));
+			pState->changedSinceLastSync = false;
 
 			return XR_SUCCESS;
 		}
@@ -3459,52 +3537,36 @@ XR_PROC xrSyncActions(
 	LOG_METHOD_ONCE(xrSyncActions);
 	LogNextChain(syncInfo->next);
 
-	Session* pSession = (Session*)session;
-
-	if (pSession->activeSessionState != XR_SESSION_STATE_FOCUSED)
+	auto pSess = (Session*)session;
+	if (pSess->activeSessionState != XR_SESSION_STATE_FOCUSED) {
+		LOG("XR_SESSION_NOT_FOCUSED\n");
 		return XR_SESSION_NOT_FOCUSED;
+	}
 
-	// short ciruit for now
-	return XR_SUCCESS;
+	auto time = xrGetTime();
+	for (int si = 0; si < syncInfo->countActiveActionSets; ++si) {
 
-	XrTime    currentTime = xrGetTime();
+		auto pActSet = (ActionSet*)syncInfo->activeActionSets[si].actionSet;
+		auto actSetHash = SLAB_KEY(slab.actionSet, pActSet);
 
-	for (int activeSetIndex = 0; activeSetIndex < syncInfo->countActiveActionSets; ++activeSetIndex) {
+		for (int ai = 0; ai < pActSet->actions.count; ++ai) {
+			auto pAct = SLAB_PTR(slab.action, pActSet->actions.handles[ai]);
 
-		ActionSet* pActiveActionSet = (ActionSet*)syncInfo->activeActionSets[activeSetIndex].actionSet;
-		XrHash     activeActionSetHash = GetActionSetHash(&xr.instance.actionSets, pActiveActionSet);
+			for (int sai = 0; sai < pAct->countSubactions; ++sai) {
+				auto pState = SLAB_PTR(slab.state, pAct->hSubactionStates[sai]);
+				auto pBind = SLAB_PTR(slab.binding, pAct->hSubactionBindings[sai]);
 
-		ActionSetState* pActionSetState = GetActionSetStateByHash(&pSession->actionSetStates, activeActionSetHash);
+				// need to understand this priority again
+//				if (pState->lastSyncedPriority > pActSet->priority &&
+//					pState->lastChangeTime == currentTime)
+//					continue;
 
-		if (pActionSetState == NULL)
-			continue;
-
-		for (int actionIndex = 0; actionIndex < COUNT(pActiveActionSet->Actions.slots); ++actionIndex) {
-			Action*      pAction = &pActiveActionSet->Actions.data[actionIndex];
-			ActionState* pActionState = &pActionSetState->states[actionIndex];
-
-			for (int subActionIndex = 0; subActionIndex < pAction->countSubactionPaths; ++subActionIndex) {
-				XrBindingPool*  pSubactionBindingPool = &pAction->subactionBindings[subActionIndex];
-				SubactionState* pSubactionState = &pActionState->subactionStates[subActionIndex];
-
-				if (pSubactionState->lastSyncedPriority > pActiveActionSet->priority &&
-					pSubactionState->lastChangeTime == currentTime)
-					continue;
-
-				const float lastState = pSubactionState->currentState;
-
-				// We are going to want to keep a 'max count'
-				for (int bindingIndex = 0; bindingIndex < COUNT(pSubactionBindingPool->slots); ++bindingIndex) {
-					if (!pSubactionBindingPool->slots[bindingIndex].occupied)
-						continue;
-
-					Binding* pBinding = (Binding*)pSubactionBindingPool->data[bindingIndex];
-					pBinding->func(pActionState);
-					pSubactionState->lastSyncedPriority = pActiveActionSet->priority;
-					pSubactionState->lastChangeTime = currentTime;
-					pSubactionState->isActive = XR_TRUE;
-					pSubactionState->changedSinceLastSync = pSubactionState->currentState != lastState;
-				}
+				float priorState = pState->currentState;
+				pBind->func(&pState->currentState);
+//				pState->lastSyncedPriority = pActSet->priority;
+				pState->lastChangeTime = time;
+				pState->isActive = XR_TRUE;
+				pState->changedSinceLastSync = pState->currentState != priorState;
 			}
 		}
 	}
