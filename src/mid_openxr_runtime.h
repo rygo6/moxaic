@@ -49,8 +49,11 @@
 #define XRAPI_CALL
 #endif
 
-//
+
+////
 //// Mid Common Utility
+////
+
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
@@ -67,8 +70,37 @@
 //#define LOG_ERROR(_format, ...) fprintf(stderr, "Error!!! " _format, __VA_ARGS__);
 #define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__)
 
-//
+#ifdef WIN32
+#ifndef MID_WIN32_DEBUG
+#define MID_WIN32_DEBUG
+static void LogWin32Error(HRESULT err)
+{
+	LOG_ERROR("Win32 Code: 0x%08lX\n", err);
+	char* errStr;
+	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
+		LOG_ERROR("%s\n", errStr);
+		LocalFree(errStr);
+	}
+}
+#define CHECK_WIN32(condition, err)          \
+	if (__builtin_expect(!(condition), 0)) { \
+		LogWin32Error(err);                  \
+		PANIC("Win32 Error!");               \
+	}
+#define DX_CHECK(command)               \
+	({                                  \
+		HRESULT hr = command;           \
+		CHECK_WIN32(SUCCEEDED(hr), hr); \
+	})
+#endif
+#endif
+
+
+////
 //// Mid OpenXR
+////
+
 typedef float    XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
 typedef uint32_t XrHash;
 typedef uint32_t Handle_dep;
@@ -116,8 +148,10 @@ void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEy
 
 XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized);
 
-//
+////
 //// Mid OpenXR Constants
+////
+
 #define XR_FORCE_STEREO_TO_MONO
 
 #define XR_DEFAULT_WIDTH   1024
@@ -129,8 +163,11 @@ XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized);
 #define XR_OPENGL_MAJOR_VERSION 4
 #define XR_OPENGL_MINOR_VERSION 6
 
-//
+
+////
 //// Mid OpenXR Types
+////
+
 typedef enum XrStructureTypeExt {
 	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
 	XR_TYPE_SUB_VIEW = 2000480000,
@@ -154,7 +191,7 @@ typedef struct XrSpaceBounds {
 	XrRect2Di          imageRect;
 } XrSpaceBounds;
 
-typedef enum XrSwapType {
+typedef enum XrSwapType : uint8_t {
 	XR_SWAP_TYPE_MONO,
 	XR_SWAP_TYPE_STEREO,
 	XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
@@ -194,13 +231,6 @@ typedef bitset64_t slab_bitset_t;
 			return result;                             \
 		}                                              \
 	})
-
-#define POOL(_type, _capacity)                             \
-	typedef struct __attribute((aligned(4))) _type##Pool { \
-		SlubSlot slots[_capacity];                         \
-		_type    data[_capacity];                          \
-	} _type##Pool;
-
 
 // I don't know if wnat a SLUB... SLAB might be better in all scenarios? Maybe a SLUB for a the bigger, fewer, allocs?
 //#define CACHE_SIZE 64
@@ -378,6 +408,7 @@ static Handle_dep _GetHandle(void* pData, int stride, const void* pValue)
 	return (Handle_dep)((pValue - pData) / stride);
 }
 
+
 ////
 //// Handle
 ////
@@ -415,6 +446,13 @@ typedef uint32_t block_key;
 	HANDLE_GENERATION_SET(handle, g);                   \
 })
 
+#define HANDLE_CHECK(handle, error) \
+	if (!HANDLE_VALID(handle)) {    \
+		LOG_ERROR(#error "\n");     \
+		return error;               \
+	}
+
+
 ////
 //// Block
 ////
@@ -426,6 +464,57 @@ typedef uint32_t block_key;
 		type      blocks[n];      \
 	}
 
+static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash)
+{
+	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
+	if (i == -1) return HANDLE_DEFAULT;
+	BITSET(pOccupiedSet, i);
+	pHashes[i] = hash;
+	return HANDLE_GENERATION_INCREMENT(i);
+}
+static block_handle FindBlockByHash(int hashCount, block_key* pHashes, block_key hash)
+{
+	for (int i = 0; i < hashCount; ++i) {
+		if (pHashes[i] == hash)
+			return i;
+	}
+	return HANDLE_DEFAULT;
+}
+
+#define BLOCK_CLAIM(block, key)                                                                        \
+	({                                                                                                 \
+		int _handle = ClaimBlock(sizeof(block.occupied), (bitset_t*)&block.occupied, block.keys, key); \
+		assert(_handle >= 0 && #block ": Claiming handle. Out of capacity.");                          \
+		(block_handle) _handle;                                                                        \
+	})
+#define BLOCK_RELEASE(block, handle)                                                                                                                       \
+	({                                                                                                                                                     \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < block.blocks + COUNT(block.blocks) && #block ": Releasing SLAB Handle. Out of range."); \
+		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing SLAB handle. Should be occupied.");                                     \
+		BITCLEAR(block.occupied, (int)HANDLE_INDEX(handle));                                                                                               \
+	})
+#define BLOCK_FIND(block, hash)                                \
+	({                                                         \
+		assert(hash != 0);                                     \
+		FindBlockByHash(sizeof(block.keys), block.keys, hash); \
+	})
+#define BLOCK_HANDLE(block, p)                                                                                                \
+	({                                                                                                                        \
+		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting SLAB handle. Out of range."); \
+		(block_handle)(p - block.blocks);                                                                                     \
+	})
+#define BLOCK_KEY(block, p)                                                                                                \
+	({                                                                                                                     \
+		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting SLAB key. Out of range."); \
+		block.keys[p - block.blocks];                                                                                      \
+	})
+#define BLOCK_PTR(block, handle)                                                                                                       \
+	({                                                                                                                                 \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Getting SLAB ptr. Out of range."); \
+		&block.blocks[HANDLE_INDEX(handle)];                                                                                           \
+	})
+
+
 ////
 //// Map
 ////
@@ -434,14 +523,42 @@ typedef struct MapBase {
 	uint32_t  count;
 	block_key keys[];
 	// keys could be any size
-//	block_handle handles[];
+	//	block_handle handles[];
 } MapBase;
+
 #define MAP_DECL(n)              \
 	struct {                     \
 		uint32_t     count;      \
 		block_key    keys[n];    \
 		block_handle handles[n]; \
 	}
+
+static inline map_handle MapAdd(int capacity, MapBase* pMap, block_handle handle, map_key key)
+{
+	int i = pMap->count;
+	if (i == capacity)
+		return HANDLE_DEFAULT;
+	block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
+	pHandles[i] = handle;
+	pMap->keys[i] = key;
+	pMap->count++;
+	return HANDLE_GENERATION_INCREMENT(i);
+}
+
+static inline map_handle MapFind(int capacity, MapBase* pMap, map_key key)
+{
+	for (int i = 0; i < pMap->count; ++i) {
+		if (pMap->keys[i] == key) {
+			block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
+			return pHandles[i];
+		}
+	}
+	return HANDLE_DEFAULT;
+}
+
+#define MAP_ADD(map, handle, key) MapAdd(COUNT(map.keys), (MapBase*)&map, handle, key)
+#define MAP_FIND(map, key) MapFind(COUNT(map.keys), (MapBase*)&map, key)
+
 
 ////
 //// Set
@@ -452,10 +569,11 @@ typedef struct SetBase {
 	block_handle* handles;
 } SetBase;
 #define SET_DECL(n)              \
-	struct {                     \
+	struct CACHE_ALIGN {         \
 		uint32_t     count;      \
 		block_handle handles[n]; \
 	}
+
 
 ////
 //// OpenXR Types
@@ -509,27 +627,24 @@ typedef struct Action {
 #define XR_ACTION_SET_CAPACITY 64
 #define XR_MAX_ACTION_SET_STATES 64
 typedef struct ActionSet {
-	uint32_t     priority;
-	block_handle attachedToSession;
-
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) actions;
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) states;
 
-	char actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
+	uint32_t     priority;
+	block_handle attachedToSession;
+	char         actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
 } ActionSet;
 
-#define XR_MAX_SPACE_COUNT 32
+#define XR_SPACE_CAPACITY 128
 typedef struct Space {
-	XrSession            session;
+	block_handle         hSession;
 	XrReferenceSpaceType referenceSpaceType;
 	XrPosef              poseInReferenceSpace;
 } Space;
-POOL(Space, XR_MAX_SPACE_COUNT)
 
 #define XR_SWAPCHAIN_CAPACITY 8
 typedef struct Swapchain {
-	// we should replace XrHandle pointers with uint16_t handle offsets maybe?
-	XrSession session;
+	block_handle hSession;
 
 	uint8_t swapIndex;
 	union {
@@ -554,53 +669,58 @@ typedef struct Swapchain {
 	uint32_t               arraySize;
 	uint32_t               mipCount;
 } Swapchain;
-// I don't think I actually need a pool? Just one per session, and it has to switch
-POOL(Swapchain, 2)
 
 #define XR_SESSIONS_CAPACITY 8
-// this layout is awful from a DOD perspective can I make it less awful?
+#define XR_MAX_SPACES 8
 typedef struct Session {
-	XrSessionIndex index;
+	//// Info
+	XrSessionIndex          index;
+	XrSystemId              systemId;
+	XrViewConfigurationType primaryViewConfigurationType;
 
-	XrSystemId systemId;
-	XrSwapType swapType;
+	//// Swap
+	CACHE_ALIGN
+	block_handle hSwap;
+	XrSwapType   swapType;
 
-	bool running;
-	bool exiting;
-
-	XrSessionState activeSessionState;
-	XrSessionState pendingSessionState;
-
-	Handle_dep activeReferenceSpaceHandle;
-	Handle_dep pendingReferenceSpaceHandle;
-
-	// should be handles
-	block_handle hActiveInteractionProfile;
-	block_handle hPendingInteractionProfile;
-
-	XrBool32 activeIsUserPresent;
-	XrBool32 pendingIsUserPresent;
-
-	SpacePool referenceSpaces;
-	SpacePool actionSpaces;
-
+	//// Timing
+	CACHE_ALIGN
 	XrTime frameWaited;
 	XrTime frameBegan;
 	XrTime frameEnded;
-
-	// CTS seems to need 3 retained displayTimes to pass.
 	XrTime predictedDisplayTimes[3];
 	XrTime lastBeginDisplayTime;
 	XrTime lastDisplayTime;
 	uint32_t synchronizedFrameCount;
-
 	uint64_t sessionTimelineValue;
 
-	SwapchainPool      swapchains;
-
+	//// Maps
+	CACHE_ALIGN
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) actionSets;
+	MAP_DECL(XR_MAX_SPACES) referenceSpaces;
+	MAP_DECL(XR_MAX_SPACES) actionSpaces;
 
-	XrViewConfigurationType primaryViewConfigurationType;
+	//// State
+	CACHE_ALIGN
+	bool running: 1;
+	bool exiting: 1;
+
+	//// Events
+	CACHE_ALIGN
+	XrSessionState activeSessionState: 4;
+	XrSessionState pendingSessionState: 4;
+
+	block_handle hActiveReferenceSpace;
+	block_handle hPendingReferenceSpace;
+
+	block_handle hActiveInteractionProfile;
+	block_handle hPendingInteractionProfile;
+
+	XrBool32 activeIsUserPresent: 1;
+	XrBool32 pendingIsUserPresent: 1;
+
+	//// Graphics
+	CACHE_ALIGN
 	union {
 		struct {
 			HDC   hDC;
@@ -624,16 +744,16 @@ typedef struct Session {
 } Session;
 
 typedef struct Instance {
-	// System
+	//// System
 	XrApplicationInfo applicationInfo;
 	XrSystemId        systemId;
 	XrFormFactor      systemFormFactor;
+	XrGraphicsApi     graphicsApi;
 
-	// Interaction
+	//// Interaction
 	MAP_DECL(XR_INTERACTION_PROFILE_CAPACITY) interactionProfiles;
 
-	// Graphics
-	XrGraphicsApi graphicsApi;
+	/// Graphics
 	union {
 		struct {
 			LUID              adapterLuid;
@@ -643,9 +763,12 @@ typedef struct Instance {
 
 } Instance;
 
-//
-//// MidOpenXR Implementation
-#ifdef MID_OPENXR_IMPLEMENTATION
+
+////
+//// OpenXR Implementation
+////
+
+#if defined(MID_OPENXR_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
 static struct {
 	Instance instance;
@@ -660,148 +783,16 @@ static struct {
 	BLOCK_DECL(ActionSet, XR_ACTION_SET_CAPACITY) actionSet;
 	BLOCK_DECL(Action, XR_ACTION_CAPACITY) action;
 	BLOCK_DECL(SubactionState, XR_SUBACTION_CAPACITY) state;
+	BLOCK_DECL(Space, XR_SPACE_CAPACITY) space;
+	BLOCK_DECL(Swapchain, XR_SWAPCHAIN_CAPACITY) swap;
 } block;
 
 ////
-//// MAP
+//// Utility
 ////
-
-static inline map_handle MapAdd(int capacity, MapBase* pMap, block_handle handle, map_key key)
-{
-	int i = pMap->count;
-	if (i == capacity)
-		return HANDLE_DEFAULT;
-	block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
-	pHandles[i] = handle;
-	pMap->keys[i] = key;
-	pMap->count++;
-	return HANDLE_GENERATION_INCREMENT(i);
-}
-
-static inline map_handle MapFind(int capacity, MapBase* pMap, map_key key)
-{
-	for (int i = 0; i < pMap->count; ++i) {
-		if (pMap->keys[i] == key) {
-			block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
-			return pHandles[i];
-		}
-	}
-	return HANDLE_DEFAULT;
-}
-
-#define MAP_ADD(map, handle, key) MapAdd(COUNT(map.keys), (MapBase*)&map, handle, key)
-#define MAP_FIND(map, key) MapFind(COUNT(map.keys), (MapBase*)&map, key)
-
-////
-//// SLAB
-////
-
-static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash)
-{
-	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
-	if (i == -1) return HANDLE_DEFAULT;
-	BITSET(pOccupiedSet, i);
-	pHashes[i] = hash;
-	return HANDLE_GENERATION_INCREMENT(i);
-//	return HandleGenerationIncrement(i);
-}
-static block_handle FindBlockByHash(int hashCount, block_key* pHashes, block_key hash)
-{
-	for (int i = 0; i < hashCount; ++i) {
-		if (pHashes[i] == hash)
-			return i;
-	}
-	return HANDLE_DEFAULT;
-}
-
-#define BLOCK_CLAIM(block, key)                                                                      \
-	({                                                                                              \
-		int _handle = ClaimBlock(sizeof(block.occupied), (bitset_t*)&block.occupied, block.keys, key); \
-		assert(_handle >= 0 && #block ": Claiming handle. Out of capacity.");                        \
-		(block_handle) _handle;                                                                     \
-	})
-#define BLOCK_RELEASE(block, handle)                                                                                                                     \
-	({                                                                                                                                                  \
-		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < block.blocks + COUNT(block.blocks) && #block ": Releasing SLAB Handle. Out of range."); \
-		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing SLAB handle. Should be occupied.");                                    \
-		BITCLEAR(block.occupied, (int)HANDLE_INDEX(handle));                                                                                             \
-	})
-#define BLOCK_FIND(block, hash)                               \
-	({                                                       \
-		assert(hash != 0);                                   \
-		FindBlockByHash(sizeof(block.keys), block.keys, hash); \
-	})
-#define BLOCK_HANDLE(block, p)                                                                                             \
-	({                                                                                                                    \
-		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting SLAB handle. Out of range."); \
-		(block_handle)(p - block.blocks);                                                                                  \
-	})
-#define BLOCK_KEY(block, p)                                                                                             \
-	({                                                                                                                 \
-		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting SLAB key. Out of range."); \
-		block.keys[p - block.blocks];                                                                                    \
-	})
-#define BLOCK_PTR(block, handle)                                                                                                      \
-	({                                                                                                                               \
-		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Getting SLAB ptr. Out of range."); \
-		&block.blocks[HANDLE_INDEX(handle)];                                                                                          \
-	})
-
-#define HANDLE_CHECK(handle, error) \
-	if (!HANDLE_VALID(handle)) {    \
-		LOG_ERROR(#error "\n");     \
-		return error;               \
-	}
-
-////
-//// MidOpenXR Debug
-////
-
-#define ENABLE_DEBUG_LOG_METHOD
-#ifdef ENABLE_DEBUG_LOG_METHOD
-#define LOG_METHOD(_method) printf("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
-#define LOG_METHOD_ONCE(_method)   \
-	{                              \
-		static int logged = false; \
-		if (!logged) {             \
-			logged = true;         \
-			LOG_METHOD(_method);   \
-		}                          \
-	}
-#else
-#define LOG_METHOD(_name)
-#endif
-
-#ifdef WIN32
-#ifndef MID_WIN32_DEBUG
-#define MID_WIN32_DEBUG
-static void LogWin32Error(HRESULT err)
-{
-	LOG_ERROR("Win32 Code: 0x%08lX\n", err);
-	char* errStr;
-	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-		LOG_ERROR("%s\n", errStr);
-		LocalFree(errStr);
-	}
-}
-#define CHECK_WIN32(condition, err)          \
-	if (__builtin_expect(!(condition), 0)) { \
-		LogWin32Error(err);                  \
-		PANIC("Win32 Error!");               \
-	}
-#define DX_CHECK(command)               \
-	({                                  \
-		HRESULT hr = command;           \
-		CHECK_WIN32(SUCCEEDED(hr), hr); \
-	})
-#endif
-#endif
 
 #define XR_PROC XRAPI_ATTR XrResult XRAPI_CALL
 
-//
-//// Mid OpenXR Utility
 static uint32_t CalcDJB2(const char* str, int max)
 {
 	char     c;
@@ -866,6 +857,32 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 	WakeByAddressAll(pSharedTime);
 }
 
+
+////
+//// Debug Logging
+////
+
+#define CHECK_INSTANCE(instance)                \
+	if (&xr.instance != (Instance*)instance) {  \
+		LOG_ERROR("XR_ERROR_HANDLE_INVALID\n"); \
+		return XR_ERROR_HANDLE_INVALID;         \
+	}
+
+#define ENABLE_DEBUG_LOG_METHOD
+#ifdef ENABLE_DEBUG_LOG_METHOD
+#define LOG_METHOD(_method) printf("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
+#define LOG_METHOD_ONCE(_method)   \
+	{                              \
+		static int logged = false; \
+		if (!logged) {             \
+			logged = true;         \
+			LOG_METHOD(_method);   \
+		}                          \
+	}
+#else
+#define LOG_METHOD(_name)
+#endif
+
 #define ENUM_NAME_CASE(_enum, _value) \
 	case _value:                      \
 		return #_enum;
@@ -899,7 +916,6 @@ static const char* string_XrStructureType(XrStructureType type)
 }
 #undef PRINT_STRUCT_TYPE_NAME
 
-
 #define STR(s) #s
 #define XSTR(s) STR(s)
 #define DOT(_) ._
@@ -913,12 +929,8 @@ static const char* string_XrStructureType(XrStructureType type)
 // do I want to do this? maybe
 #define format_XrQuaternionf FORMAT_STRUCT_F(XrQuaternionf)
 #define expand_XrQuaternionf(_) #_ XR_LIST_STRUCT_XrQuaternionf(COMMA _ DOT)
-
-
-//#define FORMAT_QUAT_F     "{x: %.3f, y: %.3f, z: %.3f, w: %.3f}"
-//#define EXPAND_QUAT(_v)   _v.x, _v.y, _v.z, _v.w
-#define FORMAT_VEC3_F     "{x: %.3f, y: %.3f, z: %.3f}"
-#define EXPAND_VEC3(_v)   _v.x, _v.y, _v.z
+#define format_XrVector3f     "{x: %.3f, y: %.3f, z: %.3f}"
+#define expand_XrVector3f(_v)   _v.x, _v.y, _v.z
 #define FORMAT_OFFSET_I   "{x: %d, y: %d}"
 #define EXPAND_OFFSET(_o) _o.x, _o.y
 #define FORMAT_EXTENT_I   "{width: %d, height: %d}"
@@ -934,8 +946,10 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 	}
 }
 
-//
-//// MidOpenXR Math
+////
+//// Math
+////
+
 #define PI 3.14159265358979323846
 // I prolly just want to make a depenedency on mid math
 static inline XrQuaternionf xrRotFromMat4(XrMat4 m)
@@ -1063,8 +1077,10 @@ static inline float xrFloatLerp(float a, float b, float t)
 }
 
 
-//
+////
 //// Device Input Funcs
+////
+
 static int OculusLeftClick(float* pValue)
 {
 	*pValue = 100;
@@ -1076,8 +1092,11 @@ static int OculusRightClick(float* pValue)
 	return 0;
 }
 
-//
-//// Implementation
+
+////
+//// Binding
+////
+
 static XrResult RegisterBinding(
 	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
@@ -1106,12 +1125,10 @@ typedef struct BindingDefinition {
 	int (*func)(void*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
-static XrResult InitBinding(XrInstance instance, const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
+static XrResult InitBinding(const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
 {
-	Instance* pInstance = (Instance*)instance;
-
 	XrPath interactionProfilePath;
-	xrStringToPath(instance, interactionProfile, &interactionProfilePath);
+	xrStringToPath((XrInstance)&xr.instance, interactionProfile, &interactionProfilePath);
 	auto interactionProfilePathHash = BLOCK_KEY(block.path, (Path*)interactionProfilePath);
 
 	auto interactionProfileHandle  = BLOCK_CLAIM(block.profile, interactionProfilePathHash);
@@ -1121,8 +1138,8 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 
 	for (int i = 0; i < bindingDefinitionCount; ++i) {
 		XrPath bindingPath;
-		xrStringToPath(instance, pBindingDefinitions[i].path, &bindingPath);
-		XR_CHECK(RegisterBinding(instance, pInteractionProfile, (Path*)bindingPath, pBindingDefinitions[i].func));
+		xrStringToPath((XrInstance)&xr.instance, pBindingDefinitions[i].path, &bindingPath);
+		XR_CHECK(RegisterBinding((XrInstance)&xr.instance, pInteractionProfile, (Path*)bindingPath, pBindingDefinitions[i].func));
 	}
 
 	return XR_SUCCESS;
@@ -1130,8 +1147,9 @@ static XrResult InitBinding(XrInstance instance, const char* interactionProfile,
 
 #define XR_DEFAULT_INTERACTION_PROFILE "/interaction_profiles/oculus/touch_controller"
 
-static XrResult InitStandardBindings(XrInstance instance)
+static XrResult InitStandardBindings()
 {
+
 #define BINDING_DEFINITION(_func, _path) (int (*)(void*)) _func, _path
 
 	{
@@ -1158,7 +1176,7 @@ static XrResult InitStandardBindings(XrInstance instance)
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
-		InitBinding(instance, "/interaction_profiles/oculus/touch_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding("/interaction_profiles/oculus/touch_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 	{
@@ -1185,7 +1203,7 @@ static XrResult InitStandardBindings(XrInstance instance)
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
-		InitBinding(instance, "/interaction_profiles/microsoft/motion_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding("/interaction_profiles/microsoft/motion_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 	{
@@ -1212,7 +1230,7 @@ static XrResult InitStandardBindings(XrInstance instance)
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
-		InitBinding(instance, "/interaction_profiles/khr/simple_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding("/interaction_profiles/khr/simple_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 	{
@@ -1239,7 +1257,7 @@ static XrResult InitStandardBindings(XrInstance instance)
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
-		InitBinding(instance, "/interaction_profiles/valve/index_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding("/interaction_profiles/valve/index_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 	{
@@ -1266,12 +1284,17 @@ static XrResult InitStandardBindings(XrInstance instance)
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
-		InitBinding(instance, "/interaction_profiles/htc/vive_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding("/interaction_profiles/htc/vive_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
+
+#undef BINDING_DEFINITION
 
 	return XR_SUCCESS;
-#undef BINDING_DEFINITION
 }
+
+////
+//// OpenXR Implementations
+////
 
 XR_PROC xrEnumerateApiLayerProperties(
 	uint32_t              propertyCapacityInput,
@@ -1422,9 +1445,6 @@ XR_PROC xrCreateInstance(
 		return XR_ERROR_LIMIT_REACHED;
 	}
 
-	Instance* pInstance = &xr.instance;
-//	ClaimHandle(instances, pInstance);
-
 	for (int i = 0; i < createInfo->enabledApiLayerCount; ++i) {
 		printf("Enabled API Layer: %s\n", createInfo->enabledApiLayerNames[i]);
 	}
@@ -1432,22 +1452,21 @@ XR_PROC xrCreateInstance(
 	for (int i = 0; i < createInfo->enabledExtensionCount; ++i) {
 		printf("Enabled Extension: %s\n", createInfo->enabledExtensionNames[i]);
 		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
-			pInstance->graphicsApi = XR_GRAPHICS_API_OPENGL;
+			xr.instance.graphicsApi = XR_GRAPHICS_API_OPENGL;
 		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
-			pInstance->graphicsApi = XR_GRAPHICS_API_D3D11_4;
+			xr.instance.graphicsApi = XR_GRAPHICS_API_D3D11_4;
 	}
 
-	memcpy(&pInstance->applicationInfo, &createInfo->applicationInfo, sizeof(XrApplicationInfo));
-
+	memcpy(&xr.instance.applicationInfo, &createInfo->applicationInfo, sizeof(XrApplicationInfo));
 
 	printf("applicationName: %s\n", createInfo->applicationInfo.applicationName);
 	printf("applicationVersion: %d\n", createInfo->applicationInfo.applicationVersion);
 	printf("engineName: %s\n", createInfo->applicationInfo.engineName);
 	printf("engineVersion: %d\n", createInfo->applicationInfo.engineVersion);
 	{
-		int maj = XR_VERSION_MAJOR(pInstance->applicationInfo.apiVersion);
-		int min = XR_VERSION_MINOR(pInstance->applicationInfo.apiVersion);
-		int patch = XR_VERSION_PATCH(pInstance->applicationInfo.apiVersion);
+		int maj = XR_VERSION_MAJOR(xr.instance.applicationInfo.apiVersion);
+		int min = XR_VERSION_MINOR(xr.instance.applicationInfo.apiVersion);
+		int patch = XR_VERSION_PATCH(xr.instance.applicationInfo.apiVersion);
 		printf("apiVersion: %d.%d.%d\n", maj, min, patch);
 	}
 	{
@@ -1463,15 +1482,15 @@ XR_PROC xrCreateInstance(
 	}
 
 //#define FIELD_FORMAT_SPECIFIER(_field) _Generic(_field, uint64_t: "%llu", uint32_t: "%d", float: "%f", double: "%lf", char*: "%s", const char*: "%s")
-//#define PRINT_STRUCT(_field) printf(#_field ": "); printf(FIELD_FORMAT_SPECIFIER(pInstance->applicationInfo._field), pInstance->applicationInfo._field); printf("\n");
+//#define PRINT_STRUCT(_field) printf(#_field ": "); printf(FIELD_FORMAT_SPECIFIER(xr.instance.applicationInfo._field), xr.instance.applicationInfo._field); printf("\n");
 //	XR_LIST_STRUCT_XrApplicationInfo(PRINT_STRUCT);
 
-	*instance = (XrInstance)pInstance;
+	*instance = (XrInstance)&xr.instance;
 
-	InitStandardBindings(*instance);
+	InitStandardBindings();
 	midXrInitialize();
 
-	switch (pInstance->graphicsApi) {
+	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
 			if (!gl.CreateMemoryObjectsEXT)
@@ -1502,9 +1521,10 @@ XR_PROC xrDestroyInstance(
 	XrInstance instance)
 {
 	LOG_METHOD(xrDestroyInstance);
-	Instance* pInstance = &xr.instance;
-	assert(instance == (XrInstance)pInstance);
-	*pInstance = (Instance){};
+	CHECK_INSTANCE(instance);
+
+	xr.instance = (Instance){};
+
 	return XR_SUCCESS;
 }
 
@@ -1513,6 +1533,7 @@ XR_PROC xrGetInstanceProperties(
 	XrInstanceProperties* instanceProperties)
 {
 	LOG_METHOD(xrGetInstanceProperties);
+	CHECK_INSTANCE(instance);
 
 	instanceProperties->runtimeVersion = XR_MAKE_VERSION(0, 1, 0);
 	strncpy(instanceProperties->runtimeName, "Moxaic OpenXR", XR_MAX_RUNTIME_NAME_SIZE);
@@ -1540,23 +1561,26 @@ XR_PROC xrPollEvent(
 	XrEventDataBuffer* eventData)
 {
 	LOG_METHOD_ONCE(xrPollEvent);
+	CHECK_INSTANCE(instance);
 
+	// technicall could be worth iterating map in instance?
 	for (int i = 0; i < XR_SESSIONS_CAPACITY; ++i) {
+
 		if (!BITSET(block.session.occupied, i))
 			continue;
 
-		Session* pSession = &block.session.blocks[i];
+		auto pSess = &block.session.blocks[i];
 
-		if (pSession->activeSessionState != pSession->pendingSessionState) {
+		if (pSess->activeSessionState != pSess->pendingSessionState) {
 
 			eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
 
 			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
-			pEventData->session = (XrSession)pSession;
+			pEventData->session = (XrSession)pSess;
 			pEventData->time = xrGetTime();
 
 			// Must cycle through Focus, Visible, Synchronized if exiting.
-			if (pSession->exiting) {
+			if (pSess->exiting) {
 				// todo refactor some this in switches
 //				switch (pSession->activeSessionState) {
 //					case XR_SESSION_STATE_FOCUSED:
@@ -1564,153 +1588,155 @@ XR_PROC xrPollEvent(
 //					case XR_SESSION_STATE_READY:
 //				}
 
-				if (pSession->activeSessionState == XR_SESSION_STATE_FOCUSED)
-					pSession->activeSessionState = XR_SESSION_STATE_VISIBLE;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
-					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_READY)
-					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
-					pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING) {
-					if (pSession->running)
+				if (pSess->activeSessionState == XR_SESSION_STATE_FOCUSED)
+					pSess->activeSessionState = XR_SESSION_STATE_VISIBLE;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_VISIBLE)
+					pSess->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_READY)
+					pSess->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+					pSess->activeSessionState = XR_SESSION_STATE_STOPPING;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_STOPPING) {
+					if (pSess->running)
 						return XR_EVENT_UNAVAILABLE; // must wait for Idle
 					else {
-						pSession->activeSessionState = XR_SESSION_STATE_IDLE;
-						pSession->pendingSessionState = XR_SESSION_STATE_EXITING;
+						pSess->activeSessionState = XR_SESSION_STATE_IDLE;
+						pSess->pendingSessionState = XR_SESSION_STATE_EXITING;
 					}
-				} else if (pSession->activeSessionState == XR_SESSION_STATE_IDLE) {
-					if (pSession->running) {
-						pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
+				} else if (pSess->activeSessionState == XR_SESSION_STATE_IDLE) {
+					if (pSess->running) {
+						pSess->activeSessionState = XR_SESSION_STATE_STOPPING;
 					} else {
-						pSession->activeSessionState = XR_SESSION_STATE_EXITING;
+						pSess->activeSessionState = XR_SESSION_STATE_EXITING;
 					}
 				}
 
-				pEventData->state = pSession->activeSessionState;
-				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				pEventData->state = pSess->activeSessionState;
+				LOG("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
 				return XR_SUCCESS;
 			}
 
-			if (!pSession->running) {
+			if (!pSess->running) {
 
-				if (pSession->pendingSessionState == XR_SESSION_STATE_IDLE) {
+				if (pSess->pendingSessionState == XR_SESSION_STATE_IDLE) {
 
-					if (pSession->activeSessionState == XR_SESSION_STATE_UNKNOWN) {
-						pSession->activeSessionState = XR_SESSION_STATE_IDLE;
+					if (pSess->activeSessionState == XR_SESSION_STATE_UNKNOWN) {
+						pSess->activeSessionState = XR_SESSION_STATE_IDLE;
 						// Immediately progress Idle to Ready when starting
-						pSession->pendingSessionState = XR_SESSION_STATE_READY;
-					} else if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING)
-						pSession->activeSessionState = XR_SESSION_STATE_IDLE;
+						pSess->pendingSessionState = XR_SESSION_STATE_READY;
+					} else if (pSess->activeSessionState == XR_SESSION_STATE_STOPPING)
+						pSess->activeSessionState = XR_SESSION_STATE_IDLE;
 
 				} else {
-					pSession->activeSessionState = pSession->pendingSessionState;
+					pSess->activeSessionState = pSess->pendingSessionState;
 				}
 
-				pEventData->state = pSession->activeSessionState;
-				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				pEventData->state = pSess->activeSessionState;
+				LOG("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
 				return XR_SUCCESS;
 			}
 
 			// Must cycle through Focus, Visible, Synchronized if going to idle.
-			if (pSession->pendingSessionState == XR_SESSION_STATE_IDLE) {
+			if (pSess->pendingSessionState == XR_SESSION_STATE_IDLE) {
 
-				if (pSession->activeSessionState == XR_SESSION_STATE_FOCUSED)
-					pSession->activeSessionState = XR_SESSION_STATE_VISIBLE;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
-					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
-					pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING)
-					pSession->activeSessionState = XR_SESSION_STATE_IDLE;
+				if (pSess->activeSessionState == XR_SESSION_STATE_FOCUSED)
+					pSess->activeSessionState = XR_SESSION_STATE_VISIBLE;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_VISIBLE)
+					pSess->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+					pSess->activeSessionState = XR_SESSION_STATE_STOPPING;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_STOPPING)
+					pSess->activeSessionState = XR_SESSION_STATE_IDLE;
 
-				pEventData->state = pSession->activeSessionState;
-				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				pEventData->state = pSess->activeSessionState;
+				LOG("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
 				return XR_SUCCESS;
 			}
 
 			// Must cycle through Focus, Visible, Synchronized if stopping.
-			if (pSession->pendingSessionState == XR_SESSION_STATE_STOPPING) {
+			if (pSess->pendingSessionState == XR_SESSION_STATE_STOPPING) {
 
-				if (pSession->activeSessionState == XR_SESSION_STATE_FOCUSED)
-					pSession->activeSessionState = XR_SESSION_STATE_VISIBLE;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_READY)
-					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
-					pSession->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
-				else if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
-					pSession->activeSessionState = XR_SESSION_STATE_STOPPING;
+				if (pSess->activeSessionState == XR_SESSION_STATE_FOCUSED)
+					pSess->activeSessionState = XR_SESSION_STATE_VISIBLE;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_READY)
+					pSess->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_VISIBLE)
+					pSess->activeSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+				else if (pSess->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+					pSess->activeSessionState = XR_SESSION_STATE_STOPPING;
 
-				pEventData->state = pSession->activeSessionState;
-				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+				pEventData->state = pSess->activeSessionState;
+				LOG("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
 				return XR_SUCCESS;
 			}
 
 			// Must ensure stopping does not switch back to Ready after going Idle
-			if (pSession->activeSessionState == XR_SESSION_STATE_STOPPING) {
-				pSession->activeSessionState = pSession->pendingSessionState;
-				pEventData->state = pSession->activeSessionState ;
-				printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+			if (pSess->activeSessionState == XR_SESSION_STATE_STOPPING) {
+				pSess->activeSessionState = pSess->pendingSessionState;
+				pEventData->state = pSess->activeSessionState ;
+				LOG("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
 				return XR_SUCCESS;
 			}
 
-			pSession->activeSessionState = pSession->pendingSessionState;
-			pEventData->state = pSession->activeSessionState ;
-			printf("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
+			pSess->activeSessionState = pSess->pendingSessionState;
+			pEventData->state = pSess->activeSessionState ;
+			LOG("XrEventDataSessionStateChanged: %s\n", string_XrSessionState(pEventData->state));
 
 			// Forcing to focused for now, but should happen after some user input probably
-			if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE) {
-				pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
+			if (pSess->activeSessionState == XR_SESSION_STATE_VISIBLE) {
+				pSess->pendingSessionState = XR_SESSION_STATE_FOCUSED;
 			}
 
 			return XR_SUCCESS;
 		}
 
-		if (pSession->activeReferenceSpaceHandle != pSession->pendingReferenceSpaceHandle) {
+		if (pSess->hActiveReferenceSpace != pSess->hPendingReferenceSpace) {
 
 			eventData->type = XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING;
 
-			XrEventDataReferenceSpaceChangePending* pEventData = (XrEventDataReferenceSpaceChangePending*)eventData;
-			pEventData->session = (XrSession)pSession;
-			pEventData->referenceSpaceType = pSession->referenceSpaces.data[pSession->pendingReferenceSpaceHandle].referenceSpaceType;
+			auto pPendingSpace = BLOCK_PTR(block.space, pSess->hPendingReferenceSpace);
+
+			auto pEventData = (XrEventDataReferenceSpaceChangePending*)eventData;
+			pEventData->session = (XrSession)pSess;
+			pEventData->referenceSpaceType = pPendingSpace->referenceSpaceType;
 			pEventData->changeTime = xrGetTime();
 			pEventData->poseValid = XR_TRUE;
 			// this is not correct, supposed to be origin of new space in space of prior space
-			pEventData->poseInPreviousSpace = pSession->referenceSpaces.data[pSession->pendingReferenceSpaceHandle].poseInReferenceSpace;
+			pEventData->poseInPreviousSpace = pPendingSpace->poseInReferenceSpace;
 
 			printf("XrEventDataReferenceSpaceChangePending: %d\n", pEventData->referenceSpaceType);
 
-			pSession->activeReferenceSpaceHandle = pSession->pendingReferenceSpaceHandle;
+			pSess->hActiveReferenceSpace = pSess->hPendingReferenceSpace;
 
 			return XR_SUCCESS;
 		}
 
-		if (pSession->hActiveInteractionProfile != pSession->hPendingInteractionProfile) {
+		if (pSess->hActiveInteractionProfile != pSess->hPendingInteractionProfile) {
 
 			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
 			auto pEventData = (XrEventDataInteractionProfileChanged*)eventData;
-			pEventData->session = (XrSession)pSession;
+			pEventData->session = (XrSession)pSess;
 
-			pSession->hActiveInteractionProfile = pSession->hPendingInteractionProfile;
+			pSess->hActiveInteractionProfile = pSess->hPendingInteractionProfile;
 
-			auto pActionInteractionProfile = BLOCK_PTR(block.profile, pSession->hActiveInteractionProfile);
+			auto pActionInteractionProfile = BLOCK_PTR(block.profile, pSess->hActiveInteractionProfile);
 			auto pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
 			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
 
 			return XR_SUCCESS;
 		}
 
-		if (pSession->activeIsUserPresent != pSession->pendingIsUserPresent) {
+		if (pSess->activeIsUserPresent != pSess->pendingIsUserPresent) {
 
 			eventData->type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT;
 
-			XrEventDataUserPresenceChangedEXT* pEventData = (XrEventDataUserPresenceChangedEXT*)eventData;
-			pEventData->session = (XrSession)pSession;
-			pEventData->isUserPresent = pSession->pendingIsUserPresent;
+			auto pEventData = (XrEventDataUserPresenceChangedEXT*)eventData;
+			pEventData->session = (XrSession)pSess;
+			pEventData->isUserPresent = pSess->pendingIsUserPresent;
 
-			pSession->activeIsUserPresent = pSession->pendingIsUserPresent;
+			pSess->activeIsUserPresent = pSess->pendingIsUserPresent;
 
-			printf("XrEventDataUserPresenceChangedEXT %d\n", pSession->activeIsUserPresent);
+			printf("XrEventDataUserPresenceChangedEXT %d\n", pSess->activeIsUserPresent);
 
 			return XR_SUCCESS;
 		}
@@ -1727,6 +1753,8 @@ XR_PROC xrResultToString(
 	XrResult   value,
 	char       buffer[XR_MAX_RESULT_STRING_SIZE])
 {
+	CHECK_INSTANCE(instance);
+
 	switch (value) {
 		XR_LIST_ENUM_XrResult(TRANSFER_ENUM_NAME);
 		default:
@@ -1743,6 +1771,8 @@ XR_PROC xrStructureTypeToString(
 	XrStructureType value,
 	char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
 {
+	CHECK_INSTANCE(instance);
+
 	switch (value) {
 		XR_LIST_ENUM_XrStructureType(TRANSFER_ENUM_NAME);
 		default:
@@ -1766,17 +1796,18 @@ XR_PROC xrGetSystem(
 {
 	LOG_METHOD_ONCE(xrGetSystem);
 	LogNextChain((XrBaseInStructure*)getInfo->next);
+	CHECK_INSTANCE(instance);
 
 	Instance* pInstance = (Instance*)instance;
 
 	switch (getInfo->formFactor) {
 		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
-			pInstance->systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
-			pInstance->systemId = SYSTEM_ID_HMD_VR_STEREO;
+			xr.instance.systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
+			xr.instance.systemId = SYSTEM_ID_HMD_VR_STEREO;
 			*systemId = SYSTEM_ID_HMD_VR_STEREO;
 			return XR_SUCCESS;
 		case XR_FORM_FACTOR_HANDHELD_DISPLAY:
-			pInstance->systemFormFactor = XR_FORM_FACTOR_HANDHELD_DISPLAY;
+			xr.instance.systemFormFactor = XR_FORM_FACTOR_HANDHELD_DISPLAY;
 			pInstance->systemId = SYSTEM_ID_HANDHELD_AR;
 			*systemId = SYSTEM_ID_HANDHELD_AR;
 			return XR_SUCCESS;
@@ -1794,6 +1825,7 @@ XR_PROC xrGetSystemProperties(
 {
 	LOG_METHOD(xrGetSystemProperties);
 	LogNextChain((XrBaseInStructure*)properties->next);
+	CHECK_INSTANCE(instance);
 
 	switch ((SystemId)systemId) {
 		default:
@@ -1830,8 +1862,7 @@ XR_PROC xrEnumerateEnvironmentBlendModes(
 	XrEnvironmentBlendMode* environmentBlendModes)
 {
 	LOG_METHOD(xrEnumerateEnvironmentBlendModes);
-
-	Instance* pInstance = (Instance*)instance;
+	CHECK_INSTANCE(instance);
 
 	const XrEnvironmentBlendMode modes[] = {
 		XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
@@ -1868,21 +1899,20 @@ XR_PROC xrCreateSession(
 	XrSession*                 session)
 {
 	LOG_METHOD(xrCreateSession);
+	CHECK_INSTANCE(instance);
 
-	Instance* pInstance = (Instance*)instance;
-
-	if (pInstance->systemId == XR_NULL_SYSTEM_ID) {
+	if (xr.instance.systemId == XR_NULL_SYSTEM_ID) {
 		LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
 		return XR_ERROR_SYSTEM_INVALID;
 	}
 
 	printf("SystemId: %llu\n", createInfo->systemId);
-	if (pInstance->systemId != createInfo->systemId) {
+	if (xr.instance.systemId != createInfo->systemId) {
 		LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
 		return XR_ERROR_SYSTEM_INVALID;
 	}
 
-	if (pInstance->graphics.d3d11.adapterLuid.LowPart == 0) {
+	if (xr.instance.graphics.d3d11.adapterLuid.LowPart == 0) {
 		LOG_ERROR("XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING\n");
 		return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
 	}
@@ -1891,11 +1921,11 @@ XR_PROC xrCreateSession(
 	xrClaimSessionIndex(&sessionIndex);
 	printf("Claimed SessionIndex %d\n", sessionIndex);
 
-	auto claimedSessionHandle = BLOCK_CLAIM(block.session, sessionIndex);
-	auto pClaimedSession = BLOCK_PTR(block.session, claimedSessionHandle);
-	*pClaimedSession = (Session){};
+	auto hSess = BLOCK_CLAIM(block.session, sessionIndex);
+	auto pSess = BLOCK_PTR(block.session, hSess);
+	*pSess = (Session){};
 
-	pClaimedSession->index = sessionIndex;
+	pSess->index = sessionIndex;
 
 	HANDLE compositorFenceHandle;
 	xrGetCompositorTimeline(sessionIndex, &compositorFenceHandle);
@@ -1913,10 +1943,10 @@ XR_PROC xrCreateSession(
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR\n");
 			XrGraphicsBindingOpenGLWin32KHR* binding = (XrGraphicsBindingOpenGLWin32KHR*)createInfo->next;
 
-			pClaimedSession->binding.gl.hDC = binding->hDC;
-			pClaimedSession->binding.gl.hGLRC = binding->hGLRC;
+			pSess->binding.gl.hDC = binding->hDC;
+			pSess->binding.gl.hGLRC = binding->hGLRC;
 
-			*session = (XrSession)pClaimedSession;
+			*session = (XrSession)pSess;
 			break;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR: {
@@ -1967,12 +1997,12 @@ XR_PROC xrCreateSession(
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
-			pClaimedSession->binding.d3d11.device5 = device5;
-			pClaimedSession->binding.d3d11.context4 = context4;
-			pClaimedSession->binding.d3d11.compositorFence = compositorFence;
-			pClaimedSession->binding.d3d11.sessionFence = sessionFence;
+			pSess->binding.d3d11.device5 = device5;
+			pSess->binding.d3d11.context4 = context4;
+			pSess->binding.d3d11.compositorFence = compositorFence;
+			pSess->binding.d3d11.sessionFence = sessionFence;
 
-			*session = (XrSession)pClaimedSession;
+			*session = (XrSession)pSess;
 
 			break;
 		}
@@ -1980,13 +2010,13 @@ XR_PROC xrCreateSession(
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR\n");
 			XrGraphicsBindingVulkanKHR* binding = (XrGraphicsBindingVulkanKHR*)createInfo->next;
 
-			pClaimedSession->binding.vk.instance = binding->instance;
-			pClaimedSession->binding.vk.physicalDevice = binding->physicalDevice;
-			pClaimedSession->binding.vk.device = binding->device;
-			pClaimedSession->binding.vk.queueFamilyIndex = binding->queueFamilyIndex;
-			pClaimedSession->binding.vk.queueIndex = binding->queueIndex;
+			pSess->binding.vk.instance = binding->instance;
+			pSess->binding.vk.physicalDevice = binding->physicalDevice;
+			pSess->binding.vk.device = binding->device;
+			pSess->binding.vk.queueFamilyIndex = binding->queueFamilyIndex;
+			pSess->binding.vk.queueIndex = binding->queueIndex;
 
-			*session = (XrSession)pClaimedSession;
+			*session = (XrSession)pSess;
 		}
 		default: {
 			LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
@@ -1995,15 +2025,15 @@ XR_PROC xrCreateSession(
 	}
 
 
-	pClaimedSession->systemId = createInfo->systemId;
-	pClaimedSession->activeSessionState = XR_SESSION_STATE_UNKNOWN;
-	pClaimedSession->pendingSessionState = XR_SESSION_STATE_IDLE;
-	pClaimedSession->activeReferenceSpaceHandle = XR_HANDLE_INVALID;
-	pClaimedSession->pendingReferenceSpaceHandle = XR_HANDLE_INVALID;
-	pClaimedSession->hActiveInteractionProfile = HANDLE_DEFAULT;
-	pClaimedSession->hPendingInteractionProfile = HANDLE_DEFAULT;
-	pClaimedSession->activeIsUserPresent = XR_FALSE;
-	pClaimedSession->pendingIsUserPresent = XR_TRUE;
+	pSess->systemId = createInfo->systemId;
+	pSess->activeSessionState = XR_SESSION_STATE_UNKNOWN;
+	pSess->pendingSessionState = XR_SESSION_STATE_IDLE;
+	pSess->hActiveReferenceSpace = HANDLE_DEFAULT;
+	pSess->hPendingReferenceSpace = HANDLE_DEFAULT;
+	pSess->hActiveInteractionProfile = HANDLE_DEFAULT;
+	pSess->hPendingInteractionProfile = HANDLE_DEFAULT;
+	pSess->activeIsUserPresent = XR_FALSE;
+	pSess->pendingIsUserPresent = XR_TRUE;
 
 	return XR_SUCCESS;
 }
@@ -2014,10 +2044,10 @@ XR_PROC xrDestroySession(
 	LOG_METHOD(xrDestroySession);
 
 	auto pSession = (Session*)session;
-	auto sessionHandle = BLOCK_HANDLE(block.session, pSession);
-	BLOCK_RELEASE(block.session, sessionHandle);
+	auto hSession = BLOCK_HANDLE(block.session, pSession);
+	BLOCK_RELEASE(block.session, hSession);
 
-	xrReleaseSessionIndex(sessionHandle);
+	xrReleaseSessionIndex(pSession->index);
 
 	return XR_SUCCESS;
 }
@@ -2030,7 +2060,7 @@ XR_PROC xrEnumerateReferenceSpaces(
 {
 	LOG_METHOD(xrEnumerateReferenceSpaces);
 
-	Session* pSession = (Session*)session;
+	auto pSess = (Session*)session;
 
 	const XrReferenceSpaceType supportedSpaces[] = {
 		XR_REFERENCE_SPACE_TYPE_VIEW,
@@ -2060,24 +2090,25 @@ XR_PROC xrCreateReferenceSpace(
 	const XrReferenceSpaceCreateInfo* createInfo,
 	XrSpace*                          space)
 {
-	LOG("xrCreateReferenceSpace %s pos: " FORMAT_VEC3_F format_XrQuaternionf "\n",
+	LOG("xrCreateReferenceSpace %s pos: " format_XrVector3f format_XrQuaternionf "\n",
 		string_XrReferenceSpaceType(createInfo->referenceSpaceType),
-		EXPAND_VEC3(createInfo->poseInReferenceSpace.position),
+		expand_XrVector3f(createInfo->poseInReferenceSpace.position),
 		expand_XrQuaternionf(createInfo->poseInReferenceSpace.orientation));
+	assert(createInfo->next == NULL);
 
-	Session* pSession = (Session*)session;
+	auto pSess = (Session*)session;
 
-	Space* pSpace;
-	ClaimHandle(pSession->referenceSpaces, pSpace);
+	auto hSpace = BLOCK_CLAIM(block.path, 0);
+	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
 
-	pSpace->session = session;
+	auto pSpace = BLOCK_PTR(block.space, hSpace);
+	pSpace->hSession = BLOCK_HANDLE(block.session, pSess);
 	pSpace->referenceSpaceType = createInfo->referenceSpaceType;
 	pSpace->poseInReferenceSpace = createInfo->poseInReferenceSpace;
 
 	// auto switch to first created space
-	if (pSession->pendingReferenceSpaceHandle == XR_HANDLE_INVALID) {
-		pSession->pendingReferenceSpaceHandle = GetHandle(pSession->referenceSpaces, pSpace);
-	}
+	if (!HANDLE_VALID(pSess->hPendingReferenceSpace))
+		pSess->hPendingReferenceSpace = hSpace;
 
 	*space = (XrSpace)pSpace;
 
@@ -2116,12 +2147,14 @@ XR_PROC xrCreateActionSpace(
 	LOG_METHOD_ONCE(xrCreateActionSpace);
 	assert(createInfo->next == NULL);
 
-	Session* pSession = (Session*)session;
+	auto hSpace = BLOCK_CLAIM(block.space, 0);
+	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
+	auto pSpace = BLOCK_PTR(block.space, hSpace);
 
-	Space* actionSpace;
-	ClaimHandle(pSession->actionSpaces, actionSpace);
+	auto pSess = (Session*)session;
+	MAP_ADD(pSess->actionSpaces, hSpace, 0);
 
-	*space = (XrSpace)actionSpace;
+	*space = (XrSpace)pSpace;
 
 	return XR_SUCCESS;
 }
@@ -2134,8 +2167,8 @@ XR_PROC xrLocateSpace(
 {
 	LOG_METHOD_ONCE(xrLocateSpace);
 
-	Space* pSpace = (Space*)space;
-	Session* pSession = (Session*)pSpace->session;
+	auto pSpace = (Space*)space;
+	auto pSess = BLOCK_PTR(block.session, pSpace->hSession);
 
 	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
 							  XR_SPACE_LOCATION_POSITION_VALID_BIT |
@@ -2144,7 +2177,7 @@ XR_PROC xrLocateSpace(
 
 	XrVector3f euler;
 	XrVector3f pos;
-	xrGetHeadPose(pSession->index, &euler, &pos);
+	xrGetHeadPose(pSess->index, &euler, &pos);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
@@ -2191,6 +2224,7 @@ XR_PROC xrEnumerateViewConfigurations(
 	XrViewConfigurationType* viewConfigurationTypes)
 {
 	LOG_METHOD(xrEnumerateViewConfigurations);
+	CHECK_INSTANCE(instance);
 
 #define TRANSFER_MODES                                     \
 	*viewConfigurationTypeCountOutput = COUNT(modes);      \
@@ -2237,6 +2271,7 @@ XR_PROC xrGetViewConfigurationProperties(
 {
 	LOG_METHOD(xrGetViewConfigurationProperties);
 	printf("%s\n", string_XrViewConfigurationType(viewConfigurationType));
+	CHECK_INSTANCE(instance);
 
 	if (!configurationProperties) {
 		return XR_ERROR_VALIDATION_FAILURE;
@@ -2276,6 +2311,7 @@ XR_PROC xrEnumerateViewConfigurationViews(
 {
 	LOG_METHOD(xrEnumerateViewConfigurationViews);
 	LOG("%s\n", string_XrViewConfigurationType(viewConfigurationType));
+	CHECK_INSTANCE(instance);
 
 	switch ((SystemId)systemId) {
 		case SYSTEM_ID_HANDHELD_AR:
@@ -2407,18 +2443,19 @@ XR_PROC xrCreateSwapchain(
 		return XR_ERROR_FEATURE_UNSUPPORTED;
 	}
 
-	Session*  pSession = (Session*)session;
+	auto pSess = (Session*)session;
+	auto hSess = BLOCK_HANDLE(block.session, pSess);
 
 	int expectedWidth = XR_DEFAULT_WIDTH;
 	int expectedHeight = XR_DEFAULT_HEIGHT;
 
 	if (createInfo->width * 2 == expectedWidth) {
-		pSession->swapType = XR_SWAP_TYPE_STEREO_DOUBLE_WIDE;
+		pSess->swapType = XR_SWAP_TYPE_STEREO_DOUBLE_WIDE;
 		expectedWidth *= 2;
 		printf("Setting XR_SWAP_TYPE_STEREO_DOUBLE_WIDE for session.\n");
 	}
 	if (createInfo->arraySize > 1) {
-		pSession->swapType = XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY;
+		pSess->swapType = XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY;
 		printf("Setting XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY for session.\n");
 	}
 
@@ -2427,22 +2464,23 @@ XR_PROC xrCreateSwapchain(
 		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	Swapchain* pSwapchain;
-	ClaimHandle(pSession->swapchains, pSwapchain);
+	auto hSwap = BLOCK_CLAIM(block.swap, 0);
+	HANDLE_CHECK(hSwap, XR_ERROR_LIMIT_REACHED);
+	auto pSwap = BLOCK_PTR(block.swap, hSwap);
 
-	pSwapchain->session = session;
-	pSwapchain->createFlags = createInfo->createFlags;
-	pSwapchain->usageFlags = createInfo->usageFlags;
-	pSwapchain->format = createInfo->format;
-	pSwapchain->sampleCount = createInfo->sampleCount;
-	pSwapchain->width = createInfo->width;
-	pSwapchain->height = createInfo->height;
-	pSwapchain->faceCount = createInfo->faceCount;
-	pSwapchain->arraySize = createInfo->arraySize;
-	pSwapchain->mipCount = createInfo->mipCount;
+	pSwap->hSession = hSess;
+	pSwap->createFlags = createInfo->createFlags;
+	pSwap->usageFlags = createInfo->usageFlags;
+	pSwap->format = createInfo->format;
+	pSwap->sampleCount = createInfo->sampleCount;
+	pSwap->width = createInfo->width;
+	pSwap->height = createInfo->height;
+	pSwap->faceCount = createInfo->faceCount;
+	pSwap->arraySize = createInfo->arraySize;
+	pSwap->mipCount = createInfo->mipCount;
 
 	HANDLE colorHandles[XR_SWAP_COUNT];
-	xrClaimFramebufferImages(pSession->index, XR_SWAP_COUNT, colorHandles);
+	xrClaimFramebufferImages(pSess->index, XR_SWAP_COUNT, colorHandles);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -2454,8 +2492,8 @@ XR_PROC xrCreateSwapchain(
 	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
 	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				DEFAULT_IMAGE_CREATE_INFO(pSwapchain->width, pSwapchain->height, GL_RGBA8, pSwapchain->color[i].gl.memObject, pSwapchain->color[i].gl.texture, colorHandles[i]);
-				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwapchain->color[i].gl.texture, pSwapchain->color[i].gl.memObject);
+				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->color[i].gl.memObject, pSwap->color[i].gl.texture, colorHandles[i]);
+				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->color[i].gl.texture, pSwap->color[i].gl.memObject);
 			}
 #undef DEFAULT_IMAGE_CREATE_INFO
 
@@ -2464,18 +2502,18 @@ XR_PROC xrCreateSwapchain(
 		case XR_GRAPHICS_API_D3D11_4: {
 			printf("Creating D3D11 Swap\n");
 
-			ID3D11Device5* device5 = pSession->binding.d3d11.device5;
+			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwapchain->color[i].d3d11.texture));
-				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device5, colorHandles[i], pSwapchain->color[i].d3d11.texture);
+				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwap->color[i].d3d11.texture));
+				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device5, colorHandles[i], pSwap->color[i].d3d11.texture);
 //				D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {
 //					.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
 //					.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D,
 //					.Texture2D.MipSlice = 0,
 //				};
-//				DX_CHECK(ID3D11Device5_CreateRenderTargetView(device5, (ID3D11Resource*)pSwapchain->color[i].d3d11.texture, &rtvDesc, &pSwapchain->color[i].d3d11.rtView));
-//				DX_CHECK(ID3D11Texture2D_QueryInterface(pSwapchain->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwapchain->color[i].d3d11.keyedMutex));
-//				IDXGIKeyedMutex_AcquireSync(pSwapchain->color[i].d3d11.keyedMutex, 0, INFINITE);
+//				DX_CHECK(ID3D11Device5_CreateRenderTargetView(device5, (ID3D11Resource*)pSwap->color[i].d3d11.texture, &rtvDesc, &pSwap->color[i].d3d11.rtView));
+//				DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwap->color[i].d3d11.keyedMutex));
+//				IDXGIKeyedMutex_AcquireSync(pSwap->color[i].d3d11.keyedMutex, 0, INFINITE);
 			}
 
 			break;
@@ -2485,7 +2523,7 @@ XR_PROC xrCreateSwapchain(
 			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	*swapchain = (XrSwapchain)pSwapchain;
+	*swapchain = (XrSwapchain)pSwap;
 	return XR_SUCCESS;
 }
 
@@ -2554,12 +2592,12 @@ XR_PROC xrAcquireSwapchainImage(
 	LOG_METHOD_ONCE(xrAcquireSwapchainImage);
 	assert(acquireInfo->next == NULL);
 
-	Swapchain* pSwapchain = (Swapchain*)swapchain;
-	Session*   pSession = (Session*)pSwapchain->session;
+	auto pSwap = (Swapchain*)swapchain;
+	auto pSess = BLOCK_PTR(block.session, pSwap->hSession);
 
-	xrClaimSwapPoolImage(pSession->index, &pSwapchain->swapIndex);
+	xrClaimSwapPoolImage(pSess->index, &pSwap->swapIndex);
 
-	*index = pSwapchain->swapIndex;
+	*index = pSwap->swapIndex;
 
 	return XR_SUCCESS;
 }
@@ -2571,10 +2609,10 @@ XR_PROC xrWaitSwapchainImage(
 	LOG_METHOD_ONCE(xrWaitSwapchainImage);
 	assert(waitInfo->next == NULL);
 
-	Swapchain* pSwapchain = (Swapchain*)swapchain;
-	Session*   pSession = (Session*)pSwapchain->session;
+	auto pSwap = (Swapchain*)swapchain;
+	auto pSess = BLOCK_PTR(block.session, pSwap->hSession);
 
-	ID3D11DeviceContext4*   context4 = pSession->binding.d3d11.context4;
+	ID3D11DeviceContext4*   context4 = pSess->binding.d3d11.context4;
 
 //	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
 //
@@ -2595,12 +2633,12 @@ XR_PROC xrReleaseSwapchainImage(
 	LOG_METHOD_ONCE(xrReleaseSwapchainImage);
 	assert(releaseInfo->next == NULL);
 
-	Swapchain* pSwapchain = (Swapchain*)swapchain;
-	Session*   pSession = (Session*)pSwapchain->session;
+	auto pSwap = (Swapchain*)swapchain;
+	auto pSess = BLOCK_PTR(block.session, pSwap->hSession);
 
-	xrReleaseSwapPoolImage(pSession->index, pSwapchain->swapIndex);
+	xrReleaseSwapPoolImage(pSess->index, pSwap->swapIndex);
 
-	ID3D11DeviceContext4*   context4 = pSession->binding.d3d11.context4;
+	ID3D11DeviceContext4*   context4 = pSess->binding.d3d11.context4;
 
 //	IDXGIKeyedMutex* keyedMutex = pSwapchain->color[pSwapchain->swapIndex].d3d11.keyedMutex;
 //
@@ -2635,7 +2673,7 @@ XR_PROC xrBeginSession(
 	pSession->running = true;
 	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 
-//	switch (pInstance->graphicsApi) {
+//	switch (xr.instance.graphicsApi) {
 //		case XR_GRAPHICS_API_OPENGL:    break;
 //		case XR_GRAPHICS_API_OPENGL_ES: break;
 //		case XR_GRAPHICS_API_VULKAN:    break;
@@ -2708,38 +2746,38 @@ XR_PROC xrWaitFrame(
 	if (frameWaitInfo != NULL)
 		assert(frameWaitInfo->next == NULL);
 
-	Session* pSession = (Session*)session;
-	if (!pSession->running) {
+	auto pSess = (Session*)session;
+	if (!pSess->running) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
 
-	XrTimeWaitWin32(&pSession->frameBegan, pSession->frameWaited);
+	XrTimeWaitWin32(&pSess->frameBegan, pSess->frameWaited);
 
-	if (pSession->lastDisplayTime == 0) {
+	if (pSess->lastDisplayTime == 0) {
 		uint64_t initialTimelineValue;
 		switch (xr.instance.graphicsApi) {
 			case XR_GRAPHICS_API_D3D11_4:
-				initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
+				initialTimelineValue = ID3D11Fence_GetCompletedValue(pSess->binding.d3d11.compositorFence);
 				break;
 			default:
 				LOG_ERROR("Graphics API not supported.\n");
 				return XR_ERROR_RUNTIME_FAILURE;
 		}
-		xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
+		xrSetInitialCompositorTimelineValue(pSess->index, initialTimelineValue);
 	}
 
-	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+	bool synchronized = pSess->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 	uint64_t compositorTimelineValue;
-	xrGetCompositorTimelineValue(pSession->index, synchronized, &compositorTimelineValue);
+	xrGetCompositorTimelineValue(pSess->index, synchronized, &compositorTimelineValue);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
-			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
-			ID3D11Fence*          compositorFence = pSession->binding.d3d11.compositorFence;
+			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
+			ID3D11Fence*          compositorFence = pSess->binding.d3d11.compositorFence;
 
 			ID3D11DeviceContext4_Flush(context4);
 			ID3D11DeviceContext4_Wait(context4, compositorFence, compositorTimelineValue);
@@ -2761,23 +2799,23 @@ XR_PROC xrWaitFrame(
 	}
 
 	XrTime currentTime = xrGetTime();
-	XrTime lastFrameTime = pSession->lastDisplayTime == 0 ? currentTime : pSession->lastDisplayTime;
-	XrTime frameInterval = xrGetFrameInterval(pSession->index, synchronized);
+	XrTime lastFrameTime = pSess->lastDisplayTime == 0 ? currentTime : pSess->lastDisplayTime;
+	XrTime frameInterval = xrGetFrameInterval(pSess->index, synchronized);
 
 	frameState->predictedDisplayPeriod = frameInterval;
 	frameState->predictedDisplayTime = lastFrameTime + frameInterval;
-	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
-							   pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
+	frameState->shouldRender = pSess->activeSessionState == XR_SESSION_STATE_VISIBLE ||
+							   pSess->activeSessionState == XR_SESSION_STATE_FOCUSED;
 
-	memmove(&pSession->predictedDisplayTimes[1], &pSession->predictedDisplayTimes[0], sizeof(pSession->predictedDisplayTimes[0]) * (COUNT(pSession->predictedDisplayTimes) - 1));
-	pSession->predictedDisplayTimes[0] = frameState->predictedDisplayTime;
-	pSession->lastBeginDisplayTime = currentTime;
+	memmove(&pSess->predictedDisplayTimes[1], &pSess->predictedDisplayTimes[0], sizeof(pSess->predictedDisplayTimes[0]) * (COUNT(pSess->predictedDisplayTimes) - 1));
+	pSess->predictedDisplayTimes[0] = frameState->predictedDisplayTime;
+	pSess->lastBeginDisplayTime = currentTime;
 
 //	double frameIntervalMs = xrTimeToMilliseconds(frameInterval);
 //	double fps = 1.0 / MillisecondsToSeconds(frameIntervalMs);
 //	printf("xrWaitFrame frameIntervalMs: %f fps: %f\n", frameIntervalMs, fps);
 
-	__atomic_add_fetch(&pSession->frameWaited, 1, __ATOMIC_RELEASE);
+	__atomic_add_fetch(&pSess->frameWaited, 1, __ATOMIC_RELEASE);
 
 	return XR_SUCCESS;
 }
@@ -3085,19 +3123,13 @@ XR_PROC xrLocateViews(
 	return XR_SUCCESS;
 }
 
-#define CHECK_INSTANCE                          \
-	if (&xr.instance != (Instance*)instance) {  \
-		LOG_ERROR("XR_ERROR_HANDLE_INVALID\n"); \
-		return XR_ERROR_HANDLE_INVALID;         \
-	}
-
 XR_PROC xrStringToPath(
 	XrInstance  instance,
 	const char* pathString,
 	XrPath*     path)
 {
 	LOG_METHOD_ONCE(xrStringToPath);
-	CHECK_INSTANCE
+	CHECK_INSTANCE(instance);
 
 	auto pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (int i = 0; i < XR_PATH_CAPACITY; ++i) {
@@ -3134,7 +3166,7 @@ XR_PROC xrPathToString(
 	char*      buffer)
 {
 	LOG_METHOD_ONCE(xrPathToString);
-	CHECK_INSTANCE
+	CHECK_INSTANCE(instance);
 
 	auto pPath = (Path*)path;
 
@@ -3275,7 +3307,7 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	LOG_METHOD(xrSuggestInteractionProfileBindings);
 	LogNextChain(suggestedBindings->next);
 	assert(suggestedBindings->next == NULL);
-	CHECK_INSTANCE
+	CHECK_INSTANCE(instance);
 
 	auto pProfilePath = (Path*)suggestedBindings->interactionProfile;
 	auto profilePathHash = BLOCK_KEY(block.path, pProfilePath);
@@ -3888,17 +3920,16 @@ XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 {
 	LOG_METHOD(xrGetD3D11GraphicsRequirementsKHR);
 	LogNextChain(graphicsRequirements->next);
+	CHECK_INSTANCE(instance);
 
-	Instance* pInstance = (Instance*)instance;
-
-	if (pInstance->systemId != systemId) {
+	if (xr.instance.systemId != systemId) {
 		LOG_ERROR("Invalid System ID.");
 		return XR_ERROR_SYSTEM_INVALID;
 	}
 
-	if (pInstance->graphics.d3d11.adapterLuid.LowPart != 0) {
-		graphicsRequirements->adapterLuid = pInstance->graphics.d3d11.adapterLuid;
-		graphicsRequirements->minFeatureLevel = pInstance->graphics.d3d11.minFeatureLevel;
+	if (xr.instance.graphics.d3d11.adapterLuid.LowPart != 0) {
+		graphicsRequirements->adapterLuid = xr.instance.graphics.d3d11.adapterLuid;
+		graphicsRequirements->minFeatureLevel = xr.instance.graphics.d3d11.minFeatureLevel;
 		printf("Already found D3D11GraphicsRequirements LUID: %ld:%lu FeatureLevel: %d\n",
 			   graphicsRequirements->adapterLuid.HighPart,
 			   graphicsRequirements->adapterLuid.LowPart,
@@ -3951,8 +3982,8 @@ XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 		   graphicsRequirements->adapterLuid.LowPart,
 		   graphicsRequirements->minFeatureLevel);
 
-	pInstance->graphics.d3d11.adapterLuid = graphicsRequirements->adapterLuid;
-	pInstance->graphics.d3d11.minFeatureLevel = graphicsRequirements->minFeatureLevel;
+	xr.instance.graphics.d3d11.adapterLuid = graphicsRequirements->adapterLuid;
+	xr.instance.graphics.d3d11.minFeatureLevel = graphicsRequirements->minFeatureLevel;
 
 	return XR_SUCCESS;
 }
