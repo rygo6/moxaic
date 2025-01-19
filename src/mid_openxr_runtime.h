@@ -462,30 +462,32 @@ typedef uint32_t block_key;
 		BITSET_DECL(occupied, n); \
 		block_key keys[n];        \
 		type      blocks[n];      \
+		uint8_t   generations[n]  \
 	}
 
-static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pHashes, uint32_t hash)
+static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
 {
 	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
 	if (i == -1) return HANDLE_DEFAULT;
 	BITSET(pOccupiedSet, i);
-	pHashes[i] = hash;
-	return HANDLE_GENERATION_INCREMENT(i);
+	pKeys[i] = key;
+	pGenerations[i] = pGenerations[i] == HANDLE_GENERATION_MAX ? 1 : (pGenerations[i] + 1) & 0xF;
+	return HANDLE_GENERATION_SET(i, pGenerations[i]);
 }
-static block_handle FindBlockByHash(int hashCount, block_key* pHashes, block_key hash)
+static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* pGenerations, block_key hash)
 {
 	for (int i = 0; i < hashCount; ++i) {
 		if (pHashes[i] == hash)
-			return i;
+			return HANDLE_GENERATION_SET(i, pGenerations[i]);
 	}
 	return HANDLE_DEFAULT;
 }
 
-#define BLOCK_CLAIM(block, key)                                                                        \
-	({                                                                                                 \
-		int _handle = ClaimBlock(sizeof(block.occupied), (bitset_t*)&block.occupied, block.keys, key); \
-		assert(_handle >= 0 && #block ": Claiming handle. Out of capacity.");                          \
-		(block_handle) _handle;                                                                        \
+#define BLOCK_CLAIM(block, key)                                                                                           \
+	({                                                                                                                    \
+		int _handle = ClaimBlock(sizeof(block.occupied), (bitset_t*)&block.occupied, block.keys, block.generations, key); \
+		assert(_handle >= 0 && #block ": Claiming handle. Out of capacity.");                                             \
+		(block_handle) _handle;                                                                                           \
 	})
 #define BLOCK_RELEASE(block, handle)                                                                                                                       \
 	({                                                                                                                                                     \
@@ -493,15 +495,15 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, block_key
 		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing SLAB handle. Should be occupied.");                                     \
 		BITCLEAR(block.occupied, (int)HANDLE_INDEX(handle));                                                                                               \
 	})
-#define BLOCK_FIND(block, hash)                                \
-	({                                                         \
-		assert(hash != 0);                                     \
-		FindBlockByHash(sizeof(block.keys), block.keys, hash); \
+#define BLOCK_FIND(block, hash)                                                   \
+	({                                                                            \
+		assert(hash != 0);                                                        \
+		FindBlockByHash(sizeof(block.keys), block.keys, block.generations, hash); \
 	})
 #define BLOCK_HANDLE(block, p)                                                                                                \
 	({                                                                                                                        \
 		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting SLAB handle. Out of range."); \
-		(block_handle)(p - block.blocks);                                                                                     \
+		HANDLE_GENERATION_SET((p - block.blocks), block.generations[(p - block.blocks)]);                                     \
 	})
 #define BLOCK_KEY(block, p)                                                                                                \
 	({                                                                                                                     \
@@ -1348,11 +1350,11 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 //			.extensionName = XR_EXT_CONFORMANCE_AUTOMATION_EXTENSION_NAME,
 //			.extensionVersion = XR_EXT_conformance_automation_SPEC_VERSION,
 //		},
-//		{
-//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-//			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
-//			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
-//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
+			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
+		},
 		{
 			.type = XR_TYPE_EXTENSION_PROPERTIES,
 			.extensionName = XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
@@ -2370,17 +2372,19 @@ XR_PROC xrEnumerateSwapchainFormats(
 {
 	LOG_METHOD(xrEnumerateSwapchainFormats);
 
-	Session*  pSession = (Session*)session;
+	auto pSess = (Session*)session;
+	auto hSess = BLOCK_HANDLE(block.session, pSess);
+	HANDLE_CHECK(hSess, XR_ERROR_HANDLE_INVALID);
 
-#define TRANSFER_SWAP_FORMATS                               \
-	*formatCountOutput = COUNT(swapFormats);                \
-	if (formats == NULL)                                    \
-		return XR_SUCCESS;                                  \
-	if (formatCapacityInput < COUNT(swapFormats))           \
-		return XR_ERROR_SIZE_INSUFFICIENT;                  \
-	for (int i = 0; i < COUNT(swapFormats); ++i) {          \
-		printf("Enumerating Format: %llu\n", swapFormats[i]); \
-		formats[i] = swapFormats[i];                        \
+#define TRANSFER_SWAP_FORMATS(_)                    \
+	*formatCountOutput = COUNT(_);                  \
+	if (formats == NULL)                            \
+		return XR_SUCCESS;                          \
+	if (formatCapacityInput < COUNT(_))             \
+		return XR_ERROR_SIZE_INSUFFICIENT;          \
+	for (int i = 0; i < COUNT(_); ++i) {            \
+		printf("Enumerating Format: %llu\n", _[i]); \
+		formats[i] = _[i];                          \
 	}
 
 	switch (xr.instance.graphicsApi) {
@@ -2388,24 +2392,40 @@ XR_PROC xrEnumerateSwapchainFormats(
 			int64_t swapFormats[] = {
 				GL_SRGB8_ALPHA8,
 				GL_SRGB8,
+				// unity can't output depth on opengl
+//				GL_DEPTH_COMPONENT16,
+//				GL_DEPTH_COMPONENT32F,
+//				GL_DEPTH24_STENCIL8
 			};
-			TRANSFER_SWAP_FORMATS
+			TRANSFER_SWAP_FORMATS(swapFormats);
 			return XR_SUCCESS;
 		}
 		case XR_GRAPHICS_API_VULKAN: {
 			int64_t swapFormats[] = {
 				VK_FORMAT_R8G8B8A8_UNORM,
 				VK_FORMAT_R8G8B8A8_SRGB,
+				// unity supported
+				VK_FORMAT_D16_UNORM,
+				VK_FORMAT_D24_UNORM_S8_UINT,
+
+//				VK_FORMAT_D32_SFLOAT,
 			};
-			TRANSFER_SWAP_FORMATS
+			TRANSFER_SWAP_FORMATS(swapFormats);
 			return XR_SUCCESS;
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
 			int64_t swapFormats[] = {
 				DXGI_FORMAT_R8G8B8A8_UNORM,
 				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+
+				// unity supported
+				DXGI_FORMAT_D16_UNORM,
+				DXGI_FORMAT_D32_FLOAT_S8X24_UINT
+
+//				DXGI_FORMAT_D32_FLOAT,
+//				DXGI_FORMAT_D24_UNORM_S8_UINT,
 			};
-			TRANSFER_SWAP_FORMATS
+			TRANSFER_SWAP_FORMATS(swapFormats);
 			return XR_SUCCESS;
 		}
 		default:
@@ -2423,18 +2443,24 @@ XR_PROC xrCreateSwapchain(
 {
 	LOG_METHOD(xrCreateSwapchain);
 
-	printf("Create swapchain format: %lld sampleCount %d width: %d height %d faceCount: %d arraySize: %d mipCount %d\n",
-		   createInfo->format, createInfo->sampleCount, createInfo->width, createInfo->height, createInfo->faceCount, createInfo->arraySize, createInfo->mipCount);
+	LOG("format: %lld\n", createInfo->format);
+	LOG("sampleCount: %u\n", createInfo->sampleCount);
+	LOG("width: %u\n", createInfo->width);
+	LOG("height: %u\n", createInfo->height);
+	LOG("faceCount: %u\n", createInfo->faceCount);
+	LOG("arraySize: %u\n", createInfo->arraySize);
+	LOG("mipCount: %u\n", createInfo->mipCount);
 
+	// move up to log section
 #define PRINT_CREATE_FLAGS(_flag, _bit)  \
 	if (createInfo->createFlags & _flag) \
-		printf(#_flag "\n");
+		printf("flag: " #_flag "\n");
 	XR_LIST_BITS_XrSwapchainCreateFlags(PRINT_CREATE_FLAGS);
 #undef PRINT_CREATE_FLAGS
 
 #define PRINT_USAGE_FLAGS(_flag, _bit)  \
 	if (createInfo->usageFlags & _flag) \
-		printf(#_flag "\n");
+		printf("usage: " #_flag "\n");
 	XR_LIST_BITS_XrSwapchainUsageFlags(PRINT_USAGE_FLAGS);
 #undef PRINT_USAGE_FLAGS
 
