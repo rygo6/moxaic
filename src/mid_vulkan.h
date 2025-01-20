@@ -7,7 +7,7 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
@@ -120,23 +120,24 @@ static void LogWin32Error(HRESULT err)
 	PFN_FUNC(CmdClearColorImage)
 #endif
 
-#ifdef WIN32
-#define MIDVK_PLATFORM_SURFACE_EXTENSION_NAME      VK_KHR_WIN32_SURFACE_EXTENSION_NAME
-#define MIDVK_EXTERNAL_MEMORY_EXTENSION_NAME       VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME
-#define MIDVK_EXTERNAL_SEMAPHORE_EXTENSION_NAME    VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
-#define MIDVK_EXTERNAL_FENCE_EXTENSION_NAME        VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
+#ifdef _WIN32
+#define VK_PLATFORM_SURFACE_EXTENSION_NAME         VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME
+#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
+#define VK_EXTERNAL_FENCE_EXTENSION_NAME           VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
 #define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #define VK_EXTERNAL_HANDLE_PLATFORM                HANDLE
 #else
-#define MIDVK_PLATFORM_SURFACE_EXTENSION_NAME   0
-#define MIDVK_EXTERNAL_MEMORY_EXTENSION_NAME    0
-#define MIDVK_EXTERNAL_SEMAPHORE_EXTENSION_NAME 0
-#define MIDVK_EXTERNAL_FENCE_EXTENSION_NAME     0
-#define MIDVK_EXTERNAL_MEMORY_HANDLE_TYPE       0
-#define MIDVK_EXTERNAL_SEMAPHORE_HANDLE_TYPE    0
-#define MIDVK_EXTERNAL_HANDLE                   int
+#define VK_PLATFORM_SURFACE_EXTENSION_NAME         0
+#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          0
+#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       0
+#define VK_EXTERNAL_FENCE_EXTENSION_NAME           0
+#define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    0
+#define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM 0
+#define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     0
+#define VK_EXTERNAL_HANDLE_PLATFORM                0
 #endif
 
 #define VK_ALLOC         NULL
@@ -381,7 +382,8 @@ typedef enum VkPipeSetIndices : uint8_t {
 constexpr VkFormat VK_BASIC_PASS_FORMATS[] = {
 	[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
 	[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
-	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
+//	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
+	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_FORMAT_D16_UNORM,
 };
 
 constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
@@ -1425,7 +1427,7 @@ static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropert
 	vkGetPhysicalDeviceMemoryProperties(vk.context.physicalDevice, &memProps);
 	uint32_t memTypeIndex = FindMemoryTypeIndex(memProps.memoryTypeCount, memProps.memoryTypes, pMemReqs->memoryTypeBits, propFlags);
 
-#if WIN32
+#if _WIN32
 	VkExportMemoryWin32HandleInfoKHR exportMemPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
 		.pNext = pDedicatedAllocInfo,
@@ -2181,7 +2183,7 @@ void vkInitializeInstance()
 			//        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 			VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 			VK_KHR_SURFACE_EXTENSION_NAME,
-			MIDVK_PLATFORM_SURFACE_EXTENSION_NAME,
+			VK_PLATFORM_SURFACE_EXTENSION_NAME,
 		};
 		VkInstanceCreateInfo instanceCreationInfo = {
 			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -2315,9 +2317,9 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 			VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
 			VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
 			VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
-			MIDVK_EXTERNAL_MEMORY_EXTENSION_NAME,
-			MIDVK_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-			MIDVK_EXTERNAL_FENCE_EXTENSION_NAME,
+			VK_EXTERNAL_MEMORY_EXTENSION_NAME,
+			VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+			VK_EXTERNAL_FENCE_EXTENSION_NAME,
 		};
 		uint32_t activeQueueIndex = 0;
 		uint32_t activeQueueCount = 0;
@@ -2541,7 +2543,7 @@ void vkCreateBasicPipeLayout()
 
 void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence)
 {
-#if WIN32
+#if _WIN32
 	VkExportFenceWin32HandleInfoKHR exportPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_WIN32_HANDLE_INFO_KHR,
 		// TODO are these the best security options? Read seems to affect it and solves issue of child corrupting semaphore on crash... but not 100%
@@ -2563,7 +2565,7 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 		default: break;
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY:  {
-#if WIN32
+#if _WIN32
 			VkImportFenceWin32HandleInfoKHR importWin32HandleInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_WIN32_HANDLE_INFO_KHR,
 				.fence = *pFence,
@@ -2581,7 +2583,7 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 // I need a word that represents a more comprehensive Create more function
 void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore)
 {
-#if WIN32
+#if _WIN32
 	VkExportSemaphoreWin32HandleInfoKHR exportPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
 		// TODO are these the best security options? Read seems to affect it and solves issue of child corrupting semaphore on crash... but not 100%
@@ -2608,7 +2610,7 @@ void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 		default: break;
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY:  {
-#if WIN32
+#if _WIN32
 			VkImportSemaphoreWin32HandleInfoKHR importWin32HandleInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
 				.semaphore = *pSemaphore,

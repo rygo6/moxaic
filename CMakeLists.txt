@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(moxaic C)
 
 set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(TARGET_NAME moxaic)
 
 file(GLOB SRC_FILES
@@ -60,6 +61,8 @@ target_compile_options(${TARGET_NAME} PRIVATE
         # make __FILE__ path relative to project
         -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/=
         -fopt-info-vec
+
+        -std=c23
 )
 
 target_link_options(${TARGET_NAME} PRIVATE

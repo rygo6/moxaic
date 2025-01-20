@@ -204,7 +204,7 @@ typedef struct MxcSwap {
 	VkDedicatedTexture depth;
 	VkDedicatedTexture gbuffer;
 
-#if WIN32
+#if _WIN32
 	VkWin32ExternalTexture colorExternal;
 	VkWin32ExternalTexture normalExternal;
 	VkWin32ExternalTexture depthExternal;

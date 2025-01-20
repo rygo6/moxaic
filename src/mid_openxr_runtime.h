@@ -2455,13 +2455,17 @@ XR_PROC xrCreateSwapchain(
 #define PRINT_CREATE_FLAGS(_flag, _bit)  \
 	if (createInfo->createFlags & _flag) \
 		printf("flag: " #_flag "\n");
+
 	XR_LIST_BITS_XrSwapchainCreateFlags(PRINT_CREATE_FLAGS);
+
 #undef PRINT_CREATE_FLAGS
 
 #define PRINT_USAGE_FLAGS(_flag, _bit)  \
 	if (createInfo->usageFlags & _flag) \
 		printf("usage: " #_flag "\n");
+
 	XR_LIST_BITS_XrSwapchainUsageFlags(PRINT_USAGE_FLAGS);
+
 #undef PRINT_USAGE_FLAGS
 
 	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
