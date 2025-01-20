@@ -11,8 +11,7 @@
 #include "mid_vulkan.h"
 #include "mid_bit.h"
 
-
-////
+//////////////
 //// Constants
 ////
 
@@ -21,11 +20,9 @@
 #define MXC_NODE_GBUFFER_LEVELS 10
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 
-
-////
+//////////////
 //// IPC Types
 ////
-
 typedef uint8_t MxcRingBufferHandle;
 #define MXC_RING_BUFFER_CAPACITY 256
 #define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
@@ -36,11 +33,9 @@ typedef struct MxcRingBuffer {
 	MxcRingBufferHandle targets[MXC_RING_BUFFER_CAPACITY];
 } MxcRingBuffer;
 
-
-////
+/////////////////
 //// Shared Types
 ////
-
 typedef enum MxcNodeType {
 	MXC_NODE_TYPE_NONE,
 	MXC_NODE_TYPE_THREAD,
@@ -99,6 +94,11 @@ typedef struct MxcNodeShared {
 } MxcNodeShared;
 
 typedef struct MxcImportParam {
+	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
+	HANDLE colorHandles[VK_SWAP_COUNT * 2];
+	HANDLE depthHandles[VK_SWAP_COUNT * 2];
+
+
 	struct {
 		HANDLE color;
 		HANDLE normal;
@@ -116,13 +116,53 @@ typedef struct MxcExternalNodeMemory {
 	MxcImportParam importParam;
 } MxcExternalNodeMemory;
 
-
+//////////////
+//// Swap Pool
 ////
-//// Compositor Types
-////
+typedef uint16_t swap_index_t;
+typedef struct MxcSwapInfo {
+	MxcSwapType  type   : 4;
+	MxcSwapUsage usage  : 4;
+	// not sure if I will use these
+	MxcSwapScale xScale : 4;
+	MxcSwapScale yScale : 4;
+} MxcSwapInfo;
 
-// Data for the compositor
-typedef struct MxcCompositorNodeContext {
+typedef struct MxcSwap {
+
+	VkDedicatedTexture color;
+	VkDedicatedTexture normal;
+	VkDedicatedTexture depth;
+	VkDedicatedTexture gbuffer;
+
+#if _WIN32
+	VkWin32ExternalTexture colorExternal;
+	VkWin32ExternalTexture normalExternal;
+	VkWin32ExternalTexture depthExternal;
+	VkWin32ExternalTexture gbufferExternal;
+#endif
+
+} MxcSwap;
+
+typedef bitset64_t swap_bitset_t;
+typedef struct MxcNodeSwapPool {
+	swap_bitset_t occupied;
+	swap_bitset_t created;
+	MxcSwap       swaps[BITNSIZE(swap_bitset_t)];
+} MxcNodeSwapPool;
+
+//extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
+extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_USAGE_COUNT];
+
+MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index);
+int      mxcClaimSwap(const MxcSwapInfo* pInfo);
+void     mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index);
+void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap);
+
+//////////////////////////////
+//// Compositor Types and Data
+////
+typedef struct MxcCompositorContext {
 	// read multiple threads, write 1 thread
 	uint32_t swapIndex;
 
@@ -135,8 +175,15 @@ typedef struct MxcCompositorNodeContext {
 	VkCommandPool pool;
 	pthread_t     threadId;
 
-} MxcCompositorNodeContext;
+} MxcCompositorContext;
 
+// I should do this. remove compositor code from nodes entirely
+//#if defined(MOXAIC_COMPOSITOR)
+extern MxcCompositorContext compositorContext;
+
+///////////////////////////////////
+//// Compositor Node Types and Data
+////
 typedef struct MxcNodeCompositorSetState {
 	mat4 model;
 
@@ -184,35 +231,9 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
 } MxcNodeCompositorData;
 
-
+///////////////
+//// Node Context
 ////
-//// Node Types
-////
-
-typedef uint16_t swap_index_t;
-typedef struct MxcSwapInfo {
-	MxcSwapType  type   : 4;
-	MxcSwapUsage usage  : 4;
-	MxcSwapScale xScale : 4;
-	MxcSwapScale yScale : 4;
-} MxcSwapInfo;
-
-typedef struct MxcSwap {
-
-	VkDedicatedTexture color;
-	VkDedicatedTexture normal;
-	VkDedicatedTexture depth;
-	VkDedicatedTexture gbuffer;
-
-#if _WIN32
-	VkWin32ExternalTexture colorExternal;
-	VkWin32ExternalTexture normalExternal;
-	VkWin32ExternalTexture depthExternal;
-	VkWin32ExternalTexture gbufferExternal;
-#endif
-
-} MxcSwap;
-
 typedef struct MxcNodeContext {
 	MxcNodeType type;
 	MxcSwapType swapType;
@@ -247,25 +268,6 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-
-////
-//// Swap Pool
-////
-
-typedef bitset64_t swap_bitset_t;
-typedef struct MxcNodeSwapPool {
-	swap_bitset_t occupied;
-	swap_bitset_t created;
-	MxcSwap       swaps[BITNSIZE(swap_bitset_t)];
-} MxcNodeSwapPool;
-
-extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
-
-
-////
-//// Node State
-////
-
 // I am presuming a node simply won't need to have as many thread nodes within it
 #if defined(MOXAIC_COMPOSITOR)
 #define MXC_NODE_CAPACITY 64
@@ -283,26 +285,15 @@ extern MxcNodeShared localNodesShared[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
 
-
-////
-//// Compositor State
-////
-
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
-// I should do this. remove compositor code from nodes entirely
-//#if defined(MOXAIC_COMPOSITOR)
 // technically this should go into a comp node thread local....
 extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
-extern MxcCompositorNodeContext compositorNodeContext;
-//#endif
 
-
-////
+///////////////
 //// Node Queue
 ////
-
 // This could be a MidVK construct
 typedef struct MxcQueuedNodeCommandBuffer {
 	VkCommandBuffer cmd;
@@ -336,71 +327,27 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 	}
 }
 
-void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*));
+void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorContext*));
 void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
-void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap);
 
+NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
 void ReleaseNode(NodeHandle handle);
 
-static MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index)
-{
-	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
-	assert(index < COUNT(pPool->swaps));
-	return &pPool->swaps[index];
-}
 
-static int mxcClaimSwap(const MxcSwapInfo* pInfo)
-{
-	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
-
-	int i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
-	if (i == -1) {
-		LOG_ERROR("Ran out of occupied claiming swap!\n");
-		return -1;
-	}
-
-	BITSET(pPool->occupied, i);
-	printf("Claimed swap %d\n", i);
-
-	if (!BITTEST(pPool->created, i)) {
-		BITSET(pPool->created, i);
-		VkBasicFramebufferTextureCreateInfo textureCreateInfo = {
-			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-			.locality = VK_LOCALITY_CONTEXT,
-		};
-//		mxcCreateSwap(pInfo, &textureCreateInfo, &pPool->swaps[i]);
-		printf("Created Swap. Index: %d Width: %d Height: %d\n", i, textureCreateInfo.extent.width, textureCreateInfo.extent.height);
-	}
-
-	return i;
-}
-
-static void mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index)
-{
-	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
-	assert(index < COUNT(pPool->swaps));
-	BITCLEAR(pPool->occupied, index);
-	printf("Releasing swap %d\n", index);
-}
-
-
-////
+///////////////////////
 //// Process Connection
 ////
-
 void mxcInitializeInterprocessServer();
 void mxcShutdownInterprocessServer();
 void mxcConnectInterprocessNode(bool createTestNode);
 void mxcShutdownInterprocessNode();
 
-
-////
+//////////////////////
 //// Process IPC Funcs
 ////
-
 typedef void (*MxcIpcFuncPtr)(const NodeHandle);
 typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_NODE_CLOSED,

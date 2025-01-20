@@ -261,7 +261,7 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
 	}
 }
 
-void mxcCompostorNodeRun(const MxcCompositorNodeContext* pNodeContext, const MxcCompNode* pNode)
+void mxcCompostorNodeRun(const MxcCompositorContext* pNodeContext, const MxcCompNode* pNode)
 {
 	const MxcCompMode compMode = pNode->compMode;
 
@@ -512,9 +512,9 @@ run_loop:
 		CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
 		{  // Blit Framebuffer
-			AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compositorNodeContext.swapIndex);
+			AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compositorContext.swapIndex);
 			__atomic_thread_fence(__ATOMIC_RELEASE);
-			VkImage swapImage = swap.images[compositorNodeContext.swapIndex];
+			VkImage swapImage = swap.images[compositorContext.swapIndex];
 
 			VkImageMemoryBarrier2 beginBlitBarrier = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -564,7 +564,7 @@ run_loop:
 	goto run_loop;
 }
 
-void* mxcCompNodeThread(const MxcCompositorNodeContext* pNodeContext)
+void* mxcCompNodeThread(const MxcCompositorContext* pNodeContext)
 {
 	MxcCompNode compNode;
 

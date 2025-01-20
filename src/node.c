@@ -11,8 +11,6 @@
 #include "test_node.h"
 #include "mid_vulkan.h"
 
-MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
-
 // Compositor and Node Process both use
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
 
@@ -26,7 +24,7 @@ MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY] = {};
 MxcNodeShared localNodesShared[MXC_NODE_CAPACITY] = {};
 
 // Compositor state in Compositor Process
-MxcCompositorNodeContext compositorNodeContext = {};
+MxcCompositorContext compositorContext = {};
 
 // State imported into Node Process
 HANDLE                 importedExternalMemoryHandle = NULL;
@@ -37,34 +35,235 @@ size_t                     submitNodeQueueStart = 0;
 size_t                     submitNodeQueueEnd = 0;
 MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
-void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorNodeContext*))
+//////////////
+//// Swap Pool
+////
+//MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
+MxcNodeSwapPool nodeSwapPool[MXC_SWAP_USAGE_COUNT];
+
+void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap)
+{
+#if defined(D3D11)
+#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT
+#elif defined(D3D12)
+#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
+#endif
+
+	{
+		VkImageCreateInfo info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = &(VkExternalMemoryImageCreateInfo){
+				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			},
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+			.extent = pTextureCreateInfo->extent,
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+		};
+		vkWin32CreateExternalTexture(&info, &pSwap->colorExternal);
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedColorFramebuffer",
+			.pImageCreateInfo = &info,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.importHandle = pSwap->colorExternal.handle,
+			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->color);
+	}
+
+	{
+		VkImageCreateInfo info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = &(VkExternalMemoryImageCreateInfo){
+				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			},
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+			.extent = pTextureCreateInfo->extent,
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+		};
+		vkWin32CreateExternalTexture(&info, &pSwap->normalExternal);
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedNormalFramebuffer",
+			.pImageCreateInfo = &info,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.importHandle = pSwap->normalExternal.handle,
+			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->normal);
+	}
+
+	{
+		VkImageCreateInfo info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = &(VkExternalMemoryImageCreateInfo){
+				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			},
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = MXC_NODE_GBUFFER_FORMAT,
+			.extent = pTextureCreateInfo->extent,
+			.mipLevels = MXC_NODE_GBUFFER_LEVELS,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = MXC_NODE_GBUFFER_USAGE,
+		};
+		vkWin32CreateExternalTexture(&info, &pSwap->gbufferExternal);
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedGBufferFramebuffer",
+			.pImageCreateInfo = &info,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.importHandle = pSwap->gbufferExternal.handle,
+			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->gbuffer);
+	}
+
+	// If exporting, transition to interprocess state and skip depth creation since depth is not sent over IPC currently
+	if (pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
+
+		// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
+		VkImageMemoryBarrier2 interProcessBarriers[] = {
+			{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pSwap->color.image,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pSwap->normal.image,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pSwap->gbuffer.image,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			},
+		};
+		VK_DEVICE_FUNC(CmdPipelineBarrier2);
+		VkCommandBuffer cmd = midVkBeginImmediateTransferCommandBuffer();
+		CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
+		midVkEndImmediateTransferCommandBuffer(cmd);
+
+		return;
+	}
+
+//	VkTextureCreateInfo depthCreateInfo = {
+//		.debugName = "ImportedDepthFramebuffer",
+//		.pImageCreateInfo = &(VkImageCreateInfo) {
+//			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//			.imageType = VK_IMAGE_TYPE_2D,
+//			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+//			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//			.mipLevels = 1,
+//			.arrayLayers = 1,
+//			.samples = VK_SAMPLE_COUNT_1_BIT,
+//			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+//		},
+//		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+//		.locality = VK_LOCALITY_CONTEXT,
+//	};
+//	vkCreateTexture(&depthCreateInfo, &pSwap->depth);
+}
+
+MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index)
+{
+//	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->type];
+	assert(index < COUNT(pPool->swaps));
+	return &pPool->swaps[index];
+}
+
+int mxcClaimSwap(const MxcSwapInfo* pInfo)
+{
+//	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->type];
+
+	int i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
+	if (i == -1) {
+		LOG_ERROR("Ran out of occupied claiming swap!\n");
+		return -1;
+	}
+
+	BITSET(pPool->occupied, i);
+	printf("Claimed swap %d\n", i);
+
+	if (!BITTEST(pPool->created, i)) {
+		BITSET(pPool->created, i);
+		VkBasicFramebufferTextureCreateInfo textureCreateInfo = {
+			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+			.locality = VK_LOCALITY_CONTEXT,
+		};
+		//		mxcCreateSwap(pInfo, &textureCreateInfo, &pPool->swaps[i]);
+		printf("Created Swap. Index: %d Width: %d Height: %d\n", i, textureCreateInfo.extent.width, textureCreateInfo.extent.height);
+	}
+
+	return i;
+}
+
+void mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index)
+{
+//	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->type];
+	assert(index < COUNT(pPool->swaps));
+	BITCLEAR(pPool->occupied, index);
+	printf("Releasing swap %d\n", index);
+}
+
+/////////////////////////
+//// Compositor Lifecycle
+////
+void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorContext*))
 {
 	MidVkSemaphoreCreateInfo semaphoreCreateInfo = {
 		.debugName = "CompTimelineSemaphore",
 		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE};
-	midVkCreateSemaphore(&semaphoreCreateInfo, &compositorNodeContext.compositorTimeline);
-	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorNodeContext.swap);
+	midVkCreateSemaphore(&semaphoreCreateInfo, &compositorContext.compositorTimeline);
+	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorContext.swap);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorNodeContext.pool));
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = compositorNodeContext.pool,
+		.commandPool = compositorContext.pool,
 		.commandBufferCount = 1,
 	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorNodeContext.cmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorNodeContext.cmd, "CompCmd");
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.cmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorContext.cmd, "CompCmd");
 
-	CHECK(pthread_create(&compositorNodeContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorNodeContext), "Comp Node thread creation failed!");
+	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorContext), "Comp Node thread creation failed!");
 	printf("Request and Run CompNode Thread Success.\n");
 }
 
-static NodeHandle RequestLocalNodeHandle()
+///////////////////
+//// Node Lifecycle
+////
+NodeHandle RequestLocalNodeHandle()
 {
 	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
 	localNodesShared[handle] = (MxcNodeShared){};
@@ -209,7 +408,7 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 
 	MxcNodeContext* pNodeContext = &nodeContexts[handle];
 	*pNodeContext = (MxcNodeContext){};
-	pNodeContext->compositorTimeline = compositorNodeContext.compositorTimeline;
+	pNodeContext->compositorTimeline = compositorContext.compositorTimeline;
 	pNodeContext->type = MXC_NODE_TYPE_THREAD;
 
 	// maybe have the thread allocate this and submit it once ready to get rid of < 1 check
@@ -338,14 +537,15 @@ void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHa
 	// todo this needs error handling
 }
 
-//
-/// Node Render
-// Do I want this?
-static const VkImageUsageFlags NODE_PASS_USAGES[] = {
+////////////////
+//// Node Render
+////
+static const VkImageUsageFlags NODE_PASS_USAGES[] = { // Do I want this?
 	[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 };
+
 void mxcCreateNodeRenderPass()
 {
 	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
@@ -443,154 +643,9 @@ void mxcCreateNodeRenderPass()
 	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.nodeRenderPass, "NodeRenderPass");
 }
 
-void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap)
-{
-#if defined(D3D11)
-	#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT
-#elif defined(D3D12)
-	#define EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
-#endif
-
-	{
-		VkImageCreateInfo info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = &(VkExternalMemoryImageCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			},
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
-			.extent = pTextureCreateInfo->extent,
-			.mipLevels = 1,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
-		};
-		vkWin32CreateExternalTexture(&info, &pSwap->colorExternal);
-		VkTextureCreateInfo textureInfo = {
-			.debugName = "ExportedColorFramebuffer",
-			.pImageCreateInfo = &info,
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.importHandle = pSwap->colorExternal.handle,
-			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-		};
-		vkCreateTexture(&textureInfo, &pSwap->color);
-	}
-
-	{
-		VkImageCreateInfo info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = &(VkExternalMemoryImageCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			},
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
-			.extent = pTextureCreateInfo->extent,
-			.mipLevels = 1,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
-		};
-		vkWin32CreateExternalTexture(&info, &pSwap->normalExternal);
-		VkTextureCreateInfo textureInfo = {
-			.debugName = "ExportedNormalFramebuffer",
-			.pImageCreateInfo = &info,
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.importHandle = pSwap->normalExternal.handle,
-			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-		};
-		vkCreateTexture(&textureInfo, &pSwap->normal);
-	}
-
-	{
-		VkImageCreateInfo info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = &(VkExternalMemoryImageCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-				.handleTypes = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			},
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = MXC_NODE_GBUFFER_FORMAT,
-			.extent = pTextureCreateInfo->extent,
-			.mipLevels = MXC_NODE_GBUFFER_LEVELS,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = MXC_NODE_GBUFFER_USAGE,
-		};
-		vkWin32CreateExternalTexture(&info, &pSwap->gbufferExternal);
-		VkTextureCreateInfo textureInfo = {
-			.debugName = "ExportedGBufferFramebuffer",
-			.pImageCreateInfo = &info,
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.importHandle = pSwap->gbufferExternal.handle,
-			.handleType = EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-		};
-		vkCreateTexture(&textureInfo, &pSwap->gbuffer);
-	}
-
-	// If exporting, transition to interprocess state and skip depth creation since depth is not sent over IPC currently
-	if (pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || pTextureCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY) {
-
-		// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
-		VkImageMemoryBarrier2 interProcessBarriers[] = {
-			{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->color.image,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-			},
-			{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->normal.image,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-			},
-			{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->gbuffer.image,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-			},
-		};
-		VK_DEVICE_FUNC(CmdPipelineBarrier2);
-		VkCommandBuffer cmd = midVkBeginImmediateTransferCommandBuffer();
-		CmdPipelineImageBarriers2(cmd, COUNT(interProcessBarriers), interProcessBarriers);
-		midVkEndImmediateTransferCommandBuffer(cmd);
-
-		return;
-	}
-
-	VkTextureCreateInfo depthCreateInfo = {
-		.debugName = "ImportedDepthFramebuffer",
-		.pImageCreateInfo = &(VkImageCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
-			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-			.mipLevels = 1,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
-		},
-		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-		.locality = VK_LOCALITY_CONTEXT,
-	};
-	vkCreateTexture(&depthCreateInfo, &pSwap->depth);
-
-}
-
-//
-/// IPC
+//////////////////
+//// IPC LifeCycle
+////
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
 
 static struct {
@@ -689,7 +744,7 @@ static void InterprocessServerAcceptNodeConnection()
 //		*pNodeCompositorData = (MxcNodeCompositorData){};
 		pNodeContext = &nodeContexts[handle];
 		*pNodeContext = (MxcNodeContext){};
-		pNodeContext->compositorTimeline = compositorNodeContext.compositorTimeline;
+		pNodeContext->compositorTimeline = compositorContext.compositorTimeline;
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED;
 		pNodeContext->swapType = MXC_SWAP_TYPE_SINGLE;
 		pNodeContext->processId = nodeProcessId;
@@ -763,7 +818,7 @@ static void InterprocessServerAcceptNodeConnection()
 					  0, false, DUPLICATE_SAME_ACCESS),
 				  "Duplicate nodeTimeline handle fail.");
 		WIN32_CHECK(DuplicateHandle(
-					  currentHandle, vkGetSemaphoreExternalHandle(compositorNodeContext.compositorTimeline),
+					  currentHandle, vkGetSemaphoreExternalHandle(compositorContext.compositorTimeline),
 					  nodeProcessHandle, &pImportParam->compositorTimelineHandle,
 					  0, false, DUPLICATE_SAME_ACCESS),
 				  "Duplicate compeTimeline handle fail.");
@@ -908,6 +963,7 @@ Exit:
 	WSACleanup();
 	return NULL;
 }
+
 void mxcInitializeInterprocessServer()
 {
 	SYSTEM_INFO systemInfo;
@@ -917,6 +973,7 @@ void mxcInitializeInterprocessServer()
 	ipcServer.listenSocket = INVALID_SOCKET;
 	CHECK(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
 }
+
 void mxcShutdownInterprocessServer()
 {
 	if (ipcServer.listenSocket != INVALID_SOCKET) {
@@ -1140,9 +1197,9 @@ void mxcShutdownInterprocessNode()
 	}
 }
 
-//
-//// IPC
-
+///////////////////
+//// IPC Func Queue
+////
 int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, const MxcIpcFunc target)
 {
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
