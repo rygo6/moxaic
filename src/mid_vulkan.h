@@ -1,3 +1,6 @@
+//////////////////////
+//// Mid Vulkan Header
+//////////////////////
 #pragma once
 
 #include <stdbool.h>
@@ -7,30 +10,41 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
+// Win32 Dependencies
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 
-//#define D3D11
-#define D3D12
-#define COBJMACROS
-#if defined(D3D11)
-#include <dxgi1_6.h>
-#include <d3d11.h>
-#include <d3d11_1.h>
-#include <d3d11_4.h>
-#elif defined(D3D12)
-#include <dxgi1_6.h>
-#include <d3d12.h>
+	#define WIN32_LEAN_AND_MEAN
+	#include <windows.h>
+
+	//#define D3D11
+	#define D3D12
+	#define D3D11_NO_HELPERS
+	#define CINTERFACE
+	#define COBJMACROS
+	#define WIDL_C_INLINE_WRAPPERS
+	#if defined(D3D11)
+		#include <dxgi1_6.h>
+		#include <d3d11.h>
+		#include <d3d11_1.h>
+		#include <d3d11_4.h>
+	#elif defined(D3D12)
+		#include <initguid.h>
+		#include <dxgi.h>
+		#include <dxgi1_4.h>
+		#include <dxgi1_6.h>
+		#include <d3d12.h>
+	#endif
+
+	#include <vulkan/vulkan_win32.h>
+
 #endif
 
-#include <vulkan/vulkan_win32.h>
-#endif
-
+// Mid Dependencies
 #include "mid_math.h"
 
-//
-//// Mid Common Utility
+///////////////////
+//// Common Utility
+////
 #define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__)
 
 #ifndef MID_DEBUG
@@ -51,30 +65,30 @@ extern void Panic(const char* file, int line, const char* message);
 #endif
 #endif
 
-#ifdef WIN32
-#ifndef MID_WIN32_DEBUG
-#define MID_WIN32_DEBUG
-static void LogWin32Error(HRESULT err)
-{
-	fprintf(stderr, "Win32 Error Code: 0x%08lX\n", err);
-	char* errStr;
-	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-		fprintf(stderr, "%s\n", errStr);
-		LocalFree(errStr);
+#ifdef _WIN32
+	#ifndef MID_WIN32_DEBUG
+	#define MID_WIN32_DEBUG
+	static void LogWin32Error(HRESULT err)
+	{
+		fprintf(stderr, "Win32 Error Code: 0x%08lX\n", err);
+		char* errStr;
+		if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+						  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
+			fprintf(stderr, "%s\n", errStr);
+			LocalFree(errStr);
+		}
 	}
-}
-#define CHECK_WIN32(condition, err)          \
-	if (__builtin_expect(!(condition), 0)) { \
-		LogWin32Error(err);                  \
-		PANIC("Win32 Error!");               \
-	}
-#define DX_CHECK(command)               \
-	({                                  \
-		HRESULT hr = command;           \
-		CHECK_WIN32(SUCCEEDED(hr), hr); \
-	})
-#endif
+	#define CHECK_WIN32(condition, err)          \
+		if (__builtin_expect(!(condition), 0)) { \
+			LogWin32Error(err);                  \
+			PANIC("Win32 Error!");               \
+		}
+	#define DX_CHECK(command)               \
+		({                                  \
+			HRESULT hr = command;           \
+			CHECK_WIN32(SUCCEEDED(hr), hr); \
+		})
+	#endif
 #endif
 
 #ifndef CACHE_ALIGN
@@ -87,8 +101,9 @@ static void LogWin32Error(HRESULT err)
 #define INLINE __attribute__((always_inline)) static inline
 #endif
 
-//
-/// Globals
+///////////////////
+//// Vulkan Globals
+////
 #define VKM_DEBUG_MEMORY_ALLOC
 
 // these values shouldn't be macros
@@ -121,27 +136,27 @@ static void LogWin32Error(HRESULT err)
 #endif
 
 #ifdef _WIN32
-#define VK_PLATFORM_SURFACE_EXTENSION_NAME         VK_KHR_WIN32_SURFACE_EXTENSION_NAME
-#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME
-#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
-#define VK_EXTERNAL_FENCE_EXTENSION_NAME           VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
-#define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
-#define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
-#define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_WIN32_BIT
-#define VK_EXTERNAL_HANDLE_PLATFORM                HANDLE
+	#define VK_PLATFORM_SURFACE_EXTENSION_NAME         VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+	#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME
+	#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME
+	#define VK_EXTERNAL_FENCE_EXTENSION_NAME           VK_KHR_EXTERNAL_FENCE_WIN32_EXTENSION_NAME
+	#define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_BIT
+	#define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_BIT
+	#define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_WIN32_BIT
+	#define VK_EXTERNAL_HANDLE_PLATFORM                HANDLE
 #else
-#define VK_PLATFORM_SURFACE_EXTENSION_NAME         0
-#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          0
-#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       0
-#define VK_EXTERNAL_FENCE_EXTENSION_NAME           0
-#define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    0
-#define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM 0
-#define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     0
-#define VK_EXTERNAL_HANDLE_PLATFORM                0
+	#define VK_PLATFORM_SURFACE_EXTENSION_NAME         0
+	#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          0
+	#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       0
+	#define VK_EXTERNAL_FENCE_EXTENSION_NAME           0
+	#define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    0
+	#define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM 0
+	#define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     0
+	#define VK_EXTERNAL_HANDLE_PLATFORM                0
 #endif
 
 #define VK_ALLOC         NULL
-#define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2)
+#define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2) // this prolly redundant?
 // do I want separate SWAP and framebuffer counts?
 #define VK_SWAP_COUNT    2
 #define VK_CHECK(command)                       \
@@ -157,11 +172,11 @@ static void LogWin32Error(HRESULT err)
 	PFN_vk##_func _func = (PFN_##vk##_func)vkGetDeviceProcAddr(vk.context.device, "vk" #_func); \
 	CHECK(_func == NULL, "Couldn't load " #_func)
 
-#define VKM_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-#define VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-#define VKM_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+#define VK_BUFFER_USAGE_MESH                  VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+#define VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+#define VK_MEMORY_HOST_VISIBLE_COHERENT       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 
-// I don't think I want this?
+	// I don't think I want this? don't make wrappers to simple things?
 #define VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM                        \
 	&(VkExternalMemoryImageCreateInfo)                                \
 	{                                                                 \
@@ -172,35 +187,9 @@ static void LogWin32Error(HRESULT err)
 #define VK_COLOR_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
 #define VK_DEPTH_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
 
-//----------------------------------------------------------------------------------
-// Mid Types
-//----------------------------------------------------------------------------------
-
-typedef enum VkLocality : uint8_t {
-	// Used within the context it was made
-	VK_LOCALITY_CONTEXT,
-	// Used by multiple contexts, but in the same process
-	MID_LOCALITY_PROCESS,
-	// Used by nodes external to this context, device and process.
-	VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
-	VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
-	// Used by nodes external to this context, device and process.
-	VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-	VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
-	VK_LOCALITY_COUNT,
-} VkLocality;
-#define MID_LOCALITY_INTERPROCESS(_locality)                      \
-	(_locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
-	 _locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY ||  \
-	 _locality == VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
-	 _locality == VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
-#define MID_LOCALITY_INTERPROCESS_EXPORTED(_locality)             \
-	(_locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
-	 _locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY)
-#define MID_LOCALITY_INTERPROCESS_IMPORTED(_locality)             \
-	(_locality == VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
-	 _locality == VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
-
+///////////////
+//// Math Types
+////
 // these should go in math. Can I make MidVk not depend on specific math lib?
 typedef struct MidPose {
 	vec3 position;
@@ -218,9 +207,33 @@ typedef struct MidCamera {
 	float   yFovRad;
 } MidCamera;
 
-//----------------------------------------------------------------------------------
-// Vulkan Types
-//----------------------------------------------------------------------------------
+/////////////////
+//// Vulkan Types
+////
+typedef enum VkLocality : uint8_t {
+	// Used within the context it was made
+	VK_LOCALITY_CONTEXT,
+	// Used by multiple contexts, but in the same process
+	VK_LOCALITY_PROCESS,
+	// Used by nodes external to this context, device and process.
+	VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
+	VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
+	// Used by nodes external to this context, device and process.
+	VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+	VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
+	VK_LOCALITY_COUNT,
+} VkLocality;
+#define VK_LOCALITY_INTERPROCESS(_)                      \
+	(_ == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
+	 _ == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY ||  \
+	 _ == VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
+	 _ == VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
+#define VK_LOCALITY_INTERPROCESS_EXPORTED(_)             \
+	(_ == VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE || \
+	 _ == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY)
+#define VK_LOCALITY_INTERPROCESS_IMPORTED(_)             \
+	(_ == VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
+	 _ == VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
 
 typedef struct VkSwapContext {
 	VkSwapchainKHR chain;
@@ -230,7 +243,6 @@ typedef struct VkSwapContext {
 } VkSwapContext;
 
 typedef uint8_t VkSharedMemoryType;
-
 typedef struct VkSharedMemory {
 	VkDeviceSize       offset;
 	VkDeviceSize       size;
@@ -290,16 +302,19 @@ typedef enum VkQueueFamilyType : uint8_t {
 	VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER,
 	VK_QUEUE_FAMILY_TYPE_COUNT
 } VkQueueFamilyType;
+
 static const char* string_QueueFamilyType[] = {
 	[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = "VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS",
 	[VK_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = "VK_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE",
 	[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = "VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER",
 };
+
 typedef struct VkmQueueFamily {
 	VkQueue       queue;
 	VkCommandPool pool;
 	uint32_t      index;
 } VkmQueueFamily;
+
 typedef struct VkBasicPipeLayout {
 	VkPipelineLayout      pipeLayout;
 	VkDescriptorSetLayout globalSetLayout;
@@ -315,6 +330,16 @@ typedef struct VkGlobalSet {
 	VkDescriptorSet   set;
 } VkGlobalSet;
 
+typedef struct MidVkBasicPipe {
+	VkBasicPipeLayout layout;
+	VkPipeline        pipe;
+	VkSampler         linearSampler;
+	VkRenderPass      pass;
+} MidVkBasicPipe;
+
+//////////////////////////
+//// Vulkan Global Context
+////
 typedef struct VkContext {
 	VkPhysicalDevice physicalDevice;
 	VkDevice         device;
@@ -332,15 +357,9 @@ typedef struct VkContext {
 
 } VkContext;
 
-typedef struct MidVkBasicPipe {
-	VkBasicPipeLayout layout;
-	VkPipeline        pipe;
-	VkSampler         linearSampler;
-	VkRenderPass      pass;
-} MidVkBasicPipe;
-
 //#define VK_CONTEXT_CAPACITY    2 // should be 1 always?
 #define VK_SURFACE_CAPACITY    2
+
 typedef struct CACHE_ALIGN Vk {
 	VkInstance   instance;
 	VkContext    context;
@@ -349,9 +368,10 @@ typedef struct CACHE_ALIGN Vk {
 	PFN_FUNCS
 #undef PFN_FUNC
 } Vk;
+
 extern Vk vk;
 
-// do this ?? I think so yes
+// do this ?? I think so yes... enforce thread on vulkan mechanics which need same thread
 typedef struct MidVkThreadContext {
 	VkDescriptorPool descriptorPool;
 } MidVkThreadContext;
@@ -361,10 +381,10 @@ extern __thread MidVkThreadContext threadContext;
 extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 
-////
+
+//////////////////////////
 //// Basic Render Pipeline
 ////
-
 typedef enum VkBasicPassAttachmentIndices : uint8_t {
 	VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX,
 	VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX,
@@ -441,10 +461,10 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 		},                                                     \
 	}
 
-//----------------------------------------------------------------------------------
-// Image Barriers
-//----------------------------------------------------------------------------------
 
+//////////////////////////////
+//// Mid Vulkan Image Barriers
+////
 #define VK_IMAGE_BARRIER_SRC_UNDEFINED        \
 	.srcStageMask = VK_PIPELINE_STAGE_2_NONE, \
 	.srcAccessMask = VK_ACCESS_2_NONE,        \
@@ -507,11 +527,11 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 #define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE \
 	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
 
-// we want to move these to PFN struct
-//----------------------------------------------------------------------------------
-// Inline Methods
-//----------------------------------------------------------------------------------
 
+//////////////////////////////
+//// Mid Vulkan Inline Methods
+////
+// we want to move these to PFN struct
 #define CmdPipelineImageBarriers2(_cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers)
 INLINE void PFN_CmdPipelineImageBarriers2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
 {
@@ -723,9 +743,10 @@ INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pC
 	for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }
 
-//
-//// Methods
 
+////////////////////////////////////
+//// Mid Vulkan Methods Declarations
+////
 typedef enum VkDedicatedMemory {
 	VK_DEDICATED_MEMORY_FALSE,
 	VK_DEDICATED_MEMORY_IF_PREFERRED,
@@ -893,23 +914,28 @@ void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* 
 VkCommandBuffer midVkBeginImmediateTransferCommandBuffer();
 void            midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
-#ifdef WIN32
+#ifdef _WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
 #endif
 
-//
-//// MidVulkan Implementation
+
+//////////////////////////////
+//// Mid Vulkan Implementation
+//////////////////////////////
 #if defined(MID_VULKAN_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
 #include "stb_image.h" // abstract this out?
 
+////////////////////
+//// Global Context
+////
 __attribute((aligned(64))) Vk                          vk = {};
 __thread __attribute((aligned(64))) MidVkThreadContext threadContext = {};
 VkDebugUtilsMessengerEXT                               debugUtilsMessenger = VK_NULL_HANDLE;
 
-//
+/////////////
 //// Utility
-
+////
 static void VkmReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents)
 {
 	FILE* file = fopen(pPath, "rb");
@@ -954,6 +980,7 @@ VkCommandBuffer midVkBeginImmediateTransferCommandBuffer()
 	VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
 	return cmd;
 }
+
 void midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
 {
 	VK_CHECK(vkEndCommandBuffer(cmd));
@@ -967,9 +994,9 @@ void midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
 	vkFreeCommandBuffers(vk.context.device, vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool, 1, &cmd);
 }
 
-//
+//////////////
 //// Pipelines
-
+////
 #define COLOR_WRITE_MASK_RGBA VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
 
 void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShaderModule)
@@ -986,7 +1013,7 @@ void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShad
 	free(pCode);
 }
 
-// Standard Pipeline
+//// Basic Pipeline
 #define VKM_PIPE_VERTEX_BINDING_STD_INDEX 0
 enum VkmPipeVertexAttributeStandardIndices {
 	VKM_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,
@@ -1267,9 +1294,9 @@ void vkCreateBasicTaskMeshPipe(const char* taskShaderPath, const char* meshShade
 	vkDestroyShaderModule(vk.context.device, meshShader, VK_ALLOC);
 }
 
-//
+////////////////
 //// Descriptors
-
+////
 static void CreateGlobalSetLayout()
 {
 	VkDescriptorSetLayoutCreateInfo info = {
@@ -1332,9 +1359,9 @@ void midVkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescrip
 	VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &allocateInfo, pSet));
 }
 
-//
+///////////
 //// Memory
-
+////
 static void PrintFlags(VkMemoryPropertyFlags propFlags, const char* (*string_Method)(VkFlags flags))
 {
 	int index = 0;
@@ -1448,8 +1475,8 @@ static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropert
 	};
 	VkMemoryAllocateInfo memAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = MID_LOCALITY_INTERPROCESS_EXPORTED(locality) ? &exportMemAllocInfo :
-				 MID_LOCALITY_INTERPROCESS_IMPORTED(locality) ? &importMemAllocInfo :
+		.pNext = VK_LOCALITY_INTERPROCESS_EXPORTED(locality) ? &exportMemAllocInfo :
+				 VK_LOCALITY_INTERPROCESS_IMPORTED(locality) ? &importMemAllocInfo :
 																(void*)pDedicatedAllocInfo,
 		.allocationSize = pMemReqs->size,
 		.memoryTypeIndex = memTypeIndex,
@@ -1544,7 +1571,7 @@ void vkCreateBufferSharedMemory(const VkRequestAllocationInfo* pRequest, VkBuffe
 static void CreateStagingBuffer(const void* srcData, VkDeviceSize bufferSize, VkDeviceMemory* pStagingMemory, VkBuffer* pStagingBuffer)
 {
 	void* dstData;
-	CreateAllocBindBuffer(VKM_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_LOCALITY_CONTEXT, pStagingMemory, pStagingBuffer);
+	CreateAllocBindBuffer(VK_MEMORY_HOST_VISIBLE_COHERENT, bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_LOCALITY_CONTEXT, pStagingMemory, pStagingBuffer);
 	VK_CHECK(vkMapMemory(vk.context.device, *pStagingMemory, 0, bufferSize, 0, &dstData));
 	memcpy(dstData, srcData, bufferSize);
 	vkUnmapMemory(vk.context.device, *pStagingMemory);
@@ -1572,7 +1599,7 @@ void midVkCreateMeshSharedMemory(const VkMeshCreateInfo* pCreateInfo, VkMesh* pM
 	VkRequestAllocationInfo AllocRequest = {
 		.memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		.size = pMesh->indexOffset + indexBufferSize,
-		.usage = VKM_BUFFER_USAGE_MESH,
+		.usage = VK_BUFFER_USAGE_MESH,
 		.locality = VK_LOCALITY_CONTEXT,
 		.dedicated = VK_DEDICATED_MEMORY_FALSE,
 	};
@@ -1600,7 +1627,7 @@ void vkmCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 	pMesh->indexOffset = 0;
 	pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
 
-	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VKM_BUFFER_USAGE_MESH, VK_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
+	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VK_BUFFER_USAGE_MESH, VK_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
 	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
 	midVkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
 }
@@ -1640,7 +1667,7 @@ static void CreateAllocImage(const VkTextureCreateInfo* pCreateInfo, VkDedicated
 	VK_CHECK(vkCreateImage(vk.context.device, pCreateInfo->pImageCreateInfo, VK_ALLOC, &pTexture->image));
 
 	bool requiresExternalDedicated = false;
-	if (MID_LOCALITY_INTERPROCESS(pCreateInfo->locality)) {
+	if (VK_LOCALITY_INTERPROCESS(pCreateInfo->locality)) {
 		VkPhysicalDeviceExternalImageFormatInfo externalImageInfo = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
 			.handleType = pCreateInfo->handleType,
@@ -2063,7 +2090,7 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.debugName = "ColorFramebuffer",
 			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
 				.extent = pCreateInfo->extent,
@@ -2080,7 +2107,7 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.debugName = "NormalFramebuffer",
 			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
 				.extent = pCreateInfo->extent,
@@ -2097,7 +2124,7 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.debugName = "DepthFramebuffer",
 			.pImageCreateInfo = &(VkImageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
 				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 				.extent = pCreateInfo->extent,
@@ -2557,7 +2584,7 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 	};
 	VkFenceCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-		.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
+		.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
 	};
 	VK_CHECK(vkCreateFence(vk.context.device, &info, VK_ALLOC, pFence));
 //	vkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
@@ -2597,7 +2624,7 @@ void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 	};
 	VkSemaphoreTypeCreateInfo typeInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		.pNext = MID_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
+		.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
 		.semaphoreType = pCreateInfo->semaphoreType,
 	};
 	VkSemaphoreCreateInfo info = {
@@ -2628,7 +2655,7 @@ void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 void vkCreateGlobalSet(VkGlobalSet* pSet)
 {
 	midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pSet->set);
-	midVkCreateAllocBindMapBuffer(VKM_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
+	midVkCreateAllocBindMapBuffer(VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
 	vkUpdateDescriptorSets(vk.context.device, 1, &VK_SET_WRITE_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }
 
@@ -2681,7 +2708,7 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore)
 	return handle;
 }
 
-#ifdef WIN32
+#ifdef _WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
 {
 	VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {

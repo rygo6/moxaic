@@ -1,3 +1,6 @@
+//////////////////////
+//// Mid OpenXR Header
+//////////////////////
 #pragma once
 
 #include <math.h>
@@ -7,53 +10,53 @@
 #include <string.h>
 #include <assert.h>
 
-#define WIN32_LEAN_AND_MEAN
-#define NOCOMM
-#define NOSERVICE
-#define NOCRYPT
-#define NOMCX
-#include <windows.h>
-#include <windows.h>
-#include <synchapi.h>
+#ifdef _WIN32
+	#define XR_USE_PLATFORM_WIN32
+	#define XR_USE_GRAPHICS_API_D3D11
 
+	#define WIN32_LEAN_AND_MEAN
+	#define NOCOMM
+	#define NOSERVICE
+	#define NOCRYPT
+	#define NOMCX
+	#include <windows.h>
+	#include <synchapi.h>
+
+	#define D3D11_NO_HELPERS
+	#define CINTERFACE
+	#define COBJMACROS
+	#define WIDL_C_INLINE_WRAPPERS
+	#include <initguid.h>
+	#include <d3d11_1.h>
+	#include <d3d11_3.h>
+	#include <d3d11_4.h>
+	#include <dxgi.h>
+	#include <dxgi1_4.h>
+#endif
+
+#define XR_USE_GRAPHICS_API_VULKAN
 #include <vulkan/vulkan.h>
 
-#define D3D11_NO_HELPERS
-#define CINTERFACE
-#define COBJMACROS
-#define WIDL_C_INLINE_WRAPPERS
-#include <d3d11_1.h>
-#include <initguid.h>
-#include <dxgi.h>
-#include <dxgi1_4.h>
-
+#define XR_USE_GRAPHICS_API_OPENGL
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
 #include <GL/glext.h>
 
-#define XR_USE_PLATFORM_WIN32
-#define XR_USE_GRAPHICS_API_VULKAN
-#define XR_USE_GRAPHICS_API_OPENGL
-#define XR_USE_GRAPHICS_API_D3D11
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_reflection.h>
 #include <openxr/openxr_loader_negotiation.h>
-#include <d3d11_3.h>
-#include <d3d11_4.h>
 
 #include "mid_bit.h"
 
 #ifdef MID_IDE_ANALYSIS
-#undef XRAPI_CALL
-#define XRAPI_CALL
+	#undef XRAPI_CALL
+	#define XRAPI_CALL
 #endif
 
-
+///////////////////////
+//// Common Utility
 ////
-//// Mid Common Utility
-////
-
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
@@ -70,7 +73,7 @@
 //#define LOG_ERROR(_format, ...) fprintf(stderr, "Error!!! " _format, __VA_ARGS__);
 #define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__)
 
-#ifdef WIN32
+#ifdef _WIN32
 #ifndef MID_WIN32_DEBUG
 #define MID_WIN32_DEBUG
 static void LogWin32Error(HRESULT err)
@@ -96,16 +99,20 @@ static void LogWin32Error(HRESULT err)
 #endif
 #endif
 
+typedef uint8_t  U8;
+typedef uint16_t U16;
+typedef uint32_t U32;
+typedef uint64_t U64;
+typedef int8_t   I8;
+typedef int16_t  I16;
+typedef int32_t  I32;
+typedef int64_t  I64;
+typedef float    F32;
+typedef double   F64;
 
+////////////////////////
+//// Method Declarations
 ////
-//// Mid OpenXR
-////
-
-typedef float    XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
-typedef uint32_t XrHash;
-typedef uint32_t Handle_dep;
-#define XR_HANDLE_INVALID -1
-
 typedef enum XrGraphicsApi {
 	XR_GRAPHICS_API_OPENGL,
 	XR_GRAPHICS_API_OPENGL_ES,
@@ -148,10 +155,9 @@ void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEy
 
 XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized);
 
+/////////////////////
+//// OpenXR Constants
 ////
-//// Mid OpenXR Constants
-////
-
 #define XR_FORCE_STEREO_TO_MONO
 
 #define XR_DEFAULT_WIDTH   1024
@@ -164,9 +170,10 @@ XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized);
 #define XR_OPENGL_MINOR_VERSION 6
 
 
+/////////////////
+//// OpenXR Types
 ////
-//// Mid OpenXR Types
-////
+typedef float XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
 
 typedef enum XrStructureTypeExt {
 	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
@@ -212,14 +219,6 @@ typedef enum XrSwapType : uint8_t {
 //	const void* XR_MAY_ALIAS    next;
 //} XrFrameBeginSwapPoolInfo;
 
-
-typedef struct SlubSlot {
-	bool occupied : 1;
-} SlubSlot;
-
-
-typedef bitset64_t slab_bitset_t;
-
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 
@@ -232,194 +231,14 @@ typedef bitset64_t slab_bitset_t;
 		}                                              \
 	})
 
-// I don't know if wnat a SLUB... SLAB might be better in all scenarios? Maybe a SLUB for a the bigger, fewer, allocs?
-//#define CACHE_SIZE 64
-//typedef struct __attribute((aligned(CACHE_SIZE))) {
-//	uint8_t data[CACHE_SIZE];
-//} SlubBlock;
-//
-//#define POOL_BLOCK_COUNT 1U << 16
-//typedef uint16_t SlubHandle;
-//typedef struct {
-//	SlubSlot    slots[POOL_BLOCK_COUNT];
-//	SlubBlock   blocks[POOL_BLOCK_COUNT];
-//} SlubMemory;
-//
-//typedef struct {
-//	// explore 24 and 20 bit hashes
-//	uint32_t value;
-//} Hash;
-//
-//#define POOL_HANDLE_MAX_CAPACITY 1U << 8
-//typedef uint8_t PoolHandle;
-//typedef struct {
-//	SlubSlot    slots[POOL_HANDLE_MAX_CAPACITY];
-//	SlubHandle  handles[POOL_HANDLE_MAX_CAPACITY];
-//	Hash        hashes[POOL_HANDLE_MAX_CAPACITY];
-//	size_t      blockSize;
-//} HashedPool;
-//
-//#define POOL_STRUCT(_type, _capacity)                                                                                  \
-//	typedef struct {                                                                                                   \
-//		SlubSlot   slots[_capacity];                                                                                   \
-//		SlubHandle handles[_capacity];                                                                                 \
-//		Hash       hashes[_capacity];                                                                                  \
-//	} _type##HashedPool;                                                                                               \
-//	_Static_assert(_capacity <= POOL_HANDLE_MAX_CAPACITY, #_type " " #_capacity " exceeds POOL_HANDLE_MAX_CAPACITY."); \
-//	static inline void ClaimSessionPoolHandle(_type##HashedPool* pPool, PoolHandle* pPoolHandle)                       \
-//	{                                                                                                                  \
-//		ClaimPoolHandle(sizeof(_type), _capacity, pPool->slots, pPool->handles, pPool->hashes, pPoolHandle);           \
-//	}
-//
-//extern SlubMemory poolMemory;
-//
-//static XrResult ClaimBlockHandle(size_t size, SlubHandle* pBlockHandle)
-//{
-//	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
-//	uint32_t blockCount = (size / CACHE_SIZE) + 1;
-//	printf("Scanning blockCount size %d\n", blockCount);
-//
-//	uint32_t  requiredBlockCount = blockCount;
-//	uint32_t  blockHandle = UINT32_MAX;
-//	for (int i = 0; i < POOL_BLOCK_COUNT; ++i) {
-//		if (poolMemory.slots[i].occupied) {
-//			requiredBlockCount = blockCount;
-//			continue;
-//		}
-//
-//		if (--requiredBlockCount != 0)
-//			continue;
-//
-//		blockHandle = i;
-//		break;
-//	}
-//
-//	if (blockHandle == UINT32_MAX) {
-//		LOG_ERROR("Couldn't find required blockCount size.\n");
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//
-//	*pBlockHandle = blockHandle;
-//
-//	printf("Found blockHandle %d\n", blockHandle);
-//	return XR_SUCCESS;
-//}
-//static void ReleaseBlockHandle(size_t size, SlubHandle blockHandle)
-//{
-//	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
-//	uint8_t blockCount = (size / CACHE_SIZE) + 1;
-//	printf("Releasing blockCount size %d\n", blockCount);
-//
-//	for (int i = 0; i < blockCount; ++i) {
-//		assert((blockHandle + i) < POOL_BLOCK_COUNT);
-//		poolMemory.slots[blockHandle + i].occupied = false;
-//	}
-//}
-//
-//static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle* pPoolHandle)
-//{
-//	uint32_t poolHandle = UINT32_MAX;
-//	for (int i = 0; i < poolCapacity; ++i) {
-//		if (pSlots[i].occupied) {
-//			continue;
-//		}
-//
-//		pSlots[i].occupied = true;
-//		poolHandle = i;
-//		break;
-//	}
-//
-//	if (poolHandle == UINT32_MAX) {
-//		LOG_ERROR("Couldn't find available handle.\n");
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//
-//	SlubHandle blockHandle;
-//	if (ClaimBlockHandle(blockSize, &blockHandle) != XR_SUCCESS) {
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//
-//	pBlockHandles[poolHandle] = blockHandle;
-//
-//	*pPoolHandle = poolHandle;
-//
-//	printf("Found PoolHandle %d\n", poolHandle);
-//	return XR_SUCCESS;
-//}
-//static XrResult ReleasePoolHandle(int blockSize, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle poolHandle)
-//{
-//	assert(pSlots[poolHandle].occupied);
-//
-//	ReleaseBlockHandle(blockSize, pBlockHandles[poolHandle]);
-//	pSlots[poolHandle].occupied = false;
-//	pHashes[poolHandle].value = 0;
-//
-//	printf("Released PoolHandle %d\n", poolHandle);
-//	return XR_SUCCESS;
-//}
-
-
-//#define ClaimHandleHashed(_pool, _pValue, _hash) XR_CHECK(_ClaimHandleHashed((Pool*)&_pool, sizeof(_pool.data[0]), COUNT(_pool.data), (void**)&_pValue, _hash))
-//static XrResult _ClaimHandleHashed(Pool* pPool, int stride, int capacity, void** ppValue, XrHash _hash)
-//{
-//	if (pPool->currentIndex >= capacity) {
-//		fprintf(stderr, "XR_ERROR_LIMIT_REACHED");
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//	const uint32_t handle = pPool->currentIndex++;
-//	*ppValue = &pPool->data + (handle * stride);
-//	XrHash* pHashStart = (XrHash*)(&pPool->data + (capacity * stride));
-//	XrHash* pHash = pHashStart + (handle * sizeof(XrHash));
-//	*pHash = _hash;
-//	return XR_SUCCESS;
-//}
-#define ClaimHandle(_pool, _pValue) XR_CHECK(_ClaimHandle(_pool.slots, _pool.data, sizeof(_pool.data[0]), COUNT(_pool.slots), (void**)&_pValue))
-static XrResult _ClaimHandle(SlubSlot* pSlots, void* pData, int stride, int capacity, void** ppValue)
-{
-	uint32_t handle = UINT32_MAX;
-	for (int i = 0; i < capacity; ++i) {
-		if (pSlots[i].occupied) {
-			continue;
-		}
-
-		pSlots[i].occupied = true;
-		handle = i;
-		break;
-	}
-
-	if (handle == UINT32_MAX) {
-		LOG_ERROR("XR_ERROR_LIMIT_REACHED\n");
-		return XR_ERROR_LIMIT_REACHED;
-	}
-
-	*ppValue = pData + (handle * stride);
-	return XR_SUCCESS;
-}
-//#define ReleaseHandle(_pool, _handle) XR_CHECK(_ReleaseHandle(_pool.slots, _handle))
-//static XrResult _ReleaseHandle(SlubSlot* pSlots, Handle_dep handle)
-//{
-//	assert(pSlots[handle].occupied == true);
-//	pSlots[handle].occupied = false;
-//	return XR_SUCCESS;
-//}
-#define GetHandle(_pool, _pValue) _GetHandle(_pool.data, sizeof(_pool.data[0]), _pValue)
-static Handle_dep _GetHandle(void* pData, int stride, const void* pValue)
-{
-	return (Handle_dep)((pValue - pData) / stride);
-}
-
-
-////
+///////////
 //// Handle
 ////
+typedef U16 map_handle;
+typedef U16 map_key;
 
-// I don't know if maps should use handles? nor need generations?
-// map_handle could be uint8_t
-typedef uint16_t map_handle;
-typedef uint16_t map_key;
-
-typedef uint16_t block_handle;
-typedef uint32_t block_key;
+typedef U16 block_handle;
+typedef U32 block_key;
 
 #define HANDLE_INDEX_BIT_COUNT 12
 #define HANDLE_INDEX_MASK      0x0FFF
@@ -441,7 +260,7 @@ typedef uint32_t block_key;
 #define HANDLE_VALID(handle) (HANDLE_GENERATION(handle) != 0)
 
 #define HANDLE_GENERATION_INCREMENT(handle) ({          \
-	uint8_t g = HANDLE_GENERATION(handle);              \
+	U8 g = HANDLE_GENERATION(handle);                   \
 	g = g == HANDLE_GENERATION_MAX ? 1 : (g + 1) & 0xF; \
 	HANDLE_GENERATION_SET(handle, g);                   \
 })
@@ -452,17 +271,15 @@ typedef uint32_t block_key;
 		return error;               \
 	}
 
-
-////
+//////////
 //// Block
 ////
-
 #define BLOCK_DECL(type, n)       \
 	struct {                      \
 		BITSET_DECL(occupied, n); \
 		block_key keys[n];        \
 		type      blocks[n];      \
-		uint8_t   generations[n]  \
+		uint8_t   generations[n]; \
 	}
 
 static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
@@ -517,10 +334,9 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	})
 
 
-////
+////////
 //// Map
 ////
-
 typedef struct MapBase {
 	uint32_t  count;
 	block_key keys[];
@@ -561,13 +377,11 @@ static inline map_handle MapFind(int capacity, MapBase* pMap, map_key key)
 #define MAP_ADD(map, handle, key) MapAdd(COUNT(map.keys), (MapBase*)&map, handle, key)
 #define MAP_FIND(map, key) MapFind(COUNT(map.keys), (MapBase*)&map, key)
 
-
-////
+////////
 //// Set
 ////
-
 typedef struct SetBase {
-	uint32_t      count;
+	U32           count;
 	block_handle* handles;
 } SetBase;
 #define SET_DECL(n)              \
@@ -576,8 +390,7 @@ typedef struct SetBase {
 		block_handle handles[n]; \
 	}
 
-
-////
+/////////////////
 //// OpenXR Types
 ////
 #define XR_PATH_CAPACITY 256
@@ -602,28 +415,28 @@ typedef InteractionProfile* XrInteractionProfile;
 #define XR_SUBACTION_CAPACITY 256
 typedef struct SubactionState {
 	// need to understand this priority again
-//	uint32_t lastSyncedPriority;
+	//	uint32_t lastSyncedPriority;
 
 	// actual layout from OXR to memcpy
-	float    currentState;
+	F32      currentState;
 	XrBool32 changedSinceLastSync;
 	XrTime   lastChangeTime;
 	XrBool32 isActive;
 } SubactionState;
 
 #define XR_MAX_SUBACTION_PATHS 2
-#define XR_ACTION_CAPACITY 128
+#define XR_ACTION_CAPACITY     128
 typedef struct Action {
 	block_handle hActionSet;
 
-	uint32_t     countSubactions;
+	U8          countSubactions;
 	block_handle hSubactionStates[XR_MAX_SUBACTION_PATHS];
 	block_handle hSubactionBindings[XR_MAX_SUBACTION_PATHS];
 	block_handle hSubactionPaths[XR_MAX_SUBACTION_PATHS];
 
-	XrActionType  actionType;
-	char          actionName[XR_MAX_ACTION_NAME_SIZE];
-	char          localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
+	XrActionType actionType;
+	char         actionName[XR_MAX_ACTION_NAME_SIZE];
+	char         localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
 } Action;
 
 #define XR_ACTION_SET_CAPACITY 64
@@ -632,9 +445,10 @@ typedef struct ActionSet {
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) actions;
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) states;
 
-	uint32_t     priority;
 	block_handle attachedToSession;
 	char         actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
+	char         localizedActionSetName[XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE];
+	U32          priority;
 } ActionSet;
 
 #define XR_SPACE_CAPACITY 128
@@ -663,13 +477,13 @@ typedef struct Swapchain {
 
 	XrSwapchainCreateFlags createFlags;
 	XrSwapchainUsageFlags  usageFlags;
-	int64_t                format;
-	uint32_t               sampleCount;
-	uint32_t               width;
-	uint32_t               height;
-	uint32_t               faceCount;
-	uint32_t               arraySize;
-	uint32_t               mipCount;
+	I64                    format;
+	U32                    sampleCount;
+	U32                    width;
+	U32                    height;
+	U32                    faceCount;
+	U32                    arraySize;
+	U32                    mipCount;
 } Swapchain;
 
 #define XR_SESSIONS_CAPACITY 8
@@ -693,8 +507,8 @@ typedef struct Session {
 	XrTime predictedDisplayTimes[3];
 	XrTime lastBeginDisplayTime;
 	XrTime lastDisplayTime;
-	uint32_t synchronizedFrameCount;
-	uint64_t sessionTimelineValue;
+	U32 synchronizedFrameCount;
+	U64 sessionTimelineValue;
 
 	//// Maps
 	CACHE_ALIGN
@@ -765,13 +579,14 @@ typedef struct Instance {
 
 } Instance;
 
-
-////
-//// OpenXR Implementation
-////
-
+//////////////////////////////
+//// Mid OpenXR Implementation
+//////////////////////////////
 #if defined(MID_OPENXR_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
+///////////////////
+//// Global Context
+////
 static struct {
 	Instance instance;
 } xr;
@@ -789,17 +604,16 @@ static struct {
 	BLOCK_DECL(Swapchain, XR_SWAPCHAIN_CAPACITY) swap;
 } block;
 
-////
+////////////
 //// Utility
 ////
-
 #define XR_PROC XRAPI_ATTR XrResult XRAPI_CALL
 
 static uint32_t CalcDJB2(const char* str, int max)
 {
-	char     c;
-	int      i = 0;
-	uint32_t hash = 5381;
+	char c;
+	int  i = 0;
+	U32  hash = 5381;
 	while ((c = *str++) && i++ < max)
 		hash = ((hash << 5) + hash) + c;
 	return hash;
@@ -860,10 +674,9 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 }
 
 
+//////////////////
+//// OpenXR Debug Logging
 ////
-//// Debug Logging
-////
-
 #define CHECK_INSTANCE(instance)                \
 	if (&xr.instance != (Instance*)instance) {  \
 		LOG_ERROR("XR_ERROR_HANDLE_INVALID\n"); \
@@ -918,27 +731,15 @@ static const char* string_XrStructureType(XrStructureType type)
 }
 #undef PRINT_STRUCT_TYPE_NAME
 
-#define STR(s) #s
-#define XSTR(s) STR(s)
-#define DOT(_) ._
-#define COMMA ,
+#define STR(s)         #s
+#define XSTR(s)        STR(s)
+#define DOT(_)         ._
+#define COMMA          ,
+#define BRACES(f, _)   {f(_)}
 
-#define FORMAT_F(_) _: %.3f
-#define BRACES(_, _f) { _(_f) }
-#define LIST_STRUCT(_) XR_LIST_STRUCT_##_
-#define FORMAT_STRUCT_F(_) "%s: " XSTR(BRACES(LIST_STRUCT(_), FORMAT_F))
-
-// do I want to do this? maybe
-#define format_XrQuaternionf FORMAT_STRUCT_F(XrQuaternionf)
-#define expand_XrQuaternionf(_) #_ XR_LIST_STRUCT_XrQuaternionf(COMMA _ DOT)
-#define format_XrVector3f     "{x: %.3f, y: %.3f, z: %.3f}"
-#define expand_XrVector3f(_v)   _v.x, _v.y, _v.z
-#define FORMAT_OFFSET_I   "{x: %d, y: %d}"
-#define EXPAND_OFFSET(_o) _o.x, _o.y
-#define FORMAT_EXTENT_I   "{width: %d, height: %d}"
-#define EXPAND_EXTENT(_e) _e.width, _e.height
-#define FORMAT_RECT_I     FORMAT_OFFSET_I FORMAT_EXTENT_I
-#define EXPAND_RECT(_r)   EXPAND_OFFSET(_r.offset), EXPAND_EXTENT(_r.extent)
+#define FORMAT_F(_)          _: %.3f
+#define FORMAT_STRUCT_F(_)  "%s: " XSTR(BRACES(XR_LIST_STRUCT_##_, FORMAT_F))
+#define EXPAND_STRUCT(t, _) STR(_) XR_LIST_STRUCT_##t(COMMA _ DOT)
 
 static void LogNextChain(const XrBaseInStructure* nextProperties)
 {
@@ -948,10 +749,9 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 	}
 }
 
-////
+/////////
 //// Math
 ////
-
 #define PI 3.14159265358979323846
 // I prolly just want to make a depenedency on mid math
 static inline XrQuaternionf xrRotFromMat4(XrMat4 m)
@@ -1078,11 +878,9 @@ static inline float xrFloatLerp(float a, float b, float t)
 	return a + t * (b - a);
 }
 
-
-////
+///////////////////////
 //// Device Input Funcs
 ////
-
 static int OculusLeftClick(float* pValue)
 {
 	*pValue = 100;
@@ -1094,11 +892,9 @@ static int OculusRightClick(float* pValue)
 	return 0;
 }
 
-
-////
+////////////
 //// Binding
 ////
-
 static XrResult RegisterBinding(
 	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
@@ -1294,10 +1090,9 @@ static XrResult InitStandardBindings()
 	return XR_SUCCESS;
 }
 
+//////////////////////////////////
+//// OpenXR Method Implementations
 ////
-//// OpenXR Implementations
-////
-
 XR_PROC xrEnumerateApiLayerProperties(
 	uint32_t              propertyCapacityInput,
 	uint32_t*             propertyCountOutput,
@@ -2092,10 +1887,10 @@ XR_PROC xrCreateReferenceSpace(
 	const XrReferenceSpaceCreateInfo* createInfo,
 	XrSpace*                          space)
 {
-	LOG("xrCreateReferenceSpace %s pos: " format_XrVector3f format_XrQuaternionf "\n",
+	LOG("xrCreateReferenceSpace %s pos: " FORMAT_STRUCT_F(XrVector3f) FORMAT_STRUCT_F(XrQuaternionf) "\n",
 		string_XrReferenceSpaceType(createInfo->referenceSpaceType),
-		expand_XrVector3f(createInfo->poseInReferenceSpace.position),
-		expand_XrQuaternionf(createInfo->poseInReferenceSpace.orientation));
+		EXPAND_STRUCT(XrVector3f, createInfo->poseInReferenceSpace.position),
+		EXPAND_STRUCT(XrQuaternionf, createInfo->poseInReferenceSpace.orientation));
 	assert(createInfo->next == NULL);
 
 	auto pSess = (Session*)session;
@@ -3226,15 +3021,18 @@ XR_PROC xrCreateActionSet(
 	XrActionSet*                 actionSet)
 {
 #ifdef ENABLE_DEBUG_LOG_METHOD
-//	LOG_METHOD(xrCreateActionSet);
-//	printf("%lu:%lu: xrCreateActionSet %s %s\n", GetCurrentProcessId(), GetCurrentThreadId(), createInfo->actionSetName, createInfo->localizedActionSetName);
+	LOG_METHOD(xrCreateActionSet);
+	printf("%lu:%lu: xrCreateActionSet %s %s\n", GetCurrentProcessId(), GetCurrentThreadId(), createInfo->actionSetName, createInfo->localizedActionSetName);
 #endif
 	assert(createInfo->next == NULL);
 
 	block_key actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 
 	auto hFoundActionSet = BLOCK_FIND(block.actionSet, actionSetNameHash);
-	HANDLE_CHECK(hFoundActionSet, XR_ERROR_LOCALIZED_NAME_DUPLICATED);
+	if (HANDLE_VALID(hFoundActionSet)) {
+		LOG_ERROR("XR_ERROR_LOCALIZED_NAME_DUPLICATED %s\n", createInfo->actionSetName);
+		return XR_ERROR_LOCALIZED_NAME_DUPLICATED;
+	}
 
 	auto hActionSet = BLOCK_CLAIM(block.actionSet, actionSetNameHash);
 	HANDLE_CHECK(hActionSet, XR_ERROR_LIMIT_REACHED);
@@ -3242,13 +3040,16 @@ XR_PROC xrCreateActionSet(
 	auto pActionSet = BLOCK_PTR(block.actionSet, hActionSet);
 	*pActionSet = (ActionSet){};
 
-	pActionSet->priority = createInfo->priority;
 	pActionSet->attachedToSession = HANDLE_DEFAULT;
+
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
+	strncpy((char*)&pActionSet->localizedActionSetName, (const char*)&createInfo->localizedActionSetName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
+	pActionSet->priority = createInfo->priority;
 
 	*actionSet = (XrActionSet)pActionSet;
 
 	printf("Created ActionSet with %s\n", createInfo->actionSetName);
+	printf("Created ActionSet with %s\n", createInfo->localizedActionSetName);
 	return XR_SUCCESS;
 }
 
@@ -3416,9 +3217,12 @@ XR_PROC xrAttachSessionActionSets(
 	auto pSess = (Session*)session;
 	auto hSess = BLOCK_HANDLE(block.session, pSess);
 
-	if (pSess->actionSets.count != 0) {
-		LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED\n");
-		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
+	for (int i = 0; i < attachInfo->countActionSets; ++i) {
+		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
+		if (HANDLE_VALID(pActSet->attachedToSession)) {
+			LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED %s\n", pActSet->actionSetName);
+			return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
+		}
 	}
 
 	for (int i = 0; i < attachInfo->countActionSets; ++i) {
