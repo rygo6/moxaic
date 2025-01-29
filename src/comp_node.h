@@ -3,20 +3,20 @@
 #include "node.h"
 #include "mid_vulkan.h"
 
-typedef enum MxcCompMode {
+typedef enum MxcCompositorMode {
   MXC_COMP_MODE_BASIC,
   MXC_COMP_MODE_TESS,
   MXC_COMP_MODE_TASK_MESH,
   MXC_COMP_MODE_COMPUTE,
   MXC_COMP_MODE_COUNT,
-} MxcCompMode;
+} MxcCompositorMode;
 
-typedef struct MxcCompNodeCreateInfo {
-  MxcCompMode  compMode;
-} MxcCompNodeCreateInfo;
+typedef struct MxcCompositorCreateInfo {
+	MxcCompositorMode mode;
+} MxcCompositorCreateInfo;
 
-typedef struct MxcCompNode {
-  MxcCompMode compMode;
+typedef struct MxcCompositor {
+	MxcCompositorMode compMode;
 
   // device should go in context
   // todo no shjould just access it from context directly
@@ -41,8 +41,8 @@ typedef struct MxcCompNode {
   VkFramebuffer framebuffer;
   VkBasicFramebufferTexture framebuffers[VK_SWAP_COUNT];
 
-} MxcCompNode;
+} MxcCompositor;
 
-void  mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
-void* mxcCompNodeThread(const MxcCompositorContext* pNodeContext);
-void  mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode);
+void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pNode);
+void* mxcCompNodeThread(MxcCompositorContext* pNodeContext);
+void  mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pNode);

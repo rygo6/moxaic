@@ -17,6 +17,7 @@
 	#include <windows.h>
 
 	//#define D3D11
+	// I'd really prefer this to be D3D12 only and not deal with D3D11 keyed mutex as they are the oddball
 	#define D3D12
 	#define D3D11_NO_HELPERS
 	#define CINTERFACE
@@ -515,17 +516,15 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
 	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 
-#define VK_IMAGE_BARRIER_DST_PRESENT          \
-	.dstStageMask = VK_PIPELINE_STAGE_2_NONE, \
-	.dstAccessMask = VK_ACCESS_2_NONE,        \
-	.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-
 #define VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED       \
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
 	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
 
 #define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE \
 	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
+
+#define VK_IMAGE_BARRIER_DEPTH_SUBRESOURCE_RANGE \
+	.subresourceRange = VK_DEPTH_SUBRESOURCE_RANGE
 
 
 //////////////////////////////
@@ -699,7 +698,7 @@ INLINE void midVkBindBufferSharedMemory(VkBuffer buffer, VkSharedMemory shareMem
 {
 	VK_CHECK(vkBindBufferMemory(vk.context.device, buffer, deviceMemory[shareMemory.type], shareMemory.offset));
 }
-INLINE void* midVkSharedMemoryPointer(VkSharedMemory shareMemory)
+INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
 {
 	return pMappedMemory[shareMemory.type] + shareMemory.offset;
 }
@@ -723,7 +722,7 @@ INLINE void vkmUpdateGlobalSetView(MidPose* pCameraTransform, VkGlobalSetState* 
 	pState->invViewProj = Mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
-INLINE void vkmUpdateObjectSet(MidPose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
+INLINE void vkUpdateObjectSet(MidPose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
 {
 	pTransform->rotation = QuatFromEuler(pTransform->euler);
 	pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
@@ -760,8 +759,8 @@ typedef struct VkRequestAllocationInfo {
 	VkLocality            locality;
 	VkDedicatedMemory     dedicated;
 } VkRequestAllocationInfo;
-void midVkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
-void midVkCreateAllocBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
+void vkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
+void vkCreateAllocateBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
 void midVkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDeviceSize bufferSize, VkBuffer buffer);
 void vkCreateBufferSharedMemory(const VkRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkSharedMemory* pMemory);
 
@@ -1348,7 +1347,7 @@ static void CreateStdObjectSetLayout()
 }
 
 // get rid of this don't wrap methods that don't actually simplify the structs
-void midVkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet)
+void vkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet)
 {
 	VkDescriptorSetAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1525,7 +1524,7 @@ static void CreateAllocBindBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSi
 	VK_CHECK(vkBindBufferMemory(vk.context.device, *pBuffer, *pDeviceMem, 0));
 }
 
-void midVkCreateAllocBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped)
+void vkCreateAllocateBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped)
 {
 	CreateAllocBindBuffer(memPropFlags, bufferSize, usage, locality, pDeviceMem, pBuffer);
 	VK_CHECK(vkMapMemory(vk.context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
@@ -1767,7 +1766,7 @@ static struct {
 	ID3D12Device*  device;
 } d3d12;
 #endif
-static DXGI_FORMAT VkToDXGIFormat(VkFormat format)
+static DXGI_FORMAT vkDXGIFormat(VkFormat format)
 {
 	switch (format) {
 		case VK_FORMAT_R8_UNORM:
@@ -1858,6 +1857,17 @@ static DXGI_FORMAT VkToDXGIFormat(VkFormat format)
 		default: return DXGI_FORMAT_UNKNOWN;
 	}
 }
+static bool vkDepthFormat(VkFormat format)
+{
+	switch (format) {
+		case VK_FORMAT_D16_UNORM:
+		case VK_FORMAT_D32_SFLOAT:
+		case VK_FORMAT_D24_UNORM_S8_UINT:
+		case VK_FORMAT_D32_SFLOAT_S8_UINT:
+			return true;
+		default: return false;
+	}
+}
 
 static void CheckDXGI()
 {
@@ -1942,10 +1952,12 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.Height = pCreateInfo->extent.height,
 		.DepthOrArraySize = pCreateInfo->arrayLayers,
 		.MipLevels = pCreateInfo->mipLevels,
-		.Format = VkToDXGIFormat(pCreateInfo->format),
+		.Format = vkDXGIFormat(pCreateInfo->format),
 		.SampleDesc.Count = pCreateInfo->samples,
 		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-		.Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+		.Flags = vkDepthFormat(pCreateInfo->format) ?
+					  D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL :
+					  D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
 	};
 	D3D12_HEAP_PROPERTIES heapProperties = {
 		.Type = D3D12_HEAP_TYPE_DEFAULT,
@@ -1954,16 +1966,22 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.CreationNodeMask = 1,
 		.VisibleNodeMask = 1,
 	};
-	printf("Created DX12 Texture Format: %d\n", textureDesc.Format);
+	D3D12_CLEAR_VALUE clearValue = {
+		.Format = DXGI_FORMAT_D16_UNORM,
+		.DepthStencil = { 1.0f, 0 }
+	};
 	DX_CHECK(ID3D12Device_CreateCommittedResource(
 		d3d12.device,
 		&heapProperties,
 		D3D12_HEAP_FLAG_SHARED,
 		&textureDesc,
-		D3D12_RESOURCE_STATE_RENDER_TARGET,
-		NULL,
+		vkDepthFormat(pCreateInfo->format) ?
+			D3D12_RESOURCE_STATE_DEPTH_WRITE :
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+		vkDepthFormat(pCreateInfo->format) ? &clearValue : NULL,
 		&IID_ID3D12Resource,
 		(void**)&pTexture->texture));
+	printf("Created DX12 Texture Format: %d\n", textureDesc.Format);
 	DX_CHECK(ID3D12Device_CreateSharedHandle(
 		d3d12.device,
 		(ID3D12DeviceChild*)pTexture->texture,
@@ -2654,8 +2672,8 @@ void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemapho
 
 void vkCreateGlobalSet(VkGlobalSet* pSet)
 {
-	midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pSet->set);
-	midVkCreateAllocBindMapBuffer(VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
+	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pSet->set);
+	vkCreateAllocateBindMapBuffer(VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
 	vkUpdateDescriptorSets(vk.context.device, 1, &VK_SET_WRITE_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 }
 

@@ -50,16 +50,29 @@ typedef enum MxcNodeType {
 } MxcNodeType;
 
 typedef enum MxcSwapType {
+	MXC_SWAP_TYPE_UNKNOWN,
 	MXC_SWAP_TYPE_SINGLE,
-	MXC_SWAP_TYPE_TEXTURE_ARRAY,
-	MXC_SWAP_TYPE_DOUBLE_WIDE,
+	MXC_SWAP_TYPE_STEREO_SINGLE,
+	MXC_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
+	MXC_SWAP_TYPE_STEREO_DOUBLE_WIDE,
 	MXC_SWAP_TYPE_COUNT,
 } MxcSwapType;
+
+constexpr int MXC_SWAP_TYPE_COUNTS[] = {
+	[MXC_SWAP_TYPE_UNKNOWN] = 0,
+	[MXC_SWAP_TYPE_SINGLE] = 1,
+	[MXC_SWAP_TYPE_STEREO_SINGLE] = 2,
+	[MXC_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
+	[MXC_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
+};
+
 typedef enum MxcSwapUsage {
+	MXC_SWAP_USAGE_UNKNOWN,
 	MXC_SWAP_USAGE_COLOR,
-	MXC_SWAP_USAGE_DEPTH,
+	MXC_SWAP_USAGE_COLOR_AND_DEPTH,
 	MXC_SWAP_USAGE_COUNT,
 } MxcSwapUsage;
+
 typedef enum MxcSwapScale {
 	MXC_SWAP_SCALE_FULL,
 	MXC_SWAP_SCALE_HALF,
@@ -83,37 +96,37 @@ typedef struct MxcNodeShared {
 	MidCamera         camera;
 
 	// read every cycle, occasional write
-	int      leftSwapIndex;
-	int      rightSwapIndex;
-	float    compositorRadius;
-	int      compositorCycleSkip;
+	f32      compositorRadius;
+	u32      compositorCycleSkip;
 	uint64_t compositorBaseCycleValue;
 
-	MxcRingBuffer ipcFuncQueue;
+	// Interprocess
+	MxcRingBuffer nodeInterprocessFuncQueue;
+
+	// Swap
+	MxcSwapType  swapType;
+	MxcSwapUsage swapUsage;
 
 } MxcNodeShared;
 
-typedef struct MxcImportParam {
+typedef struct MxcNodeImports {
+
+	HANDLE swapsSyncedHandle;
+
 	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
-	HANDLE colorHandles[VK_SWAP_COUNT * 2];
-	HANDLE depthHandles[VK_SWAP_COUNT * 2];
-
-
-	struct {
-		HANDLE color;
-		HANDLE normal;
-		HANDLE gbuffer;
-	} framebufferHandles[VK_SWAP_COUNT];
+	HANDLE colorSwapHandles[VK_SWAP_COUNT * 2];
+	HANDLE depthSwapHandles[VK_SWAP_COUNT * 2];
 
 	HANDLE nodeTimelineHandle;
 	HANDLE compositorTimelineHandle;
-} MxcImportParam;
+
+} MxcNodeImports;
 
 typedef struct MxcExternalNodeMemory {
 	// these needs to turn into array so one process can share chunk of shared memory
 	// is that good for security though?
 	MxcNodeShared shared;
-	MxcImportParam importParam;
+	MxcNodeImports imports;
 } MxcExternalNodeMemory;
 
 //////////////
@@ -129,19 +142,13 @@ typedef struct MxcSwapInfo {
 } MxcSwapInfo;
 
 typedef struct MxcSwap {
-
 	VkDedicatedTexture color;
-	VkDedicatedTexture normal;
 	VkDedicatedTexture depth;
-	VkDedicatedTexture gbuffer;
-
+	VkDedicatedTexture gBuffer;
 #if _WIN32
 	VkWin32ExternalTexture colorExternal;
-	VkWin32ExternalTexture normalExternal;
 	VkWin32ExternalTexture depthExternal;
-	VkWin32ExternalTexture gbufferExternal;
 #endif
-
 } MxcSwap;
 
 typedef bitset64_t swap_bitset_t;
@@ -216,14 +223,12 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	VkBuffer       SetBuffer;
 	VkSharedMemory SetSharedMemory;
 
-	CACHE_ALIGN
-	struct {
-		// this will get pulled out into a shared pool of some sort
+	struct CACHE_ALIGN {
 		VkImage               color;
-		VkImage               normal;
+		VkImage               depth;
 		VkImage               gBuffer;
 		VkImageView           colorView;
-		VkImageView           normalView;
+		VkImageView           depthView;
 		VkImageView           gBufferView;
 		VkImageMemoryBarrier2 acquireBarriers[3];
 		VkImageMemoryBarrier2 releaseBarriers[3];
@@ -236,25 +241,35 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 ////
 typedef struct MxcNodeContext {
 	MxcNodeType type;
-	MxcSwapType swapType;
 
+	// these could be a union if truly only one or the other
+	// Node Data
 	VkCommandPool   pool;
 	VkCommandBuffer cmd;
 
-	// shared data
-	MxcNodeShared*            pNodeShared;
+	// Compositor Data
+	VkDedicatedTexture colorFramebuffers[VK_SWAP_COUNT * 2];
+	VkDedicatedTexture normalFramebuffers[VK_SWAP_COUNT * 2];
+	VkDedicatedTexture depthFramebuffers[VK_SWAP_COUNT * 2];
+	VkDedicatedTexture gbufferFramebuffers[VK_SWAP_COUNT * 2];
 
-	// this should be a pool of swaps shared by all nodes
-	// unless it can import an image fast enough on the fly, maybe it can? CEF does
-	MxcSwap swaps[VK_SWAP_COUNT];
 
-	// I'm not actually 100% sure if I want this
-//	VkFence vkNodeFence;
+	// Node/Compositor Duplicated
+	// If thread the node/compositor both directly access this.
+	// If IPC it is replicate via duplicated handles from NodeImports.
+	// Maybe these should be their own struct? MxcNodeDuplicated
+	HANDLE      swapsSyncedHandle;
+	MxcSwap     swap[VK_SWAP_COUNT * 2];
 
-	// I don't think I need the node timeline...
 	VkSemaphore nodeTimeline;
 	VkSemaphore compositorTimeline;
 
+	// Node/Compositor Shared
+	MxcNodeShared* pNodeShared;
+	MxcNodeImports* pNodeImports;
+
+
+	// these could be a union too
 	// MXC_NODE_TYPE_THREAD
 	pthread_t       threadId;
 
@@ -327,8 +342,8 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 	}
 }
 
-void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(const struct MxcCompositorContext*));
-void mxcRequestNodeThread(void* (*runFunc)(const struct MxcNodeContext*), NodeHandle* pNodeHandle);
+void mxcRequestAndRunCompositorNodeThread(VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*));
+void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* pNodeHandle);
 
 void mxcCreateNodeRenderPass();
 
@@ -351,17 +366,19 @@ void mxcShutdownInterprocessNode();
 typedef void (*MxcIpcFuncPtr)(const NodeHandle);
 typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_NODE_CLOSED,
-	MXC_INTERPROCESS_TARGET_CLAIM_SWAP,
+	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
 	MXC_INTERPROCESS_TARGET_COUNT,
 } MxcIpcFunc;
 _Static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
+// I could get rid of this and just do a comparison polling on every node state like OXR does
+// or I could move this queue mechanic into OXR and make that better?
 int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, const MxcIpcFunc target);
 int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
 
-static inline void mxcIpcFuncQueuePoll()
+static inline void mxcNodeInterprocessPoll()
 {
 	for (int i = 0; i < nodeCount; ++i)
-		mxcIpcDequeue(&activeNodesShared[i]->ipcFuncQueue, i);
+		mxcIpcDequeue(&activeNodesShared[i]->nodeInterprocessFuncQueue, i);
 }

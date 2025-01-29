@@ -44,16 +44,17 @@ bool NodeIntersect(const vec2 globalUV, out vec3 intersectNodeNDC, out vec3 dept
     intersectNodeNDC = NDCFromClipPos(nodeIntersectClipPos);
     const vec2 nodeIntersectUV = UVFromNDC(intersectNodeNDC);
 
-    const vec3 nodeNormalSample = textureLod(nodeNormal, nodeIntersectUV, 0).xyz;
-    const vec4 worldNormal = nodeUBO.invView * vec4(nodeNormalSample, 1);
-    const float worldFacingRatio = dot(worldNormal.xyz, worldRay);
+//    const vec3 nodeNormalSample = textureLod(nodeNormal, nodeIntersectUV, 0).xyz;
+//    const vec4 worldNormal = nodeUBO.invView * vec4(nodeNormalSample, 1);
+//    const float worldFacingRatio = dot(worldNormal.xyz, worldRay);
 
     const float nodeDepthSample = textureLod(nodeGBuffer, nodeIntersectUV, 0).r;
 
     const vec3 depthProjectNodeNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
     depthProjectGlobalNDC = GlobalNDCFromNodeNDC(depthProjectNodeNDC);
 
-    return intersected && nodeDepthSample > 0 && worldFacingRatio < 0;
+//    return intersected && nodeDepthSample > 0 && worldFacingRatio < 0;
+    return intersected && nodeDepthSample > 0;
 }
 
 uint packFloatAnd565Color(float normalizedDepth, vec3 color) {

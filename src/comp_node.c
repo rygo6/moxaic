@@ -9,7 +9,7 @@
 enum SetBindCompIndices {
 	SET_BIND_COMP_BUFFER_INDEX,
 	SET_BIND_COMP_COLOR_INDEX,
-	SET_BIND_COMP_NORMAL_INDEX,
+//	SET_BIND_COMP_NORMAL_INDEX,
 	SET_BIND_COMP_GBUFFER_INDEX,
 	SET_BIND_COMP_COUNT
 };
@@ -39,19 +39,19 @@ enum SetBindCompIndices {
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
 		},                                                           \
 	}
-#define SET_WRITE_COMP_NORMAL(node_set, normal_image_view)           \
-	(VkWriteDescriptorSet)                                           \
-	{                                                                \
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
-		.dstSet = node_set,                                          \
-		.dstBinding = SET_BIND_COMP_NORMAL_INDEX,                    \
-		.descriptorCount = 1,                                        \
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-		.pImageInfo = &(VkDescriptorImageInfo){                      \
-			.imageView = normal_image_view,                          \
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
-		},                                                           \
-	}
+//#define SET_WRITE_COMP_NORMAL(node_set, normal_image_view)           \
+//	(VkWriteDescriptorSet)                                           \
+//	{                                                                \
+//		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
+//		.dstSet = node_set,                                          \
+//		.dstBinding = SET_BIND_COMP_NORMAL_INDEX,                    \
+//		.descriptorCount = 1,                                        \
+//		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+//		.pImageInfo = &(VkDescriptorImageInfo){                      \
+//			.imageView = normal_image_view,                          \
+//			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
+//		},                                                           \
+//	}
 #define SET_WRITE_COMP_GBUFFER(node_set, gbuffer_image_view)         \
 	(VkWriteDescriptorSet)                                           \
 	{                                                                \
@@ -67,7 +67,7 @@ enum SetBindCompIndices {
 	}
 #define SHADER_STAGE_VERT_TESC_TESE_FRAG VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
 #define SHADER_STAGE_TASK_MESH_FRAG      VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT
-static void CreateCompSetLayout(MxcCompMode compMode, VkDescriptorSetLayout* pLayout)
+static void CreateCompSetLayout(MxcCompositorMode compMode, VkDescriptorSetLayout* pLayout)
 {
 	VkShaderStageFlags stageFlags = {};
 	switch (compMode) {
@@ -93,13 +93,13 @@ static void CreateCompSetLayout(MxcCompMode compMode, VkDescriptorSetLayout* pLa
 				.stageFlags = stageFlags,
 				.pImmutableSamplers = &vk.context.linearSampler,
 			},
-			[SET_BIND_COMP_NORMAL_INDEX] = {
-				.binding = SET_BIND_COMP_NORMAL_INDEX,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.descriptorCount = 1,
-				.stageFlags = stageFlags,
-				.pImmutableSamplers = &vk.context.linearSampler,
-			},
+//			[SET_BIND_COMP_NORMAL_INDEX] = {
+//				.binding = SET_BIND_COMP_NORMAL_INDEX,
+//				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+//				.descriptorCount = 1,
+//				.stageFlags = stageFlags,
+//				.pImmutableSamplers = &vk.context.linearSampler,
+//			},
 			[SET_BIND_COMP_GBUFFER_INDEX] = {
 				.binding = SET_BIND_COMP_GBUFFER_INDEX,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -112,12 +112,12 @@ static void CreateCompSetLayout(MxcCompMode compMode, VkDescriptorSetLayout* pLa
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &nodeSetLayoutCreateInfo, VK_ALLOC, pLayout));
 }
 
-enum PipeSetCompIndices {
+enum PipeSetCompositorIndices {
 	PIPE_SET_COMP_GLOBAL_INDEX,
 	PIPE_SET_COMP_NODE_INDEX,
 	PIPE_SET_COMP_COUNT,
 };
-static void CreateCompPipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pNodePipeLayout)
+static void CreateCompositorPipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pNodePipeLayout)
 {
 	const VkPipelineLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -130,16 +130,16 @@ static void CreateCompPipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipeline
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pNodePipeLayout));
 }
 
-void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
+void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pNode)
 {
 	{   // Create
 
 		// layouts
-		CreateCompSetLayout(pInfo->compMode, &pNode->compNodeSetLayout);
-		CreateCompPipeLayout(pNode->compNodeSetLayout, &pNode->compNodePipeLayout);
+		CreateCompSetLayout(pInfo->mode, &pNode->compNodeSetLayout);
+		CreateCompositorPipeLayout(pNode->compNodeSetLayout, &pNode->compNodePipeLayout);
 
 		// meshes
-		switch (pInfo->compMode) {
+		switch (pInfo->mode) {
 			case MXC_COMP_MODE_BASIC:
 				vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
 								  "./shaders/basic_comp.frag.spv",
@@ -193,7 +193,7 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 			VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
 
 			// global set
-			midVkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pNode->globalSet.set);
+			vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pNode->globalSet.set);
 			VkRequestAllocationInfo requestInfo = {
 				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 				.size = sizeof(VkGlobalSetState),
@@ -233,15 +233,15 @@ void mxcCreateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
 
 	{  // Copy needed state
 		// todo get rid lets go to context directly
-		pNode->compMode = pInfo->compMode;
+		pNode->compMode = pInfo->mode;
 		pNode->device = vk.context.device;
 		pNode->compRenderPass = vk.context.renderPass;
 	}
 }
 
-void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNode)
+void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pNode)
 {
-	switch (pInfo->compMode) {
+	switch (pInfo->mode) {
 		case MXC_COMP_MODE_BASIC:
 			break;
 		case MXC_COMP_MODE_TESS:
@@ -257,19 +257,34 @@ void mxcBindUpdateCompNode(const MxcCompNodeCreateInfo* pInfo, MxcCompNode* pNod
 		// should I make them all share the same buffer? probably
 		midVkBindBufferSharedMemory(nodeCompositorData[i].SetBuffer, nodeCompositorData[i].SetSharedMemory);
 		vkUpdateDescriptorSets(vk.context.device, 1, &SET_WRITE_COMP_BUFFER(nodeCompositorData[i].set, nodeCompositorData[i].SetBuffer), 0, NULL);
-		nodeCompositorData[i].pSetMapped = midVkSharedMemoryPointer(nodeCompositorData[i].SetSharedMemory);
+		nodeCompositorData[i].pSetMapped = vkSharedMemoryPtr(nodeCompositorData[i].SetSharedMemory);
 	}
 }
 
-void mxcCompostorNodeRun(const MxcCompositorContext* pNodeContext, const MxcCompNode* pNode)
+void mxcCompositorNodeRun(const MxcCompositorContext* pCompositorContext, const MxcCompositor* pCompositor)
 {
-	const MxcCompMode compMode = pNode->compMode;
+	auto device = vk.context.device;
 
-	const VkDevice        device = pNode->device;
-	const VkCommandBuffer cmd = pNodeContext->cmd;
-	const VkRenderPass    renderPass = pNode->compRenderPass;
-	const VkFramebuffer   framebuffer = pNode->framebuffer;
-	const VkDescriptorSet globalSet = pNode->globalSet.set;
+	auto cmd = pCompositorContext->cmd;
+	auto compTimeline = pCompositorContext->compositorTimeline;
+	u64  compositorBaseCycleValue = 0;
+
+	auto compositorMode = pCompositor->compMode;
+	auto renderPass = pCompositor->compRenderPass;
+	auto framebuffer = pCompositor->framebuffer;
+	auto globalSet = pCompositor->globalSet.set;
+
+	auto compNodePipeLayout = pCompositor->compNodePipeLayout;
+	auto compNodePipe = pCompositor->compNodePipe;
+
+	auto quadIndexCount = pCompositor->quadMesh.indexCount;
+	auto quadBuffer = pCompositor->quadMesh.buffer;
+	auto quadIndexOffset = pCompositor->quadMesh.indexOffset;
+	auto quadVertexOffset = pCompositor->quadMesh.vertexOffset;
+
+	auto timeQueryPool = pCompositor->timeQueryPool;
+
+	auto swap = pCompositorContext->swap;
 
 	MidCamera globalCamera = {
 		.yFovRad = RAD_FROM_DEG(45.0f),
@@ -281,24 +296,9 @@ void mxcCompostorNodeRun(const MxcCompositorContext* pNodeContext, const MxcComp
 		.euler = {0.0f, 0.0f, 0.0f},
 	};
 	globalCameraPose.rotation = QuatFromEuler(globalCameraPose.euler);
-	VkGlobalSetState  globalSetState = {};
-	VkGlobalSetState* pGlobalSetMapped = midVkSharedMemoryPointer(pNode->globalSet.sharedMemory);
+	auto globalSetState = (VkGlobalSetState){};
+	auto pGlobalSetMapped = vkSharedMemoryPtr(pCompositor->globalSet.sharedMemory);
 	vkmUpdateGlobalSetViewProj(globalCamera, globalCameraPose, &globalSetState, pGlobalSetMapped);
-
-	const VkPipelineLayout compNodePipeLayout = pNode->compNodePipeLayout;
-	const VkPipeline       compNodePipe = pNode->compNodePipe;
-
-	const uint32_t     quadIndexCount = pNode->quadMesh.indexCount;
-	const VkBuffer     quadBuffer = pNode->quadMesh.buffer;
-	const VkDeviceSize quadIndexOffset = pNode->quadMesh.indexOffset;
-	const VkDeviceSize quadVertexOffset = pNode->quadMesh.vertexOffset;
-
-	uint64_t          compositorBaseCycleValue = 0;
-	const VkSemaphore compTimeline = pNodeContext->compositorTimeline;
-
-	const VkSwapContext swap = pNodeContext->swap;
-
-	const VkQueryPool timeQueryPool = pNode->timeQueryPool;
 
 	struct {
 		VkImageView color;
@@ -307,10 +307,10 @@ void mxcCompostorNodeRun(const MxcCompositorContext* pNodeContext, const MxcComp
 	} compositorFramebufferViews[VK_SWAP_COUNT];
 	VkImage compositorFramebufferColorImages[VK_SWAP_COUNT];
 	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-		compositorFramebufferViews[i].color = pNode->framebuffers[i].color.view;
-		compositorFramebufferViews[i].normal = pNode->framebuffers[i].normal.view;
-		compositorFramebufferViews[i].depth = pNode->framebuffers[i].depth.view;
-		compositorFramebufferColorImages[i] = pNode->framebuffers[i].color.image;
+		compositorFramebufferViews[i].color = pCompositor->framebuffers[i].color.view;
+		compositorFramebufferViews[i].normal = pCompositor->framebuffers[i].normal.view;
+		compositorFramebufferViews[i].depth = pCompositor->framebuffers[i].depth.view;
+		compositorFramebufferColorImages[i] = pCompositor->framebuffers[i].color.image;
 	}
 	int compositorFramebufferIndex = 0;
 
@@ -380,24 +380,24 @@ run_loop:
 				// the inverse of node timeline is the framebuffer index to display
 				// while the non-inverse is the framebuffer to be rendered into
 				// we want to keep this index a function of the timeline value to evade needing any other index list
-				if (pNodeCompositorData->lastTimelineValue > 0) {
-					uint8_t priorNodeFramebufferIndex = !(pNodeCompositorData->lastTimelineValue % VK_SWAP_COUNT);
-					auto pPriorFramebuffers = &pNodeCompositorData->framebuffers[priorNodeFramebufferIndex];
-					CmdPipelineImageBarriers2(cmd, COUNT(pPriorFramebuffers->releaseBarriers), pPriorFramebuffers->releaseBarriers);
-//					uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_SEQ_CST);
-//					assert(priorExchangedSwap);
-				}
+//				if (pNodeCompositorData->lastTimelineValue > 0) {
+//					uint8_t priorNodeFramebufferIndex = !(pNodeCompositorData->lastTimelineValue % VK_SWAP_COUNT);
+//					auto pPriorFramebuffers = &pNodeCompositorData->framebuffers[priorNodeFramebufferIndex];
+//					CmdPipelineImageBarriers2(cmd, COUNT(pPriorFramebuffers->releaseBarriers), pPriorFramebuffers->releaseBarriers);
+////					uint8_t priorExchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[priorNodeFramebufferIndex], false, __ATOMIC_SEQ_CST);
+////					assert(priorExchangedSwap);
+//				}
 
 				uint8_t nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
 				auto pFramebuffers = &pNodeCompositorData->framebuffers[nodeFramebufferIndex];
-				CmdPipelineImageBarriers2(cmd, COUNT(pFramebuffers->acquireBarriers), pFramebuffers->acquireBarriers);
+//				CmdPipelineImageBarriers2(cmd, COUNT(pFramebuffers->acquireBarriers), pFramebuffers->acquireBarriers);
 //				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
 //				assert(!exchangedSwap);
 
 				// These will end up being updated from a framebuffer pool so they need to be written each switch
 				VkWriteDescriptorSet writeSets[] = {
 					SET_WRITE_COMP_COLOR(pNodeCompositorData->set, pFramebuffers->colorView),
-					SET_WRITE_COMP_NORMAL(pNodeCompositorData->set, pFramebuffers->normalView),
+//					SET_WRITE_COMP_NORMAL(pNodeCompositorData->set, pFramebuffers->normalView),
 					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pFramebuffers->gBufferView),
 				};
 				vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
@@ -492,7 +492,7 @@ run_loop:
 				CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, compNodePipeLayout, PIPE_SET_COMP_NODE_INDEX, 1, &nodeCompositorData[i].set, 0, NULL);
 
 				// move this into method delegate in node compositor data
-				switch (compMode) {
+				switch (compositorMode) {
 					case MXC_COMP_MODE_BASIC:
 					case MXC_COMP_MODE_TESS:
 						CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
@@ -532,7 +532,9 @@ run_loop:
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = swapImage,
 				VK_IMAGE_BARRIER_SRC_BLIT,
-				VK_IMAGE_BARRIER_DST_PRESENT,
+				.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+				.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
+				.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			};
@@ -564,19 +566,24 @@ run_loop:
 	goto run_loop;
 }
 
-void* mxcCompNodeThread(const MxcCompositorContext* pNodeContext)
+void* mxcCompNodeThread(MxcCompositorContext* pNodeContext)
 {
-	MxcCompNode compNode;
+	MxcCompositor compositor;
 
-	midVkBeginAllocationRequests();
-	const MxcCompNodeCreateInfo compNodeInfo = {
-//		.compMode = MXC_COMP_MODE_TESS,
-		.compMode = MXC_COMP_MODE_BASIC,
-	};
-	mxcCreateCompNode(&compNodeInfo, &compNode);
-	midVkEndAllocationRequests();
+	{
+		midVkBeginAllocationRequests();
 
-	mxcBindUpdateCompNode(&compNodeInfo, &compNode);
-	mxcCompostorNodeRun(pNodeContext, &compNode);
+		MxcCompositorCreateInfo compNodeInfo = {
+			//		.compMode = MXC_COMP_MODE_TESS,
+			.mode = MXC_COMP_MODE_BASIC,
+		};
+		mxcCreateCompositor(&compNodeInfo, &compositor);
+
+		midVkEndAllocationRequests();
+		mxcBindUpdateCompositor(&compNodeInfo, &compositor);
+	}
+
+	mxcCompositorNodeRun(pNodeContext, &compositor);
+
 	return NULL;
 }

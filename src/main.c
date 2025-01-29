@@ -23,7 +23,7 @@ bool isRunning = true;
 
 int main(void)
 {
-//	// we should make this to some kind of tests class
+	//	// we should make this to some kind of tests class
 //	MxcSwapInfo info = {
 //		.yScale = MXC_SWAP_SCALE_FULL,
 //		.xScale = MXC_SWAP_SCALE_FULL,
@@ -131,7 +131,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
@@ -155,7 +155,7 @@ int main(void)
 
 			// interprocess polling could be a different thread?
 			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
-			mxcIpcFuncQueuePoll();
+			mxcNodeInterprocessPoll();
 
 			// somewhere input state needs to be copied to a node and only update when it knows the node needs it
 			midUpdateWindowInput();

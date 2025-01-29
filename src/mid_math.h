@@ -8,6 +8,19 @@
 #define RAD_FROM_DEG(_deg) (_deg * (PI / 180.0f))
 #define DEG_FROM_RAD(_rad) (_rad * (180.0f / PI))
 
+// vec type names should match this
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int8_t   i8;
+typedef int16_t  i16;
+typedef int32_t  i32;
+typedef int64_t  i64;
+typedef _Float16 f16;
+typedef float    f32;
+typedef double   f64;
+
 #define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
 SIMD_TYPE(float, float2, 2);
 SIMD_TYPE(uint32_t, int2, 2);

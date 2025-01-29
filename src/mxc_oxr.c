@@ -18,7 +18,7 @@ void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 {
 	printf("Creating Moxaic OpenXR Session.\n");
 
-	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 
 	NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShared);
@@ -52,7 +52,7 @@ void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
-	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 	*pHandle = pImportParam->nodeTimelineHandle;
 }
@@ -67,7 +67,7 @@ void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineVal
 void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
-	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
@@ -77,12 +77,12 @@ void xrClaimFramebufferImages(XrSessionIndex sessionIndex, int imageCount, HANDL
 	CHECK(imageCount != VK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 
-	MxcImportParam* pImportParam = &pImportedExternalMemory->importParam;
+	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 
 	for (int i = 0; i < imageCount; ++i) {
-		printf("Claiming framebuffer handle %p\n", pImportParam->framebufferHandles[i].color);
-		pHandle[i] = pImportParam->framebufferHandles[i].color;
+//		printf("Claiming framebuffer handle %p\n", pImportParam->framebufferHandles[i].color);
+//		pHandle[i] = pImportParam->framebufferHandles[i].color;
 	}
 }
 
@@ -134,18 +134,12 @@ void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t tim
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
 
-static XrTime HzToXrTime(double hz)
-{
-	double seconds = 1.0 / hz;
-	return (XrTime)(seconds * 1e9);
-}
-
 XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	double hz = 240.0 / (double)(pNodeShared->compositorCycleSkip);
-	XrTime hzTime = HzToXrTime(hz);
+	XrTime hzTime = xrHzToXrTime(hz);
 //	printf("xrGetFrameInterval compositorCycleSkip: %d hz: %f hzTime: %llu\n", pNodeShared->compositorCycleSkip, hz, hzTime);
 	return hzTime;
 }

@@ -99,16 +99,18 @@ static void LogWin32Error(HRESULT err)
 #endif
 #endif
 
-typedef uint8_t  U8;
-typedef uint16_t U16;
-typedef uint32_t U32;
-typedef uint64_t U64;
-typedef int8_t   I8;
-typedef int16_t  I16;
-typedef int32_t  I32;
-typedef int64_t  I64;
-typedef float    F32;
-typedef double   F64;
+// this need to go in mid common
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int8_t   i8;
+typedef int16_t  i16;
+typedef int32_t  i32;
+typedef int64_t  i64;
+typedef _Float16 f16;
+typedef float    f32;
+typedef double   f64;
 
 ////////////////////////
 //// Method Declarations
@@ -154,6 +156,11 @@ typedef struct XrEyeView {
 void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView);
 
 XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized);
+
+static inline XrTime xrHzToXrTime(double hz)
+{
+	return (XrTime)(hz / 1e9);
+}
 
 /////////////////////
 //// OpenXR Constants
@@ -234,11 +241,11 @@ typedef enum XrSwapType : uint8_t {
 ///////////
 //// Handle
 ////
-typedef U16 map_handle;
-typedef U16 map_key;
+typedef u16 map_handle;
+typedef u16 map_key;
 
-typedef U16 block_handle;
-typedef U32 block_key;
+typedef u16 block_handle;
+typedef u32 block_key;
 
 #define HANDLE_INDEX_BIT_COUNT 12
 #define HANDLE_INDEX_MASK      0x0FFF
@@ -260,7 +267,7 @@ typedef U32 block_key;
 #define HANDLE_VALID(handle) (HANDLE_GENERATION(handle) != 0)
 
 #define HANDLE_GENERATION_INCREMENT(handle) ({          \
-	U8 g = HANDLE_GENERATION(handle);                   \
+	u8 g = HANDLE_GENERATION(handle);                   \
 	g = g == HANDLE_GENERATION_MAX ? 1 : (g + 1) & 0xF; \
 	HANDLE_GENERATION_SET(handle, g);                   \
 })
@@ -381,7 +388,7 @@ static inline map_handle MapFind(int capacity, MapBase* pMap, map_key key)
 //// Set
 ////
 typedef struct SetBase {
-	U32           count;
+	u32           count;
 	block_handle* handles;
 } SetBase;
 #define SET_DECL(n)              \
@@ -418,7 +425,7 @@ typedef struct SubactionState {
 	//	uint32_t lastSyncedPriority;
 
 	// actual layout from OXR to memcpy
-	F32      currentState;
+	f32      currentState;
 	XrBool32 changedSinceLastSync;
 	XrTime   lastChangeTime;
 	XrBool32 isActive;
@@ -429,7 +436,7 @@ typedef struct SubactionState {
 typedef struct Action {
 	block_handle hActionSet;
 
-	U8          countSubactions;
+	u8           countSubactions;
 	block_handle hSubactionStates[XR_MAX_SUBACTION_PATHS];
 	block_handle hSubactionBindings[XR_MAX_SUBACTION_PATHS];
 	block_handle hSubactionPaths[XR_MAX_SUBACTION_PATHS];
@@ -448,7 +455,7 @@ typedef struct ActionSet {
 	block_handle attachedToSession;
 	char         actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
 	char         localizedActionSetName[XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE];
-	U32          priority;
+	u32          priority;
 } ActionSet;
 
 #define XR_SPACE_CAPACITY 128
@@ -477,13 +484,13 @@ typedef struct Swapchain {
 
 	XrSwapchainCreateFlags createFlags;
 	XrSwapchainUsageFlags  usageFlags;
-	I64                    format;
-	U32                    sampleCount;
-	U32                    width;
-	U32                    height;
-	U32                    faceCount;
-	U32                    arraySize;
-	U32                    mipCount;
+	i64                    format;
+	u32                    sampleCount;
+	u32                    width;
+	u32                    height;
+	u32                    faceCount;
+	u32                    arraySize;
+	u32                    mipCount;
 } Swapchain;
 
 #define XR_SESSIONS_CAPACITY 8
@@ -507,8 +514,8 @@ typedef struct Session {
 	XrTime predictedDisplayTimes[3];
 	XrTime lastBeginDisplayTime;
 	XrTime lastDisplayTime;
-	U32 synchronizedFrameCount;
-	U64 sessionTimelineValue;
+	u32    synchronizedFrameCount;
+	u64    sessionTimelineValue;
 
 	//// Maps
 	CACHE_ALIGN
@@ -613,7 +620,7 @@ static uint32_t CalcDJB2(const char* str, int max)
 {
 	char c;
 	int  i = 0;
-	U32  hash = 5381;
+	u32  hash = 5381;
 	while ((c = *str++) && i++ < max)
 		hash = ((hash << 5) + hash) + c;
 	return hash;
@@ -644,11 +651,6 @@ static XrTime xrGetTime()
 	XrTime xrTime = (XrTime)(seconds * secondsToNanos);
 
 	return xrTime;
-}
-
-static XrTime HzToXrTime(double hz)
-{
-	return (XrTime)(hz / 1e9);
 }
 
 static inline XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)

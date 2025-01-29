@@ -5,35 +5,35 @@
 #include "node.h"
 
 typedef struct MxcTestNode {
-  VkRenderPass     nodeRenderPass;
-  VkPipelineLayout pipeLayout;
-  VkPipeline       basicPipe;
+	VkRenderPass     nodeRenderPass;
+	VkPipelineLayout pipeLayout;
+	VkPipeline       basicPipe;
 
-  VkFramebuffer             framebuffer;
-  VkImageView               gBufferMipViews[VK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
+	VkFramebuffer framebuffer;
+	VkImageView   gBufferMipViews[VK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 
-  VkDescriptorSetLayout nodeProcessSetLayout;
-  VkPipelineLayout      nodeProcessPipeLayout;
-  VkPipeline            nodeProcessBlitMipAveragePipe;
-  VkPipeline            nodeProcessBlitDownPipe;
+	VkDescriptorSetLayout nodeProcessSetLayout;
+	VkPipelineLayout      nodeProcessPipeLayout;
+	VkPipeline            nodeProcessBlitMipAveragePipe;
+	VkPipeline            nodeProcessBlitDownPipe;
 
-  VkDevice device;
+	VkDevice device;
 
-  VkGlobalSet globalSet;
+	VkGlobalSet globalSet;
 
-  VkDescriptorSet checkerMaterialSet;
-  VkDescriptorSet sphereObjectSet;
+	VkDescriptorSet checkerMaterialSet;
+	VkDescriptorSet sphereObjectSet;
 
-  VkDedicatedTexture checkerTexture;
+	VkDedicatedTexture checkerTexture;
 
-  VkMesh       sphereMesh;
-  MidPose      sphereTransform;
+	VkMesh  sphereMesh;
+	MidPose sphereTransform;
 
-  VkObjectSetState      sphereObjectState;
-  VkObjectSetState* pSphereObjectSetMapped;
-  VkDeviceMemory        sphereObjectSetMemory;
-  VkBuffer              sphereObjectSetBuffer;
+	VkObjectSetState  sphereObjectState;
+	VkObjectSetState* pSphereObjectSetMapped;
+	VkDeviceMemory    sphereObjectSetMemory;
+	VkBuffer          sphereObjectSetBuffer;
 
 } MxcTestNode;
 
-void* mxcTestNodeThread(const MxcNodeContext* pNodeContext);
+void* mxcTestNodeThread(MxcNodeContext* pNodeContext);
