@@ -350,15 +350,12 @@ run_loop:
 		vkmCmdResetBegin(cmd);
 
 		for (int nodeIndex = 0; nodeIndex < nodeCount; ++nodeIndex) {
-			MxcNodeShared* pNodeShared = activeNodesShared[nodeIndex];
+			auto pNodeShared = activeNodesShared[nodeIndex];
 
 			// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 			// shared: 569 - semaphore: 315416 ratio: 554.333919
-			uint64_t nodeTimelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
-//			uint64_t nodeTimelineValue;
-//			vkGetSemaphoreCounterValue(device, nodeContexts[nodeIndex].vkNodeTimeline, &nodeTimelineValue);
+			u64 nodeTimelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
 
-			// I don't like this but it waits until the node renders something. Prediction should be okay here.
 			if (nodeTimelineValue < 1)
 				continue;
 
@@ -388,17 +385,15 @@ run_loop:
 ////					assert(priorExchangedSwap);
 //				}
 
-				uint8_t nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
-				auto pFramebuffers = &pNodeCompositorData->framebuffers[nodeFramebufferIndex];
-//				CmdPipelineImageBarriers2(cmd, COUNT(pFramebuffers->acquireBarriers), pFramebuffers->acquireBarriers);
+				u8 nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
+				auto pFramebuffers = &pNodeCompositorData->swaps[nodeFramebufferIndex];
+				CmdPipelineImageBarriers2(cmd, COUNT(pFramebuffers->acquireBarriers), pFramebuffers->acquireBarriers);
 //				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
 //				assert(!exchangedSwap);
 
-				// These will end up being updated from a framebuffer pool so they need to be written each switch
 				VkWriteDescriptorSet writeSets[] = {
 					SET_WRITE_COMP_COLOR(pNodeCompositorData->set, pFramebuffers->colorView),
-//					SET_WRITE_COMP_NORMAL(pNodeCompositorData->set, pFramebuffers->normalView),
-					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pFramebuffers->gBufferView),
+					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pFramebuffers->gBufferMipViews[0]),
 				};
 				vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 			}

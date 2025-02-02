@@ -115,6 +115,7 @@ typedef struct MxcNodeImports {
 
 	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
 	HANDLE colorSwapHandles[VK_SWAP_COUNT * 2];
+	HANDLE gbufferSwapHandles[VK_SWAP_COUNT * 2];
 	HANDLE depthSwapHandles[VK_SWAP_COUNT * 2];
 
 	HANDLE nodeTimelineHandle;
@@ -144,10 +145,11 @@ typedef struct MxcSwapInfo {
 typedef struct MxcSwap {
 	VkDedicatedTexture color;
 	VkDedicatedTexture depth;
-	VkDedicatedTexture gBuffer;
+	VkDedicatedTexture gbuffer;
 #if _WIN32
 	VkWin32ExternalTexture colorExternal;
 	VkWin32ExternalTexture depthExternal;
+	VkWin32ExternalTexture gbufferExternal;
 #endif
 } MxcSwap;
 
@@ -208,12 +210,13 @@ typedef struct MxcNodeCompositorSetState {
 } MxcNodeCompositorSetState;
 
 // Data compositor needs for each node
-typedef struct CACHE_ALIGN MxcNodeCompositorData {
+typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 
 	MidPose                    rootPose;
 	uint64_t                   lastTimelineValue;
 
 	// Does it actually make difference to keep local copy?
+	// Should keep it anyways in case we do need to start flushing buffers
 	MxcNodeCompositorSetState  setState;
 	MxcNodeCompositorSetState* pSetMapped;
 	VkDescriptorSet            set;
@@ -224,17 +227,15 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	VkSharedMemory SetSharedMemory;
 
 	struct CACHE_ALIGN {
+		VkImageMemoryBarrier2 acquireBarriers[2];
+		VkImageMemoryBarrier2 releaseBarriers[2];
 		VkImage               color;
-		VkImage               depth;
 		VkImage               gBuffer;
 		VkImageView           colorView;
-		VkImageView           depthView;
-		VkImageView           gBufferView;
-		VkImageMemoryBarrier2 acquireBarriers[3];
-		VkImageMemoryBarrier2 releaseBarriers[3];
-	} framebuffers[VK_SWAP_COUNT];
+		VkImageView           gBufferMipViews[MXC_NODE_GBUFFER_LEVELS];
+	} swaps[VK_SWAP_COUNT];
 
-} MxcNodeCompositorData;
+} MxcNodeCompositorLocal;
 
 ///////////////
 //// Node Context
@@ -259,6 +260,7 @@ typedef struct MxcNodeContext {
 	// If IPC it is replicate via duplicated handles from NodeImports.
 	// Maybe these should be their own struct? MxcNodeDuplicated
 	HANDLE      swapsSyncedHandle;
+	// Should be a handle? Maybe. Although when replicated to a node it won't have a handle.
 	MxcSwap     swap[VK_SWAP_COUNT * 2];
 
 	VkSemaphore nodeTimeline;
@@ -304,7 +306,7 @@ extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 // technically this should go into a comp node thread local....
-extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
+extern MxcNodeCompositorLocal nodeCompositorData[MXC_NODE_CAPACITY];
 
 ///////////////
 //// Node Queue

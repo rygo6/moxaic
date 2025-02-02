@@ -887,13 +887,13 @@ typedef struct VkWin32ExternalTexture {
 } VkWin32ExternalTexture;
 void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture);
 
-typedef struct MidVkSemaphoreCreateInfo {
+typedef struct vkSemaphoreCreateInfoExt {
 	const char*           debugName;
 	VkSemaphoreType       semaphoreType;
 	VkLocality            locality;
 	VK_EXTERNAL_HANDLE_PLATFORM importHandle;
-} MidVkSemaphoreCreateInfo;
-void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore);
+} vkSemaphoreCreateInfoExt;
+void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemaphore* pSemaphore);
 
 typedef struct VkExternalFenceCreateInfo {
 	const char*           debugName;
@@ -2626,7 +2626,7 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 }
 
 // I need a word that represents a more comprehensive Create more function
-void midVkCreateSemaphore(const MidVkSemaphoreCreateInfo* pCreateInfo, VkSemaphore* pSemaphore)
+void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemaphore* pSemaphore)
 {
 #if _WIN32
 	VkExportSemaphoreWin32HandleInfoKHR exportPlatformInfo = {

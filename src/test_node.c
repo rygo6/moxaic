@@ -222,7 +222,7 @@ run_loop:
 				vkDestroyImageView(device, pSwap[i].color.view, VK_ALLOC);
 			}
 
-			if (hasDepth && pSwap[i].depth.image != VK_NULL_HANDLE) {
+			if (pSwap[i].depth.image != VK_NULL_HANDLE) {
 				vkDestroyImage(device, pSwap[i].depth.image, VK_ALLOC);
 				vkDestroyImageView(device, pSwap[i].depth.view, VK_ALLOC);
 			}
@@ -235,7 +235,6 @@ run_loop:
 
 		if (needsImport) {
 			for (int i = 0; i < swapCount; ++i) {
-
 				VkTextureCreateInfo colorCreateInfo = {
 					.debugName = "ImportedColorFramebuffer",
 					.pImageCreateInfo = &(VkImageCreateInfo){
@@ -259,31 +258,28 @@ run_loop:
 				};
 				vkCreateTexture(&colorCreateInfo, &pSwap[i].color);
 
-				if (hasDepth) {
-					VkTextureCreateInfo depthCreateInfo = {
-						.debugName = "ImportedDepthFramebuffer",
-						.pImageCreateInfo = &(VkImageCreateInfo){
-							.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-							.pNext = &(VkExternalMemoryImageCreateInfo){
-								.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-								.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM,
-							},
-							.imageType = VK_IMAGE_TYPE_2D,
-							.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
-							.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-							.mipLevels = 1,
-							.arrayLayers = 1,
-							.samples = VK_SAMPLE_COUNT_1_BIT,
-							.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+				VkTextureCreateInfo depthCreateInfo = {
+					.debugName = "ImportedDepthFramebuffer",
+					.pImageCreateInfo = &(VkImageCreateInfo){
+						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+						.pNext = &(VkExternalMemoryImageCreateInfo){
+							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+							.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM,
 						},
-						.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-						.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-						.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
-						.importHandle = pNodeContext->pNodeImports->depthSwapHandles[i],
-					};
-					vkCreateTexture(&depthCreateInfo, &pSwap[i].depth);
-				}
-
+						.imageType = VK_IMAGE_TYPE_2D,
+						.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+						.mipLevels = 1,
+						.arrayLayers = 1,
+						.samples = VK_SAMPLE_COUNT_1_BIT,
+						.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+					},
+					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+					.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+					.importHandle = pNodeContext->pNodeImports->depthSwapHandles[i],
+				};
+				vkCreateTexture(&depthCreateInfo, &pSwap[i].depth);
 			}
 		}
 	}
@@ -331,7 +327,7 @@ run_loop:
 		CmdEndRenderPass(cmd);
 	}
 
-//	{  // Blit GBuffer
+	{  // Blit GBuffer
 //		ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
 //		ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 32), 1);
 //		{
@@ -402,7 +398,7 @@ run_loop:
 //			ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> 1}, 32), 1);
 //			CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
 //		}
-//
+
 //		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitDownPipe);
 //		for (uint32_t i = MXC_NODE_GBUFFER_LEVELS - 1; i > 0; --i) {
 //			VkImageMemoryBarrier2 barriers[] = {
@@ -432,9 +428,9 @@ run_loop:
 //			ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> (1 - 1)}, 32), 1);
 //			CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
 //		}
-//	}
+	}
 
-//	CmdPipelineImageBarriers2(cmd, releaseBarrierCount, releaseBarriers[framebufferIndex]);
+	CmdPipelineImageBarriers2(cmd, releaseBarrierCount, releaseBarriers[framebufferIndex]);
 	EndCommandBuffer(cmd);
 
 	nodeTimelineValue++;
@@ -590,25 +586,6 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pTestNo
 			vkCreateTexture(&depthCreateInfo, &pNodeContext->depthFramebuffers[i]);
 
 		}
-
-		// this gbuffer manipulation needs to happen outside of the node in the compositor to prepare the data
-//		for (uint32_t bufferIndex = 0; bufferIndex < VK_SWAP_COUNT; ++bufferIndex) {
-//			for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
-//				VkImageViewCreateInfo imageViewCreateInfo = {
-//					.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-//					.image = pNodeContext->gbufferFramebuffers[bufferIndex].image,
-//					.viewType = VK_IMAGE_VIEW_TYPE_2D,
-//					.format = MXC_NODE_GBUFFER_FORMAT,
-//					.subresourceRange = {
-//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//						.baseMipLevel = mipIndex,
-//						.levelCount = 1,
-//						.layerCount = 1,
-//					},
-//				};
-//				VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, VK_ALLOC, &pTestNode->gBufferMipViews[bufferIndex][mipIndex]));
-//			}
-//		}
 
 		// This is way too many descriptors... optimize this
 		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
