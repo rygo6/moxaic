@@ -386,14 +386,14 @@ run_loop:
 //				}
 
 				u8 nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
-				auto pFramebuffers = &pNodeCompositorData->swaps[nodeFramebufferIndex];
-				CmdPipelineImageBarriers2(cmd, COUNT(pFramebuffers->acquireBarriers), pFramebuffers->acquireBarriers);
+				auto pNodeSwaps = &pNodeCompositorData->swaps[nodeFramebufferIndex];
+				CmdPipelineImageBarriers2(cmd, COUNT(pNodeSwaps->acquireBarriers), pNodeSwaps->acquireBarriers);
 //				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
 //				assert(!exchangedSwap);
 
 				VkWriteDescriptorSet writeSets[] = {
-					SET_WRITE_COMP_COLOR(pNodeCompositorData->set, pFramebuffers->colorView),
-					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pFramebuffers->gBufferMipViews[0]),
+					SET_WRITE_COMP_COLOR(pNodeCompositorData->set, pNodeSwaps->colorView),
+					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pNodeSwaps->gBufferMipViews[0]),
 				};
 				vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 			}

@@ -96,11 +96,12 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 	assert(__atomic_always_lock_free(sizeof(pNodeShared->timelineValue), &pNodeShared->timelineValue));
 
-	VkImageMemoryBarrier2 acquireBarriers[VK_SWAP_COUNT][2];
+	int  swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+	VkImageMemoryBarrier2 acquireBarriers[swapCount][2];
 	uint32_t              acquireBarrierCount = 0;
-	VkImageMemoryBarrier2 releaseBarriers[VK_SWAP_COUNT][2];
+	VkImageMemoryBarrier2 releaseBarriers[swapCount][2];
 	uint32_t              releaseBarrierCount = 0;
-	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
+	for (int i = 0; i < swapCount; ++i) {
 		switch (pNodeContext->type) {
 			case MXC_NODE_TYPE_THREAD:
 				// Acquire not needed from thread.
@@ -117,7 +118,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 				break;
 			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
 
-				acquireBarrierCount = 3;
+				acquireBarrierCount = 2;
 				acquireBarriers[i][0] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
@@ -127,7 +128,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 					.newLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 					.dstQueueFamilyIndex = graphicsQueueIndex,
-//					.image = framebufferImages[i].color,
+//					.image == color
 					.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
 				};
 				acquireBarriers[i][1] = (VkImageMemoryBarrier2){
@@ -139,11 +140,11 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 					.newLayout = VK_IMAGE_LAYOUT_GENERAL,
 					.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
 					.dstQueueFamilyIndex = graphicsQueueIndex,
-//					.image = framebufferImages[i].gBuffer,
+//					.image == gbuffer
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
 
-				releaseBarrierCount = 3;
+				releaseBarrierCount = 2;
 				releaseBarriers[i][0] = (VkImageMemoryBarrier2){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
@@ -152,7 +153,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 					.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 					.srcQueueFamilyIndex = graphicsQueueIndex,
 					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-//					.image = framebufferImages[i].color,
+//					.image == color
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
 				releaseBarriers[i][1] = (VkImageMemoryBarrier2){
@@ -163,7 +164,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 					.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 					.srcQueueFamilyIndex = graphicsQueueIndex,
 					.dstQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-//					.image = framebufferImages[i].gBuffer,
+//					.image == gbuffer
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				};
 
@@ -236,12 +237,12 @@ run_loop:
 		if (needsImport) {
 			for (int i = 0; i < swapCount; ++i) {
 				VkTextureCreateInfo colorCreateInfo = {
-					.debugName = "ImportedColorFramebuffer",
+					.debugName = "ImportedColorSwap",
 					.pImageCreateInfo = &(VkImageCreateInfo){
 						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 						.pNext = &(VkExternalMemoryImageCreateInfo){
 							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-							.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM,
+							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 						},
 						.imageType = VK_IMAGE_TYPE_2D,
 						.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
@@ -253,18 +254,45 @@ run_loop:
 					},
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-					.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 					.importHandle = pNodeContext->pNodeImports->colorSwapHandles[i],
 				};
 				vkCreateTexture(&colorCreateInfo, &pSwap[i].color);
+				acquireBarriers[i][0].image = pSwap[i].color.image;
+				releaseBarriers[i][0].image = pSwap[i].color.image;
 
-				VkTextureCreateInfo depthCreateInfo = {
-					.debugName = "ImportedDepthFramebuffer",
+				VkTextureCreateInfo gbufferCreateInfo = {
+					.debugName = "ImportedGbufferSwap",
 					.pImageCreateInfo = &(VkImageCreateInfo){
 						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 						.pNext = &(VkExternalMemoryImageCreateInfo){
 							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-							.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM,
+							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+						},
+						.imageType = VK_IMAGE_TYPE_2D,
+						.format = MXC_NODE_GBUFFER_FORMAT,
+						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+						.mipLevels = 1,
+						.arrayLayers = 1,
+						.samples = VK_SAMPLE_COUNT_1_BIT,
+						.usage = MXC_NODE_GBUFFER_USAGE,
+					},
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+					.importHandle = pNodeContext->pNodeImports->gbufferSwapHandles[i],
+				};
+				vkCreateTexture(&gbufferCreateInfo, &pSwap[i].gbuffer);
+				acquireBarriers[i][1].image = pSwap[i].gbuffer.image;
+				releaseBarriers[i][1].image = pSwap[i].gbuffer.image;
+
+				VkTextureCreateInfo depthCreateInfo = {
+					.debugName = "ImportedDepthSwap",
+					.pImageCreateInfo = &(VkImageCreateInfo){
+						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+						.pNext = &(VkExternalMemoryImageCreateInfo){
+							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 						},
 						.imageType = VK_IMAGE_TYPE_2D,
 						.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
@@ -276,10 +304,11 @@ run_loop:
 					},
 					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-					.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT,
+					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 					.importHandle = pNodeContext->pNodeImports->depthSwapHandles[i],
 				};
 				vkCreateTexture(&depthCreateInfo, &pSwap[i].depth);
+
 			}
 		}
 	}
@@ -309,10 +338,10 @@ run_loop:
 		};
 		CmdSetViewport(cmd, 0, 1, &viewport);
 		CmdSetScissor(cmd, 0, 1, &scissor);
-//		CmdPipelineImageBarriers2(cmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
+		CmdPipelineImageBarriers2(cmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
 
 		VkClearColorValue clearColor = (VkClearColorValue){0, 0, 0.1, 0};
-		CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, pSwap[framebufferIndex].color.view, pNodeContext->normalFramebuffers[framebufferIndex].view, pSwap[framebufferIndex].depth.view);
+		CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, pSwap[framebufferIndex].color.view, pNode->normalFramebuffers[framebufferIndex].view, pSwap[framebufferIndex].depth.view);
 
 		// this is really all that'd be user exposed....
 		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
@@ -510,7 +539,7 @@ static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layou
 	VK_CHECK(vkCreateComputePipelines(vk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VK_ALLOC, pPipe));
 	vkDestroyShaderModule(vk.context.device, shader, VK_ALLOC);
 }
-static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pTestNode)
+static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 {
 	auto pNodeShared = pNodeContext->pNodeShared;
 	int  swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
@@ -521,33 +550,33 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pTestNo
 	}
 
 	{	// Create
-		CreateNodeProcessSetLayout(&pTestNode->nodeProcessSetLayout);
-		CreateNodeProcessPipeLayout(pTestNode->nodeProcessSetLayout, &pTestNode->nodeProcessPipeLayout);
-		CreateNodeProcessPipe("./shaders/node_process_blit_slope_average_up.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitMipAveragePipe);
-		CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pTestNode->nodeProcessPipeLayout, &pTestNode->nodeProcessBlitDownPipe);
+		CreateNodeProcessSetLayout(&pNode->nodeProcessSetLayout);
+		CreateNodeProcessPipeLayout(pNode->nodeProcessSetLayout, &pNode->nodeProcessPipeLayout);
+		CreateNodeProcessPipe("./shaders/node_process_blit_slope_average_up.comp.spv", pNode->nodeProcessPipeLayout, &pNode->nodeProcessBlitMipAveragePipe);
+		CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pNode->nodeProcessPipeLayout, &pNode->nodeProcessBlitDownPipe);
 
-		vkCreateBasicFramebuffer(vk.context.nodeRenderPass, &pTestNode->framebuffer);
-		vkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pTestNode->framebuffer, "TestNodeFramebuffer");
+		vkCreateBasicFramebuffer(vk.context.nodeRenderPass, &pNode->framebuffer);
+		vkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "TestNodeFramebuffer");
 
 		for (int i = 0; i < swapCount; ++i) {
 
-			VkTextureCreateInfo colorCreateInfo = {
-				.debugName = "ImportedColorFramebuffer",
-				.pImageCreateInfo = &(VkImageCreateInfo){
-					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
-					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
-					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-					.mipLevels = 1,
-					.arrayLayers = 1,
-					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
-				},
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality = VK_LOCALITY_CONTEXT,
-			};
-			vkCreateTexture(&colorCreateInfo, &pNodeContext->colorFramebuffers[i]);
+//			VkTextureCreateInfo colorCreateInfo = {
+//				.debugName = "ImportedColorFramebuffer",
+//				.pImageCreateInfo = &(VkImageCreateInfo){
+//					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
+//					.imageType = VK_IMAGE_TYPE_2D,
+//					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+//					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//					.mipLevels = 1,
+//					.arrayLayers = 1,
+//					.samples = VK_SAMPLE_COUNT_1_BIT,
+//					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+//				},
+//				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//				.locality = VK_LOCALITY_CONTEXT,
+//			};
+//			vkCreateTexture(&colorCreateInfo, &pNodeContext->colorFramebuffers[i]);
 
 			VkTextureCreateInfo normalCreateInfo = {
 				.debugName = "ImportedNormalFramebuffer",
@@ -565,25 +594,25 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pTestNo
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT,
 			};
-			vkCreateTexture(&normalCreateInfo, &pNodeContext->normalFramebuffers[i]);
+			vkCreateTexture(&normalCreateInfo, &pNode->normalFramebuffers[i]);
 
-			VkTextureCreateInfo depthCreateInfo = {
-				.debugName = "ImportedDepthFramebuffer",
-				.pImageCreateInfo = &(VkImageCreateInfo){
-					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
-					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
-					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-					.mipLevels = 1,
-					.arrayLayers = 1,
-					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
-				},
-				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-				.locality = VK_LOCALITY_CONTEXT,
-			};
-			vkCreateTexture(&depthCreateInfo, &pNodeContext->depthFramebuffers[i]);
+//			VkTextureCreateInfo depthCreateInfo = {
+//				.debugName = "ImportedDepthFramebuffer",
+//				.pImageCreateInfo = &(VkImageCreateInfo){
+//					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
+//					.imageType = VK_IMAGE_TYPE_2D,
+//					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+//					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//					.mipLevels = 1,
+//					.arrayLayers = 1,
+//					.samples = VK_SAMPLE_COUNT_1_BIT,
+//					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+//				},
+//				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+//				.locality = VK_LOCALITY_CONTEXT,
+//			};
+//			vkCreateTexture(&depthCreateInfo, &pNodeContext->depthFramebuffers[i]);
 
 		}
 
@@ -601,39 +630,39 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pTestNo
 		};
 		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &descriptorPoolCreateInfo, VK_ALLOC, &threadContext.descriptorPool));
 
-		vkCreateGlobalSet(&pTestNode->globalSet);
+		vkCreateGlobalSet(&pNode->globalSet);
 
-		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.materialSetLayout, &pTestNode->checkerMaterialSet);
-		vkCreateTextureFromFile("textures/uvgrid.jpg", &pTestNode->checkerTexture);
+		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.materialSetLayout, &pNode->checkerMaterialSet);
+		vkCreateTextureFromFile("textures/uvgrid.jpg", &pNode->checkerTexture);
 
-		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.objectSetLayout, &pTestNode->sphereObjectSet);
+		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.objectSetLayout, &pNode->sphereObjectSet);
 		vkCreateAllocateBindMapBuffer(
 			VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			sizeof(VkObjectSetState),
 			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			VK_LOCALITY_CONTEXT,
-			&pTestNode->sphereObjectSetMemory,
-			&pTestNode->sphereObjectSetBuffer,
-			(void**)&pTestNode->pSphereObjectSetMapped);
+			&pNode->sphereObjectSetMemory,
+			&pNode->sphereObjectSetBuffer,
+			(void**)&pNode->pSphereObjectSetMapped);
 
 		VkWriteDescriptorSet writeSets[] = {
-			KM_SET_WRITE_MATERIAL_IMAGE(pTestNode->checkerMaterialSet, pTestNode->checkerTexture.view),
-			VK_SET_WRITE_OBJECT_BUFFER(pTestNode->sphereObjectSet, pTestNode->sphereObjectSetBuffer),
+			KM_SET_WRITE_MATERIAL_IMAGE(pNode->checkerMaterialSet, pNode->checkerTexture.view),
+			VK_SET_WRITE_OBJECT_BUFFER(pNode->sphereObjectSet, pNode->sphereObjectSetBuffer),
 		};
 		vkUpdateDescriptorSets(vk.context.device, _countof(writeSets), writeSets, 0, NULL);
 
-		pTestNode->sphereTransform = (MidPose){.position = {0, 0, -4}};
-		vkUpdateObjectSet(&pTestNode->sphereTransform, &pTestNode->sphereObjectState, pTestNode->pSphereObjectSetMapped);
+		pNode->sphereTransform = (MidPose){.position = {0, 0, -4}};
+		vkUpdateObjectSet(&pNode->sphereTransform, &pNode->sphereObjectState, pNode->pSphereObjectSetMapped);
 
-		CreateSphereMesh(0.5, 32, 32, &pTestNode->sphereMesh);
+		CreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);
 	}
 
 	{  // Copy needed state
 		// context is available to all now so don't need to do this
-		pTestNode->device = vk.context.device;
-		pTestNode->nodeRenderPass = vk.context.nodeRenderPass;
-		pTestNode->pipeLayout = vk.context.basicPipeLayout.pipeLayout;
-		pTestNode->basicPipe = vk.context.basicPipe;
+		pNode->device = vk.context.device;
+		pNode->nodeRenderPass = vk.context.nodeRenderPass;
+		pNode->pipeLayout = vk.context.basicPipeLayout.pipeLayout;
+		pNode->basicPipe = vk.context.basicPipe;
 	}
 }
 

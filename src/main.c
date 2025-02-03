@@ -131,7 +131,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
 		mxcInitializeInterprocessServer();
 
-#define TEST_NODE
+//#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
@@ -184,6 +184,7 @@ int main(void)
 			compositorBaseCycleValue += MXC_CYCLE_COUNT;
 
 			__atomic_thread_fence(__ATOMIC_ACQUIRE);
+			// itd be good to come up with a mechanism that can actually deal with real multiple queues for debugging
 			midVkSubmitPresentCommandBuffer(compositorContext.cmd,
 											compositorContext.swap.chain,
 											compositorContext.swap.acquireSemaphore,

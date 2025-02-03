@@ -20,6 +20,12 @@
 #define MXC_NODE_GBUFFER_LEVELS 10
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 
+#if defined(D3D11)
+#define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT
+#elif defined(D3D12)
+#define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
+#endif
+
 //////////////
 //// IPC Types
 ////
@@ -164,9 +170,9 @@ typedef struct MxcNodeSwapPool {
 extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_USAGE_COUNT];
 
 MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index);
-int      mxcClaimSwap(const MxcSwapInfo* pInfo);
+int      mxcClaimSwap(const MxcSwapInfo* pSwapInfo);
 void     mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index);
-void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTextureCreateInfo, MxcSwap* pSwap);
+void     mxcCreateSwap(const MxcSwapInfo* pSwapInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap);
 
 //////////////////////////////
 //// Compositor Types and Data
@@ -209,7 +215,7 @@ typedef struct MxcNodeCompositorSetState {
 	vec2 lrUV;
 } MxcNodeCompositorSetState;
 
-// Data compositor needs for each node
+// Data compositor needs for each node. Could this go in CompositorContext?
 typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 
 	MidPose                    rootPose;
@@ -249,10 +255,10 @@ typedef struct MxcNodeContext {
 	VkCommandBuffer cmd;
 
 	// Compositor Data
-	VkDedicatedTexture colorFramebuffers[VK_SWAP_COUNT * 2];
-	VkDedicatedTexture normalFramebuffers[VK_SWAP_COUNT * 2];
-	VkDedicatedTexture depthFramebuffers[VK_SWAP_COUNT * 2];
-	VkDedicatedTexture gbufferFramebuffers[VK_SWAP_COUNT * 2];
+//	VkDedicatedTexture colorFramebuffers[VK_SWAP_COUNT * 2];
+//	VkDedicatedTexture normalFramebuffers[VK_SWAP_COUNT * 2];
+//	VkDedicatedTexture depthFramebuffers[VK_SWAP_COUNT * 2];
+//	VkDedicatedTexture gbufferFramebuffers[VK_SWAP_COUNT * 2];
 
 
 	// Node/Compositor Duplicated
