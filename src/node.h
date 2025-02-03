@@ -170,9 +170,9 @@ typedef struct MxcNodeSwapPool {
 extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_USAGE_COUNT];
 
 MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index);
-int      mxcClaimSwap(const MxcSwapInfo* pSwapInfo);
+int      mxcClaimSwap(const MxcSwapInfo* pInfo);
 void     mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index);
-void     mxcCreateSwap(const MxcSwapInfo* pSwapInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap);
+void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap);
 
 //////////////////////////////
 //// Compositor Types and Data
@@ -255,18 +255,14 @@ typedef struct MxcNodeContext {
 	VkCommandBuffer cmd;
 
 	// Compositor Data
-//	VkDedicatedTexture colorFramebuffers[VK_SWAP_COUNT * 2];
-//	VkDedicatedTexture normalFramebuffers[VK_SWAP_COUNT * 2];
-//	VkDedicatedTexture depthFramebuffers[VK_SWAP_COUNT * 2];
-//	VkDedicatedTexture gbufferFramebuffers[VK_SWAP_COUNT * 2];
-
 
 	// Node/Compositor Duplicated
 	// If thread the node/compositor both directly access this.
-	// If IPC it is replicate via duplicated handles from NodeImports.
+	// If IPC it is replicated via duplicated handles from NodeImports.
 	// Maybe these should be their own struct? MxcNodeDuplicated
 	HANDLE      swapsSyncedHandle;
 	// Should be a handle? Maybe. Although when replicated to a node it won't have a handle.
+	// these don't need to be VkImage on non vk nodes... so ya
 	MxcSwap     swap[VK_SWAP_COUNT * 2];
 
 	VkSemaphore nodeTimeline;

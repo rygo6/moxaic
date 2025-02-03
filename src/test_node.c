@@ -53,7 +53,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 	auto needsImport = nodeType != MXC_NODE_TYPE_THREAD;
 
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
-	MxcNodeImports* pNodeImports = pNodeContext->pNodeImports;
+	MxcNodeImports* pImports = pNodeContext->pNodeImports;
 	MxcSwap*        pSwap = pNodeContext->swap;
 
 	VkDevice        device = pNode->device;
@@ -212,10 +212,10 @@ run_loop:
 
 		for (int i = 0; i < swapCount; ++i) {
 			if (needsImport) {
-				if (pNodeImports->colorSwapHandles[i] != NULL)
+				if (pImports->colorSwapHandles[i] != NULL)
 					CloseHandle(pNodeContext->pNodeImports->colorSwapHandles[i]);
-				if (hasDepth && pNodeImports->depthSwapHandles[i] != NULL)
-					CloseHandle(pNodeImports->depthSwapHandles[i]);
+				if (hasDepth && pImports->depthSwapHandles[i] != NULL)
+					CloseHandle(pImports->depthSwapHandles[i]);
 			}
 
 			if (pSwap[i].color.image != VK_NULL_HANDLE) {

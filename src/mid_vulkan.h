@@ -1945,6 +1945,9 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 //	ID3D11DeviceContext_Release(d3d11.context);
 
 #elif defined(D3D12)
+	bool isDepth = vkDepthFormat(pCreateInfo->format);
+	auto format = vkDXGIFormat(pCreateInfo->format);
+
 	D3D12_RESOURCE_DESC textureDesc = {
 		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 		.Alignment = 0,
@@ -1952,12 +1955,12 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.Height = pCreateInfo->extent.height,
 		.DepthOrArraySize = pCreateInfo->arrayLayers,
 		.MipLevels = pCreateInfo->mipLevels,
-		.Format = vkDXGIFormat(pCreateInfo->format),
+		.Format = format,
 		.SampleDesc.Count = pCreateInfo->samples,
 		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-		.Flags = vkDepthFormat(pCreateInfo->format) ?
-					  D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL :
-					  D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+		.Flags = isDepth ?
+					 D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL :
+					 D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS,
 	};
 	D3D12_HEAP_PROPERTIES heapProperties = {
 		.Type = D3D12_HEAP_TYPE_DEFAULT,
@@ -1968,17 +1971,18 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 	};
 	D3D12_CLEAR_VALUE clearValue = {
 		.Format = DXGI_FORMAT_D16_UNORM,
-		.DepthStencil = { 1.0f, 0 }
-	};
+		.DepthStencil = {1.0f, 0}};
 	DX_CHECK(ID3D12Device_CreateCommittedResource(
 		d3d12.device,
 		&heapProperties,
 		D3D12_HEAP_FLAG_SHARED,
 		&textureDesc,
-		vkDepthFormat(pCreateInfo->format) ?
+		isDepth ?
 			D3D12_RESOURCE_STATE_DEPTH_WRITE :
 			D3D12_RESOURCE_STATE_RENDER_TARGET,
-		vkDepthFormat(pCreateInfo->format) ? &clearValue : NULL,
+		isDepth ?
+			&clearValue :
+			NULL,
 		&IID_ID3D12Resource,
 		(void**)&pTexture->texture));
 	printf("Created DX12 Texture Format: %d\n", textureDesc.Format);

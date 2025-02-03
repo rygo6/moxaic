@@ -1,10 +1,3 @@
-// build
-//#include "comp_node.c"
-//#include "node.c"
-//#include "test_node.c"
-//#include "window.c"
-//#include "mid_vulkan.c"
-
 #include <stdio.h>
 #include <stdlib.h>
 

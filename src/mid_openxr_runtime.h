@@ -131,13 +131,13 @@ void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
 
 void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
-void xrClaimFramebufferImages(XrSessionIndex sessionIndex, int imageCount, HANDLE* pHandle);
+void xrClaimSwapImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles);
 
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
 void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
 
-void xrClaimSwapPoolImage(XrSessionIndex sessionIndex, uint8_t* pIndex);
-void xrReleaseSwapPoolImage(XrSessionIndex sessionIndex, uint8_t index);
+void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex);
+void xrReleaseSwapIndex(XrSessionIndex sessionIndex, uint8_t index);
 
 void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
 void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
@@ -2306,8 +2306,11 @@ XR_PROC xrCreateSwapchain(
 	pSwap->arraySize = createInfo->arraySize;
 	pSwap->mipCount = createInfo->mipCount;
 
+//	int  swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+
 	HANDLE colorHandles[XR_SWAP_COUNT];
-	xrClaimFramebufferImages(pSess->index, XR_SWAP_COUNT, colorHandles);
+	HANDLE depthHandles[XR_SWAP_COUNT];
+	xrClaimSwapImages(pSess->index, XR_SWAP_COUNT, colorHandles, depthHandles);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -2422,7 +2425,7 @@ XR_PROC xrAcquireSwapchainImage(
 	auto pSwap = (Swapchain*)swapchain;
 	auto pSess = BLOCK_PTR(block.session, pSwap->hSession);
 
-	xrClaimSwapPoolImage(pSess->index, &pSwap->swapIndex);
+	xrClaimSwapIndex(pSess->index, &pSwap->swapIndex);
 
 	*index = pSwap->swapIndex;
 
@@ -2463,7 +2466,7 @@ XR_PROC xrReleaseSwapchainImage(
 	auto pSwap = (Swapchain*)swapchain;
 	auto pSess = BLOCK_PTR(block.session, pSwap->hSession);
 
-	xrReleaseSwapPoolImage(pSess->index, pSwap->swapIndex);
+	xrReleaseSwapIndex(pSess->index, pSwap->swapIndex);
 
 	ID3D11DeviceContext4*   context4 = pSess->binding.d3d11.context4;
 

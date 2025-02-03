@@ -72,21 +72,27 @@ void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
-void xrClaimFramebufferImages(XrSessionIndex sessionIndex, int imageCount, HANDLE* pHandle)
+void xrClaimSwapImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles)
 {
-	CHECK(imageCount != VK_SWAP_COUNT, "Required swap image count does not match imported swap count!")
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
-
-	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
+	MxcNodeImports* pImports = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 
-	for (int i = 0; i < imageCount; ++i) {
-//		printf("Claiming framebuffer handle %p\n", pImportParam->framebufferHandles[i].color);
-//		pHandle[i] = pImportParam->framebufferHandles[i].color;
+	pNodeShared->swapType = MXC_SWAP_TYPE_STEREO_SINGLE;
+	pNodeShared->swapUsage = MXC_SWAP_USAGE_COLOR_AND_DEPTH;
+
+	mxcIpcFuncEnqueue(&pNodeShared->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
+	printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
+	WaitForSingleObject(pNodeContext->swapsSyncedHandle, INFINITE);
+	printf("Swaps claimed.\n");
+
+	for (int i = 0; i < count; ++i) {
+		pColorHandles[i] = pImports->colorSwapHandles[i];
+		pDepthHandles[i] = pImports->depthSwapHandles[i];
 	}
 }
 
-void xrClaimSwapPoolImage(XrSessionIndex sessionIndex, uint8_t* pIndex)
+void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
@@ -98,7 +104,7 @@ void xrClaimSwapPoolImage(XrSessionIndex sessionIndex, uint8_t* pIndex)
 //	assert(priorIndex == false);
 }
 
-void xrReleaseSwapPoolImage(XrSessionIndex sessionIndex, uint8_t index)
+void xrReleaseSwapIndex(XrSessionIndex sessionIndex, uint8_t index)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;

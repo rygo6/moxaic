@@ -64,7 +64,7 @@ MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 //MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
 MxcNodeSwapPool nodeSwapPool[MXC_SWAP_USAGE_COUNT];
 
-void mxcCreateSwap(const MxcSwapInfo* pSwapInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap)
+void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap)
 {
 	{
 		VkImageCreateInfo info = {
@@ -182,10 +182,10 @@ MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index)
 	return &pPool->swaps[index];
 }
 
-int mxcClaimSwap(const MxcSwapInfo* pSwapInfo)
+int mxcClaimSwap(const MxcSwapInfo* pInfo)
 {
 //	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
-	MxcNodeSwapPool* pPool = &nodeSwapPool[pSwapInfo->type];
+	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->type];
 
 	int i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
 	// should change all this to use mid_block stuff
@@ -203,7 +203,7 @@ int mxcClaimSwap(const MxcSwapInfo* pSwapInfo)
 			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 		};
-		mxcCreateSwap(pSwapInfo, &texInfo, &pPool->swaps[i]);
+		mxcCreateSwap(pInfo, &texInfo, &pPool->swaps[i]);
 		printf("Created Swap. Index: %d Width: %d Height: %d\n", i, texInfo.extent.width, texInfo.extent.height);
 	}
 
