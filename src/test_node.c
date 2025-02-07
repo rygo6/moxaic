@@ -96,7 +96,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 	assert(__atomic_always_lock_free(sizeof(pNodeShared->timelineValue), &pNodeShared->timelineValue));
 
-	int  swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+	int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
 	VkImageMemoryBarrier2 acquireBarriers[swapCount][2];
 	uint32_t              acquireBarrierCount = 0;
 	VkImageMemoryBarrier2 releaseBarriers[swapCount][2];
@@ -207,8 +207,8 @@ run_loop:
 	if (claimSwaps) {
 		claimSwaps = false;
 
-		bool hasDepth = pNodeShared->swapUsage == MXC_SWAP_USAGE_COLOR_AND_DEPTH;
-		int  swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+		bool hasDepth = pNodeShared->swapUsage == XR_SWAP_USAGE_COLOR_AND_DEPTH;
+		int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
 
 		for (int i = 0; i < swapCount; ++i) {
 			if (needsImport) {
@@ -542,11 +542,11 @@ static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layou
 static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 {
 	auto pNodeShared = pNodeContext->pNodeShared;
-	int  swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+	int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
 
 	{	// Config
-		pNodeShared->swapType = MXC_SWAP_TYPE_SINGLE;
-		pNodeShared->swapUsage = MXC_SWAP_USAGE_COLOR_AND_DEPTH;
+		pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
+		pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
 	}
 
 	{	// Create
@@ -669,8 +669,8 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 void* mxcTestNodeThread(MxcNodeContext* pNodeContext)
 {
 	auto pNodeShared = pNodeContext->pNodeShared;
-	pNodeShared->swapType = MXC_SWAP_TYPE_SINGLE;
-	pNodeShared->swapUsage = MXC_SWAP_USAGE_COLOR_AND_DEPTH;
+	pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
+	pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
 
 	MxcTestNode testNode;
 	mxcCreateTestNode(pNodeContext, &testNode);

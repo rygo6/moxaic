@@ -123,6 +123,22 @@ typedef enum XrGraphicsApi {
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
+typedef enum XrSwapUsage {
+	XR_SWAP_USAGE_UNKNOWN,
+	XR_SWAP_USAGE_COLOR,
+	XR_SWAP_USAGE_COLOR_AND_DEPTH,
+	XR_SWAP_USAGE_COUNT,
+} XrSwapUsage;
+
+typedef enum XrSwapType : uint8_t {
+	XR_SWAP_TYPE_UNKNOWN,
+	XR_SWAP_TYPE_MONO_SINGLE,
+	XR_SWAP_TYPE_STEREO_SINGLE,
+	XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
+	XR_SWAP_TYPE_STEREO_DOUBLE_WIDE,
+	XR_SWAP_TYPE_COUNT,
+} XrSwapType;
+
 void midXrInitialize();
 
 // Session may claim an index from implementation or reference state in the implementation
@@ -131,7 +147,8 @@ void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
 
 void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
-void xrClaimSwapImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles);
+void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType, XrSwapUsage swapUsage);
+void xrClaimSwapColorImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles);
 
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
 void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
@@ -172,6 +189,7 @@ static inline XrTime xrHzToXrTime(double hz)
 #define XR_DEFAULT_SAMPLES 1
 
 #define XR_SWAP_COUNT 2
+#define XR_MAX_SWAP_IMAGE_COUNT 2
 
 #define XR_OPENGL_MAJOR_VERSION 4
 #define XR_OPENGL_MINOR_VERSION 6
@@ -205,13 +223,13 @@ typedef struct XrSpaceBounds {
 	XrRect2Di          imageRect;
 } XrSpaceBounds;
 
-typedef enum XrSwapType : uint8_t {
-	XR_SWAP_TYPE_MONO,
-	XR_SWAP_TYPE_STEREO,
-	XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
-	XR_SWAP_TYPE_STEREO_DOUBLE_WIDE,
-	XR_SWAP_TYPE_COUNT,
-} XrSwapType;
+constexpr int XR_SWAP_TYPE_COUNTS[] = {
+	[XR_SWAP_TYPE_UNKNOWN] = 0,
+	[XR_SWAP_TYPE_MONO_SINGLE] = 1,
+	[XR_SWAP_TYPE_STEREO_SINGLE] = 2,
+	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
+	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
+};
 
 //typedef struct XrFrameEndInfo {
 //	XrStructureType    type;
@@ -345,7 +363,7 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 //// Map
 ////
 typedef struct MapBase {
-	uint32_t  count;
+	u32       count;
 	block_key keys[];
 	// keys could be any size
 	//	block_handle handles[];
@@ -353,7 +371,7 @@ typedef struct MapBase {
 
 #define MAP_DECL(n)              \
 	struct {                     \
-		uint32_t     count;      \
+		u32          count;      \
 		block_key    keys[n];    \
 		block_handle handles[n]; \
 	}
@@ -469,7 +487,7 @@ typedef struct Space {
 typedef struct Swapchain {
 	block_handle hSession;
 
-	uint8_t swapIndex;
+	u8 swapIndex;
 	union {
 		struct {
 			GLuint texture;
@@ -477,10 +495,17 @@ typedef struct Swapchain {
 		} gl;
 		struct {
 			ID3D11Texture2D* texture;
-//			IDXGIKeyedMutex* keyedMutex;
-//			ID3D11RenderTargetView* rtView;
 		} d3d11;
-	} color[XR_SWAP_COUNT];
+	} color[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
+	union {
+		struct {
+			GLuint texture;
+			GLuint memObject;
+		} gl;
+		struct {
+			ID3D11Texture2D* texture;
+		} d3d11;
+	} depth[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 
 	XrSwapchainCreateFlags createFlags;
 	XrSwapchainUsageFlags  usageFlags;
@@ -492,6 +517,7 @@ typedef struct Swapchain {
 	u32                    arraySize;
 	u32                    mipCount;
 } Swapchain;
+typedef block_handle swap_handle; // do this?
 
 #define XR_SESSIONS_CAPACITY 8
 #define XR_MAX_SPACES 8
@@ -503,8 +529,9 @@ typedef struct Session {
 
 	//// Swap
 	CACHE_ALIGN
-	block_handle hSwap;
+	swap_handle  hSwap;
 	XrSwapType   swapType;
+	XrSwapUsage  swapUsage;
 
 	//// Timing
 	CACHE_ALIGN
@@ -733,11 +760,11 @@ static const char* string_XrStructureType(XrStructureType type)
 }
 #undef PRINT_STRUCT_TYPE_NAME
 
-#define STR(s)         #s
-#define XSTR(s)        STR(s)
-#define DOT(_)         ._
-#define COMMA          ,
-#define BRACES(f, _)   {f(_)}
+#define STR(s)       #s
+#define XSTR(s)      STR(s)
+#define DOT(_)       ._
+#define COMMA        ,
+#define BRACES(f, _) {f(_)}
 
 #define FORMAT_F(_)          _: %.3f
 #define FORMAT_STRUCT_F(_)  "%s: " XSTR(BRACES(XR_LIST_STRUCT_##_, FORMAT_F))
@@ -2252,17 +2279,13 @@ XR_PROC xrCreateSwapchain(
 #define PRINT_CREATE_FLAGS(_flag, _bit)  \
 	if (createInfo->createFlags & _flag) \
 		printf("flag: " #_flag "\n");
-
 	XR_LIST_BITS_XrSwapchainCreateFlags(PRINT_CREATE_FLAGS);
-
 #undef PRINT_CREATE_FLAGS
 
 #define PRINT_USAGE_FLAGS(_flag, _bit)  \
 	if (createInfo->usageFlags & _flag) \
 		printf("usage: " #_flag "\n");
-
 	XR_LIST_BITS_XrSwapchainUsageFlags(PRINT_USAGE_FLAGS);
-
 #undef PRINT_USAGE_FLAGS
 
 	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
@@ -2276,12 +2299,17 @@ XR_PROC xrCreateSwapchain(
 	int expectedWidth = XR_DEFAULT_WIDTH;
 	int expectedHeight = XR_DEFAULT_HEIGHT;
 
-	if (createInfo->width * 2 == expectedWidth) {
+	if (createInfo->width == expectedWidth && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+		pSess->swapType = XR_SWAP_TYPE_MONO_SINGLE;
+		printf("Setting XR_SWAP_TYPE_MONO_SINGLE for session.\n");
+	} else if (createInfo->width == expectedWidth && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
+		pSess->swapType = XR_SWAP_TYPE_STEREO_SINGLE;
+		printf("Setting XR_SWAP_TYPE_STEREO_SINGLE for session.\n");
+	} else if (createInfo->width * 2 == expectedWidth) {
 		pSess->swapType = XR_SWAP_TYPE_STEREO_DOUBLE_WIDE;
 		expectedWidth *= 2;
 		printf("Setting XR_SWAP_TYPE_STEREO_DOUBLE_WIDE for session.\n");
-	}
-	if (createInfo->arraySize > 1) {
+	} else if (createInfo->arraySize > 1) {
 		pSess->swapType = XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY;
 		printf("Setting XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY for session.\n");
 	}
@@ -2306,11 +2334,13 @@ XR_PROC xrCreateSwapchain(
 	pSwap->arraySize = createInfo->arraySize;
 	pSwap->mipCount = createInfo->mipCount;
 
-//	int  swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+	// This is making a big assumption that all swaps wil be the same size... we should probably enable individual request
+	// unfortunately you can't know all swaps itll want up front and you dont know it till it calls this
+	xrCreateSwapImages(pSess->index, pSess->swapType, XR_SWAP_USAGE_COLOR_AND_DEPTH);
 
 	HANDLE colorHandles[XR_SWAP_COUNT];
 	HANDLE depthHandles[XR_SWAP_COUNT];
-	xrClaimSwapImages(pSess->index, XR_SWAP_COUNT, colorHandles, depthHandles);
+	xrClaimSwapColorImages(pSess->index, XR_SWAP_COUNT, colorHandles, depthHandles);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -2334,6 +2364,7 @@ XR_PROC xrCreateSwapchain(
 
 			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
+				assert(colorHandles[i] != NULL);
 				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwap->color[i].d3d11.texture));
 				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device5, colorHandles[i], pSwap->color[i].d3d11.texture);
 //				D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {
@@ -2488,30 +2519,41 @@ XR_PROC xrBeginSession(
 	LOG_METHOD_ONCE(xrBeginSession);
 	LogNextChain(beginInfo->next);
 
-	Session* pSession = (Session*)session;
+	auto pSess = (Session*)session;
 
-	if (pSession->running) {
+	if (pSess->running) {
 		LOG_ERROR("XR_ERROR_SESSION_RUNNING\n");
 		return XR_ERROR_SESSION_RUNNING;
 	}
 
-	if (pSession->activeSessionState != XR_SESSION_STATE_READY) {
+	if (pSess->activeSessionState != XR_SESSION_STATE_READY) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_READY\n");
 		return XR_ERROR_SESSION_NOT_READY;
 	}
 
-	pSession->running = true;
-	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
+	pSess->running = true;
+	pSess->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 
-//	switch (xr.instance.graphicsApi) {
-//		case XR_GRAPHICS_API_OPENGL:    break;
-//		case XR_GRAPHICS_API_OPENGL_ES: break;
-//		case XR_GRAPHICS_API_VULKAN:    break;
-//		case XR_GRAPHICS_API_D3D11_4:   break;
-//		default:
-//			LOG_ERROR("Graphics API not supported.\n");
-//			return XR_ERROR_RUNTIME_FAILURE;
-//	}
+	switch (pSess->primaryViewConfigurationType) {
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+//			xrSetSwapTypeAndUsage(pSess->index, XR_SWAP_TYPE_MONO_SINGLE, XR_SWAP_USAGE_COLOR_AND_DEPTH);
+			break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+			break;
+		default:
+			LOG_ERROR("PrimaryViewConfigurationType not supported.\n");
+			return XR_ERROR_RUNTIME_FAILURE;
+	}
+
+	switch (xr.instance.graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL:    break;
+		case XR_GRAPHICS_API_OPENGL_ES: break;
+		case XR_GRAPHICS_API_VULKAN:    break;
+		case XR_GRAPHICS_API_D3D11_4:   break;
+		default:
+			LOG_ERROR("Graphics API not supported.\n");
+			return XR_ERROR_RUNTIME_FAILURE;
+	}
 
 	if (beginInfo->next != NULL) {
 		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;

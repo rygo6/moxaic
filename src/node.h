@@ -10,6 +10,7 @@
 
 #include "mid_vulkan.h"
 #include "mid_bit.h"
+#include "mid_openxr_runtime.h"
 
 //////////////
 //// Constants
@@ -55,30 +56,6 @@ typedef enum MxcNodeType {
 	MXC_NODE_TYPE_COUNT
 } MxcNodeType;
 
-typedef enum MxcSwapType {
-	MXC_SWAP_TYPE_UNKNOWN,
-	MXC_SWAP_TYPE_SINGLE,
-	MXC_SWAP_TYPE_STEREO_SINGLE,
-	MXC_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
-	MXC_SWAP_TYPE_STEREO_DOUBLE_WIDE,
-	MXC_SWAP_TYPE_COUNT,
-} MxcSwapType;
-
-constexpr int MXC_SWAP_TYPE_COUNTS[] = {
-	[MXC_SWAP_TYPE_UNKNOWN] = 0,
-	[MXC_SWAP_TYPE_SINGLE] = 1,
-	[MXC_SWAP_TYPE_STEREO_SINGLE] = 2,
-	[MXC_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-	[MXC_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
-};
-
-typedef enum MxcSwapUsage {
-	MXC_SWAP_USAGE_UNKNOWN,
-	MXC_SWAP_USAGE_COLOR,
-	MXC_SWAP_USAGE_COLOR_AND_DEPTH,
-	MXC_SWAP_USAGE_COUNT,
-} MxcSwapUsage;
-
 typedef enum MxcSwapScale {
 	MXC_SWAP_SCALE_FULL,
 	MXC_SWAP_SCALE_HALF,
@@ -110,8 +87,8 @@ typedef struct MxcNodeShared {
 	MxcRingBuffer nodeInterprocessFuncQueue;
 
 	// Swap
-	MxcSwapType  swapType;
-	MxcSwapUsage swapUsage;
+	XrSwapType  swapType;
+	XrSwapUsage swapUsage;
 
 } MxcNodeShared;
 
@@ -120,9 +97,10 @@ typedef struct MxcNodeImports {
 	HANDLE swapsSyncedHandle;
 
 	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
-	HANDLE colorSwapHandles[VK_SWAP_COUNT * 2];
-	HANDLE gbufferSwapHandles[VK_SWAP_COUNT * 2];
-	HANDLE depthSwapHandles[VK_SWAP_COUNT * 2];
+	HANDLE colorSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
+	HANDLE gbufferSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
+	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
+	u8     claimedSwapCount;
 
 	HANDLE nodeTimelineHandle;
 	HANDLE compositorTimelineHandle;
@@ -131,7 +109,6 @@ typedef struct MxcNodeImports {
 
 typedef struct MxcExternalNodeMemory {
 	// these needs to turn into array so one process can share chunk of shared memory
-	// is that good for security though?
 	MxcNodeShared shared;
 	MxcNodeImports imports;
 } MxcExternalNodeMemory;
@@ -141,8 +118,8 @@ typedef struct MxcExternalNodeMemory {
 ////
 typedef uint16_t swap_index_t;
 typedef struct MxcSwapInfo {
-	MxcSwapType  type   : 4;
-	MxcSwapUsage usage  : 4;
+	XrSwapType  type   : 4;
+	XrSwapUsage usage  : 4;
 	// not sure if I will use these
 	MxcSwapScale xScale : 4;
 	MxcSwapScale yScale : 4;
@@ -166,8 +143,17 @@ typedef struct MxcNodeSwapPool {
 	MxcSwap       swaps[BITNSIZE(swap_bitset_t)];
 } MxcNodeSwapPool;
 
+constexpr int MXC_SWAP_TYPE_POOL_INDEX[] = {
+	[XR_SWAP_TYPE_UNKNOWN] = 0,
+	[XR_SWAP_TYPE_MONO_SINGLE] = 0,
+	[XR_SWAP_TYPE_STEREO_SINGLE] = 0,
+	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
+	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 2,
+};
+constexpr int MXC_SWAP_TYPE_POOL_COUNT = 3;
+
 //extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
-extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_USAGE_COUNT];
+extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_TYPE_POOL_COUNT];
 
 MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index);
 int      mxcClaimSwap(const MxcSwapInfo* pInfo);
@@ -373,7 +359,7 @@ typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
 	MXC_INTERPROCESS_TARGET_COUNT,
 } MxcIpcFunc;
-_Static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
+static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
 // I could get rid of this and just do a comparison polling on every node state like OXR does

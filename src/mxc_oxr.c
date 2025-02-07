@@ -26,6 +26,7 @@ void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 	*pNodeContext = (MxcNodeContext){};
 	pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
 	pNodeContext->pNodeShared = pNodeShared;
+	pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
 	printf("Importing node handle %d as OpenXR session\n", nodeHandle);
 
 	// openxr session = moxaic node
@@ -72,24 +73,37 @@ void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
-void xrClaimSwapImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles)
+void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType, XrSwapUsage swapUsage)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
-	MxcNodeImports* pImports = &pImportedExternalMemory->imports;
-	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
+	auto pNodeCtxt = &nodeContexts[sessionIndex];
+	auto pImports = &pImportedExternalMemory->imports;
+	auto pNodeShrd = &pImportedExternalMemory->shared;
+	pImports->claimedSwapCount = 0;
+	if (pNodeShrd->swapType != swapType || pNodeShrd->swapUsage != swapUsage) {
+		pNodeShrd->swapType = swapType;
+		pNodeShrd->swapUsage = swapUsage;
+		mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 
-	pNodeShared->swapType = MXC_SWAP_TYPE_STEREO_SINGLE;
-	pNodeShared->swapUsage = MXC_SWAP_USAGE_COLOR_AND_DEPTH;
-
-	mxcIpcFuncEnqueue(&pNodeShared->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
-	printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
-	WaitForSingleObject(pNodeContext->swapsSyncedHandle, INFINITE);
-	printf("Swaps claimed.\n");
-
-	for (int i = 0; i < count; ++i) {
-		pColorHandles[i] = pImports->colorSwapHandles[i];
-		pDepthHandles[i] = pImports->depthSwapHandles[i];
+		printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
+		WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 	}
+}
+
+void xrClaimSwapColorImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles)
+{
+	auto pNodeCtxt = &nodeContexts[sessionIndex];
+	auto pImports = &pImportedExternalMemory->imports;
+	auto pNodeShrd = &pImportedExternalMemory->shared;
+
+//	printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
+//	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
+
+	int offset = pImports->claimedSwapCount;
+	for (int i = 0; i < count; ++i) {
+		pColorHandles[i] = pImports->colorSwapHandles[i + offset];
+		pDepthHandles[i] = pImports->depthSwapHandles[i + offset];
+	}
+	pImports->claimedSwapCount += count;
 }
 
 void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)

@@ -62,13 +62,13 @@ MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
 
 //MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
-MxcNodeSwapPool nodeSwapPool[MXC_SWAP_USAGE_COUNT];
+MxcNodeSwapPool nodeSwapPool[MXC_SWAP_TYPE_POOL_COUNT];
 
 void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap)
 {
-	{
+	{ // Color
 		VkImageCreateInfo info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = &(VkExternalMemoryImageCreateInfo){
 				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
@@ -93,9 +93,9 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		vkCreateTexture(&textureInfo, &pSwap->color);
 	}
 
-	{
+	{ // Depth
 		VkImageCreateInfo info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = &(VkExternalMemoryImageCreateInfo){
 				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
@@ -120,11 +120,11 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		vkCreateTexture(&textureInfo, &pSwap->depth);
 	}
 
-	{
+	{ // GBuffer
 		VkImageCreateInfo info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = &(VkExternalMemoryImageCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
 			.imageType = VK_IMAGE_TYPE_2D,
@@ -153,7 +153,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		VkCommandBuffer cmd = midVkBeginImmediateTransferCommandBuffer();
 		VkImageMemoryBarrier2 barriers[] = {
 			{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pSwap->color.image,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
 				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
@@ -161,7 +161,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pSwap->depth.image,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
 				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
@@ -176,18 +176,19 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 
 MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index)
 {
-//	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
-	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->type];
+	//	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+	auto poolIndex = MXC_SWAP_TYPE_POOL_INDEX[pInfo->type];
+	auto pPool = &nodeSwapPool[poolIndex];
 	assert(index < COUNT(pPool->swaps));
 	return &pPool->swaps[index];
 }
 
 int mxcClaimSwap(const MxcSwapInfo* pInfo)
 {
-//	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
-	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->type];
-
-	int i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
+	//	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
+	auto poolIndex = MXC_SWAP_TYPE_POOL_INDEX[pInfo->type];
+	auto pPool = &nodeSwapPool[poolIndex];
+	int  i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
 	// should change all this to use mid_block stuff
 	if (i == -1) {
 		LOG_ERROR("Ran out of occupied claiming swap!\n");
@@ -213,7 +214,8 @@ int mxcClaimSwap(const MxcSwapInfo* pInfo)
 void mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index)
 {
 //	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->xScale][pInfo->yScale];
-	MxcNodeSwapPool* pPool = &nodeSwapPool[pInfo->type];
+	auto poolIndex = MXC_SWAP_TYPE_POOL_INDEX[pInfo->type];
+	auto pPool = &nodeSwapPool[poolIndex];
 	assert(index < COUNT(pPool->swaps));
 	BITCLEAR(pPool->occupied, index);
 	printf("Releasing swap %d\n", index);
@@ -234,13 +236,13 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorContext.swap);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = compositorContext.pool,
 		.commandBufferCount = 1,
 	};
@@ -281,7 +283,7 @@ void ReleaseNode(NodeHandle handle)
 	}
 static int CleanupNode(NodeHandle handle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[handle];
+	auto pNodeCtxt = &nodeContexts[handle];
 
 	ReleaseNode(handle);
 
@@ -292,11 +294,11 @@ static int CleanupNode(NodeHandle handle)
 //	}
 
 	// Close external handles
-	switch (pNodeContext->type) {
+	switch (pNodeCtxt->type) {
 		case MXC_NODE_TYPE_THREAD:
-			vkFreeCommandBuffers(vk.context.device, pNodeContext->pool, 1, &pNodeContext->cmd);
-			vkDestroyCommandPool(vk.context.device, pNodeContext->pool, VK_ALLOC);
-			int result = pthread_join(pNodeContext->threadId, NULL);
+			vkFreeCommandBuffers(vk.context.device, pNodeCtxt->pool, 1, &pNodeCtxt->cmd);
+			vkDestroyCommandPool(vk.context.device, pNodeCtxt->pool, VK_ALLOC);
+			int result = pthread_join(pNodeCtxt->threadId, NULL);
 			if (result != 0) {
 				perror("Thread join failed");
 			}
@@ -308,7 +310,7 @@ static int CleanupNode(NodeHandle handle)
 //				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].normal.memory));
 //				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeContext->vkNodeFramebufferTextures[i].gbuffer.memory));
 //			}
-			CLOSE_HANDLE(vkGetSemaphoreExternalHandle(pNodeContext->nodeTimeline));
+			CLOSE_HANDLE(vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline));
 			break;
 		case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
 			// this should probably run on the node when closing, but it also seems to clean itself up fine ?
@@ -330,12 +332,12 @@ static int CleanupNode(NodeHandle handle)
 	}
 
 	// must first release command buffer
-	vkDestroySemaphore(vk.context.device, pNodeContext->nodeTimeline, VK_ALLOC);
+	vkDestroySemaphore(vk.context.device, pNodeCtxt->nodeTimeline, VK_ALLOC);
 
 	// Clear compositor data
 	VkWriteDescriptorSet writeSets[] = {
-		(VkWriteDescriptorSet) {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		{
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = nodeCompositorData[handle].set,
 			.dstBinding = 1,
 			.descriptorCount = 1,
@@ -345,8 +347,8 @@ static int CleanupNode(NodeHandle handle)
 				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
 		},
-		(VkWriteDescriptorSet) {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		{
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = nodeCompositorData[handle].set,
 			.dstBinding = 2,
 			.descriptorCount = 1,
@@ -356,8 +358,8 @@ static int CleanupNode(NodeHandle handle)
 				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
 		},
-		(VkWriteDescriptorSet) {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		{
+			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = nodeCompositorData[handle].set,
 			.dstBinding = 3,
 			.descriptorCount = 1,
@@ -366,7 +368,7 @@ static int CleanupNode(NodeHandle handle)
 				.imageView = VK_NULL_HANDLE,
 				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
-		}
+		},
 	};
 	vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
@@ -395,55 +397,49 @@ static int CleanupNode(NodeHandle handle)
 void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* pNodeHandle)
 {
 	printf("Requesting Node Thread.\n");
-	const NodeHandle handle = RequestLocalNodeHandle();
+	auto handle = RequestLocalNodeHandle();
 
-	MxcNodeContext* pNodeContext = &nodeContexts[handle];
-	*pNodeContext = (MxcNodeContext){};
-	pNodeContext->type = MXC_NODE_TYPE_THREAD;
-	pNodeContext->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-	pNodeContext->compositorTimeline = compositorContext.compositorTimeline;
+	auto pNodeCtxt = &nodeContexts[handle];
+	*pNodeCtxt = (MxcNodeContext){};
+	pNodeCtxt->type = MXC_NODE_TYPE_THREAD;
+	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+	pNodeCtxt->compositorTimeline = compositorContext.compositorTimeline;
 
 	// maybe have the thread allocate this and submit it once ready to get rid of < 1 check
 	// then could also get rid of pNodeContext->pNodeShared?
 	// no how would something on another process do that
-	MxcNodeShared* pNodeShared = &localNodesShared[handle];
-	*pNodeShared = (MxcNodeShared){};
-	pNodeContext->pNodeShared = pNodeShared;
-	pNodeShared->rootPose.rotation = QuatFromEuler(pNodeShared->rootPose.euler);
+	auto pNodeShrd = &localNodesShared[handle];
+	*pNodeShrd = (MxcNodeShared){};
+	pNodeCtxt->pNodeShared = pNodeShrd;
+	pNodeShrd->rootPose.rotation = QuatFromEuler(pNodeShrd->rootPose.euler);
 
-	pNodeShared->camera.yFovRad = RAD_FROM_DEG(45.0f);
-	pNodeShared->camera.zNear = 0.1f;
-	pNodeShared->camera.zFar = 100.0f;
+	pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
+	pNodeShrd->camera.zNear = 0.1f;
+	pNodeShrd->camera.zFar = 100.0f;
 
-	pNodeShared->compositorRadius = 0.5;
-	pNodeShared->compositorCycleSkip = 8;
-
-//	VkExternalFenceCreateInfo nodeFenceCreateInfo = {
-//		.debugName = "NodeFence",
-//		.locality = VK_LOCALITY_CONTEXT,
-//	};
-//	vkCreateExternalFence(&nodeFenceCreateInfo, &pNodeContext->vkNodeFence);
+	pNodeShrd->compositorRadius = 0.5;
+	pNodeShrd->compositorCycleSkip = 8;
 
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
 		.locality = VK_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
-	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeContext->nodeTimeline);
+	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->nodeTimeline);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeContext->pool));
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtxt->pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = pNodeContext->pool,
+		.commandPool = pNodeCtxt->pool,
 		.commandBufferCount = 1,
 	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->cmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->cmd, "TestNode");
 
 	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCompositorData[handle];
 	// do not clear since set data is preallocated
@@ -454,23 +450,23 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 		auto pCompSwap = &pNodeCompositorData->swaps[i];
 
 		pCompSwap->acquireBarriers[0] = (VkImageMemoryBarrier2){
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = pCompSwap->color,
 			SWAP_ACQUIRE_BARRIER,
 		};
 		pCompSwap->acquireBarriers[1] = (VkImageMemoryBarrier2){
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = pCompSwap->gBuffer,
 			SWAP_ACQUIRE_BARRIER,
 		};
 
 		pCompSwap->releaseBarriers[0] = (VkImageMemoryBarrier2){
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = pCompSwap->color,
 			SWAP_RELEASE_BARRIER,
 		};
 		pCompSwap->releaseBarriers[1] = (VkImageMemoryBarrier2){
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = pCompSwap->gBuffer,
 			SWAP_RELEASE_BARRIER,
 		};
@@ -478,7 +474,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 	*pNodeHandle = handle;
 
-	CHECK(pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeContext), "Node thread creation failed!");
+	CHECK(pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
@@ -496,11 +492,11 @@ static const VkImageUsageFlags NODE_PASS_USAGES[] = { // Do I want this?
 void mxcCreateNodeRenderPass()
 {
 	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
 		.pAttachments = (VkAttachmentDescription2[]){
 			[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = {
-				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
 				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -511,7 +507,7 @@ void mxcCreateNodeRenderPass()
 				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
 			[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = {
-				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
 				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -522,7 +518,7 @@ void mxcCreateNodeRenderPass()
 				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			},
 			[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = {
-				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
 				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -536,25 +532,25 @@ void mxcCreateNodeRenderPass()
 		.subpassCount = 1,
 		.pSubpasses = (VkSubpassDescription2[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
 				.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 				.colorAttachmentCount = 2,
 				.pColorAttachments = (VkAttachmentReference2[]){
 					[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = {
-						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+						VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 						.attachment = VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
 					[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = {
-						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+						VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 						.attachment = VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
 				},
 				.pDepthStencilAttachment = &(VkAttachmentReference2){
-					.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
+					VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
 					.attachment = VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX,
 					.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -565,7 +561,7 @@ void mxcCreateNodeRenderPass()
 		.pDependencies = (VkSubpassDependency2[]){
 			// from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
 			{
-				.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
 				.srcSubpass = VK_SUBPASS_EXTERNAL,
 				.dstSubpass = 0,
 				.srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -575,7 +571,7 @@ void mxcCreateNodeRenderPass()
 				.dependencyFlags = 0,
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
 				.srcSubpass = 0,
 				.dstSubpass = VK_SUBPASS_EXTERNAL,
 				.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
@@ -742,23 +738,23 @@ static void InterprocessServerAcceptNodeConnection()
 				auto pCompSwap = &pNodeCompLcl->swaps[i];
 
 				pCompSwap->acquireBarriers[0] = (VkImageMemoryBarrier2){
-					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.image = pCompSwap->color,
 					SWAP_ACQUIRE_BARRIER,
 				};
 				pCompSwap->acquireBarriers[1] = (VkImageMemoryBarrier2){
-					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.image = pCompSwap->gBuffer,
 					SWAP_ACQUIRE_BARRIER,
 				};
 
 				pCompSwap->releaseBarriers[0] = (VkImageMemoryBarrier2){
-					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.image = pCompSwap->color,
 					SWAP_RELEASE_BARRIER,
 				};
 				pCompSwap->releaseBarriers[1] = (VkImageMemoryBarrier2){
-					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.image = pCompSwap->gBuffer,
 					SWAP_RELEASE_BARRIER,
 				};
@@ -830,9 +826,9 @@ static void* RunInterProcessServer(void* arg)
 	}
 
 Exit:
-	if (ipcServer.listenSocket != INVALID_SOCKET) {
+	if (ipcServer.listenSocket != INVALID_SOCKET)
 		closesocket(ipcServer.listenSocket);
-	}
+
 	unlink(SOCKET_PATH);
 	WSACleanup();
 	return NULL;
@@ -850,9 +846,9 @@ void mxcInitializeInterprocessServer()
 
 void mxcShutdownInterprocessServer()
 {
-	if (ipcServer.listenSocket != INVALID_SOCKET) {
+	if (ipcServer.listenSocket != INVALID_SOCKET)
 		closesocket(ipcServer.listenSocket);
-	}
+
 	unlink(SOCKET_PATH);
 	WSACleanup();
 }
@@ -938,13 +934,14 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		pNodeContext->pNodeShared = pNodeShared;
 		pNodeContext->pNodeImports = pNodeImports;
 
+		pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
+		assert(pNodeContext->swapsSyncedHandle != NULL);
+
 		printf("Importing node handle %d\n", handle);
 	}
 
 	// Create node data
 	{
-		pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
-
 		vkSemaphoreCreateInfoExt compTimelineCreateInfo = {
 			.debugName = "CompositorTimelineSemaphoreImport",
 			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
@@ -961,13 +958,13 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		vkCreateSemaphoreExt(&nodeTimelineCreateInfo, &pNodeContext->nodeTimeline);
 
 		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 			.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 		};
 		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeContext->pool));
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 			.commandPool = pNodeContext->pool,
 			.commandBufferCount = 1,
 		};
@@ -1049,9 +1046,10 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 	auto pNodeCompositorData = &nodeCompositorData[handle];
 
 	auto needsExport = pNodeContext->type != MXC_NODE_TYPE_THREAD;
-	auto swapCount = MXC_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+	auto swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * XR_SWAP_COUNT;
 
-	HANDLE      currentHandle = GetCurrentProcess();
+	HANDLE currentHandle = GetCurrentProcess();
+
 	MxcSwapInfo info = {
 		.type = pNodeShared->swapType,
 		.usage = pNodeShared->swapUsage,
@@ -1065,7 +1063,9 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 			goto Exit;
 
 		auto pNodeSwap = &pNodeContext->swap[i];
-		*pNodeSwap = nodeSwapPool[info.type].swaps[swapHandle];
+		auto poolIndex = MXC_SWAP_TYPE_POOL_INDEX[info.type];
+		auto pPool = &nodeSwapPool[poolIndex];
+		*pNodeSwap = pPool->swaps[swapHandle];
 
 		auto pCompSwap = &pNodeCompositorData->swaps[i];
 		pCompSwap->acquireBarriers[0].image = pNodeSwap->color.image;
@@ -1077,8 +1077,8 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 		pCompSwap->releaseBarriers[1].image = pNodeSwap->gbuffer.image;
 		pCompSwap->gBuffer = pNodeSwap->gbuffer.image;
 		for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
-			VkImageViewCreateInfo imageViewCreateInfo = {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			VkImageViewCreateInfo info = {
+				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 				.image = pNodeSwap->gbuffer.image,
 				.viewType = VK_IMAGE_VIEW_TYPE_2D,
 				.format = MXC_NODE_GBUFFER_FORMAT,
@@ -1089,7 +1089,7 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 					.layerCount = 1,
 				},
 			};
-			VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, VK_ALLOC, &pCompSwap->gBufferMipViews[mipIndex]));
+			VK_CHECK(vkCreateImageView(vk.context.device, &info, VK_ALLOC, &pCompSwap->gBufferMipViews[mipIndex]));
 		}
 
 		if (needsExport) {
