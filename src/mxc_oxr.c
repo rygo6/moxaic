@@ -73,37 +73,44 @@ void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
-void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType, XrSwapUsage swapUsage)
+void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType)
 {
 	auto pNodeCtxt = &nodeContexts[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
-	pImports->claimedSwapCount = 0;
-	if (pNodeShrd->swapType != swapType || pNodeShrd->swapUsage != swapUsage) {
+	if (pNodeShrd->swapType != swapType) {
+		pImports->claimedColorSwapCount = 0;
+		pImports->claimedGbufferSwapCount = 0;
+		pImports->claimedDepthSwapCount = 0;
 		pNodeShrd->swapType = swapType;
-		pNodeShrd->swapUsage = swapUsage;
 		mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
-
 		printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
 		WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 	}
 }
 
-void xrClaimSwapColorImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles)
+void xrClaimSwapImages(XrSessionIndex sessionIndex, XrSwapUsage usage, int count, HANDLE* pHandles)
 {
 	auto pNodeCtxt = &nodeContexts[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
-
-//	printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
-//	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
-
-	int offset = pImports->claimedSwapCount;
-	for (int i = 0; i < count; ++i) {
-		pColorHandles[i] = pImports->colorSwapHandles[i + offset];
-		pDepthHandles[i] = pImports->depthSwapHandles[i + offset];
+	switch (usage) {
+		case XR_SWAP_USAGE_COLOR:
+			for (int i = 0; i < count; ++i)
+				pHandles[i] = pImports->colorSwapHandles[i + pImports->claimedColorSwapCount];
+			pImports->claimedColorSwapCount += count;
+			break;
+		case XR_SWAP_USAGE_DEPTH:
+			for (int i = 0; i < count; ++i)
+				pHandles[i] = pImports->depthSwapHandles[i + pImports->claimedDepthSwapCount];
+			pImports->claimedDepthSwapCount += count;
+			break;
+		case XR_SWAP_USAGE_GBUFFER:
+			for (int i = 0; i < count; ++i)
+				pHandles[i] = pImports->gbufferSwapHandles[i + pImports->claimedGbufferSwapCount];
+			pImports->claimedGbufferSwapCount += count;
+			break;
 	}
-	pImports->claimedSwapCount += count;
 }
 
 void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)

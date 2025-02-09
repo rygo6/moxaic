@@ -88,7 +88,6 @@ typedef struct MxcNodeShared {
 
 	// Swap
 	XrSwapType  swapType;
-	XrSwapUsage swapUsage;
 
 } MxcNodeShared;
 
@@ -100,7 +99,9 @@ typedef struct MxcNodeImports {
 	HANDLE colorSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 	HANDLE gbufferSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
-	u8     claimedSwapCount;
+	u8     claimedColorSwapCount;
+	u8     claimedGbufferSwapCount;
+	u8     claimedDepthSwapCount;
 
 	HANDLE nodeTimelineHandle;
 	HANDLE compositorTimelineHandle;
@@ -127,7 +128,7 @@ typedef struct MxcSwapInfo {
 
 typedef struct MxcSwap {
 	VkDedicatedTexture color;
-	VkDedicatedTexture depth;
+//	VkDedicatedTexture depth;
 	VkDedicatedTexture gbuffer;
 #if _WIN32
 	VkWin32ExternalTexture colorExternal;

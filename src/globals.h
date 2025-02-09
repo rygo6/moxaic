@@ -19,7 +19,21 @@ extern void Panic(const char* file, int line, const char* message);
 #define CACHE_ALIGN __attribute((aligned(64)))
 #define PACKED __attribute__((packed))
 #define ALIGN(size) __attribute((aligned(size)))
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
+#define CONTAINS(_array, _count, _)        \
+	({                                     \
+		bool found = false;                \
+		for (int i = 0; i < _count; ++i) { \
+			if (_array[i] == _) {          \
+				found = true;              \
+				break;                     \
+			}                              \
+		}                                  \
+		found;                             \
+	})
+
 #define CONCAT(_a, _b) #_a #_b
 
 #define DEFAULT_WIDTH 1024

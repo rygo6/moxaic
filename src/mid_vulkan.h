@@ -79,15 +79,18 @@ extern void Panic(const char* file, int line, const char* message);
 			LocalFree(errStr);
 		}
 	}
-	#define CHECK_WIN32(condition, err)          \
-		if (__builtin_expect(!(condition), 0)) { \
-			LogWin32Error(err);                  \
-			PANIC("Win32 Error!");               \
+	#define CHECK_WIN32(condition, err) \
+		if (UNLIKELY(!(condition))) {   \
+			LogWin32Error(err);         \
+			PANIC("Win32 Error!");      \
 		}
-	#define DX_CHECK(command)               \
-		({                                  \
-			HRESULT hr = command;           \
-			CHECK_WIN32(SUCCEEDED(hr), hr); \
+	#define DX_CHECK(command)           \
+		({                              \
+			HRESULT hr = command;       \
+			if (UNLIKELY(FAILED(hr))) { \
+				LogWin32Error(hr);      \
+				PANIC("DX Error!");     \
+			}                           \
 		})
 	#endif
 #endif
@@ -1977,12 +1980,8 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		&heapProperties,
 		D3D12_HEAP_FLAG_SHARED,
 		&textureDesc,
-		isDepth ?
-			D3D12_RESOURCE_STATE_DEPTH_WRITE :
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
-		isDepth ?
-			&clearValue :
-			NULL,
+		D3D12_RESOURCE_STATE_COMMON,
+		NULL,
 		&IID_ID3D12Resource,
 		(void**)&pTexture->texture));
 	printf("Created DX12 Texture Format: %d\n", textureDesc.Format);

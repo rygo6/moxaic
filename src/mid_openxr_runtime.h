@@ -115,22 +115,22 @@ typedef double   f64;
 ////////////////////////
 //// Method Declarations
 ////
-typedef enum XrGraphicsApi {
+typedef enum XrGraphicsApi : u8 {
 	XR_GRAPHICS_API_OPENGL,
-	XR_GRAPHICS_API_OPENGL_ES,
 	XR_GRAPHICS_API_VULKAN,
 	XR_GRAPHICS_API_D3D11_4,
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
-typedef enum XrSwapUsage {
+typedef enum XrSwapUsage : u8 {
 	XR_SWAP_USAGE_UNKNOWN,
 	XR_SWAP_USAGE_COLOR,
-	XR_SWAP_USAGE_COLOR_AND_DEPTH,
+	XR_SWAP_USAGE_DEPTH,
+	XR_SWAP_USAGE_GBUFFER,
 	XR_SWAP_USAGE_COUNT,
 } XrSwapUsage;
 
-typedef enum XrSwapType : uint8_t {
+typedef enum XrSwapType : u8 {
 	XR_SWAP_TYPE_UNKNOWN,
 	XR_SWAP_TYPE_MONO_SINGLE,
 	XR_SWAP_TYPE_STEREO_SINGLE,
@@ -147,8 +147,8 @@ void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
 
 void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
-void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType, XrSwapUsage swapUsage);
-void xrClaimSwapColorImages(XrSessionIndex sessionIndex, int count, HANDLE* pColorHandles, HANDLE *pDepthHandles);
+void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType);
+void xrClaimSwapImages(XrSessionIndex sessionIndex, XrSwapUsage usage, int count, HANDLE* pHandles);
 
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
 void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
@@ -486,8 +486,8 @@ typedef struct Space {
 #define XR_SWAPCHAIN_CAPACITY 8
 typedef struct Swapchain {
 	block_handle hSession;
-
-	u8 swapIndex;
+	XrSwapUsage  usage;
+	u8           swapIndex;
 	union {
 		struct {
 			GLuint texture;
@@ -496,26 +496,17 @@ typedef struct Swapchain {
 		struct {
 			ID3D11Texture2D* texture;
 		} d3d11;
-	} color[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
-	union {
-		struct {
-			GLuint texture;
-			GLuint memObject;
-		} gl;
-		struct {
-			ID3D11Texture2D* texture;
-		} d3d11;
-	} depth[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
+	} texture[XR_SWAP_COUNT];
 
-	XrSwapchainCreateFlags createFlags;
-	XrSwapchainUsageFlags  usageFlags;
-	i64                    format;
-	u32                    sampleCount;
+//	XrSwapchainCreateFlags createFlags;
+//	XrSwapchainUsageFlags  usageFlags;
+//	i64                    format;
+//	u32                    sampleCount;
 	u32                    width;
 	u32                    height;
-	u32                    faceCount;
-	u32                    arraySize;
-	u32                    mipCount;
+//	u32                    faceCount;
+//	u32                    arraySize;
+//	u32                    mipCount;
 } Swapchain;
 typedef block_handle swap_handle; // do this?
 
@@ -1335,7 +1326,6 @@ XR_PROC xrCreateInstance(
 		case XR_GRAPHICS_API_D3D11_4: {
 			return XR_SUCCESS;
 		}
-		case XR_GRAPHICS_API_OPENGL_ES:
 		case XR_GRAPHICS_API_VULKAN:
 		default:
 			LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED\n");
@@ -2007,7 +1997,6 @@ XR_PROC xrLocateSpace(
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
-		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:
 			XR_CONVERT_D3D11_EULER(euler);
@@ -2188,6 +2177,69 @@ XR_PROC xrEnumerateViewConfigurationViews(
 	return XR_SUCCESS;
 }
 
+constexpr i64 colorGlSwapFormats[] = {
+	GL_SRGB8_ALPHA8,
+	GL_SRGB8,
+};
+constexpr i64 depthGlSwapFormats[] = {
+	// unity can't output depth on opengl
+	//GL_DEPTH_COMPONENT16,
+	//GL_DEPTH_COMPONENT32F,
+	//GL_DEPTH24_STENCIL8
+};
+
+constexpr i64 colorVkSwapFormats[] = {
+	VK_FORMAT_R8G8B8A8_UNORM,
+	VK_FORMAT_R8G8B8A8_SRGB,
+};
+constexpr i64 depthVkSwapFormats[] = {
+	// unity supported
+	VK_FORMAT_D16_UNORM,
+	VK_FORMAT_D24_UNORM_S8_UINT,
+	//VK_FORMAT_D32_SFLOAT,
+};
+
+constexpr i64 colorDxSwapFormats[] = {
+	DXGI_FORMAT_R8G8B8A8_UNORM,
+	DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+};
+constexpr i64 depthDxSwapFormats[] = {
+	// unity supported
+	DXGI_FORMAT_D16_UNORM,
+	DXGI_FORMAT_D32_FLOAT_S8X24_UINT
+	//DXGI_FORMAT_D32_FLOAT,
+	//DXGI_FORMAT_D24_UNORM_S8_UINT,
+};
+
+static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = {
+	[XR_GRAPHICS_API_OPENGL] = {
+		[XR_SWAP_USAGE_COLOR] = colorGlSwapFormats,
+		[XR_SWAP_USAGE_DEPTH] = depthGlSwapFormats,
+	},
+	[XR_GRAPHICS_API_VULKAN] = {
+		[XR_SWAP_USAGE_COLOR] = colorVkSwapFormats,
+		[XR_SWAP_USAGE_DEPTH] = depthVkSwapFormats,
+	},
+	[XR_GRAPHICS_API_D3D11_4] = {
+		[XR_SWAP_USAGE_COLOR] = colorDxSwapFormats,
+		[XR_SWAP_USAGE_DEPTH] = depthDxSwapFormats,
+	},
+};
+constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = {
+	[XR_GRAPHICS_API_OPENGL] = {
+		[XR_SWAP_USAGE_COLOR] = COUNT(colorGlSwapFormats),
+		[XR_SWAP_USAGE_DEPTH] = COUNT(depthGlSwapFormats),
+	},
+	[XR_GRAPHICS_API_VULKAN] = {
+		[XR_SWAP_USAGE_COLOR] = COUNT(colorVkSwapFormats),
+		[XR_SWAP_USAGE_DEPTH] = COUNT(depthVkSwapFormats),
+	},
+	[XR_GRAPHICS_API_D3D11_4] = {
+		[XR_SWAP_USAGE_COLOR] = COUNT(colorDxSwapFormats),
+		[XR_SWAP_USAGE_DEPTH] = COUNT(depthDxSwapFormats),
+	},
+};
+
 XR_PROC xrEnumerateSwapchainFormats(
 	XrSession session,
 	uint32_t  formatCapacityInput,
@@ -2200,64 +2252,36 @@ XR_PROC xrEnumerateSwapchainFormats(
 	auto hSess = BLOCK_HANDLE(block.session, pSess);
 	HANDLE_CHECK(hSess, XR_ERROR_HANDLE_INVALID);
 
-#define TRANSFER_SWAP_FORMATS(_)                    \
-	*formatCountOutput = COUNT(_);                  \
-	if (formats == NULL)                            \
-		return XR_SUCCESS;                          \
-	if (formatCapacityInput < COUNT(_))             \
-		return XR_ERROR_SIZE_INSUFFICIENT;          \
-	for (int i = 0; i < COUNT(_); ++i) {            \
-		printf("Enumerating Format: %llu\n", _[i]); \
-		formats[i] = _[i];                          \
-	}
-
 	switch (xr.instance.graphicsApi) {
-		case XR_GRAPHICS_API_OPENGL: {
-			int64_t swapFormats[] = {
-				GL_SRGB8_ALPHA8,
-				GL_SRGB8,
-				// unity can't output depth on opengl
-//				GL_DEPTH_COMPONENT16,
-//				GL_DEPTH_COMPONENT32F,
-//				GL_DEPTH24_STENCIL8
-			};
-			TRANSFER_SWAP_FORMATS(swapFormats);
-			return XR_SUCCESS;
-		}
-		case XR_GRAPHICS_API_VULKAN: {
-			int64_t swapFormats[] = {
-				VK_FORMAT_R8G8B8A8_UNORM,
-				VK_FORMAT_R8G8B8A8_SRGB,
-				// unity supported
-				VK_FORMAT_D16_UNORM,
-				VK_FORMAT_D24_UNORM_S8_UINT,
-
-//				VK_FORMAT_D32_SFLOAT,
-			};
-			TRANSFER_SWAP_FORMATS(swapFormats);
-			return XR_SUCCESS;
-		}
-		case XR_GRAPHICS_API_D3D11_4: {
-			int64_t swapFormats[] = {
-				DXGI_FORMAT_R8G8B8A8_UNORM,
-				DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
-
-				// unity supported
-				DXGI_FORMAT_D16_UNORM,
-				DXGI_FORMAT_D32_FLOAT_S8X24_UINT
-
-//				DXGI_FORMAT_D32_FLOAT,
-//				DXGI_FORMAT_D24_UNORM_S8_UINT,
-			};
-			TRANSFER_SWAP_FORMATS(swapFormats);
-			return XR_SUCCESS;
-		}
+		case XR_GRAPHICS_API_OPENGL:
+		case XR_GRAPHICS_API_VULKAN:
+		case XR_GRAPHICS_API_D3D11_4:
+			break;
 		default:
 			LOG_ERROR("xrEnumerateSwapchainFormats Graphics API not supported.");
 			return XR_ERROR_RUNTIME_FAILURE;
 	}
 
-#undef TRANSFER_SWAP_FORMATS
+	const i64* colorFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_USAGE_COLOR];
+	const i64* depthFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_USAGE_DEPTH];
+	int colorCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_USAGE_COLOR];
+	int depthCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_USAGE_DEPTH];
+	*formatCountOutput = colorCount + depthCount;
+	if (formats == NULL)
+		return XR_SUCCESS;
+	if (formatCapacityInput < colorCount + depthCount)
+		return XR_ERROR_SIZE_INSUFFICIENT;
+	int index = 0;
+	for (int i = 0; i < colorCount; ++i) {
+		printf("Enumerating Color Format: %llu\n", colorFormats[i]);
+		formats[index++] = colorFormats[i];
+	}
+	for (int i = 0; i < depthCount; ++i) {
+		printf("Enumerating Depth Format: %llu\n", depthFormats[i]);
+		formats[index++] = depthFormats[i];
+	}
+
+	return XR_SUCCESS;
 }
 
 XR_PROC xrCreateSwapchain(
@@ -2324,59 +2348,61 @@ XR_PROC xrCreateSwapchain(
 	auto pSwap = BLOCK_PTR(block.swap, hSwap);
 
 	pSwap->hSession = hSess;
-	pSwap->createFlags = createInfo->createFlags;
-	pSwap->usageFlags = createInfo->usageFlags;
-	pSwap->format = createInfo->format;
-	pSwap->sampleCount = createInfo->sampleCount;
+//	pSwap->createFlags = createInfo->createFlags;
+//	pSwap->usageFlags = createInfo->usageFlags;
+//	pSwap->format = createInfo->format;
+//	pSwap->sampleCount = createInfo->sampleCount;
 	pSwap->width = createInfo->width;
 	pSwap->height = createInfo->height;
-	pSwap->faceCount = createInfo->faceCount;
-	pSwap->arraySize = createInfo->arraySize;
-	pSwap->mipCount = createInfo->mipCount;
+//	pSwap->faceCount = createInfo->faceCount;
+//	pSwap->arraySize = createInfo->arraySize;
+//	pSwap->mipCount = createInfo->mipCount;
+
+	bool isColor = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+	bool isDepth = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	pSwap->usage = isColor ? XR_SWAP_USAGE_COLOR : isDepth ? XR_SWAP_USAGE_DEPTH : XR_SWAP_USAGE_UNKNOWN;
+
+	switch (pSwap->usage) {
+		case XR_SWAP_USAGE_COLOR:   ;
+		case XR_SWAP_USAGE_DEPTH:   ;
+		case XR_SWAP_USAGE_GBUFFER: break;
+		default:
+			LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED\n");
+			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
+	}
 
 	// This is making a big assumption that all swaps wil be the same size... we should probably enable individual request
 	// unfortunately you can't know all swaps itll want up front and you dont know it till it calls this
-	xrCreateSwapImages(pSess->index, pSess->swapType, XR_SWAP_USAGE_COLOR_AND_DEPTH);
+	xrCreateSwapImages(pSess->index, pSess->swapType);
 
-	HANDLE colorHandles[XR_SWAP_COUNT];
-	HANDLE depthHandles[XR_SWAP_COUNT];
-	xrClaimSwapColorImages(pSess->index, XR_SWAP_COUNT, colorHandles, depthHandles);
+	HANDLE handles[XR_SWAP_COUNT];
+	xrClaimSwapImages(pSess->index, pSwap->usage, XR_SWAP_COUNT, handles);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			printf("Creating OpenGL Swap");
-
-#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
-	gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
-	gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
-	gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
-	gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
+			#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
+				gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
+				gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
+				gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
+				gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->color[i].gl.memObject, pSwap->color[i].gl.texture, colorHandles[i]);
-				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->color[i].gl.texture, pSwap->color[i].gl.memObject);
+				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, handles[i]);
+				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
 			}
-#undef DEFAULT_IMAGE_CREATE_INFO
-
+			#undef DEFAULT_IMAGE_CREATE_INFO
 			break;
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
 			printf("Creating D3D11 Swap\n");
-
 			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				assert(colorHandles[i] != NULL);
-				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandles[i], &IID_ID3D11Texture2D, (void**)&pSwap->color[i].d3d11.texture));
-				printf("Imported d3d11 swap texture. Device: %p Handle: %p Texture: %p\n", device5, colorHandles[i], pSwap->color[i].d3d11.texture);
-//				D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {
-//					.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-//					.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D,
-//					.Texture2D.MipSlice = 0,
-//				};
-//				DX_CHECK(ID3D11Device5_CreateRenderTargetView(device5, (ID3D11Resource*)pSwap->color[i].d3d11.texture, &rtvDesc, &pSwap->color[i].d3d11.rtView));
-//				DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->color[i].d3d11.texture, &IID_IDXGIKeyedMutex, (void**)&pSwap->color[i].d3d11.keyedMutex));
-//				IDXGIKeyedMutex_AcquireSync(pSwap->color[i].d3d11.keyedMutex, 0, INFINITE);
+				assert(handles[i] != NULL);
+				ID3D11Resource* resource;
+				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, handles[i], &IID_ID3D11Resource, (void**)&resource));
+				DX_CHECK(ID3D11Resource_QueryInterface(resource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.texture));
+				printf("Imported d3d11 swap. Device: %p Handle: %p Texture: %p\n", device5, handles[i], pSwap->texture[i].d3d11.texture);
 			}
-
 			break;
 		}
 		case XR_GRAPHICS_API_VULKAN:
@@ -2412,17 +2438,14 @@ XR_PROC xrEnumerateSwapchainImages(
 	if (imageCapacityInput != XR_SWAP_COUNT)
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	Swapchain* pSwapchain = (Swapchain*)swapchain;
+	Swapchain* pSwap = (Swapchain*)swapchain;
 
 	switch (images[0].type) {
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
 			printf("Enumerating gl Swapchain Images\n");
 			XrSwapchainImageOpenGLKHR* pImage = (XrSwapchainImageOpenGLKHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
-				assert(pImage[i].type == XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR);
-				assert(pImage[i].next == NULL);
-				assert(pImage[i].image == 0);
-				pImage[i].image = pSwapchain->color[i].gl.texture;
+				pImage[i].image = pSwap->texture[i].gl.texture;
 			}
 			break;
 		}
@@ -2430,10 +2453,7 @@ XR_PROC xrEnumerateSwapchainImages(
 			printf("Enumerating d3d11 Swapchain Images\n");
 			XrSwapchainImageD3D11KHR* pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
-				assert(pImage[i].type == XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR);
-				assert(pImage[i].next == NULL);
-				assert(pImage[i].texture == NULL);
-				pImage[i].texture = pSwapchain->color[i].d3d11.texture;
+				pImage[i].texture = pSwap->texture[i].d3d11.texture;
 			}
 			break;
 		}
@@ -2547,7 +2567,6 @@ XR_PROC xrBeginSession(
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
-		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   break;
 		default:
@@ -2645,7 +2664,6 @@ XR_PROC xrWaitFrame(
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
-		case XR_GRAPHICS_API_OPENGL_ES: break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
 			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
@@ -2780,8 +2798,15 @@ XR_PROC xrEndFrame(
 
 				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
 					auto pView = &pProjectionLayer->views[view];
-					assert(pView->type == XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW);
 //					printf("subImage %d " FORMAT_RECT_I "\n", pView->subImage.imageArrayIndex, EXPAND_RECT(pView->subImage.imageRect));
+				}
+
+				switch (pProjectionLayer->next != NULL ? *(XrStructureType*)pProjectionLayer->next : 0) {
+					case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
+						auto pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pProjectionLayer->next;
+
+						break;
+					}
 				}
 
 				break;
@@ -2925,7 +2950,6 @@ XR_PROC xrLocateViews(
 
 		switch (xr.instance.graphicsApi) {
 			case XR_GRAPHICS_API_OPENGL:    break;
-			case XR_GRAPHICS_API_OPENGL_ES: break;
 			case XR_GRAPHICS_API_VULKAN:    break;
 			case XR_GRAPHICS_API_D3D11_4:
 				XR_CONVERT_D3D11_EULER(eyeView.euler);
@@ -2944,7 +2968,6 @@ XR_PROC xrLocateViews(
 		switch (xr.instance.graphicsApi) {
 			default:
 			case XR_GRAPHICS_API_OPENGL:
-			case XR_GRAPHICS_API_OPENGL_ES:
 			case XR_GRAPHICS_API_VULKAN:
 				angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.upperLeftClip.y);
 				angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.lowerRightClip.y);

@@ -109,15 +109,15 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
 		};
 		vkWin32CreateExternalTexture(&info, &pSwap->depthExternal);
-		VkTextureCreateInfo textureInfo = {
-			.debugName = "ExportedDepthFramebuffer",
-			.pImageCreateInfo = &info,
-			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-			.importHandle = pSwap->depthExternal.handle,
-			.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-		};
-		vkCreateTexture(&textureInfo, &pSwap->depth);
+//		VkTextureCreateInfo textureInfo = {
+//			.debugName = "ExportedDepthFramebuffer",
+//			.pImageCreateInfo = &info,
+//			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+//			.importHandle = pSwap->depthExternal.handle,
+//			.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//		};
+//		vkCreateTexture(&textureInfo, &pSwap->depth);
 	}
 
 	{ // GBuffer
@@ -160,14 +160,14 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
-			{
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->depth.image,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_DEPTH_SUBRESOURCE_RANGE,
-			},
+//			{
+//				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+//				.image = pSwap->depth.image,
+//				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+//				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+//				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+//				VK_IMAGE_BARRIER_DEPTH_SUBRESOURCE_RANGE,
+//			},
 		};
 		CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
 		midVkEndImmediateTransferCommandBuffer(cmd);
@@ -1052,7 +1052,6 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 
 	MxcSwapInfo info = {
 		.type = pNodeShared->swapType,
-		.usage = pNodeShared->swapUsage,
 		.yScale = MXC_SWAP_SCALE_FULL,
 		.xScale = MXC_SWAP_SCALE_FULL,
 	};
@@ -1097,7 +1096,7 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 							currentHandle, pNodeSwap->colorExternal.handle,
 							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.colorSwapHandles[i],
 							0, false, DUPLICATE_SAME_ACCESS),
-						"Duplicate color handle fail");
+						"Duplicate texture handle fail");
 			WIN32_CHECK(DuplicateHandle(
 							currentHandle, pNodeSwap->gbufferExternal.handle,
 							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.gbufferSwapHandles[i],

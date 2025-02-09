@@ -207,14 +207,11 @@ run_loop:
 	if (claimSwaps) {
 		claimSwaps = false;
 
-		bool hasDepth = pNodeShared->swapUsage == XR_SWAP_USAGE_COLOR_AND_DEPTH;
-		int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
-
 		for (int i = 0; i < swapCount; ++i) {
 			if (needsImport) {
 				if (pImports->colorSwapHandles[i] != NULL)
 					CloseHandle(pNodeContext->pNodeImports->colorSwapHandles[i]);
-				if (hasDepth && pImports->depthSwapHandles[i] != NULL)
+				if (pImports->depthSwapHandles[i] != NULL)
 					CloseHandle(pImports->depthSwapHandles[i]);
 			}
 
@@ -223,10 +220,10 @@ run_loop:
 				vkDestroyImageView(device, pSwap[i].color.view, VK_ALLOC);
 			}
 
-			if (pSwap[i].depth.image != VK_NULL_HANDLE) {
-				vkDestroyImage(device, pSwap[i].depth.image, VK_ALLOC);
-				vkDestroyImageView(device, pSwap[i].depth.view, VK_ALLOC);
-			}
+//			if (pSwap[i].depth.image != VK_NULL_HANDLE) {
+//				vkDestroyImage(device, pSwap[i].depth.image, VK_ALLOC);
+//				vkDestroyImageView(device, pSwap[i].depth.view, VK_ALLOC);
+//			}
 		}
 
 		mxcIpcFuncEnqueue(&pNodeShared->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
@@ -286,28 +283,28 @@ run_loop:
 				acquireBarriers[i][1].image = pSwap[i].gbuffer.image;
 				releaseBarriers[i][1].image = pSwap[i].gbuffer.image;
 
-				VkTextureCreateInfo depthCreateInfo = {
-					.debugName = "ImportedDepthSwap",
-					.pImageCreateInfo = &(VkImageCreateInfo){
-						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-						.pNext = &(VkExternalMemoryImageCreateInfo){
-							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-						},
-						.imageType = VK_IMAGE_TYPE_2D,
-						.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
-						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-						.mipLevels = 1,
-						.arrayLayers = 1,
-						.samples = VK_SAMPLE_COUNT_1_BIT,
-						.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
-					},
-					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-					.importHandle = pNodeContext->pNodeImports->depthSwapHandles[i],
-				};
-				vkCreateTexture(&depthCreateInfo, &pSwap[i].depth);
+//				VkTextureCreateInfo depthCreateInfo = {
+//					.debugName = "ImportedDepthSwap",
+//					.pImageCreateInfo = &(VkImageCreateInfo){
+//						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//						.pNext = &(VkExternalMemoryImageCreateInfo){
+//							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+//							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+//						},
+//						.imageType = VK_IMAGE_TYPE_2D,
+//						.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+//						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//						.mipLevels = 1,
+//						.arrayLayers = 1,
+//						.samples = VK_SAMPLE_COUNT_1_BIT,
+//						.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+//					},
+//					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+//					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+//					.importHandle = pNodeContext->pNodeImports->depthSwapHandles[i],
+//				};
+//				vkCreateTexture(&depthCreateInfo, &pSwap[i].depth);
 
 			}
 		}
@@ -341,7 +338,7 @@ run_loop:
 		CmdPipelineImageBarriers2(cmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
 
 		VkClearColorValue clearColor = (VkClearColorValue){0, 0, 0.1, 0};
-		CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, pSwap[framebufferIndex].color.view, pNode->normalFramebuffers[framebufferIndex].view, pSwap[framebufferIndex].depth.view);
+//		CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, pSwap[framebufferIndex].color.view, pNode->normalFramebuffers[framebufferIndex].view, pSwap[framebufferIndex].depth.view);
 
 		// this is really all that'd be user exposed....
 		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
@@ -546,7 +543,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 	{	// Config
 		pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
-		pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
+//		pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
 	}
 
 	{	// Create
@@ -670,7 +667,7 @@ void* mxcTestNodeThread(MxcNodeContext* pNodeContext)
 {
 	auto pNodeShared = pNodeContext->pNodeShared;
 	pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
-	pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
+//	pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
 
 	MxcTestNode testNode;
 	mxcCreateTestNode(pNodeContext, &testNode);
