@@ -1962,7 +1962,9 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.SampleDesc.Count = pCreateInfo->samples,
 		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
 		.Flags = isDepth ?
-					 D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL :
+					 // Importing a texture with D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL seems to crash
+					 // However you can import depth exported like this and it appears to use it?
+					 D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS :
 					 D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS,
 	};
 	D3D12_HEAP_PROPERTIES heapProperties = {

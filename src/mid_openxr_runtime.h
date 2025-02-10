@@ -86,16 +86,7 @@ static void LogWin32Error(HRESULT err)
 		LocalFree(errStr);
 	}
 }
-#define CHECK_WIN32(condition, err)          \
-	if (__builtin_expect(!(condition), 0)) { \
-		LogWin32Error(err);                  \
-		PANIC("Win32 Error!");               \
-	}
-#define DX_CHECK(command)               \
-	({                                  \
-		HRESULT hr = command;           \
-		CHECK_WIN32(SUCCEEDED(hr), hr); \
-	})
+wwwwwwwwwwwwwwwwwwwwwwwwwwwww
 #endif
 #endif
 
@@ -758,7 +749,9 @@ static const char* string_XrStructureType(XrStructureType type)
 #define BRACES(f, _) {f(_)}
 
 #define FORMAT_F(_)          _: %.3f
+#define FORMAT_I(_)          _: %d
 #define FORMAT_STRUCT_F(_)  "%s: " XSTR(BRACES(XR_LIST_STRUCT_##_, FORMAT_F))
+#define FORMAT_STRUCT_I(_)  "%s: " XSTR(BRACES(XR_LIST_STRUCT_##_, FORMAT_I))
 #define EXPAND_STRUCT(t, _) STR(_) XR_LIST_STRUCT_##t(COMMA _ DOT)
 
 static void LogNextChain(const XrBaseInStructure* nextProperties)
@@ -2196,19 +2189,21 @@ constexpr i64 depthVkSwapFormats[] = {
 	// unity supported
 	VK_FORMAT_D16_UNORM,
 	VK_FORMAT_D24_UNORM_S8_UINT,
-	//VK_FORMAT_D32_SFLOAT,
 };
 
 constexpr i64 colorDxSwapFormats[] = {
 	DXGI_FORMAT_R8G8B8A8_UNORM,
 	DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
 };
-constexpr i64 depthDxSwapFormats[] = {
+constexpr i64 D3D11_DEPTH_SWAP_FORMATS[] = {
 	// unity supported
 	DXGI_FORMAT_D16_UNORM,
-	DXGI_FORMAT_D32_FLOAT_S8X24_UINT
-	//DXGI_FORMAT_D32_FLOAT,
-	//DXGI_FORMAT_D24_UNORM_S8_UINT,
+	DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+};
+constexpr i64 D3D11_DEPTH_SWAP_FORMATS_TYPELESS[] = {
+	// unity supported
+	[DXGI_FORMAT_D16_UNORM] = DXGI_FORMAT_R16_TYPELESS,
+	[DXGI_FORMAT_D32_FLOAT_S8X24_UINT] = DXGI_FORMAT_R32G8X24_TYPELESS,
 };
 
 static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = {
@@ -2222,7 +2217,7 @@ static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = 
 	},
 	[XR_GRAPHICS_API_D3D11_4] = {
 		[XR_SWAP_USAGE_COLOR] = colorDxSwapFormats,
-		[XR_SWAP_USAGE_DEPTH] = depthDxSwapFormats,
+		[XR_SWAP_USAGE_DEPTH] = D3D11_DEPTH_SWAP_FORMATS,
 	},
 };
 constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = {
@@ -2236,7 +2231,7 @@ constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = {
 	},
 	[XR_GRAPHICS_API_D3D11_4] = {
 		[XR_SWAP_USAGE_COLOR] = COUNT(colorDxSwapFormats),
-		[XR_SWAP_USAGE_DEPTH] = COUNT(depthDxSwapFormats),
+		[XR_SWAP_USAGE_DEPTH] = COUNT(D3D11_DEPTH_SWAP_FORMATS),
 	},
 };
 
@@ -2396,13 +2391,33 @@ XR_PROC xrCreateSwapchain(
 		case XR_GRAPHICS_API_D3D11_4: {
 			printf("Creating D3D11 Swap\n");
 			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
+
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				assert(handles[i] != NULL);
-				ID3D11Resource* resource;
-				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, handles[i], &IID_ID3D11Resource, (void**)&resource));
-				DX_CHECK(ID3D11Resource_QueryInterface(resource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.texture));
-				printf("Imported d3d11 swap. Device: %p Handle: %p Texture: %p\n", device5, handles[i], pSwap->texture[i].d3d11.texture);
+//				if (pSwap->usage == XR_SWAP_USAGE_COLOR) {
+					assert(handles[i] != NULL);
+					ID3D11Resource* resource;
+					DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, handles[i], &IID_ID3D11Resource, (void**)&resource));
+					DX_CHECK(ID3D11Resource_QueryInterface(resource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.texture));
+					LOG("Imported d3d11 swap. Device: %p Handle: %p Texture: %p\n", device5, handles[i], pSwap->texture[i].d3d11.texture);
+//				} else if (pSwap->usage == XR_SWAP_USAGE_DEPTH) {
+//					LOG("Creating depth");
+//					D3D11_TEXTURE2D_DESC desc = {
+//						.Width = createInfo->width,
+//						.Height = createInfo->height,
+//						.MipLevels = createInfo->mipCount,
+//						.ArraySize = createInfo->arraySize,
+//						.Format = D3D11_DEPTH_SWAP_FORMATS_TYPELESS[createInfo->format],
+//						.SampleDesc.Count = createInfo->sampleCount,
+//						.SampleDesc.Quality = 0,
+//						.Usage = D3D11_USAGE_DEFAULT,
+//						.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_DEPTH_STENCIL,
+//						.CPUAccessFlags = 0,
+//						.MiscFlags = 0,
+//					};
+//					DX_CHECK(ID3D11Device5_CreateTexture2D(device5, &desc, NULL, &pSwap->texture[i].d3d11.texture));
+//				}
 			}
+
 			break;
 		}
 		case XR_GRAPHICS_API_VULKAN:
@@ -2438,20 +2453,20 @@ XR_PROC xrEnumerateSwapchainImages(
 	if (imageCapacityInput != XR_SWAP_COUNT)
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	Swapchain* pSwap = (Swapchain*)swapchain;
+	auto pSwap = (Swapchain*)swapchain;
 
 	switch (images[0].type) {
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
-			printf("Enumerating gl Swapchain Images\n");
-			XrSwapchainImageOpenGLKHR* pImage = (XrSwapchainImageOpenGLKHR*)images;
+			LOG("Enumerating gl Swapchain Images\n");
+			auto pImage = (XrSwapchainImageOpenGLKHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
 				pImage[i].image = pSwap->texture[i].gl.texture;
 			}
 			break;
 		}
 		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
-			printf("Enumerating d3d11 Swapchain Images\n");
-			XrSwapchainImageD3D11KHR* pImage = (XrSwapchainImageD3D11KHR*)images;
+			LOG("Enumerating d3d11 Swapchain Images\n");
+			auto pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
 				pImage[i].texture = pSwap->texture[i].d3d11.texture;
 			}
@@ -2798,26 +2813,34 @@ XR_PROC xrEndFrame(
 
 				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
 					auto pView = &pProjectionLayer->views[view];
-//					printf("subImage %d " FORMAT_RECT_I "\n", pView->subImage.imageArrayIndex, EXPAND_RECT(pView->subImage.imageRect));
-				}
-
-				switch (pProjectionLayer->next != NULL ? *(XrStructureType*)pProjectionLayer->next : 0) {
-					case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
-						auto pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pProjectionLayer->next;
-
-						break;
+//					LOG("color subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) "\n",
+//						pView->subImage.swapchain,
+//						EXPAND_STRUCT(XrOffset2Di, pView->subImage.imageRect.offset),
+//						EXPAND_STRUCT(XrExtent2Di, pView->subImage.imageRect.extent));
+					switch (pView->next != NULL ? *(XrStructureType*)pView->next : 0) {
+						case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
+							auto pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
+//							LOG("depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
+//								pDepthInfo->subImage.swapchain,
+//								EXPAND_STRUCT(XrOffset2Di, pDepthInfo->subImage.imageRect.offset),
+//								EXPAND_STRUCT(XrExtent2Di, pDepthInfo->subImage.imageRect.extent),
+//								pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
+							break;
+						}
+						default:
+							LOG_ERROR("Unknown XrCompositionLayerProjection.next %p\n", pView->next);
+							break;
 					}
+
 				}
 
 				break;
 			}
-			case XR_TYPE_COMPOSITION_LAYER_QUAD: {
+			case XR_TYPE_COMPOSITION_LAYER_QUAD:
 				LOG("XR_TYPE_COMPOSITION_LAYER_QUAD");
-			}
-			default: {
-				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
 				break;
-			}
+			default:
+				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
 		}
 	}
 
