@@ -113,6 +113,24 @@ void xrClaimSwapImages(XrSessionIndex sessionIndex, XrSwapUsage usage, int count
 	}
 }
 
+void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pHandle)
+{
+	auto pNodeCtxt = &nodeContexts[sessionIndex];
+	auto pImports = &pImportedExternalMemory->imports;
+	auto pNodeShrd = &pImportedExternalMemory->shared;
+	switch (usage) {
+		case XR_SWAP_USAGE_COLOR:
+			*pHandle = pImports->colorSwapHandles[pImports->claimedColorSwapCount++];
+			break;
+		case XR_SWAP_USAGE_DEPTH:
+			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
+			break;
+		case XR_SWAP_USAGE_GBUFFER:
+			*pHandle = pImports->gbufferSwapHandles[pImports->claimedGbufferSwapCount++];
+			break;
+	}
+}
+
 void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];

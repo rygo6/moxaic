@@ -139,7 +139,7 @@ void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
 void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
 void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType);
-void xrClaimSwapImages(XrSessionIndex sessionIndex, XrSwapUsage usage, int count, HANDLE* pHandles);
+void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pHandle);
 
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
 void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
@@ -486,6 +486,9 @@ typedef struct Swapchain {
 		} gl;
 		struct {
 			ID3D11Texture2D* texture;
+			ID3D11Texture2D* gbuffer;
+			ID3D11Resource*  resource;
+			ID3D11Resource*  gbufferResource;
 		} d3d11;
 	} texture[XR_SWAP_COUNT];
 
@@ -2370,22 +2373,19 @@ XR_PROC xrCreateSwapchain(
 	// unfortunately you can't know all swaps itll want up front and you dont know it till it calls this
 	xrCreateSwapImages(pSess->index, pSess->swapType);
 
-	HANDLE handles[XR_SWAP_COUNT];
-	xrClaimSwapImages(pSess->index, pSwap->usage, XR_SWAP_COUNT, handles);
-
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			printf("Creating OpenGL Swap");
-			#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
-				gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
-				gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
-				gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
-				gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
-			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, handles[i]);
-				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
-			}
-			#undef DEFAULT_IMAGE_CREATE_INFO
+//			#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
+//				gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
+//				gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
+//				gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
+//				gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
+//			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
+//				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, handles[i]);
+//				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
+//			}
+//			#undef DEFAULT_IMAGE_CREATE_INFO
 			break;
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
@@ -2393,14 +2393,26 @@ XR_PROC xrCreateSwapchain(
 			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
 
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-//				if (pSwap->usage == XR_SWAP_USAGE_COLOR) {
-					assert(handles[i] != NULL);
-					ID3D11Resource* resource;
-					DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, handles[i], &IID_ID3D11Resource, (void**)&resource));
-					DX_CHECK(ID3D11Resource_QueryInterface(resource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.texture));
-					LOG("Imported d3d11 swap. Device: %p Handle: %p Texture: %p\n", device5, handles[i], pSwap->texture[i].d3d11.texture);
-//				} else if (pSwap->usage == XR_SWAP_USAGE_DEPTH) {
-//					LOG("Creating depth");
+
+				HANDLE handle;
+				xrClaimSwapImage(pSess->index, pSwap->usage, &handle);
+				assert(handle != NULL);
+
+				DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, handle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.resource));
+				DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.resource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.texture));
+				LOG("Imported d3d11 swap. Device: %p Handle: %p Texture: %p\n", device5, handle, pSwap->texture[i].d3d11.texture);
+
+				 if (pSwap->usage == XR_SWAP_USAGE_DEPTH) {
+
+					 HANDLE gbufferHandle;
+					 xrClaimSwapImage(pSess->index, XR_SWAP_USAGE_GBUFFER, &gbufferHandle);
+					 assert(gbufferHandle != NULL);
+
+					 DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, handle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.gbufferResource));
+					 DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.gbufferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.gbuffer));
+					 LOG("Imported d3d11 gbuffer swap. Device: %p Handle: %p Texture: %p\n", device5, handle, pSwap->texture[i].d3d11.gbuffer);
+
+
 //					D3D11_TEXTURE2D_DESC desc = {
 //						.Width = createInfo->width,
 //						.Height = createInfo->height,
@@ -2415,7 +2427,7 @@ XR_PROC xrCreateSwapchain(
 //						.MiscFlags = 0,
 //					};
 //					DX_CHECK(ID3D11Device5_CreateTexture2D(device5, &desc, NULL, &pSwap->texture[i].d3d11.texture));
-//				}
+				}
 			}
 
 			break;
@@ -2770,9 +2782,9 @@ XR_PROC xrEndFrame(
 	LOG_METHOD_ONCE(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
 
-	Session* pSession = (Session*)session;
+	auto pSess = (Session*)session;
 
-	if (!pSession->running || pSession->activeSessionState == XR_SESSION_STATE_IDLE ||  pSession->activeSessionState == XR_SESSION_STATE_EXITING) {
+	if (!pSess->running || pSess->activeSessionState == XR_SESSION_STATE_IDLE || pSess->activeSessionState == XR_SESSION_STATE_EXITING) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
@@ -2780,16 +2792,16 @@ XR_PROC xrEndFrame(
 		LOG_ERROR("XR_ERROR_TIME_INVALID \n");
 		return XR_ERROR_TIME_INVALID ;
 	}
-	if (pSession->frameBegan == pSession->frameEnded) {
+	if (pSess->frameBegan == pSess->frameEnded) {
 		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID \n");
 		return XR_ERROR_CALL_ORDER_INVALID;
 	}
 
 	bool displayTimeFound = false;
-	for (int i = 0; i < COUNT(pSession->predictedDisplayTimes); ++i) {
+	for (int i = 0; i < COUNT(pSess->predictedDisplayTimes); ++i) {
 		if (i > 0)
 			printf("MISSED FRAME END TIME\n");
-		if (pSession->predictedDisplayTimes[i] == frameEndInfo->displayTime) {
+		if (pSess->predictedDisplayTimes[i] == frameEndInfo->displayTime) {
 			displayTimeFound = true;
 			break;
 		}
@@ -2820,6 +2832,18 @@ XR_PROC xrEndFrame(
 					switch (pView->next != NULL ? *(XrStructureType*)pView->next : 0) {
 						case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
 							auto pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
+							auto pDepthSwap = (Swapchain*)pDepthInfo->subImage.swapchain;
+							auto swapIndex = pDepthSwap->swapIndex;
+
+							ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
+							ID3D11DeviceContext4_CopySubresourceRegion(
+								context4,
+								pDepthSwap->texture[swapIndex].d3d11.gbufferResource, 0,  // dest texture, mip level 0
+								0, 0, 0,                                                  // x,y,z offsets
+								pDepthSwap->texture[swapIndex].d3d11.resource, 0,         // source texture, mip level 0
+								NULL                                                      // copy entire source
+							);
+
 //							LOG("depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
 //								pDepthInfo->subImage.swapchain,
 //								EXPAND_STRUCT(XrOffset2Di, pDepthInfo->subImage.imageRect.offset),
@@ -2844,16 +2868,16 @@ XR_PROC xrEndFrame(
 		}
 	}
 
-	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+	bool synchronized = pSess->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 
 	{
 		XrTime timeBeforeWait = xrGetTime();
 
-		pSession->sessionTimelineValue++;
-		uint64_t sessionTimelineValue = pSession->sessionTimelineValue;
+		pSess->sessionTimelineValue++;
+		uint64_t sessionTimelineValue = pSess->sessionTimelineValue;
 
-		ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
-		ID3D11Fence*          sessionFence = pSession->binding.d3d11.sessionFence;
+		ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
+		ID3D11Fence*          sessionFence = pSess->binding.d3d11.sessionFence;
 
 		ID3D11DeviceContext4_Flush(context4);
 		ID3D11DeviceContext4_Signal(context4, sessionFence, sessionTimelineValue);
@@ -2869,7 +2893,7 @@ XR_PROC xrEndFrame(
 		WaitForSingleObject(eventHandle, INFINITE);
 		CloseHandle(eventHandle);
 
-		xrSetSessionTimelineValue(pSession->index, sessionTimelineValue);
+		xrSetSessionTimelineValue(pSess->index, sessionTimelineValue);
 
 //		XrTime timeAfterWait = xrGetTime();
 //		XrTime waitTime = timeAfterWait - timeBeforeWait;
@@ -2880,50 +2904,50 @@ XR_PROC xrEndFrame(
 	{
 		XrTime currenTime = xrGetTime();
 
-		XrTime delta = currenTime - pSession->lastBeginDisplayTime;
+		XrTime delta = currenTime - pSess->lastBeginDisplayTime;
 		double deltaMs = xrTimeToMilliseconds(delta);
 		double fps = 1.0 / MillisecondsToSeconds(deltaMs);
 
 		XrTime discrepancy = currenTime - frameEndInfo->displayTime;
 		double discrepancyMs = xrTimeToMilliseconds(discrepancy);
-		XrTime frameInterval = xrGetFrameInterval(pSession->index, synchronized);
+		XrTime frameInterval = xrGetFrameInterval(pSess->index, synchronized);
 
 		if (discrepancy > 0) {
 //			printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
-			pSession->synchronizedFrameCount = 0;
+pSess->synchronizedFrameCount = 0;
 
 			uint64_t initialTimelineValue;
 			switch (xr.instance.graphicsApi) {
 				case XR_GRAPHICS_API_D3D11_4:
-					initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
+					initialTimelineValue = ID3D11Fence_GetCompletedValue(pSess->binding.d3d11.compositorFence);
 					break;
 				default:
 					LOG_ERROR("Graphics API not supported.\n");
 					return XR_ERROR_RUNTIME_FAILURE;
 			}
-			xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
+			xrSetInitialCompositorTimelineValue(pSess->index, initialTimelineValue);
 
 		} else {
-			pSession->synchronizedFrameCount++;
+			pSess->synchronizedFrameCount++;
 		}
 
-		pSession->lastDisplayTime = currenTime;
+		pSess->lastDisplayTime = currenTime;
 
 //		printf("xrEndFrame discrepancy: %f deltaMs: %f fps: %f sync: %d\n", discrepancyMs, deltaMs, fps, pSession->synchronizedFrameCount);
 
 		// You wait till first end frame to say synchronized. I don't know if this is really needed... maybe just a chrome quirk
 //		if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->synchronizedFrameCount > 4)
-		if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->sessionTimelineValue > 2)
-			pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+		if (pSess->activeSessionState == XR_SESSION_STATE_READY && pSess->sessionTimelineValue > 2)
+			pSess->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
 
-		if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
-			pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+		if (pSess->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+			pSess->pendingSessionState = XR_SESSION_STATE_VISIBLE;
 
 		//	if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
 		//		pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
 
-		xrProgressCompositorTimelineValue(pSession->index, 0, synchronized);
-		XrTimeSignalWin32(&pSession->frameEnded, pSession->frameBegan);
+		xrProgressCompositorTimelineValue(pSess->index, 0, synchronized);
+		XrTimeSignalWin32(&pSess->frameEnded, pSess->frameBegan);
 	}
 
 	return XR_SUCCESS;

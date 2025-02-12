@@ -128,7 +128,7 @@ typedef struct MxcSwapInfo {
 
 typedef struct MxcSwap {
 	VkDedicatedTexture color;
-//	VkDedicatedTexture depth;
+	VkDedicatedTexture depth;
 	VkDedicatedTexture gbuffer;
 #if _WIN32
 	VkWin32ExternalTexture colorExternal;
@@ -223,8 +223,10 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 		VkImageMemoryBarrier2 acquireBarriers[2];
 		VkImageMemoryBarrier2 releaseBarriers[2];
 		VkImage               color;
+		VkImage               depth;
 		VkImage               gBuffer;
 		VkImageView           colorView;
+		VkImageView           depthView;
 		VkImageView           gBufferMipViews[MXC_NODE_GBUFFER_LEVELS];
 	} swaps[VK_SWAP_COUNT];
 
