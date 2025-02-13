@@ -387,9 +387,68 @@ run_loop:
 
 				u8 nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
 				auto pNodeSwaps = &pNodeCompositorData->swaps[nodeFramebufferIndex];
-				CmdPipelineImageBarriers2(cmd, COUNT(pNodeSwaps->acquireBarriers), pNodeSwaps->acquireBarriers);
+
+#define SWAP_ACQUIRE_BARRIER                                                 \
+	.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,                    \
+	.srcAccessMask = VK_ACCESS_2_NONE,                                       \
+	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
+					VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
+					VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
+	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
+	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   \
+	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+
+				VkImageMemoryBarrier2 barriers[] = {
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pNodeSwaps->color,
+						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+						.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+						.dstQueueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+						SWAP_ACQUIRE_BARRIER,
+					},
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pNodeSwaps->gBuffer,
+						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+						.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+						.dstQueueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+						SWAP_ACQUIRE_BARRIER,
+					},
+				};
+				CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
+//				CmdPipelineImageBarriers2(cmd, COUNT(pNodeSwaps->acquireBarriers), pNodeSwaps->acquireBarriers);
 //				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
 //				assert(!exchangedSwap);
+
+//				VkClearColorValue clearColor = {
+//					.float32 = { 1.0f, 0.0f, 0.0f, 1.0f }  // Red
+//				};
+//				VkImageSubresourceRange range = {
+//					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//					.baseMipLevel = 0,
+//					.levelCount = 1,
+//					.baseArrayLayer = 0,
+//					.layerCount = 1
+//				};
+//				vkCmdClearColorImage(cmd, pNodeSwaps->gBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
+//				VkImageMemoryBarrier2 barriers2[] = {
+//					{
+//						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+//						.image = pNodeSwaps->gBuffer,
+//						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+//						VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
+//						.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |
+//										VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |
+//										VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT |
+//										VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+//						.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+//						.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+//					},
+//				};
+//				CmdPipelineImageBarriers2(cmd, COUNT(barriers2), barriers2);
 
 				VkWriteDescriptorSet writeSets[] = {
 					SET_WRITE_COMP_COLOR(pNodeCompositorData->set, pNodeSwaps->colorView),
@@ -514,10 +573,10 @@ run_loop:
 			VkImageMemoryBarrier2 beginBlitBarrier = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = swapImage,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT,
 				VK_IMAGE_BARRIER_DST_BLIT,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			};
 			CmdPipelineImageBarrier2(cmd, &beginBlitBarrier);
 
@@ -526,12 +585,12 @@ run_loop:
 			VkImageMemoryBarrier2 endBlitBarrier = {
 				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = swapImage,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_BLIT,
 				.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
 				.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR,
 				.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			};
 			CmdPipelineImageBarrier2(cmd, &endBlitBarrier);
 		}

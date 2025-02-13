@@ -523,12 +523,6 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
 	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
 
-#define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE \
-	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
-
-#define VK_IMAGE_BARRIER_DEPTH_SUBRESOURCE_RANGE \
-	.subresourceRange = VK_DEPTH_SUBRESOURCE_RANGE
-
 
 //////////////////////////////
 //// Mid Vulkan Inline Methods
@@ -913,8 +907,8 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
-VkCommandBuffer midVkBeginImmediateTransferCommandBuffer();
-void            midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
+VkCommandBuffer vkBeginImmediateTransferCommandBuffer();
+void            vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
 #ifdef _WIN32
 void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
@@ -966,7 +960,7 @@ static VkBool32 VkmDebugUtilsCallback(
 	}
 }
 
-VkCommandBuffer midVkBeginImmediateTransferCommandBuffer()
+VkCommandBuffer vkBeginImmediateTransferCommandBuffer()
 {
 	VkCommandBufferAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -983,7 +977,7 @@ VkCommandBuffer midVkBeginImmediateTransferCommandBuffer()
 	return cmd;
 }
 
-void midVkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
+void vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
 {
 	VK_CHECK(vkEndCommandBuffer(cmd));
 	VkSubmitInfo info = {
@@ -1583,9 +1577,9 @@ void midVkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, Vk
 	VkBuffer       stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 	CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
-	VkCommandBuffer commandBuffer = midVkBeginImmediateTransferCommandBuffer();
+	VkCommandBuffer commandBuffer = vkBeginImmediateTransferCommandBuffer();
 	vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.dstOffset = dstOffset, .size = bufferSize});
-	midVkEndImmediateTransferCommandBuffer(commandBuffer);
+	vkEndImmediateTransferCommandBuffer(commandBuffer);
 	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
 	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);
 }
@@ -1987,6 +1981,7 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		&IID_ID3D12Resource,
 		(void**)&pTexture->texture));
 	printf("Created DX12 Texture Format: %d\n", textureDesc.Format);
+
 	DX_CHECK(ID3D12Device_CreateSharedHandle(
 		d3d12.device,
 		(ID3D12DeviceChild*)pTexture->texture,
@@ -2030,15 +2025,15 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
 	stbi_image_free(pImagePixels);
 
-	VkCommandBuffer commandBuffer = midVkBeginImmediateTransferCommandBuffer();
+	VkCommandBuffer commandBuffer = vkBeginImmediateTransferCommandBuffer();
 
 	VkImageMemoryBarrier2 beginCopyBarrier = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 		.image = pTexture->image,
+		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		VK_IMAGE_BARRIER_SRC_UNDEFINED,
 		VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	};
 	vkmCmdPipelineImageBarriers(commandBuffer, 1, &beginCopyBarrier);
 
@@ -2051,14 +2046,14 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	VkImageMemoryBarrier2 endCopyBarrier = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 		.image = pTexture->image,
+		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
 		VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	};
 	vkmCmdPipelineImageBarriers(commandBuffer, 1, &endCopyBarrier);
 
-	midVkEndImmediateTransferCommandBuffer(commandBuffer);
+	vkEndImmediateTransferCommandBuffer(commandBuffer);
 
 	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
 	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);

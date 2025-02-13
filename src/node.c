@@ -68,7 +68,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		VkImageCreateInfo info = {
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = &(VkExternalMemoryImageCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
 			.imageType = VK_IMAGE_TYPE_2D,
@@ -122,7 +122,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		VkImageCreateInfo info = {
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = &(VkExternalMemoryImageCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
 			.imageType = VK_IMAGE_TYPE_2D,
@@ -139,27 +139,27 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 	if (VK_LOCALITY_INTERPROCESS_EXPORTED(pTexInfo->locality)) {
 		// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
 		VK_DEVICE_FUNC(CmdPipelineBarrier2);
-		VkCommandBuffer cmd = midVkBeginImmediateTransferCommandBuffer();
+		VkCommandBuffer cmd = vkBeginImmediateTransferCommandBuffer();
 		VkImageMemoryBarrier2 barriers[] = {
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pSwap->color.image,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
 				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pSwap->gbuffer.image,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
 		};
 		CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
-		midVkEndImmediateTransferCommandBuffer(cmd);
+		vkEndImmediateTransferCommandBuffer(cmd);
 	}
 }
 
@@ -1036,8 +1036,8 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 	auto pNodeShared = activeNodesShared[handle];
 	auto pNodeCompositorData = &nodeCompositorData[handle];
 
-	auto needsExport = pNodeContext->type != MXC_NODE_TYPE_THREAD;
-	auto swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * XR_SWAP_COUNT;
+	bool needsExport = pNodeContext->type != MXC_NODE_TYPE_THREAD;
+	int swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * XR_SWAP_COUNT;
 
 	HANDLE currentHandle = GetCurrentProcess();
 
@@ -1046,18 +1046,17 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 		.yScale = MXC_SWAP_SCALE_FULL,
 		.xScale = MXC_SWAP_SCALE_FULL,
 	};
-	for (int i = 0; i < swapCount; ++i) {
+	for (int si = 0; si < swapCount; ++si) {
 
 		int swapHandle = mxcClaimSwap(&swapInfo);
 		if (swapHandle == -1)
 			goto Exit;
 
-		auto pNodeSwap = &pNodeContext->swap[i];
-		auto poolIndex = MXC_SWAP_TYPE_POOL_INDEX[swapInfo.type];
-		auto pPool = &nodeSwapPool[poolIndex];
+		auto pNodeSwap = &pNodeContext->swap[si];
+		auto pPool = &nodeSwapPool[MXC_SWAP_TYPE_POOL_INDEX[swapInfo.type]];
 		*pNodeSwap = pPool->swaps[swapHandle];
 
-		auto pCompSwap = &pNodeCompositorData->swaps[i];
+		auto pCompSwap = &pNodeCompositorData->swaps[si];
 		pCompSwap->acquireBarriers[0].image = pNodeSwap->color.image;
 		pCompSwap->releaseBarriers[0].image = pNodeSwap->color.image;
 		pCompSwap->color = pNodeSwap->color.image;
@@ -1066,7 +1065,7 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 		pCompSwap->acquireBarriers[1].image = pNodeSwap->gbuffer.image;
 		pCompSwap->releaseBarriers[1].image = pNodeSwap->gbuffer.image;
 		pCompSwap->gBuffer = pNodeSwap->gbuffer.image;
-		for (uint32_t mipIndex = 0; mipIndex < MXC_NODE_GBUFFER_LEVELS; ++mipIndex) {
+		for (uint32_t mi = 0; mi < MXC_NODE_GBUFFER_LEVELS; ++mi) {
 			VkImageViewCreateInfo info = {
 				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 				.image = pNodeSwap->gbuffer.image,
@@ -1074,28 +1073,28 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 				.format = MXC_NODE_GBUFFER_FORMAT,
 				.subresourceRange = {
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = mipIndex,
+					.baseMipLevel = mi,
 					.levelCount = 1,
 					.layerCount = 1,
 				},
 			};
-			VK_CHECK(vkCreateImageView(vk.context.device, &info, VK_ALLOC, &pCompSwap->gBufferMipViews[mipIndex]));
+			VK_CHECK(vkCreateImageView(vk.context.device, &info, VK_ALLOC, &pCompSwap->gBufferMipViews[mi]));
 		}
 
 		if (needsExport) {
 			WIN32_CHECK(DuplicateHandle(
 							currentHandle, pNodeSwap->colorExternal.handle,
-							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.colorSwapHandles[i],
+							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.colorSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
 						"Duplicate texture handle fail");
 			WIN32_CHECK(DuplicateHandle(
 							currentHandle, pNodeSwap->gbufferExternal.handle,
-							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.gbufferSwapHandles[i],
+							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.gbufferSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
 						"Duplicate gbuffer handle fail");
 			WIN32_CHECK(DuplicateHandle(
 							currentHandle, pNodeSwap->depthExternal.handle,
-							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.depthSwapHandles[i],
+							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.depthSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
 						"Duplicate depth handle fail");
 		}

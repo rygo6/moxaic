@@ -123,8 +123,6 @@ void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pH
 			*pHandle = pImports->colorSwapHandles[pImports->claimedColorSwapCount++];
 			break;
 		case XR_SWAP_USAGE_DEPTH:
-			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
-			break;
 		case XR_SWAP_USAGE_GBUFFER:
 			*pHandle = pImports->gbufferSwapHandles[pImports->claimedGbufferSwapCount++];
 			break;
