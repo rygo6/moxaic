@@ -86,7 +86,6 @@ static void LogWin32Error(HRESULT err)
 		LocalFree(errStr);
 	}
 }
-wwwwwwwwwwwwwwwwwwwwwwwwwwwww
 #endif
 #endif
 
@@ -485,10 +484,10 @@ typedef struct Swapchain {
 			GLuint memObject;
 		} gl;
 		struct {
-			ID3D11Texture2D* texture;
-			ID3D11Texture2D* gbuffer;
-			ID3D11Resource*  resource;
-			ID3D11Resource*  gbufferResource;
+			ID3D11Texture2D* localTexture;
+			ID3D11Texture2D* transferTexture;
+			ID3D11Resource*  localResource;
+			ID3D11Resource*  transferResource;
 		} d3d11;
 	} texture[XR_SWAP_COUNT];
 
@@ -2402,21 +2401,19 @@ XR_PROC xrCreateSwapchain(
 						xrClaimSwapImage(pSess->index, XR_SWAP_USAGE_COLOR, &colorHandle);
 						assert(colorHandle != NULL);
 						LOG("Importing d3d11 color swap. Device: %p Handle: %p\n", device5, colorHandle);
-						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.resource));
-						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.resource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.texture));
+						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
+						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
+						// For color the local resource can directly be the transfer resource.
+						pSwap->texture[i].d3d11.localResource = pSwap->texture[i].d3d11.transferResource;
+						pSwap->texture[i].d3d11.localTexture = pSwap->texture[i].d3d11.transferTexture;
 						break;
 					case XR_SWAP_USAGE_DEPTH:
 						HANDLE gbufferHandle;
-						xrClaimSwapImage(pSess->index, XR_SWAP_USAGE_GBUFFER, &gbufferHandle);
-						assert(colorHandle != NULL);
-						LOG("Importing d3d11 gbuffer swap. Device: %p Handle: %p\n", device5, gbufferHandle);
-						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, gbufferHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.gbufferResource));
-						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.gbufferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.gbuffer));
-
-						float color[4] = { 1.0f, 0.0f, 0.0f, 1.0f }; // Red
-						ID3D11RenderTargetView* rtv;
-						ID3D11Device5_CreateRenderTargetView(device5, pSwap->texture[i].d3d11.gbufferResource, NULL, &rtv);
-						ID3D11DeviceContext4_ClearRenderTargetView(context4, rtv, color);
+						xrClaimSwapImage(pSess->index, XR_SWAP_USAGE_DEPTH, &gbufferHandle);
+						assert(gbufferHandle != NULL);
+						LOG("Importing d3d11 transferTexture swap. Device: %p Handle: %p\n", device5, gbufferHandle);
+						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, gbufferHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
+						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
 
 						LOG("Create d3d11 swap depth. Device: %p\n", device5);
 						D3D11_TEXTURE2D_DESC desc = {
@@ -2432,8 +2429,8 @@ XR_PROC xrCreateSwapchain(
 							.CPUAccessFlags = 0,
 							.MiscFlags = 0,
 						};
-						DX_CHECK(ID3D11Device5_CreateTexture2D(device5, &desc, NULL, &pSwap->texture[i].d3d11.texture));
-						DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->texture[i].d3d11.texture, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.resource));
+						DX_CHECK(ID3D11Device5_CreateTexture2D(device5, &desc, NULL, &pSwap->texture[i].d3d11.localTexture));
+						DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->texture[i].d3d11.localTexture, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.localResource));
 						break;
 				}
 			}
@@ -2488,7 +2485,7 @@ XR_PROC xrEnumerateSwapchainImages(
 			LOG("Enumerating d3d11 Swapchain Images\n");
 			auto pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (int i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
-				pImage[i].texture = pSwap->texture[i].d3d11.texture;
+				pImage[i].texture = pSwap->texture[i].d3d11.localTexture;
 			}
 			break;
 		}
@@ -2883,14 +2880,14 @@ XR_PROC xrEndFrame(
 
 //							ID3D11DeviceContext4_CopySubresourceRegion(
 //								context4,
-//								pDepthSwap->texture[swapIndex].d3d11.resource, 0,
+//								pDepthSwap->texture[swapIndex].d3d11.transferResource, 0,
 //								0, 0, 0,
-//								pDepthSwap->texture[swapIndex].d3d11.depthResource, 0,
+//								pDepthSwap->texture[swapIndex].d3d11.localResource, 0,
 //								NULL);
 							ID3D11DeviceContext4_CopyResource(
 								context4,
-								pDepthSwap->texture[swapIndex].d3d11.gbufferResource,
-								pDepthSwap->texture[swapIndex].d3d11.resource);
+								pDepthSwap->texture[swapIndex].d3d11.transferResource,
+								pDepthSwap->texture[swapIndex].d3d11.localResource);
 
 //							LOG("depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
 //								pDepthInfo->subImage.swapchain,

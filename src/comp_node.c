@@ -312,6 +312,54 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCompositorContext, const 
 		compositorFramebufferViews[i].depth = pCompositor->framebuffers[i].depth.view;
 		compositorFramebufferColorImages[i] = pCompositor->framebuffers[i].color.image;
 	}
+
+	#define SWAP_ACQUIRE_BARRIER                                                 \
+		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,                    \
+		.srcAccessMask = VK_ACCESS_2_NONE,                                       \
+		.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
+						VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
+						VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
+						VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
+		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   \
+		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+
+	VkImageMemoryBarrier2 localAcquireBarriers[] = {
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = VK_NULL_HANDLE,
+			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			SWAP_ACQUIRE_BARRIER,
+		},
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = VK_NULL_HANDLE,
+			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			SWAP_ACQUIRE_BARRIER,
+		},
+	};
+	VkImageMemoryBarrier2 externalAcquireBarriers[] = {
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = VK_NULL_HANDLE,
+			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+			.dstQueueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+			SWAP_ACQUIRE_BARRIER,
+		},
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = VK_NULL_HANDLE,
+			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
+			.dstQueueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+			SWAP_ACQUIRE_BARRIER,
+		},
+	};
+	#undef SWAP_ACQUIRE_BARRIER
+
 	int compositorFramebufferIndex = 0;
 
 	// just making sure atomics are only using barriers, not locks
@@ -388,71 +436,16 @@ run_loop:
 				u8 nodeFramebufferIndex = !(nodeTimelineValue % VK_SWAP_COUNT);
 				auto pNodeSwaps = &pNodeCompositorData->swaps[nodeFramebufferIndex];
 
-#define SWAP_ACQUIRE_BARRIER                                                 \
-	.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,                    \
-	.srcAccessMask = VK_ACCESS_2_NONE,                                       \
-	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
-					VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
-					VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
-	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
-	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   \
-	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-
-				VkImageMemoryBarrier2 barriers[] = {
-					{
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pNodeSwaps->color,
-						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-						.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-						.dstQueueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-						SWAP_ACQUIRE_BARRIER,
-					},
-					{
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pNodeSwaps->gBuffer,
-						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-						.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-						.dstQueueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-						SWAP_ACQUIRE_BARRIER,
-					},
-				};
-				CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
+				externalAcquireBarriers[0].image = pNodeSwaps->color;
+				externalAcquireBarriers[1].image = pNodeSwaps->depth;
+				CmdPipelineImageBarriers2(cmd, COUNT(externalAcquireBarriers), externalAcquireBarriers);
 //				CmdPipelineImageBarriers2(cmd, COUNT(pNodeSwaps->acquireBarriers), pNodeSwaps->acquireBarriers);
 //				uint8_t exchangedSwap = __atomic_exchange_n(&pNodeShared->swapClaimed[nodeFramebufferIndex], true, __ATOMIC_SEQ_CST);
 //				assert(!exchangedSwap);
 
-//				VkClearColorValue clearColor = {
-//					.float32 = { 1.0f, 0.0f, 0.0f, 1.0f }  // Red
-//				};
-//				VkImageSubresourceRange range = {
-//					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//					.baseMipLevel = 0,
-//					.levelCount = 1,
-//					.baseArrayLayer = 0,
-//					.layerCount = 1
-//				};
-//				vkCmdClearColorImage(cmd, pNodeSwaps->gBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &range);
-//				VkImageMemoryBarrier2 barriers2[] = {
-//					{
-//						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-//						.image = pNodeSwaps->gBuffer,
-//						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-//						VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
-//						.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |
-//										VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |
-//										VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT |
-//										VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-//						.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-//						.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-//						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-//					},
-//				};
-//				CmdPipelineImageBarriers2(cmd, COUNT(barriers2), barriers2);
-
 				VkWriteDescriptorSet writeSets[] = {
 					SET_WRITE_COMP_COLOR(pNodeCompositorData->set, pNodeSwaps->colorView),
-					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pNodeSwaps->gBufferMipViews[0]),
+					SET_WRITE_COMP_GBUFFER(pNodeCompositorData->set, pNodeSwaps->depthView),
 				};
 				vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 			}

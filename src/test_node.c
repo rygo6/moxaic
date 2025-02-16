@@ -258,30 +258,30 @@ run_loop:
 				acquireBarriers[i][0].image = pSwap[i].color.image;
 				releaseBarriers[i][0].image = pSwap[i].color.image;
 
-				VkTextureCreateInfo gbufferCreateInfo = {
-					.debugName = "ImportedGbufferSwap",
-					.pImageCreateInfo = &(VkImageCreateInfo){
-						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-						.pNext = &(VkExternalMemoryImageCreateInfo){
-							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-						},
-						.imageType = VK_IMAGE_TYPE_2D,
-						.format = MXC_NODE_GBUFFER_FORMAT,
-						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-						.mipLevels = 1,
-						.arrayLayers = 1,
-						.samples = VK_SAMPLE_COUNT_1_BIT,
-						.usage = MXC_NODE_GBUFFER_USAGE,
-					},
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-					.importHandle = pNodeContext->pNodeImports->gbufferSwapHandles[i],
-				};
-				vkCreateTexture(&gbufferCreateInfo, &pSwap[i].gbuffer);
-				acquireBarriers[i][1].image = pSwap[i].gbuffer.image;
-				releaseBarriers[i][1].image = pSwap[i].gbuffer.image;
+//				VkTextureCreateInfo gbufferCreateInfo = {
+//					.debugName = "ImportedGbufferSwap",
+//					.pImageCreateInfo = &(VkImageCreateInfo){
+//						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//						.pNext = &(VkExternalMemoryImageCreateInfo){
+//							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+//							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+//						},
+//						.imageType = VK_IMAGE_TYPE_2D,
+//						.format = MXC_NODE_GBUFFER_FORMAT,
+//						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//						.mipLevels = 1,
+//						.arrayLayers = 1,
+//						.samples = VK_SAMPLE_COUNT_1_BIT,
+//						.usage = MXC_NODE_GBUFFER_USAGE,
+//					},
+//					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+//					.importHandle = pNodeContext->pNodeImports->gbufferSwapHandles[i],
+//				};
+//				vkCreateTexture(&gbufferCreateInfo, &pSwap[i].gbuffer);
+//				acquireBarriers[i][1].image = pSwap[i].gbuffer.image;
+//				releaseBarriers[i][1].image = pSwap[i].gbuffer.image;
 
 //				VkTextureCreateInfo depthCreateInfo = {
 //					.debugName = "ImportedDepthSwap",

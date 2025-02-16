@@ -18,15 +18,10 @@
 
 #define MXC_NODE_GBUFFER_FORMAT VK_FORMAT_R16_UNORM
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-//#define MXC_NODE_GBUFFER_LEVELS 10
+//#define MXC_NODE_GBUFFER_LEVELS 11
 #define MXC_NODE_GBUFFER_LEVELS 1
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
-
-#if defined(D3D11)
-#define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_TEXTURE_BIT
-#elif defined(D3D12)
 #define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
-#endif
 
 //////////////
 //// IPC Types
@@ -98,10 +93,10 @@ typedef struct MxcNodeImports {
 
 	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
 	HANDLE colorSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
-	HANDLE gbufferSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
+//	HANDLE gbufferSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 	u8     claimedColorSwapCount;
-	u8     claimedGbufferSwapCount;
+//	u8     claimedGbufferSwapCount;
 	u8     claimedDepthSwapCount;
 
 	HANDLE nodeTimelineHandle;
@@ -134,7 +129,6 @@ typedef struct MxcSwap {
 #if _WIN32
 	VkWin32ExternalTexture colorExternal;
 	VkWin32ExternalTexture depthExternal;
-	VkWin32ExternalTexture gbufferExternal;
 #endif
 } MxcSwap;
 
@@ -221,8 +215,8 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 	VkSharedMemory SetSharedMemory;
 
 	struct CACHE_ALIGN {
-		VkImageMemoryBarrier2 acquireBarriers[2];
-		VkImageMemoryBarrier2 releaseBarriers[2];
+//		VkImageMemoryBarrier2 acquireBarriers[2];
+//		VkImageMemoryBarrier2 releaseBarriers[2];
 		VkImage               color;
 		VkImage               depth;
 		VkImage               gBuffer;

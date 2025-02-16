@@ -92,28 +92,20 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 	}
 
 	{ // GBuffer
-		VkImageCreateInfo info = {
-			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = &(VkExternalMemoryImageCreateInfo){
-				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			},
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = MXC_NODE_GBUFFER_FORMAT,
-			.extent = pTexInfo->extent,
-			.mipLevels = MXC_NODE_GBUFFER_LEVELS,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = MXC_NODE_GBUFFER_USAGE,
-		};
-		vkWin32CreateExternalTexture(&info, &pSwap->gbufferExternal);
 		VkTextureCreateInfo textureInfo = {
 			.debugName = "ExportedGBufferFramebuffer",
-			.pImageCreateInfo = &info,
+			.pImageCreateInfo = &(VkImageCreateInfo){
+				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+				.imageType = VK_IMAGE_TYPE_2D,
+				.format = MXC_NODE_GBUFFER_FORMAT,
+				.extent = pTexInfo->extent,
+				.mipLevels = MXC_NODE_GBUFFER_LEVELS,
+				.arrayLayers = 1,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.usage = MXC_NODE_GBUFFER_USAGE,
+			},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.importHandle = pSwap->gbufferExternal.handle,
-			.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+			.locality = VK_LOCALITY_CONTEXT,
 		};
 		vkCreateTexture(&textureInfo, &pSwap->gbuffer);
 	}
@@ -126,14 +118,23 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
 			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+			.format = VK_FORMAT_R16_UNORM,
 			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 			.mipLevels = 1,
 			.arrayLayers = 1,
 			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+			.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 		};
 		vkWin32CreateExternalTexture(&info, &pSwap->depthExternal);
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedDepthFramebuffer",
+			.pImageCreateInfo = &info,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.importHandle = pSwap->depthExternal.handle,
+			.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->depth);
 	}
 
 	if (VK_LOCALITY_INTERPROCESS_EXPORTED(pTexInfo->locality)) {
@@ -151,10 +152,10 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->gbuffer.image,
+				.image = pSwap->depth.image,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
+				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			},
 		};
@@ -417,13 +418,13 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->nodeTimeline);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtxt->pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = pNodeCtxt->pool,
 		.commandBufferCount = 1,
 	};
@@ -434,36 +435,6 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
-
-	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-		auto pCompSwap = &pNodeCompositorData->swaps[i];
-
-		pCompSwap->acquireBarriers[0] = (VkImageMemoryBarrier2){
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.image = pCompSwap->color,
-			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-			SWAP_ACQUIRE_BARRIER,
-		};
-		pCompSwap->acquireBarriers[1] = (VkImageMemoryBarrier2){
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.image = pCompSwap->gBuffer,
-			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-			SWAP_ACQUIRE_BARRIER,
-		};
-
-		pCompSwap->releaseBarriers[0] = (VkImageMemoryBarrier2){
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.image = pCompSwap->color,
-			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-			SWAP_RELEASE_BARRIER,
-		};
-		pCompSwap->releaseBarriers[1] = (VkImageMemoryBarrier2){
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.image = pCompSwap->gBuffer,
-			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-			SWAP_RELEASE_BARRIER,
-		};
-	}
 
 	*pNodeHandle = handle;
 
@@ -717,40 +688,6 @@ static void InterprocessServerAcceptNodeConnection()
 					"Duplicate compTimeline handle fail.");
 
 		pNodeCompLcl->rootPose.rotation = QuatFromEuler(pNodeCompLcl->rootPose.euler);\
-
-		uint32_t graphicsQueueIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
-
-		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-			for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-				auto pCompSwap = &pNodeCompLcl->swaps[i];
-
-				pCompSwap->acquireBarriers[0] = (VkImageMemoryBarrier2){
-					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = VK_NULL_HANDLE,
-					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-					SWAP_ACQUIRE_BARRIER,
-				};
-				pCompSwap->acquireBarriers[1] = (VkImageMemoryBarrier2){
-					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = VK_NULL_HANDLE,
-					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-					SWAP_ACQUIRE_BARRIER,
-				};
-
-				pCompSwap->releaseBarriers[0] = (VkImageMemoryBarrier2){
-					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = VK_NULL_HANDLE,
-					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-					SWAP_RELEASE_BARRIER,
-				};
-				pCompSwap->releaseBarriers[1] = (VkImageMemoryBarrier2){
-					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = VK_NULL_HANDLE,
-					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-					SWAP_RELEASE_BARRIER,
-				};
-			}
-		}
 	}
 
 	// Send shared memory handle
@@ -1057,13 +994,16 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 		*pNodeSwap = pPool->swaps[swapHandle];
 
 		auto pCompSwap = &pNodeCompositorData->swaps[si];
-		pCompSwap->acquireBarriers[0].image = pNodeSwap->color.image;
-		pCompSwap->releaseBarriers[0].image = pNodeSwap->color.image;
+//		pCompSwap->acquireBarriers[0].image = pNodeSwap->color.image;
+//		pCompSwap->releaseBarriers[0].image = pNodeSwap->color.image;
 		pCompSwap->color = pNodeSwap->color.image;
 		pCompSwap->colorView = pNodeSwap->color.view;
 
-		pCompSwap->acquireBarriers[1].image = pNodeSwap->gbuffer.image;
-		pCompSwap->releaseBarriers[1].image = pNodeSwap->gbuffer.image;
+//		pCompSwap->acquireBarriers[1].image = pNodeSwap->depth.image;
+//		pCompSwap->releaseBarriers[1].image = pNodeSwap->depth.image;
+		pCompSwap->depth = pNodeSwap->depth.image;
+		pCompSwap->depthView = pNodeSwap->depth.view;
+
 		pCompSwap->gBuffer = pNodeSwap->gbuffer.image;
 		for (uint32_t mi = 0; mi < MXC_NODE_GBUFFER_LEVELS; ++mi) {
 			VkImageViewCreateInfo info = {
@@ -1086,12 +1026,7 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 							currentHandle, pNodeSwap->colorExternal.handle,
 							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.colorSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
-						"Duplicate texture handle fail");
-			WIN32_CHECK(DuplicateHandle(
-							currentHandle, pNodeSwap->gbufferExternal.handle,
-							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.gbufferSwapHandles[si],
-							0, false, DUPLICATE_SAME_ACCESS),
-						"Duplicate gbuffer handle fail");
+						"Duplicate localTexture handle fail");
 			WIN32_CHECK(DuplicateHandle(
 							currentHandle, pNodeSwap->depthExternal.handle,
 							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.depthSwapHandles[si],

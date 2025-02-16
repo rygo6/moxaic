@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
@@ -16,25 +17,15 @@
 	#define WIN32_LEAN_AND_MEAN
 	#include <windows.h>
 
-	//#define D3D11
-	// I'd really prefer this to be D3D12 only and not deal with D3D11 keyed mutex as they are the oddball
-	#define D3D12
 	#define D3D11_NO_HELPERS
 	#define CINTERFACE
 	#define COBJMACROS
 	#define WIDL_C_INLINE_WRAPPERS
-	#if defined(D3D11)
-		#include <dxgi1_6.h>
-		#include <d3d11.h>
-		#include <d3d11_1.h>
-		#include <d3d11_4.h>
-	#elif defined(D3D12)
-		#include <initguid.h>
-		#include <dxgi.h>
-		#include <dxgi1_4.h>
-		#include <dxgi1_6.h>
-		#include <d3d12.h>
-	#endif
+	#include <initguid.h>
+	#include <dxgi.h>
+	#include <dxgi1_4.h>
+	#include <dxgi1_6.h>
+	#include <d3d12.h>
 
 	#include <vulkan/vulkan_win32.h>
 
@@ -874,12 +865,7 @@ void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture*
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
 
 typedef struct VkWin32ExternalTexture {
-#if defined(D3D11)
-	ID3D11Texture2D* texture;
-	IDXGIKeyedMutex* keyedMutex;
-#elif defined(D3D12)
 	ID3D12Resource* texture;
-#endif
 	HANDLE handle;
 } VkWin32ExternalTexture;
 void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture);
@@ -1752,17 +1738,8 @@ void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture*
 static struct {
 	IDXGIFactory4* factory;
 	IDXGIAdapter1* adapter;
-} dxgi;
-#if defined(D3D11)
-static struct {
-	ID3D11DeviceContext* context;
-	ID3D11Device1*  device1;
-} d3d11;
-#elif defined(D3D12)
-static struct {
 	ID3D12Device*  device;
 } d3d12;
-#endif
 static DXGI_FORMAT vkDXGIFormat(VkFormat format)
 {
 	switch (format) {
@@ -1868,83 +1845,28 @@ static bool vkDepthFormat(VkFormat format)
 
 static void CheckDXGI()
 {
-	if (dxgi.adapter == NULL) {
+	if (d3d12.adapter == NULL) {
 		UINT flags = DXGI_CREATE_FACTORY_DEBUG;
-		DX_CHECK(CreateDXGIFactory2(flags, &IID_IDXGIFactory4, (void**)&dxgi.factory));
-		for (UINT i = 0; IDXGIFactory4_EnumAdapters1(dxgi.factory, i, &dxgi.adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
+		DX_CHECK(CreateDXGIFactory2(flags, &IID_IDXGIFactory4, (void**)&d3d12.factory));
+		for (UINT i = 0; IDXGIFactory4_EnumAdapters1(d3d12.factory, i, &d3d12.adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
 			DXGI_ADAPTER_DESC1 desc;
-			DX_CHECK(IDXGIAdapter1_GetDesc1(dxgi.adapter, &desc));
+			DX_CHECK(IDXGIAdapter1_GetDesc1(d3d12.adapter, &desc));
 			wprintf(L"DXGI Adapter %d Name: %ls Description: %ld:%lu\n",
 					i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
 			break;  // add logic to choose?
 		}
 
-#if defined(D3D12)
-		DX_CHECK(D3D12CreateDevice((IUnknown*)dxgi.adapter, D3D_FEATURE_LEVEL_11_1, &IID_ID3D12Device, (void**)&d3d12.device));
-#endif
+		DX_CHECK(D3D12CreateDevice((IUnknown*)d3d12.adapter, D3D_FEATURE_LEVEL_11_1, &IID_ID3D12Device, (void**)&d3d12.device));
 	}
 }
 
 void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture)
 {
+	assert(vkDepthFormat(pCreateInfo->format) == false && "D3D Can't export depth formats.");
+	assert(pCreateInfo->mipLevels == 1 && "Importing mips to other APIs is problematic.");
 	CheckDXGI();
-#if defined(D3D11)
-	if (d3d11.device1 == NULL) {
-		D3D_FEATURE_LEVEL featuresLevels[] = {D3D_FEATURE_LEVEL_11_1};
-		D3D_FEATURE_LEVEL featureLevel;
-		ID3D11Device*     device;
-		DX_CHECK(D3D11CreateDevice(
-			(IDXGIAdapter*)dxgi.adapter,
-			D3D_DRIVER_TYPE_UNKNOWN,
-			NULL,
-			D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG,
-			featuresLevels,
-			COUNT(featuresLevels),
-			D3D11_SDK_VERSION,
-			&device,
-			&featureLevel,
-			&d3d11.context));
-		if (device == NULL || featureLevel < D3D_FEATURE_LEVEL_11_1) {
-			PANIC("Could not get D3D11.1 device\n");
-		}
-		DX_CHECK(ID3D11Device_QueryInterface(device, &IID_ID3D11Device1, (void**)&d3d11.device1));
-		if (d3d11.device1 == NULL) {
-			PANIC("Could not get D3D11.1 device\n");
-		}
-	}
 
-	D3D11_TEXTURE2D_DESC desc = {
-		.Width = pCreateInfo->extent.width,
-		.Height = pCreateInfo->extent.height,
-		.MipLevels = pCreateInfo->mipLevels,
-		.ArraySize = pCreateInfo->arrayLayers,
-		.Format = VkToDXGIFormat(pCreateInfo->format),
-		.SampleDesc.Count = pCreateInfo->samples,
-		.SampleDesc.Quality = 0,
-		.Usage = D3D11_USAGE_DEFAULT,
-		.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET,
-		.CPUAccessFlags = 0,
-		.MiscFlags = D3D11_RESOURCE_MISC_SHARED_NTHANDLE | D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX,
-	};
-	DX_CHECK(ID3D11Device1_CreateTexture2D(d3d11.device1, &desc, NULL, &pTexture->texture));
-	IDXGIResource1* dxgiResource1 = NULL;
-	DX_CHECK(ID3D11Texture2D_QueryInterface(pTexture->texture, &IID_IDXGIResource1, (void**)&dxgiResource1));
-	DX_CHECK(IDXGIResource1_CreateSharedHandle(dxgiResource1, NULL, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE, NULL, &pTexture->handle));
-	IDXGIResource1_Release(dxgiResource1);
-
-	DX_CHECK(ID3D11Texture2D_QueryInterface(pTexture->texture, &IID_IDXGIKeyedMutex, (void**)&pTexture->keyedMutex));
-	IDXGIKeyedMutex_AcquireSync(pTexture->keyedMutex, 0, INFINITE);
-	IDXGIKeyedMutex_ReleaseSync(pTexture->keyedMutex, 0);
-
-//	IDXGIAdapter_Release(d3d11.adapter);
-//	IDXGIFactory_Release(d3d11.factory);
-//	ID3D11Device1_Release(d3d11.device1);
-//	ID3D11DeviceContext_Release(d3d11.context);
-
-#elif defined(D3D12)
-	bool isDepth = vkDepthFormat(pCreateInfo->format);
 	auto format = vkDXGIFormat(pCreateInfo->format);
-
 	D3D12_RESOURCE_DESC textureDesc = {
 		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 		.Alignment = 0,
@@ -1955,11 +1877,7 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.Format = format,
 		.SampleDesc.Count = pCreateInfo->samples,
 		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-		.Flags = isDepth ?
-					 // Importing a texture with D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL seems to crash
-					 // However you can import depth exported like this and it appears to use it?
-					 D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS :
-					 D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS,
+		.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS,
 	};
 	D3D12_HEAP_PROPERTIES heapProperties = {
 		.Type = D3D12_HEAP_TYPE_DEFAULT,
@@ -1968,9 +1886,6 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		.CreationNodeMask = 1,
 		.VisibleNodeMask = 1,
 	};
-	D3D12_CLEAR_VALUE clearValue = {
-		.Format = DXGI_FORMAT_D16_UNORM,
-		.DepthStencil = {1.0f, 0}};
 	DX_CHECK(ID3D12Device_CreateCommittedResource(
 		d3d12.device,
 		&heapProperties,
@@ -1994,7 +1909,6 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 //	IDXGIFactory4_Release(d3d12.factory);
 //	IDXGIAdapter1_Release(d3d12.adapter);
 //	ID3D12Device_Release(d3d12.device);
-#endif
 }
 
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
@@ -2605,7 +2519,7 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 		.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? &exportInfo : NULL,
 	};
 	VK_CHECK(vkCreateFence(vk.context.device, &info, VK_ALLOC, pFence));
-//	vkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
+	vkSetDebugName(VK_OBJECT_TYPE_FENCE, (uint64_t)*pFence, pCreateInfo->debugName);
 	switch (pCreateInfo->locality) {
 		default: break;
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:

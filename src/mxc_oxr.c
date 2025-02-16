@@ -80,36 +80,12 @@ void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType)
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 	if (pNodeShrd->swapType != swapType) {
 		pImports->claimedColorSwapCount = 0;
-		pImports->claimedGbufferSwapCount = 0;
+//		pImports->claimedGbufferSwapCount = 0;
 		pImports->claimedDepthSwapCount = 0;
 		pNodeShrd->swapType = swapType;
 		mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 		printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
 		WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
-	}
-}
-
-void xrClaimSwapImages(XrSessionIndex sessionIndex, XrSwapUsage usage, int count, HANDLE* pHandles)
-{
-	auto pNodeCtxt = &nodeContexts[sessionIndex];
-	auto pImports = &pImportedExternalMemory->imports;
-	auto pNodeShrd = &pImportedExternalMemory->shared;
-	switch (usage) {
-		case XR_SWAP_USAGE_COLOR:
-			for (int i = 0; i < count; ++i)
-				pHandles[i] = pImports->colorSwapHandles[i + pImports->claimedColorSwapCount];
-			pImports->claimedColorSwapCount += count;
-			break;
-		case XR_SWAP_USAGE_DEPTH:
-			for (int i = 0; i < count; ++i)
-				pHandles[i] = pImports->depthSwapHandles[i + pImports->claimedDepthSwapCount];
-			pImports->claimedDepthSwapCount += count;
-			break;
-		case XR_SWAP_USAGE_GBUFFER:
-			for (int i = 0; i < count; ++i)
-				pHandles[i] = pImports->gbufferSwapHandles[i + pImports->claimedGbufferSwapCount];
-			pImports->claimedGbufferSwapCount += count;
-			break;
 	}
 }
 
@@ -123,9 +99,11 @@ void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pH
 			*pHandle = pImports->colorSwapHandles[pImports->claimedColorSwapCount++];
 			break;
 		case XR_SWAP_USAGE_DEPTH:
-		case XR_SWAP_USAGE_GBUFFER:
-			*pHandle = pImports->gbufferSwapHandles[pImports->claimedGbufferSwapCount++];
+			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
 			break;
+//		case XR_SWAP_USAGE_GBUFFER:
+//			*pHandle = pImports->gbufferSwapHandles[pImports->claimedGbufferSwapCount++];
+//			break;
 	}
 }
 
