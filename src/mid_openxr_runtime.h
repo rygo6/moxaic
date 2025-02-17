@@ -139,6 +139,7 @@ void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
 void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType);
 void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pHandle);
+void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ);
 
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
 void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
@@ -2834,18 +2835,7 @@ XR_PROC xrEndFrame(
 				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
 					auto pView = &pProjectionLayer->views[view];
 					auto pSwap = (Swapchain*)pView->subImage.swapchain;
-					auto swapIndex = pSwap->swapIndex;
-
-//					float color[4] = { 1.0f, 0.0f, 0.0f, 1.0f }; // Red
-//					ID3D11RenderTargetView* rtv;
-//					D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {
-//						.Format = DXGI_FORMAT_R16_UNORM,
-//						.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D,
-//						.Texture2D = { .MipSlice = 0 }
-//					};
-//					ID3D11Device5_CreateRenderTargetView(device5, pSwap->texture[swapIndex].d3d11.resource, NULL, &rtv);
-//					ID3D11DeviceContext4_ClearRenderTargetView(context4, rtv, color);
-
+					u8 swapIndex = pSwap->swapIndex;
 //					LOG("color subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) "\n",
 //						pView->subImage.swapchain,
 //						EXPAND_STRUCT(XrOffset2Di, pView->subImage.imageRect.offset),
@@ -2855,45 +2845,19 @@ XR_PROC xrEndFrame(
 						case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
 							auto pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
 							auto pDepthSwap = (Swapchain*)pDepthInfo->subImage.swapchain;
-							auto depthSwapIndex = pDepthSwap->swapIndex;
-
-//							float color[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-//							D3D11_RENDER_TARGET_VIEW_DESC rtvDesc = {
-//								.Format = DXGI_FORMAT_R16_UNORM,
-//								.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D,
-//								.Texture2D = { .MipSlice = 0 }
-//							};
-//							ID3D11RenderTargetView* rtv;
-//							ID3D11Device5_CreateRenderTargetView(device5, pDepthSwap->texture[swapIndex].d3d11.gbufferResource, &rtvDesc, &rtv);
-//							ID3D11DeviceContext4_ClearRenderTargetView(context4, rtv, color);
-
-//							D3D11_BOX box = {
-//								.left = 0,
-//								.top = 0,
-//								.front = 0,
-//								.right = 1024,
-//								.bottom = 1024,
-//								.back = 1
-//							};
-//							uint32_t color = 0xFF0000FF; // Red in RGBA
-//							ID3D11DeviceContext4_UpdateSubresource(context4, pDepthSwap->texture[swapIndex].d3d11.resource, 0, &box, &color, 1024 * 2, 0);
-
-//							ID3D11DeviceContext4_CopySubresourceRegion(
-//								context4,
-//								pDepthSwap->texture[swapIndex].d3d11.transferResource, 0,
-//								0, 0, 0,
-//								pDepthSwap->texture[swapIndex].d3d11.localResource, 0,
-//								NULL);
-							ID3D11DeviceContext4_CopyResource(
-								context4,
-								pDepthSwap->texture[swapIndex].d3d11.transferResource,
-								pDepthSwap->texture[swapIndex].d3d11.localResource);
-
+							u8 depthSwapIndex = pDepthSwap->swapIndex;
 //							LOG("depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
 //								pDepthInfo->subImage.swapchain,
 //								EXPAND_STRUCT(XrOffset2Di, pDepthInfo->subImage.imageRect.offset),
 //								EXPAND_STRUCT(XrExtent2Di, pDepthInfo->subImage.imageRect.extent),
 //								pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
+
+							ID3D11DeviceContext4_CopyResource(
+								context4,
+								pDepthSwap->texture[swapIndex].d3d11.transferResource,
+								pDepthSwap->texture[swapIndex].d3d11.localResource);
+							xrSetDepthInfo(pSess->index, pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
+
 							break;
 						}
 						default:

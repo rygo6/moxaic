@@ -93,11 +93,14 @@ typedef struct MxcNodeImports {
 
 	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
 	HANDLE colorSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
-//	HANDLE gbufferSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 	u8     claimedColorSwapCount;
-//	u8     claimedGbufferSwapCount;
 	u8     claimedDepthSwapCount;
+
+	float minDepth;
+	float maxDepth;
+	float nearZ;
+	float farZ;
 
 	HANDLE nodeTimelineHandle;
 	HANDLE compositorTimelineHandle;
@@ -219,7 +222,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 //		VkImageMemoryBarrier2 releaseBarriers[2];
 		VkImage               color;
 		VkImage               depth;
-		VkImage               gBuffer;
+		VkImage               gBuffer; // I think I only need one gbuffer?
 		VkImageView           colorView;
 		VkImageView           depthView;
 		VkImageView           gBufferMipViews[MXC_NODE_GBUFFER_LEVELS];

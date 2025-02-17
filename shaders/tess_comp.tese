@@ -13,6 +13,9 @@ layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec2 outUV;
 layout (location = 2) out vec4 outWorldPos;
 
+float doubleWide = 1.0f;
+bool clipped = false;
+
 void main()
 {
     const vec2 inUV = mix(
@@ -24,15 +27,16 @@ void main()
     const vec2 scaledUV = inUV * scale;
     const vec2 ndcUV = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
 
-    float alphaValue = texture(nodeColor, scaledUV).a;
-    float depthValue = texture(nodeGBuffer, scaledUV).r;
+    vec2 finalUV = clipped ? vec2(scaledUV.x / doubleWide, scaledUV.y) : vec2(inUV.x / doubleWide, inUV.y);
+    float alphaValue = texture(nodeColor, finalUV).a;
+    float depthValue = texture(nodeGBuffer, finalUV).r;
 
     vec2 ndc = NDCFromUV(ndcUV);
     vec4 clipPos = ClipPosFromNDC(ndc, depthValue);
     vec3 worldPos = WorldPosFromNodeClipPos(clipPos);
     gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
 
-    outUV = scaledUV;
+    outUV = finalUV;
 
     outNormal = mix(
         mix(inNormals[0], inNormals[1], gl_TessCoord.x),

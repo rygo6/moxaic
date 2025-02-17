@@ -80,7 +80,6 @@ void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType)
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 	if (pNodeShrd->swapType != swapType) {
 		pImports->claimedColorSwapCount = 0;
-//		pImports->claimedGbufferSwapCount = 0;
 		pImports->claimedDepthSwapCount = 0;
 		pNodeShrd->swapType = swapType;
 		mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
@@ -101,10 +100,18 @@ void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pH
 		case XR_SWAP_USAGE_DEPTH:
 			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
 			break;
-//		case XR_SWAP_USAGE_GBUFFER:
-//			*pHandle = pImports->gbufferSwapHandles[pImports->claimedGbufferSwapCount++];
-//			break;
 	}
+}
+
+void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ)
+{
+	auto pNodeCtxt = &nodeContexts[sessionIndex];
+	auto pImports = &pImportedExternalMemory->imports;
+	auto pNodeShrd = &pImportedExternalMemory->shared;
+	pImports->minDepth = minDepth;
+	pImports->maxDepth = maxDepth;
+	pImports->nearZ = nearZ;
+	pImports->farZ = farZ;
 }
 
 void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)
