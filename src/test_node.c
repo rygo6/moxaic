@@ -199,7 +199,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 run_loop:
 
-	midVkTimelineWait(device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
+	vkTimelineWait(device, pNodeShared->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
 	memcpy(pGlobalSetMapped, (void*)&pNodeShared->globalSetState, sizeof(VkGlobalSetState));
@@ -242,12 +242,12 @@ run_loop:
 							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 						},
 						.imageType = VK_IMAGE_TYPE_2D,
-						.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+						.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 						.mipLevels = 1,
 						.arrayLayers = 1,
 						.samples = VK_SAMPLE_COUNT_1_BIT,
-						.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+						.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 					},
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
@@ -342,9 +342,9 @@ run_loop:
 
 		// this is really all that'd be user exposed....
 		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_GLOBAL, 1, &globalSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_OBJECT_INDEX, 1, &sphereObjectSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_SET_INDEX_BASIC_GLOBAL, 1, &globalSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_SET_INDEX_BASIC_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_SET_INDEX_BASIC_OBJECT, 1, &sphereObjectSet, 0, NULL);
 
 		CmdBindVertexBuffers(cmd, 0, 1, (VkBuffer[]){sphereBuffer}, (VkDeviceSize[]){sphereVertexOffset});
 		CmdBindIndexBuffer(cmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
@@ -465,7 +465,7 @@ run_loop:
 		.nodeTimeline = nodeTimeline,
 		.nodeTimelineSignalValue = nodeTimelineValue,
 	});
-	midVkTimelineWait(device, nodeTimelineValue, nodeTimeline);
+	vkTimelineWait(device, nodeTimelineValue, nodeTimeline);
 
 	// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 	// shared: 569 - semaphore: 315416 ratio: 554.333919
@@ -581,12 +581,12 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.pNext = VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+					.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+					.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT,
@@ -627,7 +627,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 		};
 		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &descriptorPoolCreateInfo, VK_ALLOC, &threadContext.descriptorPool));
 
-		vkCreateGlobalSet(&pNode->globalSet);
+//		vkCreateGlobalSet(&pNode->globalSet);
 
 		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.materialSetLayout, &pNode->checkerMaterialSet);
 		vkCreateTextureFromFile("textures/uvgrid.jpg", &pNode->checkerTexture);

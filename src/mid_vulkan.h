@@ -205,7 +205,7 @@ typedef struct MidCamera {
 /////////////////
 //// Vulkan Types
 ////
-typedef enum VkLocality : uint8_t {
+typedef enum VkLocality : u8 {
 	// Used within the context it was made
 	VK_LOCALITY_CONTEXT,
 	// Used by multiple contexts, but in the same process
@@ -237,7 +237,7 @@ typedef struct VkSwapContext {
 	VkImage        images[VK_SWAP_COUNT];
 } VkSwapContext;
 
-typedef uint8_t VkSharedMemoryType;
+typedef u8 VkSharedMemoryType;
 typedef struct VkSharedMemory {
 	VkDeviceSize       offset;
 	VkDeviceSize       size;
@@ -319,13 +319,14 @@ typedef struct VkBasicPipeLayout {
 
 typedef struct VkGlobalSet {
 	VkGlobalSetState* pMapped;
-	VkDeviceMemory    memory;
+//	VkDeviceMemory    memory;
 	VkSharedMemory    sharedMemory;
 	VkBuffer          buffer;
 	VkDescriptorSet   set;
 } VkGlobalSet;
 
-typedef struct MidVkBasicPipe {
+typedef struct VkBasicPipe {
+	// TODO change to this
 	VkBasicPipeLayout layout;
 	VkPipeline        pipe;
 	VkSampler         linearSampler;
@@ -363,10 +364,10 @@ typedef struct CACHE_ALIGN Vk {
 	PFN_FUNCS
 #undef PFN_FUNC
 } Vk;
-
 extern Vk vk;
 
 // do this ?? I think so yes... enforce thread on vulkan mechanics which need same thread
+// should be context and shared context? maybe
 typedef struct MidVkThreadContext {
 	VkDescriptorPool descriptorPool;
 } MidVkThreadContext;
@@ -380,34 +381,34 @@ extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 //////////////////////////
 //// Basic Render Pipeline
 ////
-typedef enum VkBasicPassAttachmentIndices : uint8_t {
-	VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX,
-	VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX,
-	VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX,
-	VK_BASIC_PASS_ATTACHMENT_COUNT,
-} VkPassAttachmentIndices;
+enum {
+	VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR,
+	VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL,
+	VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH,
+	VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
+};
 
-typedef enum VkPipeSetIndices : uint8_t {
-	VK_PIPE_SET_INDEX_GLOBAL,
-	VK_PIPE_SET_INDEX_MATERIAL,
-	VK_PIPE_SET_OBJECT_INDEX,
-	VK_PIPE_SET_INDEX_COUNT,
-} VkPipeSetIndices;
+enum {
+	VK_SET_INDEX_BASIC_GLOBAL,
+	VK_SET_INDEX_BASIC_MATERIAL,
+	VK_SET_INDEX_BASIC_OBJECT,
+	VK_SET_INDEX_BASIC_COUNT,
+};
 
 constexpr VkFormat VK_BASIC_PASS_FORMATS[] = {
-	[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = VK_FORMAT_R8G8B8A8_UNORM,
-	[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = VK_FORMAT_R16G16B16A16_SFLOAT,
+	[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = VK_FORMAT_R8G8B8A8_UNORM,
+	[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = VK_FORMAT_R16G16B16A16_SFLOAT,
 //	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
-	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_FORMAT_D16_UNORM,
+	[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = VK_FORMAT_D16_UNORM,
 };
 
 constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
-	[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+	[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
 											 VK_IMAGE_USAGE_SAMPLED_BIT |
 											 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-	[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+	[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
 											  VK_IMAGE_USAGE_SAMPLED_BIT,
-	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+	[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
 											 VK_IMAGE_USAGE_SAMPLED_BIT,
 };
 
@@ -555,27 +556,27 @@ INLINE void PFN_CmdBeginRenderPass(
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.pNext = &(VkRenderPassAttachmentBeginInfo){
 			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
-			.attachmentCount = VK_BASIC_PASS_ATTACHMENT_COUNT,
+			.attachmentCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 			.pAttachments = (VkImageView[]){
-				[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = colorView,
-				[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = normalView,
-				[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = depthView,
+				[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = colorView,
+				[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = normalView,
+				[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = depthView,
 			},
 		},
 		.renderPass = renderPass,
 		.framebuffer = framebuffer,
 		.renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
-		.clearValueCount = VK_BASIC_PASS_ATTACHMENT_COUNT,
+		.clearValueCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 		.pClearValues = (VkClearValue[]){
-			[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = {.color = clearColor},
-			[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
-			[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = {.depthStencil = {0.0f}},
+			[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {.color = clearColor},
+			[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
+			[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = {.depthStencil = {0.0f}},
 		},
 	};
 	func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 // todo needs PFN version
-INLINE void vkmCmdResetBegin(VkCommandBuffer commandBuffer)
+INLINE void vkCmdResetBegin(VkCommandBuffer commandBuffer)
 {
 	vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	vkBeginCommandBuffer(commandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
@@ -661,7 +662,7 @@ INLINE void vkmSubmitCommandBuffer(VkCommandBuffer cmd, VkQueue queue, VkSemapho
 	VK_CHECK(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
 }
 // todo needs PFN version
-INLINE void midVkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore timeline)
+INLINE void vkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore timeline)
 {
 	VkSemaphoreWaitInfo semaphoreWaitInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -672,7 +673,7 @@ INLINE void midVkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore t
 	VK_CHECK(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 // todo needs PFN version
-INLINE void midVkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
+INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
 {
 	VkSemaphoreSignalInfo semaphoreSignalInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
@@ -682,7 +683,7 @@ INLINE void midVkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemapho
 	VK_CHECK(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 
-INLINE void midVkBindBufferSharedMemory(VkBuffer buffer, VkSharedMemory shareMemory)
+INLINE void vkBindBufferSharedMemory(VkBuffer buffer, VkSharedMemory shareMemory)
 {
 	VK_CHECK(vkBindBufferMemory(vk.context.device, buffer, deviceMemory[shareMemory.type], shareMemory.offset));
 }
@@ -702,7 +703,7 @@ INLINE void vkmUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkG
 	pState->invViewProj = Mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
-INLINE void vkmUpdateGlobalSetView(MidPose* pCameraTransform, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
+INLINE void vkUpdateGlobalSetView(MidPose* pCameraTransform, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
 	pState->invView = Mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
 	pState->view = Mat4Inv(pState->invView);
@@ -716,14 +717,16 @@ INLINE void vkUpdateObjectSet(MidPose* pTransform, VkObjectSetState* pState, VkO
 	pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
 	memcpy(pSphereObjectSetMapped, pState, sizeof(VkObjectSetState));
 }
-INLINE void vkmProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPose* pCameraTransform)
+
+// this should go in mid math
+INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPose* pCameraTransform)
 {
 	pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
 	pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
 	pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
 }
 // move[] = Forward, Back, Left, Right
-INLINE void vkmProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
+INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
 {
 	vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .y = move[5] - move[4], .z = move[1] - move[0]});
 	float moveSensitivity = deltaTime * 0.8f;
@@ -809,7 +812,7 @@ typedef struct MidVkContextCreateInfo {
 } MidVkContextCreateInfo;
 void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo);
 
-void vkCreateGlobalSet(VkGlobalSet* pSet);
+//void vkCreateGlobalSet(VkGlobalSet* pSet);
 
 void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShaderModule);
 
@@ -996,22 +999,22 @@ void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShad
 }
 
 //// Basic Pipeline
-#define VKM_PIPE_VERTEX_BINDING_STD_INDEX 0
-enum VkmPipeVertexAttributeStandardIndices {
-	VKM_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,
-	VKM_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,
-	VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,
-	VKM_PIPE_VERTEX_ATTRIBUTE_STD_COUNT,
+#define VK_PIPE_VERTEX_BINDING_STD_INDEX 0
+enum {
+	VK_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,
+	VK_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,
+	VK_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,
+	VK_PIPE_VERTEX_ATTRIBUTE_STD_COUNT,
 };
 static void CreateStdPipeLayout()
 {
-	VkDescriptorSetLayout pSetLayouts[VK_PIPE_SET_INDEX_COUNT];
-	pSetLayouts[VK_PIPE_SET_INDEX_GLOBAL] = vk.context.basicPipeLayout.globalSetLayout;
-	pSetLayouts[VK_PIPE_SET_INDEX_MATERIAL] = vk.context.basicPipeLayout.materialSetLayout;
-	pSetLayouts[VK_PIPE_SET_OBJECT_INDEX] = vk.context.basicPipeLayout.objectSetLayout;
+	VkDescriptorSetLayout pSetLayouts[VK_SET_INDEX_BASIC_COUNT];
+	pSetLayouts[VK_SET_INDEX_BASIC_GLOBAL] = vk.context.basicPipeLayout.globalSetLayout;
+	pSetLayouts[VK_SET_INDEX_BASIC_MATERIAL] = vk.context.basicPipeLayout.materialSetLayout;
+	pSetLayouts[VK_SET_INDEX_BASIC_OBJECT] = vk.context.basicPipeLayout.objectSetLayout;
 	VkPipelineLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = VK_PIPE_SET_INDEX_COUNT,
+		.setLayoutCount = VK_SET_INDEX_BASIC_COUNT,
 		.pSetLayouts = pSetLayouts,
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.basicPipeLayout.pipeLayout));
@@ -1033,7 +1036,7 @@ static void CreateStdPipeLayout()
 		.vertexBindingDescriptionCount = 1,                                          \
 		.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){           \
 			{                                                                        \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
 				.stride = sizeof(MidVertex),                                         \
 				.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,                            \
 			},                                                                       \
@@ -1042,20 +1045,20 @@ static void CreateStdPipeLayout()
                                                                                      \
 		.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]){ \
 			{                                                                        \
-				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,            \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,            \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
 				.format = VK_FORMAT_R32G32B32_SFLOAT,                                \
 				.offset = offsetof(MidVertex, position),                             \
 			},                                                                       \
 			{                                                                        \
-				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,              \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,              \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
 				.format = VK_FORMAT_R32G32B32_SFLOAT,                                \
 				.offset = offsetof(MidVertex, normal),                               \
 			},                                                                       \
 			{                                                                        \
-				.location = VKM_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,                  \
-				.binding = VKM_PIPE_VERTEX_BINDING_STD_INDEX,                        \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,                  \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
 				.format = VK_FORMAT_R32G32_SFLOAT,                                   \
 				.offset = offsetof(MidVertex, uv),                                   \
 			},                                                                       \
@@ -1980,34 +1983,34 @@ void vkCreateBasicFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuff
 		.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 		.pNext = &(VkFramebufferAttachmentsCreateInfo){
 			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO,
-			.attachmentImageInfoCount = VK_BASIC_PASS_ATTACHMENT_COUNT,
+			.attachmentImageInfoCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 			.pAttachmentImageInfos = (VkFramebufferAttachmentImageInfo[]){
 				{.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-				 .usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+				 .usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 				 .width = DEFAULT_WIDTH,
 				 .height = DEFAULT_HEIGHT,
 				 .layerCount = 1,
 				 .viewFormatCount = 1,
-				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX]},
+				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR]},
 				{.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-				 .usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+				 .usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 				 .width = DEFAULT_WIDTH,
 				 .height = DEFAULT_HEIGHT,
 				 .layerCount = 1,
 				 .viewFormatCount = 1,
-				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX]},
+				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL]},
 				{.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-				 .usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+				 .usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 				 .width = DEFAULT_WIDTH,
 				 .height = DEFAULT_HEIGHT,
 				 .layerCount = 1,
 				 .viewFormatCount = 1,
-				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX]},
+				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH]},
 			},
 		},
 		.flags = VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT,
 		.renderPass = renderPass,
-		.attachmentCount = VK_BASIC_PASS_ATTACHMENT_COUNT,
+		.attachmentCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 		.width = DEFAULT_WIDTH,
 		.height = DEFAULT_HEIGHT,
 		.layers = 1,
@@ -2024,12 +2027,12 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 				.extent = pCreateInfo->extent,
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+				.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = pCreateInfo->locality,
@@ -2041,12 +2044,12 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 				.extent = pCreateInfo->extent,
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+				.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = pCreateInfo->locality,
@@ -2058,12 +2061,12 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
 				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 				.extent = pCreateInfo->extent,
 				.mipLevels = 1,
 				.arrayLayers = 1,
 				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+				.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 			},
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.locality = pCreateInfo->locality,
@@ -2341,9 +2344,9 @@ void vkCreateBasicRenderPass()
 		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
 		.pAttachments = (VkAttachmentDescription2[]){
-			[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = {
+			[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -2353,9 +2356,9 @@ void vkCreateBasicRenderPass()
 				//VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL to blit
 				.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			},
-			[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = {
+			[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -2364,9 +2367,9 @@ void vkCreateBasicRenderPass()
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 				.finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 			},
-			[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = {
+			[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = {
 				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX],
+				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -2383,22 +2386,22 @@ void vkCreateBasicRenderPass()
 				.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 				.colorAttachmentCount = 2,
 				.pColorAttachments = (VkAttachmentReference2[]){
-					[VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX] = {
+					[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {
 						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = VK_BASIC_PASS_ATTACHMENT_COLOR_INDEX,
+						.attachment = VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
-					[VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX] = {
+					[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {
 						.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = VK_BASIC_PASS_ATTACHMENT_NORMAL_INDEX,
+						.attachment = VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL,
 						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					},
 				},
 				.pDepthStencilAttachment = &(VkAttachmentReference2){
 					.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-					.attachment = VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX,
+					.attachment = VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH,
 					.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 				},
@@ -2584,12 +2587,12 @@ void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemapho
 	}
 }
 
-void vkCreateGlobalSet(VkGlobalSet* pSet)
-{
-	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pSet->set);
-	vkCreateAllocateBindMapBuffer(VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
-	vkUpdateDescriptorSets(vk.context.device, 1, &VK_SET_WRITE_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
-}
+//void vkCreateGlobalSet(VkGlobalSet* pSet)
+//{
+//	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pSet->set);
+//	vkCreateAllocateBindMapBuffer(VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
+//	vkUpdateDescriptorSets(vk.context.device, 1, &VK_SET_WRITE_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
+//}
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName)
 {

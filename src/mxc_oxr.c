@@ -108,10 +108,10 @@ void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth,
 	auto pNodeCtxt = &nodeContexts[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
-	pImports->minDepth = minDepth;
-	pImports->maxDepth = maxDepth;
-	pImports->nearZ = nearZ;
-	pImports->farZ = farZ;
+	pNodeShrd->depthState.minDepth = minDepth;
+	pNodeShrd->depthState.maxDepth = maxDepth;
+	pNodeShrd->depthState.nearZ = nearZ;
+	pNodeShrd->depthState.farZ = farZ;
 }
 
 void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)

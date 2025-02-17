@@ -59,12 +59,21 @@ typedef enum MxcSwapScale {
 	MXC_SWAP_SCALE_COUNT,
 } MxcSwapScale;
 
+typedef struct MxcDepthState {
+	float minDepth;
+	float maxDepth;
+	float nearZ;
+	float farZ;
+} MxcDepthState;
+
 typedef struct MxcNodeShared {
 	// read/write every cycle
-	VkGlobalSetState  globalSetState;
-	vec2              ulScreenUV;
-	vec2              lrScreenUV;
-	uint64_t          timelineValue;
+	VkGlobalSetState globalSetState;
+	vec2             ulScreenUV;
+	vec2             lrScreenUV;
+	uint64_t         timelineValue;
+
+	MxcDepthState depthState;
 
 	// I don't think I need this either?
 	MidPose           rootPose;
@@ -96,11 +105,6 @@ typedef struct MxcNodeImports {
 	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
 	u8     claimedColorSwapCount;
 	u8     claimedDepthSwapCount;
-
-	float minDepth;
-	float maxDepth;
-	float nearZ;
-	float farZ;
 
 	HANDLE nodeTimelineHandle;
 	HANDLE compositorTimelineHandle;
@@ -211,11 +215,10 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 	MxcNodeCompositorSetState  setState;
 	MxcNodeCompositorSetState* pSetMapped;
 	VkDescriptorSet            set;
-
+	VkBuffer                   setBuffer;
+	VkSharedMemory             setSharedMemory;
 	// should make them share buffer? probably
-//	VkSharedBuffer       SetBuffer;
-	VkBuffer       SetBuffer;
-	VkSharedMemory SetSharedMemory;
+	//	VkSharedBuffer       SetBuffer;
 
 	struct CACHE_ALIGN {
 //		VkImageMemoryBarrier2 acquireBarriers[2];
