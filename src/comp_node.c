@@ -129,10 +129,9 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 			},
 			[BIND_GBUFFER_PROCESS_INDEX_SRC_DEPTH] = {
 				.binding = BIND_GBUFFER_PROCESS_INDEX_SRC_DEPTH,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 				.descriptorCount = 1,
 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.pImmutableSamplers = &vk.context.linearSampler,
 			},
 			[BIND_GBUFFER_PROCESS_INDEX_DST] = {
 				.binding = BIND_GBUFFER_PROCESS_INDEX_DST,
@@ -155,16 +154,16 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 			.range = sizeof(GBufferProcessState),            \
 		},                                                   \
 	}
-#define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(_)                      \
-	(VkWriteDescriptorSet) {                                         \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
-		.dstBinding = BIND_GBUFFER_PROCESS_INDEX_SRC_DEPTH,          \
-		.descriptorCount = 1,                                        \
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-		.pImageInfo = &(VkDescriptorImageInfo){                      \
-			.imageView = _,                                          \
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
-		},                                                           \
+#define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(_)             \
+	(VkWriteDescriptorSet) {                                \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
+		.dstBinding = BIND_GBUFFER_PROCESS_INDEX_SRC_DEPTH, \
+		.descriptorCount = 1,                               \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
+		.pImageInfo = &(VkDescriptorImageInfo){             \
+			.imageView = _,                                 \
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,         \
+		},                                                  \
 	}
 #define BIND_WRITE_GBUFFER_PROCESS_DST(_)                   \
 	(VkWriteDescriptorSet) {                                \
@@ -252,6 +251,8 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtxt, const MxcCompositor
 	auto globalSetState = (VkGlobalSetState){};
 	auto pGlobalSetMapped = vkSharedMemoryPtr(pComp->globalSet.sharedMemory);
 	vkmUpdateGlobalSetViewProj(globalCam, globalCamPose, &globalSetState, pGlobalSetMapped);
+	pComp->pGBufferProcessMapped->cameraNearZ = globalCam.zNear;
+	pComp->pGBufferProcessMapped->cameraFarZ = globalCam.zFar;
 
 	struct {
 		VkImageView color;
@@ -425,7 +426,7 @@ run_loop:
 				ivec2 extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT};
 				ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 8), 1);
 
-				printf("%f %f %f %f\n", pNodeShrd->depthState.minDepth, pNodeShrd->depthState.maxDepth, pNodeShrd->depthState.nearZ, pNodeShrd->depthState.farZ);
+//				printf("%f %f %f %f\n", pNodeShrd->depthState.minDepth, pNodeShrd->depthState.maxDepth, pNodeShrd->depthState.nearZ, pNodeShrd->depthState.farZ);
 				memcpy(&pComp->pGBufferProcessMapped->depth, (void*)&pNodeShrd->depthState, sizeof(MxcDepthState));
 				VkWriteDescriptorSet initialPushSet[] = {
 					BIND_WRITE_GBUFFER_PROCESS_STATE(pComp->gBufferProcessSetBuffer),
@@ -764,8 +765,8 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 {
 	MxcCompositor compositor;
 	MxcCompositorCreateInfo info = {
-		//			.mode = MXC_COMP_MODE_TESS,
-		.mode = MXC_COMP_MODE_BASIC,
+//		.mode = MXC_COMP_MODE_BASIC,
+		.mode = MXC_COMP_MODE_TESSELATION,
 	};
 
 	midVkBeginAllocationRequests();

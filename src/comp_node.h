@@ -13,6 +13,8 @@ typedef enum MxcCompositorMode {
 
 typedef struct GBufferProcessState {
 	MxcDepthState depth;
+	float cameraNearZ;
+	float cameraFarZ;
 } GBufferProcessState;
 
 typedef struct MxcCompositorCreateInfo {

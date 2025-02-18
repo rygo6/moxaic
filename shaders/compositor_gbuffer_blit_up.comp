@@ -12,32 +12,38 @@ struct DepthState {
 
 layout (set = 0, binding = 0) uniform State {
     DepthState depth;
+    float cameraNearZ;
+    float cameraFarZ;
 } state;
-layout (set = 0, binding = 1) uniform sampler2D srcDepth;
-layout (set = 0, binding = 2) uniform writeonly image2D dstGbuffer;
+layout (set = 0, binding = 1, r16) uniform image2D srcDepth;
+layout (set = 0, binding = 2, r16) writeonly uniform image2D dstGbuffer;
 
+
+float Lerp(float a, float b, float t) {
+    return a + ((b - a) * t);
+}
+
+float LinearizeDepth(float zNear, float zFar, float projectionDepth) {
+    return zNear * zFar / (zFar - projectionDepth * (zFar - zNear));
+}
+
+float ProjectDepth(float newNear, float newFar, float linearDepth) {
+    return (newFar * (linearDepth - newNear)) / (linearDepth * (newFar - newNear));
+}
 
 void main()
 {
-    ivec2 srcSize = textureSize(srcDepth, 0);
+    ivec2 srcSize = imageSize(srcDepth);
     ivec2 dstSize = imageSize(dstGbuffer);
 
-    ivec2 dstCoord = ivec2(gl_GlobalInvocationID.xy);
-    vec2 dstUV = vec2(dstCoord) / vec2(dstSize);
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    vec2 uv = vec2(coord) / dstSize;
 
-    ivec2 srcCoord = ivec2(dstUV * srcSize);
-    vec2 srcHalfOffsetUV = vec2(srcCoord + 1.0) / vec2(srcSize);
+    float depth = imageLoad(srcDepth, coord).r;
+    float linearDepth = LinearizeDepth(state.depth.nearZ, state.depth.farZ, depth);
 
-    vec4 gatheredDepth = textureGather(srcDepth, srcHalfOffsetUV, 0);
+    // reverse near/far because we use reverseZ
+    float globalDepth = ProjectDepth(state.cameraFarZ, state.cameraNearZ, linearDepth);
 
-    float count = 0.0f;
-    for (int i = 0; i < 4; ++i) count += gatheredDepth[i] > 0.0f ? 1.0f : 0.0f;
-    int iCount = int(count);
-
-    float depthSum = 0.0f;
-    for (int i = 0; i < 4; ++i) depthSum += gatheredDepth[i];
-    float averageDepth = iCount > 0 ? depthSum / count : 0.0f;
-
-    imageStore(dstGbuffer, dstCoord, vec4(averageDepth));
-
+    imageStore(dstGbuffer, coord, vec4(globalDepth));
 }

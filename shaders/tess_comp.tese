@@ -34,6 +34,7 @@ void main()
     vec2 ndc = NDCFromUV(ndcUV);
     vec4 clipPos = ClipPosFromNDC(ndc, depthValue);
     vec3 worldPos = WorldPosFromNodeClipPos(clipPos);
+//    worldPos.z = depthValue;
     gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
 
     outUV = finalUV;

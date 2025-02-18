@@ -692,6 +692,7 @@ INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
 	return pMappedMemory[shareMemory.type] + shareMemory.offset;
 }
 
+// probably move to math lib and take copy to pointer out
 INLINE void vkmUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
 	pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};

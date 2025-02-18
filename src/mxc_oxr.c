@@ -110,6 +110,9 @@ void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth,
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 	pNodeShrd->depthState.minDepth = minDepth;
 	pNodeShrd->depthState.maxDepth = maxDepth;
+	// These might come reverse due to reverse Z
+//	pNodeShrd->depthState.nearZ = min(nearZ, farZ);
+//	pNodeShrd->depthState.farZ = max(nearZ, farZ);
 	pNodeShrd->depthState.nearZ = nearZ;
 	pNodeShrd->depthState.farZ = farZ;
 }
