@@ -2283,6 +2283,7 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 			VK_EXTERNAL_MEMORY_EXTENSION_NAME,
 			VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
 			VK_EXTERNAL_FENCE_EXTENSION_NAME,
+			VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
 		};
 		uint32_t activeQueueIndex = 0;
 		uint32_t activeQueueCount = 0;
