@@ -129,9 +129,10 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 			},
 			[BIND_GBUFFER_PROCESS_INDEX_SRC_DEPTH] = {
 				.binding = BIND_GBUFFER_PROCESS_INDEX_SRC_DEPTH,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.pImmutableSamplers = &vk.context.linearSampler,
 			},
 			[BIND_GBUFFER_PROCESS_INDEX_DST] = {
 				.binding = BIND_GBUFFER_PROCESS_INDEX_DST,
@@ -159,7 +160,7 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
 		.dstBinding = BIND_GBUFFER_PROCESS_INDEX_SRC_DEPTH, \
 		.descriptorCount = 1,                               \
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(VkDescriptorImageInfo){             \
 			.imageView = view,                              \
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,         \
@@ -438,7 +439,9 @@ run_loop:
 
 //				ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
 				ivec2 extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT};
-				ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 4), 1);
+				constexpr int localSize = 4;
+				constexpr int gatherSize = 2;
+				ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, localSize * gatherSize), 1);
 
 //				printf("%f %f %f %f\n", pNodeShrd->depthState.minDepth, pNodeShrd->depthState.maxDepth, pNodeShrd->depthState.nearZ, pNodeShrd->depthState.farZ);
 				memcpy(&pComp->pGBufferProcessMapped->depth, (void*)&pNodeShrd->depthState, sizeof(MxcDepthState));
