@@ -1,4 +1,5 @@
 #version 450
+#extension GL_KHR_shader_subgroup_basic  : require
 #extension GL_KHR_shader_subgroup_quad : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle : require
@@ -39,9 +40,19 @@ uint SubgroupOffsetIndex(ivec2 dxdy) {
    return gl_SubgroupInvocationID + dxdy.x + (dxdy.y * gl_WorkGroupSize.x);
 }
 
-uint SubgroupIndex(ivec2 dxdy) {
-    dxdy %= ivec2(gl_WorkGroupSize.xy);
+uint SubgroupIndex(ivec2 dxdy) { ;
     return dxdy.x + (dxdy.y * gl_WorkGroupSize.x);
+}
+
+float MaxQuad(float value, int dxdy){
+    float depths[3];
+    depths[0] = subgroupShuffle(value, SubgroupOffsetIndex(ivec2(dxdy, 0)));
+    depths[1] = subgroupShuffle(value, SubgroupOffsetIndex(ivec2(0,      dxdy)));
+    depths[2] = subgroupShuffle(value, SubgroupOffsetIndex(ivec2(dxdy, dxdy)));
+    for (int i = 0; i < 3; ++i)
+        value = max(value, depths[i]);
+
+    return 0;
 }
 
 float AverageQuad(float value, int dxdy){
@@ -52,14 +63,12 @@ float AverageQuad(float value, int dxdy){
     depths[3] = subgroupShuffle(value, SubgroupOffsetIndex(ivec2(dxdy, dxdy)));
 
     float count = 0.0f;
-    for (int i = 0; i < 4; ++i) count += depths[i] > 0.0f ? 1.0f : 0.0f;
-    int iCount = int(count);
-
     float depthSum = 0.0f;
-    for (int i = 0; i < 4; ++i) depthSum += depths[i];
-    float averageDepth = iCount > 0 ? depthSum / count : 0.0f;
-
-    return averageDepth;
+    for (int i = 0; i < 4; ++i) {
+        count += depths[i] > 0.0f ? 1.0f : 0.0f;
+        depthSum += depths[i];
+    }
+    return int(count) > 0 ? depthSum / count : 0;
 }
 
 void main()
@@ -68,75 +77,23 @@ void main()
     ivec2 dstSize0 = imageSize(dstGbuffer[0]);
     ivec2 coord0 = ivec2(gl_GlobalInvocationID.xy); // 8 x 8
 
-    vec2 uv = vec2(coord0) / dstSize0;
-
     float depth = imageLoad(srcDepth, coord0).r;
     float linearDepth = LinearizeDepth(state.depth.nearZ, state.depth.farZ, depth);
-
     // reverse near/far because we use reverseZ
     float depth0 = ProjectDepth(state.cameraFarZ, state.cameraNearZ, linearDepth);
 
-//    imageStore(dstGbuffer[0], coord0, vec4(globalDepth));
-
     ivec2 coord1 = coord0 / 2; // 4 x 4
-    ivec2 coord1Sample = coord1 * 2;
-    float depth1;
     ivec2 coord2 = coord0 / 4; // 2 x 2
-    ivec2 coord2Sample = coord2 * 4;
-    float depth2;
-//    ivec2 coord3 = coord0 / 8; // 1 x 1
-//    ivec2 coord3Sample = coord3 * 8; // 1 x 1
-//    float depth3;
-//    if ((coord0.x & 1) == 0 && (coord0.y & 1) == 0) {
-//        depth1 = AverageQuad(depth0, 1);
-////        imageStore(dstGbuffer[1], coord1, vec4(result1));
-//        if ((coord1.x & 1) == 0 && (coord1.y & 1) == 0) {
-//            depth2 = AverageQuad(depth1, 3);
-////            imageStore(dstGbuffer[2], coord2, vec4(result2));
-//            if ((coord2.x & 1) == 0 && (coord2.y & 1) == 0) {
-//                depth3 = AverageQuad(depth2, 7);
-////                imageStore(dstGbuffer[3], coord3, vec4(depth3));
-//            }
-//        }
-//    }
+    float depth1 = 0;
+    float depth2 = 0;
 
-    if ((coord0.x & 1) == 0 && (coord0.y & 1) == 0) {
-        depth1 = AverageQuad(depth0, 1);
-        if ((coord1.x & 1) == 0 && (coord1.y & 1) == 0) {
-            depth2 = AverageQuad(depth1, 3);
-        }
-    }
+    depth1 = AverageQuad(depth0, 1);
+    depth2 = AverageQuad(depth1, 2);
 
-//    if ((coord2.x & 1) == 0 && (coord2.y & 1) == 0) {
-//        depth3 = AverageQuad(depth2, 7);
-//    }
-//    barrier();
-
-//    if (gl_WorkGroupID.x == 32 && gl_WorkGroupID.y == 32) {
-//        debugPrintfEXT("%d %d %d %d %d %d\n", coord0.x, coord0.y, coord2.x, coord2.y, coord2Sample.x, coord2Sample.y);
-//    }
-
+    ivec2 coord1Sample = ivec2(gl_LocalInvocationID.xy / 2) * 2;
+    ivec2 coord2Sample = ivec2(gl_LocalInvocationID.xy / 4) * 4;
     depth1 = subgroupShuffle(depth1, SubgroupIndex(coord1Sample));
     depth2 = subgroupShuffle(depth2, SubgroupIndex(coord2Sample));
-//    depth2 = subgroupShuffle(depth2, SubgroupIndex(ivec2(0,0)));
-//    depth3 = subgroupShuffle(depth3, SubgroupIndex(coord3Sample));
-
-//    depth1 = subgroupShuffle(depth2, 0);
-//    depth2 = subgroupShuffle(depth2, 0);
-//    depth3 = subgroupShuffle(depth3, 0);
-
-//    if ((coord0.x & 1) != 0 && (coord0.y & 1) != 0) {
-//        subgroupShuffle(depth1, SubgroupIndex(coord1Sample));
-//    }
-//
-//    if ((coord1.x & 3) != 0 && (coord1.y & 3) != 0) {
-//        subgroupShuffle(depth2, SubgroupIndex(coord2Sample));
-//    }
-//
-//    if ((coord2.x & 7) != 0 && (coord2.y & 7) != 0) {
-//        subgroupShuffle(depth3, SubgroupIndex(coord3Sample));
-//    }
-
     float finalDepth = depth0 > 0 ? depth0 : depth1 > 0 ? depth1 : depth2;
 
     imageStore(dstGbuffer[0], coord0, vec4(finalDepth));
