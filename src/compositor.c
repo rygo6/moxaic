@@ -1,4 +1,4 @@
-#include "comp_node.h"
+#include "compositor.h"
 #include "mid_shape.h"
 #include "mid_window.h"
 #include "window.h"
@@ -18,9 +18,9 @@ enum {
 	BIND_COMPOSITOR_INDEX_COUNT
 };
 constexpr VkShaderStageFlags MXC_COMPOSITOR_MODE_FLAGS[] = {
-	[MXC_COMP_MODE_BASIC] = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMP_MODE_TESSELATION] = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMP_MODE_TASK_MESH] = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_BASIC] = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TASK_MESH] = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
 };
 static void CreateCompositorSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* pLayout)
 {
@@ -554,13 +554,13 @@ run_loop:
 
 				// move this into method delegate in node compositor data
 				switch (compMode) {
-					case MXC_COMP_MODE_BASIC:
-					case MXC_COMP_MODE_TESSELATION:
+					case MXC_COMPOSITOR_MODE_BASIC:
+					case MXC_COMPOSITOR_MODE_TESSELATION:
 						CmdBindVertexBuffers(cmd, 0, 1, (const VkBuffer[]){quadBuffer}, (const VkDeviceSize[]){quadVertexOffset});
 						CmdBindIndexBuffer(cmd, quadBuffer, quadIndexOffset, VK_INDEX_TYPE_UINT16);
 						CmdDrawIndexed(cmd, quadIndexCount, 1, 0, 0, 0);
 						break;
-					case MXC_COMP_MODE_TASK_MESH:
+					case MXC_COMPOSITOR_MODE_TASK_MESH:
 						CmdDrawMeshTasksEXT(cmd, 1, 1, 1);
 						break;
 					default: PANIC("CompMode not supported!");
@@ -640,7 +640,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 		// meshes
 		switch (pInfo->mode) {
-			case MXC_COMP_MODE_BASIC:
+			case MXC_COMPOSITOR_MODE_BASIC:
 				vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
 								  "./shaders/basic_comp.frag.spv",
 								  vk.context.renderPass,
@@ -648,7 +648,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 								  &pComp->compNodePipe);
 				CreateQuadMesh(0.5f, &pComp->quadMesh);
 				break;
-			case MXC_COMP_MODE_TESSELATION:
+			case MXC_COMPOSITOR_MODE_TESSELATION:
 				vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
 											  "./shaders/tess_comp.tesc.spv",
 											  "./shaders/tess_comp.tese.spv",
@@ -658,7 +658,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 											  &pComp->compNodePipe);
 				CreateQuadPatchMeshSharedMemory(&pComp->quadMesh);
 				break;
-			case MXC_COMP_MODE_TASK_MESH:
+			case MXC_COMPOSITOR_MODE_TASK_MESH:
 				vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
 										  "./shaders/mesh_comp.mesh.spv",
 										  "./shaders/mesh_comp.frag.spv",
@@ -753,12 +753,12 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pComp)
 {
 	switch (pInfo->mode) {
-		case MXC_COMP_MODE_BASIC:
+		case MXC_COMPOSITOR_MODE_BASIC:
 			break;
-		case MXC_COMP_MODE_TESSELATION:
+		case MXC_COMPOSITOR_MODE_TESSELATION:
 			BindUpdateQuadPatchMesh(0.5f, &pComp->quadMesh);
 			break;
-		case MXC_COMP_MODE_TASK_MESH:
+		case MXC_COMPOSITOR_MODE_TASK_MESH:
 			break;
 		default: PANIC("CompMode not supported!");
 	}
@@ -782,8 +782,8 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 {
 	MxcCompositor compositor;
 	MxcCompositorCreateInfo info = {
-		.mode = MXC_COMP_MODE_BASIC,
-//		.mode = MXC_COMP_MODE_TESSELATION,
+//		.mode = MXC_COMPOSITOR_MODE_BASIC,
+		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
 	};
 
 	midVkBeginAllocationRequests();

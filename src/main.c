@@ -5,7 +5,7 @@
 #include "mid_vulkan.h"
 #include "mid_window.h"
 
-#include "comp_node.h"
+#include "compositor.h"
 #include "node.h"
 #include "test_node.h"
 #include "window.h"
