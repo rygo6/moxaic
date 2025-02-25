@@ -439,9 +439,12 @@ run_loop:
 
 //				ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
 				ivec2 extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT};
-				constexpr int localSize = 4;
-				constexpr int gatherSize = 2;
-				ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, localSize * gatherSize), 1);
+				constexpr int subgroupSize = 16;
+				constexpr int gatherSize = 4;
+				constexpr int workgroupSize = 64;
+				int pixelCount = extent.x * extent.y;
+				int groupCount = pixelCount / subgroupSize / gatherSize / workgroupSize;
+//				ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, localSize * gatherSize), 1);
 
 //				printf("%f %f %f %f\n", pNodeShrd->depthState.minDepth, pNodeShrd->depthState.maxDepth, pNodeShrd->depthState.nearZ, pNodeShrd->depthState.farZ);
 				memcpy(&pComp->pGBufferProcessMapped->depth, (void*)&pNodeShrd->depthState, sizeof(MxcDepthState));
@@ -452,7 +455,7 @@ run_loop:
 				};
 				CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pComp->gbufferProcessBlitUpPipe);
 				CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pComp->gbufferProcessPipeLayout, SET_GBUFFER_PROCESS_INDEX, COUNT(initialPushSet), initialPushSet);
-				CmdDispatch(cmd, groupCount.x, groupCount.y, 1);
+				CmdDispatch(cmd, 1, groupCount, 1);
 
 				processFinishBarriers[0].image = pNodeSwaps->gBuffer;
 				CmdPipelineImageBarriers2(cmd, COUNT(processFinishBarriers), processFinishBarriers);
@@ -782,8 +785,8 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 {
 	MxcCompositor compositor;
 	MxcCompositorCreateInfo info = {
-//		.mode = MXC_COMPOSITOR_MODE_BASIC,
-		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
+		.mode = MXC_COMPOSITOR_MODE_BASIC,
+//		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
 	};
 
 	midVkBeginAllocationRequests();
