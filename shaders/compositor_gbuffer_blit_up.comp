@@ -1,14 +1,13 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic  : require
 #extension GL_KHR_shader_subgroup_shuffle : require
-//#extension GL_EXT_debug_printf : require
+#extension GL_EXT_debug_printf : require
 
 #define SUBGROUP_SQUARE_SIZE 4
-// 4 * 4
-#define SUBGROUP_CAPACITY 16
+#define SUBGROUP_CAPACITY 16 // 4 * 4
+
 #define WORKGROUP_SQUARE_SIZE 8
-// 8 * 8
-#define WORKGROUP_SUBGROUP_COUNT 64
+#define WORKGROUP_SUBGROUP_COUNT 64 // 8 * 8
 
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
@@ -27,6 +26,50 @@ layout (set = 0, binding = 0) uniform State {
 layout (set = 0, binding = 1) uniform sampler2D srcDepth;
 layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer[];
 
+#define WORKGROUP_SAMPLE_COUNT ((SUBGROUP_CAPACITY * WORKGROUP_SUBGROUP_COUNT) / 2)
+
+shared float depths2[WORKGROUP_SAMPLE_COUNT];
+shared float depth3;
+
+bool Log() {
+    return gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 64 * 24 + 8;
+}
+
+// https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
+uint Morton(uvec2 position) {
+    uint x = position.x;
+    uint y = position.y;
+
+    // ??
+//    const uint s[] = {8, 4, 2, 1};
+//    const uint b[] = {0x00FF00FF, 0x0F0F0F0F, 0x33333333, 0x55555555 };
+//    for (int i = 0; i < 4; ++i) {
+//        x = (x | (x << s[i])) & b[i];
+//        y = (y | (y << s[i])) & b[i];
+//    }
+
+    x = (x | (x << 8)) & 0x00FF00FFu;
+    x = (x | (x << 4)) & 0x0F0F0F0Fu;
+    x = (x | (x << 2)) & 0x33333333u;
+    x = (x | (x << 1)) & 0x55555555u;
+
+    y = (y | (y << 8)) & 0x00FF00FFu;
+    y = (y | (y << 4)) & 0x0F0F0F0Fu;
+    y = (y | (y << 2)) & 0x33333333u;
+    y = (y | (y << 1)) & 0x55555555u;
+
+    return x | (y << 1);
+}
+
+uint Unmorton(uint m) {
+    m &= 0x55555555u;
+    m = (m | (m >> 1)) & 0x33333333u;
+    m = (m | (m >> 2)) & 0x0F0F0F0Fu;
+    m = (m | (m >> 4)) & 0x00FF00FFu;
+    m = (m | (m >> 8)) & 0x0000FFFFu;
+    return m;
+}
+
 float Lerp(float a, float b, float t) {
     return a + ((b - a) * t);
 }
@@ -39,12 +82,22 @@ vec4 ProjectDepth(vec4 newNear, vec4 newFar, vec4 linearDepth) {
     return (newFar * (linearDepth - newNear)) / (linearDepth * (newFar - newNear));
 }
 
-ivec2 WorkgroupCoord(uint index, ivec2 size) {
-    return ivec2(index % size.x, index / size.x);
+ivec2 GlobalWorkgroupID(uint globalWorkgroupIndex, ivec2 size) {
+    size /= ivec2(WORKGROUP_SQUARE_SIZE, WORKGROUP_SQUARE_SIZE);
+    size /= ivec2(SUBGROUP_SQUARE_SIZE, SUBGROUP_SQUARE_SIZE);
+//    if (Log()){
+//        debugPrintfEXT("%d %d %d \n", size.x, size.y, globalWorkgroupIndex);
+//    }
+    return ivec2(globalWorkgroupIndex % size.x, globalWorkgroupIndex / size.x) * WORKGROUP_SQUARE_SIZE * SUBGROUP_SQUARE_SIZE;
 }
 
-ivec2 SubgroupCoord(uint index) {
-    return ivec2(index % SUBGROUP_SQUARE_SIZE, index / SUBGROUP_SQUARE_SIZE);
+ivec2 LocalWorkgroupID(uint localSubgroupIndex) {
+    return ivec2(localSubgroupIndex % WORKGROUP_SQUARE_SIZE, localSubgroupIndex / WORKGROUP_SQUARE_SIZE) * SUBGROUP_SQUARE_SIZE;
+}
+
+ivec2 SubgroupID(uint subgroupInvocIndex) {
+    subgroupInvocIndex %= SUBGROUP_CAPACITY;
+    return ivec2(subgroupInvocIndex % SUBGROUP_SQUARE_SIZE, subgroupInvocIndex / SUBGROUP_SQUARE_SIZE);
 }
 
 uint SubgroupOffsetIndex(ivec2 dxdy) {
@@ -57,22 +110,37 @@ uint SubgroupIndex(ivec2 dxdy) { ;
 }
 
 float AverageNonZeroQuad(vec4 quad){
-    float count = 0.0f;
+    int count = 0;
     float sum = 0.0f;
     for (int i = 0; i < 4; ++i) {
-        count += quad[i] > 0.0f ? 1.0f : 0.0f;
+        count += int(quad[i] > 0);
         sum += quad[i];
     }
-    return int(count) > 0 ? sum / count : 0;
+    return count > 0 ? sum / float(count) : 0;
 }
 
 void main()
 {
     ivec2 size = imageSize(dstGbuffer[0]);
-    ivec2 workgroupCount = size / SUBGROUP_SQUARE_SIZE / 2;
-    ivec2 subgroupCoord = SubgroupCoord(gl_SubgroupInvocationID % SUBGROUP_CAPACITY);
-    ivec2 workGroupCoord = WorkgroupCoord(gl_GlobalInvocationID.y, workgroupCount) * 4;
-    ivec2 coord = subgroupCoord + workGroupCoord;
+    ivec2 halfSize = size / 2;
+
+    uint globalWorkgroupIndex = gl_WorkGroupID.y;
+    ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, halfSize);
+
+    uint localSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
+    ivec2 localWorkgroupID = LocalWorkgroupID(localSubgroupIndex);
+
+    uint globalSubgroupIndex = gl_GlobalInvocationID.y;
+    uint subgroupInvocIndex = gl_SubgroupInvocationID;
+    ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
+
+    ivec2 coord = subgroupID + localWorkgroupID + globalWorkgroupId;
+
+    uint yInvocations = gl_NumWorkGroups.y * gl_WorkGroupSize.y;
+//    if (Log()) {
+//        debugPrintfEXT("i%d cx%d cy%d gx%d gy%d lx%d ly%d sx%d sy%d \n", globalWorkgroupIndex, coord.x, coord.y, globalWorkgroupId.x, globalWorkgroupId.y, localWorkgroupID.x, localWorkgroupID.y, subgroupID.x, subgroupID.y);
+//    }
+
 
     // * 2 because initial sample is 2x2 textureGather
     ivec2 coord0 = coord * 2;
@@ -82,33 +150,46 @@ void main()
     vec4 gatheredLinearDepth = LinearizeDepth(vec4(state.depth.nearZ), vec4(state.depth.farZ), gatheredDepth);
     vec4 gatheredProjectedDepth = ProjectDepth(vec4(state.cameraFarZ), vec4(state.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ
 
-//    uint yInvocations = gl_NumWorkGroups.y * gl_WorkGroupSize.y;
-//    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0){
-//        uint a = SubgroupOffsetIndex(ivec2(1, 1));
-//        uint b = SubgroupIndex(coord1Sample);
-//        debugPrintfEXT("--- %d %d \n", a, b);
-//        debugPrintfEXT("%d %d \n", coord0.x, coord0.y);
-//    }
-
     float depth0 = AverageNonZeroQuad(gatheredProjectedDepth);
-    vec4 depth1Shuffle = vec4(
+    vec4 depth0Shuffle = vec4(
         subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(0, 1))),
         subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(1, 1))),
         subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(1, 0))),
         depth0);
-    float depth1 = (subgroupCoord.x % 2 == 0 && subgroupCoord.y % 2 == 0) ? AverageNonZeroQuad(depth1Shuffle) : 0;
-    vec4 depth2Shuffle = vec4(
+    float depth1 = (subgroupID.x % 2 == 0 && subgroupID.y % 2 == 0) ? AverageNonZeroQuad(depth0Shuffle) : 0;
+    vec4 depth1Shuffle = vec4(
         subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(0, 1))),
         subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(1, 1))),
         subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(1, 0))),
         depth1);
-    float depth2 = (subgroupCoord.x % 4 == 0 && subgroupCoord.y % 4 == 0) ? AverageNonZeroQuad(depth2Shuffle) : 0;
+    float depth2 = (subgroupID.x % 4 == 0 && subgroupID.y % 4 == 0) ? AverageNonZeroQuad(depth1Shuffle) : 0;
 
-    ivec2 coord1Sample = ivec2(subgroupCoord / 2) * 2;
-    ivec2 coord2Sample = ivec2(subgroupCoord / 4) * 4;
+    ivec2 coord1Sample = ivec2(subgroupID / 2) * 2;
+    ivec2 coord2Sample = ivec2(subgroupID / 4) * 4;
     depth1 = subgroupShuffle(depth1, SubgroupIndex(coord1Sample));
     depth2 = subgroupShuffle(depth2, SubgroupIndex(coord2Sample));
-    float finalDepth = depth0 > 0 ? depth0 : depth1 > 0 ? depth1 : depth2;
+
+    // Average what's available in the subgroups
+    float depth2Shuffle = subgroupShuffle(depth2, SUBGROUP_CAPACITY);
+    if (subgroupInvocIndex == 0) {
+        uint sharedMemoryIndex = globalSubgroupIndex / 2;
+        depths2[sharedMemoryIndex] = (depth2 + depth2Shuffle) / (int(depth2 > 0) +  int(depth2Shuffle > 0));
+    }
+
+    barrier();
+
+    if (gl_LocalInvocationIndex == 0) {
+        int count = 0;
+        float sum = 0.0;
+        for (int i = 0; i < WORKGROUP_SAMPLE_COUNT; i++) {
+            count += int(depths2[i] > 0);
+            sum += depths2[i];
+        }
+        float average = count > 0 ? sum / float(count) : 0;
+        depth3 = depth2;
+    }
+
+    barrier();
 
     const ivec2 gatherOffsets[4] = {
         { 0, 1 },
@@ -116,13 +197,13 @@ void main()
         { 1, 0 },
         { 0, 0 },
     };
-
     for (int i = 0; i < 4; ++i) {
         float finalDepth = gatheredProjectedDepth[i] > 0 ? gatheredProjectedDepth[i] :
             depth0 > 0 ? depth0 :
             depth1 > 0 ? depth1 :
-            depth2;
+            depth2 > 0 ? depth2 :
+            depth3;
         imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(finalDepth));
-//        imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(depth1));
+//        imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(depth2));
     }
 }
