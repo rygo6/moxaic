@@ -9,6 +9,8 @@
 #define WORKGROUP_SQUARE_SIZE 8
 #define WORKGROUP_SUBGROUP_COUNT 64 // 8 * 8
 
+#define HALF_EPSILON 0.0009765625
+
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
 struct DepthState {
@@ -26,13 +28,13 @@ layout (set = 0, binding = 0) uniform State {
 layout (set = 0, binding = 1) uniform sampler2D srcDepth;
 layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer[];
 
-#define WORKGROUP_SAMPLE_COUNT ((SUBGROUP_CAPACITY * WORKGROUP_SUBGROUP_COUNT) / 2)
+#define WORKGROUP_SAMPLE_COUNT (WORKGROUP_SUBGROUP_COUNT / 2)
 
 shared float depths2[WORKGROUP_SAMPLE_COUNT];
 shared float depth3;
 
 bool Log() {
-    return gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 64 * 24 + 8;
+    return gl_WorkGroupID.y == 0;
 }
 
 // https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
@@ -113,7 +115,7 @@ float AverageNonZeroQuad(vec4 quad){
     int count = 0;
     float sum = 0.0f;
     for (int i = 0; i < 4; ++i) {
-        count += int(quad[i] > 0);
+        count += int(quad[i] > HALF_EPSILON);
         sum += quad[i];
     }
     return count > 0 ? sum / float(count) : 0;
@@ -121,6 +123,10 @@ float AverageNonZeroQuad(vec4 quad){
 
 void main()
 {
+    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+        debugPrintfEXT("---- \n");
+    }
+
     ivec2 size = imageSize(dstGbuffer[0]);
     ivec2 halfSize = size / 2;
 
@@ -171,9 +177,11 @@ void main()
 
     // Average what's available in the subgroups
     float depth2Shuffle = subgroupShuffle(depth2, SUBGROUP_CAPACITY);
-    if (subgroupInvocIndex == 0) {
-        uint sharedMemoryIndex = globalSubgroupIndex / 2;
-        depths2[sharedMemoryIndex] = (depth2 + depth2Shuffle) / (int(depth2 > 0) +  int(depth2Shuffle > 0));
+
+    if (subgroupID.x % 4 == 0 && subgroupID.y % 4 == 0) {
+        uint sharedMemoryIndex = localSubgroupIndex / 2;
+        float averageDepth = (depth2 + depth2Shuffle) > 0 ? (depth2 + depth2Shuffle) / (int(depth2 > 0) +  int(depth2Shuffle > 0)) : 0;
+        depths2[sharedMemoryIndex] = averageDepth;
     }
 
     barrier();
@@ -181,12 +189,14 @@ void main()
     if (gl_LocalInvocationIndex == 0) {
         int count = 0;
         float sum = 0.0;
+        float maxDepth = 0.0;
         for (int i = 0; i < WORKGROUP_SAMPLE_COUNT; i++) {
-            count += int(depths2[i] > 0);
+            count += int(depths2[i] > HALF_EPSILON);
             sum += depths2[i];
         }
+
         float average = count > 0 ? sum / float(count) : 0;
-        depth3 = depth2;
+        depth3 = average;
     }
 
     barrier();
@@ -204,6 +214,5 @@ void main()
             depth2 > 0 ? depth2 :
             depth3;
         imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(finalDepth));
-//        imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(depth2));
     }
 }
