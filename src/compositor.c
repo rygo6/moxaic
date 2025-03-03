@@ -785,8 +785,8 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 {
 	MxcCompositor compositor;
 	MxcCompositorCreateInfo info = {
-		.mode = MXC_COMPOSITOR_MODE_BASIC,
-//		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
+//		.mode = MXC_COMPOSITOR_MODE_BASIC,
+		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
 	};
 
 	midVkBeginAllocationRequests();

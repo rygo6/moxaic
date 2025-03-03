@@ -1,7 +1,7 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic  : require
 #extension GL_KHR_shader_subgroup_shuffle : require
-#extension GL_EXT_debug_printf : require
+//#extension GL_EXT_debug_printf : require
 
 #define SUBGROUP_SQUARE_SIZE 4
 #define SUBGROUP_CAPACITY 16 // 4 * 4
@@ -123,9 +123,9 @@ float AverageNonZeroQuad(vec4 quad){
 
 void main()
 {
-    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
-        debugPrintfEXT("---- \n");
-    }
+//    if (Log()) {
+//        debugPrintfEXT("---- \n");
+//    }
 
     ivec2 size = imageSize(dstGbuffer[0]);
     ivec2 halfSize = size / 2;
@@ -143,16 +143,19 @@ void main()
     ivec2 coord = subgroupID + localWorkgroupID + globalWorkgroupId;
 
     uint yInvocations = gl_NumWorkGroups.y * gl_WorkGroupSize.y;
-//    if (Log()) {
-//        debugPrintfEXT("i%d cx%d cy%d gx%d gy%d lx%d ly%d sx%d sy%d \n", globalWorkgroupIndex, coord.x, coord.y, globalWorkgroupId.x, globalWorkgroupId.y, localWorkgroupID.x, localWorkgroupID.y, subgroupID.x, subgroupID.y);
-//    }
-
 
     // * 2 because initial sample is 2x2 textureGather
     ivec2 coord0 = coord * 2;
     vec2 quadCenterUV = vec2(coord0 + 1) / vec2(size);
 
+    #define EXPAND 31
+    const ivec2 expandGatherOffsets[4] = { { -EXPAND, EXPAND }, { EXPAND, EXPAND }, { EXPAND, -EXPAND }, { -EXPAND, -EXPAND }, };
+    vec4 expandGatheredDepth = textureGatherOffsets(srcDepth, quadCenterUV, expandGatherOffsets, 0);
     vec4 gatheredDepth = textureGather(srcDepth, quadCenterUV, 0);
+    for (int i = 0; i < 4; ++i) {
+        gatheredDepth[i] = gatheredDepth[i] > HALF_EPSILON ? gatheredDepth[i] : expandGatheredDepth[i];
+    }
+
     vec4 gatheredLinearDepth = LinearizeDepth(vec4(state.depth.nearZ), vec4(state.depth.farZ), gatheredDepth);
     vec4 gatheredProjectedDepth = ProjectDepth(vec4(state.cameraFarZ), vec4(state.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ
 
@@ -177,7 +180,6 @@ void main()
 
     // Average what's available in the subgroups
     float depth2Shuffle = subgroupShuffle(depth2, SUBGROUP_CAPACITY);
-
     if (subgroupID.x % 4 == 0 && subgroupID.y % 4 == 0) {
         uint sharedMemoryIndex = localSubgroupIndex / 2;
         float averageDepth = (depth2 + depth2Shuffle) > 0 ? (depth2 + depth2Shuffle) / (int(depth2 > 0) +  int(depth2Shuffle > 0)) : 0;
@@ -201,12 +203,7 @@ void main()
 
     barrier();
 
-    const ivec2 gatherOffsets[4] = {
-        { 0, 1 },
-        { 1, 1 },
-        { 1, 0 },
-        { 0, 0 },
-    };
+    const ivec2 gatherOffsets[4] = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }, };
     for (int i = 0; i < 4; ++i) {
         float finalDepth = gatheredProjectedDepth[i] > 0 ? gatheredProjectedDepth[i] :
             depth0 > 0 ? depth0 :
