@@ -91,25 +91,6 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		vkCreateTexture(&textureInfo, &pSwap->color);
 	}
 
-	{ // GBuffer
-		VkTextureCreateInfo textureInfo = {
-			.debugName = "ExportedGBufferFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo){
-				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MXC_NODE_GBUFFER_FORMAT,
-				.extent = pTexInfo->extent,
-				.mipLevels = MXC_NODE_GBUFFER_LEVELS,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MXC_NODE_GBUFFER_USAGE,
-			},
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.locality = VK_LOCALITY_CONTEXT,
-		};
-		vkCreateTexture(&textureInfo, &pSwap->gbuffer);
-	}
-
 	{ // Depth
 		VkImageCreateInfo info = {
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -137,17 +118,38 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		vkCreateTexture(&textureInfo, &pSwap->depth);
 	}
 
+	{ // GBuffer
+		VkTextureCreateInfo textureInfo = {
+			.debugName = "ExportedGBufferFramebuffer",
+			.pImageCreateInfo = &(VkImageCreateInfo){
+				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+				.imageType = VK_IMAGE_TYPE_2D,
+				.format = MXC_NODE_GBUFFER_FORMAT,
+				.extent = pTexInfo->extent,
+				.mipLevels = MXC_NODE_GBUFFER_LEVELS,
+				.arrayLayers = 1,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.usage = MXC_NODE_GBUFFER_USAGE,
+			},
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.locality = VK_LOCALITY_CONTEXT,
+		};
+		vkCreateTexture(&textureInfo, &pSwap->gbuffer);
+	}
+
 	if (VK_LOCALITY_INTERPROCESS_EXPORTED(pTexInfo->locality)) {
-		// we need to transition these out of undefined initially because the transition in the other process won't update layout to avoid initial validation error on transition
 		VK_DEVICE_FUNC(CmdPipelineBarrier2);
-		VkCommandBuffer cmd = vkBeginImmediateTransferCommandBuffer();
+		// Transfer on main because not all transfer queues can do compute transfer
+		VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool);
 		VkImageMemoryBarrier2 barriers[] = {
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pSwap->color.image,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+				.dstAccessMask = VK_ACCESS_2_NONE,
+				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			},
 			{
@@ -155,12 +157,24 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 				.image = pSwap->depth.image,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+				.dstAccessMask = VK_ACCESS_2_NONE,
+				.newLayout = VK_IMAGE_LAYOUT_GENERAL,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			},
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pSwap->gbuffer.image,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+				.dstAccessMask = VK_ACCESS_2_NONE,
+				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			},
 		};
 		CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
-		vkEndImmediateTransferCommandBuffer(cmd);
+		vkEndImmediateCommandBuffer(cmd, vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
 	}
 }
 

@@ -789,9 +789,9 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
 	};
 
-	midVkBeginAllocationRequests();
+	vkBeginAllocationRequests();
 	mxcCreateCompositor(&info, &compositor);
-	midVkEndAllocationRequests();
+	vkEndAllocationRequests();
 	mxcBindUpdateCompositor(&info, &compositor);
 
 	mxcCompositorNodeRun(pContext, &info, &compositor);

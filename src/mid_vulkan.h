@@ -465,12 +465,7 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	.srcStageMask = VK_PIPELINE_STAGE_2_NONE, \
 	.srcAccessMask = VK_ACCESS_2_NONE,        \
 	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
-
-#define VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ \
-	.dstStageMask = VK_PIPELINE_STAGE_2_NONE,    \
-	.dstAccessMask = VK_ACCESS_2_NONE,           \
-	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-
+\
 #define VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE              \
 	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
@@ -765,8 +760,8 @@ typedef struct VkMeshCreateInfo {
 void midVkCreateMeshSharedMemory(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh);
 void midVkBindUpdateMeshSharedMemory(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh);
 
-void midVkBeginAllocationRequests();
-void midVkEndAllocationRequests();
+void vkBeginAllocationRequests();
+void vkEndAllocationRequests();
 
 typedef struct VkmInitializeDesc {
 	// should use this... ? but need to decide on this vs vulkan configurator
@@ -897,6 +892,8 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
+VkCommandBuffer vkBeginImmediateCommandBuffer(VkCommandPool commandPool);
+void            vkEndImmediateCommandBuffer(VkCommandBuffer cmd, VkCommandPool commandPool, VkQueue queue);
 VkCommandBuffer vkBeginImmediateTransferCommandBuffer();
 void            vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
@@ -950,6 +947,37 @@ static VkBool32 VkmDebugUtilsCallback(
 	}
 }
 
+VkCommandBuffer vkBeginImmediateCommandBuffer(VkCommandPool commandPool)
+{
+	VkCommandBufferAllocateInfo allocateInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = commandPool,
+		.commandBufferCount = 1,
+	};
+	VkCommandBuffer cmd;
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &allocateInfo, &cmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd, "ImmediateCommandBuffer");
+	VkCommandBufferBeginInfo beginInfo = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+	};
+	VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+	return cmd;
+}
+
+void vkEndImmediateCommandBuffer(VkCommandBuffer cmd, VkCommandPool commandPool, VkQueue queue)
+{
+	VK_CHECK(vkEndCommandBuffer(cmd));
+	VkSubmitInfo info = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &cmd,
+	};
+	VK_CHECK(vkQueueSubmit(queue, 1, &info, VK_NULL_HANDLE));
+	VK_CHECK(vkQueueWaitIdle(queue));
+	vkFreeCommandBuffers(vk.context.device, commandPool, 1, &cmd);
+}
+
 VkCommandBuffer vkBeginImmediateTransferCommandBuffer()
 {
 	VkCommandBufferAllocateInfo allocateInfo = {
@@ -959,6 +987,7 @@ VkCommandBuffer vkBeginImmediateTransferCommandBuffer()
 	};
 	VkCommandBuffer cmd;
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &allocateInfo, &cmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd, "ImmediateTransferCommandBuffer");
 	VkCommandBufferBeginInfo beginInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -1399,7 +1428,7 @@ static __thread size_t  externalRequestedMemoryAllocSize[VK_MAX_MEMORY_TYPES] = 
 __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES] = {};
 __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {};
 
-void midVkBeginAllocationRequests()
+void vkBeginAllocationRequests()
 {
 	printf("Begin Memory Allocation Requests.\n");
 	// what do I do here? should I enable a mechanic to do this twice? or on pass in memory?
@@ -1407,7 +1436,7 @@ void midVkBeginAllocationRequests()
 		requestedMemoryAllocSize[memTypeIndex] = 0;
 	}
 }
-void midVkEndAllocationRequests()
+void vkEndAllocationRequests()
 {
 	printf("End Memory Allocation Requests.\n");
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
@@ -1966,7 +1995,9 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 		.image = pTexture->image,
 		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
-		VK_IMAGE_BARRIER_DST_ACQUIRE_SHADER_READ,
+		.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+		.dstAccessMask = VK_ACCESS_2_NONE,
+		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 	};
 	vkmCmdPipelineImageBarriers(commandBuffer, 1, &endCopyBarrier);
@@ -2264,6 +2295,7 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 			.features = {
 				.tessellationShader = VK_TRUE,
 				.robustBufferAccess = VK_TRUE,
+				.shaderImageGatherExtended = VK_TRUE,
 #ifdef VKM_DEBUG_WIREFRAME
 				.fillModeNonSolid = VK_TRUE,
 #endif

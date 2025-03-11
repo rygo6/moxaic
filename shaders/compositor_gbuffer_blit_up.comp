@@ -30,8 +30,8 @@ layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer[];
 
 #define WORKGROUP_SAMPLE_COUNT (WORKGROUP_SUBGROUP_COUNT / 2)
 
-shared float depths2[WORKGROUP_SAMPLE_COUNT];
-shared float depth3;
+//shared float depths2[WORKGROUP_SAMPLE_COUNT];
+//shared float depth3;
 
 bool Log() {
     return gl_WorkGroupID.y == 0;
@@ -160,56 +160,60 @@ void main()
     vec4 gatheredProjectedDepth = ProjectDepth(vec4(state.cameraFarZ), vec4(state.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ
 
     float depth0 = AverageNonZeroQuad(gatheredProjectedDepth);
-    vec4 depth0Shuffle = vec4(
-        subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(0, 1))),
-        subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(1, 1))),
-        subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(1, 0))),
-        depth0);
-    float depth1 = (subgroupID.x % 2 == 0 && subgroupID.y % 2 == 0) ? AverageNonZeroQuad(depth0Shuffle) : 0;
-    vec4 depth1Shuffle = vec4(
-        subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(0, 1))),
-        subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(1, 1))),
-        subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(1, 0))),
-        depth1);
-    float depth2 = (subgroupID.x % 4 == 0 && subgroupID.y % 4 == 0) ? AverageNonZeroQuad(depth1Shuffle) : 0;
 
-    ivec2 coord1Sample = ivec2(subgroupID / 2) * 2;
-    ivec2 coord2Sample = ivec2(subgroupID / 4) * 4;
-    depth1 = subgroupShuffle(depth1, SubgroupIndex(coord1Sample));
-    depth2 = subgroupShuffle(depth2, SubgroupIndex(coord2Sample));
+    // Subgroup averaging
+//    vec4 depth0Shuffle = vec4(
+//        subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(0, 1))),
+//        subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(1, 1))),
+//        subgroupShuffle(depth0, SubgroupOffsetIndex(ivec2(1, 0))),
+//        depth0);
+//    float depth1 = (subgroupID.x % 2 == 0 && subgroupID.y % 2 == 0) ? AverageNonZeroQuad(depth0Shuffle) : 0;
+//    vec4 depth1Shuffle = vec4(
+//        subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(0, 1))),
+//        subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(1, 1))),
+//        subgroupShuffle(depth1, SubgroupOffsetIndex(ivec2(1, 0))),
+//        depth1);
+//    float depth2 = (subgroupID.x % 4 == 0 && subgroupID.y % 4 == 0) ? AverageNonZeroQuad(depth1Shuffle) : 0;
 
-    // Average what's available in the subgroups
-    float depth2Shuffle = subgroupShuffle(depth2, SUBGROUP_CAPACITY);
-    if (subgroupID.x % 4 == 0 && subgroupID.y % 4 == 0) {
-        uint sharedMemoryIndex = localSubgroupIndex / 2;
-        float averageDepth = (depth2 + depth2Shuffle) > 0 ? (depth2 + depth2Shuffle) / (int(depth2 > 0) +  int(depth2Shuffle > 0)) : 0;
-        depths2[sharedMemoryIndex] = averageDepth;
-    }
+//    ivec2 coord1Sample = ivec2(subgroupID / 2) * 2;
+//    ivec2 coord2Sample = ivec2(subgroupID / 4) * 4;
+//    depth1 = subgroupShuffle(depth1, SubgroupIndex(coord1Sample));
+//    depth2 = subgroupShuffle(depth2, SubgroupIndex(coord2Sample));
 
-    barrier();
+    // Shared memory averaging
+//    float depth2Shuffle = subgroupShuffle(depth2, SUBGROUP_CAPACITY);
+//    if (subgroupID.x % 4 == 0 && subgroupID.y % 4 == 0) {
+//        uint sharedMemoryIndex = localSubgroupIndex / 2;
+//        float averageDepth = (depth2 + depth2Shuffle) > 0 ? (depth2 + depth2Shuffle) / (int(depth2 > 0) +  int(depth2Shuffle > 0)) : 0;
+//        depths2[sharedMemoryIndex] = averageDepth;
+//    }
 
-    if (gl_LocalInvocationIndex == 0) {
-        int count = 0;
-        float sum = 0.0;
-        float maxDepth = 0.0;
-        for (int i = 0; i < WORKGROUP_SAMPLE_COUNT; i++) {
-            count += int(depths2[i] > HALF_EPSILON);
-            sum += depths2[i];
-        }
-
-        float average = count > 0 ? sum / float(count) : 0;
-        depth3 = average;
-    }
-
-    barrier();
+//    barrier();
+//
+//    if (gl_LocalInvocationIndex == 0) {
+//        int count = 0;
+//        float sum = 0.0;
+//        float maxDepth = 0.0;
+//        for (int i = 0; i < WORKGROUP_SAMPLE_COUNT; i++) {
+//            count += int(depths2[i] > HALF_EPSILON);
+//            sum += depths2[i];
+//        }
+//
+//        float average = count > 0 ? sum / float(count) : 0;
+//        depth3 = average;
+//    }
+//
+//    barrier();
 
     const ivec2 gatherOffsets[4] = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }, };
     for (int i = 0; i < 4; ++i) {
-        float finalDepth = gatheredProjectedDepth[i] > 0 ? gatheredProjectedDepth[i] :
-            depth0 > 0 ? depth0 :
-            depth1 > 0 ? depth1 :
-            depth2 > 0 ? depth2 :
-            depth3;
+//        float finalDepth = gatheredProjectedDepth[i] > 0 ? gatheredProjectedDepth[i] :
+//            depth0 > 0 ? depth0 :
+//            depth1 > 0 ? depth1 :
+//            depth2 > 0 ? depth2 :
+//            depth3;
+//        imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(finalDepth));
+        float finalDepth = gatheredProjectedDepth[i] > 0 ? gatheredProjectedDepth[i] : depth0;
         imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(finalDepth));
     }
 }
