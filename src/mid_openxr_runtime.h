@@ -129,6 +129,13 @@ typedef enum XrSwapType : u8 {
 	XR_SWAP_TYPE_COUNT,
 } XrSwapType;
 
+typedef enum XrSwapClip : u8 {
+	XR_SWAP_CLIP_NONE,
+	XR_SWAP_CLIP_STRETCH,
+	XR_SWAP_CLIP_OCCLUSION_CROP,
+	XR_SWAP_CLIP_COUNT,
+} XrSwapClip;
+
 void midXrInitialize();
 
 // Session may claim an index from implementation or reference state in the implementation
@@ -479,6 +486,9 @@ typedef struct Swapchain {
 	block_handle hSession;
 	XrSwapUsage  usage;
 	u8           swapIndex;
+	u32          width;
+	u32          height;
+
 	union {
 		struct {
 			GLuint texture;
@@ -492,15 +502,6 @@ typedef struct Swapchain {
 		} d3d11;
 	} texture[XR_SWAP_COUNT];
 
-//	XrSwapchainCreateFlags createFlags;
-//	XrSwapchainUsageFlags  usageFlags;
-//	i64                    format;
-//	u32                    sampleCount;
-	u32                    width;
-	u32                    height;
-//	u32                    faceCount;
-//	u32                    arraySize;
-//	u32                    mipCount;
 } Swapchain;
 typedef block_handle swap_handle; // do this?
 
@@ -508,15 +509,17 @@ typedef block_handle swap_handle; // do this?
 #define XR_MAX_SPACES 8
 typedef struct Session {
 	//// Info
+	CACHE_ALIGN
 	XrSessionIndex          index;
 	XrSystemId              systemId;
 	XrViewConfigurationType primaryViewConfigurationType;
 
 	//// Swap
 	CACHE_ALIGN
-	swap_handle  hSwap;
-	XrSwapType   swapType;
-	XrSwapUsage  swapUsage;
+	swap_handle hSwap;
+	XrSwapType  swapType;
+	XrSwapClip  swapClip;
+	XrSwapUsage swapUsage;
 
 	//// Timing
 	CACHE_ALIGN
@@ -2346,15 +2349,8 @@ XR_PROC xrCreateSwapchain(
 	auto pSwap = BLOCK_PTR(block.swap, hSwap);
 
 	pSwap->hSession = hSess;
-//	pSwap->createFlags = createInfo->createFlags;
-//	pSwap->usageFlags = createInfo->usageFlags;
-//	pSwap->format = createInfo->format;
-//	pSwap->sampleCount = createInfo->sampleCount;
 	pSwap->width = createInfo->width;
 	pSwap->height = createInfo->height;
-//	pSwap->faceCount = createInfo->faceCount;
-//	pSwap->arraySize = createInfo->arraySize;
-//	pSwap->mipCount = createInfo->mipCount;
 
 	bool isColor = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 	bool isDepth = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -3016,28 +3012,63 @@ XR_PROC xrLocateViews(
 
 		float fovHalfXRad = eyeView.fovRad.x / 2.0f;
 		float fovHalfYRad = eyeView.fovRad.y / 2.0f;
-		float angleLeft = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.upperLeftClip.x);
-		float angleRight = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.lowerRightClip.x);
+		float angleLeft;
+		float angleRight;
 		float angleUp;
 		float angleDown;
 
-		switch (xr.instance.graphicsApi) {
-			default:
-			case XR_GRAPHICS_API_OPENGL:
-			case XR_GRAPHICS_API_VULKAN:
-				angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.upperLeftClip.y);
-				angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.lowerRightClip.y);
-				break;
-			case XR_GRAPHICS_API_D3D11_4:
-				// DX11 Y needs to invert
-				angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.upperLeftClip.y);
-				angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.lowerRightClip.y);
 
-				// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices unless all the angles are negative.
-				angleUp -= PI * 2;
-				angleDown -= PI * 2;
-				angleLeft -= PI * 2;
-				angleRight -= PI * 2;
+		switch (pSession->swapClip) {
+			default:
+			case XR_SWAP_CLIP_NONE:
+				angleLeft = -fovHalfXRad;
+				angleRight = fovHalfXRad;
+
+				switch (xr.instance.graphicsApi) {
+					default:
+					case XR_GRAPHICS_API_OPENGL:
+					case XR_GRAPHICS_API_VULKAN:
+						angleUp = fovHalfYRad;
+						angleDown = -fovHalfYRad;
+						break;
+					case XR_GRAPHICS_API_D3D11_4:
+						angleUp = fovHalfYRad;
+						angleDown = -fovHalfYRad;
+
+						// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices unless all the angles are negative.
+						angleUp -= PI * 2;
+						angleDown -= PI * 2;
+						angleLeft -= PI * 2;
+						angleRight -= PI * 2;
+
+						break;
+				}
+
+				break;
+			case XR_SWAP_CLIP_STRETCH:
+				angleLeft = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.upperLeftClip.x);
+				angleRight = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.lowerRightClip.x);
+
+				switch (xr.instance.graphicsApi) {
+					default:
+					case XR_GRAPHICS_API_OPENGL:
+					case XR_GRAPHICS_API_VULKAN:
+						angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.upperLeftClip.y);
+						angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.lowerRightClip.y);
+						break;
+					case XR_GRAPHICS_API_D3D11_4:
+						// DX11 Y needs to invert
+						angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.upperLeftClip.y);
+						angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.lowerRightClip.y);
+
+						// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices unless all the angles are negative.
+						angleUp -= PI * 2;
+						angleDown -= PI * 2;
+						angleLeft -= PI * 2;
+						angleRight -= PI * 2;
+
+						break;
+				}
 
 				break;
 		}

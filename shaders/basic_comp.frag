@@ -11,8 +11,12 @@ layout(location = 1) out vec4 outNormal;
 
 void main()
 {
-//    outColor = texture(nodeColor, inUV);
-    outColor = texture(nodeGBuffer, inUV);
+    vec4 color = texture(nodeColor, inUV);
+    if (color.a == 0)
+        discard;
+
+    outColor = color;
+
     const vec4 viewNormal = globalUBO.view * vec4(inNormal, 1);
     outNormal = vec4(normalize(viewNormal.xyz), 1.0);
 }

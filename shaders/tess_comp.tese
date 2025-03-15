@@ -18,26 +18,29 @@ bool clipped = false;
 
 void main()
 {
-    const vec2 inUV = mix(
+    vec2 inUV = mix(
         mix(inUVs[0], inUVs[1], gl_TessCoord.x),
         mix(inUVs[3], inUVs[2], gl_TessCoord.x),
         gl_TessCoord.y);
+    vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
+    vec2 scaledUV = inUV * scale;
+    vec2 nodeUv = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
 
-    const vec2 scale = clamp(vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
-    const vec2 scaledUV = inUV * scale;
-    const vec2 ndcUV = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
+//    vec2 finalUv = clipped ?
+//        vec2(scaledUV.x / doubleWide, scaledUV.y) :
+//        vec2(inUV.x / doubleWide, inUV.y);
+    vec2 finalUv = nodeUv;
+    outUV = finalUv;
 
-    vec2 finalUV = clipped ? vec2(scaledUV.x / doubleWide, scaledUV.y) : vec2(inUV.x / doubleWide, inUV.y);
-    float alphaValue = texture(nodeColor, finalUV).a;
-    float depthValue = texture(nodeGBuffer, finalUV).r;
+    float alphaValue = texture(nodeColor, finalUv).a;
+    float depthValue = texture(nodeGBuffer, finalUv).r;
 
-    vec2 ndc = NDCFromUV(ndcUV);
-    vec4 clipPos = ClipPosFromNDC(ndc, depthValue);
-    vec3 worldPos = WorldPosFromNodeClipPos(clipPos);
-//    worldPos.z = depthValue;
-    gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
+    vec2 nodeNdc = NDCFromUV(nodeUv);
+    vec4 nodeClipPos = ClipPosFromNDC(nodeNdc, depthValue);
+    vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
+    vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
+    gl_Position = globalClipPos;
 
-    outUV = finalUV;
 
     outNormal = mix(
         mix(inNormals[0], inNormals[1], gl_TessCoord.x),

@@ -473,8 +473,8 @@ run_loop:
 
 				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
 				memcpy(&pNodeCompData->setState.view, (void*)&pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
-				pNodeCompData->setState.ulUV = pNodeShrd->ulScreenUV;
-				pNodeCompData->setState.lrUV = pNodeShrd->lrScreenUV;
+				pNodeCompData->setState.ulUV = pNodeShrd->ulClipUV;
+				pNodeCompData->setState.lrUV = pNodeShrd->lrClipUV;
 
 				memcpy(pNodeCompData->pSetMapped, &pNodeCompData->setState, sizeof(MxcNodeCompositorSetState));
 
@@ -517,8 +517,8 @@ run_loop:
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShrd->globalSetState, &globalSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
 				pNodeShrd->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
-				pNodeShrd->ulScreenUV = ulUV;
-				pNodeShrd->lrScreenUV = lrUV;
+				pNodeShrd->ulClipUV = ulUV;
+				pNodeShrd->lrClipUV = lrUV;
 				__atomic_thread_fence(__ATOMIC_RELEASE);
 			}
 		}

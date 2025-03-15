@@ -10,21 +10,27 @@ layout(location = 1) out vec2 outUV;
 
 float doubleWide = 1.0f;
 bool clipped = false;
+bool cropped = false;
 
 void main() {
-    const vec4 originClipPos = nodeUBO.viewProj * nodeUBO.model * vec4(0,0,0,1);
+    vec4 originClipPos = nodeUBO.viewProj * nodeUBO.model * vec4(0,0,0,1);
+    float originDepth = originClipPos.z / originClipPos.w;
 
-    const vec2 scale = vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize);
-    const vec2 scaledUV = inUV * scale;
-    vec2 ndcUV = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
+    vec2 scale = vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize);
+    vec2 scaledUV = inUV * scale;
+    vec2 nodeUv = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
 
-    vec2 nodeNDC = NDCFromUV(ndcUV);
-    vec4 nodeClipPos = ClipPosFromNDC(nodeNDC, originClipPos.z / originClipPos.w);
+//    vec2 finalUv = clipped ?
+//        vec2(scaledUV.x / doubleWide, scaledUV.y) :
+//        vec2(inUV.x / doubleWide, inUV.y);
+    vec2 finalUv = nodeUv;
+    outUV = finalUv;
+
+    vec2 nodeNdc = NDCFromUV(nodeUv);
+    vec4 nodeClipPos = ClipPosFromNDC(nodeNdc, originDepth);
     vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
-    gl_Position = globalUBO.viewProj * vec4(worldPos, 1.0f);
+    vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
+    gl_Position = globalClipPos;
 
     outNormal = inNormal;
-
-    vec2 finalUV = clipped ? vec2(scaledUV.x / doubleWide, scaledUV.y) : vec2(inUV.x / doubleWide, inUV.y);
-    outUV = finalUV;
 }

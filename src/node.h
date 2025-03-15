@@ -68,8 +68,8 @@ typedef struct MxcDepthState {
 typedef struct MxcNodeShared {
 	// read/write every cycle
 	VkGlobalSetState globalSetState;
-	vec2             ulScreenUV;
-	vec2             lrScreenUV;
+	vec2             ulClipUV;
+	vec2             lrClipUV;
 	uint64_t         timelineValue;
 
 	MxcDepthState depthState;
