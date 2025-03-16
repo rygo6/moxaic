@@ -775,6 +775,10 @@ void vkCreateBasicTaskMeshPipe(
 	VkRenderPass renderPass,
 	VkPipelineLayout layout,
 	VkPipeline* pPipe);
+void vkCreateComputePipe(
+	const char* shaderPath,
+	VkPipelineLayout layout,
+	VkPipeline* pPipe);
 
 typedef struct VkBasicSamplerCreateInfo {
 	VkFilter               filter;
@@ -984,98 +988,90 @@ static void CreateStdPipeLayout()
 }
 
 #define DEFAULT_ROBUSTNESS_STATE                                                             \
-	(VkPipelineRobustnessCreateInfoEXT)                                                \
-	{                                                                                        \
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO_EXT,                      \
+	(VkPipelineRobustnessCreateInfoEXT) {                                                    \
+		VK_STRUCTURE_TYPE_PIPELINE_ROBUSTNESS_CREATE_INFO_EXT,                               \
 		.storageBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT, \
 		.uniformBuffers = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT, \
 		.vertexInputs = VK_PIPELINE_ROBUSTNESS_BUFFER_BEHAVIOR_ROBUST_BUFFER_ACCESS_2_EXT,   \
 		.images = VK_PIPELINE_ROBUSTNESS_IMAGE_BEHAVIOR_ROBUST_IMAGE_ACCESS_2_EXT,           \
 	}
-#define DEFAULT_VERTEX_INPUT_STATE                                                   \
-	(VkPipelineVertexInputStateCreateInfo)                                     \
-	{                                                                                \
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,          \
-		.vertexBindingDescriptionCount = 1,                                          \
-		.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){           \
-			{                                                                        \
-				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
-				.stride = sizeof(MidVertex),                                         \
-				.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,                            \
-			},                                                                       \
-		},                                                                           \
-		.vertexAttributeDescriptionCount = 3,                                        \
-                                                                                     \
-		.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]){ \
-			{                                                                        \
-				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,            \
-				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
-				.format = VK_FORMAT_R32G32B32_SFLOAT,                                \
-				.offset = offsetof(MidVertex, position),                             \
-			},                                                                       \
-			{                                                                        \
-				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,              \
-				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
-				.format = VK_FORMAT_R32G32B32_SFLOAT,                                \
-				.offset = offsetof(MidVertex, normal),                               \
-			},                                                                       \
-			{                                                                        \
-				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,                  \
-				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                        \
-				.format = VK_FORMAT_R32G32_SFLOAT,                                   \
-				.offset = offsetof(MidVertex, uv),                                   \
-			},                                                                       \
-		},                                                                           \
+#define DEFAULT_VERTEX_INPUT_STATE                                              \
+	(VkPipelineVertexInputStateCreateInfo) {                                    \
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,              \
+		.vertexBindingDescriptionCount = 1,                                     \
+		.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]) {     \
+			{                                                                   \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                    \
+				.stride = sizeof(MidVertex),                                    \
+				.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,                       \
+			},                                                                  \
+		},                                                                      \
+		.vertexAttributeDescriptionCount = 3,                                   \
+		.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) { \
+			{                                                                   \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_POSITION_INDEX,        \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                    \
+				.format = VK_FORMAT_R32G32B32_SFLOAT,                           \
+				.offset = offsetof(MidVertex, position),                        \
+			},                                                                  \
+			{                                                                   \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_NORMAL_INDEX,          \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                    \
+				.format = VK_FORMAT_R32G32B32_SFLOAT,                           \
+				.offset = offsetof(MidVertex, normal),                          \
+			},                                                                  \
+			{                                                                   \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,              \
+				.binding = VK_PIPE_VERTEX_BINDING_STD_INDEX,                    \
+				.format = VK_FORMAT_R32G32_SFLOAT,                              \
+				.offset = offsetof(MidVertex, uv),                              \
+			},                                                                  \
+		},                                                                      \
 	}
-#define DEFAULT_VIEWPORT_STATE                                          \
-	(VkPipelineViewportStateCreateInfo)                           \
-	{                                                                   \
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, \
-		.viewportCount = 1,                                             \
-		.scissorCount = 1,                                              \
+#define DEFAULT_VIEWPORT_STATE                                 \
+	(VkPipelineViewportStateCreateInfo) {                      \
+		VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO, \
+		.viewportCount = 1,                                    \
+		.scissorCount = 1,                                     \
 	}
-#ifdef VKM_DEBUG_WIREFRAME
+#ifdef VK_DEBUG_WIREFRAME
 #define FILL_MODE VK_POLYGON_MODE_LINE
 #else
 #define FILL_MODE VK_POLYGON_MODE_FILL
 #endif
 #define DEFAULT_RASTERIZATION_STATE                                          \
-	(VkPipelineRasterizationStateCreateInfo)                           \
-	{                                                                        \
+	(VkPipelineRasterizationStateCreateInfo) {                               \
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO, \
 		.polygonMode = FILL_MODE,                                            \
 		.frontFace = VK_FRONT_FACE_CLOCKWISE,                                \
 		.lineWidth = 1.0f,                                                   \
 	}
-#define DEFAULT_DEPTH_STENCIL_STATE                                          \
-	(VkPipelineDepthStencilStateCreateInfo)                            \
-	{                                                                        \
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, \
-		.depthTestEnable = VK_TRUE,                                          \
-		.depthWriteEnable = VK_TRUE,                                         \
-		.depthCompareOp = VK_COMPARE_OP_GREATER,                             \
-		.maxDepthBounds = 1.0f,                                              \
+#define DEFAULT_DEPTH_STENCIL_STATE                                 \
+	(VkPipelineDepthStencilStateCreateInfo) {                       \
+		VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, \
+		.depthTestEnable = VK_TRUE,                                 \
+		.depthWriteEnable = VK_TRUE,                                \
+		.depthCompareOp = VK_COMPARE_OP_GREATER,                    \
+		.maxDepthBounds = 1.0f,                                     \
 	}
-#define DEFAULT_DYNAMIC_STATE                                          \
-	(VkPipelineDynamicStateCreateInfo)                           \
-	{                                                                  \
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, \
-		.dynamicStateCount = 2,                                        \
-		.pDynamicStates = (VkDynamicState[]){                    \
-			VK_DYNAMIC_STATE_VIEWPORT,                                 \
-			VK_DYNAMIC_STATE_SCISSOR,                                  \
-		},                                                             \
+#define DEFAULT_DYNAMIC_STATE                                 \
+	(VkPipelineDynamicStateCreateInfo) {                      \
+		VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO, \
+		.dynamicStateCount = 2,                               \
+		.pDynamicStates = (VkDynamicState[]) {                \
+			VK_DYNAMIC_STATE_VIEWPORT,                        \
+			VK_DYNAMIC_STATE_SCISSOR,                         \
+		},                                                    \
 	}
-#define DEFAULT_OPAQUE_COLOR_BLEND_STATE                                   \
-	(VkPipelineColorBlendStateCreateInfo)                            \
-	{                                                                      \
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, \
-		.logicOp = VK_LOGIC_OP_COPY,                                       \
-		.attachmentCount = 2,                                              \
-		.pAttachments = (VkPipelineColorBlendAttachmentState[]){     \
-			{/* Color */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},         \
-			{/* Normal */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},        \
-		},                                                                 \
+#define DEFAULT_OPAQUE_COLOR_BLEND_STATE                            \
+	(VkPipelineColorBlendStateCreateInfo) {                         \
+		VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,   \
+		.logicOp = VK_LOGIC_OP_COPY,                                \
+		.attachmentCount = 2,                                       \
+		.pAttachments = (VkPipelineColorBlendAttachmentState[]) {   \
+			{/* Color */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},  \
+			{/* Normal */ .colorWriteMask = COLOR_WRITE_MASK_RGBA}, \
+		},                                                          \
 	}
 
 void vkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
@@ -1085,18 +1081,18 @@ void vkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, V
 	VkShaderModule fragShader;
 	vkCreateShaderModuleFromPath(fragShaderPath, &fragShader);
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &DEFAULT_ROBUSTNESS_STATE,
 		.stageCount = 2,
 		.pStages = (VkPipelineShaderStageCreateInfo[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_VERTEX_BIT,
 				.module = vertShader,
 				.pName = "main",
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 				.module = fragShader,
 				.pName = "main",
@@ -1104,13 +1100,13 @@ void vkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, V
 		},
 		.pVertexInputState = &DEFAULT_VERTEX_INPUT_STATE,
 		.pInputAssemblyState = &(VkPipelineInputAssemblyStateCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 		},
 		.pViewportState = &DEFAULT_VIEWPORT_STATE,
 		.pRasterizationState = &DEFAULT_RASTERIZATION_STATE,
 		.pMultisampleState = &(VkPipelineMultisampleStateCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		},
 		.pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
@@ -1135,30 +1131,30 @@ void vkCreateBasicTessellationPipe(const char* vertShaderPath, const char* tescS
 	VkShaderModule fragShader;
 	vkCreateShaderModuleFromPath(fragShaderPath, &fragShader);
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &DEFAULT_ROBUSTNESS_STATE,
 		.stageCount = 4,
 		.pStages = (VkPipelineShaderStageCreateInfo[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_VERTEX_BIT,
 				.module = vertShader,
 				.pName = "main",
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT,
 				.module = tescShader,
 				.pName = "main",
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT,
 				.module = teseShader,
 				.pName = "main",
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 				.module = fragShader,
 				.pName = "main",
@@ -1166,17 +1162,17 @@ void vkCreateBasicTessellationPipe(const char* vertShaderPath, const char* tescS
 		},
 		.pVertexInputState = &DEFAULT_VERTEX_INPUT_STATE,
 		.pTessellationState = &(VkPipelineTessellationStateCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
 			.patchControlPoints = 4,
 		},
 		.pInputAssemblyState = &(VkPipelineInputAssemblyStateCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			.topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST,
 		},
 		.pViewportState = &DEFAULT_VIEWPORT_STATE,
 		.pRasterizationState = &DEFAULT_RASTERIZATION_STATE,
 		.pMultisampleState = &(VkPipelineMultisampleStateCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		},
 		.pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
@@ -1201,24 +1197,24 @@ void vkCreateBasicTaskMeshPipe(const char* taskShaderPath, const char* meshShade
 	VkShaderModule fragShader;
 	vkCreateShaderModuleFromPath(fragShaderPath, &fragShader);
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &DEFAULT_ROBUSTNESS_STATE,
 		.stageCount = 3,
 		.pStages = (VkPipelineShaderStageCreateInfo[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_TASK_BIT_EXT,
 				.module = taskShader,
 				.pName = "main",
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_MESH_BIT_EXT,
 				.module = meshShader,
 				.pName = "main",
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 				.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 				.module = fragShader,
 				.pName = "main",
@@ -1227,7 +1223,7 @@ void vkCreateBasicTaskMeshPipe(const char* taskShaderPath, const char* meshShade
 		.pViewportState = &DEFAULT_VIEWPORT_STATE,
 		.pRasterizationState = &DEFAULT_RASTERIZATION_STATE,
 		.pMultisampleState = &(VkPipelineMultisampleStateCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		},
 		.pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
@@ -1240,6 +1236,23 @@ void vkCreateBasicTaskMeshPipe(const char* taskShaderPath, const char* meshShade
 	vkDestroyShaderModule(vk.context.device, fragShader, VK_ALLOC);
 	vkDestroyShaderModule(vk.context.device, taskShader, VK_ALLOC);
 	vkDestroyShaderModule(vk.context.device, meshShader, VK_ALLOC);
+}
+
+void vkCreateComputePipe(const char* shaderPath, VkPipelineLayout layout, VkPipeline* pPipe)
+{
+	VkShaderModule shader;	vkCreateShaderModuleFromPath(shaderPath, &shader);
+	VkComputePipelineCreateInfo pipelineInfo = {
+		VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage = {
+			VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.module = shader,
+			.pName = "main",
+		},
+		.layout = layout,
+	};
+	VK_CHECK(vkCreateComputePipelines(vk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VK_ALLOC, pPipe));
+	vkDestroyShaderModule(vk.context.device, shader, VK_ALLOC);
 }
 
 ////////////////

@@ -28,9 +28,10 @@ typedef struct MxcCompositor {
 
   VkRenderPass compRenderPass;
 
-  VkDescriptorSetLayout compositorNodeSetLayout;
-  VkPipelineLayout      compositorPipeLayout;
-  VkPipeline            compNodePipe;
+  VkDescriptorSetLayout nodeSetLayout;
+  VkPipelineLayout      nodePipeLayout;
+  VkPipeline            nodePipe;
+  VkPipeline            computeNodePipe;
 
   VkDescriptorSetLayout gbufferProcessSetLayout;
   VkPipelineLayout      gbufferProcessPipeLayout;

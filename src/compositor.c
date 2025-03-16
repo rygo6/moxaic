@@ -3,6 +3,7 @@
 #include "mid_window.h"
 #include "window.h"
 
+#include <stdatomic.h>
 #include <assert.h>
 #include <vulkan/vk_enum_string_helper.h>
 
@@ -241,8 +242,8 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtxt, const MxcCompositor
 	auto framebuffer = pComp->framebuffer;
 	auto globalSet = pComp->globalSet.set;
 
-	auto compNodePipeLayout = pComp->compositorPipeLayout;
-	auto compNodePipe = pComp->compNodePipe;
+	auto compNodePipeLayout = pComp->nodePipeLayout;
+	auto compNodePipe = pComp->nodePipe;
 
 	auto quadIndexCount = pComp->quadMesh.indexCount;
 	auto quadBuffer = pComp->quadMesh.buffer;
@@ -396,7 +397,7 @@ run_loop:
 
 			// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 			// shared: 569 - semaphore: 315416 ratio: 554.333919
-			u64 nodeTimelineVal = __atomic_load_n(&pNodeShrd->timelineValue, __ATOMIC_ACQUIRE);
+			u64 nodeTimelineVal = atomic_load_explicit(&pNodeShrd->timelineValue, memory_order_acquire);
 
 			if (nodeTimelineVal < 1)
 				continue;
@@ -519,7 +520,7 @@ run_loop:
 				pNodeShrd->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
 				pNodeShrd->ulClipUV = ulUV;
 				pNodeShrd->lrClipUV = lrUV;
-				__atomic_thread_fence(__ATOMIC_RELEASE);
+				atomic_thread_fence(memory_order_release);
 			}
 		}
 
@@ -576,8 +577,8 @@ run_loop:
 		CmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
 		{  // Blit Framebuffer
-			AcquireNextImageKHR(dvc, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &compositorContext.swapIndex);
-			__atomic_thread_fence(__ATOMIC_RELEASE);
+			u32 swapIndex; AcquireNextImageKHR(dvc, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &swapIndex);
+			atomic_store_explicit(&compositorContext.swapIndex, swapIndex, memory_order_release);
 			VkImage swapImage = swap.images[compositorContext.swapIndex];
 
 			VkImageMemoryBarrier2 beginBlitBarrier = {
@@ -638,8 +639,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 	{   // Create
 
 		// layouts
-		CreateCompositorSetLayout(pInfo->mode, &pComp->compositorNodeSetLayout);
-		CreateCompositorPipeLayout(pComp->compositorNodeSetLayout, &pComp->compositorPipeLayout);
+		CreateCompositorSetLayout(pInfo->mode, &pComp->nodeSetLayout);
+		CreateCompositorPipeLayout(pComp->nodeSetLayout, &pComp->nodePipeLayout);
 
 		// meshes
 		switch (pInfo->mode) {
@@ -647,8 +648,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 				vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
 								  "./shaders/basic_comp.frag.spv",
 								  vk.context.renderPass,
-								  pComp->compositorPipeLayout,
-								  &pComp->compNodePipe);
+								  pComp->nodePipeLayout,
+								  &pComp->nodePipe);
 				CreateQuadMesh(0.5f, &pComp->quadMesh);
 				break;
 			case MXC_COMPOSITOR_MODE_TESSELATION:
@@ -657,8 +658,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 											  "./shaders/tess_comp.tese.spv",
 											  "./shaders/tess_comp.frag.spv",
 											  vk.context.renderPass,
-											  pComp->compositorPipeLayout,
-											  &pComp->compNodePipe);
+											  pComp->nodePipeLayout,
+											  &pComp->nodePipe);
 				CreateQuadPatchMeshSharedMemory(&pComp->quadMesh);
 				break;
 			case MXC_COMPOSITOR_MODE_TASK_MESH:
@@ -666,30 +667,35 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 										  "./shaders/mesh_comp.mesh.spv",
 										  "./shaders/mesh_comp.frag.spv",
 										  vk.context.renderPass,
-										  pComp->compositorPipeLayout,
-										  &pComp->compNodePipe);
+										  pComp->nodePipeLayout,
+										  &pComp->nodePipe);
 				CreateQuadMesh(0.5f, &pComp->quadMesh);
 				break;
-			default: PANIC("CompMode not supported!");
+			case MXC_COMPOSITOR_MODE_COMPUTE:
+				vkCreateComputePipe("./shaders/compute_compositor.comp.spv",
+										  pComp->nodePipeLayout,
+										  &pComp->computeNodePipe);
+				break;
+			default: PANIC("Compositor mode not supported!");
 		}
 
 		{ // Pools
 			VkQueryPoolCreateInfo queryInfo = {
-				.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+				VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
 				.queryType = VK_QUERY_TYPE_TIMESTAMP,
 				.queryCount = 2,
 			};
 			VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, VK_ALLOC, &pComp->timeQueryPool));
 
 			VkDescriptorPoolCreateInfo poolInfo = {
-				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+				VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 				.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
 				.maxSets = MXC_NODE_CAPACITY * 3,
 				.poolSizeCount = 3,
 				.pPoolSizes = (VkDescriptorPoolSize[]){
-					{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = MXC_NODE_CAPACITY},
+					{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         .descriptorCount = MXC_NODE_CAPACITY},
 					{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MXC_NODE_CAPACITY},
-					{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = MXC_NODE_CAPACITY},
+					{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = MXC_NODE_CAPACITY},
 				},
 			};
 			VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
@@ -722,10 +728,10 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 		// should I preallocate all set memory? the MxcNodeCompositorSetState * 256 is only 130 kb. That may be a small price to pay to ensure contiguous memory on GPU
 		for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 			VkDescriptorSetAllocateInfo setInfo = {
-				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 				.descriptorPool = threadContext.descriptorPool,
 				.descriptorSetCount = 1,
-				.pSetLayouts = &pComp->compositorNodeSetLayout,
+				.pSetLayouts = &pComp->nodeSetLayout,
 			};
 			VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &nodeCompositorData[i].set));
 			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].set, CONCAT(NodeSet, i));
