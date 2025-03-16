@@ -1,32 +1,12 @@
 #pragma once
 
+#include "mid_common.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-
-///////////////
-//// Mid Common
-
-//// Debug
-#ifndef MID_DEBUG
-#define MID_DEBUG
-extern void Panic(const char* file, int line, const char* message);
-#define PANIC(_message) Panic(__FILE__, __LINE__, _message)
-#define CHECK(_err, _message)                      \
-	if (__builtin_expect(!!(_err), 0)) {           \
-		fprintf(stderr, "Error Code: %d\n", _err); \
-		PANIC(_message);                           \
-	}
-#ifdef MID_WINDOW_IMPLEMENTATION
-[[noreturn]] void Panic(const char* file, int line, const char* message)
-{
-	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
-	__builtin_trap();
-}
-#endif
-#endif
 
 //////////////////////
 //// Mid Window Header

@@ -7,56 +7,11 @@
 #define MID_IDE_ANALYSIS
 #endif
 
-#define MID_DEBUG
-extern void Panic(const char* file, int line, const char* message);
-#define PANIC(_message) Panic(__FILE__, __LINE__, _message)
-#define CHECK(_err, _message)                      \
-	if (__builtin_expect(!!(_err), 0)) {           \
-		fprintf(stderr, "Error Code: %d\n", _err); \
-		PANIC(_message);                           \
-	}
-
-#define CACHE_ALIGN __attribute((aligned(64)))
-#define PACKED __attribute__((packed))
-#define ALIGN(size) __attribute((aligned(size)))
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
-#define CONTAINS(_array, _count, _)        \
-	({                                     \
-		bool found = false;                \
-		for (int i = 0; i < _count; ++i) { \
-			if (_array[i] == _) {          \
-				found = true;              \
-				break;                     \
-			}                              \
-		}                                  \
-		found;                             \
-	})
-
-#define CONCAT(_a, _b) #_a #_b
-
 #define DEFAULT_WIDTH 2048
 #define DEFAULT_HEIGHT 2048
 
 #define DEFAULT_WINDOW_X_POSITION 0
 #define DEFAULT_WINDOW_Y_POSITION 0
-
-#define HOT    __attribute__((hot))
-#define INLINE __attribute__((always_inline)) static inline
-
-// to mid common
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef int8_t   i8;
-typedef int16_t  i16;
-typedef int32_t  i32;
-typedef int64_t  i64;
-typedef _Float16 f16;
-typedef float    f32;
-typedef double   f64;
 
 typedef enum MxcView {
 	MXC_VIEW_UNINITIALIZED = 0,

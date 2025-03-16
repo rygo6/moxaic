@@ -3,6 +3,9 @@
 //////////////////////
 #pragma once
 
+#include "mid_common.h"
+#include "mid_bit.h"
+
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -47,18 +50,9 @@
 #include <openxr/openxr_reflection.h>
 #include <openxr/openxr_loader_negotiation.h>
 
-#include "mid_bit.h"
-
 #ifdef MID_IDE_ANALYSIS
 	#undef XRAPI_CALL
 	#define XRAPI_CALL
-#endif
-
-///////////////
-//// Mid Common
-////
-#ifndef COUNT
-#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
 #endif
 
 #if defined(__GNUC__)
@@ -69,38 +63,9 @@
 #define EXPORT
 #endif
 
-#define LOG(...) printf(__VA_ARGS__)
-//#define LOG_ERROR(_format, ...) fprintf(stderr, "Error!!! " _format, __VA_ARGS__);
-#define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__)
-
-#ifdef _WIN32
-#ifndef MID_WIN32_DEBUG
-#define MID_WIN32_DEBUG
-static void LogWin32Error(HRESULT err)
-{
-	LOG_ERROR("Win32 Code: 0x%08lX\n", err);
-	char* errStr;
-	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-		LOG_ERROR("%s\n", errStr);
-		LocalFree(errStr);
-	}
-}
-#endif
-#endif
-
-// this need to go in mid common
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-typedef int8_t   i8;
-typedef int16_t  i16;
-typedef int32_t  i32;
-typedef int64_t  i64;
-typedef _Float16 f16;
-typedef float    f32;
-typedef double   f64;
+/////////////////////
+//// Mid OpenXR Types
+////
 
 typedef enum XrGraphicsApi : u8 {
 	XR_GRAPHICS_API_OPENGL,

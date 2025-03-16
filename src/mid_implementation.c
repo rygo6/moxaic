@@ -1,5 +1,3 @@
-#include <stdio.h>
-
 /* From raylib, feel I should use this somehow?
 // If defined, the following flags inhibit definition of the indicated items.
 #define NOGDICAPMASKS     // CC_*, LC_*, PC_*, CP_*, TC_*, RC_
@@ -43,12 +41,9 @@
 #define NOMCX             // Modem Configuration Extensions
 */
 
-#define MID_DEBUG
-[[noreturn]] void Panic(const char* file, int line, const char* message)
-{
-	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
-	__builtin_trap();
-}
+#define MID_COMMON_IMPLEMENTATION
+#include "mid_common.h"
+#undef MID_COMMON_IMPLEMENTATION
 
 #define MID_VULKAN_IMPLEMENTATION
 #include "mid_vulkan.h"

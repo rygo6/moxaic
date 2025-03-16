@@ -3,6 +3,9 @@
 //////////////////////
 #pragma once
 
+#include "mid_common.h"
+#include "mid_math.h"
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,7 +14,6 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-// Win32 Dependencies
 #ifdef _WIN32
 
 	#define WIN32_LEAN_AND_MEAN
@@ -31,76 +33,9 @@
 
 #endif
 
-// Mid Dependencies
-#include "mid_math.h"
-
-///////////////////
-//// Common Utility
-////
-#define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__)
-
-#ifndef MID_DEBUG
-#define MID_DEBUG
-extern void Panic(const char* file, int line, const char* message);
-#define PANIC(_message) Panic(__FILE__, __LINE__, _message)
-#define CHECK(_err, _message)                      \
-	if (__builtin_expect(!!(_err), 0)) {           \
-		fprintf(stderr, "Error Code: %d\n", _err); \
-		PANIC(_message);                           \
-	}
-#ifdef MID_VULKAN_IMPLEMENTATION
-[[noreturn]] void Panic(const char* file, int line, const char* message)
-{
-	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
-	__builtin_trap();
-}
-#endif
-#endif
-
-#ifdef _WIN32
-	#ifndef MID_WIN32_DEBUG
-	#define MID_WIN32_DEBUG
-	static void LogWin32Error(HRESULT err)
-	{
-		fprintf(stderr, "Win32 Error Code: 0x%08lX\n", err);
-		char* errStr;
-		if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-						  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-			fprintf(stderr, "%s\n", errStr);
-			LocalFree(errStr);
-		}
-	}
-	#define CHECK_WIN32(condition, err) \
-		if (UNLIKELY(!(condition))) {   \
-			LogWin32Error(err);         \
-			PANIC("Win32 Error!");      \
-		}
-	#define DX_CHECK(command)           \
-		({                              \
-			HRESULT hr = command;       \
-			if (UNLIKELY(FAILED(hr))) { \
-				LogWin32Error(hr);      \
-				PANIC("DX Error!");     \
-			}                           \
-		})
-	#endif
-#endif
-
-#ifndef CACHE_ALIGN
-#define CACHE_ALIGN __attribute((aligned(64)))
-#endif
-#ifndef COUNT
-#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
-#endif
-#ifndef INLINE
-#define INLINE __attribute__((always_inline)) static inline
-#endif
-
 ///////////////////
 //// Vulkan Globals
 ////
-#define VKM_DEBUG_MEMORY_ALLOC
-
 // these values shouldn't be macros
 #ifndef DEFAULT_WIDTH
 #define DEFAULT_WIDTH 1024
@@ -109,6 +44,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define DEFAULT_HEIGHT 1024
 #endif
 
+// move everything to this
 #ifndef PFN_FUNCS
 #define PFN_FUNCS                     \
 	PFN_FUNC(WaitSemaphores)          \
@@ -151,9 +87,9 @@ extern void Panic(const char* file, int line, const char* message);
 #endif
 
 #define VK_ALLOC         NULL
-#define MIDVK_VERSION    VK_MAKE_API_VERSION(0, 1, 3, 2) // this prolly redundant?
-// do I want separate SWAP and framebuffer counts?
+#define VK_VERSION       VK_MAKE_API_VERSION(0, 1, 3, 2) // this prolly redundant?
 #define VK_SWAP_COUNT    2
+
 #define VK_CHECK(command)                       \
 	({                                          \
 		VkResult result = command;              \
@@ -387,21 +323,18 @@ enum {
 	VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH,
 	VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 };
-
 enum {
 	VK_SET_INDEX_BASIC_GLOBAL,
 	VK_SET_INDEX_BASIC_MATERIAL,
 	VK_SET_INDEX_BASIC_OBJECT,
 	VK_SET_INDEX_BASIC_COUNT,
 };
-
 constexpr VkFormat VK_BASIC_PASS_FORMATS[] = {
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = VK_FORMAT_R8G8B8A8_UNORM,
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = VK_FORMAT_R16G16B16A16_SFLOAT,
 //	[VK_BASIC_PASS_ATTACHMENT_DEPTH_INDEX] = VK_FORMAT_D32_SFLOAT,
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = VK_FORMAT_D16_UNORM,
 };
-
 constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
 											 VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -425,7 +358,7 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,      \
 		.pBufferInfo = &(VkDescriptorBufferInfo){                 \
 			.buffer = global_set_buffer,                          \
-			.range = sizeof(VkGlobalSetState),                   \
+			.range = sizeof(VkGlobalSetState),                    \
 		},                                                        \
 	}
 #define VK_SET_BIND_MATERIAL_IMAGE 0
@@ -453,7 +386,7 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,   \
 		.pBufferInfo = &(VkDescriptorBufferInfo){              \
 			.buffer = objectSetBuffer,                         \
-			.range = sizeof(VkObjectSetState),             \
+			.range = sizeof(VkObjectSetState),                 \
 		},                                                     \
 	}
 
@@ -465,7 +398,7 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	.srcStageMask = VK_PIPELINE_STAGE_2_NONE, \
 	.srcAccessMask = VK_ACCESS_2_NONE,        \
 	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
-\
+
 #define VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE              \
 	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
@@ -765,6 +698,7 @@ void vkEndAllocationRequests();
 
 typedef struct VkmInitializeDesc {
 	// should use this... ? but need to decide on this vs vulkan configurator
+	// I think I should get rid of this until I need a solution...
 	const char* applicationName;
 	uint32_t    applicationVersion;
 
@@ -784,21 +718,21 @@ typedef struct VkmInitializeDesc {
 } VkmInitializeDesc;
 void vkInitializeInstance();
 
-typedef enum VkmSupport {
+typedef enum VkSupport {
 	VKM_SUPPORT_OPTIONAL,
 	VKM_SUPPORT_YES,
 	VKM_SUPPORT_NO,
 	VKM_SUPPORT_COUNT,
-} VkmSupport;
+} VkSupport;
 static const char* string_Support[] = {
 	[VKM_SUPPORT_OPTIONAL] = "SUPPORT_OPTIONAL",
 	[VKM_SUPPORT_YES] = "SUPPORT_YES",
 	[VKM_SUPPORT_NO] = "SUPPORT_NO",
 };
 typedef struct VkmQueueFamilyCreateInfo {
-	VkmSupport               supportsGraphics;
-	VkmSupport               supportsCompute;
-	VkmSupport               supportsTransfer;
+	VkSupport                supportsGraphics;
+	VkSupport                supportsCompute;
+	VkSupport                supportsTransfer;
 	VkQueueGlobalPriorityKHR globalPriority;
 	uint32_t                 queueCount;  // probably get rid of this, we will multiplex queues automatically and presume only 1
 	const float*             pQueuePriorities;
@@ -807,8 +741,6 @@ typedef struct MidVkContextCreateInfo {
 	VkmQueueFamilyCreateInfo queueFamilyCreateInfos[VK_QUEUE_FAMILY_TYPE_COUNT];
 } MidVkContextCreateInfo;
 void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo);
-
-//void vkCreateGlobalSet(VkGlobalSet* pSet);
 
 void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShaderModule);
 
@@ -919,7 +851,8 @@ VkDebugUtilsMessengerEXT                               debugUtilsMessenger = VK_
 /////////////
 //// Utility
 ////
-static void VkmReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents)
+// move to common?
+static void vkReadFile(const char* pPath, size_t* pFileLength, char** ppFileContents)
 {
 	FILE* file = fopen(pPath, "rb");
 	CHECK(file == NULL, "File can't be opened!");
@@ -1018,7 +951,7 @@ void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShad
 {
 	size_t size;
 	char*  pCode;
-	VkmReadFile(pShaderPath, &size, &pCode);
+	vkReadFile(pShaderPath, &size, &pCode);
 	VkShaderModuleCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 		.codeSize = size,
@@ -2187,7 +2120,7 @@ void vkInitializeInstance()
 				.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 				.pEngineName = "Vulkan",
 				.engineVersion = VK_MAKE_VERSION(1, 0, 0),
-				.apiVersion = MIDVK_VERSION,
+				.apiVersion = VK_VERSION,
 			},
 			.enabledLayerCount = COUNT(ppEnabledLayerNames),
 			.ppEnabledLayerNames = ppEnabledLayerNames,
@@ -2241,7 +2174,7 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 
 		printf("minUniformBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment);
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
-		CHECK(physicalDeviceProperties.properties.apiVersion < MIDVK_VERSION, "Insufficient Vulkan API Version");
+		CHECK(physicalDeviceProperties.properties.apiVersion < VK_VERSION, "Insufficient Vulkan API Version");
 	}
 
 	{  // Device
