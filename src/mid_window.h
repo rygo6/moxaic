@@ -6,7 +6,9 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-//
+///////////////
+//// Mid Common
+
 //// Debug
 #ifndef MID_DEBUG
 #define MID_DEBUG
@@ -26,13 +28,20 @@ extern void Panic(const char* file, int line, const char* message);
 #endif
 #endif
 
-//
-//// MidWindow Header
+//////////////////////
+//// Mid Window Header
+////
 #ifndef DEFAULT_WIDTH
 #define DEFAULT_WIDTH  1024
 #endif
 #ifndef DEFAULT_WIDTH
 #define DEFAULT_HEIGHT 1024
+#endif
+#ifndef DEFAULT_WINDOW_X_POSITION
+#define DEFAULT_WINDOW_X_POSITION CW_USEDEFAULT
+#endif
+#ifndef DEFAULT_WINDOW_Y_POSITION
+#define DEFAULT_WINDOW_Y_POSITION CW_USEDEFAULT
 #endif
 
 typedef struct MidWindow {
@@ -105,19 +114,16 @@ static inline uint64_t midQueryPerformanceCounter(){
 
 extern double timeQueryMs;
 
-//
-//// MidWindow Implementation
-#ifdef MID_WINDOW_IMPLEMENTATION
+//////////////////////////////
+//// Mid Window Implementation
+////
+#if defined(MID_WINDOW_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
 #include <windowsx.h>
 
 #include <stdio.h>
-
-#ifdef MID_WINDOW_VULKAN
-#include <vulkan/vulkan_win32.h>
-#endif
 
 #define WINDOW_NAME "moxaic"
 #define CLASS_NAME  "MoxaicWindowClass"
@@ -214,9 +220,9 @@ void midUpdateWindowInput() {
   static int titleUpdateRate = 64;
   if (!--titleUpdateRate) {
     titleUpdateRate = 64;
-#define TITLE_BUFFER_SIZE 64
-    static char titleBuffer[TITLE_BUFFER_SIZE];
-    snprintf(titleBuffer, TITLE_BUFFER_SIZE, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0f / midWindowInput.deltaTime, timeQueryMs);
+	constexpr int titleBufferSize = 64;
+    static char titleBuffer[titleBufferSize];
+    snprintf(titleBuffer, titleBufferSize, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0f / midWindowInput.deltaTime, timeQueryMs);
     SetWindowText(midWindow.hWnd, titleBuffer);
   }
 }
@@ -225,14 +231,14 @@ void midCreateWindow() {
   CHECK(midWindow.hInstance != NULL, "Window already created!");
   midWindow.hInstance = GetModuleHandle(NULL);
   midWindow.running = true;
-  const DWORD    windowStyle = WS_OVERLAPPEDWINDOW;
-  const WNDCLASS wc = {.lpfnWndProc = WindowProc, .hInstance = midWindow.hInstance, .lpszClassName = CLASS_NAME};
+  DWORD    windowStyle = WS_OVERLAPPEDWINDOW;
+  WNDCLASS wc = {.lpfnWndProc = WindowProc, .hInstance = midWindow.hInstance, .lpszClassName = CLASS_NAME};
   RegisterClass(&wc);
-  RECT rect = {.right = DEFAULT_WIDTH, .bottom = DEFAULT_HEIGHT};
+  RECT rect = { .right = DEFAULT_WIDTH, .bottom = DEFAULT_HEIGHT};
   AdjustWindowRect(&rect, windowStyle, FALSE);
   midWindow.width = rect.right - rect.left;
   midWindow.height = rect.bottom - rect.top;
-  midWindow.hWnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle, CW_USEDEFAULT, CW_USEDEFAULT, midWindow.width, midWindow.height, NULL, NULL, midWindow.hInstance, NULL);
+  midWindow.hWnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle, DEFAULT_WINDOW_X_POSITION, DEFAULT_WINDOW_Y_POSITION, midWindow.width, midWindow.height, NULL, NULL, midWindow.hInstance, NULL);
   CHECK(midWindow.hWnd == NULL, "Failed to create window.");
   ShowWindow(midWindow.hWnd, SW_SHOW);
   UpdateWindow(midWindow.hWnd);

@@ -54,8 +54,8 @@
 	#define XRAPI_CALL
 #endif
 
-///////////////////////
-//// Common Utility
+///////////////
+//// Mid Common
 ////
 #ifndef COUNT
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
@@ -102,9 +102,6 @@ typedef _Float16 f16;
 typedef float    f32;
 typedef double   f64;
 
-////////////////////////
-//// Method Declarations
-////
 typedef enum XrGraphicsApi : u8 {
 	XR_GRAPHICS_API_OPENGL,
 	XR_GRAPHICS_API_VULKAN,
@@ -112,13 +109,11 @@ typedef enum XrGraphicsApi : u8 {
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
-typedef enum XrSwapUsage : u8 {
-	XR_SWAP_USAGE_UNKNOWN,
-	XR_SWAP_USAGE_COLOR,
-	XR_SWAP_USAGE_DEPTH,
-	XR_SWAP_USAGE_GBUFFER,
-	XR_SWAP_USAGE_COUNT,
-} XrSwapUsage;
+typedef enum XrSwapOutputFlags : u8 {
+	XR_SWAP_OUTPUT_FLAG_COLOR,
+	XR_SWAP_OUTPUT_FLAG_DEPTH,
+} XrSwapOutputFlags;
+#define XR_SWAP_OUTPUT_FLAG_COUNT 2
 
 typedef enum XrSwapType : u8 {
 	XR_SWAP_TYPE_UNKNOWN,
@@ -136,16 +131,29 @@ typedef enum XrSwapClip : u8 {
 	XR_SWAP_CLIP_COUNT,
 } XrSwapClip;
 
-void midXrInitialize();
+typedef struct XrSwapConfig {
+	u16               width;
+	u16               height;
+	u8                samples : 4;
+	XrSwapOutputFlags outputs : 4;
+	XrSwapType        type    : 4;
+	XrSwapClip        clip    : 4;
+} XrSwapConfig;
 
-// Session may claim an index from implementation or reference state in the implementation
 typedef uint16_t XrSessionIndex;
+
+/////////////////////////////////
+//// External Method Declarations
+////
+void xrInitialize();
+void xrSwapConfig(XrSystemId systemId, XrSwapConfig* pConfig);
+
 void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
 
 void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
 void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType);
-void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pHandle);
+void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle);
 void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ);
 
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
@@ -182,12 +190,12 @@ static inline XrTime xrHzToXrTime(double hz)
 ////
 #define XR_FORCE_STEREO_TO_MONO
 
-#define XR_DEFAULT_WIDTH   1024
-#define XR_DEFAULT_HEIGHT  1024
-#define XR_DEFAULT_SAMPLES 1
+//#define XR_DEFAULT_WIDTH   1024
+//#define XR_DEFAULT_HEIGHT  1024
+//#define XR_DEFAULT_SAMPLES 1
 
 #define XR_SWAP_COUNT 2
-#define XR_MAX_SWAP_IMAGE_COUNT 2
+#define XR_MAX_VIEW_COUNT 2
 
 #define XR_OPENGL_MAJOR_VERSION 4
 #define XR_OPENGL_MINOR_VERSION 6
@@ -484,7 +492,7 @@ typedef struct Space {
 #define XR_SWAPCHAIN_CAPACITY 8
 typedef struct Swapchain {
 	block_handle hSession;
-	XrSwapUsage  usage;
+	XrSwapOutputFlags output;
 	u8           swapIndex;
 	u32          width;
 	u32          height;
@@ -519,7 +527,6 @@ typedef struct Session {
 	swap_handle hSwap;
 	XrSwapType  swapType;
 	XrSwapClip  swapClip;
-	XrSwapUsage swapUsage;
 
 	//// Timing
 	CACHE_ALIGN
@@ -1304,7 +1311,7 @@ XR_PROC xrCreateInstance(
 	*instance = (XrInstance)&xr.instance;
 
 	InitStandardBindings();
-	midXrInitialize();
+	xrInitialize();
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -1642,6 +1649,8 @@ XR_PROC xrGetSystemProperties(
 	LogNextChain((XrBaseInStructure*)properties->next);
 	CHECK_INSTANCE(instance);
 
+	XrSwapConfig swapConfig; xrSwapConfig(systemId, &swapConfig);
+
 	switch ((SystemId)systemId) {
 		default:
 			return XR_ERROR_HANDLE_INVALID;
@@ -1650,8 +1659,8 @@ XR_PROC xrGetSystemProperties(
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicDesktop", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-			properties->graphicsProperties.maxSwapchainImageWidth = XR_DEFAULT_WIDTH;
-			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
+			properties->graphicsProperties.maxSwapchainImageWidth = swapConfig.width;
+			properties->graphicsProperties.maxSwapchainImageHeight = swapConfig.height;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
 			return XR_SUCCESS;
@@ -1660,8 +1669,8 @@ XR_PROC xrGetSystemProperties(
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicHMD", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-			properties->graphicsProperties.maxSwapchainImageWidth = XR_DEFAULT_WIDTH;
-			properties->graphicsProperties.maxSwapchainImageHeight = XR_DEFAULT_HEIGHT;
+			properties->graphicsProperties.maxSwapchainImageWidth = swapConfig.width;
+			properties->graphicsProperties.maxSwapchainImageHeight = swapConfig.height;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
 			return XR_SUCCESS;
@@ -2162,14 +2171,16 @@ XR_PROC xrEnumerateViewConfigurationViews(
 			return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
 	}
 
+	XrSwapConfig swapConfig; xrSwapConfig(systemId, &swapConfig);
+
 	for (int i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
 		views[i] = (XrViewConfigurationView){
-			.recommendedImageRectWidth = XR_DEFAULT_WIDTH,
-			.maxImageRectWidth = XR_DEFAULT_WIDTH,
-			.recommendedImageRectHeight = XR_DEFAULT_HEIGHT,
-			.maxImageRectHeight = XR_DEFAULT_HEIGHT,
-			.recommendedSwapchainSampleCount = XR_DEFAULT_SAMPLES,
-			.maxSwapchainSampleCount = XR_DEFAULT_SAMPLES,
+			.recommendedImageRectWidth = swapConfig.width,
+			.maxImageRectWidth = swapConfig.width,
+			.recommendedImageRectHeight = swapConfig.height,
+			.maxImageRectHeight = swapConfig.height,
+			.recommendedSwapchainSampleCount = swapConfig.samples,
+			.maxSwapchainSampleCount = swapConfig.samples,
 		};
 	};
 
@@ -2212,32 +2223,32 @@ constexpr i64 D3D11_DEPTH_SWAP_FORMATS_TYPELESS[] = {
 	[DXGI_FORMAT_D32_FLOAT_S8X24_UINT] = DXGI_FORMAT_R32G8X24_TYPELESS,
 };
 
-static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = {
+static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_FLAG_COUNT] = {
 	[XR_GRAPHICS_API_OPENGL] = {
-		[XR_SWAP_USAGE_COLOR] = colorGlSwapFormats,
-		[XR_SWAP_USAGE_DEPTH] = depthGlSwapFormats,
+		[XR_SWAP_OUTPUT_FLAG_COLOR] = colorGlSwapFormats,
+		[XR_SWAP_OUTPUT_FLAG_DEPTH] = depthGlSwapFormats,
 	},
 	[XR_GRAPHICS_API_VULKAN] = {
-		[XR_SWAP_USAGE_COLOR] = colorVkSwapFormats,
-		[XR_SWAP_USAGE_DEPTH] = depthVkSwapFormats,
+		[XR_SWAP_OUTPUT_FLAG_COLOR] = colorVkSwapFormats,
+		[XR_SWAP_OUTPUT_FLAG_DEPTH] = depthVkSwapFormats,
 	},
 	[XR_GRAPHICS_API_D3D11_4] = {
-		[XR_SWAP_USAGE_COLOR] = colorDxSwapFormats,
-		[XR_SWAP_USAGE_DEPTH] = D3D11_DEPTH_SWAP_FORMATS,
+		[XR_SWAP_OUTPUT_FLAG_COLOR] = colorDxSwapFormats,
+		[XR_SWAP_OUTPUT_FLAG_DEPTH] = D3D11_DEPTH_SWAP_FORMATS,
 	},
 };
-constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_USAGE_COUNT] = {
+constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_FLAG_COUNT] = {
 	[XR_GRAPHICS_API_OPENGL] = {
-		[XR_SWAP_USAGE_COLOR] = COUNT(colorGlSwapFormats),
-		[XR_SWAP_USAGE_DEPTH] = COUNT(depthGlSwapFormats),
+		[XR_SWAP_OUTPUT_FLAG_COLOR] = COUNT(colorGlSwapFormats),
+		[XR_SWAP_OUTPUT_FLAG_DEPTH] = COUNT(depthGlSwapFormats),
 	},
 	[XR_GRAPHICS_API_VULKAN] = {
-		[XR_SWAP_USAGE_COLOR] = COUNT(colorVkSwapFormats),
-		[XR_SWAP_USAGE_DEPTH] = COUNT(depthVkSwapFormats),
+		[XR_SWAP_OUTPUT_FLAG_COLOR] = COUNT(colorVkSwapFormats),
+		[XR_SWAP_OUTPUT_FLAG_DEPTH] = COUNT(depthVkSwapFormats),
 	},
 	[XR_GRAPHICS_API_D3D11_4] = {
-		[XR_SWAP_USAGE_COLOR] = COUNT(colorDxSwapFormats),
-		[XR_SWAP_USAGE_DEPTH] = COUNT(D3D11_DEPTH_SWAP_FORMATS),
+		[XR_SWAP_OUTPUT_FLAG_COLOR] = COUNT(colorDxSwapFormats),
+		[XR_SWAP_OUTPUT_FLAG_DEPTH] = COUNT(D3D11_DEPTH_SWAP_FORMATS),
 	},
 };
 
@@ -2263,10 +2274,10 @@ XR_PROC xrEnumerateSwapchainFormats(
 			return XR_ERROR_RUNTIME_FAILURE;
 	}
 
-	const i64* colorFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_USAGE_COLOR];
-	const i64* depthFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_USAGE_DEPTH];
-	int colorCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_USAGE_COLOR];
-	int depthCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_USAGE_DEPTH];
+	const i64* colorFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_COLOR];
+	const i64* depthFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_DEPTH];
+	int colorCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_COLOR];
+	int depthCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_DEPTH];
 	*formatCountOutput = colorCount + depthCount;
 	if (formats == NULL)
 		return XR_SUCCESS;
@@ -2309,7 +2320,7 @@ XR_PROC xrCreateSwapchain(
 
 #define PRINT_USAGE_FLAGS(_flag, _bit)  \
 	if (createInfo->usageFlags & _flag) \
-		printf("usage: " #_flag "\n");
+		printf("outputs: " #_flag "\n");
 	XR_LIST_BITS_XrSwapchainUsageFlags(PRINT_USAGE_FLAGS);
 #undef PRINT_USAGE_FLAGS
 
@@ -2321,26 +2332,25 @@ XR_PROC xrCreateSwapchain(
 	auto pSess = (Session*)session;
 	auto hSess = BLOCK_HANDLE(block.session, pSess);
 
-	int expectedWidth = XR_DEFAULT_WIDTH;
-	int expectedHeight = XR_DEFAULT_HEIGHT;
+	XrSwapConfig swapConfig; xrSwapConfig(pSess->systemId, &swapConfig);
 
-	if (createInfo->width == expectedWidth && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+	if (createInfo->width == swapConfig.width && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
 		pSess->swapType = XR_SWAP_TYPE_MONO_SINGLE;
 		printf("Setting XR_SWAP_TYPE_MONO_SINGLE for session.\n");
-	} else if (createInfo->width == expectedWidth && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
+	} else if (createInfo->width == swapConfig.width && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
 		pSess->swapType = XR_SWAP_TYPE_STEREO_SINGLE;
 		printf("Setting XR_SWAP_TYPE_STEREO_SINGLE for session.\n");
-	} else if (createInfo->width * 2 == expectedWidth) {
+	} else if (createInfo->width * 2 == swapConfig.width) {
 		pSess->swapType = XR_SWAP_TYPE_STEREO_DOUBLE_WIDE;
-		expectedWidth *= 2;
+		swapConfig.width *= 2;
 		printf("Setting XR_SWAP_TYPE_STEREO_DOUBLE_WIDE for session.\n");
 	} else if (createInfo->arraySize > 1) {
 		pSess->swapType = XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY;
 		printf("Setting XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY for session.\n");
 	}
 
-	if (createInfo->width != expectedWidth || createInfo->height != expectedHeight) {
-		LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED %d %d\n", expectedWidth, expectedHeight);
+	if (createInfo->width != swapConfig.width || createInfo->height != swapConfig.height) {
+		LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED %d %d\n", swapConfig.width, swapConfig.height);
 		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
@@ -2354,16 +2364,7 @@ XR_PROC xrCreateSwapchain(
 
 	bool isColor = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 	bool isDepth = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-	pSwap->usage = isColor ? XR_SWAP_USAGE_COLOR : isDepth ? XR_SWAP_USAGE_DEPTH : XR_SWAP_USAGE_UNKNOWN;
-
-	switch (pSwap->usage) {
-		case XR_SWAP_USAGE_COLOR:   ;
-		case XR_SWAP_USAGE_DEPTH:   ;
-		case XR_SWAP_USAGE_GBUFFER: break;
-		default:
-			LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED\n");
-			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
-	}
+	pSwap->output = isColor ? XR_SWAP_OUTPUT_FLAG_COLOR : XR_SWAP_OUTPUT_FLAG_DEPTH;
 
 	// This is making a big assumption that all swaps wil be the same size... we should probably enable individual request
 	// unfortunately you can't know all swaps itll want up front and you dont know it till it calls this
@@ -2392,10 +2393,10 @@ XR_PROC xrCreateSwapchain(
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
 
 
-				switch (pSwap->usage) {
-					case XR_SWAP_USAGE_COLOR:
+				switch (pSwap->output) {
+					case XR_SWAP_OUTPUT_FLAG_COLOR:
 						HANDLE colorHandle;
-						xrClaimSwapImage(pSess->index, XR_SWAP_USAGE_COLOR, &colorHandle);
+						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
 						assert(colorHandle != NULL);
 						LOG("Importing d3d11 color swap. Device: %p Handle: %p\n", device5, colorHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
@@ -2404,9 +2405,9 @@ XR_PROC xrCreateSwapchain(
 						pSwap->texture[i].d3d11.localResource = pSwap->texture[i].d3d11.transferResource;
 						pSwap->texture[i].d3d11.localTexture = pSwap->texture[i].d3d11.transferTexture;
 						break;
-					case XR_SWAP_USAGE_DEPTH:
+					case XR_SWAP_OUTPUT_FLAG_DEPTH:
 						HANDLE gbufferHandle;
-						xrClaimSwapImage(pSess->index, XR_SWAP_USAGE_DEPTH, &gbufferHandle);
+						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_DEPTH, &gbufferHandle);
 						assert(gbufferHandle != NULL);
 						LOG("Importing d3d11 transferTexture swap. Device: %p Handle: %p\n", device5, gbufferHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, gbufferHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));

@@ -100,8 +100,8 @@ typedef struct MxcNodeImports {
 	HANDLE swapsSyncedHandle;
 
 	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
-	HANDLE colorSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
-	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_SWAP_IMAGE_COUNT];
+	HANDLE colorSwapHandles[XR_SWAP_COUNT * XR_MAX_VIEW_COUNT];
+	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_VIEW_COUNT];
 	u8     claimedColorSwapCount;
 	u8     claimedDepthSwapCount;
 
@@ -122,7 +122,7 @@ typedef struct MxcExternalNodeMemory {
 typedef uint16_t swap_index_t;
 typedef struct MxcSwapInfo {
 	XrSwapType  type   : 4;
-	XrSwapUsage usage  : 4;
+	XrSwapOutputFlags usage  : 4;
 	// not sure if I will use these
 	MxcSwapScale xScale : 4;
 	MxcSwapScale yScale : 4;

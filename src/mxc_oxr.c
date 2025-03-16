@@ -6,12 +6,21 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-void midXrInitialize()
+void xrInitialize()
 {
 	printf("Initializing Moxaic OpenXR Node.\n");
 	isCompositor = false;
 	mxcConnectInterprocessNode(false);
 }
+
+void xrSwapConfig(XrSystemId systemId, XrSwapConfig* pConfig)
+{
+	pConfig->width = DEFAULT_WIDTH;
+	pConfig->height = DEFAULT_HEIGHT;
+	pConfig->samples = 1;
+	pConfig->outputs = 1;
+}
+
 
 // maybe should be external handle?
 void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
@@ -88,16 +97,16 @@ void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType)
 	}
 }
 
-void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapUsage usage, HANDLE* pHandle)
+void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle)
 {
 	auto pNodeCtxt = &nodeContexts[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 	switch (usage) {
-		case XR_SWAP_USAGE_COLOR:
+		case XR_SWAP_OUTPUT_FLAG_COLOR:
 			*pHandle = pImports->colorSwapHandles[pImports->claimedColorSwapCount++];
 			break;
-		case XR_SWAP_USAGE_DEPTH:
+		case XR_SWAP_OUTPUT_FLAG_DEPTH:
 			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
 			break;
 	}

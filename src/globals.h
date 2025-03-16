@@ -36,8 +36,11 @@ extern void Panic(const char* file, int line, const char* message);
 
 #define CONCAT(_a, _b) #_a #_b
 
-#define DEFAULT_WIDTH 1024
-#define DEFAULT_HEIGHT 1024
+#define DEFAULT_WIDTH 2048
+#define DEFAULT_HEIGHT 2048
+
+#define DEFAULT_WINDOW_X_POSITION 0
+#define DEFAULT_WINDOW_Y_POSITION 0
 
 #define HOT    __attribute__((hot))
 #define INLINE __attribute__((always_inline)) static inline
