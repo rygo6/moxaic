@@ -65,6 +65,14 @@ typedef struct MxcDepthState {
 	float farZ;
 } MxcDepthState;
 
+typedef enum MxcCompositorMode {
+	MXC_COMPOSITOR_MODE_BASIC,
+	MXC_COMPOSITOR_MODE_TESSELATION,
+	MXC_COMPOSITOR_MODE_TASK_MESH,
+	MXC_COMPOSITOR_MODE_COMPUTE,
+	MXC_COMPOSITOR_MODE_COUNT,
+} MxcCompositorMode;
+
 typedef struct MxcNodeShared {
 	// read/write every cycle
 	VkGlobalSetState globalSetState;
@@ -83,9 +91,10 @@ typedef struct MxcNodeShared {
 	MidCamera         camera;
 
 	// read every cycle, occasional write
-	f32      compositorRadius;
-	u32      compositorCycleSkip;
-	uint64_t compositorBaseCycleValue;
+	f32               compositorRadius;
+	u32               compositorCycleSkip;
+	uint64_t          compositorBaseCycleValue;
+	MxcCompositorMode compositorMode;
 
 	// Interprocess
 	MxcRingBuffer nodeInterprocessFuncQueue;
@@ -211,11 +220,10 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 
 	// Does it actually make difference to keep local copy?
 	// Should keep it anyways in case we do need to start flushing buffers
-	MxcNodeCompositorSetState  setState;
+	MxcNodeCompositorSetState  nodeSetState;
 	MxcNodeCompositorSetState* pSetMapped;
-	VkDescriptorSet            set;
-	VkBuffer                   setBuffer;
-	VkSharedMemory             setSharedMemory;
+	VkSharedDescriptorSet      nodeSet;
+	//	VkSharedBuffer             setBuffer;
 	// should make them share buffer? probably
 	//	VkSharedBuffer       SetBuffer;
 

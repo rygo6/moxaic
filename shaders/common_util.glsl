@@ -1,15 +1,15 @@
 const float FLOAT_EPSILON = 1e-6;
 
-bool intersectRayPlane(const vec3 rayOrigin, const vec3 rayDir, const vec3 planePoint, const vec3 planeNormal, out vec3 intersectWorldPos) {
-    const float facingRatio = dot(planeNormal, rayDir);
-    const float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
+bool intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal, out vec3 intersectWorldPos) {
+    float facingRatio = dot(planeNormal, rayDir);
+    float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
     intersectWorldPos = rayOrigin + t * rayDir;
     return facingRatio < 0;
 }
 
 vec3 WorldPosFromGlobalClipPos(vec4 clipPos)
 {
-    const vec4 worldPos = globalUBO.invViewProj * clipPos;
+    vec4 worldPos = globalUBO.invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
 }
 
@@ -30,7 +30,7 @@ vec4 GlobalClipPosFromWorldPos(vec3 worldPos)
 
 vec3 WorldPosFromNodeClipPos(vec4 clipPos)
 {
-    const vec4 worldPos = nodeUBO.invViewProj * clipPos;
+    vec4 worldPos = nodeUBO.invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
 }
 

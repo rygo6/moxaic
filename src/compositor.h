@@ -3,14 +3,6 @@
 #include "node.h"
 #include "mid_vulkan.h"
 
-typedef enum MxcCompositorMode {
-	MXC_COMPOSITOR_MODE_BASIC,
-	MXC_COMPOSITOR_MODE_TESSELATION,
-	MXC_COMPOSITOR_MODE_TASK_MESH,
-	MXC_COMPOSITOR_MODE_COMPUTE,
-	MXC_COMPOSITOR_MODE_COUNT,
-} MxcCompositorMode;
-
 typedef struct GBufferProcessState {
 	MxcDepthState depth;
 	float cameraNearZ;
@@ -31,6 +23,10 @@ typedef struct MxcCompositor {
   VkDescriptorSetLayout nodeSetLayout;
   VkPipelineLayout      nodePipeLayout;
   VkPipeline            nodePipe;
+
+  VkDescriptorSetLayout computeNodeSetLayout;
+  VkDescriptorSetLayout computeOutputSetLayout;
+  VkPipelineLayout      computeNodePipeLayout;
   VkPipeline            computeNodePipe;
 
   VkDescriptorSetLayout gbufferProcessSetLayout;
@@ -38,12 +34,12 @@ typedef struct MxcCompositor {
   VkPipeline            gbufferProcessBlitUpPipe;
 
   GBufferProcessState*  pGBufferProcessMapped;
-  VkBuffer              gBufferProcessSetBuffer;
-  VkSharedMemory        gBufferProcessSetSharedMemory;
+  VkSharedBuffer  		gBufferProcessSetBuffer;
 
-  VkGlobalSet globalSet;
+  VkSharedDescriptorSet globalSet;
 
   VkMesh quadMesh;
+  VkSharedMesh quadPatchMesh;
 
   VkFramebuffer framebuffer;
   VkBasicFramebufferTexture framebuffers[VK_SWAP_COUNT];

@@ -15,5 +15,4 @@ layout (set = 1, binding = 0) uniform NodeUBO {
 } nodeUBO;
 
 layout (set = 1, binding = 1) uniform sampler2D nodeColor;
-//layout (set = 1, binding = 2) uniform sampler2D nodeNormal;
 layout (set = 1, binding = 2) uniform sampler2D nodeGBuffer;

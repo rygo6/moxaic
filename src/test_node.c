@@ -61,7 +61,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 	VkRenderPass    nodeRenderPass = pNode->nodeRenderPass;
 	VkFramebuffer   framebuffer = pNode->framebuffer;
 
-	VkGlobalSetState* pGlobalSetMapped = pNode->globalSet.pMapped;
+	VkGlobalSetState* pGlobalSetMapped = pNode->pGlobalMapped;
 	VkDescriptorSet   globalSet = pNode->globalSet.set;
 
 	VkDescriptorSet  checkerMaterialSet = pNode->checkerMaterialSet;
@@ -77,10 +77,10 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 //	VkImageView gBufferMipViews[VK_SWAP_COUNT][MXC_NODE_GBUFFER_LEVELS];
 //	memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
 
-	uint32_t     sphereIndexCount = pNode->sphereMesh.indexCount;
+	uint32_t     sphereIndexCount = pNode->sphereMesh.offsets.indexCount;
 	VkBuffer     sphereBuffer = pNode->sphereMesh.buffer;
-	VkDeviceSize sphereIndexOffset = pNode->sphereMesh.indexOffset;
-	VkDeviceSize sphereVertexOffset = pNode->sphereMesh.vertexOffset;
+	VkDeviceSize sphereIndexOffset = pNode->sphereMesh.offsets.indexOffset;
+	VkDeviceSize sphereVertexOffset = pNode->sphereMesh.offsets.vertexOffset;
 
 	VkSemaphore compTimeline = pNodeContext->compositorTimeline;
 	VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
@@ -651,7 +651,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 		pNode->sphereTransform = (MidPose){.position = {0, 0, -4}};
 		vkUpdateObjectSet(&pNode->sphereTransform, &pNode->sphereObjectState, pNode->pSphereObjectSetMapped);
 
-		CreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);
+		vkCreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);
 	}
 
 	{  // Copy needed state

@@ -180,6 +180,11 @@ typedef struct VkSharedMemory {
 	VkSharedMemoryType type;
 } VkSharedMemory;
 
+typedef struct VkSharedBuffer {
+	VkSharedMemory    memory;
+	VkBuffer          buffer;
+} VkSharedBuffer;
+
 typedef struct VkTexture {
 	VkImage        image;
 	VkImageView    view;
@@ -192,19 +197,23 @@ typedef struct VkDedicatedTexture {
 	VkDeviceMemory memory;
 } VkDedicatedTexture;
 
+typedef struct VkMeshOffsets {
+	u32            indexCount;
+	u32            vertexCount;
+	VkDeviceSize   indexOffset;
+	VkDeviceSize   vertexOffset;
+} VkMeshOffsets;
+
 typedef struct VkMesh {
-	// get rid of this? I don't think I have a use for non-shared memory meshes
-	// maybe in an IPC shared mesh? But I cant think of a use for that
 	VkDeviceMemory memory;
 	VkBuffer       buffer;
-
-	VkSharedMemory sharedMemory;
-
-	uint32_t     indexCount;
-	uint32_t     vertexCount;
-	VkDeviceSize indexOffset;
-	VkDeviceSize vertexOffset;
+	VkMeshOffsets  offsets;
 } VkMesh;
+
+typedef struct VkSharedMesh {
+	VkSharedBuffer sharedBuffer;
+	VkMeshOffsets  offsets;
+} VkSharedMesh;
 
 typedef struct VkBasicFramebufferTexture {
 	VkDedicatedTexture color;
@@ -253,13 +262,12 @@ typedef struct VkBasicPipeLayout {
 	VkDescriptorSetLayout objectSetLayout;
 } VkBasicPipeLayout;
 
-typedef struct VkGlobalSet {
-	VkGlobalSetState* pMapped;
-//	VkDeviceMemory    memory;
-	VkSharedMemory    sharedMemory;
-	VkBuffer          buffer;
+typedef struct VkSharedDescriptorSet {
+	//	VkSharedMemory    sharedMemory;
+	//	VkBuffer          buffer;
+	VkSharedBuffer    sharedBuffer;
 	VkDescriptorSet   set;
-} VkGlobalSet;
+} VkSharedDescriptorSet;
 
 typedef struct VkBasicPipe {
 	// TODO change to this
@@ -611,17 +619,29 @@ INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore 
 	VK_CHECK(vkSignalSemaphore(device, &semaphoreSignalInfo));
 }
 
-INLINE void vkBindBufferSharedMemory(VkBuffer buffer, VkSharedMemory shareMemory)
-{
-	VK_CHECK(vkBindBufferMemory(vk.context.device, buffer, deviceMemory[shareMemory.type], shareMemory.offset));
-}
 INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
 {
 	return pMappedMemory[shareMemory.type] + shareMemory.offset;
 }
+INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
+{
+	return vkSharedMemoryPtr(shareBuffer.memory);
+}
+INLINE void* vkSharedDescriptorSetPtr(VkSharedDescriptorSet descriptorSet)
+{
+	return vkSharedBufferPtr(descriptorSet.sharedBuffer);
+}
+INLINE void vkBindSharedBuffer(const VkSharedBuffer* pBuffer)
+{
+	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buffer, deviceMemory[pBuffer->memory.type], pBuffer->memory.offset));
+}
+INLINE void vkBindSharedDescriptorSet(VkSharedDescriptorSet* pSet)
+{
+	vkBindSharedBuffer(&pSet->sharedBuffer);
+}
 
 // probably move to math lib and take copy to pointer out
-INLINE void vkmUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
+INLINE void vkUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
 	pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
 	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar);
@@ -681,8 +701,14 @@ typedef struct VkRequestAllocationInfo {
 } VkRequestAllocationInfo;
 void vkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptorSetLayout* pSetLayout, VkDescriptorSet* pSet);
 void vkCreateAllocateBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
-void midVkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDeviceSize bufferSize, VkBuffer buffer);
-void vkCreateBufferSharedMemory(const VkRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkSharedMemory* pMemory);
+void vkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDeviceSize bufferSize, VkBuffer buffer);
+void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffer* pBuffer);
+typedef struct VkSharedDescriptorSetInfo {
+	const char*             debugName;
+	VkDescriptorSetLayout   layout;
+	VkRequestAllocationInfo request;
+} VkSharedDescriptorSetInfo;
+void vkCreateSharedDescriptorSet(const VkSharedDescriptorSetInfo* pInfo, VkSharedDescriptorSet* pSet);
 
 typedef struct VkMeshCreateInfo {
 	uint32_t         indexCount;
@@ -690,8 +716,8 @@ typedef struct VkMeshCreateInfo {
 	const uint16_t*  pIndices;
 	const MidVertex* pVertices;
 } VkMeshCreateInfo;
-void midVkCreateMeshSharedMemory(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh);
-void midVkBindUpdateMeshSharedMemory(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh);
+void vkCreateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh);
+void vkBindUpdateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh);
 
 void vkBeginAllocationRequests();
 void vkEndAllocationRequests();
@@ -820,7 +846,7 @@ typedef struct VkExternalFenceCreateInfo {
 } VkExternalFenceCreateInfo;
 void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence);
 
-void vkmCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh);
+void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh);
 
 VK_EXTERNAL_HANDLE_PLATFORM vkGetMemoryExternalHandle(VkDeviceMemory memory);
 VK_EXTERNAL_HANDLE_PLATFORM vkGetFenceExternalHandle(VkFence fence);
@@ -1492,17 +1518,17 @@ void vkCreateAllocateBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceS
 	VK_CHECK(vkMapMemory(vk.context.device, *pDeviceMem, 0, bufferSize, 0, ppMapped));
 }
 
-void vkCreateBufferSharedMemory(const VkRequestAllocationInfo* pRequest, VkBuffer* pBuffer, VkSharedMemory* pMemory)
+void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffer* pBuffer)
 {
 	VkBufferCreateInfo bufferCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = pRequest->size,
 		.usage = pRequest->usage,
 	};
-	VK_CHECK(vkCreateBuffer(vk.context.device, &bufferCreateInfo, VK_ALLOC, pBuffer));
+	VK_CHECK(vkCreateBuffer(vk.context.device, &bufferCreateInfo, VK_ALLOC, &pBuffer->buffer));
 
-	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = *pBuffer};
-	VkMemoryDedicatedRequirements   dedicatedReqs = {.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS};
+	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pBuffer->buffer};
+	VkMemoryDedicatedRequirements   dedicatedReqs = { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS };
 	VkMemoryRequirements2           memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
 	vkGetBufferMemoryRequirements2(vk.context.device, &bufMemReqInfo2, &memReqs2);
 
@@ -1517,16 +1543,34 @@ void vkCreateBufferSharedMemory(const VkRequestAllocationInfo* pRequest, VkBuffe
 
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 	vkGetPhysicalDeviceMemoryProperties2(vk.context.physicalDevice, &memProps2);
-	pMemory->type = FindMemoryTypeIndex(memProps2.memoryProperties.memoryTypeCount, memProps2.memoryProperties.memoryTypes, memReqs2.memoryRequirements.memoryTypeBits, pRequest->memoryPropertyFlags);
-	pMemory->offset = requestedMemoryAllocSize[pMemory->type] + (requestedMemoryAllocSize[pMemory->type] % memReqs2.memoryRequirements.alignment);
-	pMemory->size = memReqs2.memoryRequirements.size;
+	pBuffer->memory.type = FindMemoryTypeIndex(memProps2.memoryProperties.memoryTypeCount, memProps2.memoryProperties.memoryTypes, memReqs2.memoryRequirements.memoryTypeBits, pRequest->memoryPropertyFlags);
+	pBuffer->memory.offset = requestedMemoryAllocSize[pBuffer->memory.type] + (requestedMemoryAllocSize[pBuffer->memory.type] % memReqs2.memoryRequirements.alignment);
+	pBuffer->memory.size = memReqs2.memoryRequirements.size;
 
-	requestedMemoryAllocSize[pMemory->type] += memReqs2.memoryRequirements.size;
+	requestedMemoryAllocSize[pBuffer->memory.type] += memReqs2.memoryRequirements.size;
 
 #ifdef VK_DEBUG_MEMORY_ALLOC
 	printf("Request Shared MemoryType: %d Allocation: %zu ", pMemory->type, memReqs2.memoryRequirements.size);
 	PrintMemoryPropertyFlags(pRequest->memoryPropertyFlags);
 #endif
+}
+
+void vkCreateSharedDescriptorSet(const VkSharedDescriptorSetInfo* pInfo, VkSharedDescriptorSet* pSet)
+{
+	VkDescriptorSetAllocateInfo setInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = threadContext.descriptorPool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &pInfo->layout,
+	};
+	VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pSet->set));
+	vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pSet->set, pInfo->debugName);
+	VkRequestAllocationInfo requestInfo = {
+		.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+		.size = pInfo->request.size,
+		.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	};
+	vkCreateSharedBuffer(&pInfo->request, &pSet->sharedBuffer);
 }
 
 static void CreateStagingBuffer(const void* srcData, VkDeviceSize bufferSize, VkDeviceMemory* pStagingMemory, VkBuffer* pStagingBuffer)
@@ -1537,7 +1581,7 @@ static void CreateStagingBuffer(const void* srcData, VkDeviceSize bufferSize, Vk
 	memcpy(dstData, srcData, bufferSize);
 	vkUnmapMemory(vk.context.device, *pStagingMemory);
 }
-void midVkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDeviceSize bufferSize, VkBuffer buffer)
+void vkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDeviceSize bufferSize, VkBuffer buffer)
 {
 	VkBuffer       stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1548,49 +1592,49 @@ void midVkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, Vk
 	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
 	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);
 }
-void midVkCreateMeshSharedMemory(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
+void vkCreateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh)
 {
-	pMesh->vertexCount = pCreateInfo->vertexCount;
-	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->vertexCount;
-	pMesh->vertexOffset = 0;
-	pMesh->indexCount = pCreateInfo->indexCount;
-	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-	pMesh->indexOffset = vertexBufferSize;
+	pMesh->offsets.vertexCount = pCreateInfo->vertexCount;
+	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->offsets.vertexCount;
+	pMesh->offsets.vertexOffset = 0;
+	pMesh->offsets.indexCount = pCreateInfo->indexCount;
+	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->offsets.indexCount;
+	pMesh->offsets.indexOffset = vertexBufferSize;
 
 	VkRequestAllocationInfo AllocRequest = {
 		.memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		.size = pMesh->indexOffset + indexBufferSize,
+		.size = pMesh->offsets.indexOffset + indexBufferSize,
 		.usage = VK_BUFFER_USAGE_MESH,
 		.locality = VK_LOCALITY_CONTEXT,
 		.dedicated = VK_DEDICATED_MEMORY_FALSE,
 	};
-	vkCreateBufferSharedMemory(&AllocRequest, &pMesh->buffer, &pMesh->sharedMemory);
+	vkCreateSharedBuffer(&AllocRequest, &pMesh->sharedBuffer);
 }
-void midVkBindUpdateMeshSharedMemory(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
+void vkBindUpdateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh)
 {
 	// Ensure size is same
-	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->buffer};
+	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->sharedBuffer.buffer};
 	VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
 	vkGetBufferMemoryRequirements2(vk.context.device, &bufMemReqInfo2, &memReqs2);
-	CHECK(pMesh->sharedMemory.size != memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
+	CHECK(pMesh->sharedBuffer.memory.size != memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
 
 	// bind populate
-	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->buffer, deviceMemory[pMesh->sharedMemory.type], pMesh->sharedMemory.offset));
-	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, sizeof(uint16_t) * pMesh->indexCount, pMesh->buffer);
-	midVkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, sizeof(MidVertex) * pMesh->vertexCount, pMesh->buffer);
+	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->sharedBuffer.buffer, deviceMemory[pMesh->sharedBuffer.memory.type], pMesh->sharedBuffer.memory.offset));
+	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, sizeof(uint16_t) * pMesh->offsets.indexCount, pMesh->sharedBuffer.buffer);
+	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(MidVertex) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buffer);
 }
-void vkmCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
+void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 {
-	pMesh->indexCount = pCreateInfo->indexCount;
-	pMesh->vertexCount = pCreateInfo->vertexCount;
-	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->indexCount;
-	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->vertexCount;
-	pMesh->indexOffset = 0;
-	pMesh->vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
+	pMesh->offsets.indexCount = pCreateInfo->indexCount;
+	pMesh->offsets.vertexCount = pCreateInfo->vertexCount;
+	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->offsets.indexCount;
+	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->offsets.vertexCount;
+	pMesh->offsets.indexOffset = 0;
+	pMesh->offsets.vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
 
-	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->vertexOffset + vertexBufferSize, VK_BUFFER_USAGE_MESH, VK_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
-	midVkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->indexOffset, indexBufferSize, pMesh->buffer);
-	midVkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->vertexOffset, vertexBufferSize, pMesh->buffer);
+	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->offsets.vertexOffset + vertexBufferSize, VK_BUFFER_USAGE_MESH, VK_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
+	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, indexBufferSize, pMesh->buffer);
+	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, vertexBufferSize, pMesh->buffer);
 }
 
 //----------------------------------------------------------------------------------

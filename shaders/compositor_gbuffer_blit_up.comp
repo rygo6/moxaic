@@ -3,15 +3,12 @@
 #extension GL_KHR_shader_subgroup_shuffle : require
 //#extension GL_EXT_debug_printf : require
 
-#define SUBGROUP_SQUARE_SIZE 4
-#define SUBGROUP_CAPACITY 16 // 4 * 4
-
-#define WORKGROUP_SQUARE_SIZE 8
-#define WORKGROUP_SUBGROUP_COUNT 64 // 8 * 8
-
-#define HALF_EPSILON 0.0009765625
+#include "math.glsl"
+#include "subgroup_grid.glsl"
 
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
+
+#define HALF_EPSILON 0.0009765625
 
 struct DepthState {
     float minDepth;
@@ -28,87 +25,11 @@ layout (set = 0, binding = 0) uniform State {
 layout (set = 0, binding = 1) uniform sampler2D srcDepth;
 layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer[];
 
-#define WORKGROUP_SAMPLE_COUNT (WORKGROUP_SUBGROUP_COUNT / 2)
-
 //shared float depths2[WORKGROUP_SAMPLE_COUNT];
 //shared float depth3;
 
 bool Log() {
     return gl_WorkGroupID.y == 0;
-}
-
-// https://graphics.stanford.edu/~seander/bithacks.html#InterleaveBMN
-uint Morton(uvec2 position) {
-    uint x = position.x;
-    uint y = position.y;
-
-    // ??
-//    const uint s[] = {8, 4, 2, 1};
-//    const uint b[] = {0x00FF00FF, 0x0F0F0F0F, 0x33333333, 0x55555555 };
-//    for (int i = 0; i < 4; ++i) {
-//        x = (x | (x << s[i])) & b[i];
-//        y = (y | (y << s[i])) & b[i];
-//    }
-
-    x = (x | (x << 8)) & 0x00FF00FFu;
-    x = (x | (x << 4)) & 0x0F0F0F0Fu;
-    x = (x | (x << 2)) & 0x33333333u;
-    x = (x | (x << 1)) & 0x55555555u;
-
-    y = (y | (y << 8)) & 0x00FF00FFu;
-    y = (y | (y << 4)) & 0x0F0F0F0Fu;
-    y = (y | (y << 2)) & 0x33333333u;
-    y = (y | (y << 1)) & 0x55555555u;
-
-    return x | (y << 1);
-}
-
-uint Unmorton(uint m) {
-    m &= 0x55555555u;
-    m = (m | (m >> 1)) & 0x33333333u;
-    m = (m | (m >> 2)) & 0x0F0F0F0Fu;
-    m = (m | (m >> 4)) & 0x00FF00FFu;
-    m = (m | (m >> 8)) & 0x0000FFFFu;
-    return m;
-}
-
-float Lerp(float a, float b, float t) {
-    return a + ((b - a) * t);
-}
-
-vec4 LinearizeDepth(vec4 zNear, vec4 zFar, vec4 projectionDepth) {
-    return zNear * zFar / (zFar - projectionDepth * (zFar - zNear));
-}
-
-vec4 ProjectDepth(vec4 newNear, vec4 newFar, vec4 linearDepth) {
-    return (newFar * (linearDepth - newNear)) / (linearDepth * (newFar - newNear));
-}
-
-ivec2 GlobalWorkgroupID(uint globalWorkgroupIndex, ivec2 size) {
-    size /= ivec2(WORKGROUP_SQUARE_SIZE, WORKGROUP_SQUARE_SIZE);
-    size /= ivec2(SUBGROUP_SQUARE_SIZE, SUBGROUP_SQUARE_SIZE);
-//    if (Log()){
-//        debugPrintfEXT("%d %d %d \n", size.x, size.y, globalWorkgroupIndex);
-//    }
-    return ivec2(globalWorkgroupIndex % size.x, globalWorkgroupIndex / size.x) * WORKGROUP_SQUARE_SIZE * SUBGROUP_SQUARE_SIZE;
-}
-
-ivec2 LocalWorkgroupID(uint localSubgroupIndex) {
-    return ivec2(localSubgroupIndex % WORKGROUP_SQUARE_SIZE, localSubgroupIndex / WORKGROUP_SQUARE_SIZE) * SUBGROUP_SQUARE_SIZE;
-}
-
-ivec2 SubgroupID(uint subgroupInvocIndex) {
-    subgroupInvocIndex %= SUBGROUP_CAPACITY;
-    return ivec2(subgroupInvocIndex % SUBGROUP_SQUARE_SIZE, subgroupInvocIndex / SUBGROUP_SQUARE_SIZE);
-}
-
-uint SubgroupOffsetIndex(ivec2 dxdy) {
-    return (gl_SubgroupInvocationID + dxdy.x + (dxdy.y * SUBGROUP_SQUARE_SIZE));
-}
-
-uint SubgroupIndex(ivec2 dxdy) { ;
-    uint subgroupIndex = gl_SubgroupInvocationID / SUBGROUP_CAPACITY;
-    return dxdy.x + (dxdy.y * SUBGROUP_SQUARE_SIZE) + (subgroupIndex * SUBGROUP_CAPACITY);
 }
 
 float AverageNonZeroQuad(vec4 quad){
@@ -141,8 +62,6 @@ void main()
     ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
 
     ivec2 coord = subgroupID + localWorkgroupID + globalWorkgroupId;
-
-    uint yInvocations = gl_NumWorkGroups.y * gl_WorkGroupSize.y;
 
     // * 2 because initial sample is 2x2 textureGather
     ivec2 coord0 = coord * 2;

@@ -342,7 +342,7 @@ static int CleanupNode(NodeHandle handle)
 	VkWriteDescriptorSet writeSets[] = {
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].set,
+			.dstSet = nodeCompositorData[handle].nodeSet.set,
 			.dstBinding = 1,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -353,7 +353,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].set,
+			.dstSet = nodeCompositorData[handle].nodeSet.set,
 			.dstBinding = 2,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -364,7 +364,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].set,
+			.dstSet = nodeCompositorData[handle].nodeSet.set,
 			.dstBinding = 3,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
