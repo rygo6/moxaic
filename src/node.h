@@ -222,7 +222,8 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 	// Should keep it anyways in case we do need to start flushing buffers
 	MxcNodeCompositorSetState  nodeSetState;
 	MxcNodeCompositorSetState* pSetMapped;
-	VkSharedDescriptorSet      nodeSet;
+	VkSharedBuffer             nodeSetBuffer;
+	VkDescriptorSet            nodeSet;
 	//	VkSharedBuffer             setBuffer;
 	// should make them share buffer? probably
 	//	VkSharedBuffer       SetBuffer;

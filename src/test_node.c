@@ -552,8 +552,11 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 		CreateNodeProcessPipe("./shaders/node_process_blit_slope_average_up.comp.spv", pNode->nodeProcessPipeLayout, &pNode->nodeProcessBlitMipAveragePipe);
 		CreateNodeProcessPipe("./shaders/node_process_blit_down_alpha_omit.comp.spv", pNode->nodeProcessPipeLayout, &pNode->nodeProcessBlitDownPipe);
 
-		vkCreateBasicFramebuffer(vk.context.nodeRenderPass, &pNode->framebuffer);
-		vkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)pNode->framebuffer, "TestNodeFramebuffer");
+		VkBasicFramebufferCreateInfo framebufferCreateInfo = {
+			.debugName = "TestNodeFramebuffer",
+			.renderPass = vk.context.nodeRenderPass,
+		};
+		vkCreateBasicFramebuffer(&framebufferCreateInfo, &pNode->framebuffer);
 
 		for (int i = 0; i < swapCount; ++i) {
 
@@ -643,8 +646,8 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 			(void**)&pNode->pSphereObjectSetMapped);
 
 		VkWriteDescriptorSet writeSets[] = {
-			KM_SET_WRITE_MATERIAL_IMAGE(pNode->checkerMaterialSet, pNode->checkerTexture.view),
-			VK_SET_WRITE_OBJECT_BUFFER(pNode->sphereObjectSet, pNode->sphereObjectSetBuffer),
+			VK_BIND_WRITE_MATERIAL_IMAGE(pNode->checkerMaterialSet, pNode->checkerTexture.view),
+			VK_BIND_WRITE_OBJECT_BUFFER(pNode->sphereObjectSet, pNode->sphereObjectSetBuffer),
 		};
 		vkUpdateDescriptorSets(vk.context.device, _countof(writeSets), writeSets, 0, NULL);
 

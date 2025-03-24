@@ -36,18 +36,23 @@ typedef struct MxcCompositor {
   GBufferProcessState*  pGBufferProcessMapped;
   VkSharedBuffer  		gBufferProcessSetBuffer;
 
-  VkSharedDescriptorSet globalSet;
+  VkSharedBuffer  globalBuffer;
+  VkDescriptorSet globalSet;
 
   VkMesh quadMesh;
   VkSharedMesh quadPatchMesh;
 
-  VkFramebuffer framebuffer;
-  VkBasicFramebufferTexture framebuffers[VK_SWAP_COUNT];
+  VkFramebuffer             graphicsFramebuffer;
+  VkBasicFramebufferTexture graphicsFramebufferTexture;
+
+//  VkDedicatedTexture computeFramebufferAtomicTexture;
+  VkDedicatedTexture computeFramebufferColorTexture;
+  VkDescriptorSet    computeOutputSet;
 
   VkQueryPool timeQueryPool;
 
 } MxcCompositor;
 
-void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pComp);
+void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCompositor);
 void* mxcCompNodeThread(MxcCompositorContext* pContext);
 void  mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pComp);

@@ -263,8 +263,6 @@ typedef struct VkBasicPipeLayout {
 } VkBasicPipeLayout;
 
 typedef struct VkSharedDescriptorSet {
-	//	VkSharedMemory    sharedMemory;
-	//	VkBuffer          buffer;
 	VkSharedBuffer    sharedBuffer;
 	VkDescriptorSet   set;
 } VkSharedDescriptorSet;
@@ -355,49 +353,45 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 
 #define VK_PASS_CLEAR_COLOR (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
 
-#define VK_SET_BIND_GLOBAL_BUFFER 0
-#define VK_SET_WRITE_GLOBAL_BUFFER(global_set, global_set_buffer) \
-	(VkWriteDescriptorSet)                                        \
-	{                                                             \
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,          \
-		.dstSet = global_set,                                     \
-		.dstBinding = VK_SET_BIND_GLOBAL_BUFFER,                  \
-		.descriptorCount = 1,                                     \
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,      \
-		.pBufferInfo = &(VkDescriptorBufferInfo){                 \
-			.buffer = global_set_buffer,                          \
-			.range = sizeof(VkGlobalSetState),                    \
-		},                                                        \
+#define VK_BIND_INDEX_GLOBAL_BUFFER 0
+#define VK_BIND_WRITE_GLOBAL_BUFFER(set, buf)                \
+	(VkWriteDescriptorSet) {                                 \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
+		.dstSet = set,                                       \
+		.dstBinding = VK_BIND_INDEX_GLOBAL_BUFFER,           \
+		.descriptorCount = 1,                                \
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+		.pBufferInfo = &(VkDescriptorBufferInfo){            \
+			.buffer = buf,                                   \
+			.range = sizeof(VkGlobalSetState),               \
+		},                                                   \
 	}
-#define VK_SET_BIND_MATERIAL_IMAGE 0
-#define KM_SET_WRITE_MATERIAL_IMAGE(materialSet, material_image_view) \
-	(VkWriteDescriptorSet)                                            \
-	{                                                                 \
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
-		.dstSet = materialSet,                                        \
-		.dstBinding = VK_SET_BIND_MATERIAL_IMAGE,                     \
-		.descriptorCount = 1,                                         \
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,  \
-		.pImageInfo = &(VkDescriptorImageInfo){                       \
-			.imageView = material_image_view,                         \
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,  \
-		},                                                            \
+#define VK_BIND_INDEX_MATERIAL_IMAGE 0
+#define VK_BIND_WRITE_MATERIAL_IMAGE(set, view)                      \
+	(VkWriteDescriptorSet) {                                         \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
+		.dstSet = set,                                               \
+		.dstBinding = VK_BIND_INDEX_MATERIAL_IMAGE,                  \
+		.descriptorCount = 1,                                        \
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+		.pImageInfo = &(VkDescriptorImageInfo){                      \
+			.imageView = view,                                       \
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
+		},                                                           \
 	}
-#define VK_SET_BIND_OBJECT_BUFFER 0
-#define VK_SET_WRITE_OBJECT_BUFFER(objectSet, objectSetBuffer) \
-	(VkWriteDescriptorSet)                                     \
-	{                                                          \
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,       \
-		.dstSet = objectSet,                                   \
-		.dstBinding = VK_SET_BIND_OBJECT_BUFFER,               \
-		.descriptorCount = 1,                                  \
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,   \
-		.pBufferInfo = &(VkDescriptorBufferInfo){              \
-			.buffer = objectSetBuffer,                         \
-			.range = sizeof(VkObjectSetState),                 \
-		},                                                     \
+#define VK_BIND_INDEX_OBJECT_BUFFER 0
+#define VK_BIND_WRITE_OBJECT_BUFFER(set, buf)                \
+	(VkWriteDescriptorSet) {                                 \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
+		.dstSet = set,                                       \
+		.dstBinding = VK_BIND_INDEX_OBJECT_BUFFER,           \
+		.descriptorCount = 1,                                \
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+		.pBufferInfo = &(VkDescriptorBufferInfo){            \
+			.buffer = buf,                                   \
+			.range = sizeof(VkObjectSetState),               \
+		},                                                   \
 	}
-
 
 //////////////////////////////
 //// Mid Vulkan Image Barriers
@@ -627,17 +621,9 @@ INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
 {
 	return vkSharedMemoryPtr(shareBuffer.memory);
 }
-INLINE void* vkSharedDescriptorSetPtr(VkSharedDescriptorSet descriptorSet)
-{
-	return vkSharedBufferPtr(descriptorSet.sharedBuffer);
-}
 INLINE void vkBindSharedBuffer(const VkSharedBuffer* pBuffer)
 {
 	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buffer, deviceMemory[pBuffer->memory.type], pBuffer->memory.offset));
-}
-INLINE void vkBindSharedDescriptorSet(VkSharedDescriptorSet* pSet)
-{
-	vkBindSharedBuffer(&pSet->sharedBuffer);
 }
 
 // probably move to math lib and take copy to pointer out
@@ -703,12 +689,6 @@ void vkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptor
 void vkCreateAllocateBindMapBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer, void** ppMapped);
 void vkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDeviceSize bufferSize, VkBuffer buffer);
 void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffer* pBuffer);
-typedef struct VkSharedDescriptorSetInfo {
-	const char*             debugName;
-	VkDescriptorSetLayout   layout;
-	VkRequestAllocationInfo request;
-} VkSharedDescriptorSetInfo;
-void vkCreateSharedDescriptorSet(const VkSharedDescriptorSetInfo* pInfo, VkSharedDescriptorSet* pSet);
 
 typedef struct VkMeshCreateInfo {
 	uint32_t         indexCount;
@@ -771,11 +751,17 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo);
 void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShaderModule);
 
 typedef struct VkBasicFramebufferTextureCreateInfo {
+	const char* debugName; // use somehow?
 	VkExtent3D extent;
 	VkLocality locality;
 } VkBasicFramebufferTextureCreateInfo;
-void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, VkBasicFramebufferTexture* pFrameBuffers);
-void vkCreateBasicFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuffer);
+void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer);
+
+typedef struct VkBasicFramebufferCreateInfo {
+	const char* debugName;
+	VkRenderPass renderPass;
+} VkBasicFramebufferCreateInfo;
+void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer);
 
 void vkCreateBasicRenderPass();
 
@@ -1290,7 +1276,7 @@ static void CreateGlobalSetLayout()
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
 		.pBindings = &(VkDescriptorSetLayoutBinding){
-			.binding = VK_SET_BIND_GLOBAL_BUFFER,
+			.binding = VK_BIND_INDEX_GLOBAL_BUFFER,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
 			.stageFlags =
@@ -1310,7 +1296,7 @@ static void CreateStdMaterialSetLayout()
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
 		.pBindings = &(VkDescriptorSetLayoutBinding){
-			.binding = VK_SET_BIND_MATERIAL_IMAGE,
+			.binding = VK_BIND_INDEX_MATERIAL_IMAGE,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -1325,7 +1311,7 @@ static void CreateStdObjectSetLayout()
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
 		.pBindings = &(VkDescriptorSetLayoutBinding){
-			.binding = VK_SET_BIND_OBJECT_BUFFER,
+			.binding = VK_BIND_INDEX_OBJECT_BUFFER,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -1553,24 +1539,6 @@ void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffe
 	printf("Request Shared MemoryType: %d Allocation: %zu ", pMemory->type, memReqs2.memoryRequirements.size);
 	PrintMemoryPropertyFlags(pRequest->memoryPropertyFlags);
 #endif
-}
-
-void vkCreateSharedDescriptorSet(const VkSharedDescriptorSetInfo* pInfo, VkSharedDescriptorSet* pSet)
-{
-	VkDescriptorSetAllocateInfo setInfo = {
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = threadContext.descriptorPool,
-		.descriptorSetCount = 1,
-		.pSetLayouts = &pInfo->layout,
-	};
-	VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pSet->set));
-	vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pSet->set, pInfo->debugName);
-	VkRequestAllocationInfo requestInfo = {
-		.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-		.size = pInfo->request.size,
-		.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	};
-	vkCreateSharedBuffer(&pInfo->request, &pSet->sharedBuffer);
 }
 
 static void CreateStagingBuffer(const void* srcData, VkDeviceSize bufferSize, VkDeviceMemory* pStagingMemory, VkBuffer* pStagingBuffer)
@@ -1943,7 +1911,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	VkTextureCreateInfo createInfo = {
 		.debugName = pPath,
 		.pImageCreateInfo = &(VkImageCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.imageType = VK_IMAGE_TYPE_2D,
 			.format = VK_FORMAT_B8G8R8A8_SRGB,
 			.extent = (VkExtent3D){width, height, 1},
@@ -1965,7 +1933,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	VkCommandBuffer commandBuffer = vkBeginImmediateTransferCommandBuffer();
 
 	VkImageMemoryBarrier2 beginCopyBarrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 		.image = pTexture->image,
 		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		VK_IMAGE_BARRIER_SRC_UNDEFINED,
@@ -1981,7 +1949,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
 	VkImageMemoryBarrier2 endCopyBarrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 		.image = pTexture->image,
 		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
@@ -1998,103 +1966,107 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);
 }
 
-// add createinfo?
-void vkCreateBasicFramebuffer(VkRenderPass renderPass, VkFramebuffer* pFramebuffer)
+void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer)
 {
 	VkFramebufferCreateInfo framebufferCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
 		.pNext = &(VkFramebufferAttachmentsCreateInfo){
-			.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO,
+			VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO,
 			.attachmentImageInfoCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 			.pAttachmentImageInfos = (VkFramebufferAttachmentImageInfo[]){
-				{.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-				 .usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-				 .width = DEFAULT_WIDTH,
-				 .height = DEFAULT_HEIGHT,
-				 .layerCount = 1,
-				 .viewFormatCount = 1,
-				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR]},
-				{.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-				 .usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
-				 .width = DEFAULT_WIDTH,
-				 .height = DEFAULT_HEIGHT,
-				 .layerCount = 1,
-				 .viewFormatCount = 1,
-				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL]},
-				{.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-				 .usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
-				 .width = DEFAULT_WIDTH,
-				 .height = DEFAULT_HEIGHT,
-				 .layerCount = 1,
-				 .viewFormatCount = 1,
-				 .pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH]},
+				{
+					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
+					.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+					.width = DEFAULT_WIDTH,
+					.height = DEFAULT_HEIGHT,
+					.layerCount = 1,
+					.viewFormatCount = 1,
+					.pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+				},
+				{
+					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
+					.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
+					.width = DEFAULT_WIDTH,
+					.height = DEFAULT_HEIGHT,
+					.layerCount = 1,
+					.viewFormatCount = 1,
+					.pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
+				},
+				{
+					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
+					.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
+					.width = DEFAULT_WIDTH,
+					.height = DEFAULT_HEIGHT,
+					.layerCount = 1,
+					.viewFormatCount = 1,
+					.pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
+				},
 			},
 		},
 		.flags = VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT,
-		.renderPass = renderPass,
+		.renderPass = pCreateInfo->renderPass,
 		.attachmentCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 		.width = DEFAULT_WIDTH,
 		.height = DEFAULT_HEIGHT,
 		.layers = 1,
 	};
 	VK_CHECK(vkCreateFramebuffer(vk.context.device, &framebufferCreateInfo, VK_ALLOC, pFramebuffer));
+	vkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)*pFramebuffer, pCreateInfo->debugName);
 }
 
-void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo* pCreateInfo, uint32_t framebufferCount, VkBasicFramebufferTexture* pFrameBuffers)
+void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer)
 {
-	for (int i = 0; i < framebufferCount; ++i) {
-		VkTextureCreateInfo colorCreateInfo = {
-			.debugName = "ColorFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-				.extent = pCreateInfo->extent,
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-			},
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.locality = pCreateInfo->locality,
-		};
-		vkCreateTexture(&colorCreateInfo, &pFrameBuffers[i].color);
-		VkTextureCreateInfo normalCreateInfo = {
-			.debugName = "NormalFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
-				.extent = pCreateInfo->extent,
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
-			},
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.locality = pCreateInfo->locality,
-		};
-		vkCreateTexture(&normalCreateInfo, &pFrameBuffers[i].normal);
-		VkTextureCreateInfo depthCreateInfo = {
-			.debugName = "DepthFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
-				.extent = pCreateInfo->extent,
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
-			},
-			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-			.locality = pCreateInfo->locality,
-		};
-		vkCreateTexture(&depthCreateInfo, &pFrameBuffers[i].depth);
-	}
+	VkTextureCreateInfo colorCreateInfo = {
+		.debugName = "ColorFramebuffer",
+		.pImageCreateInfo = &(VkImageCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+			.extent = pCreateInfo->extent,
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+		},
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.locality = pCreateInfo->locality,
+	};
+	vkCreateTexture(&colorCreateInfo, &pFrameBuffer->color);
+	VkTextureCreateInfo normalCreateInfo = {
+		.debugName = "NormalFramebuffer",
+		.pImageCreateInfo = &(VkImageCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
+			.extent = pCreateInfo->extent,
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
+		},
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.locality = pCreateInfo->locality,
+	};
+	vkCreateTexture(&normalCreateInfo, &pFrameBuffer->normal);
+	VkTextureCreateInfo depthCreateInfo = {
+		.debugName = "DepthFramebuffer",
+		.pImageCreateInfo = &(VkImageCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
+			.extent = pCreateInfo->extent,
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
+		},
+		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+		.locality = pCreateInfo->locality,
+	};
+	vkCreateTexture(&depthCreateInfo, &pFrameBuffer->depth);
 }
 
 //----------------------------------------------------------------------------------
@@ -2191,6 +2163,7 @@ void vkInitializeInstance()
 			   VK_API_VERSION_MINOR(instanceCreationInfo.pApplicationInfo->apiVersion),
 			   VK_API_VERSION_PATCH(instanceCreationInfo.pApplicationInfo->apiVersion));
 	}
+
 	{ // do I want to do this or rely on vulkan configurator?
 		//        VkDebugUtilsMessageSeverityFlagsEXT messageSeverity = {};
 		//        // messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
