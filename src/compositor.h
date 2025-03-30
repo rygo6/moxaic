@@ -24,7 +24,7 @@ typedef struct MxcCompositor {
   VkPipelineLayout      nodePipeLayout;
   VkPipeline            nodePipe;
 
-  VkDescriptorSetLayout computeNodeSetLayout;
+//  VkDescriptorSetLayout computeNodeSetLayout;
   VkDescriptorSetLayout computeOutputSetLayout;
   VkPipelineLayout      computeNodePipeLayout;
   VkPipeline            computeNodePipe;

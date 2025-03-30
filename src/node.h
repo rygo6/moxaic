@@ -130,11 +130,12 @@ typedef struct MxcExternalNodeMemory {
 ////
 typedef uint16_t swap_index_t;
 typedef struct MxcSwapInfo {
-	XrSwapType  type   : 4;
-	XrSwapOutputFlags usage  : 4;
+	XrSwapType        type  : 4;
+	XrSwapOutputFlags usage : 4;
 	// not sure if I will use these
-	MxcSwapScale xScale : 4;
-	MxcSwapScale yScale : 4;
+	MxcSwapScale      xScale         : 4;
+	MxcSwapScale      yScale         : 4;
+	MxcCompositorMode compositorMode : 4;
 } MxcSwapInfo;
 
 typedef struct MxcSwap {
@@ -179,12 +180,12 @@ typedef struct MxcCompositorContext {
 	uint32_t swapIndex;
 
 	// read by multiple threads
-	VkCommandBuffer cmd;
+	VkCommandBuffer graphicsCmd;
 	VkSemaphore     compositorTimeline;
 	VkSwapContext   swap;
 
 	// cold data
-	VkCommandPool pool;
+	VkCommandPool graphicsPool;
 	pthread_t     threadId;
 
 } MxcCompositorContext;

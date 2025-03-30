@@ -236,7 +236,7 @@ typedef struct VkObjectSetState {
 	mat4 model;
 } VkObjectSetState;
 
-typedef enum VkQueueFamilyType : uint8_t {
+typedef enum VkQueueFamilyType : u8 {
 	VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
 	VK_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE,
 	VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER,
@@ -432,14 +432,24 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	.srcAccessMask = VK_ACCESS_2_NONE,                               \
 	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
 
-#define VK_IMAGE_BARRIER_SRC_BLIT                        \
+#define VK_IMAGE_BARRIER_SRC_BLIT_WRITE                  \
 	.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,        \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
 	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-#define VK_IMAGE_BARRIER_DST_BLIT                        \
+#define VK_IMAGE_BARRIER_DST_BLIT_WRITE                  \
 	.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,        \
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
 	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+
+#define VK_IMAGE_BARRIER_SRC_BLIT_READ                  \
+	.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,       \
+	.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
+	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+#define VK_IMAGE_BARRIER_DST_BLIT_READ                  \
+	.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,       \
+	.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
+	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+
 
 #define VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED       \
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
@@ -455,12 +465,12 @@ INLINE void PFN_CmdPipelineImageBarriers2(PFN_vkCmdPipelineBarrier2 func, VkComm
 {
 	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-#define CmdPipelineImageBarrier2(cmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, cmd, pImageMemoryBarrier)
+#define CmdPipelineImageBarrier2(graphicsCmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, graphicsCmd, pImageMemoryBarrier)
 INLINE void PFN_CmdPipelineImageBarrierFunc2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier)
 {
 	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
-#define CmdBlitImageFullScreen(cmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, cmd, srcImage, dstImage)
+#define CmdBlitImageFullScreen(graphicsCmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, graphicsCmd, srcImage, dstImage)
 INLINE void PFN_CmdBlitImageFullScreen(PFN_vkCmdBlitImage func, VkCommandBuffer cmd, VkImage srcImage, VkImage dstImage)
 {
 	VkImageBlit imageBlit = {
@@ -660,6 +670,7 @@ INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPos
 	pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
 	pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
 }
+
 // move[] = Forward, Back, Left, Right
 INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
 {
@@ -668,6 +679,15 @@ INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pC
 	for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }
 
+INLINE void vkCmdImageBarriers(VkCommandBuffer commandBuffer, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
+{
+	vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
+}
+
+INLINE void vkCmdImageBarrier(VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier)
+{
+	vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
+}
 
 ////////////////////////////////////
 //// Mid Vulkan Methods Declarations
@@ -802,11 +822,11 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 
 typedef struct VkTextureCreateInfo {
 	const char*                        debugName;
-	const VkImageCreateInfo*           pImageCreateInfo;
 	VkImageAspectFlags                 aspectMask;
 	VkLocality                         locality;
 	VkExternalMemoryHandleTypeFlagBits handleType;
 	VK_EXTERNAL_HANDLE_PLATFORM        importHandle;
+	const VkImageCreateInfo*           pImageCreateInfo;
 } VkTextureCreateInfo;
 void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture);
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
@@ -840,8 +860,8 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
-VkCommandBuffer vkBeginImmediateCommandBuffer(VkCommandPool commandPool);
-void            vkEndImmediateCommandBuffer(VkCommandBuffer cmd, VkCommandPool commandPool, VkQueue queue);
+VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType);
+void            vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuffer cmd);
 VkCommandBuffer vkBeginImmediateTransferCommandBuffer();
 void            vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
@@ -896,11 +916,11 @@ static VkBool32 VkmDebugUtilsCallback(
 	}
 }
 
-VkCommandBuffer vkBeginImmediateCommandBuffer(VkCommandPool commandPool)
+VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType)
 {
 	VkCommandBufferAllocateInfo allocateInfo = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = commandPool,
+		.commandPool = vk.context.queueFamilies[queueFamilyType].pool,
 		.commandBufferCount = 1,
 	};
 	VkCommandBuffer cmd;
@@ -914,7 +934,7 @@ VkCommandBuffer vkBeginImmediateCommandBuffer(VkCommandPool commandPool)
 	return cmd;
 }
 
-void vkEndImmediateCommandBuffer(VkCommandBuffer cmd, VkCommandPool commandPool, VkQueue queue)
+void vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuffer cmd)
 {
 	VK_CHECK(vkEndCommandBuffer(cmd));
 	VkSubmitInfo info = {
@@ -922,9 +942,9 @@ void vkEndImmediateCommandBuffer(VkCommandBuffer cmd, VkCommandPool commandPool,
 		.commandBufferCount = 1,
 		.pCommandBuffers = &cmd,
 	};
-	VK_CHECK(vkQueueSubmit(queue, 1, &info, VK_NULL_HANDLE));
-	VK_CHECK(vkQueueWaitIdle(queue));
-	vkFreeCommandBuffers(vk.context.device, commandPool, 1, &cmd);
+	VK_CHECK(vkQueueSubmit(vk.context.queueFamilies[queueFamilyType].queue, 1, &info, VK_NULL_HANDLE));
+	VK_CHECK(vkQueueWaitIdle(vk.context.queueFamilies[queueFamilyType].queue));
+	vkFreeCommandBuffers(vk.context.device, vk.context.queueFamilies[queueFamilyType].pool, 1, &cmd);
 }
 
 VkCommandBuffer vkBeginImmediateTransferCommandBuffer()
@@ -1609,16 +1629,6 @@ void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 // Images
 //----------------------------------------------------------------------------------
 
-static inline void vkmCmdPipelineImageBarriers(VkCommandBuffer commandBuffer, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
-{
-	vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
-}
-
-static inline void vkmCmdPipelineImageBarrier(VkCommandBuffer commandBuffer, const VkImageMemoryBarrier2* pImageMemoryBarrier)
-{
-	vkCmdPipelineBarrier2(commandBuffer, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
-}
-
 // could all image methods be condensed to one?
 static void CreateImageView(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
 {
@@ -1924,7 +1934,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 	};
 	vkCreateTexture(&createInfo, pTexture);
 
-	VkDeviceSize      imageBufferSize = width * height * 4;
+	VkDeviceSize   imageBufferSize = width * height * 4;
 	VkBuffer       stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 	CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
@@ -1940,7 +1950,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 		VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 	};
-	vkmCmdPipelineImageBarriers(commandBuffer, 1, &beginCopyBarrier);
+	vkCmdImageBarriers(commandBuffer, 1, &beginCopyBarrier);
 
 	VkBufferImageCopy region = {
 		.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
@@ -1958,7 +1968,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 	};
-	vkmCmdPipelineImageBarriers(commandBuffer, 1, &endCopyBarrier);
+	vkCmdImageBarriers(commandBuffer, 1, &endCopyBarrier);
 
 	vkEndImmediateTransferCommandBuffer(commandBuffer);
 
@@ -1970,7 +1980,7 @@ void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, V
 {
 	VkFramebufferCreateInfo framebufferCreateInfo = {
 		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-		.pNext = &(VkFramebufferAttachmentsCreateInfo){
+		&(VkFramebufferAttachmentsCreateInfo){
 			VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO,
 			.attachmentImageInfoCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 			.pAttachmentImageInfos = (VkFramebufferAttachmentImageInfo[]){
@@ -2018,6 +2028,8 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 {
 	VkTextureCreateInfo colorCreateInfo = {
 		.debugName = "ColorFramebuffer",
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.locality = pCreateInfo->locality,
 		.pImageCreateInfo = &(VkImageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
@@ -2029,12 +2041,12 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.samples = VK_SAMPLE_COUNT_1_BIT,
 			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 		},
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.locality = pCreateInfo->locality,
 	};
 	vkCreateTexture(&colorCreateInfo, &pFrameBuffer->color);
 	VkTextureCreateInfo normalCreateInfo = {
 		.debugName = "NormalFramebuffer",
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.locality = pCreateInfo->locality,
 		.pImageCreateInfo = &(VkImageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
@@ -2046,12 +2058,12 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.samples = VK_SAMPLE_COUNT_1_BIT,
 			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 		},
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		.locality = pCreateInfo->locality,
 	};
 	vkCreateTexture(&normalCreateInfo, &pFrameBuffer->normal);
 	VkTextureCreateInfo depthCreateInfo = {
 		.debugName = "DepthFramebuffer",
+		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+		.locality = pCreateInfo->locality,
 		.pImageCreateInfo = &(VkImageCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
@@ -2063,8 +2075,6 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.samples = VK_SAMPLE_COUNT_1_BIT,
 			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 		},
-		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-		.locality = pCreateInfo->locality,
 	};
 	vkCreateTexture(&depthCreateInfo, &pFrameBuffer->depth);
 }

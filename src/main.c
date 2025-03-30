@@ -178,7 +178,7 @@ int main(void)
 
 			__atomic_thread_fence(__ATOMIC_ACQUIRE);
 			// itd be good to come up with a mechanism that can actually deal with real multiple queues for debugging
-			midVkSubmitPresentCommandBuffer(compositorContext.cmd,
+			midVkSubmitPresentCommandBuffer(compositorContext.graphicsCmd,
 											compositorContext.swap.chain,
 											compositorContext.swap.acquireSemaphore,
 											compositorContext.swap.renderCompleteSemaphore,

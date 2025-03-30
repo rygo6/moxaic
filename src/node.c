@@ -140,7 +140,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 	if (VK_LOCALITY_INTERPROCESS_EXPORTED(pTexInfo->locality)) {
 		VK_DEVICE_FUNC(CmdPipelineBarrier2);
 		// Transfer on main because not all transfer queues can do compute transfer
-		VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool);
+		VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS);
 		VkImageMemoryBarrier2 barriers[] = {
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -169,12 +169,13 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
 				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
 				.dstAccessMask = VK_ACCESS_2_NONE,
-				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				// could I do this elsewhere?
+				.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			},
 		};
 		CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
-		vkEndImmediateCommandBuffer(cmd, vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].pool, vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue);
+		vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, cmd);
 	}
 }
 
@@ -244,14 +245,14 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.pool));
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.graphicsPool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = compositorContext.pool,
+		.commandPool = compositorContext.graphicsPool,
 		.commandBufferCount = 1,
 	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.cmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorContext.cmd, "CompositorCmd");
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.graphicsCmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorContext.graphicsCmd, "CompositorCmd");
 
 	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorContext), "Comp Node thread creation failed!");
 	printf("Request and Run CompNode Thread Success.\n");
@@ -657,7 +658,8 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->camera.zFar = 100.0f;
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
-		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
+//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
+		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 		auto handle = RequestExternalNodeHandle(pNodeShrd);
 
@@ -980,50 +982,49 @@ static void ipcFuncNodeClosed(NodeHandle handle)
 	printf("Closing %d\n", handle);
 	CleanupNode(handle);
 }
-static void ipcFuncClaimSwap(NodeHandle handle)
+static void ipcFuncClaimSwap(NodeHandle hNd)
 {
-	printf("Claiming swap for %d\n", handle);
+	printf("Claiming swap for %d\n", hNd);
 
-	auto pNodeContext = &nodeContexts[handle];
-	auto pNodeShared = activeNodesShared[handle];
-	auto pNodeCompositorData = &nodeCompositorData[handle];
+	auto pNodCtx = &nodeContexts[hNd];
+	auto pNodShrd = activeNodesShared[hNd];
+	auto pNodCmpstrDat = &nodeCompositorData[hNd];
 
-	bool needsExport = pNodeContext->type != MXC_NODE_TYPE_THREAD;
-	int swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * XR_SWAP_COUNT;
+	bool needsExport = pNodCtx->type != MXC_NODE_TYPE_THREAD;
+	int  swpCnt = XR_SWAP_TYPE_COUNTS[pNodShrd->swapType] * XR_SWAP_COUNT;
 
-	HANDLE currentHandle = GetCurrentProcess();
-
-	MxcSwapInfo swapInfo = {
-		.type = pNodeShared->swapType,
+	MxcSwapInfo swpInf = {
+		.type = pNodShrd->swapType,
 		.yScale = MXC_SWAP_SCALE_FULL,
 		.xScale = MXC_SWAP_SCALE_FULL,
+		.compositorMode = pNodShrd->compositorMode
 	};
-	for (int si = 0; si < swapCount; ++si) {
+	for (int si = 0; si < swpCnt; ++si) {
 
-		int swapHandle = mxcClaimSwap(&swapInfo);
-		if (swapHandle == -1)
+		int hSwp = mxcClaimSwap(&swpInf);
+		if (hSwp == -1)
 			goto Exit;
 
-		auto pNodeSwap = &pNodeContext->swap[si];
-		auto pPool = &nodeSwapPool[MXC_SWAP_TYPE_POOL_INDEX[swapInfo.type]];
-		*pNodeSwap = pPool->swaps[swapHandle];
+		auto pNodSwp = &pNodCtx->swap[si];
+		auto pSwpPool = &nodeSwapPool[MXC_SWAP_TYPE_POOL_INDEX[swpInf.type]];
+		*pNodSwp = pSwpPool->swaps[hSwp];
 
-		auto pCompSwap = &pNodeCompositorData->swaps[si];
+		auto pCmpstrSwap = &pNodCmpstrDat->swaps[si];
 //		pCompSwap->acquireBarriers[0].image = pNodeSwap->color.image;
 //		pCompSwap->releaseBarriers[0].image = pNodeSwap->color.image;
-		pCompSwap->color = pNodeSwap->color.image;
-		pCompSwap->colorView = pNodeSwap->color.view;
+		pCmpstrSwap->color = pNodSwp->color.image;
+		pCmpstrSwap->colorView = pNodSwp->color.view;
 
 //		pCompSwap->acquireBarriers[1].image = pNodeSwap->depth.image;
 //		pCompSwap->releaseBarriers[1].image = pNodeSwap->depth.image;
-		pCompSwap->depth = pNodeSwap->depth.image;
-		pCompSwap->depthView = pNodeSwap->depth.view;
+		pCmpstrSwap->depth = pNodSwp->depth.image;
+		pCmpstrSwap->depthView = pNodSwp->depth.view;
 
-		pCompSwap->gBuffer = pNodeSwap->gbuffer.image;
-		for (uint32_t mi = 0; mi < MXC_NODE_GBUFFER_LEVELS; ++mi) {
-			VkImageViewCreateInfo info = {
+		pCmpstrSwap->gBuffer = pNodSwp->gbuffer.image;
+		for (int mi = 0; mi < MXC_NODE_GBUFFER_LEVELS; ++mi) {
+			VkImageViewCreateInfo inf = {
 				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-				.image = pNodeSwap->gbuffer.image,
+				.image = pNodSwp->gbuffer.image,
 				.viewType = VK_IMAGE_VIEW_TYPE_2D,
 				.format = MXC_NODE_GBUFFER_FORMAT,
 				.subresourceRange = {
@@ -1033,24 +1034,24 @@ static void ipcFuncClaimSwap(NodeHandle handle)
 					.layerCount = 1,
 				},
 			};
-			VK_CHECK(vkCreateImageView(vk.context.device, &info, VK_ALLOC, &pCompSwap->gBufferMipViews[mi]));
+			VK_CHECK(vkCreateImageView(vk.context.device, &inf, VK_ALLOC, &pCmpstrSwap->gBufferMipViews[mi]));
 		}
 
 		if (needsExport) {
 			WIN32_CHECK(DuplicateHandle(
-							currentHandle, pNodeSwap->colorExternal.handle,
-							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.colorSwapHandles[si],
+							GetCurrentProcess(), pNodSwp->colorExternal.handle,
+							pNodCtx->processHandle, &pNodCtx->pExportedExternalMemory->imports.colorSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
 						"Duplicate localTexture handle fail");
 			WIN32_CHECK(DuplicateHandle(
-							currentHandle, pNodeSwap->depthExternal.handle,
-							pNodeContext->processHandle, &pNodeContext->pExportedExternalMemory->imports.depthSwapHandles[si],
+							GetCurrentProcess(), pNodSwp->depthExternal.handle,
+							pNodCtx->processHandle, &pNodCtx->pExportedExternalMemory->imports.depthSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
 						"Duplicate depth handle fail");
 		}
 	}
 
-	SetEvent(pNodeContext->swapsSyncedHandle);
+	SetEvent(pNodCtx->swapsSyncedHandle);
 
 Exit:
 	// ya we need some error handling
