@@ -45,7 +45,7 @@ typedef struct MxcCompositor {
   VkFramebuffer             graphicsFramebuffer;
   VkBasicFramebufferTexture graphicsFramebufferTexture;
 
-//  VkDedicatedTexture computeFramebufferAtomicTexture;
+  VkDedicatedTexture computeFramebufferAtomicTexture;
   VkDedicatedTexture computeFramebufferColorTexture;
   VkDescriptorSet    computeOutputSet;
 

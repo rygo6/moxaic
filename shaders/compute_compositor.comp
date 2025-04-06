@@ -13,8 +13,8 @@
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
 //layout (set = 1, binding = 5, r32ui) uniform readonly uimage2D outputAveragedAtomic;
-//layout (set = 1, binding = 6, r32ui) uniform uimage2D outputAtomic;
-layout (set = 2, binding = 0, rgba8) uniform writeonly image2D outputColor;
+layout (set = 2, binding = 0, r32ui) uniform uimage2D outputAtomic;
+layout (set = 2, binding = 1, rgba8) uniform writeonly image2D outputColor;
 
 //void mainAveragedExtrude()
 //{
@@ -101,6 +101,34 @@ layout (set = 2, binding = 0, rgba8) uniform writeonly image2D outputColor;
 //    //    imageAtomicMax(outputAtomic, ivec2(depthProjectedGlobalCoord), packedData);
 //}
 
+const uint pack565DepthMask = 0x0000FFFFu;
+
+uint packFloatAnd565Color(float normalizedDepth, vec3 color) {
+    uint packedValue = uint(normalizedDepth * 65535.0);
+
+    uint r = uint(color.r * 31.0);
+    uint g = uint(color.g * 63.0);
+    uint b = uint(color.b * 31.0);
+    uint packedColor = (r << 11) | (g << 5) | b;
+
+    return (packedValue << 16) | packedColor;
+}
+
+vec3 Unpack565ColorFromUint(uint packed) {
+    uint colorData = packed & 0xFFFFu;
+
+    uint r = (colorData >> 11) & 0x1Fu;
+    uint g = (colorData >> 5) & 0x3Fu;
+    uint b = colorData & 0x1Fu;
+
+    vec3 color;
+    color.r = float(r) / 31.0;
+    color.g = float(g) / 63.0;
+    color.b = float(b) / 31.0;
+
+    return color;
+}
+
 vec2 IntersectNodeUV(vec3 nodeOriginWorldPos, vec3 nodeOriginWorldDirection, vec2 globalUV)
 {
     vec2 globalNDC = NDCFromUV(globalUV);
@@ -117,25 +145,101 @@ vec2 IntersectNodeUV(vec3 nodeOriginWorldPos, vec3 nodeOriginWorldDirection, vec
     return intersectNodeUV;
 }
 
+vec3 IntersectNodeNDC(vec3 nodeOriginWorldPos, vec3 nodeOriginWorldDirection, vec2 globalUV)
+{
+    vec2 globalNDC = NDCFromUV(globalUV);
+    vec4 globalClipPos = ClipPosFromNDC(globalNDC);
+    vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
+    vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
+    vec3 intersectWorldPos;
+    bool intersected = intersectRayPlane(worldPos, worldRay, nodeOriginWorldPos, nodeOriginWorldDirection, intersectWorldPos);
+    vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
+    vec3 intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
+    vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
+    vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
+    return intersectNodeNDC;
+}
+
 void main()
 {
-    ivec2 size = imageSize(outputColor);
-    ivec2 halfSize = size / 2;
+    const ivec2 outputSize = imageSize(outputColor);
+    const ivec2 outputHalfSize = outputSize / 2;
 
-    uint globalWorkgroupIndex = gl_WorkGroupID.y;
-    ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, halfSize);
+    const uint globalWorkgroupIndex = gl_WorkGroupID.y;
+    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputHalfSize);
 
-    uint localSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
-    ivec2 localWorkgroupID = LocalWorkgroupID(localSubgroupIndex);
+    const uint localSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
+    const ivec2 localWorkgroupID = LocalWorkgroupID(localSubgroupIndex);
 
-    uint globalSubgroupIndex = gl_GlobalInvocationID.y;
-    uint subgroupInvocIndex = gl_SubgroupInvocationID;
-    ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
+    const uint globalSubgroupIndex = gl_GlobalInvocationID.y;
+    const uint subgroupInvocIndex = gl_SubgroupInvocationID;
+    const ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
 
-    ivec2 coord = subgroupID + localWorkgroupID + globalWorkgroupId;
-    vec2 uv = vec2(coord) / vec2(size);
+    const ivec2 coord = (subgroupID + localWorkgroupID + globalWorkgroupId) * 2;
 
-    vec4 nodeColor = texture(nodeColor, uv);
+    const vec3 nodeOriginWorldPos = vec3(0, 0, -0.5);
+    const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 
-    imageStore(outputColor, coord, nodeColor);
+    ivec2 coords[4];
+
+    for (int i = 0; i < 4; ++i) {
+        coords[i] = coord + gatherOffsets[i];
+        // AND out only the depth so the color can fill in gaps
+        imageAtomicAnd(outputAtomic, coords[i], pack565DepthMask);
+//        uint pacNodColr = imageLoad(outputAtomic, projCoords[i]).r;
+//        imageStore(outputColor, coords[i], vec4(0, 0, 0, 0));
+    }
+
+    memoryBarrier();
+    memoryBarrierImage();
+
+    vec2 globQuadUV = vec2(coord + 1) / vec2(outputSize);
+    vec3 globQuadNodNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globQuadUV);
+    vec2 globQuadNodUV = UVFromNDC(globQuadNodNDC);
+
+//    vec4 gathrDepths = textureGather(nodeGBuffer, globQuadNodUV, 0);
+    vec2 uvs[4];
+    vec2 nodUVs[4];
+    vec3 projNDCs[4];
+    ivec2 projCoords[4];
+
+    for (int i = 0; i < 4; ++i) {
+        uvs[i] = vec2(coords[i]) / vec2(outputSize);
+        vec3 nodNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, uvs[i]);
+        nodUVs[i] = UVFromNDC(nodNDC);
+        float depth = texture(nodeGBuffer, nodUVs[i]).r;
+        vec3 nodProjNDC = vec3(nodNDC.xy, depth);
+        vec4 nodProjClipPos = ClipPosFromNDC(nodProjNDC);
+        vec3 ProjWrldPos = WorldPosFromNodeClipPos(nodProjClipPos);
+        vec4 globProjClipPos = GlobalClipPosFromWorldPos(ProjWrldPos);
+        projNDCs[i] = NDCFromClipPos(globProjClipPos);
+        vec2 globProjUV = UVFromNDC(projNDCs[i]);
+        projCoords[i] = CoordFromUVRound(globProjUV, outputSize);
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        vec4 nodColr = texture(nodeColor, nodUVs[i]);
+        // I should be packing UV... then I don't even need to read color here
+        uint pacNodColr = packFloatAnd565Color(projNDCs[i].z, nodColr.xyz);
+        imageAtomicMax(outputAtomic, projCoords[i], pacNodColr);
+    }
+
+    memoryBarrier();
+
+    for (int i = 0; i < 4; ++i) {
+        uint pacNodColr = imageLoad(outputAtomic, projCoords[i]).r;
+        vec3 nodColr = Unpack565ColorFromUint(pacNodColr);
+        imageStore(outputColor, projCoords[i], vec4(nodColr, 1));
+    }
+
+//    vec2 quadCenterUV = vec2(coord0 + 1) / vec2(size);
+//    vec4 gatheredDepth = textureGather(nodeGBuffer, quadCenterUV, 0);
+
+//    for (int i = 0; i < 4; ++i) {
+//
+//        ivec2 offsetCoord = gatherOffsets[i] + coord;
+//        vec2 offsetUv = vec2(offsetCoord) / vec2(size);
+//        vec4 nodeColorSample = texture(nodeColor, offsetUv);
+//        imageStore(outputColor, offsetCoord, nodeColorSample);
+//    }
 }

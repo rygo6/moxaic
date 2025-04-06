@@ -8,8 +8,6 @@
 
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
-#define HALF_EPSILON 0.0009765625
-
 struct DepthState {
     float minDepth;
     float maxDepth;
@@ -67,8 +65,8 @@ void main()
     ivec2 coord0 = coord * 2;
     vec2 quadCenterUV = vec2(coord0 + 1) / vec2(size);
 
-    #define EXPAND 31
-    const ivec2 expandGatherOffsets[4] = { { -EXPAND, EXPAND }, { EXPAND, EXPAND }, { EXPAND, -EXPAND }, { -EXPAND, -EXPAND }, };
+    const int expand = 31;
+    const ivec2 expandGatherOffsets[4] = { { -expand, expand }, { expand, expand }, { expand, -expand }, { -expand, -expand }, };
     vec4 expandGatheredDepth = textureGatherOffsets(srcDepth, quadCenterUV, expandGatherOffsets, 0);
     vec4 gatheredDepth = textureGather(srcDepth, quadCenterUV, 0);
     for (int i = 0; i < 4; ++i) {
@@ -124,7 +122,6 @@ void main()
 //
 //    barrier();
 
-    const ivec2 gatherOffsets[4] = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }, };
     for (int i = 0; i < 4; ++i) {
 //        float finalDepth = gatheredProjectedDepth[i] > 0 ? gatheredProjectedDepth[i] :
 //            depth0 > 0 ? depth0 :

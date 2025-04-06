@@ -149,7 +149,9 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
 				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
 				.dstAccessMask = VK_ACCESS_2_NONE,
-				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+//				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				// could I do this elsewhere?
+				.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			},
 			{

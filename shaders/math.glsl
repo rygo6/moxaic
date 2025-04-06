@@ -1,3 +1,5 @@
+#define HALF_EPSILON 0.0009765625
+
 float Lerp(float a, float b, float t) {
     return a + ((b - a) * t);
 }
