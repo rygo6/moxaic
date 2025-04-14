@@ -7,6 +7,9 @@
 #include <assert.h>
 #include <vulkan/vk_enum_string_helper.h>
 
+#define VkDescriptorSetLayoutCreateInfo(...) (VkDescriptorSetLayoutCreateInfo) {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, __VA_ARGS__ }
+#define VkDescriptorSetLayoutBindingElement(bind_index, ...) [bind_index] = { .binding = bind_index, __VA_ARGS__ }
+
 //////////////
 //// Constants
 ////
@@ -15,7 +18,7 @@
 #define GRID_SUBGROUP_SQUARE_SIZE  4
 #define GRID_WORKGROUP_SUBGROUP_COUNT 64
 
-///////////
+//////////
 //// Pipes
 ////
 
@@ -36,32 +39,27 @@ enum {
 };
 static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* pLayout)
 {
-	VkDescriptorSetLayoutCreateInfo info = {
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = BIND_INDEX_NODE_COUNT,
-		.pBindings = (VkDescriptorSetLayoutBinding[]) {
-			[BIND_INDEX_NODE_STATE] = {
-				.binding = BIND_INDEX_NODE_STATE,
-				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-				.descriptorCount = 1,
-				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
-			},
-			[BIND_INDEX_NODE_COLOR] = {
-				.binding = BIND_INDEX_NODE_COLOR,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.descriptorCount = 1,
-				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
-				.pImmutableSamplers = &vk.context.linearSampler,
-			},
-			[BIND_INDEX_NODE_GBUFFER] = {
-				.binding = BIND_INDEX_NODE_GBUFFER,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.descriptorCount = 1,
-				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
-				.pImmutableSamplers = &vk.context.linearSampler,
-			},
-		},
-	};
+	auto info = VkDescriptorSetLayoutCreateInfo(
+			.bindingCount = BIND_INDEX_NODE_COUNT,
+			.pBindings = (VkDescriptorSetLayoutBinding[]){
+				VkDescriptorSetLayoutBindingElement(
+					BIND_INDEX_NODE_STATE,
+					.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+					.descriptorCount = 1,
+					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode]),
+				VkDescriptorSetLayoutBindingElement(
+					BIND_INDEX_NODE_COLOR,
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.descriptorCount = 1,
+					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+					.pImmutableSamplers = &vk.context.linearSampler),
+				VkDescriptorSetLayoutBindingElement(
+					BIND_INDEX_NODE_GBUFFER,
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.descriptorCount = 1,
+					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+					.pImmutableSamplers = &vk.context.nearestSampler),
+			});
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &info, VK_ALLOC, pLayout));
 }
 #define BIND_WRITE_NODE_STATE(set, buf)                      \
@@ -130,9 +128,6 @@ enum {
 };
 static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
 {
-#define VkDescriptorSetLayoutCreateInfo(...) (VkDescriptorSetLayoutCreateInfo) {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, __VA_ARGS__ }
-#define VkDescriptorSetLayoutBindingElement(bind_index, ...) [bind_index] = { .binding = bind_index, __VA_ARGS__ }
-
 	auto info = VkDescriptorSetLayoutCreateInfo(
 			.bindingCount = BIND_INDEX_NODE_COMPUTE_COUNT,
 			.pBindings = (VkDescriptorSetLayoutBinding[]){

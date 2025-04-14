@@ -101,7 +101,40 @@ layout (set = 2, binding = 1, rgba8) uniform writeonly image2D outputColor;
 //    //    imageAtomicMax(outputAtomic, ivec2(depthProjectedGlobalCoord), packedData);
 //}
 
-const uint pack565DepthMask = 0x0000FFFFu;
+const uint pack565ColorMask = 0x0000FFFFu;
+const uint pack565DepthMask = 0xFFFF0000u;
+const uint clearCurrentDepthFlagMask = 0x7FFFFFFFu;
+
+uint PackDepth(bool current, float normalizedDepth) {
+    normalizedDepth = clamp(normalizedDepth, 0.0, 1.0);
+
+    // Scale to use 31 bits (leaving the MSB for our flag)
+    // Maximum value will be 2^31 - 1 = 2147483647
+    uint packedValue = uint(normalizedDepth * 2147483647.0);
+
+    // Set the MSB based on the flag (bit 31)
+    packedValue = current ? packedValue | 0x80000000u : packedValue; // Set MSB to 1
+
+    return packedValue;
+}
+void UnpackDepth(uint packedDepth, out float normalizedDepth, out bool current) {
+    current = (packedDepth & 0x80000000u) != 0u;
+
+    // Extract the value bits (clearing the flag bit)
+    uint valueBits = packedDepth & 0x7FFFFFFFu;
+
+    // Convert back to normalized float
+    normalizedDepth = float(valueBits) / 2147483647.0;
+}
+bool UnpackDepthCurrentFlag(uint packedDepth) {
+    return (packedDepth & 0x80000000u) != 0u;
+}
+uint SetDepthFlag(uint value) {
+    return value | 0x80000000u;
+}
+uint ClearDepthFlag(uint value) {
+    return value & 0x7FFFFFFFu;
+}
 
 uint packFloatAnd565Color(float normalizedDepth, vec3 color) {
     uint packedValue = uint(normalizedDepth * 65535.0);
@@ -112,6 +145,10 @@ uint packFloatAnd565Color(float normalizedDepth, vec3 color) {
     uint packedColor = (r << 11) | (g << 5) | b;
 
     return (packedValue << 16) | packedColor;
+}
+
+float Unpack565DepthFromUint(uint packed) {
+    return packed >> 16;
 }
 
 vec3 Unpack565ColorFromUint(uint packed) {
@@ -177,69 +214,78 @@ void main()
 
     const ivec2 coord = (subgroupID + localWorkgroupID + globalWorkgroupId) * 2;
 
-    const vec3 nodeOriginWorldPos = vec3(0, 0, -0.5);
+    const vec3 nodeOriginWorldPos = vec3(0, 0, 0);
     const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 
-    ivec2 coords[4];
-
+    ivec2 globCoords[4];
     for (int i = 0; i < 4; ++i) {
-        coords[i] = coord + gatherOffsets[i];
-        // AND out only the depth so the color can fill in gaps
-        imageAtomicAnd(outputAtomic, coords[i], pack565DepthMask);
-//        uint pacNodColr = imageLoad(outputAtomic, projCoords[i]).r;
-//        imageStore(outputColor, coords[i], vec4(0, 0, 0, 0));
+        globCoords[i] = coord + gatherOffsets[i];
     }
 
-    memoryBarrier();
-    memoryBarrierImage();
-
-    vec2 globQuadUV = vec2(coord + 1) / vec2(outputSize);
-    vec3 globQuadNodNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globQuadUV);
-    vec2 globQuadNodUV = UVFromNDC(globQuadNodNDC);
-
+    // offsets must be a compile time constant
+//    vec2 globQuadUV = vec2(coord + 1) / vec2(outputSize);
+//    vec3 globQuadNodNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globQuadUV);
+//    vec2 globQuadNodUV = UVFromNDC(globQuadNodNDC);
 //    vec4 gathrDepths = textureGather(nodeGBuffer, globQuadNodUV, 0);
-    vec2 uvs[4];
-    vec2 nodUVs[4];
-    vec3 projNDCs[4];
-    ivec2 projCoords[4];
 
-    for (int i = 0; i < 4; ++i) {
-        uvs[i] = vec2(coords[i]) / vec2(outputSize);
-        vec3 nodNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, uvs[i]);
-        nodUVs[i] = UVFromNDC(nodNDC);
-        float depth = texture(nodeGBuffer, nodUVs[i]).r;
-        vec3 nodProjNDC = vec3(nodNDC.xy, depth);
-        vec4 nodProjClipPos = ClipPosFromNDC(nodProjNDC);
-        vec3 ProjWrldPos = WorldPosFromNodeClipPos(nodProjClipPos);
-        vec4 globProjClipPos = GlobalClipPosFromWorldPos(ProjWrldPos);
-        projNDCs[i] = NDCFromClipPos(globProjClipPos);
-        vec2 globProjUV = UVFromNDC(projNDCs[i]);
-        projCoords[i] = CoordFromUVRound(globProjUV, outputSize);
+    { // Projected Coords Processing
+        vec2 intersectNodeUVs[4];
+        ivec2 globProjCoords[4];
+        float globProjDepths[4];
+
+        for (int i = 0; i < 4; ++i) {
+            vec2 globUV = vec2(globCoords[i]) / vec2(outputSize);
+            vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globUV);
+            intersectNodeUVs[i] = UVFromNDC(intersectNodeNDC);
+            //        vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+            float nodeDepthSample = texture(nodeGBuffer, intersectNodeUVs[i]).r;// use imageload
+            vec3 nodeProjNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
+            vec4 nodeProjClipPos = ClipPosFromNDC(nodeProjNDC);
+            vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
+            vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
+            vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
+            vec2 globProjUV = UVFromNDC(globProjNDC);
+            globProjCoords[i] = CoordFromUVRound(globProjUV, outputSize);
+            globProjDepths[i] = globProjNDC.z;
+        }
+
+        // Write color here when we know the full color value
+        for (int i = 0; i < 4; ++i) {
+            vec4 nodeColor = texture(nodeColor, intersectNodeUVs[i]);
+            uint nodePackedDepth = PackDepth(true, globProjDepths[i]);
+            uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoords[i], nodePackedDepth);
+            if (nodePackedDepth > prevNodePackedDepth){
+                imageStore(outputColor, globProjCoords[i], nodeColor);
+            }
+        }
     }
 
-    for (int i = 0; i < 4; ++i) {
-        vec4 nodColr = texture(nodeColor, nodUVs[i]);
-        // I should be packing UV... then I don't even need to read color here
-        uint pacNodColr = packFloatAnd565Color(projNDCs[i].z, nodColr.xyz);
-        imageAtomicMax(outputAtomic, projCoords[i], pacNodColr);
+    // This is only a barrier within workgroup, but since these reproject artifacts are so minor, you may not notice?
+    memoryBarrierImage();
+    barrier();
+
+    { // Non-Project Coords Post Processing
+        // Clear current flag, then determine what pixels to set to black
+        bool currentFlags[4];
+        int currentCount = 0;
+        for (int i = 0; i < 4; ++i) {
+            uint nodePackedDepth = imageAtomicAnd(outputAtomic, globCoords[i], clearCurrentDepthFlagMask);
+            currentFlags[i] = UnpackDepthCurrentFlag(nodePackedDepth);
+            currentCount += int(currentFlags[i]);
+        }
+
+        // If there is only 1, that means the quad is at the edge of something the non-current depths should be clear
+        if (currentCount <= 1) {
+            for (int i = 0; i < 4; ++i) {
+                if (!currentFlags[i]) imageStore(outputColor, globCoords[i], vec4(0));
+            }
+        }
     }
 
-    memoryBarrier();
+//    ok we probably want to clear the original framebuffer but retain two prior buffers per app
+//    so then you benefit from the individual buffer being composited. Really could keep four or compound them on one
+//    but initially you need to do the project in lower res to use that approximation as starting origin/angle
+//    so that apps overlaying each other can omit whats behind. Perhaps thjey should project to an 4x MSAA texture?
+//    Could even just be 2x? Although thats not as fast as a feedback
 
-    for (int i = 0; i < 4; ++i) {
-        uint pacNodColr = imageLoad(outputAtomic, projCoords[i]).r;
-        vec3 nodColr = Unpack565ColorFromUint(pacNodColr);
-        imageStore(outputColor, projCoords[i], vec4(nodColr, 1));
-    }
-
-//    vec2 quadCenterUV = vec2(coord0 + 1) / vec2(size);
-//    vec4 gatheredDepth = textureGather(nodeGBuffer, quadCenterUV, 0);
-
-//    for (int i = 0; i < 4; ++i) {
-//
-//        ivec2 offsetCoord = gatherOffsets[i] + coord;
-//        vec2 offsetUv = vec2(offsetCoord) / vec2(size);
-//        vec4 nodeColorSample = texture(nodeColor, offsetUv);
-//        imageStore(outputColor, offsetCoord, nodeColorSample);
-//    }
 }

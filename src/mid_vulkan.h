@@ -288,6 +288,7 @@ typedef struct VkContext {
 	VkBasicPipeLayout    basicPipeLayout;
 	VkPipeline           basicPipe;
 	VkSampler            linearSampler;
+	VkSampler            nearestSampler;
 	VkRenderPass         renderPass;
 
 	// this should go elsewhere
@@ -2352,7 +2353,7 @@ void vkCreateBasicRenderPass()
 		.attachmentCount = 3,
 		.pAttachments = (VkAttachmentDescription2[]){
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {
-				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
 				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -2364,7 +2365,7 @@ void vkCreateBasicRenderPass()
 				.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			},
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {
-				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
 				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -2375,7 +2376,7 @@ void vkCreateBasicRenderPass()
 				.finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 			},
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = {
-				.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
 				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 				.samples = VK_SAMPLE_COUNT_1_BIT,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
@@ -2389,7 +2390,7 @@ void vkCreateBasicRenderPass()
 		.subpassCount = 1,
 		.pSubpasses = (VkSubpassDescription2[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
+				VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
 				.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
 				.colorAttachmentCount = 2,
 				.pColorAttachments = (VkAttachmentReference2[]){
@@ -2418,7 +2419,7 @@ void vkCreateBasicRenderPass()
 		.pDependencies = (VkSubpassDependency2[]){
 			// from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
 			{
-				.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
 				.srcSubpass = VK_SUBPASS_EXTERNAL,
 				.dstSubpass = 0,
 				.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -2428,7 +2429,7 @@ void vkCreateBasicRenderPass()
 				.dependencyFlags = 0,
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
 				.srcSubpass = 0,
 				.dstSubpass = VK_SUBPASS_EXTERNAL,
 				.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
@@ -2447,7 +2448,7 @@ void vkCreateBasicRenderPass()
 void vkCreateBasicSampler(const VkBasicSamplerCreateInfo* pDesc, VkSampler* pSampler)
 {
 	VkSamplerCreateInfo info = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.pNext = pDesc->reductionMode != VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE ?
 					 &(VkSamplerReductionModeCreateInfo){
 						 .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
@@ -2473,7 +2474,7 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 	CHECK(presentSupport == VK_FALSE, "Queue can't present to surface!")
 
 	VkSwapchainCreateInfoKHR info = {
-		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = surface,
 		.minImageCount = VK_SWAP_COUNT,
 		.imageFormat = VK_FORMAT_B8G8R8A8_SRGB,

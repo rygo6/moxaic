@@ -100,12 +100,18 @@ int main(void)
 
 		// these probably should go elsewhere ?
 		// global samplers
-		VkBasicSamplerCreateInfo samplerCreateInfo = {
+		VkBasicSamplerCreateInfo linearSamplerCreateInfo = {
 			.filter = VK_FILTER_LINEAR,
 			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
 		};
-		vkCreateBasicSampler(&samplerCreateInfo, &vk.context.linearSampler);
+		vkCreateBasicSampler(&linearSamplerCreateInfo, &vk.context.linearSampler);
+		VkBasicSamplerCreateInfo nearestSamplerCreateInfo = {
+			.filter = VK_FILTER_NEAREST,
+			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
+		};
+		vkCreateBasicSampler(&nearestSamplerCreateInfo, &vk.context.nearestSampler);
 		// standard/common rendering
 		vkCreateBasicRenderPass();
 		vkCreateBasicPipeLayout();
