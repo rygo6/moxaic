@@ -59,11 +59,10 @@ void main()
     uint subgroupInvocIndex = gl_SubgroupInvocationID;
     ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
 
-    ivec2 coord = subgroupID + localWorkgroupID + globalWorkgroupId;
+    const ivec2 globCoord = (subgroupID + localWorkgroupID + globalWorkgroupId);
+    const ivec2 globCoordQuad = (subgroupID + localWorkgroupID + globalWorkgroupId) * 2;
 
-    // * 2 because initial sample is 2x2 textureGather
-    ivec2 coord0 = coord * 2;
-    vec2 quadCenterUV = vec2(coord0 + 1) / vec2(size);
+    vec2 quadCenterUV = vec2(globCoordQuad + 1) / vec2(size);
 
     const int expand = 31;
     const ivec2 expandGatherOffsets[4] = { { -expand, expand }, { expand, expand }, { expand, -expand }, { -expand, -expand }, };
@@ -130,6 +129,6 @@ void main()
 //            depth3;
 //        imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(finalDepth));
         float finalDepth = gatheredProjectedDepth[i] > 0 ? gatheredProjectedDepth[i] : depth0;
-        imageStore(dstGbuffer[0], coord0 + gatherOffsets[i], vec4(finalDepth));
+        imageStore(dstGbuffer[0], globCoordQuad + quadGatherOffsets[i], vec4(finalDepth));
     }
 }

@@ -51,10 +51,10 @@ uint ClearDepthFlag(uint value) {
 void main()
 {
     const ivec2 outputSize = imageSize(outputColor);
-    const ivec2 outputHalfSize = outputSize / 2;
+//    const ivec2 outputHalfSize = outputSize / 2;
 
     const uint globalWorkgroupIndex = gl_WorkGroupID.y;
-    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputHalfSize);
+    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputSize);
 
     const uint localSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
     const ivec2 localWorkgroupID = LocalWorkgroupID(localSubgroupIndex);
@@ -63,7 +63,8 @@ void main()
     const uint subgroupInvocIndex = gl_SubgroupInvocationID;
     const ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
 
-    const ivec2 coord = (subgroupID + localWorkgroupID + globalWorkgroupId) * 2;
+    const ivec2 globCoord = (subgroupID + localWorkgroupID + globalWorkgroupId);
+//    const ivec2 globDoordQuad = (subgroupID + localWorkgroupID + globalWorkgroupId) * 2;
 
     const vec3 nodeOriginWorldPos = vec3(0, 0, 0);
     const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
@@ -72,24 +73,24 @@ void main()
     ivec2 globCoords[4];
     bool currentFlags[4];
     int currentCount = 0;
-    for (int i = 0; i < 4; ++i) {
-        globCoords[i] = coord + gatherOffsets[i];
-        uint nodePackedDepth = imageAtomicAnd(outputAtomic, globCoords[i], clearCurrentDepthFlagMask);
-        currentFlags[i] = UnpackDepthCurrentFlag(nodePackedDepth);
-        currentCount += int(currentFlags[i]);
-    }
+//    for (int i = 0; i < 4; ++i) {
+//        globCoords[i] = globDoordQuad + quadGatherOffsets[i];
+        uint nodePackedDepth = imageAtomicAnd(outputAtomic, globCoord, clearCurrentDepthFlagMask);
+//        currentFlags[i] = UnpackDepthCurrentFlag(nodePackedDepth);
+//        currentCount += int(currentFlags[i]);
+//    }
 
-    vec4 color = vec4(0);
-    if (currentCount > 1) {
-        for (int i = 0; i < 4; ++i) {
-            if (currentFlags[i]) {
-                color += imageLoad(outputColor, globCoords[i]);
-            }
-        }
-        color /= currentCount;
-    }
-
-    for (int i = 0; i < 4; ++i) {
-        if (!currentFlags[i]) imageStore(outputColor, globCoords[i], color);
-    }
+//    vec4 color = vec4(0);
+//    if (currentCount > 1) {
+//        for (int i = 0; i < 4; ++i) {
+//            if (currentFlags[i]) {
+//                color += imageLoad(outputColor, globCoords[i]);
+//            }
+//        }
+//        color /= currentCount;
+//    }
+//
+//    for (int i = 0; i < 4; ++i) {
+//        if (!currentFlags[i]) imageStore(outputColor, globCoords[i], color);
+//    }
 }

@@ -767,10 +767,10 @@ typedef struct VkmQueueFamilyCreateInfo {
 	uint32_t                 queueCount;  // probably get rid of this, we will multiplex queues automatically and presume only 1
 	const float*             pQueuePriorities;
 } VkmQueueFamilyCreateInfo;
-typedef struct MidVkContextCreateInfo {
+typedef struct VkContextCreateInfo {
 	VkmQueueFamilyCreateInfo queueFamilyCreateInfos[VK_QUEUE_FAMILY_TYPE_COUNT];
-} MidVkContextCreateInfo;
-void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo);
+} VkContextCreateInfo;
+void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo);
 
 void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShaderModule);
 
@@ -2199,15 +2199,16 @@ void vkInitializeInstance()
 	}
 }
 
-void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
+void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 {
 	{  // PhysicalDevice
-		uint32_t deviceCount = 0;
+		int deviceCount = 0;
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, NULL));
 		VkPhysicalDevice devices[deviceCount];
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, devices));
+
 		vk.context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this seems to be true.
-		VkPhysicalDeviceProperties2 physicalDeviceProperties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+		VkPhysicalDeviceProperties2 physicalDeviceProperties = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
 		vkGetPhysicalDeviceProperties2(vk.context.physicalDevice, &physicalDeviceProperties);
 		printf("PhysicalDevice: %s\n", physicalDeviceProperties.properties.deviceName);
 		printf("PhysicalDevice Vulkan API version: %d.%d.%d.%d\n",
@@ -2296,27 +2297,37 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 		};
 		uint32_t activeQueueIndex = 0;
 		uint32_t activeQueueCount = 0;
-		for (int i = 0; i < VK_QUEUE_FAMILY_TYPE_COUNT; ++i) activeQueueCount += pContextCreateInfo->queueFamilyCreateInfos[i].queueCount > 0;
+		for (int i = 0; i < VK_QUEUE_FAMILY_TYPE_COUNT; ++i)
+			activeQueueCount += pContextCreateInfo->queueFamilyCreateInfos[i].queueCount > 0;
+
 		VkDeviceQueueCreateInfo                  activeQueueCreateInfos[activeQueueCount];
 		VkDeviceQueueGlobalPriorityCreateInfoEXT activeQueueGlobalPriorityCreateInfos[activeQueueCount];
 		for (int queueFamilyTypeIndex = 0; queueFamilyTypeIndex < VK_QUEUE_FAMILY_TYPE_COUNT; ++queueFamilyTypeIndex) {
-			if (pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].queueCount == 0) continue;
+			if (pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].queueCount == 0)
+				continue;
+
 			vk.context.queueFamilies[queueFamilyTypeIndex].index = FindQueueIndex(vk.context.physicalDevice, &pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex]);
+
 			activeQueueGlobalPriorityCreateInfos[activeQueueIndex] = (VkDeviceQueueGlobalPriorityCreateInfoEXT){
-				.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
+				VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_EXT,
 				.globalPriority = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].globalPriority,
 			};
 			activeQueueCreateInfos[activeQueueIndex] = (VkDeviceQueueCreateInfo){
-				.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-				.pNext = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].globalPriority != 0 ? &activeQueueGlobalPriorityCreateInfos[activeQueueIndex] : NULL,
+				VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+				pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].globalPriority != 0 ?
+					&activeQueueGlobalPriorityCreateInfos[activeQueueIndex] :
+					NULL,
 				.queueFamilyIndex = vk.context.queueFamilies[queueFamilyTypeIndex].index,
 				.queueCount = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].queueCount,
-				.pQueuePriorities = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].pQueuePriorities};
+				.pQueuePriorities = pContextCreateInfo->queueFamilyCreateInfos[queueFamilyTypeIndex].pQueuePriorities,
+			};
+
 			activeQueueIndex++;
 		}
+
 		VkDeviceCreateInfo deviceCreateInfo = {
-			.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-			.pNext = &physicalDeviceFeatures,
+			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+			&physicalDeviceFeatures,
 			.queueCreateInfoCount = activeQueueCount,
 			.pQueueCreateInfos = activeQueueCreateInfos,
 			.enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
@@ -2332,7 +2343,7 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 		vkGetDeviceQueue(vk.context.device, vk.context.queueFamilies[i].index, 0, &vk.context.queueFamilies[i].queue);
 		vkSetDebugName(VK_OBJECT_TYPE_QUEUE, (uint64_t)vk.context.queueFamilies[i].queue, string_QueueFamilyType[i]);
 		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 			.queueFamilyIndex = vk.context.queueFamilies[i].index,
 		};
@@ -2352,7 +2363,7 @@ void vkCreateContext(const MidVkContextCreateInfo* pContextCreateInfo)
 void vkCreateBasicRenderPass()
 {
 	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
 		.attachmentCount = 3,
 		.pAttachments = (VkAttachmentDescription2[]){
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {
@@ -2487,7 +2498,7 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
+		.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR  ,
 		.clipped = VK_TRUE,
 	};
 	VK_CHECK(vkCreateSwapchainKHR(vk.context.device, &info, VK_ALLOC, &pSwap->chain));

@@ -69,7 +69,7 @@ int main(void)
 
 		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
 
-		MidVkContextCreateInfo contextCreateInfo = {
+		VkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
 				[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
 					.supportsGraphics = VKM_SUPPORT_YES,

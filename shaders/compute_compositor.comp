@@ -200,10 +200,11 @@ vec3 IntersectNodeNDC(vec3 nodeOriginWorldPos, vec3 nodeOriginWorldDirection, ve
 void main()
 {
     const ivec2 outputSize = imageSize(outputColor);
-    const ivec2 outputHalfSize = outputSize / 2;
+    const ivec2 outputQuadSize = outputSize / 2;
 
     const uint globalWorkgroupIndex = gl_WorkGroupID.y;
-    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputHalfSize);
+//    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputQuadSize);
+    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputSize);
 
     const uint localSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
     const ivec2 localWorkgroupID = LocalWorkgroupID(localSubgroupIndex);
@@ -212,15 +213,18 @@ void main()
     const uint subgroupInvocIndex = gl_SubgroupInvocationID;
     const ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
 
-    const ivec2 coord = (subgroupID + localWorkgroupID + globalWorkgroupId) * 2;
+    const ivec2 globCoord = (subgroupID + localWorkgroupID + globalWorkgroupId);
+//    const ivec2 globCoordQuad = globCoord * 2;
 
     const vec3 nodeOriginWorldPos = vec3(0, 0, 0);
     const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 
+
     { // Projected Coords Processing
 
-        for (int i = 0; i < 4; ++i) {
-            ivec2 globCoord = coord + gatherOffsets[i];
+//        for (int i = 0; i < 4; ++i) {
+//            ivec2 globCoordQuadOffset = globCoordQuad + quadGatherOffsets[i];
+//            vec2 globUV = vec2(globCoordQuadOffset) / vec2(outputSize);
             vec2 globUV = vec2(globCoord) / vec2(outputSize);
             vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globUV);
             vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
@@ -241,7 +245,7 @@ void main()
             vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
             float globProjDepth = globProjNDC.z;
 
-            if (!(globProjDepth > 0)) continue;
+            if (!(globProjDepth > 0)) return;
 
             vec2 globProjUV = UVFromNDC(globProjNDC);
             ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
@@ -253,7 +257,7 @@ void main()
                 vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
                 imageStore(outputColor, globProjCoord, nodeColorSample);
             }
-        }
+//        }
 
     }
 

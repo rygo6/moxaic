@@ -15,6 +15,7 @@
 ////
 
 #define GRID_SUBGROUP_CAPACITY  16
+// only divide this in if you are going to deal with quad samples and texture gather per thread
 #define GRID_SUBGROUP_SQUARE_SIZE  4
 #define GRID_WORKGROUP_SUBGROUP_COUNT 64
 
@@ -581,7 +582,7 @@ run_loop:
 //				ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
 				auto extnt = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
 				int  pixlCt = extnt.x * extnt.y;
-				int  groupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_SUBGROUP_SQUARE_SIZE / GRID_WORKGROUP_SUBGROUP_COUNT;
+				int  groupCt = pixlCt / GRID_SUBGROUP_CAPACITY  / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
 
 				memcpy(&pCompst->pGBufferProcessMapped->depth, (void*)&pNodShrd->depthState, sizeof(MxcDepthState));
 				VkWriteDescriptorSet pshSets[] = {
@@ -744,7 +745,8 @@ run_loop:
 						// can be saved
 						ivec2 extnt = {DEFAULT_WIDTH, DEFAULT_HEIGHT};
 						int   pixlCt = extnt.x * extnt.y;
-						int   groupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_SUBGROUP_SQUARE_SIZE / GRID_WORKGROUP_SUBGROUP_COUNT;
+						int   groupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT;
+//						int   quadGroupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
 
 						CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, comptNodePipe);
 						CmdDispatch(graphCmd, 1, groupCt, 1);
@@ -768,6 +770,7 @@ run_loop:
 							},
 						};
 						CmdPipelineImageBarriers2(graphCmd, COUNT(postComptBarrier), postComptBarrier);
+
 
 						CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, comptPostNodePipe);
 						CmdDispatch(graphCmd, 1, groupCt, 1);
