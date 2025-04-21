@@ -107,9 +107,8 @@ foreach (SHADER IN LISTS SHADER_SOURCE_FILES)
     set(SHADER_OUTPUT_OPT "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv")
     add_custom_command(
             OUTPUT ${SHADER_OUTPUT}
-            COMMENT "Compiling ${SHADER_NAME}"
+            COMMENT "Optimizing and Compiling ${SHADER_NAME}"
             COMMAND ${SHADER_COMPILER} ${SHADER} --target-spv=spv1.4 -o ${SHADER_OUTPUT}
-            COMMENT "Optimizing ${SHADER_NAME}"
             COMMAND ${SHADER_OPTIMIZER} -O ${SHADER_OUTPUT} -o ${SHADER_OUTPUT_OPT}
             DEPENDS ${SHADER} ${SHADER_INCLUDE_FILES}
     )

@@ -295,7 +295,7 @@ typedef struct MxcNodeContext {
 
 typedef uint8_t NodeHandle;
 // move these into struct
-extern size_t nodeCount;
+extern size_t nodeCt;
 // Cold storage for all node data
 extern MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY];
 // Could be missing if node is external process
@@ -382,6 +382,6 @@ int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
-	for (int i = 0; i < nodeCount; ++i)
+	for (int i = 0; i < nodeCt; ++i)
 		mxcIpcDequeue(&activeNodesShared[i]->nodeInterprocessFuncQueue, i);
 }

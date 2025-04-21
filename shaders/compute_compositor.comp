@@ -14,7 +14,7 @@ layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUN
 
 //layout (set = 1, binding = 5, r32ui) uniform readonly uimage2D outputAveragedAtomic;
 layout (set = 2, binding = 0, r32ui) uniform uimage2D outputAtomic;
-layout (set = 2, binding = 1, rgba8) uniform writeonly image2D outputColor;
+layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 
 //void mainAveragedExtrude()
 //{
@@ -217,75 +217,44 @@ void main()
     const vec3 nodeOriginWorldPos = vec3(0, 0, 0);
     const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 
-    ivec2 globCoords[4];
-    for (int i = 0; i < 4; ++i) {
-        globCoords[i] = coord + gatherOffsets[i];
-    }
-
-    // offsets must be a compile time constant
-//    vec2 globQuadUV = vec2(coord + 1) / vec2(outputSize);
-//    vec3 globQuadNodNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globQuadUV);
-//    vec2 globQuadNodUV = UVFromNDC(globQuadNodNDC);
-//    vec4 gathrDepths = textureGather(nodeGBuffer, globQuadNodUV, 0);
-
     { // Projected Coords Processing
-        vec2 intersectNodeUVs[4];
-        ivec2 globProjCoords[4];
-        float globProjDepths[4];
 
         for (int i = 0; i < 4; ++i) {
-            vec2 globUV = vec2(globCoords[i]) / vec2(outputSize);
+            ivec2 globCoord = coord + gatherOffsets[i];
+            vec2 globUV = vec2(globCoord) / vec2(outputSize);
             vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globUV);
-            intersectNodeUVs[i] = UVFromNDC(intersectNodeNDC);
-            //        vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
-            float nodeDepthSample = texture(nodeGBuffer, intersectNodeUVs[i]).r;// use imageload
+            vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+
+            // this should be constrained the rect where it is in the framebuffer
+//            if (intersectNodeUVs[i].x < 0 || intersectNodeUVs[i].x > 1 || intersectNodeUVs[i].y < 0 || intersectNodeUVs[i].y > 1)
+//                return;
+
+            // vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+            // use imageload I could also write dpeth into color?
+            // it is also true that technically this would be more accurate linear sampled
+
+            float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
             vec3 nodeProjNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
             vec4 nodeProjClipPos = ClipPosFromNDC(nodeProjNDC);
             vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
             vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
             vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
+            float globProjDepth = globProjNDC.z;
+
+            if (!(globProjDepth > 0)) continue;
+
             vec2 globProjUV = UVFromNDC(globProjNDC);
-            globProjCoords[i] = CoordFromUVRound(globProjUV, outputSize);
-            globProjDepths[i] = globProjNDC.z;
-        }
+            ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
 
-        // Write color here when we know the full color value
-        for (int i = 0; i < 4; ++i) {
-            vec4 nodeColor = texture(nodeColor, intersectNodeUVs[i]);
-            uint nodePackedDepth = PackDepth(true, globProjDepths[i]);
-            uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoords[i], nodePackedDepth);
+            uint nodePackedDepth = PackDepth(true, globProjDepth);
+            uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
+
             if (nodePackedDepth > prevNodePackedDepth){
-                imageStore(outputColor, globProjCoords[i], nodeColor);
+                vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
+                imageStore(outputColor, globProjCoord, nodeColorSample);
             }
         }
+
     }
-
-    // This is only a barrier within workgroup, but since these reproject artifacts are so minor, you may not notice?
-    memoryBarrierImage();
-    barrier();
-
-    { // Non-Project Coords Post Processing
-        // Clear current flag, then determine what pixels to set to black
-        bool currentFlags[4];
-        int currentCount = 0;
-        for (int i = 0; i < 4; ++i) {
-            uint nodePackedDepth = imageAtomicAnd(outputAtomic, globCoords[i], clearCurrentDepthFlagMask);
-            currentFlags[i] = UnpackDepthCurrentFlag(nodePackedDepth);
-            currentCount += int(currentFlags[i]);
-        }
-
-        // If there is only 1, that means the quad is at the edge of something the non-current depths should be clear
-        if (currentCount <= 1) {
-            for (int i = 0; i < 4; ++i) {
-                if (!currentFlags[i]) imageStore(outputColor, globCoords[i], vec4(0));
-            }
-        }
-    }
-
-//    ok we probably want to clear the original framebuffer but retain two prior buffers per app
-//    so then you benefit from the individual buffer being composited. Really could keep four or compound them on one
-//    but initially you need to do the project in lower res to use that approximation as starting origin/angle
-//    so that apps overlaying each other can omit whats behind. Perhaps thjey should project to an 4x MSAA texture?
-//    Could even just be 2x? Although thats not as fast as a feedback
 
 }

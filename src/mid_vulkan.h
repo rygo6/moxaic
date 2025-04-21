@@ -456,6 +456,9 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
 	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
 
+#define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE \
+	.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
+
 
 //////////////////////////////
 //// Mid Vulkan Inline Methods

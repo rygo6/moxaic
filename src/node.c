@@ -15,7 +15,7 @@
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
 
 // Node state in Compositor Process
-size_t                   nodeCount = 0;
+size_t                   nodeCt = 0;
 MxcNodeCompositorLocal   nodeCompositorData[MXC_NODE_CAPACITY] = {};
 MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY] = {};
 
@@ -265,21 +265,21 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 ////
 NodeHandle RequestLocalNodeHandle()
 {
-	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
+	NodeHandle handle = __atomic_fetch_add(&nodeCt, 1, __ATOMIC_RELEASE);
 	localNodesShared[handle] = (MxcNodeShared){};
 	activeNodesShared[handle] = &localNodesShared[handle];
 	return handle;
 }
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
-	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
+	NodeHandle handle = __atomic_fetch_add(&nodeCt, 1, __ATOMIC_RELEASE);
 	activeNodesShared[handle] = pNodeShared;
 	return handle;
 }
 void ReleaseNode(NodeHandle handle)
 {
 	assert(nodeContexts[handle].type != MXC_NODE_TYPE_NONE);
-	int newCount = __atomic_sub_fetch(&nodeCount, 1, __ATOMIC_RELEASE);
+	int newCount = __atomic_sub_fetch(&nodeCt, 1, __ATOMIC_RELEASE);
 	printf("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
@@ -937,7 +937,7 @@ ExitSuccess:
 }
 void mxcShutdownInterprocessNode()
 {
-	for (int i = 0; i < nodeCount; ++i) {
+	for (int i = 0; i < nodeCt; ++i) {
 		// make another queue to evade ptr?
 		mxcIpcFuncEnqueue(&activeNodesShared[i]->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 	}
