@@ -9,13 +9,14 @@
 #include "common_util.glsl"
 #include "math.glsl"
 #include "subgroup_grid.glsl"
+#include "depth_reproject.glsl"
 
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
-//layout (set = 1, binding = 5, r32ui) uniform readonly uimage2D outputAveragedAtomic;
 layout (set = 2, binding = 0, r32ui) uniform uimage2D outputAtomic;
 layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 
+// probably want to do this where I find initial  nodeOriginWorldPos and nodeOriginWorldDirection with project higher level depth mip
 //void mainAveragedExtrude()
 //{
 //    const ivec2 iScreenSize = globalUBO.screenSize;
@@ -101,164 +102,46 @@ layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 //    //    imageAtomicMax(outputAtomic, ivec2(depthProjectedGlobalCoord), packedData);
 //}
 
-const uint pack565ColorMask = 0x0000FFFFu;
-const uint pack565DepthMask = 0xFFFF0000u;
-const uint clearCurrentDepthFlagMask = 0x7FFFFFFFu;
-
-uint PackDepth(bool current, float normalizedDepth) {
-    normalizedDepth = clamp(normalizedDepth, 0.0, 1.0);
-
-    // Scale to use 31 bits (leaving the MSB for our flag)
-    // Maximum value will be 2^31 - 1 = 2147483647
-    uint packedValue = uint(normalizedDepth * 2147483647.0);
-
-    // Set the MSB based on the flag (bit 31)
-    packedValue = current ? packedValue | 0x80000000u : packedValue; // Set MSB to 1
-
-    return packedValue;
-}
-void UnpackDepth(uint packedDepth, out float normalizedDepth, out bool current) {
-    current = (packedDepth & 0x80000000u) != 0u;
-
-    // Extract the value bits (clearing the flag bit)
-    uint valueBits = packedDepth & 0x7FFFFFFFu;
-
-    // Convert back to normalized float
-    normalizedDepth = float(valueBits) / 2147483647.0;
-}
-bool UnpackDepthCurrentFlag(uint packedDepth) {
-    return (packedDepth & 0x80000000u) != 0u;
-}
-uint SetDepthFlag(uint value) {
-    return value | 0x80000000u;
-}
-uint ClearDepthFlag(uint value) {
-    return value & 0x7FFFFFFFu;
-}
-
-uint packFloatAnd565Color(float normalizedDepth, vec3 color) {
-    uint packedValue = uint(normalizedDepth * 65535.0);
-
-    uint r = uint(color.r * 31.0);
-    uint g = uint(color.g * 63.0);
-    uint b = uint(color.b * 31.0);
-    uint packedColor = (r << 11) | (g << 5) | b;
-
-    return (packedValue << 16) | packedColor;
-}
-
-float Unpack565DepthFromUint(uint packed) {
-    return packed >> 16;
-}
-
-vec3 Unpack565ColorFromUint(uint packed) {
-    uint colorData = packed & 0xFFFFu;
-
-    uint r = (colorData >> 11) & 0x1Fu;
-    uint g = (colorData >> 5) & 0x3Fu;
-    uint b = colorData & 0x1Fu;
-
-    vec3 color;
-    color.r = float(r) / 31.0;
-    color.g = float(g) / 63.0;
-    color.b = float(b) / 31.0;
-
-    return color;
-}
-
-vec2 IntersectNodeUV(vec3 nodeOriginWorldPos, vec3 nodeOriginWorldDirection, vec2 globalUV)
-{
-    vec2 globalNDC = NDCFromUV(globalUV);
-    vec4 globalClipPos = ClipPosFromNDC(globalNDC);
-    vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
-    vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
-    vec3 intersectWorldPos;
-    bool intersected = intersectRayPlane(worldPos, worldRay, nodeOriginWorldPos, nodeOriginWorldDirection, intersectWorldPos);
-    vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
-    vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
-    vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
-    return intersectNodeUV;
-}
-
-vec3 IntersectNodeNDC(vec3 nodeOriginWorldPos, vec3 nodeOriginWorldDirection, vec2 globalUV)
-{
-    vec2 globalNDC = NDCFromUV(globalUV);
-    vec4 globalClipPos = ClipPosFromNDC(globalNDC);
-    vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
-    vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
-    vec3 intersectWorldPos;
-    bool intersected = intersectRayPlane(worldPos, worldRay, nodeOriginWorldPos, nodeOriginWorldDirection, intersectWorldPos);
-    vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
-    vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
-    return intersectNodeNDC;
-}
-
 void main()
 {
-    const ivec2 outputSize = imageSize(outputColor);
-    const ivec2 outputQuadSize = outputSize / 2;
+    ivec2 outputSize = imageSize(outputColor);
+    InitializeSubgroupGridInfo(outputSize);
 
-    const uint globalWorkgroupIndex = gl_WorkGroupID.y;
-//    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputQuadSize);
-    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputSize);
+    vec2 globalUV = grid_GlobalCoord / vec2(outputSize);
 
-    const uint localSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
-    const ivec2 localWorkgroupID = LocalWorkgroupID(localSubgroupIndex);
+    vec3 nodeOriginWorldPos = vec3(0, 0, 0);
+    vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 
-    const uint globalSubgroupIndex = gl_GlobalInvocationID.y;
-    const uint subgroupInvocIndex = gl_SubgroupInvocationID;
-    const ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
+    vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globalUV);
+    vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
 
-    const ivec2 globCoord = (subgroupID + localWorkgroupID + globalWorkgroupId);
-//    const ivec2 globCoordQuad = globCoord * 2;
+    //this should be constrained the rect where it is in the framebuffer
+//    if (intersectNodeUVs[i].x < 0 || intersectNodeUVs[i].x > 1 || intersectNodeUVs[i].y < 0 || intersectNodeUVs[i].y > 1)
+//        return;
 
-    const vec3 nodeOriginWorldPos = vec3(0, 0, 0);
-    const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
+    // vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+    // use imageload I could also write dpeth into color?
+    // it is also true that technically this would be more accurate linear sampled
 
+    float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
+    vec3 nodeProjNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
+    vec4 nodeProjClipPos = ClipPosFromNDC(nodeProjNDC);
+    vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
+    vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
+    vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
+    float globProjDepth = globProjNDC.z;
 
-    { // Projected Coords Processing
+    if (!(globProjDepth > 0))
+        return;
 
-//        for (int i = 0; i < 4; ++i) {
-//            ivec2 globCoordQuadOffset = globCoordQuad + quadGatherOffsets[i];
-//            vec2 globUV = vec2(globCoordQuadOffset) / vec2(outputSize);
-            vec2 globUV = vec2(globCoord) / vec2(outputSize);
-            vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globUV);
-            vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+    vec2 globProjUV = UVFromNDC(globProjNDC);
+    ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
 
-            // this should be constrained the rect where it is in the framebuffer
-//            if (intersectNodeUVs[i].x < 0 || intersectNodeUVs[i].x > 1 || intersectNodeUVs[i].y < 0 || intersectNodeUVs[i].y > 1)
-//                return;
+    uint nodePackedDepth = PackDepth(true, globProjDepth);
+    uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
 
-            // vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
-            // use imageload I could also write dpeth into color?
-            // it is also true that technically this would be more accurate linear sampled
-
-            float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
-            vec3 nodeProjNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
-            vec4 nodeProjClipPos = ClipPosFromNDC(nodeProjNDC);
-            vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
-            vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
-            vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
-            float globProjDepth = globProjNDC.z;
-
-            if (!(globProjDepth > 0)) return;
-
-            vec2 globProjUV = UVFromNDC(globProjNDC);
-            ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
-
-            uint nodePackedDepth = PackDepth(true, globProjDepth);
-            uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
-
-            if (nodePackedDepth > prevNodePackedDepth){
-                vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
-                imageStore(outputColor, globProjCoord, nodeColorSample);
-            }
-//        }
-
+    if (nodePackedDepth > prevNodePackedDepth){
+        vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
+        imageStore(outputColor, globProjCoord, nodeColorSample);
     }
-
 }

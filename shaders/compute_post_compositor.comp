@@ -2,6 +2,7 @@
 //#extension GL_EXT_debug_printf : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_shuffle : require
 
 #include "global_binding.glsl"
 #include "node_binding.glsl"
@@ -9,88 +10,47 @@
 #include "common_util.glsl"
 #include "math.glsl"
 #include "subgroup_grid.glsl"
+#include "depth_reproject.glsl"
 
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
 layout (set = 2, binding = 0, r32ui) uniform uimage2D outputAtomic;
 layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 
-const uint clearCurrentDepthFlagMask = 0x7FFFFFFFu;
-
-uint PackDepth(bool current, float normalizedDepth) {
-    normalizedDepth = clamp(normalizedDepth, 0.0, 1.0);
-
-    // Scale to use 31 bits (leaving the MSB for our flag)
-    // Maximum value will be 2^31 - 1 = 2147483647
-    uint packedValue = uint(normalizedDepth * 2147483647.0);
-
-    // Set the MSB based on the flag (bit 31)
-    packedValue = current ? packedValue | 0x80000000u : packedValue; // Set MSB to 1
-
-    return packedValue;
-}
-void UnpackDepth(uint packedDepth, out float normalizedDepth, out bool current) {
-    current = (packedDepth & 0x80000000u) != 0u;
-
-    // Extract the value bits (clearing the flag bit)
-    uint valueBits = packedDepth & 0x7FFFFFFFu;
-
-    // Convert back to normalized float
-    normalizedDepth = float(valueBits) / 2147483647.0;
-}
-bool UnpackDepthCurrentFlag(uint packedDepth) {
-    return (packedDepth & 0x80000000u) != 0u;
-}
-uint SetDepthFlag(uint value) {
-    return value | 0x80000000u;
-}
-uint ClearDepthFlag(uint value) {
-    return value & 0x7FFFFFFFu;
-}
-
 void main()
 {
-    const ivec2 outputSize = imageSize(outputColor);
-//    const ivec2 outputHalfSize = outputSize / 2;
+    ivec2 outputSize = imageSize(outputColor);
+    InitializeSubgroupGridInfo(outputSize);
 
-    const uint globalWorkgroupIndex = gl_WorkGroupID.y;
-    const ivec2 globalWorkgroupId = GlobalWorkgroupID(globalWorkgroupIndex, outputSize);
+    vec4 colorSampleShuffle[4];
+    bool currentFlagShuffle[4];
 
-    const uint localSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
-    const ivec2 localWorkgroupID = LocalWorkgroupID(localSubgroupIndex);
+    colorSampleShuffle[quadSelf] = imageLoad(outputColor, grid_GlobalCoord);
 
-    const uint globalSubgroupIndex = gl_GlobalInvocationID.y;
-    const uint subgroupInvocIndex = gl_SubgroupInvocationID;
-    const ivec2 subgroupID = SubgroupID(subgroupInvocIndex);
+    uint nodePackedDepth = imageAtomicAnd(outputAtomic, grid_GlobalCoord, clearCurrentDepthFlagMask);
+    currentFlagShuffle[quadSelf] = UnpackDepthCurrentFlag(nodePackedDepth);
 
-    const ivec2 globCoord = (subgroupID + localWorkgroupID + globalWorkgroupId);
-//    const ivec2 globDoordQuad = (subgroupID + localWorkgroupID + globalWorkgroupId) * 2;
+    int xEven = grid_GlobalCoord.x % 2 == 0 ? 1 : -1;
+    int YEven = grid_GlobalCoord.y % 2 == 0 ? 1 : -1;
+    ivec2 quadShuffleOffsets[4] = { { 0, YEven }, { xEven, YEven }, { xEven, 0 }, { 0, 0 }, };
 
-    const vec3 nodeOriginWorldPos = vec3(0, 0, 0);
-    const vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
+    // We must do shuffling for all threads if it is current so that the shuffle works.
+    // This is why you read and shuffle first before the if return branch
+    for (int i = 0; i < 3; ++i) {
+        colorSampleShuffle[i] = subgroupShuffle(colorSampleShuffle[quadSelf], SubgroupOffsetIndex(quadShuffleOffsets[i]));
+        currentFlagShuffle[i] = subgroupShuffle(currentFlagShuffle[quadSelf], SubgroupOffsetIndex(quadShuffleOffsets[i]));
+    }
 
-    // Clear current flag, then determine what pixels to set to black
-    ivec2 globCoords[4];
-    bool currentFlags[4];
+    if (currentFlagShuffle[quadSelf])
+        return;
+
     int currentCount = 0;
-//    for (int i = 0; i < 4; ++i) {
-//        globCoords[i] = globDoordQuad + quadGatherOffsets[i];
-        uint nodePackedDepth = imageAtomicAnd(outputAtomic, globCoord, clearCurrentDepthFlagMask);
-//        currentFlags[i] = UnpackDepthCurrentFlag(nodePackedDepth);
-//        currentCount += int(currentFlags[i]);
-//    }
+    vec4 colorAverage = vec4(0);
+    for (int i = 0; i < 4; ++i) {
+        colorAverage += currentFlagShuffle[i] ? colorSampleShuffle[i] : vec4(0);
+        currentCount += int(currentFlagShuffle[i]);
+    }
+    colorAverage /= currentCount;
 
-//    vec4 color = vec4(0);
-//    if (currentCount > 1) {
-//        for (int i = 0; i < 4; ++i) {
-//            if (currentFlags[i]) {
-//                color += imageLoad(outputColor, globCoords[i]);
-//            }
-//        }
-//        color /= currentCount;
-//    }
-//
-//    for (int i = 0; i < 4; ++i) {
-//        if (!currentFlags[i]) imageStore(outputColor, globCoords[i], color);
-//    }
+    imageStore(outputColor, grid_GlobalCoord, colorAverage);
 }

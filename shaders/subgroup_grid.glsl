@@ -7,6 +7,7 @@
 
 #define WORKGROUP_SAMPLE_COUNT (WORKGROUP_SUBGROUP_COUNT / 2)
 
+const int quadSelf = 3;
 const ivec2 quadGatherOffsets[4] = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }, };
 
 ivec2 GlobalWorkgroupID(uint globalWorkgroupIndex, ivec2 size) {
@@ -31,4 +32,38 @@ uint SubgroupOffsetIndex(ivec2 dxdy) {
 uint SubgroupIndex(ivec2 dxdy) {
     uint subgroupIndex = gl_SubgroupInvocationID / SUBGROUP_CAPACITY;
     return dxdy.x + (dxdy.y * SUBGROUP_SQUARE_SIZE) + (subgroupIndex * SUBGROUP_CAPACITY);
+}
+
+ivec2 grid_Dimensions;
+uint grid_GlobalWorkgroupIndex;
+ivec2 grid_GlobalWorkgroupId;
+uint grid_LocalSubgroupIndex;
+ivec2 grid_LocalWorkgroupID;
+uint grid_GlobalSubgroupIndex;
+uint grid_SubgroupInvocationIndex;
+ivec2 grid_SubgroupID;
+ivec2 grid_GlobalCoord;
+
+void InitializeSubgroupGridInfo(ivec2 dimensions) {
+    grid_Dimensions = dimensions;
+    grid_GlobalWorkgroupIndex = gl_WorkGroupID.y;
+    grid_GlobalWorkgroupId = GlobalWorkgroupID(grid_GlobalWorkgroupIndex, grid_Dimensions);
+    grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
+    grid_LocalWorkgroupID = LocalWorkgroupID(grid_LocalSubgroupIndex);
+    grid_GlobalSubgroupIndex = gl_GlobalInvocationID.y;
+    grid_SubgroupInvocationIndex = gl_SubgroupInvocationID;
+    grid_SubgroupID = SubgroupID(grid_SubgroupInvocationIndex);
+    grid_GlobalCoord = (grid_SubgroupID + grid_LocalWorkgroupID + grid_GlobalWorkgroupId);
+}
+
+void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
+    grid_Dimensions = dimensions / 2;
+    grid_GlobalWorkgroupIndex = gl_WorkGroupID.y;
+    grid_GlobalWorkgroupId = GlobalWorkgroupID(grid_GlobalWorkgroupIndex, grid_Dimensions);
+    grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
+    grid_LocalWorkgroupID = LocalWorkgroupID(grid_LocalSubgroupIndex);
+    grid_GlobalSubgroupIndex = gl_GlobalInvocationID.y;
+    grid_SubgroupInvocationIndex = gl_SubgroupInvocationID;
+    grid_SubgroupID = SubgroupID(grid_SubgroupInvocationIndex);
+    grid_GlobalCoord = (grid_SubgroupID + grid_LocalWorkgroupID + grid_GlobalWorkgroupId) * 2;
 }

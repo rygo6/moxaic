@@ -1,3 +1,5 @@
+// this needs to cleanup into more specific headers, probably alot go into math?
+
 const float FLOAT_EPSILON = 1e-6;
 
 bool intersectRayPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal, out vec3 intersectWorldPos) {
