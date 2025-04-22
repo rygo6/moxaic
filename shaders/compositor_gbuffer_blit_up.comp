@@ -64,13 +64,19 @@ void main()
 
     vec2 quadCenterUV = vec2(globCoordQuad + 1) / vec2(size);
 
-    const int expand = 31;
-    const ivec2 expandGatherOffsets[4] = { { -expand, expand }, { expand, expand }, { expand, -expand }, { -expand, -expand }, };
-//    vec4 expandGatheredDepth = textureGatherOffsets(srcDepth, quadCenterUV, expandGatherOffsets, 0);
     vec4 gatheredDepth = textureGather(srcDepth, quadCenterUV, 0);
-//    for (int i = 0; i < 4; ++i) {
-//        gatheredDepth[i] = gatheredDepth[i] > HALF_EPSILON ? gatheredDepth[i] : expandGatheredDepth[i];
-//    }
+
+    {   // The only reason this is important is for linear sampling the depth. If I don't linear sample the depth this is probably pointless
+        // But linear sampling depth might produce better results? Need to A/B test. However if I don't linearly sample then I can use imageLoad on
+        // the gbuffer in compute composite which which might be faster
+        const int expand = 31;
+        const ivec2 expandGatherOffsets[4] = { { -expand, expand }, { expand, expand }, { expand, -expand }, { -expand, -expand }, };
+        // its possible use subgroup operations is faster than this
+        vec4 expandGatheredDepth = textureGatherOffsets(srcDepth, quadCenterUV, expandGatherOffsets, 0);
+        for (int i = 0; i < 4; ++i) {
+            gatheredDepth[i] = gatheredDepth[i] > HALF_EPSILON ? gatheredDepth[i] : expandGatheredDepth[i];
+        }
+    }
 
     vec4 gatheredLinearDepth = LinearizeDepth(vec4(state.depth.nearZ), vec4(state.depth.farZ), gatheredDepth);
     vec4 gatheredProjectedDepth = ProjectDepth(vec4(state.cameraFarZ), vec4(state.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ

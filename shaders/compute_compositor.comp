@@ -1,6 +1,7 @@
 #version 450
 //#extension GL_EXT_debug_printf : require
 #extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_shuffle : require
 #extension GL_KHR_shader_subgroup_ballot : require
 
 #include "global_binding.glsl"
@@ -107,41 +108,43 @@ void main()
     ivec2 outputSize = imageSize(outputColor);
     InitializeSubgroupGridInfo(outputSize);
 
-    vec2 globalUV = grid_GlobalCoord / vec2(outputSize);
+    {
+        vec2 globalUV = grid_GlobalCoord / vec2(outputSize);
 
-    vec3 nodeOriginWorldPos = vec3(0, 0, 0);
-    vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
+        vec3 nodeOriginWorldPos = vec3(0, 0, 0);
+        vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
 
-    vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globalUV);
-    vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+        vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globalUV);
+        vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
 
-    //this should be constrained the rect where it is in the framebuffer
-//    if (intersectNodeUVs[i].x < 0 || intersectNodeUVs[i].x > 1 || intersectNodeUVs[i].y < 0 || intersectNodeUVs[i].y > 1)
-//        return;
+        //this should be constrained the rect where it is in the framebuffer
+    //    if (intersectNodeUVs[i].x < 0 || intersectNodeUVs[i].x > 1 || intersectNodeUVs[i].y < 0 || intersectNodeUVs[i].y > 1)
+    //        return;
 
-    // vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
-    // use imageload I could also write dpeth into color?
-    // it is also true that technically this would be more accurate linear sampled
+        // vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+        // use imageload I could also write dpeth into color?
+        // it is also true that technically this would be more accurate linear sampled
 
-    float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
-    vec3 nodeProjNDC = vec3(intersectNodeNDC.xy, nodeDepthSample);
-    vec4 nodeProjClipPos = ClipPosFromNDC(nodeProjNDC);
-    vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
-    vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
-    vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
-    float globProjDepth = globProjNDC.z;
+        float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
+        vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
+        vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
+        vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
+        vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
+        float globProjDepth = globProjNDC.z;
 
-    if (!(globProjDepth > 0))
-        return;
+        if (!(globProjDepth > 0))
+            return;
 
-    vec2 globProjUV = UVFromNDC(globProjNDC);
-    ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
+        vec2 globProjUV = UVFromNDC(globProjNDC);
+        ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
 
-    uint nodePackedDepth = PackDepth(true, globProjDepth);
-    uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
+        // I am going to want to pack depth with an ID of the node eventually then use that id to sample the color
+        uint nodePackedDepth = PackDepth16(globProjDepth);
+        uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
 
-    if (nodePackedDepth > prevNodePackedDepth){
-        vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
-        imageStore(outputColor, globProjCoord, nodeColorSample);
+        if (nodePackedDepth > prevNodePackedDepth){
+            vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
+            imageStore(outputColor, globProjCoord, nodeColorSample);
+        }
     }
 }

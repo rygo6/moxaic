@@ -3,6 +3,7 @@
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
 
 #include "global_binding.glsl"
 #include "node_binding.glsl"
@@ -27,8 +28,8 @@ void main()
 
     colorSampleShuffle[quadSelf] = imageLoad(outputColor, grid_GlobalCoord);
 
-    uint nodePackedDepth = imageAtomicAnd(outputAtomic, grid_GlobalCoord, clearCurrentDepthFlagMask);
-    currentFlagShuffle[quadSelf] = UnpackDepthCurrentFlag(nodePackedDepth);
+    uint nodePackedDepth = imageAtomicExchange(outputAtomic, grid_GlobalCoord, 0);
+    currentFlagShuffle[quadSelf] = nodePackedDepth > 0;
 
     int xEven = grid_GlobalCoord.x % 2 == 0 ? 1 : -1;
     int YEven = grid_GlobalCoord.y % 2 == 0 ? 1 : -1;

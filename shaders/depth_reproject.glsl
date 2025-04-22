@@ -1,5 +1,12 @@
 const uint clearCurrentDepthFlagMask = 0x7FFFFFFFu;
 
+uint PackDepth16(float depth) {
+    return uint(depth * 65535.0);
+}
+float UnpackDepth16(uint packedDepth) {
+    return float(packedDepth) / 65535.0;
+}
+
 uint PackDepth(bool current, float normalizedDepth) {
     normalizedDepth = clamp(normalizedDepth, 0.0, 1.0);
 
