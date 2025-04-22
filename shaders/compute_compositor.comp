@@ -121,11 +121,12 @@ void main()
     //    if (intersectNodeUVs[i].x < 0 || intersectNodeUVs[i].x > 1 || intersectNodeUVs[i].y < 0 || intersectNodeUVs[i].y > 1)
     //        return;
 
-        // vec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+        ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+        float nodeDepthSample = texelFetch(nodeGBuffer, intersectNodeCoord, 0).r;
         // use imageload I could also write dpeth into color?
         // it is also true that technically this would be more accurate linear sampled
 
-        float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
+//        float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
         vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
         vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
         vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);

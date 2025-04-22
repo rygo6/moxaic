@@ -32,8 +32,8 @@ void main()
     currentFlagShuffle[quadSelf] = nodePackedDepth > 0;
 
     int xEven = grid_GlobalCoord.x % 2 == 0 ? 1 : -1;
-    int YEven = grid_GlobalCoord.y % 2 == 0 ? 1 : -1;
-    ivec2 quadShuffleOffsets[4] = { { 0, YEven }, { xEven, YEven }, { xEven, 0 }, { 0, 0 }, };
+    int yEven = grid_GlobalCoord.y % 2 == 0 ? 1 : -1;
+    ivec2 quadShuffleOffsets[4] = { { 0, yEven }, { xEven, yEven }, { xEven, 0 }, { 0, 0 }, };
 
     // We must do shuffling for all threads if it is current so that the shuffle works.
     // This is why you read and shuffle first before the if return branch
