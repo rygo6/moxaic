@@ -1,3 +1,6 @@
+#define DEPTH_FAR 0.0f
+#define DEPTH_NEAR 1.0f
+
 const uint clearCurrentDepthFlagMask = 0x7FFFFFFFu;
 
 uint PackDepth16(float depth) {
@@ -38,17 +41,23 @@ uint ClearDepthFlag(uint value) {
     return value & 0x7FFFFFFFu;
 }
 
-vec3 IntersectNodeNDC(vec3 nodeOriginWorldPos, vec3 nodeOriginWorldDirection, vec2 globalUV)
-{
-    vec2 globalNDC = NDCFromUV(globalUV);
-    vec4 globalClipPos = ClipPosFromNDC(globalNDC);
-    vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
-    vec3 worldRay = WorldRayDirFromGlobalNDC(globalNDC);
-    vec3 intersectWorldPos;
-    bool intersected = intersectRayPlane(worldPos, worldRay, nodeOriginWorldPos, nodeOriginWorldDirection, intersectWorldPos);
-    vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
-    vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
-    return intersectNodeNDC;
+bool IntersectPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal, out vec3 intersectWorldPos) {
+    float facingRatio = dot(planeNormal, rayDir);
+    float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
+    intersectWorldPos = rayOrigin + t * rayDir;
+    return facingRatio < 0;
 }
+
+//bool IntersectNodeNDC(vec3 worldPos, vec3 worldRay, vec2 globalUV, out vec3 intersectNodeNDC)
+//{
+//    vec3 intersectWorldPos;
+//    if (IntersectPlane(worldPos, worldRay, nodeOriginWorldPos, nodeOriginWorldDirection, intersectWorldPos))
+//        return false;
+//
+//    vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
+//    vec3 intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
+//    vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
+//    intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
+//
+//    return true;
+//}

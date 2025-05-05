@@ -307,7 +307,7 @@ extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 // technically this should go into a comp node thread local....
-extern MxcNodeCompositorLocal nodeCompositorData[MXC_NODE_CAPACITY];
+extern MxcNodeCompositorLocal nodeCompositData[MXC_NODE_CAPACITY];
 
 ///////////////
 //// Node Queue

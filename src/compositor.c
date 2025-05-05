@@ -59,7 +59,7 @@ static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* p
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.descriptorCount = 1,
 					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
-					.pImmutableSamplers = &vk.context.nearestSampler),
+					.pImmutableSamplers = &vk.context.linearSampler),
 			});
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &info, VK_ALLOC, pLayout));
 }
@@ -399,7 +399,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	};
 
 	// GraphicsBarriers
-	VkImageMemoryBarrier2 graphAcquireBarriers[] = {
+	VkImageMemoryBarrier2 graphicAcquireBarriers[] = {
 		{ // Color
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -433,7 +433,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		},
 	};
-	VkImageMemoryBarrier2 graphProcessFinishBarriers[] = {
+	VkImageMemoryBarrier2 graphicProcessFinishBarriers[] = {
 		{	// Gbuffer
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
@@ -445,7 +445,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	};
 
 	// ComputeBarriers
-	VkImageMemoryBarrier2 comptAcquireBarriers[] = {
+	VkImageMemoryBarrier2 computeAcquireBarriers[] = {
 		{ // Color
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -479,7 +479,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		},
 	};
-	VkImageMemoryBarrier2 comptProcessFinishBarriers[] = {
+	VkImageMemoryBarrier2 computeProcessFinishBarriers[] = {
 		{	// Gbuffer
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
@@ -527,47 +527,47 @@ run_loop:
 		vkCmdResetBegin(graphCmd);
 
 		for (int iNode = 0; iNode < nodeCt; ++iNode) {
-			auto pNodShrd = activeNodesShared[iNode];
+			auto pNodeShared = activeNodesShared[iNode];
 
 			// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 			// shared: 569 - semaphore: 315416 ratio: 554.333919
-			u64 nodeTimlnVal = atomic_load_explicit(&pNodShrd->timelineValue, memory_order_acquire);
+			u64 nodeTimlnVal = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 
 			if (nodeTimlnVal < 1)
 				continue;
 
-			auto pNodeCompstData = &nodeCompositorData[iNode];
+			auto pNodeCompositData = &nodeCompositData[iNode];
 
 			// We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
-			memcpy(&pNodeCompstData->rootPose, &pNodShrd->rootPose, sizeof(MidPose));
+			memcpy(&pNodeCompositData->rootPose, &pNodeShared->rootPose, sizeof(MidPose));
 			//nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
 
 			// update node model mat... this should happen every frame so user can move it in comp
-			pNodeCompstData->nodeSetState.model = Mat4FromPosRot(pNodeCompstData->rootPose.position, pNodeCompstData->rootPose.rotation);
+			pNodeCompositData->nodeSetState.model = Mat4FromPosRot(pNodeCompositData->rootPose.position, pNodeCompositData->rootPose.rotation);
 
-			if (nodeTimlnVal <= pNodeCompstData->lastTimelineValue)
+			if (nodeTimlnVal <= pNodeCompositData->lastTimelineValue)
 				continue;
 
 			{  // Acquire new framebuffers from node
 
 				int  iNodeSwap = !(nodeTimlnVal % VK_SWAP_COUNT);
-				auto pNodeSwap = &pNodeCompstData->swaps[iNodeSwap];
+				auto pNodeSwap = &pNodeCompositData->swaps[iNodeSwap];
 
 				VkImageMemoryBarrier2* pAcqBars;
 				VkImageMemoryBarrier2* pFinBars;
 				VkImageLayout finalBarrier;
-				switch (pNodShrd->compositorMode){
+				switch (pNodeShared->compositorMode){
 
 					case MXC_COMPOSITOR_MODE_BASIC:
 					case MXC_COMPOSITOR_MODE_TESSELATION:
 					case MXC_COMPOSITOR_MODE_TASK_MESH:
-						pAcqBars = graphAcquireBarriers;
-						pFinBars = graphProcessFinishBarriers;
+						pAcqBars = graphicAcquireBarriers;
+						pFinBars = graphicProcessFinishBarriers;
 						finalBarrier = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 						break;
 					case MXC_COMPOSITOR_MODE_COMPUTE:
-						pAcqBars = comptAcquireBarriers;
-						pFinBars = comptProcessFinishBarriers;
+						pAcqBars = computeAcquireBarriers;
+						pFinBars = computeProcessFinishBarriers;
 						finalBarrier = VK_IMAGE_LAYOUT_GENERAL;
 						break;
 					default:
@@ -584,7 +584,7 @@ run_loop:
 				int  pixlCt = extnt.x * extnt.y;
 				int  groupCt = pixlCt / GRID_SUBGROUP_CAPACITY  / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
 
-				memcpy(&pCompst->pGBufferProcessMapped->depth, (void*)&pNodShrd->depthState, sizeof(MxcDepthState));
+				memcpy(&pCompst->pGBufferProcessMapped->depth, (void*)&pNodeShared->depthState, sizeof(MxcDepthState));
 				VkWriteDescriptorSet pshSets[] = {
 					BIND_WRITE_GBUFFER_PROCESS_STATE(pCompst->gBufferProcessSetBuffer.buffer),
 					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
@@ -598,64 +598,68 @@ run_loop:
 				CmdPipelineImageBarriers2(graphCmd, 1, pFinBars);
 
 				VkWriteDescriptorSet wrtSets[] = {
-					BIND_WRITE_NODE_COLOR(pNodeCompstData->nodeSet, pNodeSwap->colorView, finalBarrier),
-					BIND_WRITE_NODE_GBUFFER(pNodeCompstData->nodeSet, pNodeSwap->gBufferMipViews[0], finalBarrier),
+					BIND_WRITE_NODE_COLOR(pNodeCompositData->nodeSet, pNodeSwap->colorView, finalBarrier),
+					BIND_WRITE_NODE_GBUFFER(pNodeCompositData->nodeSet, pNodeSwap->gBufferMipViews[0], finalBarrier),
 				};
 				vkUpdateDescriptorSets(device, COUNT(wrtSets), wrtSets, 0, NULL);
 			}
 
-			pNodeCompstData->lastTimelineValue = nodeTimlnVal;
+			pNodeCompositData->lastTimelineValue = nodeTimlnVal;
 
 			{  // Calc new node uniform and shared data
 
 				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
-				memcpy(&pNodeCompstData->nodeSetState.view, (void*)&pNodShrd->globalSetState, sizeof(VkGlobalSetState));
-				pNodeCompstData->nodeSetState.ulUV = pNodShrd->ulClipUV;
-				pNodeCompstData->nodeSetState.lrUV = pNodShrd->lrClipUV;
+				memcpy(&pNodeCompositData->nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkGlobalSetState));
+				pNodeCompositData->nodeSetState.ulUV = pNodeShared->ulClipUV;
+				pNodeCompositData->nodeSetState.lrUV = pNodeShared->lrClipUV;
 
-				memcpy(pNodeCompstData->pSetMapped, &pNodeCompstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
+				memcpy(pNodeCompositData->pSetMapped, &pNodeCompositData->nodeSetState, sizeof(MxcNodeCompositorSetState));
 
-				float radius = pNodShrd->compositorRadius;
+				float radius = pNodeShared->compositorRadius;
 
 				vec4 ulbModel = Vec4Rot(globCamPose.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
-				vec4 ulbWorld = Vec4MulMat4(pNodeCompstData->nodeSetState.model, ulbModel);
+				vec4 ulbWorld = Vec4MulMat4(pNodeCompositData->nodeSetState.model, ulbModel);
 				vec4 ulbClip = Vec4MulMat4(globSetState.view, ulbWorld);
 				vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, ulbClip));
-				vec2 ulbUV = Vec2Clamp(UVFromNDC(ulbNDC), 0.0f, 1.0f);
+				vec2 ulbUV = UVFromNDC(ulbNDC);
 
 				vec4 ulfModel = Vec4Rot(globCamPose.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-				vec4 ulfWorld = Vec4MulMat4(pNodeCompstData->nodeSetState.model, ulfModel);
+				vec4 ulfWorld = Vec4MulMat4(pNodeCompositData->nodeSetState.model, ulfModel);
 				vec4 ulfClip = Vec4MulMat4(globSetState.view, ulfWorld);
 				vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, ulfClip));
-				vec2 ulfUV = Vec2Clamp(UVFromNDC(ulfNDC), 0.0f, 1.0f);
+				vec2 ulfUV = UVFromNDC(ulfNDC);
 
 				vec2 ulUV = Vec2Min(ulfUV, ulbUV);
+				vec2 ulUVClamp = Vec2Clamp(ulUV, 0.0f, 1.0f);
 
 				vec4 lrbModel = Vec4Rot(globCamPose.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
-				vec4 lrbWorld = Vec4MulMat4(pNodeCompstData->nodeSetState.model, lrbModel);
+				vec4 lrbWorld = Vec4MulMat4(pNodeCompositData->nodeSetState.model, lrbModel);
 				vec4 lrbClip = Vec4MulMat4(globSetState.view, lrbWorld);
 				vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lrbClip));
-				vec2 lrbUV = Vec2Clamp(UVFromNDC(lrbNDC), 0.0f, 1.0f);
+				vec2 lrbUV = UVFromNDC(lrbNDC);
 
 				vec4 lrfModel = Vec4Rot(globCamPose.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
-				vec4 lrfWorld = Vec4MulMat4(pNodeCompstData->nodeSetState.model, lrfModel);
+				vec4 lrfWorld = Vec4MulMat4(pNodeCompositData->nodeSetState.model, lrfModel);
 				vec4 lrfClip = Vec4MulMat4(globSetState.view, lrfWorld);
 				vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lrfClip));
-				vec2 lrfUV = Vec2Clamp(UVFromNDC(lrfNDC), 0.0f, 1.0f);
+				vec2 lrfUV = UVFromNDC(lrfNDC);
 
 				vec2 lrUV = Vec2Max(lrbUV, lrfUV);
+				vec2 lrUVClamp = Vec2Clamp(lrUV, 0.0f, 1.0f);
 
-				vec2 diff = {.vec = lrUV.vec - ulUV.vec};
+				vec2 diff = {.vec = lrUVClamp.vec - ulUVClamp.vec};
+
+//				printf("%f  %f   %f  %f  \n", ulUV.x, lrUV.x,  ulUV.y, lrUV.y);
 
 				// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
-				pNodShrd->cameraPose = globCamPose;
-				pNodShrd->camera = globCam;
+				pNodeShared->cameraPose = globCamPose;
+				pNodeShared->camera = globCam;
 
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
-				memcpy(&pNodShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-				pNodShrd->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
-				pNodShrd->ulClipUV = ulUV;
-				pNodShrd->lrClipUV = lrUV;
+				memcpy(&pNodeShared->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
+				pNodeShared->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
+				pNodeShared->ulClipUV = ulUV;
+				pNodeShared->lrClipUV = lrUV;
 				atomic_thread_fence(memory_order_release);
 			}
 		}
@@ -688,21 +692,21 @@ run_loop:
 				// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 				switch (pNodShrd->compositorMode) {
 					case MXC_COMPOSITOR_MODE_BASIC:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositData[i].nodeSet, 0, NULL);
 						CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){quadBuffer}, (VkDeviceSize[]){quadOffsets.vertexOffset});
 						CmdBindIndexBuffer(graphCmd, quadBuffer, 0, VK_INDEX_TYPE_UINT16);
 						CmdDrawIndexed(graphCmd, quadOffsets.indexCount, 1, 0, 0, 0);
 						graphicsBlit = true;
 						break;
 					case MXC_COMPOSITOR_MODE_TESSELATION:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositData[i].nodeSet, 0, NULL);
 						CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){quadPatchBuffer}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
 						CmdBindIndexBuffer(graphCmd, quadPatchBuffer, quadPatchOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
 						CmdDrawIndexed(graphCmd, quadPatchOffsets.indexCount, 1, 0, 0, 0);
 						graphicsBlit = true;
 						break;
 					case MXC_COMPOSITOR_MODE_TASK_MESH:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositData[i].nodeSet, 0, NULL);
 						CmdDrawMeshTasksEXT(graphCmd, 1, 1, 1);
 						graphicsBlit = true;
 						break;
@@ -732,7 +736,7 @@ run_loop:
 				if (nodeTimlnVal < 1)
 					continue;
 
-				auto pNodeCompstData = &nodeCompositorData[iNode];
+				auto pNodeCompstData = &nodeCompositData[iNode];
 				int  iNodeSwap = !(nodeTimlnVal % VK_SWAP_COUNT);
 				auto pNodeSwap = &pNodeCompstData->swaps[iNodeSwap];
 
@@ -740,7 +744,7 @@ run_loop:
 				// really all the nodes need to be set in UBO array and the compute shader do this loop
 				switch (pNodShrd->compositorMode) {
 					case MXC_COMPOSITOR_MODE_COMPUTE:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, comptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositorData[iNode].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, comptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositData[iNode].nodeSet, 0, NULL);
 
 						// can be saved
 						ivec2 extnt = {DEFAULT_WIDTH, DEFAULT_HEIGHT};
@@ -974,15 +978,15 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 				.size = sizeof(MxcNodeCompositorSetState),
 				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			};
-			vkCreateSharedBuffer(&requestInfo, &nodeCompositorData[i].nodeSetBuffer);
+			vkCreateSharedBuffer(&requestInfo, &nodeCompositData[i].nodeSetBuffer);
 			VkDescriptorSetAllocateInfo setInfo = {
 				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 				.descriptorPool = threadContext.descriptorPool,
 				.descriptorSetCount = 1,
 				.pSetLayouts = &pCompositor->nodeSetLayout,
 			};
-			VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &nodeCompositorData[i].nodeSet));
-			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
+			VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &nodeCompositData[i].nodeSet));
+			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositData[i].nodeSet, "NodeSet");
 		}
 
 		{ // Graphics Framebuffers
@@ -1107,12 +1111,12 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably
 		// should also share the same descriptor set with an array
-		vkBindSharedBuffer(&nodeCompositorData[i].nodeSetBuffer);
-		nodeCompositorData[i].pSetMapped = vkSharedBufferPtr(nodeCompositorData[i].nodeSetBuffer);
-		*nodeCompositorData[i].pSetMapped = (MxcNodeCompositorSetState){};
+		vkBindSharedBuffer(&nodeCompositData[i].nodeSetBuffer);
+		nodeCompositData[i].pSetMapped = vkSharedBufferPtr(nodeCompositData[i].nodeSetBuffer);
+		*nodeCompositData[i].pSetMapped = (MxcNodeCompositorSetState){};
 
 		VkWriteDescriptorSet writeSets[] = {
-			BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buffer),
+			BIND_WRITE_NODE_STATE(nodeCompositData[i].nodeSet, nodeCompositData[i].nodeSetBuffer.buffer),
 		};
 		vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 	}

@@ -16,7 +16,7 @@ MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
 
 // Node state in Compositor Process
 size_t                   nodeCt = 0;
-MxcNodeCompositorLocal   nodeCompositorData[MXC_NODE_CAPACITY] = {};
+MxcNodeCompositorLocal   nodeCompositData[MXC_NODE_CAPACITY] = {};
 MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY] = {};
 
 // Only used for local thread nodes. Node from other process will use shared memory.
@@ -345,7 +345,7 @@ static int CleanupNode(NodeHandle handle)
 	VkWriteDescriptorSet writeSets[] = {
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].nodeSet,
+			.dstSet = nodeCompositData[handle].nodeSet,
 			.dstBinding = 1,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -356,7 +356,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].nodeSet,
+			.dstSet = nodeCompositData[handle].nodeSet,
 			.dstBinding = 2,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -367,7 +367,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].nodeSet,
+			.dstSet = nodeCompositData[handle].nodeSet,
 			.dstBinding = 3,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -448,7 +448,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->cmd, "TestNode");
 
-	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCompositorData[handle];
+	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCompositData[handle];
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
@@ -665,7 +665,7 @@ static void InterprocessServerAcceptNodeConnection()
 
 		auto handle = RequestExternalNodeHandle(pNodeShrd);
 
-		pNodeCompLcl = &nodeCompositorData[handle];
+		pNodeCompLcl = &nodeCompositData[handle];
 //		*pNodeCompositorLocal = (MxcNodeCompositorLocal){}; // Don't clear. State is recycled and pre-alloced on compositor creation.
 
 		pNodeCtxt = &nodeContexts[handle];
@@ -765,7 +765,7 @@ static void* RunInterProcessServer(void* arg)
 
 	ipcServer.listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
 	WSA_CHECK(ipcServer.listenSocket == INVALID_SOCKET, "Socket failed");
-	WSA_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Bind failed");
+	WSA_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Socket bind failed");
 	WSA_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
 
 	while (isRunning) {
@@ -990,7 +990,7 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 
 	auto pNodCtx = &nodeContexts[hNd];
 	auto pNodShrd = activeNodesShared[hNd];
-	auto pNodCmpstrDat = &nodeCompositorData[hNd];
+	auto pNodCmpstrDat = &nodeCompositData[hNd];
 
 	bool needsExport = pNodCtx->type != MXC_NODE_TYPE_THREAD;
 	int  swpCnt = XR_SWAP_TYPE_COUNTS[pNodShrd->swapType] * XR_SWAP_COUNT;

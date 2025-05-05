@@ -103,49 +103,87 @@ layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 //    //    imageAtomicMax(outputAtomic, ivec2(depthProjectedGlobalCoord), packedData);
 //}
 
+void StoreDebug(){
+    imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
+    imageStore(outputColor, grid_GlobalCoord, vec4(0,1,0,1));
+}
+
 void main()
 {
     ivec2 outputSize = imageSize(outputColor);
     InitializeSubgroupGridInfo(outputSize);
 
-    {
-        vec2 globalUV = grid_GlobalCoord / vec2(outputSize);
+    if (any(greaterThan(nodeUBO.ulUV, vec2(1.0))) || any(lessThan(nodeUBO.lrUV, vec2(0.0)))) {
+        StoreDebug();
+        return;
+    }
 
-        vec3 nodeOriginWorldPos = vec3(0, 0, 0);
-        vec3 nodeOriginWorldDirection = vec3(0, 0, -1);
+    vec2 nodeOriginNDC = vec2(0,0);
+    vec3 nodeOriginWorldPos = vec3(0,0,0);
+    vec3 nodeOriginWorldDir = -WorldRayDirFromNodeNDC(nodeOriginNDC);
 
-        vec3 intersectNodeNDC = IntersectNodeNDC(nodeOriginWorldPos, nodeOriginWorldDirection, globalUV);
-        vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+    vec2 globalUV = vec2(grid_GlobalCoord) / vec2(outputSize);
+    vec2 globalNDC = NDCFromUV(globalUV);
+    vec4 globalClipPos = ClipPosFromNDC(globalNDC, DEPTH_NEAR);
+    vec3 globalWorldPos = WorldPosFromGlobalClipPos(globalClipPos);
+    vec3 globalWorldDir = WorldRayDirFromGlobalNDC2(globalNDC);
 
-        //this should be constrained the rect where it is in the framebuffer
-    //    if (intersectNodeUVs[i].x < 0 || intersectNodeUVs[i].x > 1 || intersectNodeUVs[i].y < 0 || intersectNodeUVs[i].y > 1)
-    //        return;
+//    vec4 testDepth = texture(nodeGBuffer, globalUV);
+//    imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
+//    imageStore(outputColor, grid_GlobalCoord, vec4(testDepth));
+//    return;
 
-        ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
-        float nodeDepthSample = texelFetch(nodeGBuffer, intersectNodeCoord, 0).r;
-        // use imageload I could also write dpeth into color?
-        // it is also true that technically this would be more accurate linear sampled
+    vec3 intersectWorldPos;
+    if (!IntersectPlane(globalWorldPos, globalWorldDir, nodeOriginWorldPos, nodeOriginWorldDir, intersectWorldPos)) {
+        StoreDebug();
+        return;
+    }
+
+    vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
+    vec3 intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
+    vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
+    vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
+    vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+
+    //this should be constrained the rect where it is in the framebuffer
+    if (any(lessThan(intersectNodeUV, nodeUBO.ulUV)) || any(greaterThan(intersectNodeUV, nodeUBO.lrUV))) {
+        StoreDebug();
+        return;
+    }
+
+    // Linear sample with gbuffer dilate on depth or texelFetch/ImageLoad ?!?!
+    // I honestly do not know which is better.
+    // One reason to not linearly sample depth is that the transition between actual objects of different depths
+    // will not have interpolated pixel spread between them
+    ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+    float nodeDepthSample = texelFetch(nodeGBuffer, intersectNodeCoord, 0).r;
 
 //        float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
-        vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
-        vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
-        vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
-        vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
-        float globProjDepth = globProjNDC.z;
+    vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
+    vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
+    vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
+    vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
+    float globProjDepth = globProjNDC.z;
+    vec2 globProjUV = UVFromNDC(globProjNDC);
+    ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
 
-        if (!(globProjDepth > 0))
-            return;
+//    imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
+////    vec4 testColor = texture(nodeColor, intersectNodeUV);
+////    vec4 testColor = texture(nodeColor, globalUV);
+//    vec4 testColor = texelFetch(nodeColor, grid_GlobalCoord, 0);
+//    imageStore(outputColor, globProjCoord, testColor);
+//    return;
 
-        vec2 globProjUV = UVFromNDC(globProjNDC);
-        ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
+    if (!(globProjDepth > DEPTH_FAR))
+        return;
 
-        // I am going to want to pack depth with an ID of the node eventually then use that id to sample the color
-        uint nodePackedDepth = PackDepth16(globProjDepth);
-        uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
+    // I am going to want to pack depth with an ID of the node eventually then use that id to sample the color
+    uint nodePackedDepth = PackDepth16(globProjDepth);
+    uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
 
-        if (nodePackedDepth > prevNodePackedDepth){
-            vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
-            imageStore(outputColor, globProjCoord, nodeColorSample);
-        }
+    if (nodePackedDepth > prevNodePackedDepth){
+        vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
+//        vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
+        imageStore(outputColor, globProjCoord, nodeColorSample);
     }
 }
