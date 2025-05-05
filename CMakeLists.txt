@@ -16,6 +16,7 @@ add_executable(${TARGET_NAME}
         ${SRC_FILES}
 )
 
+
 set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.290.0")
 # make switch not compile oxr into main comp app
 #set(OPENXR_SDK_PATH "C:/OpenXRSDK/OpenXR.Loader.1.1.38")
@@ -36,9 +37,18 @@ target_include_directories(${TARGET_NAME} PUBLIC
         "${OPENXR_SDK_INCLUDE_PATH}"
 )
 
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-find_package(OpenGL REQUIRED)
+set_target_properties(${TARGET_NAME} PROPERTIES
+        # Force static linking of runtime libraries
+        LINK_FLAGS "-static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lpthread -Wl,--no-whole-archive,-Bdynamic"
+)
+
+set(PTHREAD_STATIC_PATH "C:/msys64/ucrt64/lib/libwinpthread.a")
+if(EXISTS "${PTHREAD_STATIC_PATH}")
+    message(STATUS "Found UCRT64 pthread at: ${PTHREAD_STATIC_PATH}")
+else()
+    message(WARNING "UCRT64 pthread not found at ${PTHREAD_STATIC_PATH}")
+endif()
+
 target_link_libraries(${TARGET_NAME} PUBLIC
         vulkan-1
         opengl32
@@ -48,13 +58,20 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         d3d11
         d3d12
         synchronization
-        ${CMAKE_THREAD_LIBS_INIT}
+        "${PTHREAD_STATIC_PATH}"
+)
+target_link_options(${TARGET_NAME} PRIVATE
+        #        -nostartfiles
+        #        -nodefaultlibs
+        #        -nostdlib
+        #        -nolibc
+        -v
+        #        --entry=_test
 )
 
 target_compile_definitions(${TARGET_NAME} PUBLIC
     MOXAIC_COMPOSITOR
 )
-
 target_compile_options(${TARGET_NAME} PRIVATE
         -include globals.h
 
@@ -63,15 +80,6 @@ target_compile_options(${TARGET_NAME} PRIVATE
         -fopt-info-vec
 
         -std=c23
-)
-
-target_link_options(${TARGET_NAME} PRIVATE
-#        -nostartfiles
-#        -nodefaultlibs
-#        -nostdlib
-#        -nolibc
-        -v
-#        --entry=_test
 )
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
@@ -107,7 +115,7 @@ foreach (SHADER IN LISTS SHADER_SOURCE_FILES)
     set(SHADER_OUTPUT_OPT "${CMAKE_BINARY_DIR}/shaders/${SHADER_NAME}.spv")
     add_custom_command(
             OUTPUT ${SHADER_OUTPUT}
-            COMMENT "Optimizing and Compiling ${SHADER_NAME}"
+            COMMENT "Compiling Optimizing ${SHADER_NAME}"
             COMMAND ${SHADER_COMPILER} ${SHADER} --target-spv=spv1.4 -o ${SHADER_OUTPUT}
             COMMAND ${SHADER_OPTIMIZER} -O ${SHADER_OUTPUT} -o ${SHADER_OUTPUT_OPT}
             DEPENDS ${SHADER} ${SHADER_INCLUDE_FILES}
