@@ -1,5 +1,5 @@
 #version 450
-//#extension GL_EXT_debug_printf : require
+#extension GL_EXT_debug_printf : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_shuffle : require
 #extension GL_KHR_shader_subgroup_ballot : require
@@ -103,6 +103,74 @@ layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 //    //    imageAtomicMax(outputAtomic, ivec2(depthProjectedGlobalCoord), packedData);
 //}
 
+bool WriteDebugCoord(ivec2 debugCoord, ivec2 screenCoord){
+    vec2 diff = screenCoord - debugCoord;
+
+    if (dot(diff, diff) < 30){
+        imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
+        imageStore(outputColor, grid_GlobalCoord, vec4(1,1,0,1));
+        return true;
+    }
+
+    return false;
+}
+
+void WriteDebugUV(vec2 debugUV, ivec2 screenCoord){
+    ivec2 debugCoord = CoordFromUV(debugUV, globalUBO.screenSize);
+    WriteDebugCoord(debugCoord, screenCoord);
+}
+
+void WriteDebugNDC(vec3 ndc, ivec2 screenCoord){
+    vec2 uv = UVFromNDC(ndc);
+    WriteDebugUV(uv, screenCoord);
+}
+
+void WriteDebugWorldPos(vec3 debugWorldPos, ivec2 screenCoord){
+    vec4 clipPos = GlobalClipPosFromWorldPos(debugWorldPos);
+    vec3 ndc = NDCFromClipPos(clipPos);
+    vec2 uv = UVFromNDC(ndc);
+    WriteDebugUV(uv, screenCoord);
+}
+
+bool WriteDebugLine(ivec2 P1, ivec2 P2, ivec2 screenCoord) {
+    vec2 d = P2 - P1;
+    vec2 Q = vec2(screenCoord);
+    float crossProductZ = d.x * (Q.y - P1.y) - d.y * (Q.x - P1.x);
+
+    float dotProduct = dot(Q - P1, d);
+    float squaredSegmentLength = dot(d, d);
+    bool isWithinSegment = dotProduct >= 0.0 && dotProduct <= squaredSegmentLength;
+
+    if (WriteDebugCoord(ivec2(P1), screenCoord))
+        return true;
+
+    if (abs(crossProductZ) < 100 && isWithinSegment){
+        imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
+        imageStore(outputColor, grid_GlobalCoord, vec4(0,1,1,1));
+        return true;
+    }
+
+    return false;
+}
+
+//void WriteDebugLine(vec3 P1, vec3 P2, ivec2 screenCoord) {
+//    vec4 p1ClipPos = GlobalClipPosFromWorldPos(P1);
+//    vec3 p1NDC = NDCFromClipPos(p1ClipPos);
+//    vec2 p1UV = UVFromNDC(p1NDC);
+//    vec2 p1Coord = vec2(CoordFromUV(p1UV, globalUBO.screenSize));
+//
+//    vec4 p2ClipPos = GlobalClipPosFromWorldPos(P2);
+//    vec3 p2NDC = NDCFromClipPos(p2ClipPos);
+//    vec2 p2UV = UVFromNDC(p2NDC);
+//    vec2 p2Coord = vec2(CoordFromUV(p2UV, globalUBO.screenSize));
+//
+//    if (p1NDC.z > p2NDC.z){
+//        WriteDebugLine(p2Coord, p1Coord, screenCoord);
+//    } else {
+//        WriteDebugLine(p1Coord, p2Coord, screenCoord);
+//    }
+//}
+
 void StoreDebug(){
     imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
     imageStore(outputColor, grid_GlobalCoord, vec4(0,1,0,1));
@@ -113,14 +181,11 @@ void main()
     ivec2 outputSize = imageSize(outputColor);
     InitializeSubgroupGridInfo(outputSize);
 
-    if (any(greaterThan(nodeUBO.ulUV, vec2(1.0))) || any(lessThan(nodeUBO.lrUV, vec2(0.0)))) {
-        StoreDebug();
-        return;
-    }
-
     vec2 nodeOriginNDC = vec2(0,0);
     vec3 nodeOriginWorldPos = vec3(0,0,0);
     vec3 nodeOriginWorldDir = -WorldRayDirFromNodeNDC(nodeOriginNDC);
+    // move intersection plane to back of volume
+    nodeOriginWorldPos -= nodeOriginWorldDir * 0.5;
 
     vec2 globalUV = vec2(grid_GlobalCoord) / vec2(outputSize);
     vec2 globalNDC = NDCFromUV(globalUV);
@@ -128,37 +193,38 @@ void main()
     vec3 globalWorldPos = WorldPosFromGlobalClipPos(globalClipPos);
     vec3 globalWorldDir = WorldRayDirFromGlobalNDC2(globalNDC);
 
-//    vec4 testDepth = texture(nodeGBuffer, globalUV);
-//    imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
-//    imageStore(outputColor, grid_GlobalCoord, vec4(testDepth));
-//    return;
-
-    vec3 intersectWorldPos;
-    if (!IntersectPlane(globalWorldPos, globalWorldDir, nodeOriginWorldPos, nodeOriginWorldDir, intersectWorldPos)) {
-        StoreDebug();
-        return;
-    }
-
-    vec4 intersectGlobalClipPos = GlobalClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectGlobalNDC = NDCFromClipPos(intersectGlobalClipPos);
+    // We can assume this will hit because the if check above will retun if the node framebuffer is not in the global framebuffer
+    vec3 intersectWorldPos = IntersectPlane(globalWorldPos, globalWorldDir, nodeOriginWorldPos, nodeOriginWorldDir);
     vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
     vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+    ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
 
-    //this should be constrained the rect where it is in the framebuffer
-    if (any(lessThan(intersectNodeUV, nodeUBO.ulUV)) || any(greaterThan(intersectNodeUV, nodeUBO.lrUV))) {
-        StoreDebug();
+    { // Debug lines
+        ivec2 ulCoord = CoordFromUVRound(nodeUBO.ulUV, outputSize);
+        ivec2 lrCoord = CoordFromUVRound(nodeUBO.lrUV, outputSize);
+        ivec2 urCoord = ivec2(ulCoord.x, lrCoord.y);
+        ivec2 llCoord = ivec2(lrCoord.x, ulCoord.y);
+        if (WriteDebugLine(ulCoord, urCoord, grid_GlobalCoord))
+        return;
+        if (WriteDebugLine(urCoord, lrCoord, grid_GlobalCoord))
+        return;
+        if (WriteDebugLine(lrCoord, llCoord, grid_GlobalCoord))
+        return;
+        if (WriteDebugLine(llCoord, ulCoord, grid_GlobalCoord))
         return;
     }
 
-    // Linear sample with gbuffer dilate on depth or texelFetch/ImageLoad ?!?!
-    // I honestly do not know which is better.
-    // One reason to not linearly sample depth is that the transition between actual objects of different depths
-    // will not have interpolated pixel spread between them
-    ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
+    if (any(lessThan(intersectNodeUV, nodeUBO.ulUV)) || any(greaterThan(intersectNodeUV, nodeUBO.lrUV))) {
+        uint debugDepth = PackDepth16(HALF_EPSILON);
+        imageAtomicMax(outputAtomic, grid_GlobalCoord, debugDepth);
+        imageStore(outputColor, grid_GlobalCoord, vec4(0,0,0.02,0));
+        return;
+    }
+
+    // We don't want to linear sample because then you get float pixels between objects a great depth variation
     float nodeDepthSample = texelFetch(nodeGBuffer, intersectNodeCoord, 0).r;
 
-//        float nodeDepthSample = texture(nodeGBuffer, intersectNodeUV).r;
     vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
     vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
     vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
@@ -167,13 +233,6 @@ void main()
     vec2 globProjUV = UVFromNDC(globProjNDC);
     ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
 
-//    imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
-////    vec4 testColor = texture(nodeColor, intersectNodeUV);
-////    vec4 testColor = texture(nodeColor, globalUV);
-//    vec4 testColor = texelFetch(nodeColor, grid_GlobalCoord, 0);
-//    imageStore(outputColor, globProjCoord, testColor);
-//    return;
-
     if (!(globProjDepth > DEPTH_FAR))
         return;
 
@@ -181,9 +240,9 @@ void main()
     uint nodePackedDepth = PackDepth16(globProjDepth);
     uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
 
-    if (nodePackedDepth > prevNodePackedDepth){
+    if (nodePackedDepth > prevNodePackedDepth) {
+        // We don't want to linear sample because then pixels at the edge of an object get blended with black background
         vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
-//        vec4 nodeColorSample = texture(nodeColor, intersectNodeUV);
         imageStore(outputColor, globProjCoord, nodeColorSample);
     }
 }

@@ -629,7 +629,7 @@ run_loop:
 				vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, ulfClip));
 				vec2 ulfUV = UVFromNDC(ulfNDC);
 
-				vec2 ulUV = Vec2Min(ulfUV, ulbUV);
+				vec2 ulUV = ulfNDC.z < 0 ? ulbUV : Vec2Min(ulfUV, ulbUV);
 				vec2 ulUVClamp = Vec2Clamp(ulUV, 0.0f, 1.0f);
 
 				vec4 lrbModel = Vec4Rot(globCamPose.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
@@ -644,12 +644,12 @@ run_loop:
 				vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lrfClip));
 				vec2 lrfUV = UVFromNDC(lrfNDC);
 
-				vec2 lrUV = Vec2Max(lrbUV, lrfUV);
+				vec2 lrUV = lrfNDC.z < 0 ? lrbUV : Vec2Max(lrbUV, lrfUV);
 				vec2 lrUVClamp = Vec2Clamp(lrUV, 0.0f, 1.0f);
 
 				vec2 diff = {.vec = lrUVClamp.vec - ulUVClamp.vec};
 
-//				printf("%f  %f   %f  %f  \n", ulUV.x, lrUV.x,  ulUV.y, lrUV.y);
+//				printf("%f  %f   %f  %f  \n", ulbNDC.z, ulfNDC.z,  lrbNDC.z, lrfNDC.z);
 
 				// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
 				pNodeShared->cameraPose = globCamPose;

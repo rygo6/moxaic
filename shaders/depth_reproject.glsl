@@ -41,11 +41,19 @@ uint ClearDepthFlag(uint value) {
     return value & 0x7FFFFFFFu;
 }
 
-bool IntersectPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal, out vec3 intersectWorldPos) {
+// Intersect plane testing if it actually hit
+bool IntersectPlaneTest(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal, out vec3 intersectWorldPos) {
     float facingRatio = dot(planeNormal, rayDir);
     float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
     intersectWorldPos = rayOrigin + t * rayDir;
     return facingRatio < 0;
+}
+
+// Interset plane assuming a hit
+vec3 IntersectPlane(vec3 rayOrigin, vec3 rayDir, vec3 planePoint, vec3 planeNormal) {
+    float facingRatio = dot(planeNormal, rayDir);
+    float t = dot(planePoint - rayOrigin, planeNormal) / facingRatio;
+    return rayOrigin + t * rayDir;
 }
 
 //bool IntersectNodeNDC(vec3 worldPos, vec3 worldRay, vec2 globalUV, out vec3 intersectNodeNDC)

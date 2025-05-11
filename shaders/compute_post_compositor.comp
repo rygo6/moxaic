@@ -1,5 +1,4 @@
 #version 450
-//#extension GL_EXT_debug_printf : require
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle : require
@@ -18,6 +17,8 @@ layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUN
 layout (set = 2, binding = 0, r32ui) uniform uimage2D outputAtomic;
 layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 
+// This is a simple compute post processor that uses subgroup transfering to fill gaps in extrapolation
+// It is effective except at the edges can appear funky
 void main()
 {
     ivec2 outputSize = imageSize(outputColor);
