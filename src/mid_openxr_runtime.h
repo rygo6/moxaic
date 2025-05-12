@@ -231,10 +231,14 @@ constexpr int XR_SWAP_TYPE_COUNTS[] = {
 //// Handle
 ////
 typedef u16 map_handle;
-typedef u16 map_key;
+typedef map_handle mHnd;
 
 typedef u16 block_handle;
 typedef u32 block_key;
+
+// do i like this name?
+typedef block_handle bHnd;
+typedef block_key    bKey;
 
 #define HANDLE_INDEX_BIT_COUNT 12
 #define HANDLE_INDEX_MASK      0x0FFF
@@ -250,7 +254,7 @@ typedef u32 block_key;
 #define HANDLE_GENERATION(handle)            ((handle & HANDLE_GENERATION_MASK) >> HANDLE_INDEX_BIT_COUNT)
 #define HANDLE_GENERATION_SET(handle, value) (value << HANDLE_INDEX_BIT_COUNT) | HANDLE_INDEX(handle)
 
-// 0 generation to signify it as invalid. Max index to make it assert errors if still used.
+// Generation 0 to signify it as invalid. Max index to make it assert errors if still used.
 #define HANDLE_DEFAULT ((0 & HANDLE_GENERATION_MASK) | (UINT16_MAX & HANDLE_INDEX_MASK))
 
 #define HANDLE_VALID(handle) (HANDLE_GENERATION(handle) != 0)
@@ -275,7 +279,7 @@ typedef u32 block_key;
 		BITSET_DECL(occupied, n); \
 		block_key keys[n];        \
 		type      blocks[n];      \
-		uint8_t   generations[n]; \
+		u8        generations[n]; \
 	}
 
 static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
@@ -347,26 +351,31 @@ typedef struct MapBase {
 		block_handle handles[n]; \
 	}
 
-static inline map_handle MapAdd(int capacity, MapBase* pMap, block_handle handle, map_key key)
+static inline block_handle* MapHandles(int capacity, MapBase* pMap)
+{
+	return (block_handle*)(pMap->keys + capacity);
+}
+
+static inline map_handle MapAdd(int capacity, MapBase* pMap, block_handle handle, block_key key)
 {
 	int i = pMap->count;
 	if (i == capacity)
 		return HANDLE_DEFAULT;
-	block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
-	pHandles[i] = handle;
+
+	MapHandles(capacity, pMap)[i] = handle;
 	pMap->keys[i] = key;
 	pMap->count++;
+
 	return HANDLE_GENERATION_INCREMENT(i);
 }
 
-static inline map_handle MapFind(int capacity, MapBase* pMap, map_key key)
+static inline block_handle MapFind(int capacity, MapBase* pMap, block_key key)
 {
 	for (int i = 0; i < pMap->count; ++i) {
-		if (pMap->keys[i] == key) {
-			block_handle* pHandles = (block_handle*)(pMap->keys + capacity);
-			return pHandles[i];
-		}
+		if (pMap->keys[i] == key)
+			return MapHandles(capacity, pMap)[i];
 	}
+
 	return HANDLE_DEFAULT;
 }
 
@@ -883,6 +892,67 @@ static int OculusRightClick(float* pValue)
 	return 0;
 }
 
+static int InputSelectClick_Left(float* pValue)
+{
+	LOG_METHOD(InputSelectClick_Left);
+	*pValue = 100;
+	return 0;
+}
+static int InputSelectClick_Right(float* pValue)
+{
+	LOG_METHOD(InputSelectClick_Right);
+	*pValue = 100;
+	return 0;
+}
+static int InputMenuClick_Left(float* pValue)
+{
+	LOG_METHOD(InputMenuClick_Left);
+	*pValue = 100;
+	return 0;
+}
+static int InputMenuClick_Right(float* pValue)
+{
+	LOG_METHOD(InputMenuClick_Right);
+	*pValue = 100;
+	return 0;
+}
+static int InputGripPose_Left(float* pValue)
+{
+	LOG_METHOD(InputGripPose_Left);
+	*pValue = 100;
+	return 0;
+}
+static int InputGripPose_Right(float* pValue)
+{
+	LOG_METHOD(InputGripPose_Right);
+	*pValue = 100;
+	return 0;
+}
+static int InputAimPose_Left(float* pValue)
+{
+	LOG_METHOD(InputAimPose_Left);
+	*pValue = 100;
+	return 0;
+}
+static int InputAimPose_Right(float* pValue)
+{
+	LOG_METHOD(InputAimPose_Right);
+	*pValue = 100;
+	return 0;
+}
+static int OutputHaptic_Left(float* pValue)
+{
+	LOG_METHOD(OutputHaptic_Left);
+	*pValue = 100;
+	return 0;
+}
+static int OutputHaptic_Right(float* pValue)
+{
+	LOG_METHOD(OutputHaptic_Right);
+	*pValue = 100;
+	return 0;
+}
+
 ////////////
 //// Binding
 ////
@@ -918,9 +988,9 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 {
 	XrPath interactionProfilePath;
 	xrStringToPath((XrInstance)&xr.instance, interactionProfile, &interactionProfilePath);
-	auto interactionProfilePathHash = BLOCK_KEY(block.path, (Path*)interactionProfilePath);
+	bKey interactionProfilePathHash = BLOCK_KEY(block.path, (Path*)interactionProfilePath);
 
-	auto interactionProfileHandle  = BLOCK_CLAIM(block.profile, interactionProfilePathHash);
+	bHnd interactionProfileHandle  = BLOCK_CLAIM(block.profile, interactionProfilePathHash);
 	auto pInteractionProfile = BLOCK_PTR(block.profile, interactionProfileHandle);
 
 	pInteractionProfile->path = interactionProfilePath;
@@ -934,7 +1004,7 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 	return XR_SUCCESS;
 }
 
-#define XR_DEFAULT_INTERACTION_PROFILE "/interaction_profiles/oculus/touch_controller"
+#define XR_DEFAULT_INTERACTION_PROFILE "/interaction_profiles/khr/simple_controller"
 
 static XrResult InitStandardBindings()
 {
@@ -943,81 +1013,20 @@ static XrResult InitStandardBindings()
 
 	{
 		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
+			BINDING_DEFINITION(InputSelectClick_Left, "/user/hand/left/input/select/click"),
+			BINDING_DEFINITION(InputSelectClick_Right, "/user/hand/right/input/select/click"),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
+			BINDING_DEFINITION(InputMenuClick_Left, "/user/hand/left/input/menu/click"),
+			BINDING_DEFINITION(InputMenuClick_Right, "/user/hand/right/input/menu/click"),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+			BINDING_DEFINITION(InputGripPose_Left, "/user/hand/left/input/grip/pose"),
+			BINDING_DEFINITION(InputGripPose_Right, "/user/hand/right/input/grip/pose"),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+			BINDING_DEFINITION(InputAimPose_Left, "/user/hand/left/input/aim/pose"),
+			BINDING_DEFINITION(InputAimPose_Right, "/user/hand/right/input/aim/pose"),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
-		};
-		InitBinding("/interaction_profiles/oculus/touch_controller", COUNT(bindingDefinitions), bindingDefinitions);
-	}
-
-	{
-		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
-		};
-		InitBinding("/interaction_profiles/microsoft/motion_controller", COUNT(bindingDefinitions), bindingDefinitions);
-	}
-
-	{
-		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
+			BINDING_DEFINITION(OutputHaptic_Left, "/user/hand/left/output/haptic"),
+			BINDING_DEFINITION(OutputHaptic_Right, "/user/hand/right/output/haptic"),
 		};
 		InitBinding("/interaction_profiles/khr/simple_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
@@ -1046,34 +1055,7 @@ static XrResult InitStandardBindings()
 			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
 			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
 		};
-		InitBinding("/interaction_profiles/valve/index_controller", COUNT(bindingDefinitions), bindingDefinitions);
-	}
-
-	{
-		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
-
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
-		};
-		InitBinding("/interaction_profiles/htc/vive_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding("/interaction_profiles/oculus/touch_controller", COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 #undef BINDING_DEFINITION
@@ -2268,13 +2250,13 @@ XR_PROC xrCreateSwapchain(
 {
 	LOG_METHOD(xrCreateSwapchain);
 
-	LOG("format: %lld\n", createInfo->format);
-	LOG("sampleCount: %u\n", createInfo->sampleCount);
-	LOG("width: %u\n", createInfo->width);
-	LOG("height: %u\n", createInfo->height);
-	LOG("faceCount: %u\n", createInfo->faceCount);
-	LOG("arraySize: %u\n", createInfo->arraySize);
-	LOG("mipCount: %u\n", createInfo->mipCount);
+	LOG("  format: %lld\n", createInfo->format);
+	LOG("  sampleCount: %u\n", createInfo->sampleCount);
+	LOG("  width: %u\n", createInfo->width);
+	LOG("  height: %u\n", createInfo->height);
+	LOG("  faceCount: %u\n", createInfo->faceCount);
+	LOG("  arraySize: %u\n", createInfo->arraySize);
+	LOG("  mipCount: %u\n", createInfo->mipCount);
 
 	// move up to log section
 #define PRINT_CREATE_FLAGS(_flag, _bit)  \
@@ -2885,7 +2867,7 @@ XR_PROC xrEndFrame(
 
 		if (discrepancy > 0) {
 //			printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
-pSess->synchronizedFrameCount = 0;
+			pSess->synchronizedFrameCount = 0;
 
 			uint64_t initialTimelineValue;
 			switch (xr.instance.graphicsApi) {
@@ -3079,7 +3061,7 @@ XR_PROC xrStringToPath(
 	LOG_METHOD_ONCE(xrStringToPath);
 	CHECK_INSTANCE(instance);
 
-	auto pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
+	u32 pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (int i = 0; i < XR_PATH_CAPACITY; ++i) {
 		if (block.path.keys[i] != pathHash)
 			continue;
@@ -3094,8 +3076,6 @@ XR_PROC xrStringToPath(
 
 	auto hPath = BLOCK_CLAIM(block.path, pathHash);
 	HANDLE_CHECK(hPath, XR_ERROR_PATH_COUNT_EXCEEDED);
-
-	auto i = HANDLE_INDEX(hPath);
 
 	auto pPath = BLOCK_PTR(block.path, hPath);
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
@@ -3171,8 +3151,6 @@ XR_PROC xrCreateActionSet(
 
 	*actionSet = (XrActionSet)pActionSet;
 
-	printf("Created ActionSet with %s\n", createInfo->actionSetName);
-	printf("Created ActionSet with %s\n", createInfo->localizedActionSetName);
 	return XR_SUCCESS;
 }
 
@@ -3189,26 +3167,32 @@ XR_PROC xrCreateAction(
 	const XrActionCreateInfo* createInfo,
 	XrAction*                 action)
 {
-#ifdef ENABLE_DEBUG_LOG_METHOD
-//	LOG_METHOD(xrCreateAction);
-//	printf("%lu:%lu: xrCreateAction %s %s\n", GetCurrentProcessId(), GetCurrentThreadId(), createInfo->actionName, createInfo->localizedActionName);
-#endif
+	LOG_METHOD(xrCreateAction);
 	assert(createInfo->next == NULL);
 
 	auto pActionSet = (ActionSet*)actionSet;
 	auto hActionSet = BLOCK_HANDLE(block.actionSet, pActionSet);
 	HANDLE_CHECK(hActionSet, XR_ERROR_VALIDATION_FAILURE);
 
-	HANDLE_CHECK(pActionSet->attachedToSession, XR_ERROR_ACTIONSETS_ALREADY_ATTACHED);
+	if (HANDLE_VALID(pActionSet->attachedToSession)) {
+		LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED\n");
+		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
+	}
 
 	if (createInfo->countSubactionPaths > XR_MAX_SUBACTION_PATHS) {
-		LOG_ERROR("XR_ERROR_PATH_COUNT_EXCEEDED");
+		LOG_ERROR("XR_ERROR_PATH_COUNT_EXCEEDED\n");
 		return XR_ERROR_PATH_COUNT_EXCEEDED;
 	}
 
-	block_handle actionHandle = BLOCK_CLAIM(block.action, 0);
-	HANDLE_CHECK(actionHandle, XR_ERROR_LIMIT_REACHED);
-	Action* pAction = BLOCK_PTR(block.action, actionHandle);
+	u32 actionHash = CalcDJB2(createInfo->actionName, XR_MAX_ACTION_NAME_SIZE);
+	if (HANDLE_VALID(BLOCK_FIND(block.action, actionHash))) {
+		LOG_ERROR("XR_ERROR_NAME_DUPLICATED Action %s\n", createInfo->localizedActionName);
+		return XR_ERROR_NAME_DUPLICATED;
+	}
+
+	auto hAction = BLOCK_CLAIM(block.action, actionHash);
+	HANDLE_CHECK(hAction, XR_ERROR_LIMIT_REACHED);
+	auto pAction = BLOCK_PTR(block.action, hAction);
 	*pAction = (Action){};
 
 	pAction->hActionSet = hActionSet;
@@ -3221,14 +3205,20 @@ XR_PROC xrCreateAction(
 
 	*action = (XrAction)pAction;
 
-	//	printf("	actionName: %s\n", pAction->actionName);
-	//	printf("	localizedActionName %s\n", pAction->localizedActionName);
-	//	printf("	actionType: %d\n", pAction->actionType);
-	//	printf("	countSubactionPaths: %d\n", pAction->countSubactionPaths);
-	//	for (int i = 0; i < createInfo->countSubactionPaths; ++i) {
-	//		Path* pPath = (Path*)pAction->subactionPaths[i];
-	//		printf("		subactionPath: %s\n", pPath->string);
-	//	}
+	if (HANDLE_VALID(MAP_FIND(pActionSet->actions, actionHash))) {
+		LOG_ERROR("XR_ERROR_NAME_DUPLICATED ActionSet %s Action %s\n", pActionSet->actionSetName, createInfo->localizedActionName);
+		return XR_ERROR_NAME_DUPLICATED;
+	}
+	auto hMapAction = MAP_ADD(pActionSet->actions, hAction, actionHash);
+
+	printf("	actionName: %s\n", pAction->actionName);
+	printf("	localizedActionName %s\n", pAction->localizedActionName);
+	printf("	actionType: %d\n", pAction->actionType);
+	printf("	countSubactionPaths: %d\n", pAction->countSubactions);
+	for (int i = 0; i < createInfo->countSubactionPaths; ++i) {
+		Path* pPath = BLOCK_PTR(block.path, pAction->hSubactionPaths[i]);
+		printf("		subactionPath: %s\n", pPath->string);
+	}
 
 	return XR_SUCCESS;
 }
@@ -3246,12 +3236,13 @@ static int CompareSubPath(const char* pSubPath, const char* pPath)
 {
 	while (*pSubPath != '\0') {
 		if (*pSubPath != *pPath)
-			return 1;
+			return 0;
 
 		pSubPath++;
 		pPath++;
 	}
-	return 0;
+
+	return 1;
 }
 
 XR_PROC xrSuggestInteractionProfileBindings(
@@ -3263,60 +3254,62 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	assert(suggestedBindings->next == NULL);
 	CHECK_INSTANCE(instance);
 
-	auto pProfilePath = (Path*)suggestedBindings->interactionProfile;
-	auto profilePathHash = BLOCK_KEY(block.path, pProfilePath);
+	auto pSuggestProfilePath = (Path*)suggestedBindings->interactionProfile;
+	auto suggestProfilePathHash = BLOCK_KEY(block.path, pSuggestProfilePath);
 
-	auto hProfile = BLOCK_FIND(block.profile, profilePathHash);
-	HANDLE_CHECK(hProfile, XR_ERROR_PATH_UNSUPPORTED);
+	auto hSuggestProfile = BLOCK_FIND(block.profile, suggestProfilePathHash);
+	HANDLE_CHECK(hSuggestProfile, XR_ERROR_PATH_UNSUPPORTED);
 
-	auto pProfile = BLOCK_PTR(block.profile, hProfile);
-	printf("Binding: %s\n", pProfilePath->string);
+	auto pSuggestProfile = BLOCK_PTR(block.profile, hSuggestProfile);
+	printf("Binding: %s\n", pSuggestProfilePath->string);
 
-	const auto pSuggestions = suggestedBindings->suggestedBindings;
+	const auto pSuggest = suggestedBindings->suggestedBindings;
 
-	// Pre-emptively check everything so you don't end up with a half finished binding suggestion that breaks things.
+	// Pre-emptively check everything so you don't end up with a half-finished binding suggestion that breaks things.
 	// Since this method is rarely run the overhead should be fine.
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		auto pAct = (Action*)pSuggestions[i].action;
-		auto pActSet = BLOCK_PTR(block.actionSet, pAct->hActionSet);
-		HANDLE_CHECK(pActSet->attachedToSession, XR_ERROR_ACTIONSETS_ALREADY_ATTACHED);
+		auto pSuggestAction = (Action*)pSuggest[i].action;
+		auto pSuggestActionSet = BLOCK_PTR(block.actionSet, pSuggestAction->hActionSet);
+		if (HANDLE_VALID(pSuggestActionSet->attachedToSession)) {
+			LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED \n");
+			return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
+		}
 		// Might want to check if there is space too?
 	}
 
 	int actsBound = 0;
 	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		auto        pAct = (Action*)pSuggestions[i].action;
-		auto        pBindPath = (Path*)pSuggestions[i].binding;
+		auto pSuggestAction = (Action*)pSuggest[i].action;
+		auto pSuggestBindPath = (Path*)pSuggest[i].binding;
 
-		auto bindPathHash = BLOCK_KEY(block.path, pBindPath);
-		auto hMapBind = MAP_FIND(pProfile->bindings, bindPathHash);
-		if (!HANDLE_VALID(hMapBind)) {
-			printf("Could not find suggested Binding: %s on InteractionProfile: %s\n", pBindPath->string, pProfilePath->string);
+		bKey bindPathHash = BLOCK_KEY(block.path, pSuggestBindPath);
+
+		// MAP_FIND could be nested in BLOCK_HANDLE....
+		bHnd hSuggestBind = MAP_FIND(pSuggestProfile->bindings, bindPathHash);
+		if (!HANDLE_VALID(hSuggestBind)) {
+			printf("Could not find suggested Binding: %s on InteractionProfile: %s\n", pSuggestBindPath->string, pSuggestProfilePath->string);
 			continue;
 		}
 
-		auto hBind = pProfile->bindings.handles[hMapBind];
-		auto pBind = BLOCK_PTR(block.binding, hBind);
+		auto pSuggestBind = BLOCK_PTR(block.binding, hSuggestBind);
 
-		if (pAct->countSubactions == 0) {
+		if (pSuggestAction->countSubactions == 0) {
+			pSuggestAction->hSubactionBindings[0] = hSuggestBind;
 
-			pAct->hSubactionBindings[0] = hBind;
-
-			printf("Bound Action: %s BindingPath: %s No Subaction\n", pAct->actionName, pBindPath->string);
+			printf("Bound Action: %s BindingPath: %s No Subaction\n", pSuggestAction->actionName, pSuggestBindPath->string);
 			actsBound++;
 
 			continue;
 		}
 
-		for (int subactionIndex = 0; subactionIndex < pAct->countSubactions; ++subactionIndex) {
-
-			auto pSubactPath = BLOCK_PTR(block.path, pAct->hSubactionPaths[subactionIndex]);
-			if (!CompareSubPath(pSubactPath->string, pBindPath->string))
+		for (int subIndex = 0; subIndex < pSuggestAction->countSubactions; ++subIndex) {
+			auto pSubPath = BLOCK_PTR(block.path, pSuggestAction->hSubactionPaths[subIndex]);
+			if (!CompareSubPath(pSubPath->string, pSuggestBindPath->string))
 				continue;
 
-			pAct->hSubactionBindings[subactionIndex] = hBind;
+			pSuggestAction->hSubactionBindings[subIndex] = hSuggestBind;
 
-			printf("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pAct->actionName, pBindPath->string, subactionIndex, pSubactPath->string);
+			printf("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pSuggestAction->actionName, pSuggestBindPath->string, subIndex, pSubPath->string);
 			actsBound++;
 		}
 	}
@@ -3488,7 +3481,7 @@ XR_PROC xrSyncActions(
 	XrSession                session,
 	const XrActionsSyncInfo* syncInfo)
 {
-	LOG_METHOD_ONCE(xrSyncActions);
+	LOG_METHOD(xrSyncActions);
 	LogNextChain(syncInfo->next);
 
 	auto pSess = (Session*)session;
@@ -3500,15 +3493,16 @@ XR_PROC xrSyncActions(
 	auto time = xrGetTime();
 	for (int si = 0; si < syncInfo->countActiveActionSets; ++si) {
 
-		auto pActSet = (ActionSet*)syncInfo->activeActionSets[si].actionSet;
-		auto actSetHash = BLOCK_KEY(block.actionSet, pActSet);
+		auto pActionSet = (ActionSet*)syncInfo->activeActionSets[si].actionSet;
+		auto actionSetPath = (Path*)syncInfo->activeActionSets[si].subactionPath;
+		bKey actionSetHash = BLOCK_KEY(block.actionSet, pActionSet);
 
-		for (int ai = 0; ai < pActSet->actions.count; ++ai) {
-			auto pAct = BLOCK_PTR(block.action, pActSet->actions.handles[ai]);
+		for (int ai = 0; ai < pActionSet->actions.count; ++ai) {
+			auto pAction = BLOCK_PTR(block.action, pActionSet->actions.handles[ai]);
 
-			for (int sai = 0; sai < pAct->countSubactions; ++sai) {
-				auto pState = BLOCK_PTR(block.state, pAct->hSubactionStates[sai]);
-				auto pBind = BLOCK_PTR(block.binding, pAct->hSubactionBindings[sai]);
+			for (int sai = 0; sai < pAction->countSubactions; ++sai) {
+				auto pState = BLOCK_PTR(block.state, pAction->hSubactionStates[sai]);
+				auto pBind = BLOCK_PTR(block.binding, pAction->hSubactionBindings[sai]);
 
 				// need to understand this priority again
 //				if (pState->lastSyncedPriority > pActSet->priority &&
