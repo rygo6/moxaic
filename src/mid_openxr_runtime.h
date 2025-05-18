@@ -458,9 +458,12 @@ typedef struct ActionSet {
 
 #define XR_SPACE_CAPACITY 128
 typedef struct Space {
+	XrStructureType      type;
 	block_handle         hSession;
 	XrReferenceSpaceType referenceSpaceType;
-	XrPosef              poseInReferenceSpace;
+	XrPosef              poseInSpace;
+	XrAction             action;
+	XrPath               path;
 } Space;
 
 #define XR_SWAPCHAIN_CAPACITY 8
@@ -683,6 +686,7 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 
 #define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
+
 #define LOG_METHOD(_method) printf("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
 #define LOG_METHOD_ONCE(_method)   \
 	{                              \
@@ -692,8 +696,10 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 			LOG_METHOD(_method);   \
 		}                          \
 	}
+
 #else
 #define LOG_METHOD(_name)
+#define LOG_METHOD_ONCE(_name)
 #endif
 
 #define ENUM_NAME_CASE(_enum, _value) \
@@ -892,64 +898,114 @@ static int OculusRightClick(float* pValue)
 	return 0;
 }
 
+static void DebugInputFloat(float* pValue) { *pValue += .2f; }
+
 static int InputSelectClick_Left(float* pValue)
 {
-	LOG_METHOD(InputSelectClick_Left);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputSelectClick_Left);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int InputSelectClick_Right(float* pValue)
 {
-	LOG_METHOD(InputSelectClick_Right);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputSelectClick_Right);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputSqueezeValue_Left(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeValue_Left);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputSqueezeValue_Right(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeValue_Right);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputSqueezeClick_Left(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeClick_Left);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputSqueezeClick_Right(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeClick_Right);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputTriggerValue_Left(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeClick_Left);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputTriggerValue_Right(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeClick_Right);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputTriggerTrigger_Left(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeClick_Left);
+	DebugInputFloat(pValue);
+	return 0;
+}
+static int InputTriggerTrigger_Right(float* pValue)
+{
+	LOG_METHOD_ONCE(InputSqueezeClick_Right);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int InputMenuClick_Left(float* pValue)
 {
-	LOG_METHOD(InputMenuClick_Left);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputMenuClick_Left);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int InputMenuClick_Right(float* pValue)
 {
-	LOG_METHOD(InputMenuClick_Right);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputMenuClick_Right);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int InputGripPose_Left(float* pValue)
 {
-	LOG_METHOD(InputGripPose_Left);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputGripPose_Left);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int InputGripPose_Right(float* pValue)
 {
-	LOG_METHOD(InputGripPose_Right);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputGripPose_Right);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int InputAimPose_Left(float* pValue)
 {
-	LOG_METHOD(InputAimPose_Left);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputAimPose_Left);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int InputAimPose_Right(float* pValue)
 {
-	LOG_METHOD(InputAimPose_Right);
-	*pValue = 100;
+	LOG_METHOD_ONCE(InputAimPose_Right);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int OutputHaptic_Left(float* pValue)
 {
-	LOG_METHOD(OutputHaptic_Left);
-	*pValue = 100;
+	LOG_METHOD_ONCE(OutputHaptic_Left);
+	DebugInputFloat(pValue);
 	return 0;
 }
 static int OutputHaptic_Right(float* pValue)
 {
-	LOG_METHOD(OutputHaptic_Right);
-	*pValue = 100;
+	LOG_METHOD_ONCE(OutputHaptic_Right);
+	DebugInputFloat(pValue);
 	return 0;
 }
 
@@ -1004,7 +1060,31 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 	return XR_SUCCESS;
 }
 
-#define XR_DEFAULT_INTERACTION_PROFILE "/interaction_profiles/khr/simple_controller"
+#define XR_INTERACTION_PROFILE_KHR_SIMPLE_CONTROLLER "/interaction_profiles/khr/simple_controller"
+#define XR_INTERACTION_PROFILE_OCULUS_TOUCH_CONTROLLER "/interaction_profiles/oculus/touch_controller"
+
+#define XR_DEFAULT_INTERACTION_PROFILE XR_INTERACTION_PROFILE_KHR_SIMPLE_CONTROLLER
+
+#define XR_INPUT_SELECT_CLICK_LEFT_HAND    "/user/hand/left/input/select/click"
+#define XR_INPUT_MENU_CLICK_LEFT_HAND      "/user/hand/left/input/menu/click"
+#define XR_INPUT_GRIP_POSE_LEFT_HAND       "/user/hand/left/input/grip/pose"
+#define XR_INPUT_AIM_POSE_LEFT_HAND        "/user/hand/left/input/aim/pose"
+#define XR_INPUT_SQUEEZE_VALUE_LEFT_HAND   "/user/hand/left/input/squeeze/value"
+#define XR_INPUT_SQUEEZE_CLICK_LEFT_HAND   "/user/hand/left/input/squeeze/click"
+#define XR_INPUT_TRIGGER_VALUE_LEFT_HAND   "/user/hand/left/input/trigger/value"
+#define XR_INPUT_TRIGGER_CLICK_LEFT_HAND   "/user/hand/left/input/trigger/click"
+#define XR_OUTPUT_HAPTIC_LEFT_HAND         "/user/hand/left/output/haptic"
+
+#define XR_INPUT_SELECT_CLICK_RIGHT_HAND   "/user/hand/right/input/select/click"
+#define XR_INPUT_MENU_CLICK_RIGHT_HAND     "/user/hand/right/input/menu/click"
+#define XR_INPUT_GRIP_POSE_RIGHT_HAND      "/user/hand/right/input/grip/pose"
+#define XR_INPUT_AIM_POSE_RIGHT_HAND       "/user/hand/right/input/aim/pose"
+#define XR_INPUT_SQUEEZE_VALUE_RIGHT_HAND  "/user/hand/right/input/squeeze/value"
+#define XR_INPUT_SQUEEZE_CLICK_RIGHT_HAND  "/user/hand/right/input/squeeze/click"
+#define XR_INPUT_TRIGGER_VALUE_RIGHT_HAND  "/user/hand/right/input/trigger/value"
+#define XR_INPUT_TRIGGER_CLICK_RIGHT_HAND  "/user/hand/right/input/trigger/click"
+#define XR_OUTPUT_HAPTIC_RIGHT_HAND        "/user/hand/right/output/haptic"
+
 
 static XrResult InitStandardBindings()
 {
@@ -1013,49 +1093,56 @@ static XrResult InitStandardBindings()
 
 	{
 		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(InputSelectClick_Left, "/user/hand/left/input/select/click"),
-			BINDING_DEFINITION(InputSelectClick_Right, "/user/hand/right/input/select/click"),
+			BINDING_DEFINITION(InputSelectClick_Left, XR_INPUT_SELECT_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(InputSelectClick_Right, XR_INPUT_SELECT_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputMenuClick_Left, "/user/hand/left/input/menu/click"),
-			BINDING_DEFINITION(InputMenuClick_Right, "/user/hand/right/input/menu/click"),
+			BINDING_DEFINITION(InputMenuClick_Left, XR_INPUT_MENU_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(InputMenuClick_Right, XR_INPUT_MENU_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputGripPose_Left, "/user/hand/left/input/grip/pose"),
-			BINDING_DEFINITION(InputGripPose_Right, "/user/hand/right/input/grip/pose"),
+			BINDING_DEFINITION(InputGripPose_Left, XR_INPUT_GRIP_POSE_LEFT_HAND),
+			BINDING_DEFINITION(InputGripPose_Right, XR_INPUT_GRIP_POSE_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputAimPose_Left, "/user/hand/left/input/aim/pose"),
-			BINDING_DEFINITION(InputAimPose_Right, "/user/hand/right/input/aim/pose"),
+			BINDING_DEFINITION(InputAimPose_Left, XR_INPUT_AIM_POSE_LEFT_HAND),
+			BINDING_DEFINITION(InputAimPose_Right, XR_INPUT_AIM_POSE_RIGHT_HAND),
 
-			BINDING_DEFINITION(OutputHaptic_Left, "/user/hand/left/output/haptic"),
-			BINDING_DEFINITION(OutputHaptic_Right, "/user/hand/right/output/haptic"),
+			BINDING_DEFINITION(OutputHaptic_Left, XR_OUTPUT_HAPTIC_LEFT_HAND),
+			BINDING_DEFINITION(OutputHaptic_Right, XR_OUTPUT_HAPTIC_RIGHT_HAND),
+
 		};
-		InitBinding("/interaction_profiles/khr/simple_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding(XR_INTERACTION_PROFILE_KHR_SIMPLE_CONTROLLER, COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 	{
 		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/select/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/select/click"),
+			BINDING_DEFINITION(InputSelectClick_Left, XR_INPUT_SELECT_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(InputSelectClick_Right, XR_INPUT_SELECT_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/squeeze/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/squeeze/click"),
+			BINDING_DEFINITION(InputSqueezeValue_Left, XR_INPUT_SQUEEZE_VALUE_LEFT_HAND),
+			BINDING_DEFINITION(InputSqueezeValue_Right, XR_INPUT_SQUEEZE_VALUE_RIGHT_HAND),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/value"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/value"),
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/trigger/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/trigger/click"),
+			BINDING_DEFINITION(InputSqueezeClick_Left, XR_INPUT_SQUEEZE_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(InputSqueezeClick_Right, XR_INPUT_SQUEEZE_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/grip/pose"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/grip/pose"),
+			BINDING_DEFINITION(InputTriggerValue_Left, XR_INPUT_TRIGGER_VALUE_LEFT_HAND),
+			BINDING_DEFINITION(InputTriggerValue_Right, XR_INPUT_TRIGGER_VALUE_RIGHT_HAND),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/output/haptic"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/output/haptic"),
+			BINDING_DEFINITION(InputTriggerTrigger_Left, XR_INPUT_TRIGGER_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(InputTriggerTrigger_Right, XR_INPUT_TRIGGER_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(OculusLeftClick, "/user/hand/left/input/menu/click"),
-			BINDING_DEFINITION(OculusRightClick, "/user/hand/right/input/menu/click"),
+			BINDING_DEFINITION(InputGripPose_Left, XR_INPUT_GRIP_POSE_LEFT_HAND),
+			BINDING_DEFINITION(InputGripPose_Right, XR_INPUT_GRIP_POSE_RIGHT_HAND),
+
+			BINDING_DEFINITION(InputAimPose_Left, XR_INPUT_AIM_POSE_LEFT_HAND),
+			BINDING_DEFINITION(InputAimPose_Right, XR_INPUT_AIM_POSE_RIGHT_HAND),
+
+			BINDING_DEFINITION(OutputHaptic_Left, XR_OUTPUT_HAPTIC_LEFT_HAND),
+			BINDING_DEFINITION(OutputHaptic_Right, XR_OUTPUT_HAPTIC_RIGHT_HAND),
+
+			BINDING_DEFINITION(InputMenuClick_Left, XR_INPUT_MENU_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(InputMenuClick_Right, XR_INPUT_MENU_CLICK_RIGHT_HAND),
+
 		};
-		InitBinding("/interaction_profiles/oculus/touch_controller", COUNT(bindingDefinitions), bindingDefinitions);
+		InitBinding(XR_INTERACTION_PROFILE_OCULUS_TOUCH_CONTROLLER, COUNT(bindingDefinitions), bindingDefinitions);
 	}
 
 #undef BINDING_DEFINITION
@@ -1108,11 +1195,11 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_visibility_mask_SPEC_VERSION,
 		},
-//		{
-//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-//			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
-//			.extensionVersion = XR_EXT_user_presence_SPEC_VERSION,
-//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_user_presence_SPEC_VERSION,
+		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_EXT_CONFORMANCE_AUTOMATION_EXTENSION_NAME,
@@ -1123,16 +1210,16 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_COMPOSITION_LAYER_DEPTH_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_composition_layer_depth_SPEC_VERSION,
 		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
-			.extensionVersion = XR_VARJO_quad_views_SPEC_VERSION,
-		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_MSFT_SECONDARY_VIEW_CONFIGURATION_EXTENSION_NAME,
-			.extensionVersion = XR_MSFT_secondary_view_configuration_SPEC_VERSION,
-		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_VARJO_QUAD_VIEWS_EXTENSION_NAME,
+//			.extensionVersion = XR_VARJO_quad_views_SPEC_VERSION,
+//		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_MSFT_SECONDARY_VIEW_CONFIGURATION_EXTENSION_NAME,
+//			.extensionVersion = XR_MSFT_secondary_view_configuration_SPEC_VERSION,
+//		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
@@ -1143,11 +1230,11 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 //			.extensionName = XR_MSFT_HAND_INTERACTION_EXTENSION_NAME,
 //			.extensionVersion = XR_MSFT_hand_interaction_SPEC_VERSION,
 //		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_MSFT_FIRST_PERSON_OBSERVER_EXTENSION_NAME,
-			.extensionVersion = XR_MSFT_first_person_observer_SPEC_VERSION,
-		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_MSFT_FIRST_PERSON_OBSERVER_EXTENSION_NAME,
+//			.extensionVersion = XR_MSFT_first_person_observer_SPEC_VERSION,
+//		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_META_PERFORMANCE_METRICS_EXTENSION_NAME,
@@ -1471,7 +1558,7 @@ XR_PROC xrPollEvent(
 			pEventData->changeTime = xrGetTime();
 			pEventData->poseValid = XR_TRUE;
 			// this is not correct, supposed to be origin of new space in space of prior space
-			pEventData->poseInPreviousSpace = pPendingSpace->poseInReferenceSpace;
+			pEventData->poseInPreviousSpace = pPendingSpace->poseInSpace;
 
 			printf("XrEventDataReferenceSpaceChangePending: %d\n", pEventData->referenceSpaceType);
 
@@ -1873,9 +1960,10 @@ XR_PROC xrCreateReferenceSpace(
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
 
 	auto pSpace = BLOCK_PTR(block.space, hSpace);
+	pSpace->type = createInfo->type;
 	pSpace->hSession = BLOCK_HANDLE(block.session, pSess);
 	pSpace->referenceSpaceType = createInfo->referenceSpaceType;
-	pSpace->poseInReferenceSpace = createInfo->poseInReferenceSpace;
+	pSpace->poseInSpace = createInfo->poseInReferenceSpace;
 
 	// auto switch to first created space
 	if (!HANDLE_VALID(pSess->hPendingReferenceSpace))
@@ -1915,12 +2003,19 @@ XR_PROC xrCreateActionSpace(
 	const XrActionSpaceCreateInfo* createInfo,
 	XrSpace*                       space)
 {
-	LOG_METHOD_ONCE(xrCreateActionSpace);
+	auto position = createInfo->poseInActionSpace.position;
+	auto orientation = createInfo->poseInActionSpace.orientation;
+	LOG("xrCreateActionSpace %s %s " FORMAT_STRUCT_F(XrVector3f) FORMAT_STRUCT_F(XrQuaternionf) "\n",
+		((Action*)createInfo->action)->actionName, ((Path*)createInfo->subactionPath)->string, EXPAND_STRUCT(XrVector3f, position), EXPAND_STRUCT(XrQuaternionf, orientation));
 	assert(createInfo->next == NULL);
 
 	auto hSpace = BLOCK_CLAIM(block.space, 0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
 	auto pSpace = BLOCK_PTR(block.space, hSpace);
+	pSpace->type = createInfo->type;
+	pSpace->poseInSpace = createInfo->poseInActionSpace;
+	pSpace->action = createInfo->action;
+	pSpace->path = createInfo->subactionPath;
 
 	auto pSess = (Session*)session;
 	MAP_ADD(pSess->actionSpaces, hSpace, 0);
@@ -1940,6 +2035,11 @@ XR_PROC xrLocateSpace(
 
 	auto pSpace = (Space*)space;
 	auto pSess = BLOCK_PTR(block.session, pSpace->hSession);
+
+	if (pSpace->type == XR_TYPE_ACTION_SET_CREATE_INFO) {
+		auto pPath = (Path*)pSpace->path;
+		LOG("Getting Action Space: %s\n", pPath->string);
+	}
 
 	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
 							  XR_SPACE_LOCATION_POSITION_VALID_BIT |
@@ -3261,7 +3361,7 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	HANDLE_CHECK(hSuggestProfile, XR_ERROR_PATH_UNSUPPORTED);
 
 	auto pSuggestProfile = BLOCK_PTR(block.profile, hSuggestProfile);
-	printf("Binding: %s\n", pSuggestProfilePath->string);
+	printf("Binding: %s %p\n", pSuggestProfilePath->string, pSuggestProfilePath);
 
 	const auto pSuggest = suggestedBindings->suggestedBindings;
 
@@ -3381,12 +3481,20 @@ XR_PROC xrGetCurrentInteractionProfile(
 
 	// application might set interaction profile then immediately call things without letting xrPollEvent update activeInteractionProfile
 	auto pSess = (Session*)session;
+	InteractionProfile* pProfile = XR_NULL_HANDLE;
 	if (HANDLE_VALID(pSess->hActiveInteractionProfile))
-		interactionProfile->interactionProfile = (XrPath)BLOCK_PTR(block.profile, pSess->hActiveInteractionProfile);
+		pProfile = BLOCK_PTR(block.profile, pSess->hActiveInteractionProfile);
 	else if (HANDLE_VALID(pSess->hPendingInteractionProfile))
-		interactionProfile->interactionProfile = (XrPath)BLOCK_PTR(block.profile, pSess->hPendingInteractionProfile);
-	else
-		interactionProfile->interactionProfile = XR_NULL_HANDLE;
+		pProfile = BLOCK_PTR(block.profile, pSess->hPendingInteractionProfile);
+
+	Path* pProfilePath = XR_NULL_HANDLE;
+	if (pProfile != XR_NULL_HANDLE) {
+		pProfilePath = (Path*)pProfile->path;
+		LOG("Found InteractionProfile: %s %p\n", pProfilePath->string, pProfilePath);
+	}
+
+	// TODO need to check and see if the path has anything bound to it!!
+	interactionProfile->interactionProfile = (XrPath)pProfilePath;
 
 	return XR_SUCCESS;
 }
@@ -3404,14 +3512,13 @@ XR_PROC xrGetActionStateBoolean(
 	auto hGetActSet = pGetAct->hActionSet;
 	auto pGetActSet = BLOCK_PTR(block.actionSet, hGetActSet);
 
-	//	LOG_METHOD_LOOP("Action: %s\n", pGetAction->actionName);
 
-	//	state->lastChangeTime = GetXrTime();
-	//	state->changedSinceLastSync = true;
-	//	state->currentState = true;
-	//	state->isActive = true;
+	state->changedSinceLastSync = true;
+	state->currentState = true;
+	state->lastChangeTime = xrGetTime();
+	state->isActive = true;
 
-//	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+
 	return XR_SUCCESS;
 }
 
@@ -3462,9 +3569,9 @@ XR_PROC xrGetActionStateVector2f(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateVector2f*      state)
 {
-	LOG_METHOD(xrGetActionStateVector2f);
-	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
-	return XR_ERROR_PATH_UNSUPPORTED;
+	LOG_METHOD_ONCE(xrGetActionStateVector2f);
+	state->isActive = XR_TRUE;
+	return XR_SUCCESS;
 }
 
 XR_PROC xrGetActionStatePose(
@@ -3472,16 +3579,16 @@ XR_PROC xrGetActionStatePose(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStatePose*          state)
 {
-	LOG_METHOD(xrGetActionStatePose);
-	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
-	return XR_ERROR_PATH_UNSUPPORTED;
+	LOG_METHOD_ONCE(xrGetActionStatePose);
+	state->isActive = XR_TRUE;
+	return XR_SUCCESS;
 }
 
 XR_PROC xrSyncActions(
 	XrSession                session,
 	const XrActionsSyncInfo* syncInfo)
 {
-	LOG_METHOD(xrSyncActions);
+	LOG_METHOD_ONCE(xrSyncActions);
 	LogNextChain(syncInfo->next);
 
 	auto pSess = (Session*)session;
