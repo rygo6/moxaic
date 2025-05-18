@@ -24,7 +24,7 @@ typedef const char* str;
 //// Debug Logging
 ////
 extern void Panic(const char* file, int line, const char* message);
-#define PANIC(_message) Panic(__FILE__, __LINE__, _message)
+#define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
 #define CHECK(_err, _message)                      \
 	if (__builtin_expect(!!(_err), 0)) {           \
 		fprintf(stderr, "Error Code: %d\n", _err); \

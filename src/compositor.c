@@ -334,8 +334,8 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 		.zFar = 100.0f,
 	};
 	MidPose globCamPose = {
-		.position = {0.0f, 0.0f, 2.0f},
-		.euler = {0.0f, 0.0f, 0.0f},
+		.position = VEC3(0.0f, 0.0f, 2.0f),
+		.euler = VEC3(0.0f, 0.0f, 0.0f),
 	};
 	globCamPose.rotation = QuatFromEuler(globCamPose.euler);
 	auto globSetState = (VkGlobalSetState){};
@@ -580,9 +580,9 @@ run_loop:
 				CmdPipelineImageBarriers2(graphCmd, 3, pAcqBars);
 
 //				ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
-				auto extnt = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
-				int  pixlCt = extnt.x * extnt.y;
-				int  groupCt = pixlCt / GRID_SUBGROUP_CAPACITY  / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
+				ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+				u32   pixelCt = extent.x * extent.y;
+				u32  groupCt = pixelCt / GRID_SUBGROUP_CAPACITY  / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
 
 				memcpy(&pCompst->pGBufferProcessMapped->depth, (void*)&pNodeShared->depthState, sizeof(MxcDepthState));
 				VkWriteDescriptorSet pshSets[] = {
@@ -657,7 +657,7 @@ run_loop:
 
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShared->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-				pNodeShared->globalSetState.framebufferSize = (ivec2){diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT};
+				pNodeShared->globalSetState.framebufferSize = IVEC2(diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT);
 				pNodeShared->ulClipUV = ulUV;
 				pNodeShared->lrClipUV = lrUV;
 				atomic_thread_fence(memory_order_release);
@@ -710,6 +710,8 @@ run_loop:
 						CmdDrawMeshTasksEXT(graphCmd, 1, 1, 1);
 						graphicsBlit = true;
 						break;
+					default:
+						break;
 				}
 			}
 
@@ -747,9 +749,9 @@ run_loop:
 						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, comptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositData[iNode].nodeSet, 0, NULL);
 
 						// can be saved
-						ivec2 extnt = {DEFAULT_WIDTH, DEFAULT_HEIGHT};
-						int   pixlCt = extnt.x * extnt.y;
-						int   groupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT;
+						ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+						int   pixelCt = extent.x * extent.y;
+						int   groupCt = pixelCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT;
 //						int   quadGroupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
 
 						CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, comptNodePipe);
@@ -775,11 +777,12 @@ run_loop:
 						};
 						CmdPipelineImageBarriers2(graphCmd, COUNT(postComptBarrier), postComptBarrier);
 
-
 						CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, comptPostNodePipe);
 						CmdDispatch(graphCmd, 1, groupCt, 1);
 
 						computeBlit = true;
+						break;
+					default:
 						break;
 				}
 			}

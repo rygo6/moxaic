@@ -15,9 +15,9 @@
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
 
 // Node state in Compositor Process
-size_t                   nodeCt = 0;
-MxcNodeCompositorLocal   nodeCompositData[MXC_NODE_CAPACITY] = {};
-MxcNodeShared*           activeNodesShared[MXC_NODE_CAPACITY] = {};
+u16                    nodeCt = 0;
+MxcNodeCompositorLocal nodeCompositData[MXC_NODE_CAPACITY] = {};
+MxcNodeShared*         activeNodesShared[MXC_NODE_CAPACITY] = {};
 
 // Only used for local thread nodes. Node from other process will use shared memory.
 // Maybe I could just always make it use shared memory for consistency’s sake?
@@ -576,8 +576,8 @@ static struct {
 	SOCKET    listenSocket;
 	pthread_t thread;
 } ipcServer;
-const static char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
-const static char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
+const char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
+const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
 // Checks WIN32 error code. Expects 1 for success.
 #define WIN32_CHECK(_command, _message)                             \

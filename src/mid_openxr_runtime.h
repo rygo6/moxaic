@@ -308,7 +308,7 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	})
 #define BLOCK_RELEASE(block, handle)                                                                                                                       \
 	({                                                                                                                                                     \
-		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < block.blocks + COUNT(block.blocks) && #block ": Releasing SLAB Handle. Out of range."); \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Releasing SLAB Handle. Out of range."); \
 		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing SLAB handle. Should be occupied.");                                     \
 		BITCLEAR(block.occupied, (int)HANDLE_INDEX(handle));                                                                                               \
 	})
@@ -371,7 +371,7 @@ static inline map_handle MapAdd(int capacity, MapBase* pMap, block_handle handle
 
 static inline block_handle MapFind(int capacity, MapBase* pMap, block_key key)
 {
-	for (int i = 0; i < pMap->count; ++i) {
+	for (u32 i = 0; i < pMap->count; ++i) {
 		if (pMap->keys[i] == key)
 			return MapHandles(capacity, pMap)[i];
 	}
@@ -529,8 +529,8 @@ typedef struct Session {
 
 	//// Events
 	CACHE_ALIGN
-	XrSessionState activeSessionState: 4;
-	XrSessionState pendingSessionState: 4;
+	XrSessionState activeSessionState;
+	XrSessionState pendingSessionState;
 
 	block_handle hActiveReferenceSpace;
 	block_handle hPendingReferenceSpace;
@@ -538,8 +538,8 @@ typedef struct Session {
 	block_handle hActiveInteractionProfile;
 	block_handle hPendingInteractionProfile;
 
-	XrBool32 activeIsUserPresent: 1;
-	XrBool32 pendingIsUserPresent: 1;
+	XrBool32 activeIsUserPresent;
+	XrBool32 pendingIsUserPresent;
 
 	//// Graphics
 	CACHE_ALIGN
@@ -758,51 +758,9 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 /////////
 //// Math
 ////
+#ifndef PI
 #define PI 3.14159265358979323846
-// I prolly just want to make a depenedency on mid math
-static inline XrQuaternionf xrRotFromMat4(XrMat4 m)
-{
-	XrQuaternionf q;
-	float trace = m[0] + m[5] + m[10];  // m00 + m11 + m22
-	if (trace > 0) {
-		float s = 0.5f / sqrtf(trace + 1.0f);
-		q.w = 0.25f / s;
-		q.x = (m[6] - m[9]) * s;    // m12 - m21
-		q.y = (m[8] - m[2]) * s;    // m20 - m02
-		q.z = (m[1] - m[4]) * s;    // m01 - m10
-	}
-	else if (m[0] > m[5] && m[0] > m[10]) {    // m00 largest
-		float s = 2.0f * sqrtf(1.0f + m[0] - m[5] - m[10]);
-		q.w = (m[6] - m[9]) / s;    // m12 - m21
-		q.x = 0.25f * s;
-		q.y = (m[4] + m[1]) / s;    // m10 + m01
-		q.z = (m[8] + m[2]) / s;    // m20 + m02
-	}
-	else if (m[5] > m[10]) {    // m11 largest
-		float s = 2.0f * sqrtf(1.0f + m[5] - m[0] - m[10]);
-		q.w = (m[8] - m[2]) / s;    // m20 - m02
-		q.x = (m[4] + m[1]) / s;    // m10 + m01
-		q.y = 0.25f * s;
-		q.z = (m[9] + m[6]) / s;    // m21 + m12
-	}
-	else {    // m22 largest
-		float s = 2.0f * sqrtf(1.0f + m[10] - m[0] - m[5]);
-		q.w = (m[1] - m[4]) / s;    // m01 - m10
-		q.x = (m[8] + m[2]) / s;    // m20 + m02
-		q.y = (m[9] + m[6]) / s;    // m21 + m12
-		q.z = 0.25f * s;
-	}
-	return q;
-}
-static inline XrVector3f xrPosFromMat4(XrMat4 m)
-{
-	float w = m[15];    // m33 (c3r3)
-	return (XrVector3f){
-		m[12] / w,      // m30 (c3r0)
-		m[13] / w,      // m31 (c3r1)
-		m[14] / w       // m32 (c3r2)
-	};
-}
+#endif
 static inline XrQuaternionf xrQuaternionFromEuler(XrVector3f euler)
 {
 	XrVector3f c, s;
@@ -820,61 +778,7 @@ static inline XrQuaternionf xrQuaternionFromEuler(XrVector3f euler)
 	out.z = c.x * c.y * s.z - s.x * s.y * c.z;
 	return out;
 }
-static inline XrMat4 xrMat4XInvertPos(XrMat4 m)
-{
-	m[12] = -m[12];  // c3r0
-	return m;
-}
-static inline XrMat4 xrMat4YInvertPos(XrMat4 m)
-{
-	m[13] = -m[13];  // c3r1
-	return m;
-}
-static inline XrMat4 xrMat4ZInvertPos(XrMat4 m)
-{
-	m[14] = -m[14];  // c3r2
-	return m;
-}
-static inline XrMat4 xrMat4MirrorXRot(XrMat4 m) {
-	// Get local X axis (first column of rotation part)
-	float local_x[3] = {
-		m[0],  // c0r0
-		m[1],  // c0r1
-		m[2]   // c0r2
-	};
 
-	// Create reflection matrix that mirrors across plane perpendicular to local X
-	// Householder reflection formula: I - 2(v⊗v)
-	// Negate the rotational part except for components along local X
-
-	m[4] -= 2.0f * local_x[0] * local_x[1];  // c1r0
-	m[5] -= 2.0f * local_x[1] * local_x[1];  // c1r1
-	m[6] -= 2.0f * local_x[2] * local_x[1];  // c1r2
-
-	m[8] -= 2.0f * local_x[0] * local_x[2];  // c2r0
-	m[9] -= 2.0f * local_x[1] * local_x[2];  // c2r1
-	m[10] -= 2.0f * local_x[2] * local_x[2]; // c2r2
-	return m;
-}
-static inline XrMat4 xrMat4InvertXRot(XrMat4 m) {
-	m[1] = -m[1];    // c0r1 (Y component of first column)
-	m[2] = -m[2];    // c0r2 (Z component of first column)
-
-	m[5] = -m[5];    // c1r1 (Y component of second column)
-	m[6] = -m[6];    // c1r2 (Z component of second column)
-
-	m[9] = -m[9];    // c2r1 (Y component of third column)
-	m[10] = -m[10];  // c2r2 (Z component of third column)
-	return m;
-}
-static inline XrMat4 xrMat4InvertYRot(XrMat4 m) {
-	m[0] = -m[0];  // c0r0
-	m[8] = -m[8];  // c2r0
-}
-static inline XrMat4 xrMat4InvertZRot(XrMat4 m) {
-	m[0] = -m[0];  // c0r0
-	m[4] = -m[4];  // c1r0
-}
 
 #define XR_CONVERT_DD11_POSITION(_) _.y = -_.y
 #define XR_CONVERT_D3D11_EULER(_) _.x = -_.x
@@ -1019,7 +923,7 @@ static XrResult RegisterBinding(
 	int (*func)(void*))
 {
 	auto bindPathHash = BLOCK_KEY(block.path, pBindingPath);
-	for (int i = 0; i < pInteractionProfile->bindings.count; ++i) {
+	for (u32 i = 0; i < pInteractionProfile->bindings.count; ++i) {
 		if (pInteractionProfile->bindings.keys[i] == bindPathHash) {
 			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindPathHash);
 			return XR_ERROR_PATH_INVALID;
@@ -1089,7 +993,7 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 static XrResult InitStandardBindings()
 {
 
-#define BINDING_DEFINITION(_func, _path) (int (*)(void*)) _func, _path
+#define BINDING_DEFINITION(_func, _path) {(int (*)(void*)) _func, _path}
 
 	{
 		BindingDefinition bindingDefinitions[] = {
@@ -1302,11 +1206,11 @@ XR_PROC xrCreateInstance(
 		return XR_ERROR_LIMIT_REACHED;
 	}
 
-	for (int i = 0; i < createInfo->enabledApiLayerCount; ++i) {
+	for (u32 i = 0; i < createInfo->enabledApiLayerCount; ++i) {
 		printf("Enabled API Layer: %s\n", createInfo->enabledApiLayerNames[i]);
 	}
 
-	for (int i = 0; i < createInfo->enabledExtensionCount; ++i) {
+	for (u32 i = 0; i < createInfo->enabledExtensionCount; ++i) {
 		printf("Enabled Extension: %s\n", createInfo->enabledExtensionNames[i]);
 		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
 			xr.instance.graphicsApi = XR_GRAPHICS_API_OPENGL;
@@ -1349,16 +1253,16 @@ XR_PROC xrCreateInstance(
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
-			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)wglGetProcAddress("glCreateMemoryObjectsEXT");
+			gl.CreateMemoryObjectsEXT = (PFNGLCREATEMEMORYOBJECTSEXTPROC)(void*)wglGetProcAddress("glCreateMemoryObjectsEXT");
 			if (!gl.CreateMemoryObjectsEXT)
 				LOG_ERROR("Failed to load glCreateMemoryObjectsEXT\n");
-			gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)wglGetProcAddress("glImportMemoryWin32HandleEXT");
+			gl.ImportMemoryWin32HandleEXT = (PFNGLIMPORTMEMORYWIN32HANDLEEXTPROC)(void*)wglGetProcAddress("glImportMemoryWin32HandleEXT");
 			if (!gl.ImportMemoryWin32HandleEXT)
 				LOG_ERROR("Failed to load glImportMemoryWin32HandleEXT\n");
-			gl.CreateTextures = (PFNGLCREATETEXTURESPROC)wglGetProcAddress("glCreateTextures");
+			gl.CreateTextures = (PFNGLCREATETEXTURESPROC)(void*)wglGetProcAddress("glCreateTextures");
 			if (!gl.CreateTextures)
 				LOG_ERROR("Failed to load glCreateTextures\n");
-			gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)wglGetProcAddress("glTextureStorageMem2DEXT");
+			gl.TextureStorageMem2DEXT = (PFNGLTEXTURESTORAGEMEM2DEXTPROC)(void*)wglGetProcAddress("glTextureStorageMem2DEXT");
 			if (!gl.TextureStorageMem2DEXT)
 				LOG_ERROR("Failed to load glTextureStorageMem2DEXT\n");
 			return XR_SUCCESS;
@@ -1742,7 +1646,7 @@ XR_PROC xrEnumerateEnvironmentBlendModes(
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
 		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
 		default:
-			for (int i = 0; i < COUNT(modes); ++i) {
+			for (u32 i = 0; i < COUNT(modes); ++i) {
 				environmentBlendModes[i] = modes[i];
 			}
 			break;
@@ -1811,7 +1715,7 @@ XR_PROC xrCreateSession(
 			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_D3D11_KHR\n");
 			XrGraphicsBindingD3D11KHR* binding = (XrGraphicsBindingD3D11KHR*)createInfo->next;
 
-			printf("XR D3D11 Device: %p\n", binding->device);
+			printf("XR D3D11 Device: %p\n", (void*)binding->device);
 			// do I need cleanup goto? maybe. Probably
 			if (binding->device == NULL) {
 				LOG_ERROR("XR D3D11 Device Invalid.\n");
@@ -1820,7 +1724,7 @@ XR_PROC xrCreateSession(
 
 			ID3D11Device5* device5;
 			DX_CHECK(ID3D11Device_QueryInterface(binding->device, &IID_ID3D11Device5, (void**)&device5));
-			printf("XR D3D11 Device5: %p\n", device5);
+			printf("XR D3D11 Device5: %p\n", (void*)device5);
 			if (device5 == NULL) {
 				LOG_ERROR("XR D3D11 Device5 Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
@@ -1830,7 +1734,7 @@ XR_PROC xrCreateSession(
 			ID3D11Device5_GetImmediateContext(device5, &context);
 			ID3D11DeviceContext4* context4;
 			DX_CHECK(ID3D11DeviceContext_QueryInterface(context, &IID_ID3D11DeviceContext4, (void**)&context4));
-			printf("XR D3D11 Context4: %p\n", context4);
+			printf("XR D3D11 Context4: %p\n", (void*)context4);
 			if (context4 == NULL) {
 				LOG_ERROR("XR D3D11 Context4 Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
@@ -1840,7 +1744,7 @@ XR_PROC xrCreateSession(
 			ID3D11Fence* compositorFence;
 			printf("XR D3D11 Compositor Fence Handle: %p\n", compositorFenceHandle);
 			ID3D11Device5_OpenSharedFence(device5, compositorFenceHandle, &IID_ID3D11Fence, (void**)&compositorFence);
-			printf("XR D3D11 Compositor Fence: %p\n", compositorFence);
+			printf("XR D3D11 Compositor Fence: %p\n", (void*)compositorFence);
 			if (compositorFence == NULL) {
 				LOG_ERROR("XR D3D11 Compositor Fence Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
@@ -1849,7 +1753,7 @@ XR_PROC xrCreateSession(
 			ID3D11Fence* sessionFence;
 			printf("XR D3D11 Session Fence Handle: %p\n", sessionFenceHandle);
 			ID3D11Device5_OpenSharedFence(device5, sessionFenceHandle, &IID_ID3D11Fence, (void**)&sessionFence);
-			printf("XR D3D11 Session Fence: %p\n", sessionFence);
+			printf("XR D3D11 Session Fence: %p\n", (void*)sessionFence);
 			if (sessionFence == NULL) {
 				LOG_ERROR("XR D3D11 Session Fence Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
@@ -1875,6 +1779,8 @@ XR_PROC xrCreateSession(
 			pSess->binding.vk.queueIndex = binding->queueIndex;
 
 			*session = (XrSession)pSess;
+
+			break;
 		}
 		default: {
 			LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
@@ -1936,7 +1842,7 @@ XR_PROC xrEnumerateReferenceSpaces(
 	if (spaceCapacityInput < COUNT(supportedSpaces))
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	for (int i = 0; i < spaceCapacityInput && i < COUNT(supportedSpaces); ++i) {
+	for (u32 i = 0; i < spaceCapacityInput && i < COUNT(supportedSpaces); ++i) {
 		spaces[i] = supportedSpaces[i];
 	}
 
@@ -2102,7 +2008,7 @@ XR_PROC xrEnumerateViewConfigurations(
 		return XR_SUCCESS;                                 \
 	if (viewConfigurationTypeCapacityInput < COUNT(modes)) \
 		return XR_ERROR_SIZE_INSUFFICIENT;                 \
-	for (int i = 0; i < COUNT(modes); ++i) {               \
+	for (u32 i = 0; i < COUNT(modes); ++i) {               \
 		viewConfigurationTypes[i] = modes[i];              \
 	}
 
@@ -2220,7 +2126,7 @@ XR_PROC xrEnumerateViewConfigurationViews(
 
 	XrSwapConfig swapConfig; xrSwapConfig(systemId, &swapConfig);
 
-	for (int i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
+	for (u32 i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
 		views[i] = (XrViewConfigurationView){
 			.recommendedImageRectWidth = swapConfig.width,
 			.maxImageRectWidth = swapConfig.width,
@@ -2240,9 +2146,8 @@ constexpr i64 colorGlSwapFormats[] = {
 };
 constexpr i64 depthGlSwapFormats[] = {
 	// unity can't output depth on opengl
-	//GL_DEPTH_COMPONENT16,
-	//GL_DEPTH_COMPONENT32F,
-	//GL_DEPTH24_STENCIL8
+	GL_DEPTH_COMPONENT16,
+	GL_DEPTH24_STENCIL8
 };
 
 constexpr i64 colorVkSwapFormats[] = {
@@ -2323,19 +2228,19 @@ XR_PROC xrEnumerateSwapchainFormats(
 
 	const i64* colorFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_COLOR];
 	const i64* depthFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_DEPTH];
-	int colorCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_COLOR];
-	int depthCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_DEPTH];
+	u32 colorCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_COLOR];
+	u32 depthCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_DEPTH];
 	*formatCountOutput = colorCount + depthCount;
 	if (formats == NULL)
 		return XR_SUCCESS;
 	if (formatCapacityInput < colorCount + depthCount)
 		return XR_ERROR_SIZE_INSUFFICIENT;
 	int index = 0;
-	for (int i = 0; i < colorCount; ++i) {
+	for (u32 i = 0; i < colorCount; ++i) {
 		printf("Enumerating Color Format: %llu\n", colorFormats[i]);
 		formats[index++] = colorFormats[i];
 	}
-	for (int i = 0; i < depthCount; ++i) {
+	for (u32 i = 0; i < depthCount; ++i) {
 		printf("Enumerating Depth Format: %llu\n", depthFormats[i]);
 		formats[index++] = depthFormats[i];
 	}
@@ -2420,16 +2325,18 @@ XR_PROC xrCreateSwapchain(
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
 			printf("Creating OpenGL Swap");
-//			#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
-//				gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
-//				gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
-//				gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
-//				gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
-//			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-//				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, handles[i]);
-//				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
-//			}
-//			#undef DEFAULT_IMAGE_CREATE_INFO
+			#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
+				gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
+				gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
+				gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
+				gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
+			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
+				HANDLE colorHandle;
+				xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
+				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, colorHandle);
+				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
+			}
+			#undef DEFAULT_IMAGE_CREATE_INFO
 			break;
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
@@ -2445,7 +2352,7 @@ XR_PROC xrCreateSwapchain(
 						HANDLE colorHandle;
 						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
 						assert(colorHandle != NULL);
-						LOG("Importing d3d11 color swap. Device: %p Handle: %p\n", device5, colorHandle);
+						LOG("Importing d3d11 color swap. Device: %p Handle: %p\n", (void*)device5, colorHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
 						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
 						// For color the local resource can directly be the transfer resource.
@@ -2456,11 +2363,11 @@ XR_PROC xrCreateSwapchain(
 						HANDLE gbufferHandle;
 						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_DEPTH, &gbufferHandle);
 						assert(gbufferHandle != NULL);
-						LOG("Importing d3d11 transferTexture swap. Device: %p Handle: %p\n", device5, gbufferHandle);
+						LOG("Importing d3d11 transferTexture swap. Device: %p Handle: %p\n", (void*)device5, gbufferHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, gbufferHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
 						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
 
-						LOG("Create d3d11 swap depth. Device: %p\n", device5);
+						LOG("Create d3d11 swap depth. Device: %p\n", (void*)device5);
 						D3D11_TEXTURE2D_DESC desc = {
 							.Width = createInfo->width,
 							.Height = createInfo->height,
@@ -2521,7 +2428,7 @@ XR_PROC xrEnumerateSwapchainImages(
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
 			LOG("Enumerating gl Swapchain Images\n");
 			auto pImage = (XrSwapchainImageOpenGLKHR*)images;
-			for (int i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
+			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
 				pImage[i].image = pSwap->texture[i].gl.texture;
 			}
 			break;
@@ -2529,7 +2436,7 @@ XR_PROC xrEnumerateSwapchainImages(
 		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
 			LOG("Enumerating d3d11 Swapchain Images\n");
 			auto pImage = (XrSwapchainImageD3D11KHR*)images;
-			for (int i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
+			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
 				pImage[i].texture = pSwap->texture[i].d3d11.localTexture;
 			}
 			break;
@@ -2655,7 +2562,7 @@ XR_PROC xrBeginSession(
 		XrSecondaryViewConfigurationSessionBeginInfoMSFT* secondBeginInfo = (XrSecondaryViewConfigurationSessionBeginInfoMSFT*)beginInfo->next;
 		assert(secondBeginInfo->type == XR_TYPE_SECONDARY_VIEW_CONFIGURATION_SESSION_BEGIN_INFO_MSFT);
 		assert(secondBeginInfo->next == NULL);
-		for (int i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
+		for (u32 i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
 			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
 		}
 	}
@@ -2848,7 +2755,7 @@ XR_PROC xrEndFrame(
 	}
 
 	bool displayTimeFound = false;
-	for (int i = 0; i < COUNT(pSess->predictedDisplayTimes); ++i) {
+	for (u32 i = 0; i < COUNT(pSess->predictedDisplayTimes); ++i) {
 		if (i > 0)
 			printf("MISSED FRAME END TIME\n");
 		if (pSess->predictedDisplayTimes[i] == frameEndInfo->displayTime) {
@@ -2861,7 +2768,7 @@ XR_PROC xrEndFrame(
 		return XR_ERROR_TIME_INVALID;
 	}
 
-	for (int layer = 0; layer < frameEndInfo->layerCount; ++layer) {
+	for (u32 layer = 0; layer < frameEndInfo->layerCount; ++layer) {
 
 		if (frameEndInfo->layers[layer] == NULL) {
 			LOG_ERROR("XR_ERROR_LAYER_INVALID\n");
@@ -2876,7 +2783,7 @@ XR_PROC xrEndFrame(
 				auto pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
 				assert(pProjectionLayer->viewCount == 2);
 
-				for (int view = 0; view < pProjectionLayer->viewCount; ++view) {
+				for (u32 view = 0; view < pProjectionLayer->viewCount; ++view) {
 					auto pView = &pProjectionLayer->views[view];
 					auto pSwap = (Swapchain*)pView->subImage.swapchain;
 					u8 swapIndex = pSwap->swapIndex;
@@ -3044,7 +2951,7 @@ XR_PROC xrLocateViews(
 
 	Session*  pSession = (Session*)session;
 
-	for (int i = 0; i < viewCapacityInput; ++i) {
+	for (u32 i = 0; i < viewCapacityInput; ++i) {
 		XrEyeView eyeView;
 		xrGetEyeView(pSession->index, i, &eyeView);
 
@@ -3162,7 +3069,7 @@ XR_PROC xrStringToPath(
 	CHECK_INSTANCE(instance);
 
 	u32 pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
-	for (int i = 0; i < XR_PATH_CAPACITY; ++i) {
+	for (u32 i = 0; i < XR_PATH_CAPACITY; ++i) {
 		if (block.path.keys[i] != pathHash)
 			continue;
 		if (strncmp(block.path.blocks[i].string, pathString, XR_MAX_PATH_LENGTH)) {
@@ -3298,7 +3205,7 @@ XR_PROC xrCreateAction(
 	pAction->hActionSet = hActionSet;
 	pAction->actionType = createInfo->actionType;
 	pAction->countSubactions = createInfo->countSubactionPaths;
-	for (int i = 0; i < createInfo->countSubactionPaths; ++i)
+	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i)
 		pAction->hSubactionPaths[i] = BLOCK_HANDLE(block.path, (Path*)createInfo->subactionPaths[i]);
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
 	strncpy((char*)&pAction->localizedActionName, (const char*)&createInfo->localizedActionName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
@@ -3315,7 +3222,7 @@ XR_PROC xrCreateAction(
 	printf("	localizedActionName %s\n", pAction->localizedActionName);
 	printf("	actionType: %d\n", pAction->actionType);
 	printf("	countSubactionPaths: %d\n", pAction->countSubactions);
-	for (int i = 0; i < createInfo->countSubactionPaths; ++i) {
+	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i) {
 		Path* pPath = BLOCK_PTR(block.path, pAction->hSubactionPaths[i]);
 		printf("		subactionPath: %s\n", pPath->string);
 	}
@@ -3361,13 +3268,13 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	HANDLE_CHECK(hSuggestProfile, XR_ERROR_PATH_UNSUPPORTED);
 
 	auto pSuggestProfile = BLOCK_PTR(block.profile, hSuggestProfile);
-	printf("Binding: %s %p\n", pSuggestProfilePath->string, pSuggestProfilePath);
+	printf("Binding: %s %p\n", pSuggestProfilePath->string, (void*)pSuggestProfilePath);
 
-	const auto pSuggest = suggestedBindings->suggestedBindings;
+	const XrActionSuggestedBinding* pSuggest = suggestedBindings->suggestedBindings;
 
 	// Pre-emptively check everything so you don't end up with a half-finished binding suggestion that breaks things.
 	// Since this method is rarely run the overhead should be fine.
-	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
+	for (u32 i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		auto pSuggestAction = (Action*)pSuggest[i].action;
 		auto pSuggestActionSet = BLOCK_PTR(block.actionSet, pSuggestAction->hActionSet);
 		if (HANDLE_VALID(pSuggestActionSet->attachedToSession)) {
@@ -3378,7 +3285,7 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	}
 
 	int actsBound = 0;
-	for (int i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
+	for (u32 i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		auto pSuggestAction = (Action*)pSuggest[i].action;
 		auto pSuggestBindPath = (Path*)pSuggest[i].binding;
 
@@ -3402,7 +3309,7 @@ XR_PROC xrSuggestInteractionProfileBindings(
 			continue;
 		}
 
-		for (int subIndex = 0; subIndex < pSuggestAction->countSubactions; ++subIndex) {
+		for (u32 subIndex = 0; subIndex < pSuggestAction->countSubactions; ++subIndex) {
 			auto pSubPath = BLOCK_PTR(block.path, pSuggestAction->hSubactionPaths[subIndex]);
 			if (!CompareSubPath(pSubPath->string, pSuggestBindPath->string))
 				continue;
@@ -3433,7 +3340,7 @@ XR_PROC xrAttachSessionActionSets(
 	auto pSess = (Session*)session;
 	auto hSess = BLOCK_HANDLE(block.session, pSess);
 
-	for (int i = 0; i < attachInfo->countActionSets; ++i) {
+	for (u32 i = 0; i < attachInfo->countActionSets; ++i) {
 		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
 		if (HANDLE_VALID(pActSet->attachedToSession)) {
 			LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED %s\n", pActSet->actionSetName);
@@ -3441,7 +3348,7 @@ XR_PROC xrAttachSessionActionSets(
 		}
 	}
 
-	for (int i = 0; i < attachInfo->countActionSets; ++i) {
+	for (u32 i = 0; i < attachInfo->countActionSets; ++i) {
 		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
 		auto hActSet = BLOCK_HANDLE(block.actionSet, pActSet);
 		HANDLE_CHECK(hActSet, XR_ERROR_HANDLE_INVALID);
@@ -3490,7 +3397,7 @@ XR_PROC xrGetCurrentInteractionProfile(
 	Path* pProfilePath = XR_NULL_HANDLE;
 	if (pProfile != XR_NULL_HANDLE) {
 		pProfilePath = (Path*)pProfile->path;
-		LOG("Found InteractionProfile: %s %p\n", pProfilePath->string, pProfilePath);
+		LOG("Found InteractionProfile: %s %p\n", pProfilePath->string, (void*)pProfilePath);
 	}
 
 	// TODO need to check and see if the path has anything bound to it!!
@@ -3548,7 +3455,7 @@ XR_PROC xrGetActionStateFloat(
 		return XR_SUCCESS;
 	}
 
-	for (int i = 0; i < pAct->countSubactions; ++i) {
+	for (u32 i = 0; i < pAct->countSubactions; ++i) {
 		if (hSubactPath == pAct->hSubactionPaths[i]) {
 			auto hState = pAct->hSubactionPaths[i];
 			auto pState = BLOCK_PTR(block.state, hState);
@@ -3598,16 +3505,16 @@ XR_PROC xrSyncActions(
 	}
 
 	auto time = xrGetTime();
-	for (int si = 0; si < syncInfo->countActiveActionSets; ++si) {
+	for (u32 si = 0; si < syncInfo->countActiveActionSets; ++si) {
 
 		auto pActionSet = (ActionSet*)syncInfo->activeActionSets[si].actionSet;
 		auto actionSetPath = (Path*)syncInfo->activeActionSets[si].subactionPath;
 		bKey actionSetHash = BLOCK_KEY(block.actionSet, pActionSet);
 
-		for (int ai = 0; ai < pActionSet->actions.count; ++ai) {
+		for (u32 ai = 0; ai < pActionSet->actions.count; ++ai) {
 			auto pAction = BLOCK_PTR(block.action, pActionSet->actions.handles[ai]);
 
-			for (int sai = 0; sai < pAction->countSubactions; ++sai) {
+			for (u32 sai = 0; sai < pAction->countSubactions; ++sai) {
 				auto pState = BLOCK_PTR(block.state, pAction->hSubactionStates[sai]);
 				auto pBind = BLOCK_PTR(block.binding, pAction->hSubactionBindings[sai]);
 
@@ -4016,7 +3923,7 @@ XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 			(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
 			&device, &featureLevel, &context));
 
-		printf("XR D3D11 Device: %p %d\n", device, featureLevel);
+		printf("XR D3D11 Device: %p %d\n", (void*)device, featureLevel);
 		if (device == NULL || featureLevel < D3D_FEATURE_LEVEL_11_1) {
 			LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED XR D3D11 Device Invalid\n");
 			ID3D11Device_Release(device);

@@ -31,11 +31,11 @@ static_assert(sizeof(bitset512_t) == 64, "");
 
 static inline int BitScanFirstZero(size_t setCount, bitset_t* pSet)
 {
-	int i = 0;
+	size_t i = 0;
 	for (; i < setCount; ++i)
 		if (pSet[i] != 0xFF)
 			break;
-	return i == setCount ? -1 : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
+	return i == setCount ? -1ull : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
 }
 
 //typedef unsigned char nibset_t;

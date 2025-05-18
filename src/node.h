@@ -293,9 +293,9 @@ typedef struct MxcNodeContext {
 #define MXC_NODE_CAPACITY 4
 #endif
 
-typedef uint8_t NodeHandle;
+typedef u8 NodeHandle;
 // move these into struct
-extern size_t nodeCt;
+extern u16 nodeCt;
 // Cold storage for all node data
 extern MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY];
 // Could be missing if node is external process

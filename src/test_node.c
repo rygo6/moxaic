@@ -337,7 +337,7 @@ run_loop:
 		CmdSetScissor(cmd, 0, 1, &scissor);
 		CmdPipelineImageBarriers2(cmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
 
-		VkClearColorValue clearColor = (VkClearColorValue){0, 0, 0.1, 0};
+		VkClearColorValue clearColor = (VkClearColorValue){{0, 0, 0.1f, 0}};
 //		CmdBeginRenderPass(cmd, nodeRenderPass, framebuffer, clearColor, pSwap[framebufferIndex].color.view, pNode->normalFramebuffers[framebufferIndex].view, pSwap[framebufferIndex].depth.view);
 
 		// this is really all that'd be user exposed....
@@ -651,7 +651,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 		};
 		vkUpdateDescriptorSets(vk.context.device, _countof(writeSets), writeSets, 0, NULL);
 
-		pNode->sphereTransform = (MidPose){.position = {0, 0, -4}};
+		pNode->sphereTransform = (MidPose){.position = VEC3(0, 0, -4)};
 		vkUpdateObjectSet(&pNode->sphereTransform, &pNode->sphereObjectState, pNode->pSphereObjectSetMapped);
 
 		vkCreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);

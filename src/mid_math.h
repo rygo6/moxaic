@@ -33,14 +33,21 @@ SIMD_TYPE(float, mat4, 16);
 			type __VA_ARGS__;                                         \
 		};                                                            \
 	} name;
-VEC_UNION(vec2, float, float2_vec, 8, 2, vec, x, y);
-VEC_UNION(ivec2, uint32_t, int2_vec, 8, 2, vec, x, y);
-VEC_UNION(vec3, float, float3_vec, 16, 3, vec, x, y, z);
-VEC_UNION(ivec3, uint32_t, int3_vec, 16, 3, vec, x, y, z);
-VEC_UNION(vec4, float, float4_vec, 16, 4, vec, x, y, z, w);
-VEC_UNION(ivec4, uint32_t, int4_vec, 16, 4, vec, x, y, z, w);
-VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3);
+VEC_UNION(vec2, float, float2_vec, 8, 2, vec, x, y)
+VEC_UNION(ivec2, uint32_t, int2_vec, 8, 2, vec, x, y)
+VEC_UNION(vec3, float, float3_vec, 16, 3, vec, x, y, z)
+VEC_UNION(ivec3, uint32_t, int3_vec, 16, 3, vec, x, y, z)
+VEC_UNION(vec4, float, float4_vec, 16, 4, vec, x, y, z, w)
+VEC_UNION(ivec4, uint32_t, int4_vec, 16, 4, vec, x, y, z, w)
+VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 #undef VEC_UNION
+#define VEC2(x, y) (vec2) {{x, y}}
+#define IVEC2(x, y) (ivec2) {{x, y}}
+#define VEC3(x, y, z) (vec3) {{x, y, z}}
+#define IVEC3(x, y, z) (ivec3) {{x, y, z}}
+#define VEC4(x, y, z, w) (vec4) {{x, y, z, w}}
+#define IVEC4(x, y, z, w) (ivec4) {{x, y, z, w}}
+
 #define MAT_UNION(name, type, simd_type, align, count, vec_name, ...) \
 	typedef union __attribute((aligned(align))) name {                \
 		simd_type mat;                                                \
@@ -49,8 +56,16 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3);
 			type __VA_ARGS__;                                         \
 		};                                                            \
 	} name;
-MAT_UNION(mat4, mat4_row, mat4_vec, 16, 4, col, c0, c1, c2, c3);
+MAT_UNION(mat4, mat4_row, mat4_vec, 16, 4, col, c0, c1, c2, c3)
 #undef MAT_UNION
+#define MAT4(m00, m01, m02, m03, \
+		     m10, m11, m12, m13, \
+		     m20, m21, m22, m23, \
+		     m30, m31, m32, m33) \
+	{{	m00, m01, m02, m03,      \
+		m10, m11, m12, m13,      \
+		m20, m21, m22, m23,      \
+		m30, m31, m32, m33 }};
 
 typedef vec4 quat;
 
@@ -81,16 +96,16 @@ enum MatComponents {
 	C3_R3,
 	MAT_COUNT,
 };
-static const vec3 VEC3_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
-static const vec4 VEC4_ZERO = {0.0f, 0.0f, 0.0f, 0.0f};
-static const vec4 VEC4_IDENT = {0.0f, 0.0f, 0.0f, 0.0f};
-static const quat QUAT_IDENT = {0.0f, 0.0f, 0.0f, 1.0f};
-static const mat4 MAT4_IDENT = {
-	.c0 = {1.0f, 0.0f, 0.0f, 0.0f},
-	.c1 = {0.0f, 1.0f, 0.0f, 0.0f},
-	.c2 = {0.0f, 0.0f, 1.0f, 0.0f},
-	.c3 = {0.0f, 0.0f, 0.0f, 1.0f},
-};
+#define VEC3_ZERO = VEC3(0.0f, 0.0f, 0.0f);
+#define VEC4_ZERO = VEC4(0.0f, 0.0f, 0.0f, 0.0f);
+static const vec4 VEC4_IDENT = {{0.0f, 0.0f, 0.0f, 0.0f}};
+static const quat QUAT_IDENT = {{0.0f, 0.0f, 0.0f, 1.0f}};
+static const mat4 MAT4_IDENT = {{
+	1.0f, 0.0f, 0.0f, 0.0f,
+	0.0f, 1.0f, 0.0f, 0.0f,
+	0.0f, 0.0f, 1.0f, 0.0f,
+	0.0f, 0.0f, 0.0f, 1.0f,
+}};
 
 // force inlining appears to produce same assembly for returning or by passing out pointer
 // https://godbolt.org/z/rzo8hEaaG
@@ -127,7 +142,7 @@ MATH_INLINE float Vec4Mag(vec4 v)
 MATH_INLINE vec3 PosFromMat4(mat4 m)
 {
 	float w = m.c3.r3;
-	return (vec3){m.c3.r0 / w, m.c3.r1 / w, m.c3.r2 / w};
+	return (vec3){{m.c3.r0 / w, m.c3.r1 / w, m.c3.r2 / w}};
 }
 MATH_INLINE mat4 Mat4YInvert(mat4 m)
 {
@@ -315,12 +330,12 @@ MATH_INLINE mat4 Mat4Inv(mat4 src)
 }
 MATH_INLINE mat4 Mat4ZRot(mat4 m)
 {
-	mat4 zRot = {
-		.c0 = {-1, 0, 0, 0},
-		.c1 = {0, -1, 0, 0},
-		.c2 = {0, 0, 1, 0},
-		.c3 = {0, 0, 0, 1},
-	};
+	mat4 zRot = {{
+		-1, 0, 0, 0,
+		0, -1, 0, 0,
+		0, 0, 1, 0,
+		0, 0, 0, 1,
+	}};
 	return Mat4Mul(m, zRot);
 }
 MATH_INLINE mat4 Mat4FromPosRot(vec3 pos, quat rot)
@@ -351,9 +366,9 @@ MATH_INLINE mat4 Mat4PerspectiveVulkanReverseZ(float yFovRad, float aspect, floa
 
 MATH_INLINE vec3 Vec3Cross(float3_vec l, float3_vec r)
 {
-	return (vec3){l[Y] * r[Z] - r[Y] * l[Z],
+	return (vec3){{l[Y] * r[Z] - r[Y] * l[Z],
 				  l[Z] * r[X] - r[Z] * l[X],
-				  l[X] * r[Y] - r[X] * l[Y]};
+				  l[X] * r[Y] - r[X] * l[Y]}};
 }
 MATH_INLINE vec3 Vec3Rot(quat q, vec3 v)
 {
@@ -406,10 +421,10 @@ MATH_INLINE quat QuatInverse(quat q)
 
 	if (magnitudeSquared == 0.0) {
 		fprintf(stderr, "quat mag is zero cannot invert.n");
-		return (quat){0, 0, 0, 0};
+		return (quat){{0, 0, 0, 0}};
 	}
 
-	quat conjugate = {q.w, -q.x, -q.y, -q.z};
+	quat conjugate = {{q.w, -q.x, -q.y, -q.z}};
 	return (quat){conjugate.vec / magnitudeSquared};
 }
 MATH_INLINE vec4 Vec4MulMat4(mat4 m, vec4 v)
@@ -439,14 +454,14 @@ MATH_INLINE ivec2 iVec2CeiDivide(ivec2 v, int d)
 {
 	vec2 fv = {.vec = {v.vec[X], v.vec[Y]}};
 	fv.vec = fv.vec / (float)d;
-	return (ivec2){ceilf(fv.vec[X]), ceilf(fv.vec[Y])};
+	return (ivec2){{ceilf(fv.vec[X]), ceilf(fv.vec[Y])}};
 }
 MATH_INLINE ivec2 iVec2ShiftRightCeil(ivec2 v, int shift)
 {
 	if (shift <= 0) return v;
 	return (ivec2){(v.vec >> shift) + (v.vec % 2)};
 }
-MATH_INLINE ivec2 iVec2Min(ivec2 v, int min)
+MATH_INLINE ivec2 iVec2Min(ivec2 v, u32 min)
 {
 	ivec2 out;
 	for (int i = 0; i < 2; ++i) out.vec[i] = v.vec[i] < min ? min : v.vec[i];

@@ -352,7 +352,7 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 											 VK_IMAGE_USAGE_SAMPLED_BIT,
 };
 
-#define VK_PASS_CLEAR_COLOR (VkClearColorValue) { 0.1f, 0.2f, 0.3f, 0.0f }
+#define VK_PASS_CLEAR_COLOR (VkClearColorValue) {{ 0.1f, 0.2f, 0.3f, 0.0f }}
 
 #define VK_BIND_INDEX_GLOBAL_BUFFER 0
 #define VK_BIND_WRITE_GLOBAL_BUFFER(set, buf)                \
@@ -629,7 +629,7 @@ INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore 
 
 INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
 {
-	return pMappedMemory[shareMemory.type] + shareMemory.offset;
+	return ((char*)pMappedMemory[shareMemory.type]) + shareMemory.offset;
 }
 INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
 {
@@ -643,7 +643,7 @@ INLINE void vkBindSharedBuffer(const VkSharedBuffer* pBuffer)
 // probably move to math lib and take copy to pointer out
 INLINE void vkUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
-	pState->framebufferSize = (ivec2){DEFAULT_WIDTH, DEFAULT_HEIGHT};
+	pState->framebufferSize = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar);
 	pState->invProj = Mat4Inv(pState->proj);
 	pState->invView = Mat4FromPosRot(cameraPose.position, cameraPose.rotation);
@@ -1414,7 +1414,7 @@ void vkBeginAllocationRequests()
 {
 	printf("Begin Memory Allocation Requests.\n");
 	// what do I do here? should I enable a mechanic to do this twice? or on pass in memory?
-	for (int memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
+	for (u32 memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
 		requestedMemoryAllocSize[memTypeIndex] = 0;
 	}
 }
@@ -1423,7 +1423,7 @@ void vkEndAllocationRequests()
 	printf("End Memory Allocation Requests.\n");
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 	vkGetPhysicalDeviceMemoryProperties2(vk.context.physicalDevice, &memProps2);
-	for (int memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
+	for (u32 memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
 		if (requestedMemoryAllocSize[memTypeIndex] == 0) continue;
 		VkMemoryAllocateInfo memAllocInfo = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -1538,8 +1538,8 @@ void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffe
 	VK_CHECK(vkCreateBuffer(vk.context.device, &bufferCreateInfo, VK_ALLOC, &pBuffer->buffer));
 
 	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pBuffer->buffer};
-	VkMemoryDedicatedRequirements   dedicatedReqs = { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS };
-	VkMemoryRequirements2           memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
+	VkMemoryDedicatedRequirements   dedicatedReqs = { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS, .pNext = NULL };
+	VkMemoryRequirements2           memReqs2 = { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
 	vkGetBufferMemoryRequirements2(vk.context.device, &bufMemReqInfo2, &memReqs2);
 
 	bool requiresDedicated = dedicatedReqs.requiresDedicatedAllocation;
@@ -2115,7 +2115,7 @@ static uint32_t FindQueueIndex(VkPhysicalDevice physicalDevice, const VkmQueueFa
 
 		if (pQueueDesc->globalPriority != 0) {
 			bool globalPrioritySupported = false;
-			for (int i = 0; i < queueFamilyGlobalPriorityProperties[queueFamilyIndex].priorityCount; ++i) {
+			for (u32 i = 0; i < queueFamilyGlobalPriorityProperties[queueFamilyIndex].priorityCount; ++i) {
 				if (queueFamilyGlobalPriorityProperties[queueFamilyIndex].priorities[i] == pQueueDesc->globalPriority) {
 					globalPrioritySupported = true;
 					break;
@@ -2129,7 +2129,7 @@ static uint32_t FindQueueIndex(VkPhysicalDevice physicalDevice, const VkmQueueFa
 		return queueFamilyIndex;
 	}
 
-	fprintf(stderr, "Can't find queue family: graphics=%s compute=%s transfer=%s globalPriority=%s present=%s... ",
+	fprintf(stderr, "Can't find queue family: graphics=%s compute=%s transfer=%s globalPriority=%s... ",
 			string_Support[pQueueDesc->supportsGraphics],
 			string_Support[pQueueDesc->supportsCompute],
 			string_Support[pQueueDesc->supportsTransfer],
@@ -2141,16 +2141,12 @@ static uint32_t FindQueueIndex(VkPhysicalDevice physicalDevice, const VkmQueueFa
 void vkInitializeInstance()
 {
 	{
-		const char* ppEnabledLayerNames[] = {
-			//                "VK_LAYER_KHRONOS_validation",
-			//        "VK_LAYER_LUNARG_monitor"
-			//        "VK_LAYER_RENDERDOC_Capture",
-		};
+//		const char* ppEnabledLayerNames[] = {
+//			//        "VK_LAYER_KHRONOS_validation",
+//			//        "VK_LAYER_LUNARG_monitor"
+//			//        "VK_LAYER_RENDERDOC_Capture",
+//		};
 		const char* ppEnabledInstanceExtensionNames[] = {
-			//        VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME,
-			//        VK_KHR_EXTERNAL_SEMAPHORE_CAPABILITIES_EXTENSION_NAME,
-			//        VK_KHR_EXTERNAL_FENCE_CAPABILITIES_EXTENSION_NAME,
-			//        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 			VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
 			VK_KHR_SURFACE_EXTENSION_NAME,
 			VK_PLATFORM_SURFACE_EXTENSION_NAME,
@@ -2165,8 +2161,8 @@ void vkInitializeInstance()
 				.engineVersion = VK_MAKE_VERSION(1, 0, 0),
 				.apiVersion = VK_VERSION,
 			},
-			.enabledLayerCount = COUNT(ppEnabledLayerNames),
-			.ppEnabledLayerNames = ppEnabledLayerNames,
+//			.enabledLayerCount = COUNT(ppEnabledLayerNames),
+//			.ppEnabledLayerNames = ppEnabledLayerNames,
 			.enabledExtensionCount = COUNT(ppEnabledInstanceExtensionNames),
 			.ppEnabledExtensionNames = ppEnabledInstanceExtensionNames,
 		};
@@ -2202,13 +2198,13 @@ void vkInitializeInstance()
 void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 {
 	{  // PhysicalDevice
-		int deviceCount = 0;
+		u32 deviceCount = 0;
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, NULL));
 		VkPhysicalDevice devices[deviceCount];
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, devices));
 
 		vk.context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this seems to be true.
-		VkPhysicalDeviceProperties2 physicalDeviceProperties = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+		VkPhysicalDeviceProperties2 physicalDeviceProperties = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = NULL };
 		vkGetPhysicalDeviceProperties2(vk.context.physicalDevice, &physicalDeviceProperties);
 		printf("PhysicalDevice: %s\n", physicalDeviceProperties.properties.deviceName);
 		printf("PhysicalDevice Vulkan API version: %d.%d.%d.%d\n",
