@@ -403,12 +403,6 @@ typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
 
-#define XR_BINDINGS_CAPACITY 256
-typedef struct Binding {
-	block_handle hPath;
-	int (*func)(void*);
-} Binding;
-
 #define XR_MAX_BINDINGS      16
 #define XR_INTERACTION_PROFILE_CAPACITY 16
 typedef struct InteractionProfile {
@@ -422,12 +416,25 @@ typedef struct SubactionState {
 	// need to understand this priority again
 	//	uint32_t lastSyncedPriority;
 
-	// actual layout from OXR to memcpy
-	f32      currentState;
+	union {
+		XrBool32	  boolValue;
+		f32           floatValue;
+		XrVector2f    vec2Value;
+		XrVector3f    vec3Value;
+		XrQuaternionf quatValue;
+		XrPosef       poseValue;
+	};
+
 	XrBool32 changedSinceLastSync;
 	XrTime   lastChangeTime;
 	XrBool32 isActive;
 } SubactionState;
+
+#define XR_BINDINGS_CAPACITY 256
+typedef struct Binding {
+	block_handle hPath;
+	int (*func)(SubactionState*);
+} Binding;
 
 #define XR_MAX_SUBACTION_PATHS 2
 #define XR_ACTION_CAPACITY     128
@@ -450,7 +457,7 @@ typedef struct ActionSet {
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) actions;
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) states;
 
-	block_handle attachedToSession;
+	block_handle hAttachedToSession;
 	char         actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
 	char         localizedActionSetName[XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE];
 	u32          priority;
@@ -458,12 +465,21 @@ typedef struct ActionSet {
 
 #define XR_SPACE_CAPACITY 128
 typedef struct Space {
-	XrStructureType      type;
-	block_handle         hSession;
-	XrReferenceSpaceType referenceSpaceType;
-	XrPosef              poseInSpace;
-	XrAction             action;
-	XrPath               path;
+	XrStructureType type;
+	bHnd            hSession;
+	XrPosef         poseInSpace;
+
+	union {
+		struct {
+			XrReferenceSpaceType spaceType;
+		} reference;
+
+		struct {
+			bHnd hAction;
+			bHnd hSubactionPath;
+		} action;
+	};
+
 } Space;
 
 #define XR_SWAPCHAIN_CAPACITY 8
@@ -791,125 +807,114 @@ static inline float xrFloatLerp(float a, float b, float t)
 ///////////////////////
 //// Device Input Funcs
 ////
-static int OculusLeftClick(float* pValue)
-{
-	*pValue = 100;
-	return 0;
-}
-static int OculusRightClick(float* pValue)
-{
-	*pValue = 200;
-	return 0;
-}
+static void DebugInputFloat(SubactionState* pState) { pState->floatValue += .2f; }
 
-static void DebugInputFloat(float* pValue) { *pValue += .2f; }
-
-static int InputSelectClick_Left(float* pValue)
+static int InputSelectClick_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSelectClick_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSelectClick_Right(float* pValue)
+static int InputSelectClick_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSelectClick_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeValue_Left(float* pValue)
+static int InputSqueezeValue_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeValue_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeValue_Right(float* pValue)
+static int InputSqueezeValue_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeValue_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeClick_Left(float* pValue)
+static int InputSqueezeClick_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeClick_Right(float* pValue)
+static int InputSqueezeClick_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerValue_Left(float* pValue)
+static int InputTriggerValue_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerValue_Right(float* pValue)
+static int InputTriggerValue_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerTrigger_Left(float* pValue)
+static int InputTriggerTrigger_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerTrigger_Right(float* pValue)
+static int InputTriggerTrigger_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputMenuClick_Left(float* pValue)
+static int InputMenuClick_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputMenuClick_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputMenuClick_Right(float* pValue)
+static int InputMenuClick_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputMenuClick_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputGripPose_Left(float* pValue)
+static int InputGripPose_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputGripPose_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputGripPose_Right(float* pValue)
+static int InputGripPose_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputGripPose_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputAimPose_Left(float* pValue)
+static int InputAimPose_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputAimPose_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int InputAimPose_Right(float* pValue)
+static int InputAimPose_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputAimPose_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int OutputHaptic_Left(float* pValue)
+static int OutputHaptic_Left(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(OutputHaptic_Left);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
-static int OutputHaptic_Right(float* pValue)
+static int OutputHaptic_Right(SubactionState* pState)
 {
 	LOG_METHOD_ONCE(OutputHaptic_Right);
-	DebugInputFloat(pValue);
+	DebugInputFloat(pState);
 	return 0;
 }
 
@@ -920,7 +925,7 @@ static XrResult RegisterBinding(
 	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
 	Path*               pBindingPath,
-	int (*func)(void*))
+	int (*func)(SubactionState*))
 {
 	auto bindPathHash = BLOCK_KEY(block.path, pBindingPath);
 	for (u32 i = 0; i < pInteractionProfile->bindings.count; ++i) {
@@ -941,7 +946,7 @@ static XrResult RegisterBinding(
 }
 
 typedef struct BindingDefinition {
-	int (*func)(void*);
+	int (*func)(SubactionState*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
 static XrResult InitBinding(const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
@@ -971,8 +976,8 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 
 #define XR_INPUT_SELECT_CLICK_LEFT_HAND    "/user/hand/left/input/select/click"
 #define XR_INPUT_MENU_CLICK_LEFT_HAND      "/user/hand/left/input/menu/click"
-#define XR_INPUT_GRIP_POSE_LEFT_HAND       "/user/hand/left/input/grip/pose"
-#define XR_INPUT_AIM_POSE_LEFT_HAND        "/user/hand/left/input/aim/pose"
+#define XR_INPUT_GRIP_POSE_LEFT_HAND       "/user/hand/left/input/grip/poseValue"
+#define XR_INPUT_AIM_POSE_LEFT_HAND        "/user/hand/left/input/aim/poseValue"
 #define XR_INPUT_SQUEEZE_VALUE_LEFT_HAND   "/user/hand/left/input/squeeze/value"
 #define XR_INPUT_SQUEEZE_CLICK_LEFT_HAND   "/user/hand/left/input/squeeze/click"
 #define XR_INPUT_TRIGGER_VALUE_LEFT_HAND   "/user/hand/left/input/trigger/value"
@@ -981,8 +986,8 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 
 #define XR_INPUT_SELECT_CLICK_RIGHT_HAND   "/user/hand/right/input/select/click"
 #define XR_INPUT_MENU_CLICK_RIGHT_HAND     "/user/hand/right/input/menu/click"
-#define XR_INPUT_GRIP_POSE_RIGHT_HAND      "/user/hand/right/input/grip/pose"
-#define XR_INPUT_AIM_POSE_RIGHT_HAND       "/user/hand/right/input/aim/pose"
+#define XR_INPUT_GRIP_POSE_RIGHT_HAND      "/user/hand/right/input/grip/poseValue"
+#define XR_INPUT_AIM_POSE_RIGHT_HAND       "/user/hand/right/input/aim/poseValue"
 #define XR_INPUT_SQUEEZE_VALUE_RIGHT_HAND  "/user/hand/right/input/squeeze/value"
 #define XR_INPUT_SQUEEZE_CLICK_RIGHT_HAND  "/user/hand/right/input/squeeze/click"
 #define XR_INPUT_TRIGGER_VALUE_RIGHT_HAND  "/user/hand/right/input/trigger/value"
@@ -993,7 +998,7 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 static XrResult InitStandardBindings()
 {
 
-#define BINDING_DEFINITION(_func, _path) {(int (*)(void*)) _func, _path}
+#define BINDING_DEFINITION(_func, _path) {(int (*)(SubactionState*)) _func, _path}
 
 	{
 		BindingDefinition bindingDefinitions[] = {
@@ -1052,6 +1057,29 @@ static XrResult InitStandardBindings()
 #undef BINDING_DEFINITION
 
 	return XR_SUCCESS;
+}
+
+static inline XrResult GetActionState(
+	Action*          pAction,
+	Path*            pSubPath,
+	SubactionState** ppState)
+{
+	auto hSubPath = BLOCK_HANDLE(block.path, pSubPath);
+	if (pSubPath == NULL) {
+		auto hState = pAction->hSubactionPaths[0];
+		*ppState = BLOCK_PTR(block.state, hState);
+		return XR_SUCCESS;
+	}
+
+	for (u32 i = 0; i < pAction->countSubactions; ++i) {
+		if (hSubPath == pAction->hSubactionPaths[i]) {
+			auto hState = pAction->hSubactionPaths[i];
+			*ppState = BLOCK_PTR(block.state, hState);
+			return XR_SUCCESS;
+		}
+	}
+
+	return XR_ERROR_PATH_UNSUPPORTED;
 }
 
 //////////////////////////////////
@@ -1124,11 +1152,11 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 //			.extensionName = XR_MSFT_SECONDARY_VIEW_CONFIGURATION_EXTENSION_NAME,
 //			.extensionVersion = XR_MSFT_secondary_view_configuration_SPEC_VERSION,
 //		},
-//		{
-//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-//			.extensionName = XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
-//			.extensionVersion = XR_EXT_eye_gaze_interaction_SPEC_VERSION,
-//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_eye_gaze_interaction_SPEC_VERSION,
+		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_MSFT_HAND_INTERACTION_EXTENSION_NAME,
@@ -1458,7 +1486,7 @@ XR_PROC xrPollEvent(
 
 			auto pEventData = (XrEventDataReferenceSpaceChangePending*)eventData;
 			pEventData->session = (XrSession)pSess;
-			pEventData->referenceSpaceType = pPendingSpace->referenceSpaceType;
+			pEventData->referenceSpaceType = pPendingSpace->reference.spaceType;
 			pEventData->changeTime = xrGetTime();
 			pEventData->poseValid = XR_TRUE;
 			// this is not correct, supposed to be origin of new space in space of prior space
@@ -1584,14 +1612,11 @@ XR_PROC xrGetSystemProperties(
 	XrSystemProperties* properties)
 {
 	LOG_METHOD(xrGetSystemProperties);
-	LogNextChain((XrBaseInStructure*)properties->next);
 	CHECK_INSTANCE(instance);
 
 	XrSwapConfig swapConfig; xrSwapConfig(systemId, &swapConfig);
 
 	switch ((SystemId)systemId) {
-		default:
-			return XR_ERROR_HANDLE_INVALID;
 		case SYSTEM_ID_HANDHELD_AR:
 			properties->systemId = SYSTEM_ID_HANDHELD_AR;
 			properties->vendorId = 0;
@@ -1612,6 +1637,17 @@ XR_PROC xrGetSystemProperties(
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
 			return XR_SUCCESS;
+		default:
+			return XR_ERROR_HANDLE_INVALID;
+	}
+
+	switch (properties->next != NULL ? *(XrStructureType*)properties->next : 0) {
+		case XR_TYPE_SYSTEM_EYE_GAZE_INTERACTION_PROPERTIES_EXT:
+			auto gazeProperties = (XrSystemEyeGazeInteractionPropertiesEXT *)properties->next;
+			gazeProperties->supportsEyeGazeInteraction = XR_TRUE;
+				break;
+		default:
+			break;
 	}
 }
 
@@ -1868,8 +1904,8 @@ XR_PROC xrCreateReferenceSpace(
 	auto pSpace = BLOCK_PTR(block.space, hSpace);
 	pSpace->type = createInfo->type;
 	pSpace->hSession = BLOCK_HANDLE(block.session, pSess);
-	pSpace->referenceSpaceType = createInfo->referenceSpaceType;
 	pSpace->poseInSpace = createInfo->poseInReferenceSpace;
+	pSpace->reference.spaceType = createInfo->referenceSpaceType;
 
 	// auto switch to first created space
 	if (!HANDLE_VALID(pSess->hPendingReferenceSpace))
@@ -1920,8 +1956,8 @@ XR_PROC xrCreateActionSpace(
 	auto pSpace = BLOCK_PTR(block.space, hSpace);
 	pSpace->type = createInfo->type;
 	pSpace->poseInSpace = createInfo->poseInActionSpace;
-	pSpace->action = createInfo->action;
-	pSpace->path = createInfo->subactionPath;
+	pSpace->action.hAction = BLOCK_HANDLE(block.action, (Action*)createInfo->action);
+	pSpace->action.hSubactionPath = BLOCK_HANDLE(block.path, (Path*)createInfo->subactionPath);
 
 	auto pSess = (Session*)session;
 	MAP_ADD(pSess->actionSpaces, hSpace, 0);
@@ -1940,11 +1976,68 @@ XR_PROC xrLocateSpace(
 	LOG_METHOD_ONCE(xrLocateSpace);
 
 	auto pSpace = (Space*)space;
-	auto pSess = BLOCK_PTR(block.session, pSpace->hSession);
+	auto pSession = BLOCK_PTR(block.session, pSpace->hSession);
 
-	if (pSpace->type == XR_TYPE_ACTION_SET_CREATE_INFO) {
-		auto pPath = (Path*)pSpace->path;
-		LOG("Getting Action Space: %s\n", pPath->string);
+	switch (pSpace->type) {
+		case XR_TYPE_ACTION_SPACE_CREATE_INFO: {
+			auto pSubPath = (Path*)BLOCK_PTR(block.path, pSpace->action.hSubactionPath);
+			auto pAction = (Action*)BLOCK_PTR(block.action, pSpace->action.hAction);
+
+			auto hSession = BLOCK_HANDLE(block.session, pSession);
+			auto pActionSet = BLOCK_PTR(block.actionSet, pAction->hActionSet);
+
+			if (hSession != pActionSet->hAttachedToSession) {
+				LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
+				return XR_ERROR_ACTIONSET_NOT_ATTACHED;
+			}
+
+			SubactionState* pState;
+			if (GetActionState(pAction, pSubPath, &pState) == XR_ERROR_PATH_UNSUPPORTED) {
+				LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+				return XR_ERROR_PATH_UNSUPPORTED;
+			}
+
+			location->pose = pState->poseValue;
+
+			break;
+		}
+		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO: {
+
+			switch (pSpace->reference.spaceType) {
+				case XR_REFERENCE_SPACE_TYPE_LOCAL:
+				case XR_REFERENCE_SPACE_TYPE_STAGE:
+				case XR_REFERENCE_SPACE_TYPE_VIEW:
+
+					XrVector3f euler;
+					XrVector3f pos;
+					xrGetHeadPose(pSession->index, &euler, &pos);
+
+					switch (xr.instance.graphicsApi) {
+						case XR_GRAPHICS_API_OPENGL:    break;
+						case XR_GRAPHICS_API_VULKAN:    break;
+						case XR_GRAPHICS_API_D3D11_4:
+							XR_CONVERT_D3D11_EULER(euler);
+							XR_CONVERT_DD11_POSITION(pos);
+							break;
+						default:
+							// Not all APIS might need adjustment?
+							break;
+					}
+
+					location->pose.orientation = xrQuaternionFromEuler(euler);
+					location->pose.position = pos;
+
+					break;
+				default:
+					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space type %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
+					return XR_ERROR_VALIDATION_FAILURE;
+			}
+
+			break;
+		}
+		default:
+			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space type %s\n", string_XrStructureType(pSpace->type));
+			return XR_ERROR_VALIDATION_FAILURE;
 	}
 
 	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
@@ -1952,32 +2045,15 @@ XR_PROC xrLocateSpace(
 							  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
 							  XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
 
-	XrVector3f euler;
-	XrVector3f pos;
-	xrGetHeadPose(pSess->index, &euler, &pos);
-
-	switch (xr.instance.graphicsApi) {
-		case XR_GRAPHICS_API_OPENGL:    break;
-		case XR_GRAPHICS_API_VULKAN:    break;
-		case XR_GRAPHICS_API_D3D11_4:
-			XR_CONVERT_D3D11_EULER(euler);
-			XR_CONVERT_DD11_POSITION(pos);
-			break;
-		default: break;
-	}
-
-	location->pose.orientation = xrQuaternionFromEuler(euler);
-	location->pose.position = pos;
-
 	if (location->next != NULL) {
 		switch (*(XrStructureType*)location->next) {
-			case XR_TYPE_SPACE_VELOCITY: {
+			case XR_TYPE_SPACE_VELOCITY:
 				XrSpaceVelocity* pVelocity = (XrSpaceVelocity*)location->next;
 				break;
-			}
 			default:
+				LOG_ERROR("XR_ERROR_VALIDATION_FAILURE xrLocateSpace couldn't deal with pNext: ");
 				LogNextChain(location->next);
-				break;
+				return XR_ERROR_VALIDATION_FAILURE;
 		}
 	};
 
@@ -3150,7 +3226,7 @@ XR_PROC xrCreateActionSet(
 	auto pActionSet = BLOCK_PTR(block.actionSet, hActionSet);
 	*pActionSet = (ActionSet){};
 
-	pActionSet->attachedToSession = HANDLE_DEFAULT;
+	pActionSet->hAttachedToSession = HANDLE_DEFAULT;
 
 	strncpy((char*)&pActionSet->actionSetName, (const char*)&createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 	strncpy((char*)&pActionSet->localizedActionSetName, (const char*)&createInfo->localizedActionSetName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
@@ -3181,7 +3257,7 @@ XR_PROC xrCreateAction(
 	auto hActionSet = BLOCK_HANDLE(block.actionSet, pActionSet);
 	HANDLE_CHECK(hActionSet, XR_ERROR_VALIDATION_FAILURE);
 
-	if (HANDLE_VALID(pActionSet->attachedToSession)) {
+	if (HANDLE_VALID(pActionSet->hAttachedToSession)) {
 		LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED\n");
 		return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
 	}
@@ -3277,7 +3353,7 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	for (u32 i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		auto pSuggestAction = (Action*)pSuggest[i].action;
 		auto pSuggestActionSet = BLOCK_PTR(block.actionSet, pSuggestAction->hActionSet);
-		if (HANDLE_VALID(pSuggestActionSet->attachedToSession)) {
+		if (HANDLE_VALID(pSuggestActionSet->hAttachedToSession)) {
 			LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED \n");
 			return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
 		}
@@ -3342,7 +3418,7 @@ XR_PROC xrAttachSessionActionSets(
 
 	for (u32 i = 0; i < attachInfo->countActionSets; ++i) {
 		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
-		if (HANDLE_VALID(pActSet->attachedToSession)) {
+		if (HANDLE_VALID(pActSet->hAttachedToSession)) {
 			LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED %s\n", pActSet->actionSetName);
 			return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
 		}
@@ -3358,7 +3434,7 @@ XR_PROC xrAttachSessionActionSets(
 
 		memset(&pActSet->states, 0, sizeof(pActSet->states));
 
-		pActSet->attachedToSession = hSess;
+		pActSet->hAttachedToSession = hSess;
 		printf("Attached ActionSet %s\n", pActSet->actionSetName);
 	}
 
@@ -3406,25 +3482,44 @@ XR_PROC xrGetCurrentInteractionProfile(
 	return XR_SUCCESS;
 }
 
+static inline XrResult xrGetActionState(
+	XrSession                   session,
+	const XrActionStateGetInfo* getInfo,
+	SubactionState**            ppState)
+{
+	auto pSession = (Session*)session;
+	auto hSession = BLOCK_HANDLE(block.session, pSession);
+
+	auto pAction = (Action*)getInfo->action;
+	auto pActionSet = BLOCK_PTR(block.actionSet, pAction->hActionSet);
+	auto pSubPath = (Path*)getInfo->subactionPath;
+
+	if (hSession != pActionSet->hAttachedToSession) {
+		LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
+		return XR_ERROR_ACTIONSET_NOT_ATTACHED;
+	}
+
+	return GetActionState(pAction, pSubPath, ppState);
+}
+
 XR_PROC xrGetActionStateBoolean(
 	XrSession                   session,
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateBoolean*       state)
 {
 	LOG_METHOD_ONCE(xrGetActionStateBoolean);
-	LogNextChain(getInfo->next);
+	assert(getInfo->next == NULL);
 
-	auto pGetAct = (Action*)getInfo->action;
-	auto pGetActSubPath = (Path*)getInfo->subactionPath;
-	auto hGetActSet = pGetAct->hActionSet;
-	auto pGetActSet = BLOCK_PTR(block.actionSet, hGetActSet);
+	SubactionState* pState;
+	if (xrGetActionState(session, getInfo, &pState) == XR_ERROR_PATH_UNSUPPORTED) {
+		LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+		return XR_ERROR_PATH_UNSUPPORTED;
+	}
 
-
-	state->changedSinceLastSync = true;
-	state->currentState = true;
-	state->lastChangeTime = xrGetTime();
-	state->isActive = true;
-
+	state->currentState = pState->boolValue;
+	state->changedSinceLastSync = pState->changedSinceLastSync;
+	state->lastChangeTime = pState->lastChangeTime;
+	state->isActive = pState->isActive;
 
 	return XR_SUCCESS;
 }
@@ -3435,40 +3530,20 @@ XR_PROC xrGetActionStateFloat(
 	XrActionStateFloat*         state)
 {
 	LOG_METHOD_ONCE(xrGetActionStateFloat);
-	LogNextChain(getInfo->next);
+	assert(getInfo->next == NULL);
 
-	auto pSess = (Session*)session;
-	auto pAct = (Action*)getInfo->action;
-	auto pSubactPath = (Path*)getInfo->subactionPath;
-	auto hSubactPath = BLOCK_HANDLE(block.path, pSubactPath);
-
-	auto pActSet = BLOCK_PTR(block.actionSet, pAct->hActionSet);
-	auto actSetHash = BLOCK_KEY(block.actionSet, pActSet);
-
-	if (pSubactPath == NULL) {
-		auto hState = pAct->hSubactionPaths[0];
-		auto pState = BLOCK_PTR(block.state, hState);
-
-		memcpy(&state->currentState, &pState->currentState, sizeof(SubactionState));
-		pState->changedSinceLastSync = false;
-
-		return XR_SUCCESS;
+	SubactionState* pState;
+	if (xrGetActionState(session, getInfo, &pState) == XR_ERROR_PATH_UNSUPPORTED) {
+		LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+		return XR_ERROR_PATH_UNSUPPORTED;
 	}
 
-	for (u32 i = 0; i < pAct->countSubactions; ++i) {
-		if (hSubactPath == pAct->hSubactionPaths[i]) {
-			auto hState = pAct->hSubactionPaths[i];
-			auto pState = BLOCK_PTR(block.state, hState);
+	state->currentState = pState->floatValue;
+	state->changedSinceLastSync = pState->changedSinceLastSync;
+	state->lastChangeTime = pState->lastChangeTime;
+	state->isActive = pState->isActive;
 
-			memcpy(&state->currentState, &pState->currentState, sizeof(SubactionState));
-			pState->changedSinceLastSync = false;
-
-			return XR_SUCCESS;
-		}
-	}
-
-	LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
-	return XR_ERROR_PATH_UNSUPPORTED;
+	return XR_SUCCESS;
 }
 
 XR_PROC xrGetActionStateVector2f(
@@ -3477,7 +3552,19 @@ XR_PROC xrGetActionStateVector2f(
 	XrActionStateVector2f*      state)
 {
 	LOG_METHOD_ONCE(xrGetActionStateVector2f);
-	state->isActive = XR_TRUE;
+	assert(getInfo->next == NULL);
+
+	SubactionState* pState;
+	if (xrGetActionState(session, getInfo, &pState) == XR_ERROR_PATH_UNSUPPORTED) {
+		LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+		return XR_ERROR_PATH_UNSUPPORTED;
+	}
+
+	state->currentState = pState->vec2Value;
+	state->changedSinceLastSync = pState->changedSinceLastSync;
+	state->lastChangeTime = pState->lastChangeTime;
+	state->isActive = pState->isActive;
+
 	return XR_SUCCESS;
 }
 
@@ -3487,7 +3574,15 @@ XR_PROC xrGetActionStatePose(
 	XrActionStatePose*          state)
 {
 	LOG_METHOD_ONCE(xrGetActionStatePose);
+
+	SubactionState* pState;
+	if (xrGetActionState(session, getInfo, &pState) == XR_ERROR_PATH_UNSUPPORTED) {
+		LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
+		return XR_ERROR_PATH_UNSUPPORTED;
+	}
+
 	state->isActive = XR_TRUE;
+
 	return XR_SUCCESS;
 }
 
@@ -3523,12 +3618,11 @@ XR_PROC xrSyncActions(
 //					pState->lastChangeTime == currentTime)
 //					continue;
 
-				float priorState = pState->currentState;
-				pBind->func(&pState->currentState);
-//				pState->lastSyncedPriority = pActSet->priority;
+				auto priorState = *pState;
+				pBind->func(pState);
 				pState->lastChangeTime = time;
 				pState->isActive = XR_TRUE;
-				pState->changedSinceLastSync = pState->currentState != priorState;
+				pState->changedSinceLastSync = XR_TRUE;
 			}
 		}
 	}

@@ -420,7 +420,7 @@ MATH_INLINE quat QuatInverse(quat q)
 	float magnitudeSquared = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
 
 	if (magnitudeSquared == 0.0) {
-		fprintf(stderr, "quat mag is zero cannot invert.n");
+		fprintf(stderr, "quatValue mag is zero cannot invert.n");
 		return (quat){{0, 0, 0, 0}};
 	}
 

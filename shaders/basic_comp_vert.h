@@ -37,26 +37,26 @@ namespace Impl
                 mat4 invProj;
                 mat4 invViewProj;
                 ivec2 framebufferSize;
-                vec2 ulUV;
-                vec2 lrUV;
+                vec2Value ulUV;
+                vec2Value lrUV;
             };
             
             internal::Resource<NodeUBO> nodeUBO__;
 #define nodeUBO __res->nodeUBO__.get()
             
-            internal::StageInput<vec2> inUV__;
+            internal::StageInput<vec2Value> inUV__;
 #define inUV __res->inUV__.get()
             
-            internal::StageOutput<vec2> outUV__;
+            internal::StageOutput<vec2Value> outUV__;
 #define outUV __res->outUV__.get()
             
-            internal::StageOutput<vec3> outNormal__;
+            internal::StageOutput<vec3Value> outNormal__;
 #define outNormal __res->outNormal__.get()
             
-            internal::StageInput<vec3> inNormal__;
+            internal::StageInput<vec3Value> inNormal__;
 #define inNormal __res->inNormal__.get()
             
-            internal::StageInput<vec3> inPos__;
+            internal::StageInput<vec3Value> inPos__;
 #define inPos __res->inPos__.get()
             
             internal::Resource<sampler2D> nodeColor__;
@@ -89,10 +89,10 @@ namespace Impl
         inline void main()
         {
             vec4 _100 = (nodeUBO.viewProj * nodeUBO.model) * vec4(0.0f, 0.0f, 0.0f, 1.0f);
-            vec2 _133 = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
+            vec2Value _133 = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
             outUV = _133;
-            vec4 _196 = nodeUBO.invViewProj * vec4((_133 * 2.0f) - vec2(1.0f), _100.z / _100.w, 1.0f);
-            gl_Position = globalUBO.viewProj * vec4(_196.xyz() / vec3(_196.w), 1.0f);
+            vec4 _196 = nodeUBO.invViewProj * vec4((_133 * 2.0f) - vec2Value(1.0f), _100.z / _100.w, 1.0f);
+            gl_Position = globalUBO.viewProj * vec4(_196.xyz() / vec3Value(_196.w), 1.0f);
             outNormal = inNormal;
         }
         
