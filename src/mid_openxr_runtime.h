@@ -105,6 +105,44 @@ typedef struct XrSwapConfig {
 	XrSwapClip        clip    : 4;
 } XrSwapConfig;
 
+typedef float XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
+
+typedef enum XrStructureTypeExt {
+	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
+	XR_TYPE_SUB_VIEW = 2000480000,
+	XR_TYPE_SPACE_BOUNDS = 2000490000,
+} XrStructureTypeExt;
+
+typedef enum XrReferenceSpaceTypeExt {
+	XR_REFERENCE_SPACE_TYPE_LOCAL_BOUNDED = 2000115000,
+} XrReferenceSpaceTypeExt;
+
+typedef struct XrSubView {
+	XrStructureType    type;
+	void* XR_MAY_ALIAS next;
+	XrRect2Di          imageRect;
+	uint32_t           imageArrayIndex;
+} XrSubView;
+
+typedef struct XrSpaceBounds {
+	XrStructureType    type;
+	void* XR_MAY_ALIAS next;
+	XrRect2Di          imageRect;
+} XrSpaceBounds;
+
+typedef struct XrEulerPosef {
+	XrVector3f euler;
+	XrVector3f position;
+} XrEulerPosef;
+
+constexpr int XR_SWAP_TYPE_COUNTS[] = {
+	[XR_SWAP_TYPE_UNKNOWN] = 0,
+	[XR_SWAP_TYPE_MONO_SINGLE] = 1,
+	[XR_SWAP_TYPE_STEREO_SINGLE] = 2,
+	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
+	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
+};
+
 typedef uint16_t XrSessionIndex;
 
 /////////////////////////////////
@@ -132,6 +170,7 @@ void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t t
 void xrGetCompositorTimelineValue(XrSessionIndex sessionIndex, bool synchronized, uint64_t* pTimelineValue);
 void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue, bool synchronized);
 
+void xrGetControllerPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose);
 void xrGetHeadPose(XrSessionIndex sessionIndex, XrVector3f* pEuler, XrVector3f* pPos);
 
 typedef struct XrEyeView {
@@ -164,56 +203,6 @@ static inline XrTime xrHzToXrTime(double hz)
 
 #define XR_OPENGL_MAJOR_VERSION 4
 #define XR_OPENGL_MINOR_VERSION 6
-
-
-/////////////////
-//// OpenXR Types
-////
-typedef float XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
-
-typedef enum XrStructureTypeExt {
-	XR_TYPE_FRAME_BEGIN_SWAP_POOL_EXT = 2000470000,
-	XR_TYPE_SUB_VIEW = 2000480000,
-	XR_TYPE_SPACE_BOUNDS = 2000490000,
-} XrStructureTypeExt;
-
-typedef enum XrReferenceSpaceTypeExt {
-	XR_REFERENCE_SPACE_TYPE_LOCAL_BOUNDED = 2000115000,
-} XrReferenceSpaceTypeExt;
-
-typedef struct XrSubView {
-	XrStructureType    type;
-	void* XR_MAY_ALIAS next;
-	XrRect2Di          imageRect;
-	uint32_t           imageArrayIndex;
-} XrSubView;
-
-typedef struct XrSpaceBounds {
-	XrStructureType    type;
-	void* XR_MAY_ALIAS next;
-	XrRect2Di          imageRect;
-} XrSpaceBounds;
-
-constexpr int XR_SWAP_TYPE_COUNTS[] = {
-	[XR_SWAP_TYPE_UNKNOWN] = 0,
-	[XR_SWAP_TYPE_MONO_SINGLE] = 1,
-	[XR_SWAP_TYPE_STEREO_SINGLE] = 2,
-	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
-};
-
-//typedef struct XrFrameEndInfo {
-//	XrStructureType    type;
-//	void* XR_MAY_ALIAS next;
-//	XrRect2Di          imageRect;
-//	uint32_t       imageArrayIndex;
-//} XrFrameEndInfo;
-
-// maybe?
-//typedef struct XrFrameBeginSwapPoolInfo {
-//	XrStructureType             type;
-//	const void* XR_MAY_ALIAS    next;
-//} XrFrameBeginSwapPoolInfo;
 
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
@@ -402,6 +391,7 @@ typedef struct SetBase {
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
+typedef block_handle bHndPath;
 
 #define XR_MAX_BINDINGS      16
 #define XR_INTERACTION_PROFILE_CAPACITY 16
@@ -413,38 +403,42 @@ typedef InteractionProfile* XrInteractionProfile;
 
 #define XR_SUBACTION_CAPACITY 256
 typedef struct SubactionState {
+	bHnd hAction;
+
 	// need to understand this priority again
 	//	uint32_t lastSyncedPriority;
 
 	union {
-		XrBool32	  boolValue;
+		XrBool32      boolValue;
 		f32           floatValue;
 		XrVector2f    vec2Value;
 		XrVector3f    vec3Value;
 		XrQuaternionf quatValue;
 		XrPosef       poseValue;
+		XrEulerPosef  eulerPoseValue;
 	};
 
 	XrBool32 changedSinceLastSync;
 	XrTime   lastChangeTime;
 	XrBool32 isActive;
 } SubactionState;
+typedef block_handle bHndState;
 
 #define XR_BINDINGS_CAPACITY 256
 typedef struct Binding {
-	block_handle hPath;
-	int (*func)(SubactionState*);
+	bHnd hPath;
+	int (*func)(XrSessionIndex, SubactionState*);
 } Binding;
 
 #define XR_MAX_SUBACTION_PATHS 2
 #define XR_ACTION_CAPACITY     128
 typedef struct Action {
-	block_handle hActionSet;
+	bHnd hActionSet;
 
-	u8           countSubactions;
-	block_handle hSubactionStates[XR_MAX_SUBACTION_PATHS];
-	block_handle hSubactionBindings[XR_MAX_SUBACTION_PATHS];
-	block_handle hSubactionPaths[XR_MAX_SUBACTION_PATHS];
+	u8   countSubactions;
+	bHndState hSubactionStates[XR_MAX_SUBACTION_PATHS];
+	bHnd hSubactionBindings[XR_MAX_SUBACTION_PATHS];
+	bHndPath hSubactionPaths[XR_MAX_SUBACTION_PATHS];
 
 	XrActionType actionType;
 	char         actionName[XR_MAX_ACTION_NAME_SIZE];
@@ -454,13 +448,14 @@ typedef struct Action {
 #define XR_ACTION_SET_CAPACITY 64
 #define XR_MAX_ACTION_SET_STATES 64
 typedef struct ActionSet {
+	bHnd hAttachedToSession;
+
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) actions;
 	MAP_DECL(XR_MAX_ACTION_SET_STATES) states;
 
-	block_handle hAttachedToSession;
-	char         actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
-	char         localizedActionSetName[XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE];
-	u32          priority;
+	char actionSetName[XR_MAX_ACTION_SET_NAME_SIZE];
+	char localizedActionSetName[XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE];
+	u32  priority;
 } ActionSet;
 
 #define XR_SPACE_CAPACITY 128
@@ -809,109 +804,109 @@ static inline float xrFloatLerp(float a, float b, float t)
 ////
 static void DebugInputFloat(SubactionState* pState) { pState->floatValue += .2f; }
 
-static int InputSelectClick_Left(SubactionState* pState)
+static int InputSelectClick_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSelectClick_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSelectClick_Right(SubactionState* pState)
+static int InputSelectClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSelectClick_Right);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeValue_Left(SubactionState* pState)
+static int InputSqueezeValue_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeValue_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeValue_Right(SubactionState* pState)
+static int InputSqueezeValue_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeValue_Right);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeClick_Left(SubactionState* pState)
+static int InputSqueezeClick_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputSqueezeClick_Right(SubactionState* pState)
+static int InputSqueezeClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Right);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerValue_Left(SubactionState* pState)
+static int InputTriggerValue_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerValue_Right(SubactionState* pState)
+static int InputTriggerValue_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Right);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerTrigger_Left(SubactionState* pState)
+static int InputTriggerTrigger_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputTriggerTrigger_Right(SubactionState* pState)
+static int InputTriggerTrigger_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputSqueezeClick_Right);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputMenuClick_Left(SubactionState* pState)
+static int InputMenuClick_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputMenuClick_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputMenuClick_Right(SubactionState* pState)
+static int InputMenuClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputMenuClick_Right);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputGripPose_Left(SubactionState* pState)
+static int InputGripPose_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputGripPose_Left);
-	DebugInputFloat(pState);
+	xrGetControllerPose(sessionIndex, &pState->eulerPoseValue);
 	return 0;
 }
-static int InputGripPose_Right(SubactionState* pState)
+static int InputGripPose_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputGripPose_Right);
-	DebugInputFloat(pState);
+	xrGetControllerPose(sessionIndex, &pState->eulerPoseValue);
 	return 0;
 }
-static int InputAimPose_Left(SubactionState* pState)
+static int InputAimPose_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputAimPose_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int InputAimPose_Right(SubactionState* pState)
+static int InputAimPose_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(InputAimPose_Right);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int OutputHaptic_Left(SubactionState* pState)
+static int OutputHaptic_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(OutputHaptic_Left);
 	DebugInputFloat(pState);
 	return 0;
 }
-static int OutputHaptic_Right(SubactionState* pState)
+static int OutputHaptic_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	LOG_METHOD_ONCE(OutputHaptic_Right);
 	DebugInputFloat(pState);
@@ -925,7 +920,7 @@ static XrResult RegisterBinding(
 	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
 	Path*               pBindingPath,
-	int (*func)(SubactionState*))
+	int (*func)(XrSessionIndex, SubactionState*))
 {
 	auto bindPathHash = BLOCK_KEY(block.path, pBindingPath);
 	for (u32 i = 0; i < pInteractionProfile->bindings.count; ++i) {
@@ -946,7 +941,7 @@ static XrResult RegisterBinding(
 }
 
 typedef struct BindingDefinition {
-	int (*func)(SubactionState*);
+	int (*func)(XrSessionIndex, SubactionState*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
 static XrResult InitBinding(const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
@@ -976,8 +971,8 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 
 #define XR_INPUT_SELECT_CLICK_LEFT_HAND    "/user/hand/left/input/select/click"
 #define XR_INPUT_MENU_CLICK_LEFT_HAND      "/user/hand/left/input/menu/click"
-#define XR_INPUT_GRIP_POSE_LEFT_HAND       "/user/hand/left/input/grip/poseValue"
-#define XR_INPUT_AIM_POSE_LEFT_HAND        "/user/hand/left/input/aim/poseValue"
+#define XR_INPUT_GRIP_POSE_LEFT_HAND       "/user/hand/left/input/grip/pose"
+#define XR_INPUT_AIM_POSE_LEFT_HAND        "/user/hand/left/input/aim/pose"
 #define XR_INPUT_SQUEEZE_VALUE_LEFT_HAND   "/user/hand/left/input/squeeze/value"
 #define XR_INPUT_SQUEEZE_CLICK_LEFT_HAND   "/user/hand/left/input/squeeze/click"
 #define XR_INPUT_TRIGGER_VALUE_LEFT_HAND   "/user/hand/left/input/trigger/value"
@@ -986,19 +981,17 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 
 #define XR_INPUT_SELECT_CLICK_RIGHT_HAND   "/user/hand/right/input/select/click"
 #define XR_INPUT_MENU_CLICK_RIGHT_HAND     "/user/hand/right/input/menu/click"
-#define XR_INPUT_GRIP_POSE_RIGHT_HAND      "/user/hand/right/input/grip/poseValue"
-#define XR_INPUT_AIM_POSE_RIGHT_HAND       "/user/hand/right/input/aim/poseValue"
+#define XR_INPUT_GRIP_POSE_RIGHT_HAND      "/user/hand/right/input/grip/pose"
+#define XR_INPUT_AIM_POSE_RIGHT_HAND       "/user/hand/right/input/aim/pose"
 #define XR_INPUT_SQUEEZE_VALUE_RIGHT_HAND  "/user/hand/right/input/squeeze/value"
 #define XR_INPUT_SQUEEZE_CLICK_RIGHT_HAND  "/user/hand/right/input/squeeze/click"
 #define XR_INPUT_TRIGGER_VALUE_RIGHT_HAND  "/user/hand/right/input/trigger/value"
 #define XR_INPUT_TRIGGER_CLICK_RIGHT_HAND  "/user/hand/right/input/trigger/click"
 #define XR_OUTPUT_HAPTIC_RIGHT_HAND        "/user/hand/right/output/haptic"
 
-
 static XrResult InitStandardBindings()
 {
-
-#define BINDING_DEFINITION(_func, _path) {(int (*)(SubactionState*)) _func, _path}
+#define BINDING_DEFINITION(_func, _path) {(int (*)(XrSessionIndex, SubactionState*)) _func, _path}
 
 	{
 		BindingDefinition bindingDefinitions[] = {
@@ -1055,7 +1048,6 @@ static XrResult InitStandardBindings()
 	}
 
 #undef BINDING_DEFINITION
-
 	return XR_SUCCESS;
 }
 
@@ -1073,7 +1065,7 @@ static inline XrResult GetActionState(
 
 	for (u32 i = 0; i < pAction->countSubactions; ++i) {
 		if (hSubPath == pAction->hSubactionPaths[i]) {
-			auto hState = pAction->hSubactionPaths[i];
+			bHndState hState = pAction->hSubactionStates[i];
 			*ppState = BLOCK_PTR(block.state, hState);
 			return XR_SUCCESS;
 		}
@@ -1979,7 +1971,7 @@ XR_PROC xrLocateSpace(
 	auto pSession = BLOCK_PTR(block.session, pSpace->hSession);
 
 	switch (pSpace->type) {
-		case XR_TYPE_ACTION_SPACE_CREATE_INFO: {
+		case XR_TYPE_ACTION_SPACE_CREATE_INFO:
 			auto pSubPath = (Path*)BLOCK_PTR(block.path, pSpace->action.hSubactionPath);
 			auto pAction = (Action*)BLOCK_PTR(block.action, pSpace->action.hAction);
 
@@ -2000,8 +1992,7 @@ XR_PROC xrLocateSpace(
 			location->pose = pState->poseValue;
 
 			break;
-		}
-		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO: {
+		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO:
 
 			switch (pSpace->reference.spaceType) {
 				case XR_REFERENCE_SPACE_TYPE_LOCAL:
@@ -2013,8 +2004,8 @@ XR_PROC xrLocateSpace(
 					xrGetHeadPose(pSession->index, &euler, &pos);
 
 					switch (xr.instance.graphicsApi) {
-						case XR_GRAPHICS_API_OPENGL:    break;
-						case XR_GRAPHICS_API_VULKAN:    break;
+						case XR_GRAPHICS_API_OPENGL: break;
+						case XR_GRAPHICS_API_VULKAN: break;
 						case XR_GRAPHICS_API_D3D11_4:
 							XR_CONVERT_D3D11_EULER(euler);
 							XR_CONVERT_DD11_POSITION(pos);
@@ -2034,16 +2025,16 @@ XR_PROC xrLocateSpace(
 			}
 
 			break;
-		}
 		default:
 			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space type %s\n", string_XrStructureType(pSpace->type));
 			return XR_ERROR_VALIDATION_FAILURE;
 	}
 
-	location->locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
-							  XR_SPACE_LOCATION_POSITION_VALID_BIT |
-							  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
-							  XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+	location->locationFlags =
+		XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
+		XR_SPACE_LOCATION_POSITION_VALID_BIT |
+		XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
+		XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
 
 	if (location->next != NULL) {
 		switch (*(XrStructureType*)location->next) {
@@ -3281,8 +3272,16 @@ XR_PROC xrCreateAction(
 	pAction->hActionSet = hActionSet;
 	pAction->actionType = createInfo->actionType;
 	pAction->countSubactions = createInfo->countSubactionPaths;
-	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i)
-		pAction->hSubactionPaths[i] = BLOCK_HANDLE(block.path, (Path*)createInfo->subactionPaths[i]);
+	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i) {
+		auto pSubPath = (Path*)createInfo->subactionPaths[i];
+		bKey subPathHash = BLOCK_KEY(block.path, pSubPath);
+		pAction->hSubactionPaths[i] = BLOCK_HANDLE(block.path, pSubPath);
+
+		bHnd hState = BLOCK_CLAIM(block.state, subPathHash);
+		auto pState = BLOCK_PTR(block.state, hState);
+		pState->hAction = hAction;
+		pAction->hSubactionStates[i] = hState;
+	}
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
 	strncpy((char*)&pAction->localizedActionName, (const char*)&createInfo->localizedActionName, XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE);
 
@@ -3370,6 +3369,9 @@ XR_PROC xrSuggestInteractionProfileBindings(
 		// MAP_FIND could be nested in BLOCK_HANDLE....
 		bHnd hSuggestBind = MAP_FIND(pSuggestProfile->bindings, bindPathHash);
 		if (!HANDLE_VALID(hSuggestBind)) {
+			for (u32 subIndex = 0; subIndex < pSuggestAction->countSubactions; ++subIndex)
+				pSuggestAction->hSubactionBindings[subIndex] = HANDLE_DEFAULT;
+
 			printf("Could not find suggested Binding: %s on InteractionProfile: %s\n", pSuggestBindPath->string, pSuggestProfilePath->string);
 			continue;
 		}
@@ -3593,8 +3595,8 @@ XR_PROC xrSyncActions(
 	LOG_METHOD_ONCE(xrSyncActions);
 	LogNextChain(syncInfo->next);
 
-	auto pSess = (Session*)session;
-	if (pSess->activeSessionState != XR_SESSION_STATE_FOCUSED) {
+	auto pSession = (Session*)session;
+	if (pSession->activeSessionState != XR_SESSION_STATE_FOCUSED) {
 		LOG("XR_SESSION_NOT_FOCUSED\n");
 		return XR_SESSION_NOT_FOCUSED;
 	}
@@ -3607,9 +3609,22 @@ XR_PROC xrSyncActions(
 		bKey actionSetHash = BLOCK_KEY(block.actionSet, pActionSet);
 
 		for (u32 ai = 0; ai < pActionSet->actions.count; ++ai) {
-			auto pAction = BLOCK_PTR(block.action, pActionSet->actions.handles[ai]);
+			bHnd hAction = pActionSet->actions.handles[ai];
+			auto pAction = BLOCK_PTR(block.action, hAction);
 
 			for (u32 sai = 0; sai < pAction->countSubactions; ++sai) {
+				bHnd hBind = pAction->hSubactionBindings[sai];
+				if (!HANDLE_VALID(hBind)) {
+					LOG("Warning! %s not bound!\n", pAction->actionName);
+					continue;
+				}
+
+				bHnd hState = pAction->hSubactionStates[sai];
+				if (!HANDLE_VALID(hState)) {
+					LOG("State Invalid! %s\n", pAction->actionName);
+					continue;
+				}
+
 				auto pState = BLOCK_PTR(block.state, pAction->hSubactionStates[sai]);
 				auto pBind = BLOCK_PTR(block.binding, pAction->hSubactionBindings[sai]);
 
@@ -3619,7 +3634,7 @@ XR_PROC xrSyncActions(
 //					continue;
 
 				auto priorState = *pState;
-				pBind->func(pState);
+				pBind->func(pSession->index, pState);
 				pState->lastChangeTime = time;
 				pState->isActive = XR_TRUE;
 				pState->changedSinceLastSync = XR_TRUE;

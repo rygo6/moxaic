@@ -184,6 +184,14 @@ XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized)
 	return hzTime;
 }
 
+void xrGetControllerPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose)
+{
+	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
+	pPose->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
+	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
+}
+
 void xrGetHeadPose(XrSessionIndex sessionIndex, XrVector3f* pEuler, XrVector3f* pPos)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
