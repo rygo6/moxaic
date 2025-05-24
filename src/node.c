@@ -3,13 +3,13 @@
 #include <winsock2.h>
 #include <afunix.h>
 #include <stdio.h>
-
 #include <pthread.h>
 #include <assert.h>
 
+#include "mid_vulkan.h"
+
 #include "node.h"
 #include "test_node.h"
-#include "mid_vulkan.h"
 
 // Compositor and Node Process both use
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};

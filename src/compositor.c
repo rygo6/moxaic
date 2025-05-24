@@ -683,7 +683,7 @@ run_loop:
 				auto pNodShrd = activeNodesShared[i];
 
 				// find a way to get rid of this load and check
-				u64 nodTimlnVal = __atomic_load_n(&pNodShrd->timelineValue, __ATOMIC_ACQUIRE);
+				u64 nodTimlnVal = atomic_load_explicit(&pNodShrd->timelineValue, memory_order_acquire);
 
 				// I don't like this but it waits until the node renders something. Prediction should be okay here.
 				if (nodTimlnVal < 1)
@@ -732,7 +732,7 @@ run_loop:
 				auto pNodShrd = activeNodesShared[iNode];
 
 				// find a way to get rid of this load and check
-				u64 nodeTimlnVal = __atomic_load_n(&pNodShrd->timelineValue, __ATOMIC_ACQUIRE);
+				u64 nodeTimlnVal = atomic_load_explicit(&pNodShrd->timelineValue, memory_order_acquire);
 
 				// I don't like this but it waits until the node renders something. Prediction should be okay here.
 				if (nodeTimlnVal < 1)

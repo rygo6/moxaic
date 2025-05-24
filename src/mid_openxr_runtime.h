@@ -3,15 +3,15 @@
 //////////////////////
 #pragma once
 
-#include "mid_common.h"
-#include "mid_bit.h"
-
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+
+#include "mid_common.h"
+#include "mid_bit.h"
 
 #ifdef _WIN32
 	#define XR_USE_PLATFORM_WIN32
@@ -171,7 +171,7 @@ void xrGetCompositorTimelineValue(XrSessionIndex sessionIndex, bool synchronized
 void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue, bool synchronized);
 
 void xrGetControllerPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose);
-void xrGetHeadPose(XrSessionIndex sessionIndex, XrVector3f* pEuler, XrVector3f* pPos);
+void xrGetHeadPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose);
 
 typedef struct XrEyeView {
 	XrVector3f euler;
@@ -1959,6 +1959,8 @@ XR_PROC xrCreateActionSpace(
 	return XR_SUCCESS;
 }
 
+#define XR_SPACE_PTR(_) (Space*)_
+
 XR_PROC xrLocateSpace(
 	XrSpace          space,
 	XrSpace          baseSpace,
@@ -1967,16 +1969,17 @@ XR_PROC xrLocateSpace(
 {
 	LOG_METHOD_ONCE(xrLocateSpace);
 
-	auto pSpace = (Space*)space;
+	Space* pSpace = (Space*)space;
 	auto pSession = BLOCK_PTR(block.session, pSpace->hSession);
 
+	XrEulerPosef eulerPose;
 	switch (pSpace->type) {
 		case XR_TYPE_ACTION_SPACE_CREATE_INFO:
-			auto pSubPath = (Path*)BLOCK_PTR(block.path, pSpace->action.hSubactionPath);
-			auto pAction = (Action*)BLOCK_PTR(block.action, pSpace->action.hAction);
+			Path* pSubPath = BLOCK_PTR(block.path, pSpace->action.hSubactionPath);
+			Action* pAction = BLOCK_PTR(block.action, pSpace->action.hAction);
 
-			auto hSession = BLOCK_HANDLE(block.session, pSession);
-			auto pActionSet = BLOCK_PTR(block.actionSet, pAction->hActionSet);
+			bHnd hSession = BLOCK_HANDLE(block.session, pSession);
+			ActionSet* pActionSet = BLOCK_PTR(block.actionSet, pAction->hActionSet);
 
 			if (hSession != pActionSet->hAttachedToSession) {
 				LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
@@ -1989,7 +1992,7 @@ XR_PROC xrLocateSpace(
 				return XR_ERROR_PATH_UNSUPPORTED;
 			}
 
-			location->pose = pState->poseValue;
+			eulerPose = pState->eulerPoseValue;
 
 			break;
 		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO:
@@ -1998,26 +2001,7 @@ XR_PROC xrLocateSpace(
 				case XR_REFERENCE_SPACE_TYPE_LOCAL:
 				case XR_REFERENCE_SPACE_TYPE_STAGE:
 				case XR_REFERENCE_SPACE_TYPE_VIEW:
-
-					XrVector3f euler;
-					XrVector3f pos;
-					xrGetHeadPose(pSession->index, &euler, &pos);
-
-					switch (xr.instance.graphicsApi) {
-						case XR_GRAPHICS_API_OPENGL: break;
-						case XR_GRAPHICS_API_VULKAN: break;
-						case XR_GRAPHICS_API_D3D11_4:
-							XR_CONVERT_D3D11_EULER(euler);
-							XR_CONVERT_DD11_POSITION(pos);
-							break;
-						default:
-							// Not all APIS might need adjustment?
-							break;
-					}
-
-					location->pose.orientation = xrQuaternionFromEuler(euler);
-					location->pose.position = pos;
-
+					xrGetHeadPose(pSession->index, &eulerPose);
 					break;
 				default:
 					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space type %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
@@ -2029,6 +2013,21 @@ XR_PROC xrLocateSpace(
 			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space type %s\n", string_XrStructureType(pSpace->type));
 			return XR_ERROR_VALIDATION_FAILURE;
 	}
+
+	switch (xr.instance.graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL: break;
+		case XR_GRAPHICS_API_VULKAN: break;
+		case XR_GRAPHICS_API_D3D11_4:
+			XR_CONVERT_D3D11_EULER(eulerPose.euler);
+			XR_CONVERT_DD11_POSITION(eulerPose.position);
+			break;
+		default:
+			// Not all APIS might need adjustment?
+			break;
+	}
+
+	location->pose.orientation = xrQuaternionFromEuler(eulerPose.euler);
+	location->pose.position = eulerPose.position;
 
 	location->locationFlags =
 		XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |

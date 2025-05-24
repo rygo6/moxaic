@@ -1,7 +1,7 @@
 #include <assert.h>
+#include <stdatomic.h>
 
 #include "mid_shape.h"
-
 #include "test_node.h"
 
 enum SetBindNodeProcessIndices {
@@ -469,7 +469,7 @@ run_loop:
 
 	// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 	// shared: 569 - semaphore: 315416 ratio: 554.333919
-	__atomic_store_n(&pNodeShared->timelineValue, nodeTimelineValue, __ATOMIC_RELEASE);
+	atomic_store_explicit(&pNodeShared->timelineValue, nodeTimelineValue, memory_order_release);
 
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 

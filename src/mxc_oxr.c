@@ -1,10 +1,11 @@
-#include "node.h"
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <stdatomic.h>
 
 #include "mid_openxr_runtime.h"
 #include "mid_vulkan.h"
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "node.h"
 
 void xrInitialize()
 {
@@ -71,7 +72,7 @@ void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineVal
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
-	__atomic_store_n(&pNodeShared->timelineValue, timelineValue, __ATOMIC_RELEASE);
+	atomic_store_explicit(&pNodeShared->timelineValue, timelineValue, memory_order_release);
 }
 
 void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
@@ -130,7 +131,7 @@ void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
+	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 	uint8_t index = (timelineValue % VK_SWAP_COUNT);
 	*pIndex = index;
 //	printf("Claiming swap index %d timeline %llu\n", index, timelineValue);
@@ -142,7 +143,7 @@ void xrReleaseSwapIndex(XrSessionIndex sessionIndex, uint8_t index)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
-	uint64_t timelineValue = __atomic_load_n(&pNodeShared->timelineValue, __ATOMIC_ACQUIRE);
+	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 //	printf("Releasing swap index %d timeline %llu\n", index, timelineValue);
 //	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_SEQ_CST);
 //	assert(priorIndex == true);
@@ -192,12 +193,12 @@ void xrGetControllerPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose)
 	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
 }
 
-void xrGetHeadPose(XrSessionIndex sessionIndex, XrVector3f* pEuler, XrVector3f* pPos)
+void xrGetHeadPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose)
 {
 	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
-	*pEuler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
-	*pPos = *(XrVector3f*)&pNodeShared->cameraPose.position;
+	pPose->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
+	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
 }
 
 void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView)

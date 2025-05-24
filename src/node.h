@@ -59,6 +59,7 @@ typedef enum MxcSwapScale {
 } MxcSwapScale;
 
 typedef struct MxcDepthState {
+	// this should all be atomic
 	float minDepth;
 	float maxDepth;
 	float nearZ;
@@ -78,7 +79,7 @@ typedef struct MxcNodeShared {
 	VkGlobalSetState globalSetState;
 	vec2             ulClipUV;
 	vec2             lrClipUV;
-	uint64_t         timelineValue;
+	_Atomic uint64_t timelineValue;
 
 	MxcDepthState depthState;
 
@@ -177,7 +178,7 @@ void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTexture
 ////
 typedef struct MxcCompositorContext {
 	// read multiple threads, write 1 thread
-	uint32_t swapIndex;
+	_Atomic uint32_t swapIndex;
 
 	// read by multiple threads
 	VkCommandBuffer graphicsCmd;

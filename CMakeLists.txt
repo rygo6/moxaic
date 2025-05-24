@@ -43,7 +43,7 @@ target_include_directories(${TARGET_NAME} PUBLIC
 # Force static linking of pthread... this might be reason not to use pthread?
 set_target_properties(${TARGET_NAME} PROPERTIES
         # Force static linking of runtime libraries
-        LINK_FLAGS "-static-libgcc -static-libstdc++ -Wl,-Bstatic,--whole-archive -lpthread -Wl,--no-whole-archive,-Bdynamic"
+        LINK_FLAGS "-Wl,-Bstatic,--whole-archive -lpthread -Wl,--no-whole-archive,-Bdynamic"
 )
 set(PTHREAD_STATIC_PATH "C:/msys64/ucrt64/lib/libwinpthread.a")
 if(EXISTS "${PTHREAD_STATIC_PATH}")
@@ -69,9 +69,9 @@ target_link_options(${TARGET_NAME} PRIVATE
 #        -fsanitize=address
 #        -fsanitize=undefined
 #        -fsanitize=leak
-        -fstack-protector-all
-        -fPIE
-        -pie
+#        -fstack-protector-all
+#        -fPIE
+#        -pie
 )
 
 
@@ -80,19 +80,19 @@ target_compile_definitions(${TARGET_NAME} PUBLIC
         MOXAIC_COMPOSITOR
 )
 target_compile_options(${TARGET_NAME} PRIVATE
-        #        ${SANITIZER_FLAGS}
+#        ${SANITIZER_FLAGS}
         ${DEBUG_FLAGS}
         ${WARNING_FLAGS}
-        ${SECURITY_FLAGS}
+#        ${SECURITY_FLAGS}
         ${DISABLE_WARNINGS}
 
         -include globals.h
         -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/= # make __FILE__ path relative to project
-        -fopt-info-vec # vector optimization
+#        -fopt-info-vec # vector optimization
         -std=c23
         -std=gnu23
+        -Wno-gnu-statement-expression
 )
-
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     target_compile_definitions(${TARGET_NAME} PRIVATE DEBUG)

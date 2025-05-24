@@ -26,16 +26,21 @@ static_assert(sizeof(bitset512_t) == 64, "");
 #define DECL_CONCAT(a, b, c) a##b##c
 #define BITSET_DECL(_, n) DECL_CONCAT(bitset, n, _t) _
 
-//#define TRAILING_ONES(_) __builtin_ctz(_) // non-C23
-#define TRAILING_ONES(_) __builtin_stdc_trailing_ones(_)
+#ifdef MID_IDE_ANALYSIS
+#define TRAILING_ONES(_) 0
+#elif __clang__
+#define TRAILING_ONES(_) ((int)__builtin_ctz(~_))
+#elif __GNUC__
+#define TRAILING_ONES(_) ((int)__builtin_stdc_trailing_ones(_))
+#endif
 
-static inline int BitScanFirstZero(size_t setCount, bitset_t* pSet)
+static inline int BitScanFirstZero(int setCount, bitset_t* pSet)
 {
-	size_t i = 0;
+	int i = 0;
 	for (; i < setCount; ++i)
 		if (pSet[i] != 0xFF)
 			break;
-	return i == setCount ? -1ull : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
+	return i == setCount ? -1 : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
 }
 
 //typedef unsigned char nibset_t;

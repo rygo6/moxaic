@@ -514,7 +514,7 @@ INLINE void PFN_CmdBeginRenderPass(
 		.pClearValues = (VkClearValue[]){
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {.color = clearColor},
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {.color = {{0.0f, 0.0f, 0.0f, 0.0f}}},
-			[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = {.depthStencil = {0.0f}},
+			[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = {.depthStencil = {0.0f, 0}},
 		},
 	};
 	func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
