@@ -143,6 +143,9 @@ constexpr int XR_SWAP_TYPE_COUNTS[] = {
 	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
 };
 
+#define XR_SPACE_LOCATION_ALL_TRACKED XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT | \
+										  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT
+
 typedef uint16_t XrSessionIndex;
 
 /////////////////////////////////
@@ -1865,11 +1868,11 @@ XR_PROC xrLocateSpace(
 {
 	LOG_METHOD_ONCE(xrLocateSpace);
 
-	Space* pSpace = (Space*)space;
+	auto pSpace = (Space*)space;
 	auto pSession = BLOCK_PTR(block.session, pSpace->hSession);
 
 	XrBool32 isActive = false;
-	XrEulerPosef eulerPose;
+	XrEulerPosef eulerPose = {};
 	switch (pSpace->type) {
 		case XR_TYPE_ACTION_SPACE_CREATE_INFO:
 			auto pSubPath = BLOCK_PTR(block.path, pSpace->action.hSubactionPath);
@@ -1927,12 +1930,7 @@ XR_PROC xrLocateSpace(
 
 	location->pose.orientation = xrQuaternionFromEuler(eulerPose.euler);
 	location->pose.position = eulerPose.position;
-	location->locationFlags = isActive ?
-								  XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
-									  XR_SPACE_LOCATION_POSITION_VALID_BIT |
-									  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
-									  XR_SPACE_LOCATION_POSITION_TRACKED_BIT :
-								  0;
+	location->locationFlags = isActive ? XR_SPACE_LOCATION_ALL_TRACKED : 0;
 
 	if (location->next != NULL) {
 		switch (*(XrStructureType*)location->next) {

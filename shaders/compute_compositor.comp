@@ -216,9 +216,9 @@ void main()
 //    }
 
     if (any(lessThan(intersectNodeUV, nodeUBO.ulUV)) || any(greaterThan(intersectNodeUV, nodeUBO.lrUV))) {
-        uint debugDepth = PackDepth16(HALF_EPSILON);
-        imageAtomicMax(outputAtomic, grid_GlobalCoord, debugDepth);
-        imageStore(outputColor, grid_GlobalCoord, vec4(0,0,0.02,0));
+//        uint debugDepth = PackDepth16(HALF_EPSILON);
+//        imageAtomicMax(outputAtomic, grid_GlobalCoord, debugDepth);
+//        imageStore(outputColor, grid_GlobalCoord, vec4(0,0,0.02,0));
         return;
     }
 
@@ -244,5 +244,6 @@ void main()
         // We don't want to linear sample because then pixels at the edge of an object get blended with black background
         vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
         imageStore(outputColor, globProjCoord, nodeColorSample);
+//        imageStore(outputColor, globProjCoord, vec4(nodeDepthSample));
     }
 }

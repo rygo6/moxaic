@@ -582,26 +582,26 @@ run_loop:
 //				ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
 				ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 				u32   pixelCt = extent.x * extent.y;
-				u32  groupCt = pixelCt / GRID_SUBGROUP_CAPACITY  / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
+				u32   groupCt = pixelCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
 
 				memcpy(&pCompst->pGBufferProcessMapped->depth, (void*)&pNodeShared->depthState, sizeof(MxcDepthState));
-				VkWriteDescriptorSet pshSets[] = {
+				VkWriteDescriptorSet pushSets[] = {
 					BIND_WRITE_GBUFFER_PROCESS_STATE(pCompst->gBufferProcessSetBuffer.buffer),
 					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipViews),
 				};
 				CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCompst->gbufferProcessBlitUpPipe);
-				CmdPushDescriptorSetKHR(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCompst->gbufferProcessPipeLayout, PIPE_INDEX_GBUFFER_PROCESS_INOUT, COUNT(pshSets), pshSets);
+				CmdPushDescriptorSetKHR(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCompst->gbufferProcessPipeLayout, PIPE_INDEX_GBUFFER_PROCESS_INOUT, COUNT(pushSets), pushSets);
 				CmdDispatch(graphCmd, 1, groupCt, 1);
 
 				pFinBars[0].image = pNodeSwap->gBuffer;
 				CmdPipelineImageBarriers2(graphCmd, 1, pFinBars);
 
-				VkWriteDescriptorSet wrtSets[] = {
+				VkWriteDescriptorSet writeSets[] = {
 					BIND_WRITE_NODE_COLOR(pNodeCompositData->nodeSet, pNodeSwap->colorView, finalBarrier),
 					BIND_WRITE_NODE_GBUFFER(pNodeCompositData->nodeSet, pNodeSwap->gBufferMipViews[0], finalBarrier),
 				};
-				vkUpdateDescriptorSets(device, COUNT(wrtSets), wrtSets, 0, NULL);
+				vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 			}
 
 			pNodeCompositData->lastTimelineValue = nodeTimlnVal;

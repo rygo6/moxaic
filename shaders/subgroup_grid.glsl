@@ -1,4 +1,6 @@
 //// Subgroup Grid
+#define QUAD_SQUARE_SIZE 2
+
 #define SUBGROUP_SQUARE_SIZE 4
 #define SUBGROUP_CAPACITY 16 // 4 * 4
 

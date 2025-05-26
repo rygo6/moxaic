@@ -206,8 +206,7 @@ void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEy
 
 #define UPDATE_CLICK(button, chirality)                           \
 	({                                                            \
-		auto pNodeContext = &nodeContexts[sessionIndex];          \
-		auto pNodeShared = pNodeContext->pNodeShared;             \
+		auto pNodeShared = activeNodesShared[sessionIndex];       \
 		atomic_thread_fence(memory_order_acquire);                \
 		auto pController = &pNodeShared->chirality;               \
 		auto changed = pState->isActive != pController->active || \
@@ -267,8 +266,7 @@ int xrInputMenuClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 
 #define UPDATE_POSE(pose, chirality)                                                                              \
 	({                                                                                                            \
-		auto pNodeContext = &nodeContexts[sessionIndex];                                                          \
-		auto pNodeShared = pNodeContext->pNodeShared;                                                             \
+		auto pNodeShared = activeNodesShared[sessionIndex];                                                       \
 		atomic_thread_fence(memory_order_acquire);                                                                \
 		auto pController = &pNodeShared->chirality;                                                               \
 		auto changed = pState->isActive != pController->active ||                                                 \
