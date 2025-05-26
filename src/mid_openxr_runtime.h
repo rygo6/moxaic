@@ -170,7 +170,6 @@ void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t t
 void xrGetCompositorTimelineValue(XrSessionIndex sessionIndex, bool synchronized, uint64_t* pTimelineValue);
 void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue, bool synchronized);
 
-void xrGetControllerPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose);
 void xrGetHeadPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose);
 
 typedef struct XrEyeView {
@@ -188,6 +187,30 @@ static inline XrTime xrHzToXrTime(double hz)
 {
 	return (XrTime)(hz / 1e9);
 }
+
+///////////////////////
+//// Device Input Funcs
+////
+typedef struct SubactionState SubactionState;
+
+int xrInputSelectClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputSelectClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputSqueezeValue_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputSqueezeValue_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputSqueezeClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputSqueezeClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputTriggerValue_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputTriggerValue_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputTriggerClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputTriggerClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputMenuClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputMenuClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputGripPose_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputGripPose_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputAimPose_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputAimPose_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrOutputHaptic_Left(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrOutputHaptic_Right(XrSessionIndex sessionIndex, SubactionState* pState);
 
 /////////////////////
 //// OpenXR Constants
@@ -225,7 +248,6 @@ typedef map_handle mHnd;
 typedef u16 block_handle;
 typedef u32 block_key;
 
-// do i like this name?
 typedef block_handle bHnd;
 typedef block_key    bKey;
 
@@ -391,7 +413,6 @@ typedef struct SetBase {
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
 } Path;
-typedef block_handle bHndPath;
 
 #define XR_MAX_BINDINGS      16
 #define XR_INTERACTION_PROFILE_CAPACITY 16
@@ -422,7 +443,6 @@ typedef struct SubactionState {
 	XrTime   lastChangeTime;
 	XrBool32 isActive;
 } SubactionState;
-typedef block_handle bHndState;
 
 #define XR_BINDINGS_CAPACITY 256
 typedef struct Binding {
@@ -436,9 +456,9 @@ typedef struct Action {
 	bHnd hActionSet;
 
 	u8   countSubactions;
-	bHndState hSubactionStates[XR_MAX_SUBACTION_PATHS];
+	bHnd hSubactionStates[XR_MAX_SUBACTION_PATHS];
 	bHnd hSubactionBindings[XR_MAX_SUBACTION_PATHS];
-	bHndPath hSubactionPaths[XR_MAX_SUBACTION_PATHS];
+	bHnd hSubactionPaths[XR_MAX_SUBACTION_PATHS];
 
 	XrActionType actionType;
 	char         actionName[XR_MAX_ACTION_NAME_SIZE];
@@ -799,120 +819,6 @@ static inline float xrFloatLerp(float a, float b, float t)
 	return a + t * (b - a);
 }
 
-///////////////////////
-//// Device Input Funcs
-////
-static void DebugInputFloat(SubactionState* pState) { pState->floatValue += .2f; }
-
-static int InputSelectClick_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSelectClick_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputSelectClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSelectClick_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputSqueezeValue_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeValue_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputSqueezeValue_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeValue_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputSqueezeClick_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeClick_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputSqueezeClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeClick_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputTriggerValue_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeClick_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputTriggerValue_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeClick_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputTriggerTrigger_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeClick_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputTriggerTrigger_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputSqueezeClick_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputMenuClick_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputMenuClick_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputMenuClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputMenuClick_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputGripPose_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputGripPose_Left);
-	xrGetControllerPose(sessionIndex, &pState->eulerPoseValue);
-	return 0;
-}
-static int InputGripPose_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputGripPose_Right);
-	xrGetControllerPose(sessionIndex, &pState->eulerPoseValue);
-	return 0;
-}
-static int InputAimPose_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputAimPose_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int InputAimPose_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(InputAimPose_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int OutputHaptic_Left(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(OutputHaptic_Left);
-	DebugInputFloat(pState);
-	return 0;
-}
-static int OutputHaptic_Right(XrSessionIndex sessionIndex, SubactionState* pState)
-{
-	LOG_METHOD_ONCE(OutputHaptic_Right);
-	DebugInputFloat(pState);
-	return 0;
-}
-
 ////////////
 //// Binding
 ////
@@ -967,7 +873,7 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 #define XR_INTERACTION_PROFILE_KHR_SIMPLE_CONTROLLER "/interaction_profiles/khr/simple_controller"
 #define XR_INTERACTION_PROFILE_OCULUS_TOUCH_CONTROLLER "/interaction_profiles/oculus/touch_controller"
 
-#define XR_DEFAULT_INTERACTION_PROFILE XR_INTERACTION_PROFILE_KHR_SIMPLE_CONTROLLER
+#define XR_DEFAULT_INTERACTION_PROFILE XR_INTERACTION_PROFILE_OCULUS_TOUCH_CONTROLLER
 
 #define XR_INPUT_SELECT_CLICK_LEFT_HAND    "/user/hand/left/input/select/click"
 #define XR_INPUT_MENU_CLICK_LEFT_HAND      "/user/hand/left/input/menu/click"
@@ -995,20 +901,20 @@ static XrResult InitStandardBindings()
 
 	{
 		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(InputSelectClick_Left, XR_INPUT_SELECT_CLICK_LEFT_HAND),
-			BINDING_DEFINITION(InputSelectClick_Right, XR_INPUT_SELECT_CLICK_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputSelectClick_Left, XR_INPUT_SELECT_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(xrInputSelectClick_Right, XR_INPUT_SELECT_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputMenuClick_Left, XR_INPUT_MENU_CLICK_LEFT_HAND),
-			BINDING_DEFINITION(InputMenuClick_Right, XR_INPUT_MENU_CLICK_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputMenuClick_Left, XR_INPUT_MENU_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(xrInputMenuClick_Right, XR_INPUT_MENU_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputGripPose_Left, XR_INPUT_GRIP_POSE_LEFT_HAND),
-			BINDING_DEFINITION(InputGripPose_Right, XR_INPUT_GRIP_POSE_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputGripPose_Left, XR_INPUT_GRIP_POSE_LEFT_HAND),
+			BINDING_DEFINITION(xrInputGripPose_Right, XR_INPUT_GRIP_POSE_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputAimPose_Left, XR_INPUT_AIM_POSE_LEFT_HAND),
-			BINDING_DEFINITION(InputAimPose_Right, XR_INPUT_AIM_POSE_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputAimPose_Left, XR_INPUT_AIM_POSE_LEFT_HAND),
+			BINDING_DEFINITION(xrInputAimPose_Right, XR_INPUT_AIM_POSE_RIGHT_HAND),
 
-			BINDING_DEFINITION(OutputHaptic_Left, XR_OUTPUT_HAPTIC_LEFT_HAND),
-			BINDING_DEFINITION(OutputHaptic_Right, XR_OUTPUT_HAPTIC_RIGHT_HAND),
+			BINDING_DEFINITION(xrOutputHaptic_Left, XR_OUTPUT_HAPTIC_LEFT_HAND),
+			BINDING_DEFINITION(xrOutputHaptic_Right, XR_OUTPUT_HAPTIC_RIGHT_HAND),
 
 		};
 		InitBinding(XR_INTERACTION_PROFILE_KHR_SIMPLE_CONTROLLER, COUNT(bindingDefinitions), bindingDefinitions);
@@ -1016,32 +922,32 @@ static XrResult InitStandardBindings()
 
 	{
 		BindingDefinition bindingDefinitions[] = {
-			BINDING_DEFINITION(InputSelectClick_Left, XR_INPUT_SELECT_CLICK_LEFT_HAND),
-			BINDING_DEFINITION(InputSelectClick_Right, XR_INPUT_SELECT_CLICK_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputSelectClick_Left, XR_INPUT_SELECT_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(xrInputSelectClick_Right, XR_INPUT_SELECT_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputSqueezeValue_Left, XR_INPUT_SQUEEZE_VALUE_LEFT_HAND),
-			BINDING_DEFINITION(InputSqueezeValue_Right, XR_INPUT_SQUEEZE_VALUE_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputSqueezeValue_Left, XR_INPUT_SQUEEZE_VALUE_LEFT_HAND),
+			BINDING_DEFINITION(xrInputSqueezeValue_Right, XR_INPUT_SQUEEZE_VALUE_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputSqueezeClick_Left, XR_INPUT_SQUEEZE_CLICK_LEFT_HAND),
-			BINDING_DEFINITION(InputSqueezeClick_Right, XR_INPUT_SQUEEZE_CLICK_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputSqueezeClick_Left, XR_INPUT_SQUEEZE_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(xrInputSqueezeClick_Right, XR_INPUT_SQUEEZE_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputTriggerValue_Left, XR_INPUT_TRIGGER_VALUE_LEFT_HAND),
-			BINDING_DEFINITION(InputTriggerValue_Right, XR_INPUT_TRIGGER_VALUE_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputTriggerValue_Left, XR_INPUT_TRIGGER_VALUE_LEFT_HAND),
+			BINDING_DEFINITION(xrInputTriggerValue_Right, XR_INPUT_TRIGGER_VALUE_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputTriggerTrigger_Left, XR_INPUT_TRIGGER_CLICK_LEFT_HAND),
-			BINDING_DEFINITION(InputTriggerTrigger_Right, XR_INPUT_TRIGGER_CLICK_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputTriggerClick_Left, XR_INPUT_TRIGGER_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(xrInputTriggerClick_Right, XR_INPUT_TRIGGER_CLICK_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputGripPose_Left, XR_INPUT_GRIP_POSE_LEFT_HAND),
-			BINDING_DEFINITION(InputGripPose_Right, XR_INPUT_GRIP_POSE_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputGripPose_Left, XR_INPUT_GRIP_POSE_LEFT_HAND),
+			BINDING_DEFINITION(xrInputGripPose_Right, XR_INPUT_GRIP_POSE_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputAimPose_Left, XR_INPUT_AIM_POSE_LEFT_HAND),
-			BINDING_DEFINITION(InputAimPose_Right, XR_INPUT_AIM_POSE_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputAimPose_Left, XR_INPUT_AIM_POSE_LEFT_HAND),
+			BINDING_DEFINITION(xrInputAimPose_Right, XR_INPUT_AIM_POSE_RIGHT_HAND),
 
-			BINDING_DEFINITION(OutputHaptic_Left, XR_OUTPUT_HAPTIC_LEFT_HAND),
-			BINDING_DEFINITION(OutputHaptic_Right, XR_OUTPUT_HAPTIC_RIGHT_HAND),
+			BINDING_DEFINITION(xrOutputHaptic_Left, XR_OUTPUT_HAPTIC_LEFT_HAND),
+			BINDING_DEFINITION(xrOutputHaptic_Right, XR_OUTPUT_HAPTIC_RIGHT_HAND),
 
-			BINDING_DEFINITION(InputMenuClick_Left, XR_INPUT_MENU_CLICK_LEFT_HAND),
-			BINDING_DEFINITION(InputMenuClick_Right, XR_INPUT_MENU_CLICK_RIGHT_HAND),
+			BINDING_DEFINITION(xrInputMenuClick_Left, XR_INPUT_MENU_CLICK_LEFT_HAND),
+			BINDING_DEFINITION(xrInputMenuClick_Right, XR_INPUT_MENU_CLICK_RIGHT_HAND),
 
 		};
 		InitBinding(XR_INTERACTION_PROFILE_OCULUS_TOUCH_CONTROLLER, COUNT(bindingDefinitions), bindingDefinitions);
@@ -1065,7 +971,8 @@ static inline XrResult GetActionState(
 
 	for (u32 i = 0; i < pAction->countSubactions; ++i) {
 		if (hSubPath == pAction->hSubactionPaths[i]) {
-			bHndState hState = pAction->hSubactionStates[i];
+			auto hState = pAction->hSubactionStates[i];
+			auto handle = HANDLE_INDEX(hState);
 			*ppState = BLOCK_PTR(block.state, hState);
 			return XR_SUCCESS;
 		}
@@ -1119,11 +1026,11 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_visibility_mask_SPEC_VERSION,
 		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
-			.extensionVersion = XR_EXT_user_presence_SPEC_VERSION,
-		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
+//			.extensionVersion = XR_EXT_user_presence_SPEC_VERSION,
+//		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_EXT_CONFORMANCE_AUTOMATION_EXTENSION_NAME,
@@ -1144,11 +1051,11 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 //			.extensionName = XR_MSFT_SECONDARY_VIEW_CONFIGURATION_EXTENSION_NAME,
 //			.extensionVersion = XR_MSFT_secondary_view_configuration_SPEC_VERSION,
 //		},
-		{
-			.type = XR_TYPE_EXTENSION_PROPERTIES,
-			.extensionName = XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
-			.extensionVersion = XR_EXT_eye_gaze_interaction_SPEC_VERSION,
-		},
+//		{
+//			.type = XR_TYPE_EXTENSION_PROPERTIES,
+//			.extensionName = XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
+//			.extensionVersion = XR_EXT_eye_gaze_interaction_SPEC_VERSION,
+//		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_MSFT_HAND_INTERACTION_EXTENSION_NAME,
@@ -1915,22 +1822,13 @@ XR_PROC xrGetReferenceSpaceBoundsRect(
 {
 	LOG_METHOD(xrGetReferenceSpaceBoundsRect);
 
-	Session* pSession = (Session*)session;
-
+	auto pSession = (Session*)session;
 	xrGetReferenceSpaceBounds(pSession->index, bounds);
 
 	printf("xrGetReferenceSpaceBoundsRect %s width: %f height: %f\n", string_XrReferenceSpaceType(referenceSpaceType), bounds->width, bounds->height);
 
 	return XR_SUCCESS;
 }
-
-//XR_PROC xrSetReferenceSpaceBoundsRect(
-//	XrSession            session,
-//	XrReferenceSpaceType referenceSpaceType,
-//	XrExtent2Df          bounds)
-//{
-//	return XR_SUCCESS;
-//}
 
 XR_PROC xrCreateActionSpace(
 	XrSession                      session,
@@ -1959,8 +1857,6 @@ XR_PROC xrCreateActionSpace(
 	return XR_SUCCESS;
 }
 
-#define XR_SPACE_PTR(_) (Space*)_
-
 XR_PROC xrLocateSpace(
 	XrSpace          space,
 	XrSpace          baseSpace,
@@ -1972,14 +1868,15 @@ XR_PROC xrLocateSpace(
 	Space* pSpace = (Space*)space;
 	auto pSession = BLOCK_PTR(block.session, pSpace->hSession);
 
+	XrBool32 isActive = false;
 	XrEulerPosef eulerPose;
 	switch (pSpace->type) {
 		case XR_TYPE_ACTION_SPACE_CREATE_INFO:
-			Path* pSubPath = BLOCK_PTR(block.path, pSpace->action.hSubactionPath);
-			Action* pAction = BLOCK_PTR(block.action, pSpace->action.hAction);
+			auto pSubPath = BLOCK_PTR(block.path, pSpace->action.hSubactionPath);
+			auto pAction = BLOCK_PTR(block.action, pSpace->action.hAction);
 
-			bHnd hSession = BLOCK_HANDLE(block.session, pSession);
-			ActionSet* pActionSet = BLOCK_PTR(block.actionSet, pAction->hActionSet);
+			auto hSession = BLOCK_HANDLE(block.session, pSession);
+			auto pActionSet = BLOCK_PTR(block.actionSet, pAction->hActionSet);
 
 			if (hSession != pActionSet->hAttachedToSession) {
 				LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
@@ -1993,6 +1890,7 @@ XR_PROC xrLocateSpace(
 			}
 
 			eulerPose = pState->eulerPoseValue;
+			isActive = pState->isActive;
 
 			break;
 		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO:
@@ -2002,6 +1900,7 @@ XR_PROC xrLocateSpace(
 				case XR_REFERENCE_SPACE_TYPE_STAGE:
 				case XR_REFERENCE_SPACE_TYPE_VIEW:
 					xrGetHeadPose(pSession->index, &eulerPose);
+					isActive = true;
 					break;
 				default:
 					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space type %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
@@ -2028,12 +1927,12 @@ XR_PROC xrLocateSpace(
 
 	location->pose.orientation = xrQuaternionFromEuler(eulerPose.euler);
 	location->pose.position = eulerPose.position;
-
-	location->locationFlags =
-		XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
-		XR_SPACE_LOCATION_POSITION_VALID_BIT |
-		XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
-		XR_SPACE_LOCATION_POSITION_TRACKED_BIT;
+	location->locationFlags = isActive ?
+								  XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
+									  XR_SPACE_LOCATION_POSITION_VALID_BIT |
+									  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT |
+									  XR_SPACE_LOCATION_POSITION_TRACKED_BIT :
+								  0;
 
 	if (location->next != NULL) {
 		switch (*(XrStructureType*)location->next) {
@@ -2411,8 +2310,6 @@ XR_PROC xrCreateSwapchain(
 			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
 
 			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-
-
 				switch (pSwap->output) {
 					case XR_SWAP_OUTPUT_FLAG_COLOR:
 						HANDLE colorHandle;
@@ -3624,8 +3521,9 @@ XR_PROC xrSyncActions(
 					continue;
 				}
 
-				auto pState = BLOCK_PTR(block.state, pAction->hSubactionStates[sai]);
-				auto pBind = BLOCK_PTR(block.binding, pAction->hSubactionBindings[sai]);
+				auto pBind = BLOCK_PTR(block.binding, hBind);
+				auto pState = BLOCK_PTR(block.state, hState);
+				auto index = HANDLE_INDEX(hState);
 
 				// need to understand this priority again
 //				if (pState->lastSyncedPriority > pActSet->priority &&
@@ -3633,10 +3531,8 @@ XR_PROC xrSyncActions(
 //					continue;
 
 				auto priorState = *pState;
-				pBind->func(pSession->index, pState);
+				pState->changedSinceLastSync = pBind->func(pSession->index, pState);
 				pState->lastChangeTime = time;
-				pState->isActive = XR_TRUE;
-				pState->changedSinceLastSync = XR_TRUE;
 			}
 		}
 	}

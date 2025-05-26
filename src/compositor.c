@@ -303,12 +303,12 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	auto device = vk.context.device;
 
 	auto graphCmd = pCtx->graphicsCmd;
-	auto timeln = pCtx->compositorTimeline;
+	auto timeline = pCtx->compositorTimeline;
 	u64  baseCycleValue = 0;
 
 	auto mode = pInfo->mode;
 	auto renderPass = pCompst->compRenderPass;
-	auto framebuff = pCompst->graphicsFramebuffer;
+	auto fbuff = pCompst->graphicsFramebuffer;
 	auto globalSet = pCompst->globalSet;
 	auto comptOutputSet = pCompst->computeOutputSet;
 
@@ -348,13 +348,13 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 		VkImageView color;
 		VkImageView normal;
 		VkImageView depth;
-	} graphFramebuffView;
-	graphFramebuffView.color = pCompst->graphicsFramebufferTexture.color.view;
-	graphFramebuffView.normal = pCompst->graphicsFramebufferTexture.normal.view;
-	graphFramebuffView.depth = pCompst->graphicsFramebufferTexture.depth.view;
+	} graphFbuffView;
+	graphFbuffView.color = pCompst->graphicsFramebufferTexture.color.view;
+	graphFbuffView.normal = pCompst->graphicsFramebufferTexture.normal.view;
+	graphFbuffView.depth = pCompst->graphicsFramebufferTexture.depth.view;
 
-	auto grphFrmBufColorImg = pCompst->graphicsFramebufferTexture.color.image;
-	auto cmptFrmBufColorImg = pCompst->computeFramebufferColorTexture.image;
+	auto graphFbuffColorImg = pCompst->graphicsFramebufferTexture.color.image;
+	auto comptFbuffColorImg = pCompst->computeFramebufferColorTexture.image;
 
 	#define COMPOSITOR_DST_GRAPHICS_READ                                             \
 			.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
@@ -517,13 +517,13 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 
 run_loop:
 
-	vkTimelineWait(device, baseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeln);
-	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcInput.mouseDelta, &globCamPose);
-	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcInput.move, &globCamPose);
+	vkTimelineWait(device, baseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
+	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
+	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
 	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
 
 	{  // Update Nodes
-		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeln);
+		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
 		vkCmdResetBegin(graphCmd);
 
 		for (int iNode = 0; iNode < nodeCt; ++iNode) {
@@ -649,11 +649,19 @@ run_loop:
 
 				vec2 diff = {.vec = lrUVClamp.vec - ulUVClamp.vec};
 
-//				printf("%f  %f   %f  %f  \n", ulbNDC.z, ulfNDC.z,  lrbNDC.z, lrfNDC.z);
-
 				// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
 				pNodeShared->cameraPose = globCamPose;
 				pNodeShared->camera = globCam;
+
+				pNodeShared->left.active = false;
+				pNodeShared->left.gripPose = globCamPose;
+				pNodeShared->left.aimPose = globCamPose;
+				pNodeShared->left.selectClick = mxcWindowInput.leftMouseButton;
+
+				pNodeShared->right.active = true;
+				pNodeShared->right.gripPose = globCamPose;
+				pNodeShared->right.aimPose = globCamPose;
+				pNodeShared->right.selectClick = mxcWindowInput.leftMouseButton;
 
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShared->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
@@ -669,12 +677,12 @@ run_loop:
 		bool computeBlit = false;
 
 		{  // Graphics Recording Cycle
-			vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, timeln);
+			vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, timeline);
 
-			CmdBeginRenderPass(graphCmd, renderPass, framebuff, VK_PASS_CLEAR_COLOR,
-							   graphFramebuffView.color,
-							   graphFramebuffView.normal,
-							   graphFramebuffView.depth);
+			CmdBeginRenderPass(graphCmd, renderPass, fbuff, VK_PASS_CLEAR_COLOR,
+							   graphFbuffView.color,
+							   graphFbuffView.normal,
+							   graphFbuffView.depth);
 
 			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
 			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
@@ -807,7 +815,7 @@ run_loop:
 				},
 				{
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = cmptFrmBufColorImg,
+					.image = comptFbuffColorImg,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 					VK_IMAGE_BARRIER_DST_BLIT_READ,
@@ -817,9 +825,9 @@ run_loop:
 			CmdPipelineImageBarriers2(graphCmd, COUNT(beginBlitBarrier), beginBlitBarrier);
 
 			if (graphicsBlit)
-				CmdBlitImageFullScreen(graphCmd, grphFrmBufColorImg, swapImage);
+				CmdBlitImageFullScreen(graphCmd, graphFbuffColorImg, swapImage);
 			if (computeBlit)
-				CmdBlitImageFullScreen(graphCmd, cmptFrmBufColorImg, swapImage);
+				CmdBlitImageFullScreen(graphCmd, comptFbuffColorImg, swapImage);
 
 			VkImageMemoryBarrier2 endBlitBarrier[] = {
 				{
@@ -834,7 +842,7 @@ run_loop:
 				},
 				{
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = cmptFrmBufColorImg,
+					.image = comptFbuffColorImg,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 					VK_IMAGE_BARRIER_SRC_BLIT_READ,
 					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
@@ -846,12 +854,12 @@ run_loop:
 
 		EndCommandBuffer(graphCmd);
 
-		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeln);
+		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
 
 		baseCycleValue += MXC_CYCLE_COUNT;
 
 		{ // wait for end and output query, probably don't need this wait if not querying?
-			vkTimelineWait(device, baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, timeln);
+			vkTimelineWait(device, baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, timeline);
 
 			{  // update timequery
 				uint64_t timestampsNS[2];
@@ -1066,14 +1074,19 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 
 			{
-				// I still don't entirely hate this....
+// I still don't entirely hate this....
 #define VkDescriptorSetAllocateInfo(...) (VkDescriptorSetAllocateInfo) { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, __VA_ARGS__ }
 
-				auto setInfo = VkDescriptorSetAllocateInfo(
-						.descriptorPool = threadContext.descriptorPool,
-						.descriptorSetCount = 1,
-						.pSetLayouts = &pCompositor->computeOutputSetLayout);
-				VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pCompositor->computeOutputSet));
+				//				auto setInfo = VkDescriptorSetAllocateInfo(
+				//						.descriptorPool = threadContext.descriptorPool,
+				//						.descriptorSetCount = 1,
+				//						.pSetLayouts = &pCompositor->computeOutputSetLayout);
+				VK_CHECK(vkAllocateDescriptorSets(vk.context.device,
+					&VkDescriptorSetAllocateInfo(
+							.descriptorPool = threadContext.descriptorPool,
+							.descriptorSetCount = 1,
+							.pSetLayouts = &pCompositor->computeOutputSetLayout),
+					&pCompositor->computeOutputSet));
 				vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCompositor->computeOutputSet, "ComputeOutputSet");
 
 				VkWriteDescriptorSet writeSets[] = {

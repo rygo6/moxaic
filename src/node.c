@@ -988,45 +988,45 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 {
 	printf("Claiming swap for %d\n", hNd);
 
-	auto pNodCtx = &nodeContexts[hNd];
-	auto pNodShrd = activeNodesShared[hNd];
-	auto pNodCmpstrDat = &nodeCompositData[hNd];
+	auto pNodeCtx = &nodeContexts[hNd];
+	auto pNodeShrd = activeNodesShared[hNd];
+	auto pNodeCmpstData = &nodeCompositData[hNd];
 
-	bool needsExport = pNodCtx->type != MXC_NODE_TYPE_THREAD;
-	int  swpCnt = XR_SWAP_TYPE_COUNTS[pNodShrd->swapType] * XR_SWAP_COUNT;
+	bool needsExport = pNodeCtx->type != MXC_NODE_TYPE_THREAD;
+	int  swapCnt = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
 
 	MxcSwapInfo swpInf = {
-		.type = pNodShrd->swapType,
+		.type = pNodeShrd->swapType,
 		.yScale = MXC_SWAP_SCALE_FULL,
 		.xScale = MXC_SWAP_SCALE_FULL,
-		.compositorMode = pNodShrd->compositorMode
+		.compositorMode = pNodeShrd->compositorMode
 	};
-	for (int si = 0; si < swpCnt; ++si) {
+	for (int si = 0; si < swapCnt; ++si) {
 
-		int hSwp = mxcClaimSwap(&swpInf);
-		if (hSwp == -1)
+		int hSwap = mxcClaimSwap(&swpInf);
+		if (hSwap == -1)
 			goto Exit;
 
-		auto pNodSwp = &pNodCtx->swap[si];
-		auto pSwpPool = &nodeSwapPool[MXC_SWAP_TYPE_POOL_INDEX[swpInf.type]];
-		*pNodSwp = pSwpPool->swaps[hSwp];
+		auto pNodeSwap = &pNodeCtx->swap[si];
+		auto pSwapPool = &nodeSwapPool[MXC_SWAP_TYPE_POOL_INDEX[swpInf.type]];
+		*pNodeSwap = pSwapPool->swaps[hSwap];
 
-		auto pCmpstrSwap = &pNodCmpstrDat->swaps[si];
+		auto pCmpstSwap = &pNodeCmpstData->swaps[si];
 //		pCompSwap->acquireBarriers[0].image = pNodeSwap->color.image;
 //		pCompSwap->releaseBarriers[0].image = pNodeSwap->color.image;
-		pCmpstrSwap->color = pNodSwp->color.image;
-		pCmpstrSwap->colorView = pNodSwp->color.view;
+		pCmpstSwap->color = pNodeSwap->color.image;
+		pCmpstSwap->colorView = pNodeSwap->color.view;
 
 //		pCompSwap->acquireBarriers[1].image = pNodeSwap->depth.image;
 //		pCompSwap->releaseBarriers[1].image = pNodeSwap->depth.image;
-		pCmpstrSwap->depth = pNodSwp->depth.image;
-		pCmpstrSwap->depthView = pNodSwp->depth.view;
+		pCmpstSwap->depth = pNodeSwap->depth.image;
+		pCmpstSwap->depthView = pNodeSwap->depth.view;
 
-		pCmpstrSwap->gBuffer = pNodSwp->gbuffer.image;
+		pCmpstSwap->gBuffer = pNodeSwap->gbuffer.image;
 		for (int mi = 0; mi < MXC_NODE_GBUFFER_LEVELS; ++mi) {
 			VkImageViewCreateInfo inf = {
 				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-				.image = pNodSwp->gbuffer.image,
+				.image = pNodeSwap->gbuffer.image,
 				.viewType = VK_IMAGE_VIEW_TYPE_2D,
 				.format = MXC_NODE_GBUFFER_FORMAT,
 				.subresourceRange = {
@@ -1036,24 +1036,24 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 					.layerCount = 1,
 				},
 			};
-			VK_CHECK(vkCreateImageView(vk.context.device, &inf, VK_ALLOC, &pCmpstrSwap->gBufferMipViews[mi]));
+			VK_CHECK(vkCreateImageView(vk.context.device, &inf, VK_ALLOC, &pCmpstSwap->gBufferMipViews[mi]));
 		}
 
 		if (needsExport) {
 			WIN32_CHECK(DuplicateHandle(
-							GetCurrentProcess(), pNodSwp->colorExternal.handle,
-							pNodCtx->processHandle, &pNodCtx->pExportedExternalMemory->imports.colorSwapHandles[si],
+							GetCurrentProcess(), pNodeSwap->colorExternal.handle,
+							pNodeCtx->processHandle, &pNodeCtx->pExportedExternalMemory->imports.colorSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
 						"Duplicate localTexture handle fail");
 			WIN32_CHECK(DuplicateHandle(
-							GetCurrentProcess(), pNodSwp->depthExternal.handle,
-							pNodCtx->processHandle, &pNodCtx->pExportedExternalMemory->imports.depthSwapHandles[si],
+							GetCurrentProcess(), pNodeSwap->depthExternal.handle,
+							pNodeCtx->processHandle, &pNodeCtx->pExportedExternalMemory->imports.depthSwapHandles[si],
 							0, false, DUPLICATE_SAME_ACCESS),
 						"Duplicate depth handle fail");
 		}
 	}
 
-	SetEvent(pNodCtx->swapsSyncedHandle);
+	SetEvent(pNodeCtx->swapsSyncedHandle);
 
 Exit:
 	// ya we need some error handling

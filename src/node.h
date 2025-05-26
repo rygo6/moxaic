@@ -74,12 +74,22 @@ typedef enum MxcCompositorMode {
 	MXC_COMPOSITOR_MODE_COUNT,
 } MxcCompositorMode;
 
+typedef struct MxcController {
+	bool    active;
+	MidPose gripPose;
+	MidPose aimPose;
+	bool    selectClick;
+	bool    menuClick;
+	float   triggerValue;
+} MxcController;
+
 typedef struct MxcNodeShared {
 	// read/write every cycle
+	_Atomic uint64_t timelineValue;
+
 	VkGlobalSetState globalSetState;
 	vec2             ulClipUV;
 	vec2             lrClipUV;
-	_Atomic uint64_t timelineValue;
 
 	MxcDepthState depthState;
 
@@ -90,6 +100,9 @@ typedef struct MxcNodeShared {
 	// should maybe in context?
 	MidPose           cameraPose;
 	MidCamera         camera;
+
+	MxcController left;
+	MxcController right;
 
 	// read every cycle, occasional write
 	f32               compositorRadius;

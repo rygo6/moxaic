@@ -4,12 +4,15 @@
 
 #include "mid_math.h"
 
-typedef struct MxcInput {
-  vec2 mouseDelta;
-  // forward, back, left, right, up, down
-  bool move[6];
-} MxcInput;
+typedef struct MxcWindowInput {
+	bool leftMouseButton;
 
-extern MxcInput mxcInput;
+	vec2 mouseDelta;
+
+	// forward, back, left, right, up, down
+	bool move[6];
+} MxcWindowInput;
+
+extern MxcWindowInput mxcWindowInput;
 
 void mxcProcessWindowInput();
