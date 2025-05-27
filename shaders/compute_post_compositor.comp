@@ -39,8 +39,8 @@ void main()
     // We must do shuffling for all threads if it is current so that the shuffle works.
     // This is why you read and shuffle first before the if return branch
     for (int i = 0; i < 3; ++i) {
-        colorSampleShuffle[i] = subgroupShuffle(colorSampleShuffle[quadSelf], SubgroupOffsetIndex(quadShuffleOffsets[i]));
-        currentFlagShuffle[i] = subgroupShuffle(currentFlagShuffle[quadSelf], SubgroupOffsetIndex(quadShuffleOffsets[i]));
+        colorSampleShuffle[i] = subgroupShuffle(colorSampleShuffle[quadSelf], SubgroupIndexFromOffset(quadShuffleOffsets[i]));
+        currentFlagShuffle[i] = subgroupShuffle(currentFlagShuffle[quadSelf], SubgroupIndexFromOffset(quadShuffleOffsets[i]));
     }
 
     if (currentFlagShuffle[quadSelf])

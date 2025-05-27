@@ -1,4 +1,52 @@
 //// Subgroup Grid
+
+/*
+
+  // Single Subgroup. 4x4 samples. 8x8 quad samples
+    0     1     2     3
+  0 00    00    00    00
+    00    00    00    00
+
+  1 00    00    00    00
+    00    00    00    00
+
+
+  2 00    00    00    00
+    00    00    00    00
+
+  3 00    00    00    00
+    00    00    00    00
+
+
+    01    22
+  0 11    11
+  1 11    11
+
+  2 11    11
+  2 11    11
+
+
+    02
+  0 22
+  2 22
+
+
+    0
+  0 3
+
+  // Workgroup. 8x8. 32x32 samples. 64x64 quad samples
+    0 1 2 3 4 5 6 7
+  0 g g g g g g g g
+  1 g g g g g g g g
+  3 g g g g g g g g
+  4 g g g g g g g g
+  5 g g g g g g g g
+  6 g g g g g g g g
+  7 g g g g g g g g
+  8 g g g g g g g g
+
+*/
+
 #define QUAD_SQUARE_SIZE 2
 
 #define SUBGROUP_SQUARE_SIZE 4
@@ -7,65 +55,114 @@
 #define WORKGROUP_SQUARE_SIZE 8
 #define WORKGROUP_SUBGROUP_COUNT 64 // 8 * 8
 
-#define WORKGROUP_SAMPLE_COUNT (WORKGROUP_SUBGROUP_COUNT / 2)
-
 const int quadSelf = 3;
 const ivec2 quadGatherOffsets[4] = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }, };
 
-ivec2 GlobalWorkgroupID(uint globalWorkgroupIndex, ivec2 size) {
+// Dimension of entire grid
+ivec2 grid_Dimensions;
+
+// Index of the workgroup globally
+uint grid_GlobalWorkgroupIndex;
+
+// Where 0,0 root grid coord of the workgroup is globally
+ivec2 grid_GlobalWorkgroupCoord;
+
+// Index of subgroup globally
+uint grid_GlobalSubgroupIndex;
+
+// Index of subgroup in local workgroup
+uint grid_LocalSubgroupIndex;
+
+// Where 0,0 root grid coord of the subgroup is in local workgroup
+ivec2 grid_LocalSubgroupCoord;
+
+// X/Y ID of subgroup in local workgroup
+ivec2 grid_LocalSubgroupID;
+
+// Index in subgroup
+uint grid_SubgroupIndex;
+
+// Grid Coord in subgroup
+ivec2 grid_SubgroupCoord;
+
+// Grid Coord in local workgroup
+ivec2 grid_LocalCoord;
+
+// Grid Coordinate globally
+ivec2 grid_GlobalCoord;
+
+uint IndexFromID(ivec2 id, uint dimension) {
+    return id.x + (id.y * dimension);
+}
+
+ivec2 GlobalWorkgroupCoordFromIndex(uint globalWorkgroupIndex, ivec2 size) {
     size /= ivec2(WORKGROUP_SQUARE_SIZE, WORKGROUP_SQUARE_SIZE);
     size /= ivec2(SUBGROUP_SQUARE_SIZE, SUBGROUP_SQUARE_SIZE);
     return ivec2(globalWorkgroupIndex % size.x, globalWorkgroupIndex / size.x) * WORKGROUP_SQUARE_SIZE * SUBGROUP_SQUARE_SIZE;
 }
 
-ivec2 LocalWorkgroupID(uint localSubgroupIndex) {
-    return ivec2(localSubgroupIndex % WORKGROUP_SQUARE_SIZE, localSubgroupIndex / WORKGROUP_SQUARE_SIZE) * SUBGROUP_SQUARE_SIZE;
+ivec2 LocalSubgroupIDFromIndex(uint localWorkgroupIndex) {
+    return ivec2(localWorkgroupIndex % WORKGROUP_SQUARE_SIZE, localWorkgroupIndex / WORKGROUP_SQUARE_SIZE);
 }
 
-ivec2 SubgroupID(uint subgroupInvocIndex) {
-    subgroupInvocIndex %= SUBGROUP_CAPACITY;
-    return ivec2(subgroupInvocIndex % SUBGROUP_SQUARE_SIZE, subgroupInvocIndex / SUBGROUP_SQUARE_SIZE);
+ivec2 LocalSubgroupRootCoordFromIndex(uint localWorkgroupIndex) {
+    return ivec2(localWorkgroupIndex % WORKGROUP_SQUARE_SIZE, localWorkgroupIndex / WORKGROUP_SQUARE_SIZE) * SUBGROUP_SQUARE_SIZE;
 }
 
-uint SubgroupOffsetIndex(ivec2 dxdy) {
-    return (gl_SubgroupInvocationID + dxdy.x + (dxdy.y * SUBGROUP_SQUARE_SIZE));
+uint LocalWorkgroupIndexFromOffset(ivec2 dxdy) {
+    return (grid_LocalSubgroupIndex + dxdy.x + (dxdy.y * WORKGROUP_SQUARE_SIZE)) * SUBGROUP_SQUARE_SIZE;
 }
 
-uint SubgroupIndex(ivec2 dxdy) {
-    uint subgroupIndex = gl_SubgroupInvocationID / SUBGROUP_CAPACITY;
-    return dxdy.x + (dxdy.y * SUBGROUP_SQUARE_SIZE) + (subgroupIndex * SUBGROUP_CAPACITY);
+ivec2 SubgroupCoordFromIndex(uint subgroupIndex) {
+    subgroupIndex %= SUBGROUP_CAPACITY;
+    return ivec2(subgroupIndex % SUBGROUP_SQUARE_SIZE, subgroupIndex / SUBGROUP_SQUARE_SIZE);
 }
 
-ivec2 grid_Dimensions;
-uint grid_GlobalWorkgroupIndex;
-ivec2 grid_GlobalWorkgroupId;
-uint grid_LocalSubgroupIndex;
-ivec2 grid_LocalWorkgroupID;
-uint grid_GlobalSubgroupIndex;
-uint grid_SubgroupInvocationIndex;
-ivec2 grid_SubgroupID;
-ivec2 grid_GlobalCoord;
+// SubgroupIndex by specified offset
+uint SubgroupIndexFromOffset(ivec2 coordDxDy) {
+    return (gl_SubgroupInvocationID + coordDxDy.x + (coordDxDy.y * SUBGROUP_SQUARE_SIZE));
+}
+
+// SubgroupIndex from subgroup id
+uint SubgroupIndexFromCoord(ivec2 coord) {
+    uint subgroupHalf = gl_SubgroupInvocationID / SUBGROUP_CAPACITY;
+    return coord.x + (coord.y * SUBGROUP_SQUARE_SIZE) + (subgroupHalf * SUBGROUP_CAPACITY);
+}
 
 void InitializeSubgroupGridInfo(ivec2 dimensions) {
     grid_Dimensions = dimensions;
+
     grid_GlobalWorkgroupIndex = gl_WorkGroupID.y;
-    grid_GlobalWorkgroupId = GlobalWorkgroupID(grid_GlobalWorkgroupIndex, grid_Dimensions);
-    grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
-    grid_LocalWorkgroupID = LocalWorkgroupID(grid_LocalSubgroupIndex);
+    grid_GlobalWorkgroupCoord = GlobalWorkgroupCoordFromIndex(grid_GlobalWorkgroupIndex, grid_Dimensions);
+
     grid_GlobalSubgroupIndex = gl_GlobalInvocationID.y;
-    grid_SubgroupInvocationIndex = gl_SubgroupInvocationID;
-    grid_SubgroupID = SubgroupID(grid_SubgroupInvocationIndex);
-    grid_GlobalCoord = (grid_SubgroupID + grid_LocalWorkgroupID + grid_GlobalWorkgroupId);
+    grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
+
+    grid_LocalSubgroupCoord = LocalSubgroupRootCoordFromIndex(grid_LocalSubgroupIndex);
+    grid_LocalSubgroupID = LocalSubgroupIDFromIndex(grid_LocalSubgroupIndex);
+
+    grid_SubgroupIndex = gl_SubgroupInvocationID;
+    grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
+
+    grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord);
+    grid_GlobalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord + grid_GlobalWorkgroupCoord);
 }
 
 void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
     grid_Dimensions = dimensions / 2;
+
     grid_GlobalWorkgroupIndex = gl_WorkGroupID.y;
-    grid_GlobalWorkgroupId = GlobalWorkgroupID(grid_GlobalWorkgroupIndex, grid_Dimensions);
-    grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
-    grid_LocalWorkgroupID = LocalWorkgroupID(grid_LocalSubgroupIndex);
+    grid_GlobalWorkgroupCoord = GlobalWorkgroupCoordFromIndex(grid_GlobalWorkgroupIndex, grid_Dimensions);
+
     grid_GlobalSubgroupIndex = gl_GlobalInvocationID.y;
-    grid_SubgroupInvocationIndex = gl_SubgroupInvocationID;
-    grid_SubgroupID = SubgroupID(grid_SubgroupInvocationIndex);
-    grid_GlobalCoord = (grid_SubgroupID + grid_LocalWorkgroupID + grid_GlobalWorkgroupId) * 2;
+    grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
+
+    grid_LocalSubgroupCoord = LocalSubgroupRootCoordFromIndex(grid_LocalSubgroupIndex);
+    grid_LocalSubgroupID = LocalSubgroupIDFromIndex(grid_LocalSubgroupIndex);
+
+    grid_SubgroupIndex = gl_SubgroupInvocationID;
+    grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
+
+    grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord) * 2;
+    grid_GlobalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord + grid_GlobalWorkgroupCoord) * 2;
 }
