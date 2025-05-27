@@ -322,8 +322,8 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	})
 #define BLOCK_RELEASE(block, handle)                                                                                                                       \
 	({                                                                                                                                                     \
-		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Releasing SLAB Handle. Out of range."); \
-		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing SLAB handle. Should be occupied.");                                     \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Releasing block handle. Out of range."); \
+		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing block handle. Should be occupied.");                                     \
 		BITCLEAR(block.occupied, (int)HANDLE_INDEX(handle));                                                                                               \
 	})
 #define BLOCK_FIND(block, hash)                                                   \
@@ -333,17 +333,17 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	})
 #define BLOCK_HANDLE(block, p)                                                                                                \
 	({                                                                                                                        \
-		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting SLAB handle. Out of range."); \
+		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting block handle. Out of range."); \
 		HANDLE_GENERATION_SET((p - block.blocks), block.generations[(p - block.blocks)]);                                     \
 	})
 #define BLOCK_KEY(block, p)                                                                                                \
 	({                                                                                                                     \
-		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting SLAB key. Out of range."); \
+		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting block key. Out of range."); \
 		block.keys[p - block.blocks];                                                                                      \
 	})
 #define BLOCK_PTR(block, handle)                                                                                                       \
 	({                                                                                                                                 \
-		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Getting SLAB ptr. Out of range."); \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Getting block ptr. Out of range."); \
 		&block.blocks[HANDLE_INDEX(handle)];                                                                                           \
 	})
 

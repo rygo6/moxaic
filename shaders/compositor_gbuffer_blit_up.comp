@@ -65,6 +65,8 @@ void main()
     float depth2 = 0;
     float depth3 = 0;
     float depth4 = 0;
+    float depth5 = 0;
+    float depth6 = 0;
 
     {
         // Subgroup averaging
@@ -103,28 +105,46 @@ void main()
     }
 
     { // Workgroup averaging
-        ivec2 depth4SharedId = ivec2(grid_LocalSubgroupID / 2);
-        uint depth4SharedIndex = IndexFromID(depth4SharedId, WORKGROUP_SQUARE_SIZE / 2);
-
-        ivec2 depth4RootLocalCoord = depth4SharedId * 2;
+        const int coordDivisor = 2;
+        const int offset = coordDivisor / 2;
+        ivec2 depth4SharedId = ivec2(grid_LocalSubgroupID / coordDivisor);
+        uint depth4SharedIndex = IndexFromID(depth4SharedId, WORKGROUP_SQUARE_SIZE / coordDivisor);
+        ivec2 depth4RootLocalCoord = depth4SharedId * coordDivisor;
         uint depth4RootLocalIndex = LocalSubgroupIndexFromCoord(depth4RootLocalCoord);
-
         if (grid_SubgroupIndex == 0 && grid_LocalSubgroupIndex == depth4RootLocalIndex) {
-
-//            debugPrintfEXT("%d %d  %d  %d  %d\n", depth4SharedIndex, grid_LocalSubgroupIndex, LocalSubgroupIndexFromOffset(ivec2(0, 1)), LocalSubgroupIndexFromOffset(ivec2(1, 1)), LocalSubgroupIndexFromOffset(ivec2(1, 0)));
-
             vec4 depth3Shuffle = vec4(
-                depths3[LocalSubgroupIndexFromOffset(ivec2(0, 1))],
-                depths3[LocalSubgroupIndexFromOffset(ivec2(1, 1))],
-                depths3[LocalSubgroupIndexFromOffset(ivec2(1, 0))],
+                depths3[LocalSubgroupIndexFromOffset(ivec2(0, offset))],
+                depths3[LocalSubgroupIndexFromOffset(ivec2(offset, offset))],
+                depths3[LocalSubgroupIndexFromOffset(ivec2(offset, 0))],
                 depth3);
             depths4[depth4SharedIndex] = AverageNonZeroQuad(depth3Shuffle);
         }
 
         barrier();
-
         depth4 = depths4[depth4SharedIndex];
     }
+
+    {
+        const int coordDivisor = 4;
+        const int offset = coordDivisor / 2;
+        ivec2 depth5SharedId = ivec2(grid_LocalSubgroupID / coordDivisor);
+        uint depth5SharedIndex = IndexFromID(depth5SharedId, WORKGROUP_SQUARE_SIZE / coordDivisor);
+        ivec2 depth5RootLocalCoord = depth5SharedId * coordDivisor;
+        uint depth5RootLocalIndex = LocalSubgroupIndexFromCoord(depth5RootLocalCoord);
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupIndex == depth5RootLocalIndex) {
+            vec4 depth4Shuffle = vec4(
+                depths4[LocalSubgroupIndexFromOffset(ivec2(0, offset))],
+                depths4[LocalSubgroupIndexFromOffset(ivec2(offset, offset))],
+                depths4[LocalSubgroupIndexFromOffset(ivec2(offset, 0))],
+                depth4);
+            depths5[depth5SharedIndex] = AverageNonZeroQuad(depth4Shuffle);
+        }
+
+        barrier();
+        depth5 = depths5[depth5SharedIndex];
+    }
+
+    // could do depth6 but think this will ultimately end up as 32x32 blocks and depths will be in one texture
 
 //    if (gl_LocalInvocationIndex == 0) {
 //        float minDepth = 1.0;
@@ -141,7 +161,8 @@ void main()
             depth1 > 0 ? depth1 :
             depth2 > 0 ? depth2 :
             depth3 > 0 ? depth3 :
-            depth4;
+            depth4 > 0 ? depth4 :
+            depth5;
         imageStore(dstGbuffer[0], grid_GlobalCoord + quadGatherOffsets[i], vec4(finalDepth));
     }
 }

@@ -9,6 +9,13 @@ uint PackDepth16(float depth) {
 float UnpackDepth16(uint packedDepth) {
     return float(packedDepth) / 65535.0;
 }
+uint PackDepth32(float depth) {
+    depth = clamp(depth, 0.0, 1.0);
+    return uint(depth * 4294967295.0);
+}
+float UnpackDepth32(uint packedDepth) {
+    return float(packedDepth) / 4294967295.0;
+}
 
 uint PackDepth(bool current, float normalizedDepth) {
     normalizedDepth = clamp(normalizedDepth, 0.0, 1.0);

@@ -230,17 +230,17 @@ void main()
     vec2 globProjUV = UVFromNDC(globProjNDC);
     ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
 
-//    if (!(globProjDepth > DEPTH_FAR))
-//        return;
+    if (!(globProjDepth > DEPTH_FAR))
+        return;
 
     // I am going to want to pack depth with an ID of the node eventually then use that id to sample the color
-    uint nodePackedDepth = max(PackDepth16(globProjDepth), 1); // + 1 so that infinite distance still display.... I am going to want to change this I think the depth stepping will help reproject the gap around infinite distance backgrounds better
+    uint nodePackedDepth = PackDepth32(globProjDepth);
     uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
 
     if (nodePackedDepth >= prevNodePackedDepth) {
         // We don't want to linear sample because then pixels at the edge of an object get blended with black background
         vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
-//        imageStore(outputColor, globProjCoord, nodeColorSample);
-        imageStore(outputColor, globProjCoord, vec4(nodeDepthSample));
+        imageStore(outputColor, globProjCoord, nodeColorSample);
+//        imageStore(outputColor, globProjCoord, vec4(nodeDepthSample));
     }
 }
