@@ -43,7 +43,18 @@
   5 g g g g g g g g
   6 g g g g g g g g
   7 g g g g g g g g
-  8 g g g g g g g g
+
+// this should use morton encoding
+    0  1  2  3  4  5  6  7
+  0 00 01 02 03 04 05 06 07
+  1 08 09 10 11 12 13 14 15
+  2 16 17 18 19 20 21 22 23
+  3 24 25 26 27 28 29 30 31
+  4 32 33 34 35 36 37 38 39
+  5 40 41 42 43 44 45 46 47
+  6 48 49 50 51 52 53 54 55
+  7 56 57 58 59 60 61 62 63
+
 
 */
 
@@ -105,12 +116,16 @@ ivec2 LocalSubgroupIDFromIndex(uint localWorkgroupIndex) {
     return ivec2(localWorkgroupIndex % WORKGROUP_SQUARE_SIZE, localWorkgroupIndex / WORKGROUP_SQUARE_SIZE);
 }
 
-ivec2 LocalSubgroupRootCoordFromIndex(uint localWorkgroupIndex) {
+ivec2 LocalSubgroupCoordFromIndex(uint localWorkgroupIndex) {
     return ivec2(localWorkgroupIndex % WORKGROUP_SQUARE_SIZE, localWorkgroupIndex / WORKGROUP_SQUARE_SIZE) * SUBGROUP_SQUARE_SIZE;
 }
 
-uint LocalWorkgroupIndexFromOffset(ivec2 dxdy) {
-    return (grid_LocalSubgroupIndex + dxdy.x + (dxdy.y * WORKGROUP_SQUARE_SIZE)) * SUBGROUP_SQUARE_SIZE;
+uint LocalSubgroupIndexFromCoord(ivec2 coord) {
+    return coord.x + (coord.y * WORKGROUP_SQUARE_SIZE);
+}
+
+uint LocalSubgroupIndexFromOffset(ivec2 coordDxDy) {
+    return grid_LocalSubgroupIndex + coordDxDy.x + (coordDxDy.y * WORKGROUP_SQUARE_SIZE);
 }
 
 ivec2 SubgroupCoordFromIndex(uint subgroupIndex) {
@@ -120,7 +135,7 @@ ivec2 SubgroupCoordFromIndex(uint subgroupIndex) {
 
 // SubgroupIndex by specified offset
 uint SubgroupIndexFromOffset(ivec2 coordDxDy) {
-    return (gl_SubgroupInvocationID + coordDxDy.x + (coordDxDy.y * SUBGROUP_SQUARE_SIZE));
+    return gl_SubgroupInvocationID + coordDxDy.x + (coordDxDy.y * SUBGROUP_SQUARE_SIZE);
 }
 
 // SubgroupIndex from subgroup id
@@ -138,10 +153,10 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
     grid_GlobalSubgroupIndex = gl_GlobalInvocationID.y;
     grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
 
-    grid_LocalSubgroupCoord = LocalSubgroupRootCoordFromIndex(grid_LocalSubgroupIndex);
+    grid_LocalSubgroupCoord = LocalSubgroupCoordFromIndex(grid_LocalSubgroupIndex);
     grid_LocalSubgroupID = LocalSubgroupIDFromIndex(grid_LocalSubgroupIndex);
 
-    grid_SubgroupIndex = gl_SubgroupInvocationID;
+    grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_CAPACITY;
     grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
 
     grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord);
@@ -157,10 +172,10 @@ void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
     grid_GlobalSubgroupIndex = gl_GlobalInvocationID.y;
     grid_LocalSubgroupIndex = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
 
-    grid_LocalSubgroupCoord = LocalSubgroupRootCoordFromIndex(grid_LocalSubgroupIndex);
+    grid_LocalSubgroupCoord = LocalSubgroupCoordFromIndex(grid_LocalSubgroupIndex);
     grid_LocalSubgroupID = LocalSubgroupIDFromIndex(grid_LocalSubgroupIndex);
 
-    grid_SubgroupIndex = gl_SubgroupInvocationID;
+    grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_CAPACITY;
     grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
 
     grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord) * 2;

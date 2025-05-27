@@ -1,7 +1,7 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic  : require
 #extension GL_KHR_shader_subgroup_shuffle : require
-#extension GL_EXT_debug_printf : require
+//#extension GL_EXT_debug_printf : require
 
 #include "math.glsl"
 #include "subgroup_grid.glsl"
@@ -64,6 +64,7 @@ void main()
     float depth1 = AverageNonZeroQuad(gatheredProjectedDepth);
     float depth2 = 0;
     float depth3 = 0;
+    float depth4 = 0;
 
     {
         // Subgroup averaging
@@ -75,8 +76,9 @@ void main()
 
         ivec2 depth2RootSubgroupCoord = ivec2(grid_SubgroupCoord / 2) * 2;
         uint depth2RootSubgroupIndex = SubgroupIndexFromCoord(depth2RootSubgroupCoord);
-        if (depth2RootSubgroupIndex == grid_SubgroupIndex)
+        if (depth2RootSubgroupCoord == grid_SubgroupCoord) {
             depth2 = AverageNonZeroQuad(depth1Shuffle);
+            }
         subgroupBarrier();
 
         depth2 = subgroupShuffle(depth2, depth2RootSubgroupIndex);
@@ -89,7 +91,7 @@ void main()
 
         ivec2 depth3RootSubgroupCoord = ivec2(grid_SubgroupCoord / 4) * 4;
         uint depth3RootSubgroupIndex = SubgroupIndexFromCoord(depth3RootSubgroupCoord);
-        if (depth3RootSubgroupIndex == grid_SubgroupIndex){
+        if (depth3RootSubgroupCoord == grid_SubgroupCoord){
             depth3 = AverageNonZeroQuad(depth2Shuffle);
             depths3[grid_LocalSubgroupIndex] = depth3;
         }
@@ -100,32 +102,21 @@ void main()
         barrier();
     }
 
-    float depth4 = 0;
-
     { // Workgroup averaging
-        ivec2 depth4RootLocalWorkgroupCoord = ivec2(grid_LocalSubgroupCoord / 4) * 4;
+        ivec2 depth4SharedId = ivec2(grid_LocalSubgroupID / 2);
+        uint depth4SharedIndex = IndexFromID(depth4SharedId, WORKGROUP_SQUARE_SIZE / 2);
 
-        ivec2 depth4SharedCoord = ivec2(grid_LocalSubgroupID / 2);
-        uint depth4SharedIndex = IndexFromID(depth4SharedCoord, WORKGROUP_SQUARE_SIZE / 2);
+        ivec2 depth4RootLocalCoord = depth4SharedId * 2;
+        uint depth4RootLocalIndex = LocalSubgroupIndexFromCoord(depth4RootLocalCoord);
 
-//        ivec2 depth4RootLocalWorkgroupCoord = depth4SharedCoord * 2;
-//        uint depth4RootLocalWorkgroupIndex = LocalWorkgroupIndexFromCoord(depth4RootLocalWorkgroupCoord);
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupIndex == depth4RootLocalIndex) {
 
-        if (grid_LocalSubgroupIndex == 16){
-            debugPrintfEXT("%d  %d  %d\n", depth4SharedIndex, depth4SharedCoord.x, depth4SharedCoord.y);
-        }
+//            debugPrintfEXT("%d %d  %d  %d  %d\n", depth4SharedIndex, grid_LocalSubgroupIndex, LocalSubgroupIndexFromOffset(ivec2(0, 1)), LocalSubgroupIndexFromOffset(ivec2(1, 1)), LocalSubgroupIndexFromOffset(ivec2(1, 0)));
 
-//        ivec2 depth5SharedID = ivec2(grid_LocalWorkgroupID / 4);
-//        uint depth5SharedIndex = IndexFromID(depth5SharedID, WORKGROUP_SQUARE_SIZE / 4);
-//        ivec2 depth5RootLocalWorkgroupID = depth5SharedID * 4;
-
-//        ivec2 depth6RootLocalWorkgroupID = ivec2(0, 0); // ivec2(grid_LocalWorkgroupID / 8) * 8;
-
-        if (depth4RootLocalWorkgroupCoord == grid_LocalSubgroupCoord) {
             vec4 depth3Shuffle = vec4(
-                depths3[LocalWorkgroupIndexFromOffset(ivec2(0, 1))],
-                depths3[LocalWorkgroupIndexFromOffset(ivec2(1, 1))],
-                depths3[LocalWorkgroupIndexFromOffset(ivec2(1, 0))],
+                depths3[LocalSubgroupIndexFromOffset(ivec2(0, 1))],
+                depths3[LocalSubgroupIndexFromOffset(ivec2(1, 1))],
+                depths3[LocalSubgroupIndexFromOffset(ivec2(1, 0))],
                 depth3);
             depths4[depth4SharedIndex] = AverageNonZeroQuad(depth3Shuffle);
         }
