@@ -2,6 +2,7 @@ layout (set = 1, binding = 0) uniform NodeUBO {
     mat4 model;
 
     // Laid out to be alignment with GlobalSet
+
     mat4 view;
     mat4 proj;
     mat4 viewProj;

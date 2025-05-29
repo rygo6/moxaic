@@ -990,12 +990,12 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 
 	auto pNodeCtx = &nodeContexts[hNd];
 	auto pNodeShrd = activeNodesShared[hNd];
-	auto pNodeCmpstData = &nodeCompositorData[hNd];
+	auto pNodeCompData = &nodeCompositorData[hNd];
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_TYPE_THREAD;
 	int  swapCnt = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
 
-	MxcSwapInfo swpInf = {
+	MxcSwapInfo swapInfo = {
 		.type = pNodeShrd->swapType,
 		.yScale = MXC_SWAP_SCALE_FULL,
 		.xScale = MXC_SWAP_SCALE_FULL,
@@ -1003,28 +1003,24 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 	};
 	for (int si = 0; si < swapCnt; ++si) {
 
-		int hSwap = mxcClaimSwap(&swpInf);
+		int hSwap = mxcClaimSwap(&swapInfo);
 		if (hSwap == -1)
 			goto Exit;
 
 		auto pNodeSwap = &pNodeCtx->swap[si];
-		auto pSwapPool = &nodeSwapPool[MXC_SWAP_TYPE_POOL_INDEX[swpInf.type]];
+		auto pSwapPool = &nodeSwapPool[MXC_SWAP_TYPE_POOL_INDEX[swapInfo.type]];
 		*pNodeSwap = pSwapPool->swaps[hSwap];
 
-		auto pCmpstSwap = &pNodeCmpstData->swaps[si];
-//		pCompSwap->acquireBarriers[0].image = pNodeSwap->color.image;
-//		pCompSwap->releaseBarriers[0].image = pNodeSwap->color.image;
-		pCmpstSwap->color = pNodeSwap->color.image;
-		pCmpstSwap->colorView = pNodeSwap->color.view;
+		auto pCompSwap = &pNodeCompData->swaps[si];
+		pCompSwap->color = pNodeSwap->color.image;
+		pCompSwap->colorView = pNodeSwap->color.view;
 
-//		pCompSwap->acquireBarriers[1].image = pNodeSwap->depth.image;
-//		pCompSwap->releaseBarriers[1].image = pNodeSwap->depth.image;
-		pCmpstSwap->depth = pNodeSwap->depth.image;
-		pCmpstSwap->depthView = pNodeSwap->depth.view;
+		pCompSwap->depth = pNodeSwap->depth.image;
+		pCompSwap->depthView = pNodeSwap->depth.view;
 
-		pCmpstSwap->gBuffer = pNodeSwap->gbuffer.image;
+		pCompSwap->gBuffer = pNodeSwap->gbuffer.image;
 		for (int mi = 0; mi < MXC_NODE_GBUFFER_LEVELS; ++mi) {
-			VkImageViewCreateInfo inf = {
+			VkImageViewCreateInfo info = {
 				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 				.image = pNodeSwap->gbuffer.image,
 				.viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -1036,7 +1032,7 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 					.layerCount = 1,
 				},
 			};
-			VK_CHECK(vkCreateImageView(vk.context.device, &inf, VK_ALLOC, &pCmpstSwap->gBufferMipViews[mi]));
+			VK_CHECK(vkCreateImageView(vk.context.device, &info, VK_ALLOC, &pCompSwap->gBufferMipViews[mi]));
 		}
 
 		if (needsExport) {

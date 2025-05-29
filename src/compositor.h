@@ -18,7 +18,7 @@ typedef struct MxcCompositor {
   // todo no should just access it from context directly
   VkDevice        device;
 
-  VkRenderPass compRenderPass;
+  VkRenderPass compositorRenderPass;
 
   VkDescriptorSetLayout nodeSetLayout;
   VkPipelineLayout      nodePipeLayout;

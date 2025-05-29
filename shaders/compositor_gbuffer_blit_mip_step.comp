@@ -21,7 +21,7 @@ layout (set = 0, binding = 0) uniform State {
     float cameraFarZ;
 } state;
 layout (set = 0, binding = 1) uniform sampler2D srcDepth;
-layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer[];
+layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer;
 
 shared float sharedDepths3[WORKGROUP_SUBGROUP_COUNT]; // 8 * 8 = 64
 shared float sharedDepths4[WORKGROUP_SUBGROUP_COUNT / 4]; // 4 * 4 = 16
@@ -48,7 +48,7 @@ float SampleQuad(vec4 quad) {
 
 void main()
 {
-    ivec2 outputSize = imageSize(dstGbuffer[0]);
+    ivec2 outputSize = imageSize(dstGbuffer);
     InitializeSubgroupGridQuadInfo(outputSize);
 
     vec2 quadCenterUV = vec2(grid_GlobalCoord + 1) / vec2(outputSize);
@@ -212,6 +212,6 @@ void main()
                 depth4 > 0 ? depth4 :
                 depth5 > 0 ? depth5 :
                 depth6;
-        imageStore(dstGbuffer[0], grid_GlobalCoord + quadGatherOffsets[i], vec4(finalDepth));
+        imageStore(dstGbuffer, grid_GlobalCoord + quadGatherOffsets[i], vec4(finalDepth));
     }
 }

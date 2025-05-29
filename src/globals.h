@@ -3,6 +3,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __clang__
+#define ATOMIC _Atomic
+#elif __GNUC__
+#define ATOMIC
+#endif
+
 #ifdef __JETBRAINS_IDE__
 #define MID_IDE_ANALYSIS
 #endif

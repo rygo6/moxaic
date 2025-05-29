@@ -85,7 +85,7 @@ typedef struct MxcController {
 
 typedef struct MxcNodeShared {
 	// read/write every cycle
-	_Atomic u64 timelineValue;
+	ATOMIC u64 timelineValue;
 
 	VkGlobalSetState globalSetState;
 	vec2             ulClipUV;
@@ -191,7 +191,7 @@ void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTexture
 ////
 typedef struct MxcCompositorContext {
 	// read multiple threads, write 1 thread
-	_Atomic u32 swapIndex;
+	ATOMIC u32 swapIndex;
 
 	// read by multiple threads
 	VkCommandBuffer graphicsCmd;

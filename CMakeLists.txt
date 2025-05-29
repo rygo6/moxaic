@@ -40,16 +40,42 @@ target_include_directories(${TARGET_NAME} PUBLIC
         "${OPENXR_SDK_INCLUDE_PATH}"
 )
 
-# Force static linking of pthread... this might be reason not to use pthread?
-set_target_properties(${TARGET_NAME} PROPERTIES
-        # Force static linking of runtime libraries
-        LINK_FLAGS "-Wl,-Bstatic,--whole-archive -lpthread -Wl,--no-whole-archive,-Bdynamic"
-)
-set(PTHREAD_STATIC_PATH "C:/msys64/ucrt64/lib/libwinpthread.a")
-if(EXISTS "${PTHREAD_STATIC_PATH}")
-    message(STATUS "Found UCRT64 pthread at: ${PTHREAD_STATIC_PATH}")
-else()
-    message(WARNING "UCRT64 pthread not found at ${PTHREAD_STATIC_PATH}")
+if(CMAKE_C_COMPILER_ID MATCHES "GNU")
+    # Force static linking of pthread... this might be reason not to use pthread?
+    set_target_properties(${TARGET_NAME} PROPERTIES
+            # Force static linking of runtime libraries
+            LINK_FLAGS "-static-libgcc -Wl,-Bstatic,--whole-archive -lpthread -Wl,--no-whole-archive,-Bdynamic"
+    )
+
+    set(PTHREAD_STATIC_PATH "C:/msys64/ucrt64/lib/libwinpthread.a")
+    target_link_libraries(${TARGET_NAME} PUBLIC
+            "${PTHREAD_STATIC_PATH}"
+    )
+
+    if(EXISTS "${PTHREAD_STATIC_PATH}")
+        message(STATUS "Found pthread at: ${PTHREAD_STATIC_PATH}")
+    else()
+        message(WARNING "pthread not found at ${PTHREAD_STATIC_PATH}")
+    endif()
+elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
+    set_target_properties(${TARGET_NAME} PROPERTIES
+            LINK_FLAGS "-Wl,-Bstatic,--whole-archive -lpthread -Wl,--no-whole-archive,-Bdynamic"
+    )
+
+    set(PTHREAD_STATIC_PATH "C:/msys64/clang64/lib/libwinpthread.a")
+    target_link_libraries(${TARGET_NAME} PUBLIC
+            "${PTHREAD_STATIC_PATH}"
+    )
+
+    target_compile_options(${TARGET_NAME} PRIVATE
+            -fopt-info-vec # vector optimization
+    )
+
+    if(EXISTS "${PTHREAD_STATIC_PATH}")
+        message(STATUS "Found pthread at: ${PTHREAD_STATIC_PATH}")
+    else()
+        message(WARNING "pthread not found at ${PTHREAD_STATIC_PATH}")
+    endif()
 endif()
 
 
@@ -62,7 +88,6 @@ target_link_libraries(${TARGET_NAME} PUBLIC
         d3d11
         d3d12
         synchronization
-        "${PTHREAD_STATIC_PATH}"
 )
 target_link_options(${TARGET_NAME} PRIVATE
         #no santizers on GCC windows
@@ -73,7 +98,6 @@ target_link_options(${TARGET_NAME} PRIVATE
 #        -fPIE
 #        -pie
 )
-
 
 # COMPILE
 target_compile_definitions(${TARGET_NAME} PUBLIC
@@ -88,25 +112,14 @@ target_compile_options(${TARGET_NAME} PRIVATE
 
         -include globals.h
         -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/= # make __FILE__ path relative to project
-#        -fopt-info-vec # vector optimization
         -std=c23
         -std=gnu23
         -Wno-gnu-statement-expression
-
 )
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     target_compile_definitions(${TARGET_NAME} PRIVATE DEBUG)
 endif()
-
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-    if (MSVC)
-        message("ClangCL")
-        target_compile_options(${TARGET_NAME} PRIVATE -Wl,-pdb:out.pdb)
-    else ()
-        message("Clang")
-    endif ()
-endif ()
 
 set(SHADER_COMPILER "${VULKAN_SDK_PATH}/Bin/glslc.exe")
 set(SHADER_OPTIMIZER "${VULKAN_SDK_PATH}/Bin/spirv-opt.exe")

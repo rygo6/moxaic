@@ -466,6 +466,8 @@ typedef struct Action {
 	XrActionType actionType;
 	char         actionName[XR_MAX_ACTION_NAME_SIZE];
 	char         localizedActionName[XR_MAX_LOCALIZED_ACTION_NAME_SIZE];
+
+	bool errorLogged[XR_MAX_SUBACTION_PATHS];
 } Action;
 
 #define XR_ACTION_SET_CAPACITY 64
@@ -3509,7 +3511,10 @@ XR_PROC xrSyncActions(
 			for (u32 sai = 0; sai < pAction->countSubactions; ++sai) {
 				bHnd hBind = pAction->hSubactionBindings[sai];
 				if (!HANDLE_VALID(hBind)) {
-					LOG("Warning! %s not bound!\n", pAction->actionName);
+					if (!pAction->errorLogged[sai]) {
+						pAction->errorLogged[sai] = true;
+						LOG("Warning! %s not bound!\n", pAction->actionName);
+					}
 					continue;
 				}
 
