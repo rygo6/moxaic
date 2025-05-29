@@ -17,8 +17,7 @@ layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUN
 layout (set = 2, binding = 0, r32ui) uniform uimage2D outputAtomic;
 layout (set = 2, binding = 1, rgba8) uniform image2D outputColor;
 
-// This is a simple compute post processor that uses subgroup transfering to fill gaps in extrapolation
-// It is effective except at the edges can appear funky
+// This is a simple compute post processor that uses subgroup transfering to fill a 1 pixel gap in extrapolation
 void main()
 {
     ivec2 outputSize = imageSize(outputColor);

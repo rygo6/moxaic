@@ -15,8 +15,8 @@
 MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
 
 // Node state in Compositor Process
-u16                    nodeCt = 0;
-MxcNodeCompositorLocal nodeCompositData[MXC_NODE_CAPACITY] = {};
+u16                    nodeCount = 0;
+MxcNodeCompositorLocal nodeCompositorData[MXC_NODE_CAPACITY] = {};
 MxcNodeShared*         activeNodesShared[MXC_NODE_CAPACITY] = {};
 
 // Only used for local thread nodes. Node from other process will use shared memory.
@@ -265,21 +265,21 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 ////
 NodeHandle RequestLocalNodeHandle()
 {
-	NodeHandle handle = __atomic_fetch_add(&nodeCt, 1, __ATOMIC_RELEASE);
+	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
 	localNodesShared[handle] = (MxcNodeShared){};
 	activeNodesShared[handle] = &localNodesShared[handle];
 	return handle;
 }
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
-	NodeHandle handle = __atomic_fetch_add(&nodeCt, 1, __ATOMIC_RELEASE);
+	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
 	activeNodesShared[handle] = pNodeShared;
 	return handle;
 }
 void ReleaseNode(NodeHandle handle)
 {
 	assert(nodeContexts[handle].type != MXC_NODE_TYPE_NONE);
-	int newCount = __atomic_sub_fetch(&nodeCt, 1, __ATOMIC_RELEASE);
+	int newCount = __atomic_sub_fetch(&nodeCount, 1, __ATOMIC_RELEASE);
 	printf("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
@@ -345,7 +345,7 @@ static int CleanupNode(NodeHandle handle)
 	VkWriteDescriptorSet writeSets[] = {
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositData[handle].nodeSet,
+			.dstSet = nodeCompositorData[handle].nodeSet,
 			.dstBinding = 1,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -356,7 +356,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositData[handle].nodeSet,
+			.dstSet = nodeCompositorData[handle].nodeSet,
 			.dstBinding = 2,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -367,7 +367,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositData[handle].nodeSet,
+			.dstSet = nodeCompositorData[handle].nodeSet,
 			.dstBinding = 3,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -448,7 +448,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->cmd, "TestNode");
 
-	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCompositData[handle];
+	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCompositorData[handle];
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
@@ -665,7 +665,7 @@ static void InterprocessServerAcceptNodeConnection()
 
 		auto handle = RequestExternalNodeHandle(pNodeShrd);
 
-		pNodeCompLcl = &nodeCompositData[handle];
+		pNodeCompLcl = &nodeCompositorData[handle];
 //		*pNodeCompositorLocal = (MxcNodeCompositorLocal){}; // Don't clear. State is recycled and pre-alloced on compositor creation.
 
 		pNodeCtxt = &nodeContexts[handle];
@@ -937,7 +937,7 @@ ExitSuccess:
 }
 void mxcShutdownInterprocessNode()
 {
-	for (int i = 0; i < nodeCt; ++i) {
+	for (int i = 0; i < nodeCount; ++i) {
 		// make another queue to evade ptr?
 		mxcIpcFuncEnqueue(&activeNodesShared[i]->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 	}
@@ -990,7 +990,7 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 
 	auto pNodeCtx = &nodeContexts[hNd];
 	auto pNodeShrd = activeNodesShared[hNd];
-	auto pNodeCmpstData = &nodeCompositData[hNd];
+	auto pNodeCmpstData = &nodeCompositorData[hNd];
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_TYPE_THREAD;
 	int  swapCnt = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;

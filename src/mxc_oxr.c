@@ -202,6 +202,8 @@ void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEy
 	pEyeView->fovRad = (XrVector2f){pNodeShared->camera.yFovRad, pNodeShared->camera.yFovRad};
 	pEyeView->upperLeftClip = *(XrVector2f*)&pNodeShared->ulClipUV;
 	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->lrClipUV;
+//	if (viewIndex == 1)
+//		pEyeView->position.x += 0.1f;
 }
 
 #define UPDATE_CLICK(button, chirality)                           \

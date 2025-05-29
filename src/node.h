@@ -85,7 +85,7 @@ typedef struct MxcController {
 
 typedef struct MxcNodeShared {
 	// read/write every cycle
-	_Atomic uint64_t timelineValue;
+	_Atomic u64 timelineValue;
 
 	VkGlobalSetState globalSetState;
 	vec2             ulClipUV;
@@ -191,7 +191,7 @@ void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTexture
 ////
 typedef struct MxcCompositorContext {
 	// read multiple threads, write 1 thread
-	_Atomic uint32_t swapIndex;
+	_Atomic u32 swapIndex;
 
 	// read by multiple threads
 	VkCommandBuffer graphicsCmd;
@@ -244,8 +244,6 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 	//	VkSharedBuffer       SetBuffer;
 
 	struct CACHE_ALIGN {
-//		VkImageMemoryBarrier2 acquireBarriers[2];
-//		VkImageMemoryBarrier2 releaseBarriers[2];
 		VkImage               color;
 		VkImage               depth;
 		VkImage               gBuffer; // I think I only need one gbuffer?
@@ -309,7 +307,7 @@ typedef struct MxcNodeContext {
 
 typedef u8 NodeHandle;
 // move these into struct
-extern u16 nodeCt;
+extern u16 nodeCount;
 // Cold storage for all node data
 extern MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY];
 // Could be missing if node is external process
@@ -321,7 +319,7 @@ extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 // technically this should go into a comp node thread local....
-extern MxcNodeCompositorLocal nodeCompositData[MXC_NODE_CAPACITY];
+extern MxcNodeCompositorLocal nodeCompositorData[MXC_NODE_CAPACITY];
 
 ///////////////
 //// Node Queue
@@ -396,6 +394,6 @@ int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
-	for (int i = 0; i < nodeCt; ++i)
+	for (int i = 0; i < nodeCount; ++i)
 		mxcIpcDequeue(&activeNodesShared[i]->nodeInterprocessFuncQueue, i);
 }

@@ -1,0 +1,217 @@
+#version 450
+#extension GL_KHR_shader_subgroup_basic  : require
+#extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_EXT_debug_printf : require
+
+#include "math.glsl"
+#include "subgroup_grid.glsl"
+
+layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
+
+struct DepthState {
+    float minDepth;
+    float maxDepth;
+    float nearZ;
+    float farZ;
+};
+
+layout (set = 0, binding = 0) uniform State {
+    DepthState depth;
+    float cameraNearZ;
+    float cameraFarZ;
+} state;
+layout (set = 0, binding = 1) uniform sampler2D srcDepth;
+layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer[];
+
+shared float sharedDepths3[WORKGROUP_SUBGROUP_COUNT]; // 8 * 8 = 64
+shared float sharedDepths4[WORKGROUP_SUBGROUP_COUNT / 4]; // 4 * 4 = 16
+shared float sharedDepths5[WORKGROUP_SUBGROUP_COUNT / 16]; // 2 * 2 = 4
+shared float sharedDepth6; // 1
+
+//float SampleQuad(vec4 quad){
+//    int count = 0;
+//    float sum = 0.0f;
+//    for (int i = 0; i < 4; ++i) {
+//        count += int(quad[i] > HALF_EPSILON);
+//        sum += quad[i];
+//    }
+//    return count > 0 ? sum / float(count) : 0;
+//}
+
+float SampleQuad(vec4 quad) {
+    float minValue = 1.0f;
+    for (int i = 0; i < 4; ++i)
+        minValue = quad[i] > HALF_EPSILON ? min(minValue, quad[i]) : minValue;
+
+    return minValue == 1.0f ? 0.0f : minValue;
+}
+
+void main()
+{
+    ivec2 outputSize = imageSize(dstGbuffer[0]);
+    InitializeSubgroupGridQuadInfo(outputSize);
+
+    vec2 quadCenterUV = vec2(grid_GlobalCoord + 1) / vec2(outputSize);
+    vec4 gatheredDepth = textureGather(srcDepth, quadCenterUV, 0);
+//    {   // The only reason this is important is for linear sampling the depth. If I don't linear sample the depth this is probably pointless
+//        // But linear sampling depth might produce better results? Need to A/B test. However if I don't linearly sample then I can use imageLoad on
+//        // the gbuffer in compute composite which which might be faster
+//        const int expand = 31;
+//        const ivec2 expandGatherOffsets[4] = { { -expand, expand }, { expand, expand }, { expand, -expand }, { -expand, -expand }, };
+//        // its possible use subgroup operations is faster than this
+//        vec4 expandGatheredDepth = textureGatherOffsets(srcDepth, quadCenterUV, expandGatherOffsets, 0);
+//        for (int i = 0; i < 4; ++i) {
+//            gatheredDepth[i] = gatheredDepth[i] > HALF_EPSILON ? gatheredDepth[i] : expandGatheredDepth[i];
+//        }
+//    }
+
+    vec4 gatheredLinearDepth = LinearizeDepth(vec4(state.depth.nearZ), vec4(state.depth.farZ), gatheredDepth);
+    vec4 gatheredProjectedDepth = ProjectDepth(vec4(state.cameraFarZ), vec4(state.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ
+
+    vec4 depth0Quad = gatheredProjectedDepth;
+    float depth1 = SampleQuad(gatheredProjectedDepth);
+    float depth2 = 0;
+    float depth3 = 0;
+    float depth4 = 0;
+    float depth5 = 0;
+    float depth6 = 0;
+
+    {
+        const int coordDivisor = 2;
+        const int offset = coordDivisor / 2;
+        vec4 shuffle = vec4(
+            subgroupShuffle(depth1, SubgroupIndexFromOffset(ivec2(0,      offset))),
+            subgroupShuffle(depth1, SubgroupIndexFromOffset(ivec2(offset, offset))),
+            subgroupShuffle(depth1, SubgroupIndexFromOffset(ivec2(offset, 0))),
+            depth1);
+
+        ivec2 rootSubgroupCoord = ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
+        uint rootSubgroupIndex = SubgroupIndexFromCoord(rootSubgroupCoord);
+        if (rootSubgroupCoord == grid_SubgroupCoord)
+            depth2 = SampleQuad(shuffle);
+
+        subgroupBarrier();
+        depth2 = subgroupShuffle(depth2, rootSubgroupIndex);
+    }
+
+    {
+        const int coordDivisor = 4;
+        const int offset = coordDivisor / 2;
+        vec4 shuffle = vec4(
+            subgroupShuffle(depth2, SubgroupIndexFromOffset(ivec2(0,      offset))),
+            subgroupShuffle(depth2, SubgroupIndexFromOffset(ivec2(offset, offset))),
+            subgroupShuffle(depth2, SubgroupIndexFromOffset(ivec2(offset, 0))),
+            depth2);
+
+        ivec2 rootSubgroupCoord = ivec2(0, 0); // ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
+        if (rootSubgroupCoord == grid_SubgroupCoord)
+            sharedDepths3[grid_LocalSubgroupIndex] = SampleQuad(shuffle);
+
+        barrier();
+        depth3 = sharedDepths3[grid_LocalSubgroupIndex];
+    }
+
+    const int depth3IDDivisor = 1;
+    const int depth4IDDivisor = 2;
+    const int depth5IDDivisor = 4;
+
+    const int depth3SharedSquareSize = 8; // WORKGROUP_SQUARE_SIZE;
+    const int depth4SharedSquareSize = 4; // depth3SharedSquareSize / 2;
+    const int depth5SharedSquareSize = 2; // depth4SharedSquareSize / 2;
+
+    const ivec2 depth3SharedID = grid_LocalSubgroupID / depth3IDDivisor;
+    const ivec2 depth4SharedID = grid_LocalSubgroupID / depth4IDDivisor;
+    const ivec2 depth5SharedID = grid_LocalSubgroupID / depth5IDDivisor;
+
+    const uint depth4SharedIndex = IndexFromID(depth4SharedID, depth4SharedSquareSize);
+    const uint depth5SharedIndex = IndexFromID(depth5SharedID, depth5SharedSquareSize);
+
+    /* prior. sharedDepths3
+      0  1  2  3  4  5  6  7
+    0 00 01 02 03 04 05 06 07
+    1 08 09 10 11 12 13 14 15
+    2 16 17 18 19 20 21 22 23
+    3 24 25 26 27 28 29 30 31
+    4 32 33 34 35 36 37 38 39
+    5 40 41 42 43 44 45 46 47
+    6 48 49 50 51 52 53 54 55
+    7 56 57 58 59 60 61 62 63
+    */;
+    {
+        ivec2 depth3RootLocalID = depth4SharedID * depth4IDDivisor;
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth3RootLocalID) {
+            uint shuffle0 = IndexFromID(depth3SharedID + ivec2(0, 1), depth3SharedSquareSize);
+            uint shuffle1 = IndexFromID(depth3SharedID + ivec2(1, 1), depth3SharedSquareSize);
+            uint shuffle2 = IndexFromID(depth3SharedID + ivec2(1, 0), depth3SharedSquareSize);
+            vec4 shuffle = vec4(
+                sharedDepths3[shuffle0],
+                sharedDepths3[shuffle1],
+                sharedDepths3[shuffle2],
+                depth3);
+            sharedDepths4[depth4SharedIndex] = SampleQuad(shuffle);
+        }
+
+        barrier();
+        depth4 = sharedDepths4[depth4SharedIndex];
+    }
+
+    /* prior. sharedDepths4
+      0  1  2  3
+    0 00 01 02 03
+    1 04 05 06 07
+    2 08 09 10 11
+    3 12 13 14 15
+    */
+    {
+        ivec2 depth4RootLocalID = depth5SharedID * depth5IDDivisor;
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth4RootLocalID) {
+            uint shuffle0 = IndexFromID(depth4SharedID + ivec2(0, 1), depth4SharedSquareSize);
+            uint shuffle1 = IndexFromID(depth4SharedID + ivec2(1, 1), depth4SharedSquareSize);
+            uint shuffle2 = IndexFromID(depth4SharedID + ivec2(1, 0), depth4SharedSquareSize);
+            vec4 shuffle = vec4(
+                sharedDepths4[shuffle0],
+                sharedDepths4[shuffle1],
+                sharedDepths4[shuffle2],
+                depth4);
+            sharedDepths5[depth5SharedIndex] = SampleQuad(shuffle);
+        }
+
+        barrier();
+        depth5 = sharedDepths5[depth5SharedIndex];
+    }
+
+    {
+        /* prior. sharedDepths5
+          0  1
+        0 00 01
+        1 02 03
+        */
+        ivec2 depth5RootLocalID = ivec2(0, 0); // sharedID * coordDivisor;
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth5RootLocalID) {
+            uint shuffle0 = 2; // IndexFromID(depth5SharedID + ivec2(0, 1), depth5SharedSquareSize);
+            uint shuffle1 = 3; // IndexFromID(depth5SharedID + ivec2(1, 1), depth5SharedSquareSize);
+            uint shuffle2 = 1; // IndexFromID(depth5SharedID + ivec2(1, 0), depth5SharedSquareSize);
+            vec4 shuffle = vec4(
+                sharedDepths5[shuffle0],
+                sharedDepths5[shuffle1],
+                sharedDepths5[shuffle2],
+                depth5);
+            sharedDepth6 = SampleQuad(shuffle);
+        }
+
+        barrier();
+        depth6 = sharedDepth6;
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        float finalDepth =
+            depth0Quad[i] > 0 ? depth0Quad[i] :
+                depth1 > 0 ? depth1 :
+                depth2 > 0 ? depth2 :
+                depth3 > 0 ? depth3 :
+                depth4 > 0 ? depth4 :
+                depth5 > 0 ? depth5 :
+                depth6;
+        imageStore(dstGbuffer[0], grid_GlobalCoord + quadGatherOffsets[i], vec4(finalDepth));
+    }
+}

@@ -120,8 +120,8 @@ ivec2 LocalSubgroupCoordFromIndex(uint localWorkgroupIndex) {
     return ivec2(localWorkgroupIndex % WORKGROUP_SQUARE_SIZE, localWorkgroupIndex / WORKGROUP_SQUARE_SIZE) * SUBGROUP_SQUARE_SIZE;
 }
 
-uint LocalSubgroupIndexFromCoord(ivec2 coord) {
-    return coord.x + (coord.y * WORKGROUP_SQUARE_SIZE);
+uint LocalSubgroupIndexFromID(ivec2 id) {
+    return id.x + (id.y * WORKGROUP_SQUARE_SIZE);
 }
 
 uint LocalSubgroupIndexFromOffset(ivec2 coordDxDy) {
