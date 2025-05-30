@@ -3,12 +3,6 @@
 #include "node.h"
 #include "mid_vulkan.h"
 
-typedef struct GBufferProcessState {
-	MxcDepthState depth;
-	float cameraNearZ;
-	float cameraFarZ;
-} GBufferProcessState;
-
 typedef struct MxcCompositorCreateInfo {
 	MxcCompositorMode mode;
 } MxcCompositorCreateInfo;
@@ -34,8 +28,8 @@ typedef struct MxcCompositor {
   VkPipelineLayout      gbufferProcessPipeLayout;
   VkPipeline            gbufferProcessBlitUpPipe;
 
-  GBufferProcessState*  pGBufferProcessMapped;
-  VkSharedBuffer  		gBufferProcessSetBuffer;
+  MxcProcessState*      pProcessStateMapped;
+  VkSharedBuffer        processSetBuffer;
 
   VkSharedBuffer  globalBuffer;
   VkDescriptorSet globalSet;

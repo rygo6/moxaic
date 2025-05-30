@@ -144,6 +144,23 @@ uint SubgroupIndexFromCoord(ivec2 coord) {
     return coord.x + (coord.y * SUBGROUP_SQUARE_SIZE) + (subgroupHalf * SUBGROUP_CAPACITY);
 }
 
+float AverageQuad(vec4 quad){
+    int count = 0;
+    float sum = 0.0f;
+    for (int i = 0; i < 4; ++i) {
+        count += int(quad[i] > HALF_EPSILON);
+        sum += quad[i];
+    }
+    return count > 0 ? sum / float(count) : 0;
+}
+
+float MinQuad(vec4 quad) {
+    float minValue = 1.0f;
+    for (int i = 0; i < 4; ++i)
+    minValue = quad[i] > HALF_EPSILON ? min(minValue, quad[i]) : minValue;
+    return minValue == 1.0f ? 0.0f : minValue;
+}
+
 void InitializeSubgroupGridInfo(ivec2 dimensions) {
     grid_Dimensions = dimensions;
 

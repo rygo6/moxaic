@@ -59,7 +59,6 @@ typedef enum MxcSwapScale {
 } MxcSwapScale;
 
 typedef struct MxcDepthState {
-	// this should all be atomic
 	float minDepth;
 	float maxDepth;
 	float nearZ;
@@ -83,6 +82,12 @@ typedef struct MxcController {
 	float   triggerValue;
 } MxcController;
 
+typedef struct MxcProcessState {
+	MxcDepthState depth;
+	float cameraNearZ;
+	float cameraFarZ;
+} MxcProcessState;
+
 typedef struct MxcNodeShared {
 	// read/write every cycle
 	ATOMIC u64 timelineValue;
@@ -91,7 +96,7 @@ typedef struct MxcNodeShared {
 	vec2             ulClipUV;
 	vec2             lrClipUV;
 
-	MxcDepthState depthState;
+	MxcProcessState processState;
 
 	// I don't think I need this either?
 	MidPose           rootPose;

@@ -2247,7 +2247,7 @@ XR_PROC xrCreateSwapchain(
 	}
 
 	auto pSess = (Session*)session;
-	auto hSess = BLOCK_HANDLE(block.session, pSess);
+	bHnd hSess = BLOCK_HANDLE(block.session, pSess);
 
 	XrSwapConfig swapConfig; xrSwapConfig(pSess->systemId, &swapConfig);
 
@@ -2271,9 +2271,9 @@ XR_PROC xrCreateSwapchain(
 		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	auto hSwap = BLOCK_CLAIM(block.swap, 0);
+	bHnd hSwap = BLOCK_CLAIM(block.swap, 0);
 	HANDLE_CHECK(hSwap, XR_ERROR_LIMIT_REACHED);
-	auto pSwap = BLOCK_PTR(block.swap, hSwap);
+	Swapchain* pSwap = BLOCK_PTR(block.swap, hSwap);
 
 	pSwap->hSession = hSess;
 	pSwap->width = createInfo->width;

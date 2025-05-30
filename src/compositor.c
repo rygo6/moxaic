@@ -234,7 +234,7 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,       \
 		.pBufferInfo = &(VkDescriptorBufferInfo){                  \
 			.buffer = view,                                        \
-			.range = sizeof(GBufferProcessState),                  \
+			.range = sizeof(MxcProcessState),                  \
 		},                                                         \
 	}
 #define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(view)                     \
@@ -325,8 +325,6 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	VkGlobalSetState globSetState = (VkGlobalSetState){};
 	VkGlobalSetState* pGlobSetMapped = vkSharedMemoryPtr(pComp->globalBuffer.memory);
 	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState, pGlobSetMapped);
-	pComp->pGBufferProcessMapped->cameraNearZ = globCam.zNear;
-	pComp->pGBufferProcessMapped->cameraFarZ = globCam.zFar;
 
 	struct {
 		VkImageView color;
@@ -575,9 +573,13 @@ run_loop:
 				u32   pixelCt = extent.x * extent.y;
 				u32   groupCt = pixelCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
 
-				memcpy(&pComp->pGBufferProcessMapped->depth, (void*)&pNodeShared->depthState, sizeof(MxcDepthState));
+				auto pProcState = &pNodeShared->processState;
+				pProcState->cameraNearZ = globCam.zNear;
+				pProcState->cameraFarZ = globCam.zFar;
+				memcpy(pComp->pProcessStateMapped, pProcState, sizeof(MxcProcessState));
+
 				VkWriteDescriptorSet pushSets[] = {
-					BIND_WRITE_GBUFFER_PROCESS_STATE(pComp->gBufferProcessSetBuffer.buffer),
+					BIND_WRITE_GBUFFER_PROCESS_STATE(pComp->processSetBuffer.buffer),
 					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipViews[0]),
 				};
@@ -968,10 +970,10 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 			VkRequestAllocationInfo requestInfo = {
 				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-				.size = sizeof(GBufferProcessState),
+				.size = sizeof(MxcProcessState),
 				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			};
-			vkCreateSharedBuffer(&requestInfo, &pCompositor->gBufferProcessSetBuffer);
+			vkCreateSharedBuffer(&requestInfo, &pCompositor->processSetBuffer);
 		}
 
 		// Node Sets
@@ -1113,9 +1115,9 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 
 	vkBindSharedBuffer(&pComp->globalBuffer);
 
-	vkBindSharedBuffer(&pComp->gBufferProcessSetBuffer);
-	pComp->pGBufferProcessMapped = vkSharedBufferPtr(pComp->gBufferProcessSetBuffer);
-	*pComp->pGBufferProcessMapped = (GBufferProcessState){};
+	vkBindSharedBuffer(&pComp->processSetBuffer);
+	pComp->pProcessStateMapped = vkSharedBufferPtr(pComp->processSetBuffer);
+	*pComp->pProcessStateMapped = (MxcProcessState){};
 
 	vkUpdateDescriptorSets(vk.context.device, 1, &VK_BIND_WRITE_GLOBAL_BUFFER(pComp->globalSet, pComp->globalBuffer.buffer), 0, NULL);
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
