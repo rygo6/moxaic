@@ -197,7 +197,6 @@ static void CreateNodeComputePipeLayout(
 //// GBuffer Process Pipe
 enum {
 	BIND_INDEX_GBUFFER_PROCESS_STATE,
-	BIND_INDEX_GBUFFER_PROCESS_ATOMIC_STATE,
 	BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
 	BIND_INDEX_GBUFFER_PROCESS_DST,
 	BIND_INDEX_GBUFFER_PROCESS_COUNT
@@ -211,11 +210,6 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 				VkDescriptorSetLayoutBindingElement(
 					BIND_INDEX_GBUFFER_PROCESS_STATE,
 					.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-					.descriptorCount = 1,
-					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
-				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_GBUFFER_PROCESS_ATOMIC_STATE,
-					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
 				VkDescriptorSetLayoutBindingElement(
@@ -241,17 +235,6 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 		.pBufferInfo = &(VkDescriptorBufferInfo){                  \
 			.buffer = view,                                        \
 			.range = sizeof(MxcProcessState),                  	   \
-		},                                                         \
-	}
-#define BIND_WRITE_GBUFFER_PROCESS_ATOMIC_STATE(view)              \
-	(VkWriteDescriptorSet) {                                       \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                    \
-		.dstBinding = BIND_INDEX_GBUFFER_PROCESS_ATOMIC_STATE,     \
-		.descriptorCount = 1,                                      \
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,       \
-		.pBufferInfo = &(VkDescriptorBufferInfo){                  \
-			.buffer = view,                                        \
-			.range = sizeof(MxcAtomicProcessState),                \
 		},                                                         \
 	}
 #define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(view)                     \
@@ -525,7 +508,8 @@ run_loop:
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
 	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
 
-	{  // Update Nodes
+	/// Update Nodes
+	{
 		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
 		vkCmdResetBegin(graphCmd);
 
@@ -597,7 +581,6 @@ run_loop:
 
 				VkWriteDescriptorSet pushSets[] = {
 					BIND_WRITE_GBUFFER_PROCESS_STATE(pComp->processSetBuffer.buffer),
-					BIND_WRITE_GBUFFER_PROCESS_ATOMIC_STATE(pComp->atomicProcessSetBuffer.buffer),
 					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipViews[0]),
 				};
@@ -690,7 +673,8 @@ run_loop:
 		bool graphicsBlit = false;
 		bool computeBlit = false;
 
-		{  // Graphics Recording Cycle
+		/// Graphics Recording Cycle
+		{
 			vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, timeline);
 
 			CmdBeginRenderPass(graphCmd, compPass, fb, VK_PASS_CLEAR_COLOR,
@@ -743,7 +727,8 @@ run_loop:
 //		ResetQueryPool(device, timeQueryPool, 0, 2);
 //		CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-		{  // Compute Recording Cycle. We really must separate into Compute and Graphics lists
+		/// Compute Recording Cycle. We really must separate into Compute and Graphics lists
+		{
 			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipe);
 			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
 			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_OUTPUT, 1, &cmptOutputSet, 0, NULL);
@@ -813,7 +798,8 @@ run_loop:
 		// should have separate compute and graphics queries
 //		CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
-		{  // Blit Framebuffer
+		/// Blit Framebuffer
+		{
 			u32 swapIndex; AcquireNextImageKHR(device, swap.chain, UINT64_MAX, swap.acquireSemaphore, VK_NULL_HANDLE, &swapIndex);
 			atomic_store_explicit(&compositorContext.swapIndex, swapIndex, memory_order_release);
 			VkImage swapImage = swap.images[compositorContext.swapIndex];
@@ -896,9 +882,10 @@ run_loop:
 ////
 void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCompositor)
 {
-	{   // Create
-
-		{	// Graphics Pipes
+	/// Create
+	{
+		/// Graphics Pipes
+		{
 			CreateNodeSetLayout(pInfo->mode, &pCompositor->nodeSetLayout);
 			CreateGraphicsNodePipeLayout(pCompositor->nodeSetLayout, &pCompositor->nodePipeLayout);
 
@@ -935,8 +922,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			}
 		}
 
-		{ // Compute Pipe
-//			CreateNodeSetLayout(MXC_COMPOSITOR_MODE_COMPUTE, &pCompositor->computeNodeSetLayout);
+		/// Compute Pipe
+		{
 			CreateComputeOutputSetLayout(&pCompositor->computeOutputSetLayout);
 			CreateNodeComputePipeLayout(pCompositor->nodeSetLayout,
 										pCompositor->computeOutputSetLayout,
@@ -949,7 +936,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 								&pCompositor->computePostNodePipe);
 		}
 
-		{ // Pools
+		/// Pools
+		{
 			VkQueryPoolCreateInfo queryInfo = {
 				VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
 				.queryType = VK_QUERY_TYPE_TIMESTAMP,
@@ -971,7 +959,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
 		}
 
-		{  // Global
+		/// Global
+		{
 			vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pCompositor->globalSet);
 			VkRequestAllocationInfo requestInfo = {
 				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
@@ -981,7 +970,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			vkCreateSharedBuffer(&requestInfo, &pCompositor->globalBuffer);
 		}
 
-		{ // GBuffer Process
+		/// GBuffer Process
+		{
 			CreateGBufferProcessSetLayout(&pCompositor->gbufferProcessSetLayout);
 			CreateGBufferProcessPipeLayout(pCompositor->gbufferProcessSetLayout, &pCompositor->gbufferProcessPipeLayout);
 			vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", pCompositor->gbufferProcessPipeLayout, &pCompositor->gbufferProcessBlitUpPipe);
@@ -993,14 +983,6 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 					.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 				},
 				&pCompositor->processSetBuffer);
-
-			vkCreateSharedBuffer(
-				&(VkRequestAllocationInfo){
-					.memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-					.size = sizeof(MxcAtomicProcessState),
-					.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				},
-				&pCompositor->atomicProcessSetBuffer);
 		}
 
 		// Node Sets
@@ -1029,7 +1011,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
 		}
 
-		{ // Graphics Framebuffers
+		/// Graphics Framebuffers
+		{
 			VkBasicFramebufferTextureCreateInfo framebufferTextureInfo = {
 				.debugName = "CompositeFramebufferTexture",
 				.locality = VK_LOCALITY_CONTEXT,
@@ -1103,10 +1086,6 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 
 			{
-				//				auto setInfo = VkDescriptorSetAllocateInfo(
-				//						.descriptorPool = threadContext.descriptorPool,
-				//						.descriptorSetCount = 1,
-				//						.pSetLayouts = &pCompositor->computeOutputSetLayout);
 				VK_CHECK(vkAllocateDescriptorSets(vk.context.device,
 					&VkDescriptorSetAllocateInfo(
 							.descriptorPool = threadContext.descriptorPool,
@@ -1148,8 +1127,6 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	vkBindSharedBuffer(&pComp->processSetBuffer);
 	pComp->pProcessStateMapped = vkSharedBufferPtr(pComp->processSetBuffer);
 	*pComp->pProcessStateMapped = (MxcProcessState){};
-
-	vkBindSharedBuffer(&pComp->atomicProcessSetBuffer);
 
 	vkUpdateDescriptorSets(vk.context.device, 1, &VK_BIND_WRITE_GLOBAL_BUFFER(pComp->globalSet, pComp->globalBuffer.buffer), 0, NULL);
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {

@@ -2237,23 +2237,15 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
 		CHECK(physicalDeviceProperties.properties.apiVersion < VK_VERSION, "Insufficient Vulkan API Version");
 
-		VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR physicalDeviceShaderMaximalReconvergenceFeatures = {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR,
-		};
-		VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-			.pNext = &physicalDeviceShaderMaximalReconvergenceFeatures,
-		};
-		vkGetPhysicalDeviceFeatures2(vk.context.physicalDevice, &physicalDeviceFeatures);
-		CHECK(physicalDeviceShaderMaximalReconvergenceFeatures.shaderMaximalReconvergence == false, "shaderMaximalReconvergence not supported!")
+//		VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
+//			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+//			.pNext = ,
+//		};
+//		vkGetPhysicalDeviceFeatures2(vk.context.physicalDevice, &physicalDeviceFeatures);
 	}
 
 	{  // Device
 
-		VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR physicalDeviceShaderMaximalReconvergenceFeatures = {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR,
-			.shaderMaximalReconvergence = VK_TRUE,
-		};
 		VkPhysicalDevicePipelineRobustnessFeaturesEXT physicalDevicePipelineRobustnessFeaturesEXT = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES_EXT,
 			.pipelineRobustness = VK_TRUE,
