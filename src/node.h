@@ -88,6 +88,11 @@ typedef struct MxcProcessState {
 	float cameraFarZ;
 } MxcProcessState;
 
+typedef struct MxcAtomicProcessState {
+	u32 workgroupCounter;
+	u32 workgroupResult;
+} MxcAtomicProcessState;
+
 typedef struct MxcNodeShared {
 	// read/write every cycle
 	ATOMIC u64 timelineValue;
@@ -97,6 +102,7 @@ typedef struct MxcNodeShared {
 	vec2             lrClipUV;
 
 	MxcProcessState processState;
+	MxcAtomicProcessState atomicProcessState;
 
 	// I don't think I need this either?
 	MidPose           rootPose;

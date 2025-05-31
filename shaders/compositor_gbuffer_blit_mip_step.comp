@@ -1,10 +1,14 @@
 #version 450
 #extension GL_KHR_shader_subgroup_basic  : require
 #extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_EXT_control_flow_attributes : require
+#extension GL_EXT_maximal_reconvergence : require
 #extension GL_EXT_debug_printf : require
 
 #include "math.glsl"
 #include "subgroup_grid.glsl"
+#include "logging.glsl"
 
 layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
@@ -15,13 +19,17 @@ struct DepthState {
     float farZ;
 };
 
-layout (set = 0, binding = 0) uniform GBufferProcessState {
+layout (set = 0, binding = 0) uniform ProcessState {
     DepthState depth;
     float cameraNearZ;
     float cameraFarZ;
-} gBufferProcessState;
-layout (set = 0, binding = 1) uniform sampler2D srcDepth;
-layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer;
+} processState;
+layout(set = 0, binding = 1, std430) restrict buffer AtomicProcessState {
+    uint workgroupCounter;
+    uint workgroupResult;
+} atomicProcessState;
+layout (set = 0, binding = 2) uniform sampler2D srcDepth;
+layout (set = 0, binding = 3, rgba16f) uniform image2D dstGbuffer;
 
 shared float sharedDepths3[WORKGROUP_SUBGROUP_COUNT]; // 8 * 8 = 64
 shared float sharedDepths4[WORKGROUP_SUBGROUP_COUNT / 4]; // 4 * 4 = 16
@@ -47,8 +55,8 @@ void main()
 //        }
 //    }
 
-    vec4 gatheredLinearDepth = LinearizeDepth(vec4(gBufferProcessState.depth.nearZ), vec4(gBufferProcessState.depth.farZ), gatheredDepth);
-    vec4 gatheredProjectedDepth = ProjectDepth(vec4(gBufferProcessState.cameraFarZ), vec4(gBufferProcessState.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ
+    vec4 gatheredLinearDepth = LinearizeDepth(vec4(processState.depth.nearZ), vec4(processState.depth.farZ), gatheredDepth);
+    vec4 gatheredProjectedDepth = ProjectDepth(vec4(processState.cameraFarZ), vec4(processState.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ
 
     vec4 depth0Quad = gatheredProjectedDepth;
     float depth1 = MinQuad(gatheredProjectedDepth);
@@ -57,6 +65,7 @@ void main()
     float depth4 = 0;
     float depth5 = 0;
     float depth6 = 0;
+    float depth7 = 0;
 
     {
         const int coordDivisor = 2;
@@ -69,6 +78,7 @@ void main()
 
         ivec2 rootSubgroupCoord = ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
         uint rootSubgroupIndex = SubgroupIndexFromCoord(rootSubgroupCoord);
+        [[maximally_reconverges]]
         if (rootSubgroupCoord == grid_SubgroupCoord)
             depth2 = MinQuad(shuffle);
 
@@ -86,6 +96,7 @@ void main()
             depth2);
 
         ivec2 rootSubgroupCoord = ivec2(0, 0); // ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
+        [[maximally_reconverges]]
         if (rootSubgroupCoord == grid_SubgroupCoord)
             sharedDepths3[grid_LocalSubgroupIndex] = MinQuad(shuffle);
 
@@ -121,6 +132,7 @@ void main()
     */;
     {
         ivec2 depth3RootLocalID = depth4SharedID * depth4IDDivisor;
+        [[maximally_reconverges]]
         if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth3RootLocalID) {
             uint shuffle0 = IndexFromID(depth3SharedID + ivec2(0, 1), depth3SharedSquareSize);
             uint shuffle1 = IndexFromID(depth3SharedID + ivec2(1, 1), depth3SharedSquareSize);
@@ -146,6 +158,7 @@ void main()
     */
     {
         ivec2 depth4RootLocalID = depth5SharedID * depth5IDDivisor;
+        [[maximally_reconverges]]
         if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth4RootLocalID) {
             uint shuffle0 = IndexFromID(depth4SharedID + ivec2(0, 1), depth4SharedSquareSize);
             uint shuffle1 = IndexFromID(depth4SharedID + ivec2(1, 1), depth4SharedSquareSize);
@@ -169,6 +182,7 @@ void main()
         1 02 03
         */
         ivec2 depth5RootLocalID = ivec2(0, 0); // sharedID * coordDivisor;
+        [[maximally_reconverges]]
         if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth5RootLocalID) {
             uint shuffle0 = 2; // IndexFromID(depth5SharedID + ivec2(0, 1), depth5SharedSquareSize);
             uint shuffle1 = 3; // IndexFromID(depth5SharedID + ivec2(1, 1), depth5SharedSquareSize);
@@ -186,12 +200,19 @@ void main()
     }
 
     {
-//        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupIndex == 0) {
-//            int val = atomicAdd(gBufferProcessState.counter, 1);
-//
-//
-//        }
+        [[maximally_reconverges]]
+        if (grid_LocalFirstInvocation) {
+            atomicAdd(atomicProcessState.workgroupCounter, 1);
+            atomicMin(atomicProcessState.workgroupResult, depth6 > HALF_EPSILON ? PackDepth32(depth6) : PackDepth32(1));
+            memoryBarrierBuffer();
 
+            [[maximally_reconverges]]
+            while (atomicProcessState.workgroupCounter < 256) {}
+        }
+
+        memoryBarrierBuffer();
+        barrier();
+        depth7 = UnpackDepth32(atomicProcessState.workgroupResult);
     }
 
     for (int i = 0; i < 4; ++i) {
@@ -202,7 +223,19 @@ void main()
                 depth3 > 0 ? depth3 :
                 depth4 > 0 ? depth4 :
                 depth5 > 0 ? depth5 :
-                depth6;
+                depth6 > 0 ? depth6 :
+                depth7;
         imageStore(dstGbuffer, grid_GlobalCoord + quadGatherOffsets[i], vec4(finalDepth));
     }
+
+    memoryBarrierImage();
+    barrier();
+
+    [[maximally_reconverges]]
+    if (grid_GlobalFirstInvocation) {
+        atomicExchange(atomicProcessState.workgroupCounter, 0);
+        atomicExchange(atomicProcessState.workgroupResult, PackDepth32(1));
+    }
+
+    barrier();
 }

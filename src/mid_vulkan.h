@@ -173,11 +173,19 @@ typedef struct VkSwapContext {
 	VkImage        images[VK_SWAP_COUNT];
 } VkSwapContext;
 
+typedef enum VkSharedMemoryState {
+	VK_SHARED_MEMORY_STATE_UNITIALIZED,
+	VK_SHARED_MEMORY_STATE_REQUESTED,
+	VK_SHARED_MEMORY_STATE_BOUND,
+	VK_SHARED_MEMORY_STATE_FREED,
+	VK_SHARED_MEMORY_STATE_COUNT,
+} VkSharedMemoryState;
 typedef u8 VkSharedMemoryType;
 typedef struct VkSharedMemory {
-	VkDeviceSize       offset;
-	VkDeviceSize       size;
-	VkSharedMemoryType type;
+	VkDeviceSize        offset;
+	VkDeviceSize        size;
+	VkSharedMemoryType  type;
+	VkSharedMemoryState state;
 } VkSharedMemory;
 
 typedef struct VkSharedBuffer {
@@ -629,15 +637,23 @@ INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore 
 
 INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
 {
+	assert(shareMemory.state == VK_SHARED_MEMORY_STATE_BOUND && "Shared buffer not bound!");
 	return ((char*)pMappedMemory[shareMemory.type]) + shareMemory.offset;
 }
 INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
 {
 	return vkSharedMemoryPtr(shareBuffer.memory);
 }
-INLINE void vkBindSharedBuffer(const VkSharedBuffer* pBuffer)
+INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 {
+	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_UNITIALIZED ,"Shared buffer has not been requested!");
+	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_BOUND, "Shared buffer already bound!");
+	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_FREED, "Shared buffer has been freed!");
+	CHECK(pBuffer->memory.state != VK_SHARED_MEMORY_STATE_REQUESTED, "Shared buffer has been requested!");
+	CHECK(pBuffer->memory.size <= 0, "Shared buffer has no size initialized!");
+	CHECK(pBuffer->memory.type <= 0 && pBuffer->memory.type >= VK_MAX_MEMORY_TYPES, "Shared buffer has no memory initialized!");
 	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buffer, deviceMemory[pBuffer->memory.type], pBuffer->memory.offset));
+	pBuffer->memory.state = VK_SHARED_MEMORY_STATE_BOUND;
 }
 
 // probably move to math lib and take copy to pointer out
@@ -1559,6 +1575,8 @@ void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffe
 
 	requestedMemoryAllocSize[pBuffer->memory.type] += memReqs2.memoryRequirements.size;
 
+	pBuffer->memory.state = VK_SHARED_MEMORY_STATE_REQUESTED;
+
 #ifdef VK_DEBUG_MEMORY_ALLOC
 	printf("Request Shared MemoryType: %d Allocation: %zu ", pMemory->type, memReqs2.memoryRequirements.size);
 	PrintMemoryPropertyFlags(pRequest->memoryPropertyFlags);
@@ -1614,6 +1632,8 @@ void vkBindUpdateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* p
 	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->sharedBuffer.buffer, deviceMemory[pMesh->sharedBuffer.memory.type], pMesh->sharedBuffer.memory.offset));
 	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, sizeof(uint16_t) * pMesh->offsets.indexCount, pMesh->sharedBuffer.buffer);
 	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(MidVertex) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buffer);
+
+	pMesh->sharedBuffer.memory.state = VK_SHARED_MEMORY_STATE_BOUND;
 }
 void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 {
@@ -2216,9 +2236,24 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		printf("minUniformBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment);
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
 		CHECK(physicalDeviceProperties.properties.apiVersion < VK_VERSION, "Insufficient Vulkan API Version");
+
+		VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR physicalDeviceShaderMaximalReconvergenceFeatures = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR,
+		};
+		VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+			.pNext = &physicalDeviceShaderMaximalReconvergenceFeatures,
+		};
+		vkGetPhysicalDeviceFeatures2(vk.context.physicalDevice, &physicalDeviceFeatures);
+		CHECK(physicalDeviceShaderMaximalReconvergenceFeatures.shaderMaximalReconvergence == false, "shaderMaximalReconvergence not supported!")
 	}
 
 	{  // Device
+
+		VkPhysicalDeviceShaderMaximalReconvergenceFeaturesKHR physicalDeviceShaderMaximalReconvergenceFeatures = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MAXIMAL_RECONVERGENCE_FEATURES_KHR,
+			.shaderMaximalReconvergence = VK_TRUE,
+		};
 		VkPhysicalDevicePipelineRobustnessFeaturesEXT physicalDevicePipelineRobustnessFeaturesEXT = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES_EXT,
 			.pipelineRobustness = VK_TRUE,
@@ -2290,6 +2325,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
 			VK_EXTERNAL_FENCE_EXTENSION_NAME,
 			VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
+			VK_KHR_SHADER_MAXIMAL_RECONVERGENCE_EXTENSION_NAME,
 		};
 		uint32_t activeQueueIndex = 0;
 		uint32_t activeQueueCount = 0;

@@ -197,6 +197,7 @@ static void CreateNodeComputePipeLayout(
 //// GBuffer Process Pipe
 enum {
 	BIND_INDEX_GBUFFER_PROCESS_STATE,
+	BIND_INDEX_GBUFFER_PROCESS_ATOMIC_STATE,
 	BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
 	BIND_INDEX_GBUFFER_PROCESS_DST,
 	BIND_INDEX_GBUFFER_PROCESS_COUNT
@@ -210,6 +211,11 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 				VkDescriptorSetLayoutBindingElement(
 					BIND_INDEX_GBUFFER_PROCESS_STATE,
 					.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+					.descriptorCount = 1,
+					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
+				VkDescriptorSetLayoutBindingElement(
+					BIND_INDEX_GBUFFER_PROCESS_ATOMIC_STATE,
+					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
 				VkDescriptorSetLayoutBindingElement(
@@ -234,7 +240,18 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,       \
 		.pBufferInfo = &(VkDescriptorBufferInfo){                  \
 			.buffer = view,                                        \
-			.range = sizeof(MxcProcessState),                  \
+			.range = sizeof(MxcProcessState),                  	   \
+		},                                                         \
+	}
+#define BIND_WRITE_GBUFFER_PROCESS_ATOMIC_STATE(view)              \
+	(VkWriteDescriptorSet) {                                       \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                    \
+		.dstBinding = BIND_INDEX_GBUFFER_PROCESS_ATOMIC_STATE,     \
+		.descriptorCount = 1,                                      \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,       \
+		.pBufferInfo = &(VkDescriptorBufferInfo){                  \
+			.buffer = view,                                        \
+			.range = sizeof(MxcAtomicProcessState),                \
 		},                                                         \
 	}
 #define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(view)                     \
@@ -293,7 +310,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	VkRenderPass      compPass = pComp->compositorRenderPass;
 	VkFramebuffer     fb = pComp->graphicsFramebuffer;
 	VkDescriptorSet   globalSet = pComp->globalSet;
-	VkDescriptorSet   comptOutputSet = pComp->computeOutputSet;
+	VkDescriptorSet   cmptOutputSet = pComp->computeOutputSet;
 
 	VkPipelineLayout nodePipeLayout = pComp->nodePipeLayout;
 	VkPipeline       nodePipe = pComp->nodePipe;
@@ -330,13 +347,13 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 		VkImageView color;
 		VkImageView normal;
 		VkImageView depth;
-	} graphFbuffView;
-	graphFbuffView.color = pComp->graphicsFramebufferTexture.color.view;
-	graphFbuffView.normal = pComp->graphicsFramebufferTexture.normal.view;
-	graphFbuffView.depth = pComp->graphicsFramebufferTexture.depth.view;
+	} graphFbView;
+	graphFbView.color = pComp->graphicsFramebufferTexture.color.view;
+	graphFbView.normal = pComp->graphicsFramebufferTexture.normal.view;
+	graphFbView.depth = pComp->graphicsFramebufferTexture.depth.view;
 
 	VkImage graphFbColorImg = pComp->graphicsFramebufferTexture.color.image;
-	VkImage comptFbColorImg = pComp->computeFramebufferColorTexture.image;
+	VkImage cmptFbColorImg = pComp->computeFramebufferColorTexture.image;
 
 	#define COMPOSITOR_DST_GRAPHICS_READ                                             \
 			.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
@@ -580,6 +597,7 @@ run_loop:
 
 				VkWriteDescriptorSet pushSets[] = {
 					BIND_WRITE_GBUFFER_PROCESS_STATE(pComp->processSetBuffer.buffer),
+					BIND_WRITE_GBUFFER_PROCESS_ATOMIC_STATE(pComp->atomicProcessSetBuffer.buffer),
 					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipViews[0]),
 				};
@@ -676,9 +694,9 @@ run_loop:
 			vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, timeline);
 
 			CmdBeginRenderPass(graphCmd, compPass, fb, VK_PASS_CLEAR_COLOR,
-							   graphFbuffView.color,
-							   graphFbuffView.normal,
-							   graphFbuffView.depth);
+							   graphFbView.color,
+							   graphFbView.normal,
+							   graphFbView.depth);
 
 			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
 			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
@@ -728,7 +746,7 @@ run_loop:
 		{  // Compute Recording Cycle. We really must separate into Compute and Graphics lists
 			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipe);
 			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
-			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_OUTPUT, 1, &comptOutputSet, 0, NULL);
+			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_OUTPUT, 1, &cmptOutputSet, 0, NULL);
 
 //			vkCmdClearColorImage(grphCmd, cmptFrmBufColorImg, VK_IMAGE_LAYOUT_GENERAL, &(VkClearColorValue){0.0f, 0.0f, 0.0f, 0.0f}, 1, &VK_COLOR_SUBRESOURCE_RANGE);
 
@@ -761,7 +779,7 @@ run_loop:
 						CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipe);
 						CmdDispatch(graphCmd, 1, groupCt, 1);
 
-						VkImageMemoryBarrier2 postComptBarr[] = {
+						VkImageMemoryBarrier2 postCmptBarr[] = {
 							{
 								VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 								.image = pNodeSwap->color,
@@ -779,7 +797,7 @@ run_loop:
 								VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 							},
 						};
-						CmdPipelineImageBarriers2(graphCmd, COUNT(postComptBarr), postComptBarr);
+						CmdPipelineImageBarriers2(graphCmd, COUNT(postCmptBarr), postCmptBarr);
 
 						CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptPostNodePipe);
 						CmdDispatch(graphCmd, 1, groupCt, 1);
@@ -811,7 +829,7 @@ run_loop:
 				},
 				{
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = comptFbColorImg,
+					.image = cmptFbColorImg,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 					VK_IMAGE_BARRIER_DST_BLIT_READ,
@@ -823,7 +841,7 @@ run_loop:
 			if (graphicsBlit)
 				CmdBlitImageFullScreen(graphCmd, graphFbColorImg, swapImage);
 			if (computeBlit)
-				CmdBlitImageFullScreen(graphCmd, comptFbColorImg, swapImage);
+				CmdBlitImageFullScreen(graphCmd, cmptFbColorImg, swapImage);
 
 			VkImageMemoryBarrier2 endBlitBarrier[] = {
 				{
@@ -838,7 +856,7 @@ run_loop:
 				},
 				{
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = comptFbColorImg,
+					.image = cmptFbColorImg,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 					VK_IMAGE_BARRIER_SRC_BLIT_READ,
 					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
@@ -968,31 +986,46 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			CreateGBufferProcessPipeLayout(pCompositor->gbufferProcessSetLayout, &pCompositor->gbufferProcessPipeLayout);
 			vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", pCompositor->gbufferProcessPipeLayout, &pCompositor->gbufferProcessBlitUpPipe);
 
-			VkRequestAllocationInfo requestInfo = {
-				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-				.size = sizeof(MxcProcessState),
-				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			};
-			vkCreateSharedBuffer(&requestInfo, &pCompositor->processSetBuffer);
+			vkCreateSharedBuffer(
+				&(VkRequestAllocationInfo){
+					.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+					.size = sizeof(MxcProcessState),
+					.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				},
+				&pCompositor->processSetBuffer);
+
+			vkCreateSharedBuffer(
+				&(VkRequestAllocationInfo){
+					.memoryPropertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+					.size = sizeof(MxcAtomicProcessState),
+					.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+				},
+				&pCompositor->atomicProcessSetBuffer);
 		}
 
 		// Node Sets
 		// Preallocate all Node Set buffers. MxcNodeCompositorSetState * 256 = 130 kb. Small price to pay to ensure contiguous memory on GPU
 		// TODO this should be a descriptor array
 		for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
-			VkRequestAllocationInfo requestInfo = {
-				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-				.size = sizeof(MxcNodeCompositorSetState),
-				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			};
-			vkCreateSharedBuffer(&requestInfo, &nodeCompositorData[i].nodeSetBuffer);
-			VkDescriptorSetAllocateInfo setInfo = {
-				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-				.descriptorPool = threadContext.descriptorPool,
-				.descriptorSetCount = 1,
-				.pSetLayouts = &pCompositor->nodeSetLayout,
-			};
-			VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &nodeCompositorData[i].nodeSet));
+			vkCreateSharedBuffer(
+				&(VkRequestAllocationInfo){
+					.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+					.size = sizeof(MxcNodeCompositorSetState),
+					.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+				},
+				&nodeCompositorData[i].nodeSetBuffer);
+
+			// I still don't entirely hate this... but I feel if I were to double the creation calls I'd want debugName in them all...
+			// or maybe not... debug name being in a generic macro might be nice?
+#define vkAllocateDescriptorSetsExt(...) VK_CHECK(vkAllocateDescriptorSets(vk.context.device, __VA_ARGS__))
+#define VkDescriptorSetAllocateInfo(...) (VkDescriptorSetAllocateInfo) { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, __VA_ARGS__ }
+
+			vkAllocateDescriptorSetsExt(
+				&VkDescriptorSetAllocateInfo(
+						.descriptorPool = threadContext.descriptorPool,
+						.descriptorSetCount = 1,
+						.pSetLayouts = &pCompositor->nodeSetLayout),
+				&nodeCompositorData[i].nodeSet);
 			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
 		}
 
@@ -1070,9 +1103,6 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 
 			{
-// I still don't entirely hate this....
-#define VkDescriptorSetAllocateInfo(...) (VkDescriptorSetAllocateInfo) { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, __VA_ARGS__ }
-
 				//				auto setInfo = VkDescriptorSetAllocateInfo(
 				//						.descriptorPool = threadContext.descriptorPool,
 				//						.descriptorSetCount = 1,
@@ -1118,6 +1148,8 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	vkBindSharedBuffer(&pComp->processSetBuffer);
 	pComp->pProcessStateMapped = vkSharedBufferPtr(pComp->processSetBuffer);
 	*pComp->pProcessStateMapped = (MxcProcessState){};
+
+	vkBindSharedBuffer(&pComp->atomicProcessSetBuffer);
 
 	vkUpdateDescriptorSets(vk.context.device, 1, &VK_BIND_WRITE_GLOBAL_BUFFER(pComp->globalSet, pComp->globalBuffer.buffer), 0, NULL);
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {

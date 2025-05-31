@@ -72,6 +72,8 @@ const ivec2 quadGatherOffsets[4] = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }, };
 // Dimension of entire grid
 ivec2 grid_Dimensions;
 
+bool grid_GlobalFirstInvocation;
+
 // Index of the workgroup globally
 uint grid_GlobalWorkgroupIndex;
 
@@ -80,6 +82,8 @@ ivec2 grid_GlobalWorkgroupCoord;
 
 // Index of subgroup globally
 uint grid_GlobalSubgroupIndex;
+
+bool grid_LocalFirstInvocation;
 
 // Index of subgroup in local workgroup
 uint grid_LocalSubgroupIndex;
@@ -176,6 +180,9 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
     grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_CAPACITY;
     grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
 
+    grid_GlobalFirstInvocation = grid_SubgroupIndex == 0 && grid_GlobalWorkgroupIndex == 0;
+    grid_LocalFirstInvocation = grid_SubgroupIndex == 0 && grid_LocalSubgroupIndex == 0;
+
     grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord);
     grid_GlobalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord + grid_GlobalWorkgroupCoord);
 }
@@ -194,6 +201,9 @@ void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
 
     grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_CAPACITY;
     grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
+
+    grid_GlobalFirstInvocation = grid_SubgroupIndex == 0 && grid_GlobalWorkgroupIndex == 0;
+    grid_LocalFirstInvocation = grid_SubgroupIndex == 0 && grid_LocalSubgroupIndex == 0;
 
     grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord) * 2;
     grid_GlobalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord + grid_GlobalWorkgroupCoord) * 2;

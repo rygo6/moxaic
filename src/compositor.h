@@ -31,6 +31,8 @@ typedef struct MxcCompositor {
   MxcProcessState*      pProcessStateMapped;
   VkSharedBuffer        processSetBuffer;
 
+  VkSharedBuffer        atomicProcessSetBuffer;
+
   VkSharedBuffer  globalBuffer;
   VkDescriptorSet globalSet;
 
