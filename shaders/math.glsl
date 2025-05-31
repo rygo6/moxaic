@@ -7,8 +7,14 @@ float Lerp(float a, float b, float t) {
 vec4 LinearizeDepth(vec4 zNear, vec4 zFar, vec4 projectionDepth) {
     return zNear * zFar / (zFar - projectionDepth * (zFar - zNear));
 }
-
 vec4 ProjectDepth(vec4 newNear, vec4 newFar, vec4 linearDepth) {
+    return (newFar * (linearDepth - newNear)) / (linearDepth * (newFar - newNear));
+}
+
+float LinearizeDepth(float zNear, float zFar, float projectionDepth) {
+    return zNear * zFar / (zFar - projectionDepth * (zFar - zNear));
+}
+float ProjectDepth(float newNear, float newFar, float linearDepth) {
     return (newFar * (linearDepth - newNear)) / (linearDepth * (newFar - newNear));
 }
 

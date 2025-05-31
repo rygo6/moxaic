@@ -7,7 +7,7 @@
 #include "subgroup_grid.glsl"
 #include "logging.glsl"
 
-layout (local_size_x = SUBGROUP_CAPACITY, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
+layout (local_size_x = SUBGROUP_COUNT, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
 
 struct DepthState {
     float minDepth;
@@ -32,15 +32,13 @@ shared float sharedDepth6; // 1
 void main()
 {
     ivec2 outputSize = imageSize(dstGbuffer);
-    InitializeSubgroupGridQuadInfo(outputSize);
+    InitializeSubgroupGridInfo(outputSize);
 
-    vec2 quadCenterUV = vec2(grid_GlobalCoord + 1) / vec2(outputSize);
-    vec4 gatheredDepth = textureGather(srcDepth, quadCenterUV, 0);
-    vec4 gatheredLinearDepth = LinearizeDepth(vec4(processState.depth.nearZ), vec4(processState.depth.farZ), gatheredDepth);
-    vec4 gatheredProjectedDepth = ProjectDepth(vec4(processState.cameraFarZ), vec4(processState.cameraNearZ), gatheredLinearDepth); // reverse near/far because we use reverseZ
+    float depthSample = texture(srcDepth, grid_GlobalUV).r;
+    float linearDepth = LinearizeDepth(processState.depth.nearZ, processState.depth.farZ, depthSample);
+    float projectedDepth = ProjectDepth(processState.cameraFarZ, processState.cameraNearZ, linearDepth); // reverse near/far because we use reverseZ
 
-    vec4 depth0Quad = gatheredProjectedDepth;
-    float depth1 = MinQuad(gatheredProjectedDepth);
+    float depth1 = projectedDepth;
     float depth2 = 0;
     float depth3 = 0;
     float depth4 = 0;
@@ -175,16 +173,13 @@ void main()
         depth6 = sharedDepth6;
     }
 
-    for (int i = 0; i < 4; ++i) {
-        float finalDepth =
-            depth0Quad[i] > 0 ? depth0Quad[i] :
-                depth1 > 0 ? depth1 :
-                depth2 > 0 ? depth2 :
-                depth3 > 0 ? depth3 :
-                depth4 > 0 ? depth4 :
-                depth5 > 0 ? depth5 :
-                depth6 > 0 ? depth6 :
-                depth7;
-        imageStore(dstGbuffer, grid_GlobalCoord + quadGatherOffsets[i], vec4(finalDepth));
-    }
+    float finalDepth =
+            depth1 > 0 ? depth1 :
+            depth2 > 0 ? depth2 :
+            depth3 > 0 ? depth3 :
+            depth4 > 0 ? depth4 :
+            depth5 > 0 ? depth5 :
+            depth6 > 0 ? depth6 :
+            depth7;
+    imageStore(dstGbuffer, grid_GlobalCoord, vec4(finalDepth));
 }

@@ -14,9 +14,12 @@
 //// Constants
 ////
 
-#define GRID_SUBGROUP_CAPACITY  16
 // only divide this in if you are going to deal with quad samples and texture gather per thread
+#define GRID_QUAD_SQUARE_SIZE  2
+#define GRID_QUAD_COUNT  4
 #define GRID_SUBGROUP_SQUARE_SIZE  4
+#define GRID_SUBGROUP_COUNT           16
+#define GRID_WORKGROUP_SQUARE_SIZE 8
 #define GRID_WORKGROUP_SUBGROUP_COUNT 64
 
 //////////
@@ -569,10 +572,11 @@ run_loop:
 				ResetQueryPool(device, timeQueryPool, 0, 2);
 				CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-//				ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
+//				ivec2 extent = { pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y };
 				ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 				u32   pixelCt = extent.x * extent.y;
-				u32   groupCt = pixelCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
+				u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
+//				u32   quadGroupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_QUAD_COUNT;
 
 				auto pProcState = &pNodeShared->processState;
 				pProcState->cameraNearZ = globCam.zNear;
@@ -758,8 +762,8 @@ run_loop:
 						// can be saved
 						ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 						int   pixelCt = extent.x * extent.y;
-						int   groupCt = pixelCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT;
-//						int   quadGroupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_SUBGROUP_SQUARE_SIZE;
+						int   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
+//						int   quadGroupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_QUAD_COUNT;
 
 						CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipe);
 						CmdDispatch(graphCmd, 1, groupCt, 1);

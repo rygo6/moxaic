@@ -59,9 +59,10 @@
 */
 
 #define QUAD_SQUARE_SIZE 2
+#define QUAD_COUNT 2
 
 #define SUBGROUP_SQUARE_SIZE 4
-#define SUBGROUP_CAPACITY 16 // 4 * 4
+#define SUBGROUP_COUNT 16 // 4 * 4
 
 #define WORKGROUP_SQUARE_SIZE 8
 #define WORKGROUP_SUBGROUP_COUNT 64 // 8 * 8
@@ -106,6 +107,9 @@ ivec2 grid_LocalCoord;
 // Grid Coordinate globally
 ivec2 grid_GlobalCoord;
 
+// Grid UV globally
+vec2 grid_GlobalUV;
+
 uint IndexFromID(ivec2 id, uint dimension) {
     return id.x + (id.y * dimension);
 }
@@ -133,7 +137,7 @@ uint LocalSubgroupIndexFromOffset(ivec2 coordDxDy) {
 }
 
 ivec2 SubgroupCoordFromIndex(uint subgroupIndex) {
-    subgroupIndex %= SUBGROUP_CAPACITY;
+    subgroupIndex %= SUBGROUP_COUNT;
     return ivec2(subgroupIndex % SUBGROUP_SQUARE_SIZE, subgroupIndex / SUBGROUP_SQUARE_SIZE);
 }
 
@@ -144,8 +148,8 @@ uint SubgroupIndexFromOffset(ivec2 coordDxDy) {
 
 // SubgroupIndex from subgroup id
 uint SubgroupIndexFromCoord(ivec2 coord) {
-    uint subgroupHalf = gl_SubgroupInvocationID / SUBGROUP_CAPACITY;
-    return coord.x + (coord.y * SUBGROUP_SQUARE_SIZE) + (subgroupHalf * SUBGROUP_CAPACITY);
+    uint subgroupHalf = gl_SubgroupInvocationID / SUBGROUP_COUNT;
+    return coord.x + (coord.y * SUBGROUP_SQUARE_SIZE) + (subgroupHalf * SUBGROUP_COUNT);
 }
 
 float AverageQuad(vec4 quad){
@@ -177,7 +181,7 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
     grid_LocalSubgroupCoord = LocalSubgroupCoordFromIndex(grid_LocalSubgroupIndex);
     grid_LocalSubgroupID = LocalSubgroupIDFromIndex(grid_LocalSubgroupIndex);
 
-    grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_CAPACITY;
+    grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_COUNT;
     grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
 
     grid_GlobalFirstInvocation = grid_SubgroupIndex == 0 && grid_GlobalWorkgroupIndex == 0;
@@ -185,6 +189,8 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
 
     grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord);
     grid_GlobalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord + grid_GlobalWorkgroupCoord);
+
+    grid_GlobalUV = vec2(grid_GlobalCoord) / vec2(dimensions);
 }
 
 void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
@@ -199,7 +205,7 @@ void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
     grid_LocalSubgroupCoord = LocalSubgroupCoordFromIndex(grid_LocalSubgroupIndex);
     grid_LocalSubgroupID = LocalSubgroupIDFromIndex(grid_LocalSubgroupIndex);
 
-    grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_CAPACITY;
+    grid_SubgroupIndex = gl_SubgroupInvocationID % SUBGROUP_COUNT;
     grid_SubgroupCoord = SubgroupCoordFromIndex(grid_SubgroupIndex);
 
     grid_GlobalFirstInvocation = grid_SubgroupIndex == 0 && grid_GlobalWorkgroupIndex == 0;
@@ -207,4 +213,6 @@ void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
 
     grid_LocalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord) * 2;
     grid_GlobalCoord = (grid_SubgroupCoord + grid_LocalSubgroupCoord + grid_GlobalWorkgroupCoord) * 2;
+
+    grid_GlobalUV = vec2(grid_GlobalCoord) / vec2(dimensions * 2);
 }
