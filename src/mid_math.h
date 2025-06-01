@@ -12,6 +12,8 @@
 #define PI                 3.14159265358979323846f
 #define RAD_FROM_DEG(_deg) (_deg * (PI / 180.0f))
 #define DEG_FROM_RAD(_rad) (_rad * (180.0f / PI))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
 SIMD_TYPE(float, float2, 2);
@@ -493,6 +495,10 @@ MATH_INLINE vec2 Vec2Max(vec2 a, vec2 b)
 MATH_INLINE float Lerp(float a, float b, float t)
 {
 	return a + t * (b - a);
+}
+MATH_INLINE float Clamp(float v, float min, float max)
+{
+	return fmax(fmin(v, min), max);
 }
 
 MATH_INLINE void Mat4Print(mat4 m)

@@ -22,7 +22,8 @@ layout (set = 0, binding = 0) uniform ProcessState {
     float cameraFarZ;
 } processState;
 layout (set = 0, binding = 1) uniform sampler2D srcDepth;
-layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer;
+layout (set = 0, binding = 2) uniform sampler2D srcMip;
+layout (set = 0, binding = 3, rgba16f) uniform image2D dstGbuffer;
 
 shared float sharedDepth2[WORKGROUP_SUBGROUP_COUNT]; // 8 * 8 = 64
 shared float sharedDepth3[WORKGROUP_SUBGROUP_COUNT / 4]; // 4 * 4 = 16
@@ -33,6 +34,19 @@ void main()
 {
     ivec2 outputSize = imageSize(dstGbuffer);
     InitializeSubgroupGridInfo(outputSize);
+
+    if (any(greaterThanEqual(grid_GlobalCoord, outputSize)))
+        return;
+
+//    vec4 srcMipSample = texture(srcMip, grid_GlobalUV);
+//    if (srcMipSample.r > 0) {
+//        imageStore(dstGbuffer, grid_GlobalCoord, vec4(srcMipSample.r));
+//        LOG("%d %d\n", grid_GlobalCoord.x, grid_GlobalCoord.y);
+//        return;
+//    }
+
+//    if (grid_GlobalFirstInvocation)
+//        LOG("%f %f %f %f \n", srcMipSample.r, srcMipSample.g, srcMipSample.b, srcMipSample.a);
 
     float depthSample = texture(srcDepth, grid_GlobalUV).r;
     float linearDepth = LinearizeDepth(processState.depth.nearZ, processState.depth.farZ, depthSample);
@@ -169,11 +183,12 @@ void main()
     }
 
     float finalDepth =
-            depth[0] > 0 ? depth[0] :
-            depth[1] > 0 ? depth[1] :
-            depth[2] > 0 ? depth[2] :
-            depth[3] > 0 ? depth[3] :
-            depth[4] > 0 ? depth[4] :
-            depth[5];
+            depth[0] > HALF_EPSILON ? depth[0] :
+            depth[1] > HALF_EPSILON ? depth[1] :
+            depth[2] > HALF_EPSILON ? depth[2] :
+            depth[3] > HALF_EPSILON ? depth[3] :
+            depth[4] > HALF_EPSILON ? depth[4] :
+            depth[5] > HALF_EPSILON ? depth[5] :
+            texture(srcMip, grid_GlobalUV).r;
     imageStore(dstGbuffer, grid_GlobalCoord, vec4(finalDepth));
 }

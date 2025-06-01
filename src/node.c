@@ -64,7 +64,10 @@ MxcNodeSwapPool nodeSwapPool[MXC_SWAP_TYPE_POOL_COUNT];
 
 void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap)
 {
-	{ // Color
+	CHECK(pTexInfo->extent.width < 1024 || pTexInfo->extent.height < 1024, "Swap too small!")
+
+	/// Color
+	{
 		VkImageCreateInfo info = {
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = &(VkExternalMemoryImageCreateInfo){
@@ -91,7 +94,8 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		vkCreateTexture(&textureInfo, &pSwap->color);
 	}
 
-	{ // Depth
+	/// Depth
+	{
 		VkImageCreateInfo info = {
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.pNext = &(VkExternalMemoryImageCreateInfo){
@@ -118,66 +122,98 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 		vkCreateTexture(&textureInfo, &pSwap->depth);
 	}
 
-	{ // GBuffer
-		VkTextureCreateInfo textureInfo = {
-			.debugName = "ExportedGBufferFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo){
-				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = MXC_NODE_GBUFFER_FORMAT,
-				.extent = pTexInfo->extent,
-				.mipLevels = MXC_NODE_GBUFFER_LEVELS,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = MXC_NODE_GBUFFER_USAGE,
-			},
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.locality = VK_LOCALITY_CONTEXT,
-		};
-		vkCreateTexture(&textureInfo, &pSwap->gbuffer);
+	/// GBuffer
+	{
+		vkCreateTexture(
+			&(VkTextureCreateInfo){
+				.debugName = "GBufferFramebuffer",
+				.pImageCreateInfo = &(VkImageCreateInfo){
+					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = MXC_NODE_GBUFFER_FORMAT,
+					.extent = pTexInfo->extent,
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = MXC_NODE_GBUFFER_USAGE,
+				},
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.locality = VK_LOCALITY_CONTEXT},
+			&pSwap->gbuffer);
+
+		vkCreateTexture(
+			&(VkTextureCreateInfo){
+				.debugName = "GBufferFramebufferMip",
+				.pImageCreateInfo = &(VkImageCreateInfo){
+					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = MXC_NODE_GBUFFER_FORMAT,
+					.extent = {pTexInfo->extent.width >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
+							   pTexInfo->extent.height >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
+							   pTexInfo->extent.depth},
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = MXC_NODE_GBUFFER_USAGE,
+				},
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.locality = VK_LOCALITY_CONTEXT},
+			&pSwap->gbufferMip);
 	}
 
 	if (VK_LOCALITY_INTERPROCESS_EXPORTED(pTexInfo->locality)) {
 		VK_DEVICE_FUNC(CmdPipelineBarrier2);
+
 		// Transfer on main because not all transfer queues can do compute transfer
-		VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS);
-		VkImageMemoryBarrier2 barriers[] = {
-			{
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->color.image,
-				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
-				.dstAccessMask = VK_ACCESS_2_NONE,
-//				.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				// could I do this elsewhere?
-				.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			},
-			{
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->depth.image,
-				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
-				.dstAccessMask = VK_ACCESS_2_NONE,
-				.newLayout = VK_IMAGE_LAYOUT_GENERAL,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			},
-			{
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pSwap->gbuffer.image,
-				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
-				.dstAccessMask = VK_ACCESS_2_NONE,
-				// could I do this elsewhere?
-				.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			},
-		};
-		CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
-		vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, cmd);
+		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)	{
+			VkImageMemoryBarrier2 barriers[] = {
+				{
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.image = pSwap->color.image,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_UNDEFINED,
+					.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+					.dstAccessMask = VK_ACCESS_2_NONE,
+					// could I do this elsewhere?
+					.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				},
+				{
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.image = pSwap->depth.image,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_UNDEFINED,
+					.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+					.dstAccessMask = VK_ACCESS_2_NONE,
+					// Doesn't get used in compositor. Depth gets blit to gbuffer.
+					.newLayout = VK_IMAGE_LAYOUT_GENERAL,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				},
+				{
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.image = pSwap->gbuffer.image,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_UNDEFINED,
+					.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+					.dstAccessMask = VK_ACCESS_2_NONE,
+					// could I do this elsewhere?
+					.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				},
+				{
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.image = pSwap->gbufferMip.image,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_UNDEFINED,
+					.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+					.dstAccessMask = VK_ACCESS_2_NONE,
+					// could I do this elsewhere?
+					.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				},
+			};
+			CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
+		}
 	}
 }
 
@@ -1019,21 +1055,11 @@ static void ipcFuncClaimSwap(NodeHandle hNd)
 		pCompSwap->depthView = pNodeSwap->depth.view;
 
 		pCompSwap->gBuffer = pNodeSwap->gbuffer.image;
-		for (int mi = 0; mi < MXC_NODE_GBUFFER_LEVELS; ++mi) {
-			VkImageViewCreateInfo info = {
-				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-				.image = pNodeSwap->gbuffer.image,
-				.viewType = VK_IMAGE_VIEW_TYPE_2D,
-				.format = MXC_NODE_GBUFFER_FORMAT,
-				.subresourceRange = {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = mi,
-					.levelCount = 1,
-					.layerCount = 1,
-				},
-			};
-			VK_CHECK(vkCreateImageView(vk.context.device, &info, VK_ALLOC, &pCompSwap->gBufferMipViews[mi]));
-		}
+		pCompSwap->gBufferView = pNodeSwap->gbuffer.view;
+
+		pCompSwap->gBufferMip = pNodeSwap->gbufferMip.image;
+		pCompSwap->gBufferMipView = pNodeSwap->gbufferMip.view;
+
 
 		if (needsExport) {
 			WIN32_CHECK(DuplicateHandle(

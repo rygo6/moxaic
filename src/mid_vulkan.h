@@ -473,6 +473,11 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 ////
 // we want to move these to PFN struct
 #define CmdPipelineImageBarriers2(_cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers)
+#define CmdPipelineImageBarrier2Ext(_cmd, ...)                                                         \
+	({                                                                                                 \
+		VkImageMemoryBarrier2 pBarriers[] = {{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, __VA_ARGS__}}; \
+		PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, COUNT(pBarriers), pBarriers);         \
+	})
 INLINE void PFN_CmdPipelineImageBarriers2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
 {
 	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
@@ -846,7 +851,7 @@ typedef struct VkTextureCreateInfo {
 	VkLocality                         locality;
 	VkExternalMemoryHandleTypeFlagBits handleType;
 	VK_EXTERNAL_HANDLE_PLATFORM        importHandle;
-	const VkImageCreateInfo*           pImageCreateInfo;
+	const VkImageCreateInfo*           pImageCreateInfo; // probably don't want this to be a ptr
 } VkTextureCreateInfo;
 void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture);
 void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
@@ -880,6 +885,11 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
+#define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType) \
+	for (VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(familyType); \
+		 cmd != VK_NULL_HANDLE;                               \
+		 vkEndImmediateCommandBuffer(familyType, cmd), cmd = VK_NULL_HANDLE)
+
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType);
 void            vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuffer cmd);
 VkCommandBuffer vkBeginImmediateTransferCommandBuffer();
@@ -900,9 +910,9 @@ void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocation
 ////////////////////
 //// Global Context
 ////
-__attribute((aligned(64))) Vk                          vk = {};
-__thread __attribute((aligned(64))) MidVkThreadContext threadContext = {};
-VkDebugUtilsMessengerEXT                               debugUtilsMessenger = VK_NULL_HANDLE;
+CACHE_ALIGN Vk                               vk = {};
+_Thread_local CACHE_ALIGN MidVkThreadContext threadContext = {};
+VkDebugUtilsMessengerEXT                     debugUtilsMessenger = VK_NULL_HANDLE;
 
 /////////////
 //// Utility
@@ -2237,11 +2247,47 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
 		CHECK(physicalDeviceProperties.properties.apiVersion < VK_VERSION, "Insufficient Vulkan API Version");
 
-//		VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
-//			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-//			.pNext = ,
-//		};
-//		vkGetPhysicalDeviceFeatures2(vk.context.physicalDevice, &physicalDeviceFeatures);
+		VkPhysicalDevicePipelineRobustnessFeaturesEXT physicalDevicePipelineRobustnessFeaturesEXT = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES_EXT,
+		};
+		VkPhysicalDevicePageableDeviceLocalMemoryFeaturesEXT physicalDevicePageableDeviceLocalMemoryFeatures = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PAGEABLE_DEVICE_LOCAL_MEMORY_FEATURES_EXT,
+			.pNext = &physicalDevicePipelineRobustnessFeaturesEXT,
+		};
+		VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT,
+			.pNext = &physicalDevicePageableDeviceLocalMemoryFeatures,
+		};
+		VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+			.pNext = &physicalDeviceGlobalPriorityQueryFeatures,
+		};
+		VkPhysicalDeviceMeshShaderFeaturesEXT physicalDeviceMeshShaderFeatures = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
+			.pNext = &physicalDeviceRobustness2Features,
+		};
+		VkPhysicalDeviceVulkan13Features physicalDeviceVulkan13Features = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+			.pNext = &physicalDeviceMeshShaderFeatures,
+		};
+		VkPhysicalDeviceVulkan12Features physicalDeviceVulkan12Features = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+			.pNext = &physicalDeviceVulkan13Features,
+		};
+		VkPhysicalDeviceVulkan11Features physicalDeviceVulkan11Features = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+			.pNext = &physicalDeviceVulkan12Features,
+		};
+		VkPhysicalDeviceFeatures2 physicalDeviceFeatures = {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+			.pNext = &physicalDeviceVulkan11Features,
+		};
+		vkGetPhysicalDeviceFeatures2(vk.context.physicalDevice, &physicalDeviceFeatures);
+#define CHECK_AVAILABLE(feature) CHECK(feature == VK_FALSE, #feature " unavailable!");
+		CHECK_AVAILABLE(physicalDeviceRobustness2Features.nullDescriptor);
+		CHECK_AVAILABLE(physicalDeviceVulkan13Features.synchronization2);
+		CHECK_AVAILABLE(physicalDeviceVulkan12Features.timelineSemaphore);
+#undef  CHECK_AVAILABLE
 	}
 
 	{  // Device
@@ -2257,7 +2303,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		};
 		VkPhysicalDeviceGlobalPriorityQueryFeaturesEXT physicalDeviceGlobalPriorityQueryFeatures = {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_EXT,
-			.pNext = (void*)&physicalDevicePageableDeviceLocalMemoryFeatures,
+			.pNext = &physicalDevicePageableDeviceLocalMemoryFeatures,
 			.globalPriorityQuery = VK_TRUE,
 		};
 		VkPhysicalDeviceRobustness2FeaturesEXT physicalDeviceRobustness2Features = {

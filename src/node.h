@@ -16,9 +16,10 @@
 //// Constants
 ////
 
+// The number of mip levels flattened to one image by compositor_gbuffer_blit_mip_step.comp
+#define MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT 6
 #define MXC_NODE_GBUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
-#define MXC_NODE_GBUFFER_LEVELS 4 // 8 / 2 = 4 / 2 = 2 / 2 = 1
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 #define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
 
@@ -161,6 +162,7 @@ typedef struct MxcSwap {
 	VkDedicatedTexture color;
 	VkDedicatedTexture depth;
 	VkDedicatedTexture gbuffer;
+	VkDedicatedTexture gbufferMip;
 #if _WIN32
 	VkWin32ExternalTexture colorExternal;
 	VkWin32ExternalTexture depthExternal;
@@ -251,10 +253,12 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 	struct CACHE_ALIGN {
 		VkImage               color;
 		VkImage               depth;
-		VkImage               gBuffer; // I think I only need one gbuffer?
+		VkImage               gBuffer;
+		VkImage               gBufferMip;
 		VkImageView           colorView;
 		VkImageView           depthView;
-		VkImageView           gBufferMipViews[MXC_NODE_GBUFFER_LEVELS];
+		VkImageView           gBufferView;
+		VkImageView           gBufferMipView;
 	} swaps[VK_SWAP_COUNT];
 
 } MxcNodeCompositorLocal;

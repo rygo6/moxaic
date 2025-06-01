@@ -117,6 +117,7 @@ uint IndexFromID(ivec2 id, uint dimension) {
 ivec2 GlobalWorkgroupCoordFromIndex(uint globalWorkgroupIndex, ivec2 size) {
     size /= ivec2(WORKGROUP_SQUARE_SIZE, WORKGROUP_SQUARE_SIZE);
     size /= ivec2(SUBGROUP_SQUARE_SIZE, SUBGROUP_SQUARE_SIZE);
+    size = max(size, 1);
     return ivec2(globalWorkgroupIndex % size.x, globalWorkgroupIndex / size.x) * WORKGROUP_SQUARE_SIZE * SUBGROUP_SQUARE_SIZE;
 }
 
