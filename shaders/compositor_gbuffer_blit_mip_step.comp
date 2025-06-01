@@ -24,10 +24,10 @@ layout (set = 0, binding = 0) uniform ProcessState {
 layout (set = 0, binding = 1) uniform sampler2D srcDepth;
 layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer;
 
-shared float sharedDepths3[WORKGROUP_SUBGROUP_COUNT]; // 8 * 8 = 64
-shared float sharedDepths4[WORKGROUP_SUBGROUP_COUNT / 4]; // 4 * 4 = 16
-shared float sharedDepths5[WORKGROUP_SUBGROUP_COUNT / 16]; // 2 * 2 = 4
-shared float sharedDepth6; // 1
+shared float sharedDepth2[WORKGROUP_SUBGROUP_COUNT]; // 8 * 8 = 64
+shared float sharedDepth3[WORKGROUP_SUBGROUP_COUNT / 4]; // 4 * 4 = 16
+shared float sharedDepth4[WORKGROUP_SUBGROUP_COUNT / 16]; // 2 * 2 = 4
+shared float sharedDepth5; // 1
 
 void main()
 {
@@ -38,65 +38,60 @@ void main()
     float linearDepth = LinearizeDepth(processState.depth.nearZ, processState.depth.farZ, depthSample);
     float projectedDepth = ProjectDepth(processState.cameraFarZ, processState.cameraNearZ, linearDepth); // reverse near/far because we use reverseZ
 
-    float depth1 = projectedDepth;
-    float depth2 = 0;
-    float depth3 = 0;
-    float depth4 = 0;
-    float depth5 = 0;
-    float depth6 = 0;
-    float depth7 = 0;
+    float depth[6];
+    depth[0] = projectedDepth;
 
     {
         const int coordDivisor = 2;
         const int offset = coordDivisor / 2;
         vec4 shuffle = vec4(
-            subgroupShuffle(depth1, SubgroupIndexFromOffset(ivec2(0,      offset))),
-            subgroupShuffle(depth1, SubgroupIndexFromOffset(ivec2(offset, offset))),
-            subgroupShuffle(depth1, SubgroupIndexFromOffset(ivec2(offset, 0))),
-            depth1);
+            subgroupShuffle(depth[0], SubgroupIndexFromOffset(ivec2(0,      offset))),
+            subgroupShuffle(depth[0], SubgroupIndexFromOffset(ivec2(offset, offset))),
+            subgroupShuffle(depth[0], SubgroupIndexFromOffset(ivec2(offset, 0))),
+            depth[0]);
 
         ivec2 rootSubgroupCoord = ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
         uint rootSubgroupIndex = SubgroupIndexFromCoord(rootSubgroupCoord);
         if (rootSubgroupCoord == grid_SubgroupCoord)
-            depth2 = MinQuad(shuffle);
+            depth[1] = MinQuad(shuffle);
 
         subgroupBarrier();
-        depth2 = subgroupShuffle(depth2, rootSubgroupIndex);
+        depth[1] = subgroupShuffle(depth[1], rootSubgroupIndex);
     }
 
     {
         const int coordDivisor = 4;
         const int offset = coordDivisor / 2;
         vec4 shuffle = vec4(
-            subgroupShuffle(depth2, SubgroupIndexFromOffset(ivec2(0,      offset))),
-            subgroupShuffle(depth2, SubgroupIndexFromOffset(ivec2(offset, offset))),
-            subgroupShuffle(depth2, SubgroupIndexFromOffset(ivec2(offset, 0))),
-            depth2);
+            subgroupShuffle(depth[1], SubgroupIndexFromOffset(ivec2(0,      offset))),
+            subgroupShuffle(depth[1], SubgroupIndexFromOffset(ivec2(offset, offset))),
+            subgroupShuffle(depth[1], SubgroupIndexFromOffset(ivec2(offset, 0))),
+            depth[1]);
 
         ivec2 rootSubgroupCoord = ivec2(0, 0); // ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
         if (rootSubgroupCoord == grid_SubgroupCoord)
-            sharedDepths3[grid_LocalSubgroupIndex] = MinQuad(shuffle);
+            sharedDepth2[grid_LocalSubgroupIndex] = MinQuad(shuffle);
 
         barrier();
-        depth3 = sharedDepths3[grid_LocalSubgroupIndex];
+        depth[2] = sharedDepth2[grid_LocalSubgroupIndex];
     }
 
-    const int depth3IDDivisor = 1;
-    const int depth4IDDivisor = 2;
-    const int depth5IDDivisor = 4;
+    const int depth2IDDivisor = 1;
+    const int depth3IDDivisor = 2;
+    const int depth4IDDivisor = 4;
 
-    const int depth3SharedSquareSize = 8; // WORKGROUP_SQUARE_SIZE;
-    const int depth4SharedSquareSize = 4; // depth3SharedSquareSize / 2;
-    const int depth5SharedSquareSize = 2; // depth4SharedSquareSize / 2;
+    const int depth2SharedSquareSize = 8; // WORKGROUP_SQUARE_SIZE;
+    const int depth3SharedSquareSize = 4; // depth2SharedSquareSize / 2;
+    const int depth4SharedSquareSize = 2; // depth3SharedSquareSize / 2;
 
+    const ivec2 depth2SharedID = grid_LocalSubgroupID / depth2IDDivisor;
     const ivec2 depth3SharedID = grid_LocalSubgroupID / depth3IDDivisor;
     const ivec2 depth4SharedID = grid_LocalSubgroupID / depth4IDDivisor;
-    const ivec2 depth5SharedID = grid_LocalSubgroupID / depth5IDDivisor;
 
+    const uint depth3SharedIndex = IndexFromID(depth3SharedID, depth3SharedSquareSize);
     const uint depth4SharedIndex = IndexFromID(depth4SharedID, depth4SharedSquareSize);
-    const uint depth5SharedIndex = IndexFromID(depth5SharedID, depth5SharedSquareSize);
 
-    /* prior. sharedDepths3
+    /* prior. sharedDepth2
       0  1  2  3  4  5  6  7
     0 00 01 02 03 04 05 06 07
     1 08 09 10 11 12 13 14 15
@@ -108,24 +103,24 @@ void main()
     7 56 57 58 59 60 61 62 63
     */;
     {
-        ivec2 depth3RootLocalID = depth4SharedID * depth4IDDivisor;
-        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth3RootLocalID) {
-            uint shuffle0 = IndexFromID(depth3SharedID + ivec2(0, 1), depth3SharedSquareSize);
-            uint shuffle1 = IndexFromID(depth3SharedID + ivec2(1, 1), depth3SharedSquareSize);
-            uint shuffle2 = IndexFromID(depth3SharedID + ivec2(1, 0), depth3SharedSquareSize);
+        ivec2 depth2RootLocalID = depth3SharedID * depth3IDDivisor;
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth2RootLocalID) {
+            uint shuffle0 = IndexFromID(depth2SharedID + ivec2(0, 1), depth2SharedSquareSize);
+            uint shuffle1 = IndexFromID(depth2SharedID + ivec2(1, 1), depth2SharedSquareSize);
+            uint shuffle2 = IndexFromID(depth2SharedID + ivec2(1, 0), depth2SharedSquareSize);
             vec4 shuffle = vec4(
-                sharedDepths3[shuffle0],
-                sharedDepths3[shuffle1],
-                sharedDepths3[shuffle2],
-                depth3);
-            sharedDepths4[depth4SharedIndex] = MinQuad(shuffle);
+                sharedDepth2[shuffle0],
+                sharedDepth2[shuffle1],
+                sharedDepth2[shuffle2],
+                depth[2]);
+            sharedDepth3[depth3SharedIndex] = MinQuad(shuffle);
         }
 
         barrier();
-        depth4 = sharedDepths4[depth4SharedIndex];
+        depth[3] = sharedDepth3[depth3SharedIndex];
     }
 
-    /* prior. sharedDepths4
+    /* prior. sharedDepth3
       0  1  2  3
     0 00 01 02 03
     1 04 05 06 07
@@ -133,53 +128,52 @@ void main()
     3 12 13 14 15
     */
     {
-        ivec2 depth4RootLocalID = depth5SharedID * depth5IDDivisor;
-        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth4RootLocalID) {
-            uint shuffle0 = IndexFromID(depth4SharedID + ivec2(0, 1), depth4SharedSquareSize);
-            uint shuffle1 = IndexFromID(depth4SharedID + ivec2(1, 1), depth4SharedSquareSize);
-            uint shuffle2 = IndexFromID(depth4SharedID + ivec2(1, 0), depth4SharedSquareSize);
+        ivec2 depth3RootLocalID = depth4SharedID * depth4IDDivisor;
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth3RootLocalID) {
+            uint shuffle0 = IndexFromID(depth3SharedID + ivec2(0, 1), depth3SharedSquareSize);
+            uint shuffle1 = IndexFromID(depth3SharedID + ivec2(1, 1), depth3SharedSquareSize);
+            uint shuffle2 = IndexFromID(depth3SharedID + ivec2(1, 0), depth3SharedSquareSize);
             vec4 shuffle = vec4(
-                sharedDepths4[shuffle0],
-                sharedDepths4[shuffle1],
-                sharedDepths4[shuffle2],
-                depth4);
-            sharedDepths5[depth5SharedIndex] = MinQuad(shuffle);
+                sharedDepth3[shuffle0],
+                sharedDepth3[shuffle1],
+                sharedDepth3[shuffle2],
+                depth[3]);
+            sharedDepth4[depth4SharedIndex] = MinQuad(shuffle);
         }
 
         barrier();
-        depth5 = sharedDepths5[depth5SharedIndex];
+        depth[4] = sharedDepth4[depth4SharedIndex];
     }
 
     {
-        /* prior. sharedDepths5
+        /* prior. sharedDepth4
           0  1
         0 00 01
         1 02 03
         */
-        ivec2 depth5RootLocalID = ivec2(0, 0); // sharedID * coordDivisor;
-        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth5RootLocalID) {
-            uint shuffle0 = 2; // IndexFromID(depth5SharedID + ivec2(0, 1), depth5SharedSquareSize);
-            uint shuffle1 = 3; // IndexFromID(depth5SharedID + ivec2(1, 1), depth5SharedSquareSize);
-            uint shuffle2 = 1; // IndexFromID(depth5SharedID + ivec2(1, 0), depth5SharedSquareSize);
+        ivec2 depth4RootLocalID = ivec2(0, 0); // sharedID * coordDivisor;
+        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth4RootLocalID) {
+            uint shuffle0 = 2; // IndexFromID(depth4SharedID + ivec2(0, 1), depth4SharedSquareSize);
+            uint shuffle1 = 3; // IndexFromID(depth4SharedID + ivec2(1, 1), depth4SharedSquareSize);
+            uint shuffle2 = 1; // IndexFromID(depth4SharedID + ivec2(1, 0), depth4SharedSquareSize);
             vec4 shuffle = vec4(
-                sharedDepths5[shuffle0],
-                sharedDepths5[shuffle1],
-                sharedDepths5[shuffle2],
-                depth5);
-            sharedDepth6 = MinQuad(shuffle);
+                sharedDepth4[shuffle0],
+                sharedDepth4[shuffle1],
+                sharedDepth4[shuffle2],
+                depth[4]);
+            sharedDepth5 = MinQuad(shuffle);
         }
 
         barrier();
-        depth6 = sharedDepth6;
+        depth[5] = sharedDepth5;
     }
 
     float finalDepth =
-            depth1 > 0 ? depth1 :
-            depth2 > 0 ? depth2 :
-            depth3 > 0 ? depth3 :
-            depth4 > 0 ? depth4 :
-            depth5 > 0 ? depth5 :
-            depth6 > 0 ? depth6 :
-            depth7;
+            depth[0] > 0 ? depth[0] :
+            depth[1] > 0 ? depth[1] :
+            depth[2] > 0 ? depth[2] :
+            depth[3] > 0 ? depth[3] :
+            depth[4] > 0 ? depth[4] :
+            depth[5];
     imageStore(dstGbuffer, grid_GlobalCoord, vec4(finalDepth));
 }
