@@ -646,25 +646,13 @@ run_loop:
 				CmdPushDescriptorSetKHR(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pComp->gbufferProcessPipeLayout, PIPE_INDEX_GBUFFER_PROCESS_INOUT, COUNT(mipPushSets), mipPushSets);
 				CmdDispatch(graphCmd, 1, mipGroupCt, 1);
 
-				VkImageMemoryBarrier2 processMipBarrs[] = {
-					{	// Gbuffer
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pNodeSwap->gBufferMip,
-						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
-					},
-				};
-				CmdPipelineImageBarriers2(graphCmd, COUNT(processMipBarrs), processMipBarrs);
-				// hmm kind of like this?
-//				CmdPipelineImageBarrier2Ext(
-//					graphCmd,
-//					.image = pNodeSwap->gBufferMip,
-//					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-//					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-//					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED);
+				CmdPipelineImageBarrier2Ext(
+					graphCmd,
+					.image = pNodeSwap->gBufferMip,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED);
 
 				VkWriteDescriptorSet pushSets[] = {
 					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView),
@@ -853,18 +841,18 @@ run_loop:
 							{
 								VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 								.image = pNodeSwap->color,
+								.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 								VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 								VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 								VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-								VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 							},
 							{
 								VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 								.image = pNodeSwap->gBuffer,
+								.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 								VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 								VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 								VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-								VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 							},
 						};
 						CmdPipelineImageBarriers2(graphCmd, COUNT(postCmptBarr), postCmptBarr);

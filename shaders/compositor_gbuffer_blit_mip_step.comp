@@ -38,16 +38,6 @@ void main()
     if (any(greaterThanEqual(grid_GlobalCoord, outputSize)))
         return;
 
-//    vec4 srcMipSample = texture(srcMip, grid_GlobalUV);
-//    if (srcMipSample.r > 0) {
-//        imageStore(dstGbuffer, grid_GlobalCoord, vec4(srcMipSample.r));
-//        LOG("%d %d\n", grid_GlobalCoord.x, grid_GlobalCoord.y);
-//        return;
-//    }
-
-//    if (grid_GlobalFirstInvocation)
-//        LOG("%f %f %f %f \n", srcMipSample.r, srcMipSample.g, srcMipSample.b, srcMipSample.a);
-
     float depthSample = texture(srcDepth, grid_GlobalUV).r;
     float linearDepth = LinearizeDepth(processState.depth.nearZ, processState.depth.farZ, depthSample);
     float projectedDepth = ProjectDepth(processState.cameraFarZ, processState.cameraNearZ, linearDepth); // reverse near/far because we use reverseZ
