@@ -14,7 +14,6 @@
 //// Constants
 ////
 
-// only divide this in if you are going to deal with quad samples and texture gather per thread
 #define GRID_QUAD_SQUARE_SIZE  2
 #define GRID_QUAD_COUNT  4
 #define GRID_SUBGROUP_SQUARE_SIZE  4
@@ -311,7 +310,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	u64             baseCycleValue = 0;
 
 	MxcCompositorMode mode = pInfo->mode;
-	VkRenderPass      compPass = pComp->compositorRenderPass;
+	VkRenderPass      compPass = vk.context.renderPass;;
 	VkFramebuffer     fb = pComp->graphicsFramebuffer;
 	VkDescriptorSet   globalSet = pComp->globalSet;
 	VkDescriptorSet   cmptOutputSet = pComp->computeOutputSet;
@@ -955,230 +954,222 @@ run_loop:
 ////
 void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCompositor)
 {
-	/// Create
+	/// Graphics Pipes
 	{
-		/// Graphics Pipes
-		{
-			CreateNodeSetLayout(pInfo->mode, &pCompositor->nodeSetLayout);
-			CreateGraphicsNodePipeLayout(pCompositor->nodeSetLayout, &pCompositor->nodePipeLayout);
+		CreateNodeSetLayout(pInfo->mode, &pCompositor->nodeSetLayout);
+		CreateGraphicsNodePipeLayout(pCompositor->nodeSetLayout, &pCompositor->nodePipeLayout);
 
-			// we need all of these modes available, this should be flags
-			switch (pInfo->mode) {
-				case MXC_COMPOSITOR_MODE_BASIC:
-					vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
-									  "./shaders/basic_comp.frag.spv",
-									  vk.context.renderPass,
-									  pCompositor->nodePipeLayout,
-									  &pCompositor->nodePipe);
-					vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
-					break;
-				case MXC_COMPOSITOR_MODE_TESSELATION:
-					vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
-												  "./shaders/tess_comp.tesc.spv",
-												  "./shaders/tess_comp.tese.spv",
-												  "./shaders/tess_comp.frag.spv",
-												  vk.context.renderPass,
-												  pCompositor->nodePipeLayout,
-												  &pCompositor->nodePipe);
-					vkCreateQuadPatchMeshSharedMemory(&pCompositor->quadPatchMesh);
-					break;
-				case MXC_COMPOSITOR_MODE_TASK_MESH:
-					vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
-											  "./shaders/mesh_comp.mesh.spv",
-											  "./shaders/mesh_comp.frag.spv",
+		// we need all of these modes available, this should be flags
+		switch (pInfo->mode) {
+			case MXC_COMPOSITOR_MODE_BASIC:
+				vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
+								  "./shaders/basic_comp.frag.spv",
+								  vk.context.renderPass,
+								  pCompositor->nodePipeLayout,
+								  &pCompositor->nodePipe);
+				vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
+				break;
+			case MXC_COMPOSITOR_MODE_TESSELATION:
+				vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
+											  "./shaders/tess_comp.tesc.spv",
+											  "./shaders/tess_comp.tese.spv",
+											  "./shaders/tess_comp.frag.spv",
 											  vk.context.renderPass,
 											  pCompositor->nodePipeLayout,
 											  &pCompositor->nodePipe);
-					vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
-					break;
-				default: PANIC("Compositor mode not supported!");
-			}
-		}
-
-		/// Compute Pipe
-		{
-			CreateComputeOutputSetLayout(&pCompositor->computeOutputSetLayout);
-			CreateNodeComputePipeLayout(pCompositor->nodeSetLayout,
-										pCompositor->computeOutputSetLayout,
-										&pCompositor->computeNodePipeLayout);
-			vkCreateComputePipe("./shaders/compute_compositor.comp.spv",
-								pCompositor->computeNodePipeLayout,
-								&pCompositor->computeNodePipe);
-			vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv",
-								pCompositor->computeNodePipeLayout,
-								&pCompositor->computePostNodePipe);
-		}
-
-		/// Pools
-		{
-			VkQueryPoolCreateInfo queryInfo = {
-				VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-				.queryType = VK_QUERY_TYPE_TIMESTAMP,
-				.queryCount = 2,
-			};
-			VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, VK_ALLOC, &pCompositor->timeQueryPool));
-
-			VkDescriptorPoolCreateInfo poolInfo = {
-				VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-				.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-				.maxSets = MXC_NODE_CAPACITY * 3,
-				.poolSizeCount = 3,
-				.pPoolSizes = (VkDescriptorPoolSize[]){
-					{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         .descriptorCount = MXC_NODE_CAPACITY},
-					{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MXC_NODE_CAPACITY},
-					{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = MXC_NODE_CAPACITY},
-				},
-			};
-			VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
-		}
-
-		/// Global
-		{
-			vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pCompositor->globalSet);
-			VkRequestAllocationInfo requestInfo = {
-				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-				.size = sizeof(VkGlobalSetState),
-				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			};
-			vkCreateSharedBuffer(&requestInfo, &pCompositor->globalBuffer);
-		}
-
-		/// GBuffer Process
-		{
-			CreateGBufferProcessSetLayout(&pCompositor->gbufferProcessSetLayout);
-			CreateGBufferProcessPipeLayout(pCompositor->gbufferProcessSetLayout, &pCompositor->gbufferProcessPipeLayout);
-			vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", pCompositor->gbufferProcessPipeLayout, &pCompositor->gbufferProcessBlitUpPipe);
-
-			vkCreateSharedBuffer(
-				&(VkRequestAllocationInfo){
-					.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-					.size = sizeof(MxcProcessState),
-					.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				},
-				&pCompositor->processSetBuffer);
-		}
-
-		// Node Sets
-		// Preallocate all Node Set buffers. MxcNodeCompositorSetState * 256 = 130 kb. Small price to pay to ensure contiguous memory on GPU
-		// TODO this should be a descriptor array
-		for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
-			vkCreateSharedBuffer(
-				&(VkRequestAllocationInfo){
-					.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-					.size = sizeof(MxcNodeCompositorSetState),
-					.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-				},
-				&nodeCompositorData[i].nodeSetBuffer);
-
-			// I still don't entirely hate this... but I feel if I were to double the creation calls I'd want debugName in them all...
-			// or maybe not... debug name being in a generic macro might be nice?
-#define vkAllocateDescriptorSetsExt(...) VK_CHECK(vkAllocateDescriptorSets(vk.context.device, __VA_ARGS__))
-#define VkDescriptorSetAllocateInfo(...) (VkDescriptorSetAllocateInfo) { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, __VA_ARGS__ }
-
-			vkAllocateDescriptorSetsExt(
-				&VkDescriptorSetAllocateInfo(
-						.descriptorPool = threadContext.descriptorPool,
-						.descriptorSetCount = 1,
-						.pSetLayouts = &pCompositor->nodeSetLayout),
-				&nodeCompositorData[i].nodeSet);
-			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
-		}
-
-		/// Graphics Framebuffers
-		{
-			VkBasicFramebufferTextureCreateInfo framebufferTextureInfo = {
-				.debugName = "CompositeFramebufferTexture",
-				.locality = VK_LOCALITY_CONTEXT,
-				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-			};
-			vkCreateBasicFramebufferTextures(&framebufferTextureInfo, &pCompositor->graphicsFramebufferTexture);
-			VkBasicFramebufferCreateInfo framebufferInfo = {
-				.debugName = "CompositeFramebuffer",
-				.renderPass = vk.context.renderPass,
-			};
-			vkCreateBasicFramebuffer(&framebufferInfo, &pCompositor->graphicsFramebuffer);
-		}
-
-		{ // Compute Output
-			{
-				// I still don't entirely hate this....
-#define VkImageCreateInfo(...) (VkImageCreateInfo) { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, __VA_ARGS__ }
-
-				VkTextureCreateInfo atomicCreateInfo = {
-					.debugName = "ComputeAtomicFramebuffer",
-					.pImageCreateInfo = &VkImageCreateInfo(
-							.imageType   = VK_IMAGE_TYPE_2D,
-							.format      = VK_FORMAT_R32_UINT,
-							.extent      = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-							.mipLevels   = 1,
-							.arrayLayers = 1,
-							.samples     = VK_SAMPLE_COUNT_1_BIT,
-							.usage       = VK_IMAGE_USAGE_STORAGE_BIT),
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.locality   = VK_LOCALITY_CONTEXT,
-				};
-				vkCreateTexture(&atomicCreateInfo, &pCompositor->computeFramebufferAtomicTexture);
-
-				VkTextureCreateInfo colorCreateInfo = {
-					.debugName = "ComputeColorFramebuffer",
-					.pImageCreateInfo = &(VkImageCreateInfo){
-						VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-						.imageType = VK_IMAGE_TYPE_2D,
-						.format = VK_FORMAT_R8G8B8A8_UNORM,
-						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-						.mipLevels = 1,
-						.arrayLayers = 1,
-						.samples = VK_SAMPLE_COUNT_1_BIT,
-						.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-					},
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.locality = VK_LOCALITY_CONTEXT,
-				};
-				vkCreateTexture(&colorCreateInfo, &pCompositor->computeFramebufferColorTexture);
-
-				VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS);
-
-#define VkImageMemoryBarrier2(...) (VkImageMemoryBarrier2) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, __VA_ARGS__ }
-				VkImageMemoryBarrier2 barrier[] = {
-					VkImageMemoryBarrier2(
-							.image = pCompositor->computeFramebufferAtomicTexture.image,
-							.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-							VK_IMAGE_BARRIER_SRC_UNDEFINED,
-							VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-							VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED),
-					VkImageMemoryBarrier2(
-							.image = pCompositor->computeFramebufferColorTexture.image,
-							.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-							VK_IMAGE_BARRIER_SRC_UNDEFINED,
-							VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-							VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED),
-				};
-				vkCmdImageBarriers(cmd, COUNT(barrier), barrier);
-				vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, cmd);
-			}
-
-
-			{
-				VK_CHECK(vkAllocateDescriptorSets(vk.context.device,
-					&VkDescriptorSetAllocateInfo(
-							.descriptorPool = threadContext.descriptorPool,
-							.descriptorSetCount = 1,
-							.pSetLayouts = &pCompositor->computeOutputSetLayout),
-					&pCompositor->computeOutputSet));
-				vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCompositor->computeOutputSet, "ComputeOutputSet");
-
-				VkWriteDescriptorSet writeSets[] = {
-					BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferAtomicTexture.view),
-					BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferColorTexture.view),
-				};
-				vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
-			}
+				vkCreateQuadPatchMeshSharedMemory(&pCompositor->quadPatchMesh);
+				break;
+			case MXC_COMPOSITOR_MODE_TASK_MESH:
+				vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
+										  "./shaders/mesh_comp.mesh.spv",
+										  "./shaders/mesh_comp.frag.spv",
+										  vk.context.renderPass,
+										  pCompositor->nodePipeLayout,
+										  &pCompositor->nodePipe);
+				vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
+				break;
+			default: PANIC("Compositor mode not supported!");
 		}
 	}
 
-	{  // Copy needed state
-		pCompositor->device = vk.context.device;
-		pCompositor->compositorRenderPass = vk.context.renderPass;
+	/// Compute Pipe
+	{
+		CreateComputeOutputSetLayout(&pCompositor->computeOutputSetLayout);
+		CreateNodeComputePipeLayout(pCompositor->nodeSetLayout,
+									pCompositor->computeOutputSetLayout,
+									&pCompositor->computeNodePipeLayout);
+		vkCreateComputePipe("./shaders/compute_compositor.comp.spv",
+							pCompositor->computeNodePipeLayout,
+							&pCompositor->computeNodePipe);
+		vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv",
+							pCompositor->computeNodePipeLayout,
+							&pCompositor->computePostNodePipe);
+	}
+
+	/// Pools
+	{
+		VkQueryPoolCreateInfo queryInfo = {
+			VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+			.queryType = VK_QUERY_TYPE_TIMESTAMP,
+			.queryCount = 2,
+		};
+		VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, VK_ALLOC, &pCompositor->timeQueryPool));
+
+		VkDescriptorPoolCreateInfo poolInfo = {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+			.maxSets = MXC_NODE_CAPACITY * 3,
+			.poolSizeCount = 3,
+			.pPoolSizes = (VkDescriptorPoolSize[]){
+				{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         .descriptorCount = MXC_NODE_CAPACITY},
+				{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MXC_NODE_CAPACITY},
+				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = MXC_NODE_CAPACITY},
+			},
+		};
+		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
+	}
+
+	/// Global
+	{
+		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pCompositor->globalSet);
+		VkRequestAllocationInfo requestInfo = {
+			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+			.size = sizeof(VkGlobalSetState),
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		};
+		vkCreateSharedBuffer(&requestInfo, &pCompositor->globalBuffer);
+	}
+
+	/// GBuffer Process
+	{
+		CreateGBufferProcessSetLayout(&pCompositor->gbufferProcessSetLayout);
+		CreateGBufferProcessPipeLayout(pCompositor->gbufferProcessSetLayout, &pCompositor->gbufferProcessPipeLayout);
+		vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", pCompositor->gbufferProcessPipeLayout, &pCompositor->gbufferProcessBlitUpPipe);
+
+		vkCreateSharedBuffer(
+			&(VkRequestAllocationInfo){
+				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+				.size = sizeof(MxcProcessState),
+				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			},
+			&pCompositor->processSetBuffer);
+	}
+
+	// Node Sets
+	// Preallocate all Node Set buffers. MxcNodeCompositorSetState * 256 = 130 kb. Small price to pay to ensure contiguous memory on GPU
+	// TODO this should be a descriptor array
+	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
+		vkCreateSharedBuffer(
+			&(VkRequestAllocationInfo){
+				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+				.size = sizeof(MxcNodeCompositorSetState),
+				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			},
+			&nodeCompositorData[i].nodeSetBuffer);
+
+		// I still don't entirely hate this... but I feel if I were to double the creation calls I'd want debugName in them all...
+		// or maybe not... debug name being in a generic macro might be nice?
+#define vkAllocateDescriptorSetsExt(...) VK_CHECK(vkAllocateDescriptorSets(vk.context.device, __VA_ARGS__))
+#define VkDescriptorSetAllocateInfo(...) (VkDescriptorSetAllocateInfo) { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, __VA_ARGS__ }
+
+		vkAllocateDescriptorSetsExt(
+			&VkDescriptorSetAllocateInfo(
+					.descriptorPool = threadContext.descriptorPool,
+					.descriptorSetCount = 1,
+					.pSetLayouts = &pCompositor->nodeSetLayout),
+			&nodeCompositorData[i].nodeSet);
+		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
+	}
+
+	/// Graphics Framebuffers
+	{
+		VkBasicFramebufferTextureCreateInfo framebufferTextureInfo = {
+			.debugName = "CompositeFramebufferTexture",
+			.locality = VK_LOCALITY_CONTEXT,
+			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+		};
+		vkCreateBasicFramebufferTextures(&framebufferTextureInfo, &pCompositor->graphicsFramebufferTexture);
+		VkBasicFramebufferCreateInfo framebufferInfo = {
+			.debugName = "CompositeFramebuffer",
+			.renderPass = vk.context.renderPass,
+		};
+		vkCreateBasicFramebuffer(&framebufferInfo, &pCompositor->graphicsFramebuffer);
+	}
+
+	{ // Compute Output
+		{
+			// I still don't entirely hate this....
+#define VkImageCreateInfo(...) (VkImageCreateInfo) { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, __VA_ARGS__ }
+
+			VkTextureCreateInfo atomicCreateInfo = {
+				.debugName = "ComputeAtomicFramebuffer",
+				.pImageCreateInfo = &VkImageCreateInfo(
+						.imageType   = VK_IMAGE_TYPE_2D,
+						.format      = VK_FORMAT_R32_UINT,
+						.extent      = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+						.mipLevels   = 1,
+						.arrayLayers = 1,
+						.samples     = VK_SAMPLE_COUNT_1_BIT,
+						.usage       = VK_IMAGE_USAGE_STORAGE_BIT),
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.locality   = VK_LOCALITY_CONTEXT,
+			};
+			vkCreateTexture(&atomicCreateInfo, &pCompositor->computeFramebufferAtomicTexture);
+
+			VkTextureCreateInfo colorCreateInfo = {
+				.debugName = "ComputeColorFramebuffer",
+				.pImageCreateInfo = &(VkImageCreateInfo){
+					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = VK_FORMAT_R8G8B8A8_UNORM,
+					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+				},
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.locality = VK_LOCALITY_CONTEXT,
+			};
+			vkCreateTexture(&colorCreateInfo, &pCompositor->computeFramebufferColorTexture);
+
+			VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS);
+
+#define VkImageMemoryBarrier2(...) (VkImageMemoryBarrier2) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, __VA_ARGS__ }
+			VkImageMemoryBarrier2 barrier[] = {
+				VkImageMemoryBarrier2(
+						.image = pCompositor->computeFramebufferAtomicTexture.image,
+						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+						VK_IMAGE_BARRIER_SRC_UNDEFINED,
+						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED),
+				VkImageMemoryBarrier2(
+						.image = pCompositor->computeFramebufferColorTexture.image,
+						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+						VK_IMAGE_BARRIER_SRC_UNDEFINED,
+						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED),
+			};
+			vkCmdImageBarriers(cmd, COUNT(barrier), barrier);
+			vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, cmd);
+		}
+
+
+		{
+			VK_CHECK(vkAllocateDescriptorSets(vk.context.device,
+				&VkDescriptorSetAllocateInfo(
+						.descriptorPool = threadContext.descriptorPool,
+						.descriptorSetCount = 1,
+						.pSetLayouts = &pCompositor->computeOutputSetLayout),
+				&pCompositor->computeOutputSet));
+			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCompositor->computeOutputSet, "ComputeOutputSet");
+
+			VkWriteDescriptorSet writeSets[] = {
+				BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferAtomicTexture.view),
+				BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferColorTexture.view),
+			};
+			vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+		}
 	}
 }
 
@@ -1192,7 +1183,7 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 			break;
 		case MXC_COMPOSITOR_MODE_TASK_MESH:
 			break;
-		default: PANIC("CompMode not supported!");
+		default: PANIC("Compositor mode not supported!");
 	}
 
 	vkBindSharedBuffer(&pComp->globalBuffer);

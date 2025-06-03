@@ -8,11 +8,6 @@ typedef struct MxcCompositorCreateInfo {
 } MxcCompositorCreateInfo;
 
 typedef struct MxcCompositor {
-  // device should go in context
-  // todo no should just access it from context directly
-  VkDevice        device;
-
-  VkRenderPass compositorRenderPass;
 
   VkDescriptorSetLayout nodeSetLayout;
   VkPipelineLayout      nodePipeLayout;
