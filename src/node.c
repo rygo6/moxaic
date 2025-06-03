@@ -697,13 +697,14 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->camera.zFar = 100.0f;
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
-		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
-//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
+		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 		auto handle = RequestExternalNodeHandle(pNodeShrd);
 
 		pNodeCompLcl = &nodeCompositorData[handle];
-//		*pNodeCompositorLocal = (MxcNodeCompositorLocal){}; // Don't clear. State is recycled and pre-alloced on compositor creation.
+		// Don't clear. State is recycled and pre-alloced on compositor creation.
+//		*pNodeCompositorLocal = (MxcNodeCompositorLocal){};
 
 		pNodeCtxt = &nodeContexts[handle];
 		*pNodeCtxt = (MxcNodeContext){};

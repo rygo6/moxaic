@@ -1060,25 +1060,20 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 	// Preallocate all Node Set buffers. MxcNodeCompositorSetState * 256 = 130 kb. Small price to pay to ensure contiguous memory on GPU
 	// TODO this should be a descriptor array
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
-		vkCreateSharedBuffer(
-			&(VkRequestAllocationInfo){
-				.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-				.size = sizeof(MxcNodeCompositorSetState),
-				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			},
-			&nodeCompositorData[i].nodeSetBuffer);
+		VkRequestAllocationInfo requestInfo = {
+			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+			.size = sizeof(MxcNodeCompositorSetState),
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		};
+		vkCreateSharedBuffer(&requestInfo, &nodeCompositorData[i].nodeSetBuffer);
 
-		// I still don't entirely hate this... but I feel if I were to double the creation calls I'd want debugName in them all...
-		// or maybe not... debug name being in a generic macro might be nice?
-#define vkAllocateDescriptorSetsExt(...) VK_CHECK(vkAllocateDescriptorSets(vk.context.device, __VA_ARGS__))
-#define VkDescriptorSetAllocateInfo(...) (VkDescriptorSetAllocateInfo) { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, __VA_ARGS__ }
-
-		vkAllocateDescriptorSetsExt(
-			&VkDescriptorSetAllocateInfo(
-					.descriptorPool = threadContext.descriptorPool,
-					.descriptorSetCount = 1,
-					.pSetLayouts = &pCompositor->nodeSetLayout),
-			&nodeCompositorData[i].nodeSet);
+		VkDescriptorSetAllocateInfo setCreateInfo = {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = threadContext.descriptorPool,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &pCompositor->nodeSetLayout,
+		};
+		vkAllocateDescriptorSets(vk.context.device, &setCreateInfo, &nodeCompositorData[i].nodeSet);
 		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
 	}
 
@@ -1099,21 +1094,20 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 	{ // Compute Output
 		{
-			// I still don't entirely hate this....
-#define VkImageCreateInfo(...) (VkImageCreateInfo) { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, __VA_ARGS__ }
-
 			VkTextureCreateInfo atomicCreateInfo = {
 				.debugName = "ComputeAtomicFramebuffer",
-				.pImageCreateInfo = &VkImageCreateInfo(
-						.imageType   = VK_IMAGE_TYPE_2D,
-						.format      = VK_FORMAT_R32_UINT,
-						.extent      = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-						.mipLevels   = 1,
-						.arrayLayers = 1,
-						.samples     = VK_SAMPLE_COUNT_1_BIT,
-						.usage       = VK_IMAGE_USAGE_STORAGE_BIT),
+				.pImageCreateInfo = &(VkImageCreateInfo){
+					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = VK_FORMAT_R32_UINT,
+					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = VK_IMAGE_USAGE_STORAGE_BIT,
+				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality   = VK_LOCALITY_CONTEXT,
+				.locality = VK_LOCALITY_CONTEXT,
 			};
 			vkCreateTexture(&atomicCreateInfo, &pCompositor->computeFramebufferAtomicTexture);
 
@@ -1136,20 +1130,23 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 			VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS);
 
-#define VkImageMemoryBarrier2(...) (VkImageMemoryBarrier2) { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, __VA_ARGS__ }
 			VkImageMemoryBarrier2 barrier[] = {
-				VkImageMemoryBarrier2(
-						.image = pCompositor->computeFramebufferAtomicTexture.image,
-						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-						VK_IMAGE_BARRIER_SRC_UNDEFINED,
-						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED),
-				VkImageMemoryBarrier2(
-						.image = pCompositor->computeFramebufferColorTexture.image,
-						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-						VK_IMAGE_BARRIER_SRC_UNDEFINED,
-						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED),
+				(VkImageMemoryBarrier2){
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.image = pCompositor->computeFramebufferAtomicTexture.image,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_UNDEFINED,
+					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				},
+				(VkImageMemoryBarrier2){
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.image = pCompositor->computeFramebufferColorTexture.image,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_UNDEFINED,
+					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				},
 			};
 			vkCmdImageBarriers(cmd, COUNT(barrier), barrier);
 			vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, cmd);
@@ -1157,12 +1154,13 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 
 		{
-			VK_CHECK(vkAllocateDescriptorSets(vk.context.device,
-				&VkDescriptorSetAllocateInfo(
-						.descriptorPool = threadContext.descriptorPool,
-						.descriptorSetCount = 1,
-						.pSetLayouts = &pCompositor->computeOutputSetLayout),
-				&pCompositor->computeOutputSet));
+			VkDescriptorSetAllocateInfo setInfo = {
+				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+				.descriptorPool = threadContext.descriptorPool,
+				.descriptorSetCount = 1,
+				.pSetLayouts = &pCompositor->computeOutputSetLayout,
+			};
+			VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pCompositor->computeOutputSet));
 			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCompositor->computeOutputSet, "ComputeOutputSet");
 
 			VkWriteDescriptorSet writeSets[] = {
