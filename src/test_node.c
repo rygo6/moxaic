@@ -554,7 +554,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 		VkBasicFramebufferCreateInfo framebufferCreateInfo = {
 			.debugName = "TestNodeFramebuffer",
-			.renderPass = vk.context.nodeRenderPass,
+			.renderPass = vkNode.basicPass,
 		};
 		vkCreateBasicFramebuffer(&framebufferCreateInfo, &pNode->framebuffer);
 
@@ -660,9 +660,9 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 	{  // Copy needed state
 		// context is available to all now so don't need to do this
 		pNode->device = vk.context.device;
-		pNode->nodeRenderPass = vk.context.nodeRenderPass;
+		pNode->nodeRenderPass = vkNode.basicPass;
 		pNode->pipeLayout = vk.context.basicPipeLayout.pipeLayout;
-		pNode->basicPipe = vk.context.basicPipe;
+		pNode->basicPipe = vkNode.basicPipe;
 	}
 }
 

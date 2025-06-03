@@ -98,31 +98,15 @@ int main(void)
 		};
 		vkCreateContext(&contextCreateInfo);
 
-		// these probably should go elsewhere ?
-		// global samplers
-		VkBasicSamplerCreateInfo linearSamplerCreateInfo = {
-			.filter = VK_FILTER_LINEAR,
-			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
-		};
-		vkCreateBasicSampler(&linearSamplerCreateInfo, &vk.context.linearSampler);
-		VkBasicSamplerCreateInfo nearestSamplerCreateInfo = {
-			.filter = VK_FILTER_NEAREST,
-			.addressMode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.reductionMode = VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE,
-		};
-		vkCreateBasicSampler(&nearestSamplerCreateInfo, &vk.context.nearestSampler);
-		// standard/common rendering
-		vkCreateBasicRenderPass();
-		vkCreateBasicPipeLayout();
+		vkCreateBasicGraphics();
 
-		// this need to ge in node create
 		mxcCreateNodeRenderPass();
+
 		vkCreateBasicPipe("./shaders/basic_material.vert.spv",
 						  "./shaders/basic_material.frag.spv",
-						  vk.context.nodeRenderPass,
+						  vkNode.basicPass,
 						  vk.context.basicPipeLayout.pipeLayout,
-						  &vk.context.basicPipe);
+						  &vkNode.basicPipe);
 
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");

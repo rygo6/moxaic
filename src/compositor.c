@@ -26,7 +26,7 @@
 ////
 
 constexpr VkShaderStageFlags MXC_COMPOSITOR_MODE_STAGE_FLAGS[] = {
-	[MXC_COMPOSITOR_MODE_BASIC] =       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_QUAD] =       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 	[MXC_COMPOSITOR_MODE_TASK_MESH] =   VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
 //	[MXC_COMPOSITOR_MODE_COMPUTE] =     VK_SHADER_STAGE_COMPUTE_BIT,
@@ -310,7 +310,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	u64             baseCycleValue = 0;
 
 	MxcCompositorMode mode = pInfo->mode;
-	VkRenderPass      compPass = vk.context.renderPass;;
+	VkRenderPass      compPass = vk.context.basicPass;
 	VkFramebuffer     fb = pComp->graphicsFramebuffer;
 	VkDescriptorSet   globalSet = pComp->globalSet;
 	VkDescriptorSet   cmptOutputSet = pComp->computeOutputSet;
@@ -448,7 +448,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 			.srcAccessMask = VK_ACCESS_2_NONE,
-			.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 			VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			.image = VK_NULL_HANDLE,
@@ -593,9 +593,10 @@ run_loop:
 				VkImageMemoryBarrier2* pAcqBars;
 				VkImageMemoryBarrier2* pFinBars;
 				VkImageLayout          finalLayout;
+				// we want to seperates this into compute and graphics loops
 				switch (pNodeShared->compositorMode){
 
-					case MXC_COMPOSITOR_MODE_BASIC:
+					case MXC_COMPOSITOR_MODE_QUAD:
 					case MXC_COMPOSITOR_MODE_TESSELATION:
 					case MXC_COMPOSITOR_MODE_TASK_MESH:
 						pAcqBars = graphicAcquireBarriers;
@@ -769,7 +770,7 @@ run_loop:
 
 				// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 				switch (pNodShrd->compositorMode) {
-					case MXC_COMPOSITOR_MODE_BASIC:
+					case MXC_COMPOSITOR_MODE_QUAD:
 						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
 						CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){quadBuffer}, (VkDeviceSize[]){quadOffsets.vertexOffset});
 						CmdBindIndexBuffer(graphCmd, quadBuffer, 0, VK_INDEX_TYPE_UINT16);
@@ -961,10 +962,10 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 		// we need all of these modes available, this should be flags
 		switch (pInfo->mode) {
-			case MXC_COMPOSITOR_MODE_BASIC:
+			case MXC_COMPOSITOR_MODE_QUAD:
 				vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
 								  "./shaders/basic_comp.frag.spv",
-								  vk.context.renderPass,
+								  vk.context.basicPass,
 								  pCompositor->nodePipeLayout,
 								  &pCompositor->nodePipe);
 				vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
@@ -974,7 +975,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 											  "./shaders/tess_comp.tesc.spv",
 											  "./shaders/tess_comp.tese.spv",
 											  "./shaders/tess_comp.frag.spv",
-											  vk.context.renderPass,
+											  vk.context.basicPass,
 											  pCompositor->nodePipeLayout,
 											  &pCompositor->nodePipe);
 				vkCreateQuadPatchMeshSharedMemory(&pCompositor->quadPatchMesh);
@@ -983,7 +984,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 				vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
 										  "./shaders/mesh_comp.mesh.spv",
 										  "./shaders/mesh_comp.frag.spv",
-										  vk.context.renderPass,
+										  vk.context.basicPass,
 										  pCompositor->nodePipeLayout,
 										  &pCompositor->nodePipe);
 				vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
@@ -1091,7 +1092,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 		vkCreateBasicFramebufferTextures(&framebufferTextureInfo, &pCompositor->graphicsFramebufferTexture);
 		VkBasicFramebufferCreateInfo framebufferInfo = {
 			.debugName = "CompositeFramebuffer",
-			.renderPass = vk.context.renderPass,
+			.renderPass = vk.context.basicPass,
 		};
 		vkCreateBasicFramebuffer(&framebufferInfo, &pCompositor->graphicsFramebuffer);
 	}
@@ -1176,7 +1177,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pComp)
 {
 	switch (pInfo->mode) {
-		case MXC_COMPOSITOR_MODE_BASIC:
+		case MXC_COMPOSITOR_MODE_QUAD:
 			break;
 		case MXC_COMPOSITOR_MODE_TESSELATION:
 			vkBindUpdateQuadPatchMesh(0.5f, &pComp->quadPatchMesh);
@@ -1213,8 +1214,9 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 	MxcCompositorCreateInfo info = {
 		// compute is always running...
 		// really this needs to be a flag
-//		.mode = MXC_COMPOSITOR_MODE_BASIC,
-		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
+		// these need to all be supported simoultaneously
+		.mode = MXC_COMPOSITOR_MODE_QUAD,
+//		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
 //		.mode = MXC_COMPOSITOR_MODE_COMPUTE,
 	};
 

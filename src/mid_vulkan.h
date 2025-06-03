@@ -275,14 +275,6 @@ typedef struct VkSharedDescriptorSet {
 	VkDescriptorSet   set;
 } VkSharedDescriptorSet;
 
-typedef struct VkBasicPipe {
-	// TODO change to this
-	VkBasicPipeLayout layout;
-	VkPipeline        pipe;
-	VkSampler         linearSampler;
-	VkRenderPass      pass;
-} MidVkBasicPipe;
-
 //////////////////////////
 //// Vulkan Global Context
 ////
@@ -291,16 +283,11 @@ typedef struct VkContext {
 	VkDevice         device;
 	VkmQueueFamily   queueFamilies[VK_QUEUE_FAMILY_TYPE_COUNT];
 
-	// these shouldn't be here? no they shouldn't
-	// move into MidVkBasicPipe
-	VkBasicPipeLayout    basicPipeLayout;
-	VkPipeline           basicPipe;
-	VkSampler            linearSampler;
-	VkSampler            nearestSampler;
-	VkRenderPass         renderPass;
+	VkBasicPipeLayout basicPipeLayout;
+	VkRenderPass      basicPass;
 
-	// this should go elsewhere
-	VkRenderPass nodeRenderPass;
+	VkSampler nearestSampler;
+	VkSampler linearSampler;
 
 } VkContext;
 
@@ -805,9 +792,8 @@ typedef struct VkBasicFramebufferCreateInfo {
 } VkBasicFramebufferCreateInfo;
 void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer);
 
-void vkCreateBasicRenderPass();
+void vkCreateBasicGraphics();
 
-void vkCreateBasicPipeLayout();
 void vkCreateBasicPipe(
 	const char* vertShaderPath,
 	const char* fragShaderPath,
@@ -834,12 +820,6 @@ void vkCreateComputePipe(
 	VkPipelineLayout layout,
 	VkPipeline* pPipe);
 
-typedef struct VkBasicSamplerCreateInfo {
-	VkFilter               filter;
-	VkSamplerAddressMode   addressMode;
-	VkSamplerReductionMode reductionMode;
-} VkBasicSamplerCreateInfo;
-void vkCreateBasicSampler(const VkBasicSamplerCreateInfo* pDesc, VkSampler* pSampler);
 void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFamily, VkSwapContext* pSwap);
 
 typedef struct VkTextureCreateInfo {
@@ -1032,7 +1012,7 @@ enum {
 	VK_PIPE_VERTEX_ATTRIBUTE_STD_UV_INDEX,
 	VK_PIPE_VERTEX_ATTRIBUTE_STD_COUNT,
 };
-static void CreateStdPipeLayout()
+static void CreateBasicPipeLayout()
 {
 	VkDescriptorSetLayout pSetLayouts[VK_SET_INDEX_BASIC_COUNT];
 	pSetLayouts[VK_SET_INDEX_BASIC_GLOBAL] = vk.context.basicPipeLayout.globalSetLayout;
@@ -1317,7 +1297,7 @@ void vkCreateComputePipe(const char* shaderPath, VkPipelineLayout layout, VkPipe
 ////////////////
 //// Descriptors
 ////
-static void CreateGlobalSetLayout()
+static void CreateBasicGlobalSetLayout()
 {
 	VkDescriptorSetLayoutCreateInfo info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -1327,6 +1307,7 @@ static void CreateGlobalSetLayout()
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
 			.stageFlags =
+				// these need to be enabled by some flags...
 				VK_SHADER_STAGE_VERTEX_BIT |
 				VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
 				VK_SHADER_STAGE_COMPUTE_BIT |
@@ -1337,7 +1318,7 @@ static void CreateGlobalSetLayout()
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &info, VK_ALLOC, &vk.context.basicPipeLayout.globalSetLayout));
 }
-static void CreateStdMaterialSetLayout()
+static void CreateBasicMaterialSetLayout()
 {
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -1352,7 +1333,7 @@ static void CreateStdMaterialSetLayout()
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.basicPipeLayout.materialSetLayout));
 }
-static void CreateStdObjectSetLayout()
+static void CreateBasicObjectSetLayout()
 {
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -2427,7 +2408,44 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 	}
 }
 
-void vkCreateBasicRenderPass()
+void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFamily, VkSwapContext* pSwap)
+{
+	VkBool32 presentSupport = VK_FALSE;
+	VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(vk.context.physicalDevice, vk.context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
+	CHECK(presentSupport == VK_FALSE, "Queue can't present to surface!")
+
+	VkSwapchainCreateInfoKHR info = {
+		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+		.surface = surface,
+		.minImageCount = VK_SWAP_COUNT,
+		.imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
+		.imageExtent = {DEFAULT_WIDTH, DEFAULT_HEIGHT},
+		.imageArrayLayers = 1,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+//		.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR,
+		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
+		.clipped = VK_TRUE,
+	};
+	VK_CHECK(vkCreateSwapchainKHR(vk.context.device, &info, VK_ALLOC, &pSwap->chain));
+
+	uint32_t swapCount;
+	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
+	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
+	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, pSwap->images));
+	for (int i = 0; i < VK_SWAP_COUNT; ++i)
+		vkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
+
+	VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+	VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->acquireSemaphore));
+	VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->renderCompleteSemaphore));
+	vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->acquireSemaphore, "SwapAcquireSemaphore");
+	vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->renderCompleteSemaphore, "SwapRenderCompleteSemaphore");
+}
+
+static void CreateBasicRenderPass()
 {
 	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
 		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
@@ -2521,76 +2539,49 @@ void vkCreateBasicRenderPass()
 			},
 		},
 	};
-	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, VK_ALLOC, &vk.context.renderPass));
-	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.renderPass, "ContextRenderPass");
+	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, VK_ALLOC, &vk.context.basicPass));
+	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.basicPass, "BasicRenderPass");
 }
 
-// probably get rid of these, don't create wrappers to single methods
-void vkCreateBasicSampler(const VkBasicSamplerCreateInfo* pDesc, VkSampler* pSampler)
+static void CreateBasicSamplers()
 {
-	VkSamplerCreateInfo info = {
+	VkSamplerCreateInfo linearCreateInfo = {
 		VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.pNext = pDesc->reductionMode != VK_SAMPLER_REDUCTION_MODE_WEIGHTED_AVERAGE ?
-					 &(VkSamplerReductionModeCreateInfo){
-						 .sType = VK_STRUCTURE_TYPE_SAMPLER_REDUCTION_MODE_CREATE_INFO,
-						 .reductionMode = pDesc->reductionMode,
-					 } :
-					 NULL,
-		.magFilter = pDesc->filter,
-		.minFilter = pDesc->filter,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
 		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
 		.maxLod = 16.0,
-		.addressModeU = pDesc->addressMode,
-		.addressModeV = pDesc->addressMode,
-		.addressModeW = pDesc->addressMode,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 	};
-	VK_CHECK(vkCreateSampler(vk.context.device, &info, VK_ALLOC, pSampler));
-}
+	VK_CHECK(vkCreateSampler(vk.context.device, &linearCreateInfo, VK_ALLOC, &vk.context.linearSampler));\
+	vkSetDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)vk.context.linearSampler, "LinearSampler");
 
-void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFamily, VkSwapContext* pSwap)
-{
-	VkBool32 presentSupport = VK_FALSE;
-	VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(vk.context.physicalDevice, vk.context.queueFamilies[presentQueueFamily].index, surface, &presentSupport));
-	CHECK(presentSupport == VK_FALSE, "Queue can't present to surface!")
-
-	VkSwapchainCreateInfoKHR info = {
-		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-		.surface = surface,
-		.minImageCount = VK_SWAP_COUNT,
-		.imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
-		.imageExtent = {DEFAULT_WIDTH, DEFAULT_HEIGHT},
-		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-//		.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR,
-		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
-		.clipped = VK_TRUE,
+	VkSamplerCreateInfo nearestCreateInfo = {
+		VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_NEAREST,
+		.minFilter = VK_FILTER_NEAREST,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+		.maxLod = 16.0,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 	};
-	VK_CHECK(vkCreateSwapchainKHR(vk.context.device, &info, VK_ALLOC, &pSwap->chain));
-
-	uint32_t swapCount;
-	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
-	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
-	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, pSwap->images));
-	for (int i = 0; i < VK_SWAP_COUNT; ++i)
-		vkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
-
-	VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-	VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->acquireSemaphore));
-	VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->renderCompleteSemaphore));
-	vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->acquireSemaphore, "SwapAcquireSemaphore");
-	vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->renderCompleteSemaphore, "SwapRenderCompleteSemaphore");
+	VK_CHECK(vkCreateSampler(vk.context.device, &linearCreateInfo, VK_ALLOC, &vk.context.nearestSampler));
+	vkSetDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)vk.context.nearestSampler, "NearestSampler");
 }
 
-void vkCreateBasicPipeLayout()
+void vkCreateBasicGraphics()
 {
-	CreateGlobalSetLayout();
-	CreateStdMaterialSetLayout();
-	CreateStdObjectSetLayout();
-	CreateStdPipeLayout();
+	CreateBasicSamplers();
+	CreateBasicRenderPass();
+	CreateBasicGlobalSetLayout();
+	CreateBasicMaterialSetLayout();
+	CreateBasicObjectSetLayout();
+	CreateBasicPipeLayout();
 }
 
 void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence)
