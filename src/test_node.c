@@ -632,10 +632,10 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 //		vkCreateGlobalSet(&pNode->globalSet);
 
-		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.materialSetLayout, &pNode->checkerMaterialSet);
+		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.materialSetLayout, &pNode->checkerMaterialSet);
 		vkCreateTextureFromFile("textures/uvgrid.jpg", &pNode->checkerTexture);
 
-		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.objectSetLayout, &pNode->sphereObjectSet);
+		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.objectSetLayout, &pNode->sphereObjectSet);
 		vkCreateAllocateBindMapBuffer(
 			VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			sizeof(VkObjectSetState),
@@ -661,7 +661,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 		// context is available to all now so don't need to do this
 		pNode->device = vk.context.device;
 		pNode->nodeRenderPass = vkNode.basicPass;
-		pNode->pipeLayout = vk.context.basicPipeLayout.pipeLayout;
+		pNode->pipeLayout = vk.context.basicPipeLayout;
 		pNode->basicPipe = vkNode.basicPipe;
 	}
 }

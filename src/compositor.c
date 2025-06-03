@@ -115,7 +115,7 @@ static void CreateGraphicsNodePipeLayout(
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_INDEX_NODE_GRAPHICS_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
-			[PIPE_INDEX_NODE_GRAPHICS_GLOBAL] = vk.context.basicPipeLayout.globalSetLayout,
+			[PIPE_INDEX_NODE_GRAPHICS_GLOBAL] = vk.context.globalSetLayout,
 			[PIPE_INDEX_NODE_GRAPHICS_NODE]   = nodeSetLayout,
 		},
 	};
@@ -187,7 +187,7 @@ static void CreateNodeComputePipeLayout(
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_INDEX_NODE_COMPUTE_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
-			[PIPE_INDEX_NODE_COMPUTE_GLOBAL] = vk.context.basicPipeLayout.globalSetLayout,
+			[PIPE_INDEX_NODE_COMPUTE_GLOBAL] = vk.context.globalSetLayout,
 			[PIPE_INDEX_NODE_COMPUTE_NODE]   = nodeSetLayout,
 			[PIPE_INDEX_NODE_COMPUTE_OUTPUT] = computeOutputSetLayout,
 		},
@@ -1032,7 +1032,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 	/// Global
 	{
-		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pCompositor->globalSet);
+		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pCompositor->globalSet);
 		VkRequestAllocationInfo requestInfo = {
 			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			.size = sizeof(VkGlobalSetState),
@@ -1056,10 +1056,10 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			&pCompositor->processSetBuffer);
 	}
 
-	// Node Sets
-	// Preallocate all Node Set buffers. MxcNodeCompositorSetState * 256 = 130 kb. Small price to pay to ensure contiguous memory on GPU
-	// TODO this should be a descriptor array
+	/// Node Sets
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
+		// Preallocate all Node Set buffers. MxcNodeCompositorSetState * 256 = 130 kb. Small price to pay to ensure contiguous memory on GPU
+		// TODO this should be a descriptor array
 		VkRequestAllocationInfo requestInfo = {
 			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			.size = sizeof(MxcNodeCompositorSetState),
@@ -1092,45 +1092,60 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 		vkCreateBasicFramebuffer(&framebufferInfo, &pCompositor->graphicsFramebuffer);
 	}
 
-	{ // Compute Output
+	/// Compute Output
+	{
+		VkTextureCreateInfo atomicCreateInfo = {
+			.debugName = "ComputeAtomicFramebuffer",
+			.pImageCreateInfo = &(VkImageCreateInfo){
+				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+				.imageType = VK_IMAGE_TYPE_2D,
+				.format = VK_FORMAT_R32_UINT,
+				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+				.mipLevels = 1,
+				.arrayLayers = 1,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.usage = VK_IMAGE_USAGE_STORAGE_BIT,
+			},
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.locality = VK_LOCALITY_CONTEXT,
+		};
+		vkCreateTexture(&atomicCreateInfo, &pCompositor->computeFramebufferAtomicTexture);
+
+		VkTextureCreateInfo colorCreateInfo = {
+			.debugName = "ComputeColorFramebuffer",
+			.pImageCreateInfo = &(VkImageCreateInfo){
+				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+				.imageType = VK_IMAGE_TYPE_2D,
+				.format = VK_FORMAT_R8G8B8A8_UNORM,
+				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+				.mipLevels = 1,
+				.arrayLayers = 1,
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+			},
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.locality = VK_LOCALITY_CONTEXT,
+		};
+		vkCreateTexture(&colorCreateInfo, &pCompositor->computeFramebufferColorTexture);
+
+		VkDescriptorSetAllocateInfo setInfo = {
+			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = threadContext.descriptorPool,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &pCompositor->computeOutputSetLayout,
+		};
+		VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pCompositor->computeOutputSet));
+		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCompositor->computeOutputSet, "ComputeOutputSet");
+
+		VkWriteDescriptorSet writeSets[] = {
+			BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferAtomicTexture.view),
+			BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferColorTexture.view),
+		};
+		vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+
+		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)
 		{
-			VkTextureCreateInfo atomicCreateInfo = {
-				.debugName = "ComputeAtomicFramebuffer",
-				.pImageCreateInfo = &(VkImageCreateInfo){
-					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_FORMAT_R32_UINT,
-					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-					.mipLevels = 1,
-					.arrayLayers = 1,
-					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_IMAGE_USAGE_STORAGE_BIT,
-				},
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality = VK_LOCALITY_CONTEXT,
-			};
-			vkCreateTexture(&atomicCreateInfo, &pCompositor->computeFramebufferAtomicTexture);
-
-			VkTextureCreateInfo colorCreateInfo = {
-				.debugName = "ComputeColorFramebuffer",
-				.pImageCreateInfo = &(VkImageCreateInfo){
-					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.imageType = VK_IMAGE_TYPE_2D,
-					.format = VK_FORMAT_R8G8B8A8_UNORM,
-					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-					.mipLevels = 1,
-					.arrayLayers = 1,
-					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-				},
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality = VK_LOCALITY_CONTEXT,
-			};
-			vkCreateTexture(&colorCreateInfo, &pCompositor->computeFramebufferColorTexture);
-
-			VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS);
-
-			VkImageMemoryBarrier2 barrier[] = {
+			VkImageMemoryBarrier2 barrs[] = {
 				(VkImageMemoryBarrier2){
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 					.image = pCompositor->computeFramebufferAtomicTexture.image,
@@ -1148,26 +1163,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				},
 			};
-			vkCmdImageBarriers(cmd, COUNT(barrier), barrier);
-			vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, cmd);
-		}
-
-
-		{
-			VkDescriptorSetAllocateInfo setInfo = {
-				VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-				.descriptorPool = threadContext.descriptorPool,
-				.descriptorSetCount = 1,
-				.pSetLayouts = &pCompositor->computeOutputSetLayout,
-			};
-			VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pCompositor->computeOutputSet));
-			vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCompositor->computeOutputSet, "ComputeOutputSet");
-
-			VkWriteDescriptorSet writeSets[] = {
-				BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferAtomicTexture.view),
-				BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCompositor->computeOutputSet, pCompositor->computeFramebufferColorTexture.view),
-			};
-			vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+			vkCmdImageBarriers(cmd, COUNT(barrs), barrs);
 		}
 	}
 }

@@ -105,7 +105,7 @@ int main(void)
 		vkCreateBasicPipe("./shaders/basic_material.vert.spv",
 						  "./shaders/basic_material.frag.spv",
 						  vkNode.basicPass,
-						  vk.context.basicPipeLayout.pipeLayout,
+						  vk.context.basicPipeLayout,
 						  &vkNode.basicPipe);
 
 #if defined(MOXAIC_COMPOSITOR)
