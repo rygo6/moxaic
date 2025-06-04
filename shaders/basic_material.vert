@@ -1,7 +1,6 @@
 #version 450
 
 #include "global_binding.glsl"
-#include "basic_material_binding.glsl"
 #include "object_binding.glsl"
 
 layout(location = 0) in vec3 inPosition;

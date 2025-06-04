@@ -245,6 +245,10 @@ typedef struct VkGlobalSetState {
 	ivec2 framebufferSize;
 } VkGlobalSetState;
 
+typedef struct VkMaterialSetState {
+	vec4 color;
+} VkMaterialSetState;
+
 typedef struct VkObjectSetState {
 	mat4 model;
 } VkObjectSetState;
@@ -284,6 +288,8 @@ typedef struct VkContext {
 	VkDescriptorSetLayout globalSetLayout;
 	VkDescriptorSetLayout materialSetLayout;
 	VkDescriptorSetLayout objectSetLayout;
+
+	VkDescriptorSetLayout materialPushSetLayout;
 
 	VkRenderPass basicPass;
 
@@ -339,7 +345,7 @@ enum {
 
 enum {
 	VK_SET_INDEX_LINE_GLOBAL,
-	VK_SET_INDEX_LINE_COLOR,
+	VK_SET_INDEX_LINE_MATERIAL,
 	VK_SET_INDEX_LINE_COUNT,
 };
 
@@ -374,7 +380,24 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 			.range = sizeof(VkGlobalSetState),               \
 		},                                                   \
 	}
-#define VK_BIND_INDEX_MATERIAL_IMAGE 0
+
+enum {
+	VK_BIND_INDEX_MATERIAL_COLOR,
+	VK_BIND_INDEX_MATERIAL_IMAGE,
+	VK_BIND_INDEX_MATERIAL_COUNT,
+};
+#define VK_BIND_WRITE_MATERIAL_COLOR(set, buf)               \
+	(VkWriteDescriptorSet) {                                 \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
+		.dstSet = set,                                       \
+		.dstBinding = VK_BIND_INDEX_MATERIAL_COLOR,          \
+		.descriptorCount = 1,                                \
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+		.pBufferInfo = &(VkDescriptorBufferInfo){            \
+			.buffer = buf,                                   \
+			.range = sizeof(VkMaterialSetState),             \
+		},                                                   \
+	}
 #define VK_BIND_WRITE_MATERIAL_IMAGE(set, view)                      \
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
@@ -387,6 +410,7 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
 		},                                                           \
 	}
+
 #define VK_BIND_INDEX_OBJECT_BUFFER 0
 #define VK_BIND_WRITE_OBJECT_BUFFER(set, buf)                \
 	(VkWriteDescriptorSet) {                                 \
@@ -1282,17 +1306,27 @@ static void CreateMaterialSetLayout()
 {
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-		.bindingCount = 1,
-		.pBindings = &(VkDescriptorSetLayoutBinding){
-			.binding = VK_BIND_INDEX_MATERIAL_IMAGE,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.pImmutableSamplers = &vk.context.linearSampler,
+		.bindingCount = 2,
+		.pBindings = (VkDescriptorSetLayoutBinding[]){
+			{
+				.binding = VK_BIND_INDEX_MATERIAL_COLOR,
+				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			},
+			{
+				.binding = VK_BIND_INDEX_MATERIAL_IMAGE,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+				.pImmutableSamplers = &vk.context.linearSampler,
+			},
 		},
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.materialSetLayout));
+
+	createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.materialPushSetLayout));
 }
 
 static void CreateObjectSetLayout()
@@ -1475,32 +1509,34 @@ void vkCreateBasicTaskMeshPipe(const char* taskShaderPath, const char* meshShade
 }
 
 //// Line Pipeline
-#define VK_PIPE_VERTEX_BINDING_LINE_INDEX 0
-typedef enum VkLinePipeVertexAttribute {
+enum {
+	VK_PIPE_VERTEX_BINDING_LINE_INDEX,
+	VK_PIPE_VERTEX_BINDING_LINE_COUNT,
+};
+enum {
 	VK_PIPE_VERTEX_ATTRIBUTE_LINE_POSITION_INDEX,
 	VK_PIPE_VERTEX_ATTRIBUTE_LINE_COUNT,
-} VkLinePipeVertexAttribute;
+};
 
 static void CreateLinePipeLayout()
 {
-	VkDescriptorSetLayout pSetLayouts[VK_SET_INDEX_BASIC_COUNT] = {
+	VkDescriptorSetLayout pSetLayouts[VK_SET_INDEX_LINE_COUNT] = {
 		[VK_SET_INDEX_LINE_GLOBAL] = vk.context.globalSetLayout,
-		[VK_SET_INDEX_LINE_COLOR] = vk.context.materialSetLayout,
+		[VK_SET_INDEX_LINE_MATERIAL] = vk.context.materialPushSetLayout,
 	};
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = VK_SET_INDEX_LINE_COUNT,
 		.pSetLayouts = pSetLayouts,
 	};
-	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.basicPipeLayout));
+	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.linePipeLayout));
 }
 
 void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
 {
-	VkShaderModule vertShader;
-	vkCreateShaderModuleFromPath(vertShaderPath, &vertShader);
-	VkShaderModule fragShader;
-	vkCreateShaderModuleFromPath(fragShaderPath, &fragShader);
+	VkShaderModule vertShader; vkCreateShaderModuleFromPath(vertShaderPath, &vertShader);
+	VkShaderModule fragShader; vkCreateShaderModuleFromPath(fragShaderPath, &fragShader);
+
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
 		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &DEFAULT_ROBUSTNESS_STATE,
@@ -1521,7 +1557,7 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 		},
 		.pVertexInputState = &(VkPipelineVertexInputStateCreateInfo){
 			VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			.vertexBindingDescriptionCount = 1,
+			.vertexBindingDescriptionCount = VK_PIPE_VERTEX_BINDING_LINE_COUNT,
 			.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){
 				{
 					.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX,
@@ -1529,7 +1565,7 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 					.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 				},
 			},
-			.vertexAttributeDescriptionCount = 1,
+			.vertexAttributeDescriptionCount = VK_PIPE_VERTEX_ATTRIBUTE_LINE_COUNT,
 			.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]){
 				{
 					.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX,
@@ -1584,6 +1620,7 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 		.renderPass = renderPass,
 	};
 	VK_CHECK(vkCreateGraphicsPipelines(vk.context.device, VK_NULL_HANDLE, 1, &pipelineInfo, VK_ALLOC, pPipe));
+
 	vkDestroyShaderModule(vk.context.device, fragShader, VK_ALLOC);
 	vkDestroyShaderModule(vk.context.device, vertShader, VK_ALLOC);
 
@@ -1615,7 +1652,7 @@ void vkCreateBasicGraphics()
 	CreateMaterialSetLayout();
 	CreateObjectSetLayout();
 	CreateBasicPipeLayout();
-//	CreateLinePipeLayout();
+	CreateLinePipeLayout();
 }
 
 ////////////////
@@ -2559,6 +2596,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 
 	/// Device
 	{
+		// Features
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT,
 			.rectangularLines = VK_TRUE,
@@ -2626,23 +2664,8 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 #endif
 			},
 		};
-		const char* ppEnabledDeviceExtensionNames[] = {
-			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-			VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
-			VK_EXT_MESH_SHADER_EXTENSION_NAME,
-			VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-			VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME,
-			VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
-			VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME,
-			VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
-			VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
-			VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
-			VK_EXTERNAL_MEMORY_EXTENSION_NAME,
-			VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
-			VK_EXTERNAL_FENCE_EXTENSION_NAME,
-			VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
-			VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME,
-		};
+
+		// Queues
 		uint32_t activeQueueIndex = 0;
 		uint32_t activeQueueCount = 0;
 		for (int i = 0; i < VK_QUEUE_FAMILY_TYPE_COUNT; ++i)
@@ -2673,6 +2696,25 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			activeQueueIndex++;
 		}
 
+		// Extensions
+		const char* ppEnabledDeviceExtensionNames[] = {
+			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+			VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
+			VK_EXT_MESH_SHADER_EXTENSION_NAME,
+			VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
+			VK_EXT_GLOBAL_PRIORITY_EXTENSION_NAME,
+			VK_EXT_GLOBAL_PRIORITY_QUERY_EXTENSION_NAME,
+			VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME,
+			VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+			VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
+			VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
+			VK_EXTERNAL_MEMORY_EXTENSION_NAME,
+			VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
+			VK_EXTERNAL_FENCE_EXTENSION_NAME,
+			VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
+			VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME,
+		};
+
 		VkDeviceCreateInfo deviceCreateInfo = {
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 			&physicalDeviceFeatures,
@@ -2680,6 +2722,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			.pQueueCreateInfos = activeQueueCreateInfos,
 			.enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
 			.ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
+			.pEnabledFeatures = NULL,
 		};
 		VK_CHECK(vkCreateDevice(vk.context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &vk.context.device));
 	}
