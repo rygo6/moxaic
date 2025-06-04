@@ -65,9 +65,9 @@ int main(void)
 
 	{  // Initialize
 		midCreateWindow();
-		vkInitializeInstance();
 
-		midVkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
+		vkInitializeInstance();
+		vkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
 
 		VkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
@@ -99,14 +99,15 @@ int main(void)
 		vkCreateContext(&contextCreateInfo);
 
 		vkCreateBasicGraphics();
+		vkCreateLineGraphics();
 
-		mxcCreateNodeRenderPass();
-
-		vkCreateBasicPipe("./shaders/basic_material.vert.spv",
-						  "./shaders/basic_material.frag.spv",
-						  vkNode.basicPass,
-						  vk.context.basicPipeLayout,
-						  &vkNode.basicPipe);
+		// I should do away with this, use basic renderpass and pipe in test node
+//		mxcCreateNodeRenderPass();
+//		vkCreateBasicPipe("./shaders/basic_material.vert.spv",
+//						  "./shaders/basic_material.frag.spv",
+//						  vkNode.basicPass,
+//						  vk.context.basicPipeLayout,
+//						  &vkNode.basicPipe);
 
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");

@@ -342,9 +342,9 @@ run_loop:
 
 		// this is really all that'd be user exposed....
 		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_SET_INDEX_BASIC_GLOBAL, 1, &globalSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_SET_INDEX_BASIC_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
-		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_SET_INDEX_BASIC_OBJECT, 1, &sphereObjectSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_BASIC_GLOBAL, 1, &globalSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_BASIC_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
+		CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_BASIC_OBJECT, 1, &sphereObjectSet, 0, NULL);
 
 		CmdBindVertexBuffers(cmd, 0, 1, (VkBuffer[]){sphereBuffer}, (VkDeviceSize[]){sphereVertexOffset});
 		CmdBindIndexBuffer(cmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);

@@ -130,7 +130,6 @@ typedef struct MidPose {
 typedef struct MidVertex {
 	vec3 position;
 	vec3 normal;
-//	vec3 color;?
 	vec2 uv;
 } MidVertex;
 typedef struct MidCamera {
@@ -138,10 +137,6 @@ typedef struct MidCamera {
 	float   zFar;
 	float   yFovRad;
 } MidCamera;
-typedef struct MidLineVertex {
-	vec3 position;
-	vec3 color;
-} MidLineVertex;
 
 /////////////////
 //// Vulkan Types
@@ -296,6 +291,8 @@ typedef struct VkContext {
 	VkPipelineLayout basicPipeLayout;
 	VkPipelineLayout linePipeLayout;
 
+	VkPipeline linePipe;
+
 	VkSampler nearestSampler;
 	VkSampler linearSampler;
 
@@ -329,6 +326,8 @@ extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 //////////////////////////
 //// Basic Render Pipeline
 ////
+
+//// Render Pass
 enum {
 	VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR,
 	VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL,
@@ -336,23 +335,10 @@ enum {
 	VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 };
 
-enum {
-	VK_SET_INDEX_BASIC_GLOBAL,
-	VK_SET_INDEX_BASIC_MATERIAL,
-	VK_SET_INDEX_BASIC_OBJECT,
-	VK_SET_INDEX_BASIC_COUNT,
-};
-
-enum {
-	VK_SET_INDEX_LINE_GLOBAL,
-	VK_SET_INDEX_LINE_MATERIAL,
-	VK_SET_INDEX_LINE_COUNT,
-};
-
 constexpr VkFormat VK_BASIC_PASS_FORMATS[] = {
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = VK_FORMAT_R8G8B8A8_UNORM,
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = VK_FORMAT_R16G16B16A16_SFLOAT,
-//	[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = VK_FORMAT_D32_SFLOAT,
+	//	[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = VK_FORMAT_D32_SFLOAT,
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = VK_FORMAT_D16_UNORM,
 };
 constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
@@ -367,12 +353,50 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 
 #define VK_PASS_CLEAR_COLOR (VkClearColorValue) {{ 0.1f, 0.2f, 0.3f, 0.0f }}
 
-#define VK_BIND_INDEX_GLOBAL_BUFFER 0
+//// Pipeline Layouts
+// PIPE_SET_INDEX is index of a descriptor set in pipe layout
+
+// Basic
+enum {
+	VK_PIPE_SET_INDEX_BASIC_GLOBAL,
+	VK_PIPE_SET_INDEX_BASIC_MATERIAL,
+	VK_PIPE_SET_INDEX_BASIC_OBJECT,
+	VK_PIPE_SET_INDEX_BASIC_COUNT,
+};
+
+// Line
+enum {
+	VK_PIPE_SET_INDEX_LINE_GLOBAL,
+	VK_PIPE_SET_INDEX_LINE_COUNT,
+};
+typedef struct VkLineMaterialPushState {
+	vec4 primaryColor;
+	vec4 secondaryColor;
+} VkLineMaterialPushState;
+enum {
+	VK_PIPE_PUSH_OFFSET_LINE_PRIMARY_COLOR = offsetof(VkLineMaterialPushState, primaryColor),
+	VK_PIPE_PUSH_OFFSET_LINE_SECONDARY_COLOR = offsetof(VkLineMaterialPushState, secondaryColor),
+	VK_PIPE_PUSH_OFFSET_TOTAL_SIZE = sizeof(VkLineMaterialPushState),
+};
+// Do I really want these indiviudally settable?
+INLINE void vkCmdPushPrimaryColor(VkCommandBuffer cmd, vec4 color) {
+	vkCmdPushConstants(cmd, vk.context.linePipeLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, VK_PIPE_PUSH_OFFSET_LINE_PRIMARY_COLOR, sizeof(vec4), &color);
+}
+INLINE void vkCmdPushSecondaryColor(VkCommandBuffer cmd, vec4 color) {
+	vkCmdPushConstants(cmd, vk.context.linePipeLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, VK_PIPE_PUSH_OFFSET_LINE_SECONDARY_COLOR, sizeof(vec4), &color);
+}
+
+//// Descriptor Set Bindings
+// SET_BIND_INDEX is index of descriptor binding in a descriptor set
+enum {
+	VK_SET_BIND_INDEX_GLOBAL_BUFFER,
+	VK_SET_BIND_INDEX_COUNT,
+};
 #define VK_BIND_WRITE_GLOBAL_BUFFER(set, buf)                \
 	(VkWriteDescriptorSet) {                                 \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
 		.dstSet = set,                                       \
-		.dstBinding = VK_BIND_INDEX_GLOBAL_BUFFER,           \
+		.dstBinding = VK_SET_BIND_INDEX_GLOBAL_BUFFER,       \
 		.descriptorCount = 1,                                \
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
 		.pBufferInfo = &(VkDescriptorBufferInfo){            \
@@ -382,15 +406,15 @@ constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	}
 
 enum {
-	VK_BIND_INDEX_MATERIAL_COLOR,
-	VK_BIND_INDEX_MATERIAL_IMAGE,
-	VK_BIND_INDEX_MATERIAL_COUNT,
+	VK_SET_BIND_INDEX_MATERIAL_COLOR,
+	VK_SET_BIND_INDEX_MATERIAL_IMAGE,
+	VK_SET_BIND_INDEX_MATERIAL_COUNT,
 };
 #define VK_BIND_WRITE_MATERIAL_COLOR(set, buf)               \
 	(VkWriteDescriptorSet) {                                 \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
 		.dstSet = set,                                       \
-		.dstBinding = VK_BIND_INDEX_MATERIAL_COLOR,          \
+		.dstBinding = VK_SET_BIND_INDEX_MATERIAL_COLOR,     \
 		.descriptorCount = 1,                                \
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
 		.pBufferInfo = &(VkDescriptorBufferInfo){            \
@@ -402,7 +426,7 @@ enum {
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
 		.dstSet = set,                                               \
-		.dstBinding = VK_BIND_INDEX_MATERIAL_IMAGE,                  \
+		.dstBinding = VK_SET_BIND_INDEX_MATERIAL_IMAGE,              \
 		.descriptorCount = 1,                                        \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(VkDescriptorImageInfo){                      \
@@ -411,12 +435,15 @@ enum {
 		},                                                           \
 	}
 
-#define VK_BIND_INDEX_OBJECT_BUFFER 0
+enum {
+	VK_SET_BIND_INDEX_OBJECT_BUFFER,
+	VK_SET_BIND_INDEX_OBJECT_COUNT,
+};
 #define VK_BIND_WRITE_OBJECT_BUFFER(set, buf)                \
 	(VkWriteDescriptorSet) {                                 \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
 		.dstSet = set,                                       \
-		.dstBinding = VK_BIND_INDEX_OBJECT_BUFFER,           \
+		.dstBinding = VK_SET_BIND_INDEX_OBJECT_BUFFER,       \
 		.descriptorCount = 1,                                \
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
 		.pBufferInfo = &(VkDescriptorBufferInfo){            \
@@ -424,6 +451,7 @@ enum {
 			.range = sizeof(VkObjectSetState),               \
 		},                                                   \
 	}
+
 
 //////////////////////////////
 //// Mid Vulkan Image Barriers
@@ -829,6 +857,7 @@ typedef struct VkBasicFramebufferCreateInfo {
 void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer);
 
 void vkCreateBasicGraphics();
+void vkCreateLineGraphics();
 
 void vkCreateBasicPipe(
 	const char* vertShaderPath,
@@ -909,7 +938,7 @@ VkCommandBuffer vkBeginImmediateTransferCommandBuffer();
 void            vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
 #ifdef _WIN32
-void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
 #endif
 
 
@@ -1268,13 +1297,14 @@ enum {
 
 static void CreateBasicPipeLayout()
 {
-	VkDescriptorSetLayout pSetLayouts[VK_SET_INDEX_BASIC_COUNT];
-	pSetLayouts[VK_SET_INDEX_BASIC_GLOBAL] = vk.context.globalSetLayout;
-	pSetLayouts[VK_SET_INDEX_BASIC_MATERIAL] = vk.context.materialSetLayout;
-	pSetLayouts[VK_SET_INDEX_BASIC_OBJECT] = vk.context.objectSetLayout;
+	VkDescriptorSetLayout pSetLayouts[] = {
+        [VK_PIPE_SET_INDEX_BASIC_GLOBAL] = vk.context.globalSetLayout,
+        [VK_PIPE_SET_INDEX_BASIC_MATERIAL] = vk.context.materialSetLayout,
+        [VK_PIPE_SET_INDEX_BASIC_OBJECT] = vk.context.objectSetLayout,
+    };
 	VkPipelineLayoutCreateInfo createInfo = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = VK_SET_INDEX_BASIC_COUNT,
+		.setLayoutCount = VK_PIPE_SET_INDEX_BASIC_COUNT,
 		.pSetLayouts = pSetLayouts,
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.basicPipeLayout));
@@ -1286,7 +1316,7 @@ static void CreateGlobalSetLayout()
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
 		.pBindings = &(VkDescriptorSetLayoutBinding){
-			.binding = VK_BIND_INDEX_GLOBAL_BUFFER,
+			.binding = VK_SET_BIND_INDEX_GLOBAL_BUFFER,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
 			.stageFlags =
@@ -1309,13 +1339,13 @@ static void CreateMaterialSetLayout()
 		.bindingCount = 2,
 		.pBindings = (VkDescriptorSetLayoutBinding[]){
 			{
-				.binding = VK_BIND_INDEX_MATERIAL_COLOR,
+				.binding = VK_SET_BIND_INDEX_MATERIAL_COLOR,
 				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 				.descriptorCount = 1,
 				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 			},
 			{
-				.binding = VK_BIND_INDEX_MATERIAL_IMAGE,
+				.binding = VK_SET_BIND_INDEX_MATERIAL_IMAGE,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
 				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -1335,7 +1365,7 @@ static void CreateObjectSetLayout()
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
 		.pBindings = &(VkDescriptorSetLayoutBinding){
-			.binding = VK_BIND_INDEX_OBJECT_BUFFER,
+			.binding = VK_SET_BIND_INDEX_OBJECT_BUFFER,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -1520,14 +1550,26 @@ enum {
 
 static void CreateLinePipeLayout()
 {
-	VkDescriptorSetLayout pSetLayouts[VK_SET_INDEX_LINE_COUNT] = {
-		[VK_SET_INDEX_LINE_GLOBAL] = vk.context.globalSetLayout,
-		[VK_SET_INDEX_LINE_MATERIAL] = vk.context.materialPushSetLayout,
+	VkDescriptorSetLayout pSetLayouts[VK_PIPE_SET_INDEX_LINE_COUNT] = {
+		[VK_PIPE_SET_INDEX_LINE_GLOBAL] = vk.context.globalSetLayout,
 	};
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = VK_SET_INDEX_LINE_COUNT,
+		.setLayoutCount = VK_PIPE_SET_INDEX_LINE_COUNT,
 		.pSetLayouts = pSetLayouts,
+		.pushConstantRangeCount = 2,
+		.pPushConstantRanges = (VkPushConstantRange[]){
+			{
+				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				.offset = VK_PIPE_PUSH_OFFSET_LINE_PRIMARY_COLOR,
+				.size = sizeof(vec4)
+			},
+			{
+				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+				.offset = VK_PIPE_PUSH_OFFSET_LINE_SECONDARY_COLOR,
+				.size = sizeof(vec4)
+			},
+		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.linePipeLayout));
 }
@@ -1539,7 +1581,7 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 
 	VkGraphicsPipelineCreateInfo pipelineInfo = {
 		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &DEFAULT_ROBUSTNESS_STATE,
+		&DEFAULT_ROBUSTNESS_STATE,
 		.stageCount = 2,
 		.pStages = (VkPipelineShaderStageCreateInfo[]){
 			{
@@ -1561,7 +1603,7 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 			.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){
 				{
 					.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX,
-					.stride = sizeof(MidLineVertex),
+					.stride = sizeof(vec3),
 					.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 				},
 			},
@@ -1571,7 +1613,7 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 					.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX,
 					.location = VK_PIPE_VERTEX_ATTRIBUTE_LINE_POSITION_INDEX,
 					.format = VK_FORMAT_R32G32B32_SFLOAT,
-					.offset = offsetof(MidLineVertex, position),
+					.offset = 0
 				},
 			},
 		},
@@ -1604,12 +1646,10 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 		.pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
 		.pDynamicState = &(VkPipelineDynamicStateCreateInfo){
 			VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-			.dynamicStateCount = 8,
+			.dynamicStateCount = 6,
 			.pDynamicStates = (VkDynamicState[]){
 				VK_DYNAMIC_STATE_VIEWPORT,
 				VK_DYNAMIC_STATE_SCISSOR,
-				VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY,
-				VK_DYNAMIC_STATE_POLYGON_MODE_EXT,
 				VK_DYNAMIC_STATE_LINE_RASTERIZATION_MODE_EXT,
 				VK_DYNAMIC_STATE_LINE_STIPPLE_ENABLE_EXT,
 				VK_DYNAMIC_STATE_LINE_STIPPLE_EXT,
@@ -1652,7 +1692,16 @@ void vkCreateBasicGraphics()
 	CreateMaterialSetLayout();
 	CreateObjectSetLayout();
 	CreateBasicPipeLayout();
+}
+
+void vkCreateLineGraphics()
+{
 	CreateLinePipeLayout();
+	vkCreateLinePipe("./shaders/line.vert.spv",
+					 "./shaders/line.frag.spv",
+					 vk.context.basicPass,
+					 vk.context.linePipeLayout,
+					 &vk.context.linePipe);
 }
 
 ////////////////
@@ -2929,7 +2978,7 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore)
 }
 
 #ifdef _WIN32
-void midVkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
+void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
 {
 	VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,

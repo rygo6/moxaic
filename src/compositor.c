@@ -35,29 +35,29 @@ constexpr VkShaderStageFlags MXC_COMPOSITOR_MODE_STAGE_FLAGS[] = {
 //////////////
 //// Node Pipe
 enum {
-	BIND_INDEX_NODE_STATE,
-	BIND_INDEX_NODE_COLOR,
-	BIND_INDEX_NODE_GBUFFER,
-	BIND_INDEX_NODE_COUNT
+	SET_BIND_INDEX_NODE_STATE,
+	SET_BIND_INDEX_NODE_COLOR,
+	SET_BIND_INDEX_NODE_GBUFFER,
+	SET_BIND_INDEX_NODE_COUNT
 };
 static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* pLayout)
 {
 	auto createInfo = VkDescriptorSetLayoutCreateInfo(
-			.bindingCount = BIND_INDEX_NODE_COUNT,
+			.bindingCount = SET_BIND_INDEX_NODE_COUNT,
 			.pBindings = (VkDescriptorSetLayoutBinding[]){
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_NODE_STATE,
+					SET_BIND_INDEX_NODE_STATE,
 					.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 					.descriptorCount = 1,
 					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode]),
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_NODE_COLOR,
+					SET_BIND_INDEX_NODE_COLOR,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.descriptorCount = 1,
 					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
 					.pImmutableSamplers = &vk.context.linearSampler),
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_NODE_GBUFFER,
+					SET_BIND_INDEX_NODE_GBUFFER,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.descriptorCount = 1,
 					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
@@ -69,7 +69,7 @@ static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* p
 	(VkWriteDescriptorSet) {                                 \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
 		.dstSet = set,                                       \
-		.dstBinding = BIND_INDEX_NODE_STATE,                 \
+		.dstBinding = SET_BIND_INDEX_NODE_STATE,                 \
 		.descriptorCount = 1,                                \
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
 		.pBufferInfo = &(VkDescriptorBufferInfo){            \
@@ -81,7 +81,7 @@ static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* p
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
 		.dstSet = set,                                               \
-		.dstBinding = BIND_INDEX_NODE_COLOR,                         \
+		.dstBinding = SET_BIND_INDEX_NODE_COLOR,                         \
 		.descriptorCount = 1,                                        \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(VkDescriptorImageInfo){                      \
@@ -93,7 +93,7 @@ static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* p
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
 		.dstSet = set,                                               \
-		.dstBinding = BIND_INDEX_NODE_GBUFFER,                       \
+		.dstBinding = SET_BIND_INDEX_NODE_GBUFFER,                       \
 		.descriptorCount = 1,                                        \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(VkDescriptorImageInfo){                      \
@@ -103,9 +103,9 @@ static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* p
 	}
 
 enum {
-	PIPE_INDEX_NODE_GRAPHICS_GLOBAL,
-	PIPE_INDEX_NODE_GRAPHICS_NODE,
-	PIPE_INDEX_NODE_GRAPHICS_COUNT,
+	PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL,
+	PIPE_SET_INDEX_NODE_GRAPHICS_NODE,
+	PIPE_SET_INDEX_NODE_GRAPHICS_COUNT,
 };
 static void CreateGraphicsNodePipeLayout(
 	VkDescriptorSetLayout nodeSetLayout,
@@ -113,10 +113,10 @@ static void CreateGraphicsNodePipeLayout(
 {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = PIPE_INDEX_NODE_GRAPHICS_COUNT,
+		.setLayoutCount = PIPE_SET_INDEX_NODE_GRAPHICS_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
-			[PIPE_INDEX_NODE_GRAPHICS_GLOBAL] = vk.context.globalSetLayout,
-			[PIPE_INDEX_NODE_GRAPHICS_NODE]   = nodeSetLayout,
+			[PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL] = vk.context.globalSetLayout,
+			[PIPE_SET_INDEX_NODE_GRAPHICS_NODE]   = nodeSetLayout,
 		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
@@ -125,22 +125,22 @@ static void CreateGraphicsNodePipeLayout(
 //////////////////////
 //// Compute Node Pipe
 enum {
-	BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT,
-	BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT,
-	BIND_INDEX_NODE_COMPUTE_COUNT,
+	SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT,
+	SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT,
+	SET_BIND_INDEX_NODE_COMPUTE_COUNT,
 };
 static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
 {
 	auto createInfo = VkDescriptorSetLayoutCreateInfo(
-			.bindingCount = BIND_INDEX_NODE_COMPUTE_COUNT,
+			.bindingCount = SET_BIND_INDEX_NODE_COMPUTE_COUNT,
 			.pBindings = (VkDescriptorSetLayoutBinding[]){
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT,
+					SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT,
 					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT,
+					SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT,
 					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
@@ -151,7 +151,7 @@ static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
 	(VkWriteDescriptorSet) {                                     \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                  \
             .dstSet = set,                                       \
-			.dstBinding = BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT, \
+			.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT, \
 			.descriptorCount = 1,                                \
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  \
 			.pImageInfo = &(VkDescriptorImageInfo){              \
@@ -163,7 +163,7 @@ static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
 	(VkWriteDescriptorSet) {                                    \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                 \
             .dstSet = set,                                      \
-			.dstBinding = BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT, \
+			.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT, \
 			.descriptorCount = 1,                               \
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
 			.pImageInfo = &(VkDescriptorImageInfo){             \
@@ -173,10 +173,10 @@ static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
 	}
 
 enum {
-	PIPE_INDEX_NODE_COMPUTE_GLOBAL,
-	PIPE_INDEX_NODE_COMPUTE_NODE,
-	PIPE_INDEX_NODE_COMPUTE_OUTPUT,
-	PIPE_INDEX_NODE_COMPUTE_COUNT,
+	PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL,
+	PIPE_SET_INDEX_NODE_COMPUTE_NODE,
+	PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT,
+	PIPE_SET_INDEX_NODE_COMPUTE_COUNT,
 };
 static void CreateNodeComputePipeLayout(
 	VkDescriptorSetLayout nodeSetLayout,
@@ -185,11 +185,11 @@ static void CreateNodeComputePipeLayout(
 {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = PIPE_INDEX_NODE_COMPUTE_COUNT,
+		.setLayoutCount = PIPE_SET_INDEX_NODE_COMPUTE_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
-			[PIPE_INDEX_NODE_COMPUTE_GLOBAL] = vk.context.globalSetLayout,
-			[PIPE_INDEX_NODE_COMPUTE_NODE]   = nodeSetLayout,
-			[PIPE_INDEX_NODE_COMPUTE_OUTPUT] = computeOutputSetLayout,
+			[PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL] = vk.context.globalSetLayout,
+			[PIPE_SET_INDEX_NODE_COMPUTE_NODE]   = nodeSetLayout,
+			[PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT] = computeOutputSetLayout,
 		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
@@ -198,37 +198,37 @@ static void CreateNodeComputePipeLayout(
 /////////////////////////
 //// GBuffer Process Pipe
 enum {
-	BIND_INDEX_GBUFFER_PROCESS_STATE,
-	BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
-	BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
-	BIND_INDEX_GBUFFER_PROCESS_DST,
-	BIND_INDEX_GBUFFER_PROCESS_COUNT
+	SET_BIND_INDEX_GBUFFER_PROCESS_STATE,
+	SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
+	SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
+	SET_BIND_INDEX_GBUFFER_PROCESS_DST,
+	SET_BIND_INDEX_GBUFFER_PROCESS_COUNT
 };
 static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 {
 	auto createInfo = VkDescriptorSetLayoutCreateInfo(
 			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-			.bindingCount = BIND_INDEX_GBUFFER_PROCESS_COUNT,
+			.bindingCount = SET_BIND_INDEX_GBUFFER_PROCESS_COUNT,
 			.pBindings = (VkDescriptorSetLayoutBinding[]){
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_GBUFFER_PROCESS_STATE,
+					SET_BIND_INDEX_GBUFFER_PROCESS_STATE,
 					.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
+					SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 					.pImmutableSamplers = &vk.context.nearestSampler),
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
+					SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 					.pImmutableSamplers = &vk.context.nearestSampler),
 				VkDescriptorSetLayoutBindingElement(
-					BIND_INDEX_GBUFFER_PROCESS_DST,
+					SET_BIND_INDEX_GBUFFER_PROCESS_DST,
 					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 					.descriptorCount = 1,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
@@ -238,7 +238,7 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 #define BIND_WRITE_GBUFFER_PROCESS_STATE(view)                     \
 	(VkWriteDescriptorSet) {                                       \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                    \
-		.dstBinding = BIND_INDEX_GBUFFER_PROCESS_STATE,            \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_STATE,            \
 		.descriptorCount = 1,                                      \
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,       \
 		.pBufferInfo = &(VkDescriptorBufferInfo){                  \
@@ -249,7 +249,7 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 #define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(view)                     \
 	(VkWriteDescriptorSet) {                                           \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                        \
-		.dstBinding = BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,            \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,            \
 		.descriptorCount = 1,                                          \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,   \
 		.pImageInfo = &(VkDescriptorImageInfo){                        \
@@ -260,7 +260,7 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 #define BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(view)                       \
 	(VkWriteDescriptorSet) {                                           \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                        \
-		.dstBinding = BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,            \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,            \
 		.descriptorCount = 1,                                          \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,   \
 		.pImageInfo = &(VkDescriptorImageInfo){                        \
@@ -271,7 +271,7 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 #define BIND_WRITE_GBUFFER_PROCESS_DST(view)                         \
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
-			.dstBinding = BIND_INDEX_GBUFFER_PROCESS_DST,            \
+			.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_DST,            \
 			.descriptorCount = 1,                                    \
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,      \
 			.pImageInfo = (VkDescriptorImageInfo[]) {                \
@@ -283,16 +283,16 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 	}
 
 enum {
-	PIPE_INDEX_GBUFFER_PROCESS_INOUT,
-	PIPE_INDEX_GBUFFER_PROCESS_COUNT,
+	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+	PIPE_SET_INDEX_GBUFFER_PROCESS_COUNT,
 };
 static void CreateGBufferProcessPipeLayout(VkDescriptorSetLayout layout, VkPipelineLayout* pPipeLayout)
 {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = PIPE_INDEX_GBUFFER_PROCESS_COUNT,
+		.setLayoutCount = PIPE_SET_INDEX_GBUFFER_PROCESS_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
-			[PIPE_INDEX_GBUFFER_PROCESS_INOUT] = layout,
+			[PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT] = layout,
 		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
@@ -316,7 +316,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	VkDescriptorSet   cmptOutputSet = pComp->computeOutputSet;
 
 	VkPipelineLayout nodePipeLayout = pComp->nodePipeLayout;
-	VkPipeline       nodePipe = pComp->nodePipe;
+	VkPipeline       nodePipe = pComp->nodeQuadPipe;
 	VkPipelineLayout cmptNodePipeLayout = pComp->computeNodePipeLayout;
 	VkPipeline       cmptNodePipe = pComp->computeNodePipe;
 	VkPipeline       cmptPostNodePipe = pComp->computePostNodePipe;
@@ -643,7 +643,7 @@ run_loop:
 					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipView),
 				};
-				CmdPushDescriptorSetKHR(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pComp->gbufferProcessPipeLayout, PIPE_INDEX_GBUFFER_PROCESS_INOUT, COUNT(mipPushSets), mipPushSets);
+				CmdPushDescriptorSetKHR(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pComp->gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, COUNT(mipPushSets), mipPushSets);
 				CmdDispatch(graphCmd, 1, mipGroupCt, 1);
 
 				CmdPipelineImageBarrier2Ext(
@@ -658,7 +658,7 @@ run_loop:
 					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView),
 				};
-				CmdPushDescriptorSetKHR(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pComp->gbufferProcessPipeLayout, PIPE_INDEX_GBUFFER_PROCESS_INOUT, COUNT(pushSets), pushSets);
+				CmdPushDescriptorSetKHR(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pComp->gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, COUNT(pushSets), pushSets);
 				CmdDispatch(graphCmd, 1, groupCt, 1);
 
 				pFinBars[0].image = pNodeSwap->gBuffer;
@@ -756,7 +756,7 @@ run_loop:
 							   graphFbView.depth);
 
 			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipe);
-			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
+			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
 
 			for (int i = 0; i < nodeCount; ++i) {
 				auto pNodShrd = activeNodesShared[i];
@@ -771,21 +771,21 @@ run_loop:
 				// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 				switch (pNodShrd->compositorMode) {
 					case MXC_COMPOSITOR_MODE_QUAD:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
 						CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){quadBuffer}, (VkDeviceSize[]){quadOffsets.vertexOffset});
 						CmdBindIndexBuffer(graphCmd, quadBuffer, 0, VK_INDEX_TYPE_UINT16);
 						CmdDrawIndexed(graphCmd, quadOffsets.indexCount, 1, 0, 0, 0);
 						graphicsBlit = true;
 						break;
 					case MXC_COMPOSITOR_MODE_TESSELATION:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
 						CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){quadPatchBuffer}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
 						CmdBindIndexBuffer(graphCmd, quadPatchBuffer, quadPatchOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
 						CmdDrawIndexed(graphCmd, quadPatchOffsets.indexCount, 1, 0, 0, 0);
 						graphicsBlit = true;
 						break;
 					case MXC_COMPOSITOR_MODE_TASK_MESH:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
 						CmdDrawMeshTasksEXT(graphCmd, 1, 1, 1);
 						graphicsBlit = true;
 						break;
@@ -797,14 +797,27 @@ run_loop:
 			CmdEndRenderPass(graphCmd);
 		}
 
+		{
+			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
+			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
+
+			vec4 lineColor = VEC4(0.0f, 1.0f, 1.0f, 1.0f);
+			vkCmdPushPrimaryColor(graphCmd, lineColor);
+
+			vkCmdSetLineWidth(graphCmd, 8.0f);
+
+			CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){quadPatchBuffer}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
+			vkCmdDraw(graphCmd, quadPatchOffsets.indexCount, 1, 0, 0);
+		}
+
 //		ResetQueryPool(device, timeQueryPool, 0, 2);
 //		CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
 		/// Compute Recording Cycle. We really must separate into Compute and Graphics lists
 		{
 			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipe);
-			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
-			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_OUTPUT, 1, &cmptOutputSet, 0, NULL);
+			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
+			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &cmptOutputSet, 0, NULL);
 
 //			vkCmdClearColorImage(grphCmd, cmptFrmBufColorImg, VK_IMAGE_LAYOUT_GENERAL, &(VkClearColorValue){0.0f, 0.0f, 0.0f, 0.0f}, 1, &VK_COLOR_SUBRESOURCE_RANGE);
 
@@ -826,7 +839,7 @@ run_loop:
 				// really all the nodes need to be set in UBO array and the compute shader do this loop
 				switch (pNodShrd->compositorMode) {
 					case MXC_COMPOSITOR_MODE_COMPUTE:
-						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositorData[iNode].nodeSet, 0, NULL);
+						CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_COMPUTE, cmptNodePipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositorData[iNode].nodeSet, 0, NULL);
 
 						// can be saved
 						ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
@@ -960,6 +973,9 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 		CreateNodeSetLayout(pInfo->mode, &pCompositor->nodeSetLayout);
 		CreateGraphicsNodePipeLayout(pCompositor->nodeSetLayout, &pCompositor->nodePipeLayout);
 
+		vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
+		vkCreateQuadPatchMeshSharedMemory(&pCompositor->quadPatchMesh);
+
 		// we need all of these modes available, this should be flags
 		switch (pInfo->mode) {
 			case MXC_COMPOSITOR_MODE_QUAD:
@@ -967,8 +983,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 								  "./shaders/basic_comp.frag.spv",
 								  vk.context.basicPass,
 								  pCompositor->nodePipeLayout,
-								  &pCompositor->nodePipe);
-				vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
+								  &pCompositor->nodeQuadPipe);
 				break;
 			case MXC_COMPOSITOR_MODE_TESSELATION:
 				vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
@@ -977,8 +992,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 											  "./shaders/tess_comp.frag.spv",
 											  vk.context.basicPass,
 											  pCompositor->nodePipeLayout,
-											  &pCompositor->nodePipe);
-				vkCreateQuadPatchMeshSharedMemory(&pCompositor->quadPatchMesh);
+											  &pCompositor->nodeQuadPipe);
+
 				break;
 			case MXC_COMPOSITOR_MODE_TASK_MESH:
 				vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
@@ -986,8 +1001,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 										  "./shaders/mesh_comp.frag.spv",
 										  vk.context.basicPass,
 										  pCompositor->nodePipeLayout,
-										  &pCompositor->nodePipe);
-				vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
+										  &pCompositor->nodeQuadPipe);
 				break;
 			default: PANIC("Compositor mode not supported!");
 		}
@@ -1174,12 +1188,13 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 		case MXC_COMPOSITOR_MODE_QUAD:
 			break;
 		case MXC_COMPOSITOR_MODE_TESSELATION:
-			vkBindUpdateQuadPatchMesh(0.5f, &pComp->quadPatchMesh);
 			break;
 		case MXC_COMPOSITOR_MODE_TASK_MESH:
 			break;
 		default: PANIC("Compositor mode not supported!");
 	}
+
+	vkBindUpdateQuadPatchMesh(0.5f, &pComp->quadPatchMesh);
 
 	vkBindSharedBuffer(&pComp->globalBuffer);
 
@@ -1195,6 +1210,7 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 		nodeCompositorData[i].pSetMapped = vkSharedBufferPtr(nodeCompositorData[i].nodeSetBuffer);
 		*nodeCompositorData[i].pSetMapped = (MxcNodeCompositorSetState){};
 
+		// thes could be push descriptors???
 		VkWriteDescriptorSet writeSets[] = {
 			BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buffer),
 		};
