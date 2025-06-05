@@ -47,26 +47,23 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 #define IVEC2(x, y) (ivec2) {{x, y}}
 #define VEC3(x, y, z) (vec3) {{x, y, z}}
 #define IVEC3(x, y, z) (ivec3) {{x, y, z}}
-#define VEC4(x, y, z, w) (vec4) {{x, y, z, w}}
+//#define VEC4(x, y, z, w) (vec4) {{x, y, z, w}}
 #define IVEC4(x, y, z, w) (ivec4) {{x, y, z, w}}
-#define VEC4(x, y, z, w) (vec4) {{x, y, z, w}}
 
-#define GET_MACRO(_1, _2, _3, _4, NAME, ...) NAME
-
-#define TO_VEC4_1(_) _Generic((_),            \
-	float: (vec4){{(_).x, 0.0f, 0.0f, 0.0f}}, \
-	vec2: (vec4){{(_).x, (_).y, 0.0f, 0.0f}}, \
-	vec3: (vec4){{(_).x, (_).y, (_).z, 0.0f}})
-#define TO_VEC4_2(_, _0) _Generic((_),        \
-	float: (vec4){{(_).x, (_0), (_0), (_0)}}, \
-	vec2: (vec4){{(_).x, (_).y, (_0), (_0)}}, \
-	vec3: (vec4){{(_).x, (_).y, (_).z, (_0)}})
-#define TO_VEC4_3(_, _0, _1) _Generic((_), \
-	float: (vec4){{(_).x, _0, _1, _1}},    \
-	vec2: (vec4){{(_).x, (_).y, (_0), (_1)}})
-#define TO_VEC4_4(_0, _1, _2, _3) (vec4){{(_).x, (_).y, (_0), (_1)}}
-#define TO_VEC4(...) GET_MACRO(__VA_ARGS__, TO_VEC4_4 ,TO_VEC4_3, TO_VEC4_2, TO_VEC4_1)(__VA_ARGS__)
-
+#define VEC4_MACRO(_1, _2, _3, _4, NAME, ...) NAME
+#define VEC4_1(_v) _Generic((_v),            \
+	float: (vec4){{(_v).x, 0.0f, 0.0f, 0.0f}}, \
+	vec2: (vec4){{(_v).x, (_v).y, 0.0f, 0.0f}}, \
+	vec3: (vec4){{(_v).x, (_v).y, (_v).z, 0.0f}})
+#define VEC4_2(_v, _0) _Generic((_v),        \
+	float: (vec4){{(_v).x, (_0), (_0), (_0)}}, \
+	vec2: (vec4){{(_v).x, (_v).y, (_0), (_0)}}, \
+	vec3: (vec4){{(_v).x, (_v).y, (_v).z, (_0)}})
+#define VEC4_3(_v, _0, _1) _Generic((_v), \
+	float: (vec4){{(_v).x, _0, _1, _1}},    \
+	vec2: (vec4){{(_v).x, (_v).y, (_0), (_1)}})
+#define VEC4_4(_0, _1, _2, _3) (vec4){{(_0), (_1), (_2), (_3)}}
+#define VEC4(...) VEC4_MACRO(__VA_ARGS__, VEC4_4 ,VEC4_3, VEC4_2, VEC4_1)(__VA_ARGS__)
 
 #define MAT_UNION(name, type, simd_type, align, count, vec_name, ...) \
 	typedef union __attribute((aligned(align))) name {                \

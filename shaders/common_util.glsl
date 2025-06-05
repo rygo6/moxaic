@@ -32,13 +32,13 @@ vec4 GlobalClipPosFromWorldPos(vec3 worldPos)
 
 vec3 WorldPosFromNodeClipPos(vec4 clipPos)
 {
-    vec4 worldPos = nodeUBO.invViewProj * clipPos;
+    vec4 worldPos = nodeState.invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
 }
 
 vec4 NodeClipPosFromWorldPos(vec3 worldPos)
 {
-    return nodeUBO.viewProj * vec4(worldPos, 1.0f);
+    return nodeState.viewProj * vec4(worldPos, 1.0f);
 }
 
 vec4 ClipPosFromNDC(vec2 ndc)
@@ -153,7 +153,7 @@ vec3 WorldRayDirFromGlobalNDC(vec2 ndc)
 
 vec3 WorldRayDirFromNodeNDC(vec2 ndc)
 {
-    return WorldRayDirFromNDC(ndc, nodeUBO.invProj, nodeUBO.invView);
+    return WorldRayDirFromNDC(ndc, nodeState.invProj, nodeState.invView);
 }
 
 float SqrMag(vec2 values[2]) {

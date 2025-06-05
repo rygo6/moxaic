@@ -2,7 +2,7 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "global_binding.glsl"
-#include "node_binding.glsl"
+#include "binding_node.glsl"
 #include "std_vertex.glsl"
 #include "common_util.glsl"
 
@@ -14,12 +14,12 @@ bool clipped = false;
 bool cropped = false;
 
 void main() {
-    vec4 originClipPos = nodeUBO.viewProj * nodeUBO.model * vec4(0,0,0,1);
+    vec4 originClipPos = nodeState.viewProj * nodeState.model * vec4(0,0,0,1);
     float originDepth = originClipPos.z / originClipPos.w;
 
-    vec2 scale = vec2(nodeUBO.framebufferSize) / vec2(globalUBO.screenSize);
+    vec2 scale = vec2(nodeState.framebufferSize) / vec2(globalUBO.screenSize);
     vec2 scaledUV = inUV * scale;
-    vec2 nodeUv = mix(nodeUBO.ulUV, nodeUBO.lrUV, inUV);
+    vec2 nodeUv = mix(nodeState.ulUV, nodeState.lrUV, inUV);
 
 //    vec2 finalUv = clipped ?
 //        vec2(scaledUV.x / doubleWide, scaledUV.y) :

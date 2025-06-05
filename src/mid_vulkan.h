@@ -86,9 +86,11 @@
 	#define VK_EXTERNAL_HANDLE_PLATFORM                0
 #endif
 
-#define VK_ALLOC         NULL
-#define VK_VERSION       VK_MAKE_API_VERSION(0, 1, 3, 2) // this prolly redundant?
-#define VK_SWAP_COUNT    2
+#define VK_ALLOC   NULL
+#define VK_VERSION VK_MAKE_API_VERSION(0, 1, 3, 2)  // this prolly redundant?
+
+#define VK_SWAP_COUNT  2
+#define VK_SWAP_FORMAT VK_FORMAT_B8G8R8A8_UNORM
 
 #define VK_CHECK(command)                       \
 	({                                          \
@@ -171,6 +173,7 @@ typedef struct VkSwapContext {
 	VkSemaphore    acquireSemaphore;
 	VkSemaphore    renderCompleteSemaphore;
 	VkImage        images[VK_SWAP_COUNT];
+	VkImageView    views[VK_SWAP_COUNT];
 } VkSwapContext;
 
 typedef enum VkSharedMemoryState {
@@ -193,11 +196,11 @@ typedef struct VkSharedBuffer {
 	VkBuffer          buffer;
 } VkSharedBuffer;
 
-typedef struct VkTexture {
-	VkImage        image;
-	VkImageView    view;
-	VkSharedMemory sharedMemory;
-} VkTexture;
+//typedef struct VkTexture {
+//	VkImage        image;
+//	VkImageView    view;
+//	VkSharedMemory sharedMemory;
+//} VkTexture;
 
 typedef struct VkDedicatedTexture {
 	VkImage        image;
@@ -343,6 +346,7 @@ constexpr VkFormat VK_BASIC_PASS_FORMATS[] = {
 };
 constexpr VkImageUsageFlags VK_BASIC_PASS_USAGES[] = {
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+											 VK_IMAGE_USAGE_STORAGE_BIT |
 											 VK_IMAGE_USAGE_SAMPLED_BIT |
 											 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 	[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
@@ -365,25 +369,17 @@ enum {
 };
 
 // Line
+#define VK_SHADER_STAGE_LINE VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
 enum {
 	VK_PIPE_SET_INDEX_LINE_GLOBAL,
 	VK_PIPE_SET_INDEX_LINE_COUNT,
 };
-typedef struct VkLineMaterialPushState {
+typedef struct VkLineMaterialState {
 	vec4 primaryColor;
 	vec4 secondaryColor;
-} VkLineMaterialPushState;
-enum {
-	VK_PIPE_PUSH_OFFSET_LINE_PRIMARY_COLOR = offsetof(VkLineMaterialPushState, primaryColor),
-	VK_PIPE_PUSH_OFFSET_LINE_SECONDARY_COLOR = offsetof(VkLineMaterialPushState, secondaryColor),
-	VK_PIPE_PUSH_OFFSET_TOTAL_SIZE = sizeof(VkLineMaterialPushState),
-};
-// Do I really want these indiviudally settable?
-INLINE void vkCmdPushPrimaryColor(VkCommandBuffer cmd, vec4 color) {
-	vkCmdPushConstants(cmd, vk.context.linePipeLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, VK_PIPE_PUSH_OFFSET_LINE_PRIMARY_COLOR, sizeof(vec4), &color);
-}
-INLINE void vkCmdPushSecondaryColor(VkCommandBuffer cmd, vec4 color) {
-	vkCmdPushConstants(cmd, vk.context.linePipeLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, VK_PIPE_PUSH_OFFSET_LINE_SECONDARY_COLOR, sizeof(vec4), &color);
+} VkLineMaterialState;
+INLINE void vkCmdPushLineMaterial(VkCommandBuffer cmd, VkLineMaterialState state) {
+	vkCmdPushConstants(cmd, vk.context.linePipeLayout, VK_SHADER_STAGE_LINE, 0, sizeof(VkLineMaterialState), &state);
 }
 
 //// Descriptor Set Bindings
@@ -487,7 +483,12 @@ enum {
 	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
 	.newLayout = VK_IMAGE_LAYOUT_GENERAL
 
-#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT                        \
+#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE                  \
+	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
+	.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,         \
+	.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+
+#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_UNDEFINED              \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
 	.srcAccessMask = VK_ACCESS_2_NONE,                               \
 	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
@@ -514,7 +515,7 @@ enum {
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
 	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
 
-
+#define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
 
 //////////////////////////////
 //// Mid Vulkan Inline Methods
@@ -581,12 +582,10 @@ INLINE void PFN_CmdBeginRenderPass(
 	func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
 // todo needs PFN version
-INLINE void vkCmdResetBegin(VkCommandBuffer commandBuffer)
+INLINE void vkCmdResetBegin(VkCommandBuffer cmd)
 {
-	vkResetCommandBuffer(commandBuffer, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-	vkBeginCommandBuffer(commandBuffer, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
-	vkCmdSetViewport(commandBuffer, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
-	vkCmdSetScissor(commandBuffer, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
+	vkResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+	vkBeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 }
 // todo needs PFN version
 INLINE void midVkSubmitPresentCommandBuffer(
@@ -1084,8 +1083,7 @@ static void CreateBasicRenderPass()
 				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
 				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				//VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL to blit
-				.finalLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+				.finalLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
 			},
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {
 				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
@@ -1284,15 +1282,42 @@ enum {
 			VK_DYNAMIC_STATE_SCISSOR,                         \
 		},                                                    \
 	}
-#define DEFAULT_OPAQUE_COLOR_BLEND_STATE                            \
-	(VkPipelineColorBlendStateCreateInfo) {                         \
-		VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,   \
-		.logicOp = VK_LOGIC_OP_COPY,                                \
-		.attachmentCount = 2,                                       \
-		.pAttachments = (VkPipelineColorBlendAttachmentState[]) {   \
-			{/* Color */ .colorWriteMask = COLOR_WRITE_MASK_RGBA},  \
-			{/* Normal */ .colorWriteMask = COLOR_WRITE_MASK_RGBA}, \
-		},                                                          \
+#define DEFAULT_COLOR_BLEND_ATTACHMENT_STATE_ALPHA_BLEND        \
+	(VkPipelineColorBlendAttachmentState) {          \
+		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | \
+						  VK_COLOR_COMPONENT_G_BIT | \
+						  VK_COLOR_COMPONENT_B_BIT,  \
+		.blendEnable = VK_FALSE,                     \
+		.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,  \
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO, \
+		.colorBlendOp = VK_BLEND_OP_ADD,             \
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,  \
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO, \
+		.alphaBlendOp = VK_BLEND_OP_ADD,             \
+	}
+#define DEFAULT_COLOR_BLEND_ATTACHMENT_STATE_OPAQUE \
+	(VkPipelineColorBlendAttachmentState) {         \
+		.colorWriteMask = COLOR_WRITE_MASK_RGBA,    \
+	}
+#define DEFAULT_COLOR_BLEND_STATE_OPAQUE                              \
+	(VkPipelineColorBlendStateCreateInfo) {                           \
+		VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,     \
+		.logicOp = VK_LOGIC_OP_COPY,                                  \
+		.attachmentCount = 2,                                         \
+		.pAttachments = (VkPipelineColorBlendAttachmentState[]) {     \
+			/* Color */ DEFAULT_COLOR_BLEND_ATTACHMENT_STATE_OPAQUE,  \
+			/* Normal */ DEFAULT_COLOR_BLEND_ATTACHMENT_STATE_OPAQUE, \
+		},                                                            \
+	}
+#define DEFAULT_COLOR_BLEND_STATE_ALPHA_BLEND                              \
+	(VkPipelineColorBlendStateCreateInfo) {                                \
+		VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,          \
+		.logicOp = VK_LOGIC_OP_COPY,                                       \
+		.attachmentCount = 2,                                              \
+		.pAttachments = (VkPipelineColorBlendAttachmentState[]) {          \
+			/* Color */ DEFAULT_COLOR_BLEND_ATTACHMENT_STATE_ALPHA_BLEND,  \
+			/* Normal */ DEFAULT_COLOR_BLEND_ATTACHMENT_STATE_ALPHA_BLEND, \
+		},                                                                 \
 	}
 
 static void CreateBasicPipeLayout()
@@ -1368,7 +1393,8 @@ static void CreateObjectSetLayout()
 			.binding = VK_SET_BIND_INDEX_OBJECT_BUFFER,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT |
+						  VK_SHADER_STAGE_FRAGMENT_BIT,
 		},
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.objectSetLayout));
@@ -1410,7 +1436,7 @@ void vkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, V
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		},
 		.pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
-		.pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
+		.pColorBlendState = &DEFAULT_COLOR_BLEND_STATE_OPAQUE,
 		.pDynamicState = &DEFAULT_DYNAMIC_STATE,
 		.layout = layout,
 		.renderPass = renderPass,
@@ -1476,7 +1502,7 @@ void vkCreateBasicTessellationPipe(const char* vertShaderPath, const char* tescS
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		},
 		.pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
-		.pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
+		.pColorBlendState = &DEFAULT_COLOR_BLEND_STATE_OPAQUE,
 		.pDynamicState = &DEFAULT_DYNAMIC_STATE,
 		.layout = layout,
 		.renderPass = renderPass,
@@ -1527,7 +1553,7 @@ void vkCreateBasicTaskMeshPipe(const char* taskShaderPath, const char* meshShade
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		},
 		.pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
-		.pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
+		.pColorBlendState = &DEFAULT_COLOR_BLEND_STATE_OPAQUE,
 		.pDynamicState = &DEFAULT_DYNAMIC_STATE,
 		.layout = layout,
 		.renderPass = renderPass,
@@ -1557,17 +1583,12 @@ static void CreateLinePipeLayout()
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = VK_PIPE_SET_INDEX_LINE_COUNT,
 		.pSetLayouts = pSetLayouts,
-		.pushConstantRangeCount = 2,
+		.pushConstantRangeCount = 1,
 		.pPushConstantRanges = (VkPushConstantRange[]){
 			{
-				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				.offset = VK_PIPE_PUSH_OFFSET_LINE_PRIMARY_COLOR,
-				.size = sizeof(vec4)
-			},
-			{
-				.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-				.offset = VK_PIPE_PUSH_OFFSET_LINE_SECONDARY_COLOR,
-				.size = sizeof(vec4)
+				.stageFlags = VK_SHADER_STAGE_LINE,
+				.offset = 0,
+				.size = sizeof(VkLineMaterialState )
 			},
 		},
 	};
@@ -1643,16 +1664,13 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		},
 		.pDepthStencilState = &DEFAULT_DEPTH_STENCIL_STATE,
-		.pColorBlendState = &DEFAULT_OPAQUE_COLOR_BLEND_STATE,
+		.pColorBlendState = &DEFAULT_COLOR_BLEND_STATE_OPAQUE,
 		.pDynamicState = &(VkPipelineDynamicStateCreateInfo){
 			VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-			.dynamicStateCount = 6,
+			.dynamicStateCount = 3,
 			.pDynamicStates = (VkDynamicState[]){
 				VK_DYNAMIC_STATE_VIEWPORT,
 				VK_DYNAMIC_STATE_SCISSOR,
-				VK_DYNAMIC_STATE_LINE_RASTERIZATION_MODE_EXT,
-				VK_DYNAMIC_STATE_LINE_STIPPLE_ENABLE_EXT,
-				VK_DYNAMIC_STATE_LINE_STIPPLE_EXT,
 				VK_DYNAMIC_STATE_LINE_WIDTH,
 			},
 		},
@@ -2646,6 +2664,9 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 	/// Device
 	{
 		// Features
+//		VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features = {
+//			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+//		};
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT,
 			.rectangularLines = VK_TRUE,
@@ -2762,6 +2783,9 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			VK_EXTERNAL_FENCE_EXTENSION_NAME,
 			VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
 			VK_EXT_LINE_RASTERIZATION_EXTENSION_NAME,
+			VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
+			VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
+			VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
 		};
 
 		VkDeviceCreateInfo deviceCreateInfo = {
@@ -2810,10 +2834,10 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 		.surface = surface,
 		.minImageCount = VK_SWAP_COUNT,
-		.imageFormat = VK_FORMAT_B8G8R8A8_SRGB,
+		.imageFormat = VK_SWAP_FORMAT,
 		.imageExtent = {DEFAULT_WIDTH, DEFAULT_HEIGHT},
 		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
@@ -2827,8 +2851,18 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
 	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, pSwap->images));
-	for (int i = 0; i < VK_SWAP_COUNT; ++i)
+	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
+		VkImageViewCreateInfo viewCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = pSwap->images[i],
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = VK_SWAP_FORMAT,
+			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		};
+		VK_CHECK(vkCreateImageView(vk.context.device, &viewCreateInfo, VK_ALLOC, &pSwap->views[i]));
 		vkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
+		vkSetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)pSwap->views[i], "SwapImageView");
+	}
 
 	VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 	VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->acquireSemaphore));

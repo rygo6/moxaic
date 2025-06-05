@@ -1,7 +1,7 @@
 #version 450
 
 #include "global_binding.glsl"
-#include "node_binding.glsl"
+#include "binding_node.glsl"
 
 layout (vertices = 4) out;
 
@@ -15,7 +15,7 @@ void main()
 {
     if (gl_InvocationID == 0)
     {
-        vec2 uvDiff =  abs(nodeUBO.lrUV - nodeUBO.ulUV);
+        vec2 uvDiff =  abs(nodeState.lrUV - nodeState.ulUV);
 
         vec2 tessellationFactor = uvDiff * 64;
         gl_TessLevelOuter[0] = tessellationFactor.y;

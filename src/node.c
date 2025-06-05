@@ -697,9 +697,9 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->camera.zFar = 100.0f;
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
-		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
+//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
 //		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
-//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 		NodeHandle handle = RequestExternalNodeHandle(pNodeShrd);
 

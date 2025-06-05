@@ -1,4 +1,4 @@
-layout (set = 1, binding = 0) uniform NodeUBO {
+layout (set = 1, binding = 0) uniform NodeState {
     mat4 model;
 
     // Laid out to be alignment with GlobalSet
@@ -13,7 +13,7 @@ layout (set = 1, binding = 0) uniform NodeUBO {
 
     vec2 ulUV;
     vec2 lrUV;
-} nodeUBO;
+} nodeState;
 
 layout (set = 1, binding = 1) uniform sampler2D nodeColor;
 layout (set = 1, binding = 2) uniform sampler2D nodeGBuffer;

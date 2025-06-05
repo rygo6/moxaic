@@ -2,7 +2,7 @@
 #extension GL_EXT_mesh_shader : require
 
 #include "global_binding.glsl"
-#include "node_binding.glsl"
+#include "binding_node.glsl"
 #include "mesh_comp_constants.glsl"
 
 void main()

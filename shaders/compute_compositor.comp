@@ -5,7 +5,7 @@
 #extension GL_KHR_shader_subgroup_ballot : require
 
 #include "global_binding.glsl"
-#include "node_binding.glsl"
+#include "binding_node.glsl"
 
 #include "common_util.glsl"
 #include "math.glsl"
@@ -201,8 +201,8 @@ void main()
     ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
 
 //    { // Debug lines
-//        ivec2 ulCoord = CoordFromUVRound(nodeUBO.ulUV, outputSize);
-//        ivec2 lrCoord = CoordFromUVRound(nodeUBO.lrUV, outputSize);
+//        ivec2 ulCoord = CoordFromUVRound(nodeState.ulUV, outputSize);
+//        ivec2 lrCoord = CoordFromUVRound(nodeState.lrUV, outputSize);
 //        ivec2 urCoord = ivec2(ulCoord.x, lrCoord.y);
 //        ivec2 llCoord = ivec2(lrCoord.x, ulCoord.y);
 //        if (WriteDebugLine(ulCoord, urCoord, grid_GlobalCoord))
@@ -215,7 +215,7 @@ void main()
 //        return;
 //    }
 
-    if (any(lessThan(intersectNodeUV, nodeUBO.ulUV)) || any(greaterThan(intersectNodeUV, nodeUBO.lrUV))) {
+    if (any(lessThan(intersectNodeUV, nodeState.ulUV)) || any(greaterThan(intersectNodeUV, nodeState.lrUV))) {
         return;
     }
 

@@ -1,7 +1,7 @@
 #version 450
 
 #include "global_binding.glsl"
-#include "node_binding.glsl"
+#include "binding_node.glsl"
 #include "mesh_comp_constants.glsl"
 
 layout (location = 0) in VertexInput {

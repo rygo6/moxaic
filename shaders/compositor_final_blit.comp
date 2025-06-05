@@ -1,0 +1,24 @@
+#version 450
+
+#include "math.glsl"
+#include "subgroup_grid.glsl"
+#include "logging.glsl"
+
+#define BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER 0
+#define BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER 1
+
+layout (local_size_x = SUBGROUP_COUNT, local_size_y = WORKGROUP_SUBGROUP_COUNT, local_size_z = 1) in;
+
+layout (set = 0, binding = 0, rgba8) uniform readonly image2D src[];
+layout (set = 0, binding = 1, rgba8) uniform writeonly image2D dst;
+
+void main()
+{
+    ivec2 outputSize = imageSize(dst);
+    InitializeSubgroupGridInfo(outputSize);
+
+    vec4 graphicsSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER], grid_GlobalCoord);
+    vec4 computeSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER], grid_GlobalCoord);
+    vec4 finalColor = computeSample.a > 0 ? computeSample : graphicsSample;
+    imageStore(dst, grid_GlobalCoord, finalColor);
+}

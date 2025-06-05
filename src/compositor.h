@@ -34,6 +34,10 @@ typedef struct MxcCompositor {
   VkPipelineLayout      gbufferProcessPipeLayout;
   VkPipeline            gbufferProcessBlitUpPipe;
 
+  VkDescriptorSetLayout finalBlitSetLayout;
+  VkPipelineLayout      finalBlitPipeLayout;
+  VkPipeline            finalBlitPipe;
+
   MxcProcessState*      pProcessStateMapped;
   VkSharedBuffer        processSetBuffer;
 
