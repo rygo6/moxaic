@@ -52,7 +52,7 @@ typedef enum MxcNodeType {
 	MXC_NODE_TYPE_COUNT
 } MxcNodeType;
 
-typedef enum MxcSwapScale {
+typedef enum MxcSwapScale : u8{
 	MXC_SWAP_SCALE_FULL,
 	MXC_SWAP_SCALE_HALF,
 	MXC_SWAP_SCALE_QUARTER,
@@ -66,7 +66,7 @@ typedef struct MxcDepthState {
 	float farZ;
 } MxcDepthState;
 
-typedef enum MxcCompositorMode {
+typedef enum MxcCompositorMode : u8 {
 	MXC_COMPOSITOR_MODE_QUAD,
 	MXC_COMPOSITOR_MODE_TESSELATION,
 	MXC_COMPOSITOR_MODE_TASK_MESH,
@@ -121,6 +121,8 @@ typedef struct MxcNodeShared {
 
 	// Swap
 	XrSwapType  swapType;
+	u16 swapWidth;
+	u16 swapHeight;
 
 } MxcNodeShared;
 
@@ -150,12 +152,17 @@ typedef struct MxcExternalNodeMemory {
 ////
 typedef uint16_t swap_index_t;
 typedef struct MxcSwapInfo {
-	XrSwapType        type  : 4;
-	XrSwapOutputFlags usage : 4;
+	XrSwapType        type;
+	XrSwapOutputFlags usage;
+
 	// not sure if I will use these
-	MxcSwapScale      xScale         : 4;
-	MxcSwapScale      yScale         : 4;
-	MxcCompositorMode compositorMode : 4;
+	MxcSwapScale xScale;
+	MxcSwapScale yScale;
+
+	u16 width;
+	u16 height;
+
+	MxcCompositorMode compositorMode;
 } MxcSwapInfo;
 
 typedef struct MxcSwap {

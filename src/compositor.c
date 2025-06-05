@@ -568,11 +568,11 @@ run_loop:
 		vkCmdResetBegin(graphCmd);
 
 		for (int iNode = 0; iNode < nodeCount; ++iNode) {
-			auto pNodeShared = activeNodesShared[iNode];
+			auto pNodeShrd = activeNodesShared[iNode];
 
 			// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 			// shared: 569 - semaphore: 315416 ratio: 554.333919
-			u64 nodeTimeline = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
+			u64 nodeTimeline = atomic_load_explicit(&pNodeShrd->timelineValue, memory_order_acquire);
 
 			if (nodeTimeline < 1)
 				continue;
@@ -580,7 +580,7 @@ run_loop:
 			auto pNodeCompData = &nodeCompositorData[iNode];
 
 			// We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
-			memcpy(&pNodeCompData->rootPose, &pNodeShared->rootPose, sizeof(MidPose));
+			memcpy(&pNodeCompData->rootPose, &pNodeShrd->rootPose, sizeof(MidPose));
 			//nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
 
 			// update node model mat... this should happen every frame so user can move it in comp
@@ -598,7 +598,7 @@ run_loop:
 				VkImageMemoryBarrier2* pFinBars;
 				VkImageLayout          finalLayout;
 				// we want to seperates this into compute and graphics loops
-				switch (pNodeShared->compositorMode){
+				switch (pNodeShrd->compositorMode){
 
 					case MXC_COMPOSITOR_MODE_QUAD:
 					case MXC_COMPOSITOR_MODE_TESSELATION:
@@ -625,9 +625,7 @@ run_loop:
 				ResetQueryPool(device, timeQueryPool, 0, 2);
 				CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-//				ivec2 extent = { pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y };
-
-				ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+				ivec2 extent = IVEC2(pNodeShrd->swapWidth, pNodeShrd->swapHeight);
 				u32   pixelCt = extent.x * extent.y;
 				u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
@@ -635,7 +633,7 @@ run_loop:
 				u32   mipPixelCt = mipExtent.x * mipExtent.y;
 				u32   mipGroupCt = MAX(mipPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT, 1);
 
-				auto pProcState = &pNodeShared->processState;
+				auto pProcState = &pNodeShrd->processState;
 				pProcState->cameraNearZ = globCam.zNear;
 				pProcState->cameraFarZ = globCam.zFar;
 				memcpy(pComp->pProcessStateMapped, pProcState, sizeof(MxcProcessState));
@@ -683,13 +681,13 @@ run_loop:
 			{  // Calc new node uniform and shared data
 
 				// move the globalSetState that was previously used to render into the nodeSetState to use in comp
-				memcpy(&pNodeCompData->nodeSetState.view, (void*)&pNodeShared->globalSetState, sizeof(VkGlobalSetState));
-				pNodeCompData->nodeSetState.ulUV = pNodeShared->ulClipUV;
-				pNodeCompData->nodeSetState.lrUV = pNodeShared->lrClipUV;
+				memcpy(&pNodeCompData->nodeSetState.view, (void*)&pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
+				pNodeCompData->nodeSetState.ulUV = pNodeShrd->ulClipUV;
+				pNodeCompData->nodeSetState.lrUV = pNodeShrd->lrClipUV;
 
 				memcpy(pNodeCompData->pSetMapped, &pNodeCompData->nodeSetState, sizeof(MxcNodeCompositorSetState));
 
-				float radius = pNodeShared->compositorRadius;
+				float radius = pNodeShrd->compositorRadius;
 
 				vec3 lub = VEC3(-radius, -radius, -radius);
 				vec3 luf = VEC3(-radius, -radius, radius);
@@ -740,24 +738,24 @@ run_loop:
 				vkLineAdd(pLine, rub, rdb);
 
 				// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
-				pNodeShared->cameraPose = globCamPose;
-				pNodeShared->camera = globCam;
+				pNodeShrd->cameraPose = globCamPose;
+				pNodeShrd->camera = globCam;
 
-				pNodeShared->left.active = false;
-				pNodeShared->left.gripPose = globCamPose;
-				pNodeShared->left.aimPose = globCamPose;
-				pNodeShared->left.selectClick = mxcWindowInput.leftMouseButton;
+				pNodeShrd->left.active = false;
+				pNodeShrd->left.gripPose = globCamPose;
+				pNodeShrd->left.aimPose = globCamPose;
+				pNodeShrd->left.selectClick = mxcWindowInput.leftMouseButton;
 
-				pNodeShared->right.active = true;
-				pNodeShared->right.gripPose = globCamPose;
-				pNodeShared->right.aimPose = globCamPose;
-				pNodeShared->right.selectClick = mxcWindowInput.leftMouseButton;
+				pNodeShrd->right.active = true;
+				pNodeShrd->right.gripPose = globCamPose;
+				pNodeShrd->right.aimPose = globCamPose;
+				pNodeShrd->right.selectClick = mxcWindowInput.leftMouseButton;
 
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
-				memcpy(&pNodeShared->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-				pNodeShared->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
-				pNodeShared->ulClipUV = uvMinClamp;
-				pNodeShared->lrClipUV = uvMaxClamp;
+				memcpy(&pNodeShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
+				pNodeShrd->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
+				pNodeShrd->ulClipUV = uvMinClamp;
+				pNodeShrd->lrClipUV = uvMaxClamp;
 				atomic_thread_fence(memory_order_release);
 			}
 		}

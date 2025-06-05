@@ -86,6 +86,7 @@ typedef enum XrSwapType : u8 {
 	XR_SWAP_TYPE_STEREO_SINGLE,
 	XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
 	XR_SWAP_TYPE_STEREO_DOUBLE_WIDE,
+	XR_SWAP_TYPE_ERROR,
 	XR_SWAP_TYPE_COUNT,
 } XrSwapType;
 
@@ -158,7 +159,7 @@ void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
 
 void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
-void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType);
+void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType);
 void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle);
 void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ);
 
@@ -2285,7 +2286,7 @@ XR_PROC xrCreateSwapchain(
 
 	// This is making a big assumption that all swaps wil be the same size... we should probably enable individual request
 	// unfortunately you can't know all swaps itll want up front and you dont know it till it calls this
-	xrCreateSwapImages(pSess->index, pSess->swapType);
+	xrCreateSwapImages(pSess->index, createInfo, pSess->swapType);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {

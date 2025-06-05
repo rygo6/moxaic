@@ -51,9 +51,7 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 #define IVEC4(x, y, z, w) (ivec4) {{x, y, z, w}}
 #define VEC4(x, y, z, w) (vec4) {{x, y, z, w}}
 
-#define GET_MACRO(_1, _2, _3, NAME, ...) NAME
-
-
+#define GET_MACRO(_1, _2, _3, _4, NAME, ...) NAME
 
 #define TO_VEC4_1(_) _Generic((_),            \
 	float: (vec4){{(_).x, 0.0f, 0.0f, 0.0f}}, \
@@ -66,7 +64,8 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 #define TO_VEC4_3(_, _0, _1) _Generic((_), \
 	float: (vec4){{(_).x, _0, _1, _1}},    \
 	vec2: (vec4){{(_).x, (_).y, (_0), (_1)}})
-#define TO_VEC4(...) GET_MACRO(__VA_ARGS__, TO_VEC4_3, TO_VEC4_2, TO_VEC4_1)(__VA_ARGS__)
+#define TO_VEC4_4(_0, _1, _2, _3) (vec4){{(_).x, (_).y, (_0), (_1)}}
+#define TO_VEC4(...) GET_MACRO(__VA_ARGS__, TO_VEC4_4 ,TO_VEC4_3, TO_VEC4_2, TO_VEC4_1)(__VA_ARGS__)
 
 
 #define MAT_UNION(name, type, simd_type, align, count, vec_name, ...) \

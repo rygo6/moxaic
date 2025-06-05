@@ -991,7 +991,7 @@ int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target)
 	MxcRingBufferHandle head = pBuffer->head;
 	MxcRingBufferHandle tail = pBuffer->tail;
 	if (head + 1 == tail) {
-		fprintf(stderr, "Ring buffer wrapped!");
+		LOG_ERROR("Ring buffer wrapped!\n");
 		return 1;
 	}
 	pBuffer->targets[head] = target;
@@ -1023,22 +1023,29 @@ static void ipcFuncNodeClosed(NodeHandle handle)
 	printf("Closing %d\n", handle);
 	CleanupNode(handle);
 }
-static void ipcFuncClaimSwap(NodeHandle hNd)
+static void ipcFuncClaimSwap(NodeHandle hNode)
 {
-	printf("Claiming swap for %d\n", hNd);
+	printf("Claiming swap for %d\n", hNode);
 
-	auto pNodeCtx = &nodeContexts[hNd];
-	auto pNodeShrd = activeNodesShared[hNd];
-	auto pNodeCompData = &nodeCompositorData[hNd];
+	auto pNodeCtx = &nodeContexts[hNode];
+	auto pNodeShrd = activeNodesShared[hNode];
+	auto pNodeCompData = &nodeCompositorData[hNode];
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_TYPE_THREAD;
 	int  swapCnt = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
+	if (pNodeShrd->swapWidth != DEFAULT_WIDTH || pNodeShrd->swapHeight != DEFAULT_HEIGHT) {
+		LOG_ERROR("Requested swap size not available! %d %d\n", pNodeShrd->swapWidth, pNodeShrd->swapHeight);
+		pNodeShrd->swapType = XR_SWAP_TYPE_ERROR;
+		return;
+	}
 
 	MxcSwapInfo swapInfo = {
 		.type = pNodeShrd->swapType,
 		.yScale = MXC_SWAP_SCALE_FULL,
 		.xScale = MXC_SWAP_SCALE_FULL,
-		.compositorMode = pNodeShrd->compositorMode
+		.width = pNodeShrd->swapWidth,
+		.height = pNodeShrd->swapHeight,
+		.compositorMode = pNodeShrd->compositorMode,
 	};
 	for (int si = 0; si < swapCnt; ++si) {
 

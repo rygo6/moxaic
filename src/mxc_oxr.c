@@ -83,18 +83,25 @@ void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
-void xrCreateSwapImages(XrSessionIndex sessionIndex, XrSwapType swapType)
+void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType)
 {
 	auto pNodeCtxt = &nodeContexts[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
+
 	if (pNodeShrd->swapType != swapType) {
 		pImports->claimedColorSwapCount = 0;
 		pImports->claimedDepthSwapCount = 0;
 		pNodeShrd->swapType = swapType;
+		pNodeShrd->swapWidth = createInfo->width;
+		pNodeShrd->swapHeight = createInfo->height;\
+
 		mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
-		printf("Waiting on swap claim.\n"); /// really we should wait elsewhere
+
 		WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
+
+		if (pNodeShrd->swapType == XR_SWAP_TYPE_ERROR)
+			LOG_ERROR("OXR could not acquire swap!");
 	}
 }
 
