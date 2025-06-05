@@ -3,6 +3,7 @@
 #include "mid_window.h"
 #include "window.h"
 
+#include <_mingw_mac.h>
 #include <stdatomic.h>
 #include <assert.h>
 #include <vulkan/vk_enum_string_helper.h>
@@ -301,7 +302,7 @@ static void CreateGBufferProcessPipeLayout(VkDescriptorSetLayout layout, VkPipel
 ////////
 //// Run
 ////
-void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorCreateInfo* pInfo, const MxcCompositor* pComp)
+void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorCreateInfo* pInfo, MxcCompositor* pComp)
 {
 	VkDevice device = vk.context.device;
 
@@ -330,6 +331,8 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCtx, const MxcCompositorC
 	VkQueryPool timeQueryPool = pComp->timeQueryPool;
 
 	VkSwapContext swap = pCtx->swap;
+
+	VkSharedLine* pLine = &pComp->line;
 
 	MidCamera globCam = {
 		.yFovRad = RAD_FROM_DEG(45.0f),
@@ -687,37 +690,71 @@ run_loop:
 
 				float radius = pNodeShared->compositorRadius;
 
-				vec4 ulbModel = Vec4Rot(globCamPose.rotation, (vec4){.x = -radius, .y = -radius, .z = -radius, .w = 1});
-				vec4 ulbWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, ulbModel);
-				vec4 ulbClip = Vec4MulMat4(globSetState.view, ulbWorld);
-				vec3 ulbNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, ulbClip));
-				vec2 ulbUV = UVFromNDC(ulbNDC);
+				// left up back
+				vec3 lub = VEC3(-radius, -radius, -radius);
+				vec4 lubModel = Vec4Rot(globCamPose.rotation, TO_VEC4(lub, 1.0f));
+				vec4 lubWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, lubModel);
+				vec4 lubClip = Vec4MulMat4(globSetState.view, lubWorld);
+				vec3 lubNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lubClip));
+				vec2 lubUV = UVFromNDC(lubNDC);
 
-				vec4 ulfModel = Vec4Rot(globCamPose.rotation, (vec4){.x = -radius, .y = -radius, .z = radius, .w = 1});
-				vec4 ulfWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, ulfModel);
-				vec4 ulfClip = Vec4MulMat4(globSetState.view, ulfWorld);
-				vec3 ulfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, ulfClip));
-				vec2 ulfUV = UVFromNDC(ulfNDC);
+				// left up front
+				vec3 luf = VEC3(-radius, -radius, radius);
+				vec4 lufModel = Vec4Rot(globCamPose.rotation, TO_VEC4(luf, 1.0f));
+				vec4 lufWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, lufModel);
+				vec4 lufClip = Vec4MulMat4(globSetState.view, lufWorld);
+				vec3 lufNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lufClip));
+				vec2 lufUV = UVFromNDC(lufNDC);
 
-				vec2 ulUV = ulfNDC.z < 0 ? ulbUV : Vec2Min(ulfUV, ulbUV);
-				vec2 ulUVClamp = Vec2Clamp(ulUV, 0.0f, 1.0f);
+				vec2 luUV = lufNDC.z < 0 ? lubUV : Vec2Min(lufUV, lubUV);
+				vec2 luUVClamp = Vec2Clamp(luUV, 0.0f, 1.0f);
 
-				vec4 lrbModel = Vec4Rot(globCamPose.rotation, (vec4){.x = radius, .y = radius, .z = -radius, .w = 1});
-				vec4 lrbWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, lrbModel);
-				vec4 lrbClip = Vec4MulMat4(globSetState.view, lrbWorld);
-				vec3 lrbNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lrbClip));
-				vec2 lrbUV = UVFromNDC(lrbNDC);
+				// right down back
+				vec3 rdb = VEC3(radius, radius, -radius);
+				vec4 rdbModel = Vec4Rot(globCamPose.rotation, TO_VEC4(rdb, 1.0f));
+				vec4 rdbWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, rdbModel);
+				vec4 rdbClip = Vec4MulMat4(globSetState.view, rdbWorld);
+				vec3 rdbNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, rdbClip));
+				vec2 rdbUV = UVFromNDC(rdbNDC);
 
-				vec4 lrfModel = Vec4Rot(globCamPose.rotation, (vec4){.x = radius, .y = radius, .z = radius, .w = 1});
-				vec4 lrfWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, lrfModel);
-				vec4 lrfClip = Vec4MulMat4(globSetState.view, lrfWorld);
-				vec3 lrfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lrfClip));
-				vec2 lrfUV = UVFromNDC(lrfNDC);
+				// right down front
+				vec3 rdf = VEC3(radius, radius, radius);
+				vec4 rdfModel = Vec4Rot(globCamPose.rotation, TO_VEC4(rdf, 1.0f));
+				vec4 rdfWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, rdfModel);
+				vec4 rdfClip = Vec4MulMat4(globSetState.view, rdfWorld);
+				vec3 rdfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, rdfClip));
+				vec2 rdfUV = UVFromNDC(rdfNDC);
 
-				vec2 lrUV = lrfNDC.z < 0 ? lrbUV : Vec2Max(lrbUV, lrfUV);
-				vec2 lrUVClamp = Vec2Clamp(lrUV, 0.0f, 1.0f);
+				vec2 rdUV = rdfNDC.z < 0 ? rdbUV : Vec2Max(rdbUV, rdfUV);
+				vec2 rdUVClamp = Vec2Clamp(rdUV, 0.0f, 1.0f);
 
-				vec2 diff = {.vec = lrUVClamp.vec - ulUVClamp.vec};
+				vec2 uvDiff = {.vec = rdUVClamp.vec - luUVClamp.vec};
+
+				vkLineClear(pLine);
+//				vec3 luf = VEC3(lufModel.x, lufModel.y, lufModel.z);
+//				vec3 lub = VEC3(lufModel.x, lufModel.y, rdbModel.z);
+				vec3 rub = VEC3(rdb.x, luf.y, rdb.z);
+				vec3 ruf = VEC3(rdb.x, luf.y, luf.z);
+
+//				vec3 rdf = VEC3(rdbModel.x, rdbModel.y, lufModel.z);
+//				vec3 rdb = VEC3(rdbModel.x, rdbModel.y, rdbModel.z);
+				vec3 ldb = VEC3(luf.x, rdb.y, rdb.z);
+				vec3 ldf = VEC3(luf.x, rdb.y, luf.z);
+
+				vkLineAdd(pLine, luf, lub);
+				vkLineAdd(pLine, lub, rub);
+				vkLineAdd(pLine, rub, ruf);
+				vkLineAdd(pLine, ruf, luf);
+
+				vkLineAdd(pLine, rdf, rdb);
+				vkLineAdd(pLine, rdb, ldb);
+				vkLineAdd(pLine, ldb, ldf);
+				vkLineAdd(pLine, ldf, rdf);
+
+				vkLineAdd(pLine, luf, ldf);
+				vkLineAdd(pLine, lub, ldb);
+				vkLineAdd(pLine, ruf, rdf);
+				vkLineAdd(pLine, rub, rdb);
 
 				// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
 				pNodeShared->cameraPose = globCamPose;
@@ -735,9 +772,9 @@ run_loop:
 
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShared->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-				pNodeShared->globalSetState.framebufferSize = IVEC2(diff.x * DEFAULT_WIDTH, diff.y * DEFAULT_HEIGHT);
-				pNodeShared->ulClipUV = ulUV;
-				pNodeShared->lrClipUV = lrUV;
+				pNodeShared->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
+				pNodeShared->ulClipUV = luUV;
+				pNodeShared->lrClipUV = rdUV;
 				atomic_thread_fence(memory_order_release);
 			}
 		}
@@ -801,13 +838,15 @@ run_loop:
 			CmdBindPipeline(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
 			CmdBindDescriptorSets(graphCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
 
-			vec4 lineColor = VEC4(0.0f, 1.0f, 1.0f, 1.0f);
+			vec4 lineColor = VEC4(1, 1, 1, 0.5f);
 			vkCmdPushPrimaryColor(graphCmd, lineColor);
 
-			vkCmdSetLineWidth(graphCmd, 8.0f);
+			vkCmdSetLineWidth(graphCmd, 4.0f);
 
-			CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){quadPatchBuffer}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
-			vkCmdDraw(graphCmd, quadPatchOffsets.indexCount, 1, 0, 0);
+			memcpy(pLine->pMapped, &pLine->state, sizeof(vec3) * pLine->count);
+
+			CmdBindVertexBuffers(graphCmd, 0, 1, (VkBuffer[]){pComp->line.buffer.buffer}, (VkDeviceSize[]){0});
+			vkCmdDraw(graphCmd, pComp->line.count, 1, 0, 0);
 		}
 
 //		ResetQueryPool(device, timeQueryPool, 0, 2);
@@ -1005,6 +1044,15 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 				break;
 			default: PANIC("Compositor mode not supported!");
 		}
+
+		VkRequestAllocationInfo lineRequest = {
+			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+			.size = sizeof(vec3) * 64,
+			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			.locality = VK_LOCALITY_CONTEXT,
+			.dedicated = VK_DEDICATED_MEMORY_FALSE,
+		};
+		vkCreateSharedBuffer(&lineRequest, &pCompositor->line.buffer);
 	}
 
 	/// Compute Pipe
@@ -1196,6 +1244,9 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 
 	vkBindUpdateQuadPatchMesh(0.5f, &pComp->quadPatchMesh);
 
+	vkBindSharedBuffer(&pComp->line.buffer);
+	pComp->line.pMapped = vkSharedBufferPtr(pComp->line.buffer);
+
 	vkBindSharedBuffer(&pComp->globalBuffer);
 
 	vkBindSharedBuffer(&pComp->processSetBuffer);
@@ -1220,11 +1271,11 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 
 void* mxcCompNodeThread(MxcCompositorContext* pContext)
 {
-	MxcCompositor compositor;
+	MxcCompositor compositor = {};
 	MxcCompositorCreateInfo info = {
 		// compute is always running...
 		// really this needs to be a flag
-		// these need to all be supported simoultaneously
+		// these need to all be supported simultaneously
 		.mode = MXC_COMPOSITOR_MODE_QUAD,
 //		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
 //		.mode = MXC_COMPOSITOR_MODE_COMPUTE,
