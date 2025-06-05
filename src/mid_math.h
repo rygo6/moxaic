@@ -53,6 +53,8 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 
 #define GET_MACRO(_1, _2, _3, NAME, ...) NAME
 
+
+
 #define TO_VEC4_1(_) _Generic((_),            \
 	float: (vec4){{(_).x, 0.0f, 0.0f, 0.0f}}, \
 	vec2: (vec4){{(_).x, (_).y, 0.0f, 0.0f}}, \

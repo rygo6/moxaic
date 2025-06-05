@@ -6,6 +6,7 @@
 #include <_mingw_mac.h>
 #include <stdatomic.h>
 #include <assert.h>
+#include <float.h>
 #include <vulkan/vk_enum_string_helper.h>
 
 #define VkDescriptorSetLayoutCreateInfo(...) (VkDescriptorSetLayoutCreateInfo) {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, __VA_ARGS__ }
@@ -690,57 +691,39 @@ run_loop:
 
 				float radius = pNodeShared->compositorRadius;
 
-				// left up back
 				vec3 lub = VEC3(-radius, -radius, -radius);
-				vec4 lubModel = Vec4Rot(globCamPose.rotation, TO_VEC4(lub, 1.0f));
-				vec4 lubWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, lubModel);
-				vec4 lubClip = Vec4MulMat4(globSetState.view, lubWorld);
-				vec3 lubNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lubClip));
-				vec2 lubUV = UVFromNDC(lubNDC);
-
-				// left up front
 				vec3 luf = VEC3(-radius, -radius, radius);
-				vec4 lufModel = Vec4Rot(globCamPose.rotation, TO_VEC4(luf, 1.0f));
-				vec4 lufWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, lufModel);
-				vec4 lufClip = Vec4MulMat4(globSetState.view, lufWorld);
-				vec3 lufNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, lufClip));
-				vec2 lufUV = UVFromNDC(lufNDC);
+				vec3 ldb = VEC3(-radius, radius, -radius);
+				vec3 ldf = VEC3(-radius, radius, radius);
 
-				vec2 luUV = lufNDC.z < 0 ? lubUV : Vec2Min(lufUV, lubUV);
-				vec2 luUVClamp = Vec2Clamp(luUV, 0.0f, 1.0f);
-
-				// right down back
+				vec3 rub = VEC3(radius, -radius, -radius);
+				vec3 ruf = VEC3(radius, -radius, radius);
 				vec3 rdb = VEC3(radius, radius, -radius);
-				vec4 rdbModel = Vec4Rot(globCamPose.rotation, TO_VEC4(rdb, 1.0f));
-				vec4 rdbWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, rdbModel);
-				vec4 rdbClip = Vec4MulMat4(globSetState.view, rdbWorld);
-				vec3 rdbNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, rdbClip));
-				vec2 rdbUV = UVFromNDC(rdbNDC);
-
-				// right down front
 				vec3 rdf = VEC3(radius, radius, radius);
-				vec4 rdfModel = Vec4Rot(globCamPose.rotation, TO_VEC4(rdf, 1.0f));
-				vec4 rdfWorld = Vec4MulMat4(pNodeCompData->nodeSetState.model, rdfModel);
-				vec4 rdfClip = Vec4MulMat4(globSetState.view, rdfWorld);
-				vec3 rdfNDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, rdfClip));
-				vec2 rdfUV = UVFromNDC(rdfNDC);
+				
+				constexpr int cornerCt = 8;
+				vec3 corners[cornerCt] = {	lub, luf, ldb, ldf, rub, ruf, rdb, rdf };
 
-				vec2 rdUV = rdfNDC.z < 0 ? rdbUV : Vec2Max(rdbUV, rdfUV);
-				vec2 rdUVClamp = Vec2Clamp(rdUV, 0.0f, 1.0f);
+				vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
+				vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
+				for (int i = 0; i < cornerCt; ++i) {
+					vec4 Model = TO_VEC4(corners[i], 1.0f);
+					vec4 World = Vec4MulMat4(pNodeCompData->nodeSetState.model, Model);
+					vec4 Clip = Vec4MulMat4(globSetState.view, World);
+					vec3 NDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, Clip));
+					vec2 UV = UVFromNDC(NDC);
+					uvMin.x = MIN(uvMin.x, UV.x);
+					uvMin.y = MIN(uvMin.y, UV.y);
+					uvMax.x = MAX(uvMax.x, UV.x);
+					uvMax.y = MAX(uvMax.y, UV.y);
+				}
 
-				vec2 uvDiff = {.vec = rdUVClamp.vec - luUVClamp.vec};
+
+				vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
+				vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
+				vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
 
 				vkLineClear(pLine);
-//				vec3 luf = VEC3(lufModel.x, lufModel.y, lufModel.z);
-//				vec3 lub = VEC3(lufModel.x, lufModel.y, rdbModel.z);
-				vec3 rub = VEC3(rdb.x, luf.y, rdb.z);
-				vec3 ruf = VEC3(rdb.x, luf.y, luf.z);
-
-//				vec3 rdf = VEC3(rdbModel.x, rdbModel.y, lufModel.z);
-//				vec3 rdb = VEC3(rdbModel.x, rdbModel.y, rdbModel.z);
-				vec3 ldb = VEC3(luf.x, rdb.y, rdb.z);
-				vec3 ldf = VEC3(luf.x, rdb.y, luf.z);
-
 				vkLineAdd(pLine, luf, lub);
 				vkLineAdd(pLine, lub, rub);
 				vkLineAdd(pLine, rub, ruf);
@@ -773,8 +756,8 @@ run_loop:
 				// write current global set state to node's global set state to use for next node render with new the framebuffer size
 				memcpy(&pNodeShared->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
 				pNodeShared->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
-				pNodeShared->ulClipUV = luUV;
-				pNodeShared->lrClipUV = rdUV;
+				pNodeShared->ulClipUV = uvMinClamp;
+				pNodeShared->lrClipUV = uvMaxClamp;
 				atomic_thread_fence(memory_order_release);
 			}
 		}
