@@ -42,6 +42,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define CONCAT(_a, _b) #_a #_b
 #define CACHE_ALIGN __attribute((aligned(64)))
 #define INLINE __attribute__((always_inline)) static inline
+#define EXTRACT_FIELD(_p, _field) auto _field = (_p)->_field
 #define PACKED __attribute__((packed))
 #define ALIGN(size) __attribute((aligned(size)))
 #define LIKELY(x) __builtin_expect(!!(x), 1)

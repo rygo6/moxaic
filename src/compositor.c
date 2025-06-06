@@ -399,10 +399,9 @@ static void CreateFinalBlitPipeLayout(FinalBlitSetLayout layout, FinalBlitPipeLa
 ////////
 //// Run
 ////
-#define EXTRACT_FIELD(_p, _field) auto _field = (_p)->_field
-#define EXTRACT_FIELD_PREFIX(_p, _prefix, _field) auto _prefix##_##_field = (_p)->_field
 void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 {
+	//// Local Extract
 	EXTRACT_FIELD(&vk.context, device);
 	EXTRACT_FIELD(&vk.context, basicPass);
 
@@ -422,16 +421,45 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 	EXTRACT_FIELD(pCst, nodeCompPipe);
 	EXTRACT_FIELD(pCst, nodePostCompPipe);
 
-	EXTRACT_FIELD_PREFIX(&pCst->quadMesh, quad, offsets);
-	EXTRACT_FIELD_PREFIX(&pCst->quadMesh, quad, buf);
+	EXTRACT_FIELD(pCst, finalBlitPipe);
+	EXTRACT_FIELD(pCst, finalBlitPipeLayout);
 
-	EXTRACT_FIELD_PREFIX(&pCst->quadPatchMesh, quadPatch, offsets);
-	EXTRACT_FIELD_PREFIX(&pCst->quadPatchMesh.sharedBuffer, quadPatch, buf);
+	EXTRACT_FIELD(pCst, gbufProcessBlitUpPipe);
+	EXTRACT_FIELD(pCst, gbufProcessPipeLayout);
+	EXTRACT_FIELD(pCst, pProcessStateMapped);
+	auto processSetBuf = pCst->processSetBuffer.buf;
 
 	EXTRACT_FIELD(pCst, timeQryPool);
 	EXTRACT_FIELD(pCstCtx, swapCtx);
 
-	VkSharedLineBuffer* pLine = &pCst->lineBuf;
+	auto quadMeshOffsets = pCst->quadMesh.offsets;
+	auto quadMeshBuf = pCst->quadMesh.buf;
+
+	auto quadPatchOffsets = pCst->quadMesh.offsets;
+	auto quadPatchBuf = pCst->quadMesh.buf;
+
+	auto pLineBuf = &pCst->lineBuf;
+
+	auto gfxFrameColorView = pCst->gfxFrameTex.color.view;
+	auto gfxFrameNormalView = pCst->gfxFrameTex.normal.view;
+	auto gfxFrameDepthView = pCst->gfxFrameTex.depth.view;
+	auto compFrameColorView = pCst->compFrameColorTex.view;
+
+	auto gfxFrameColorImg = pCst->gfxFrameTex.color.image;
+	auto compFrameColorImg = pCst->compFrameColorTex.image;
+
+	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuf.mem);
+
+	// We copy everything locally. Set null to ensure not used!
+	pCstCtx = NULL;
+	pInfo = NULL;
+	pCst = NULL;
+
+
+	//// Local State
+	bool timestampRecorded = false;
+
+	u64 baseCycleValue = 0;
 
 	MidCamera globCam = {
 		.yFovRad = RAD_FROM_DEG(45.0f),
@@ -445,31 +473,15 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 	globCamPose.rotation = QuatFromEuler(globCamPose.euler);
 
 	VkGlobalSetState  globSetState = (VkGlobalSetState){};
-	VkGlobalSetState* pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuf.mem);
 	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState, pGlobSetMapped);
 
-	struct {
-		VkImageView color;
-		VkImageView normal;
-		VkImageView depth;
-	} graphFrameView;
-	graphFrameView.color = pCst->gfxFrameTex.color.view;
-	graphFrameView.normal = pCst->gfxFrameTex.normal.view;
-	graphFrameView.depth = pCst->gfxFrameTex.depth.view;
-
-	VkImageView graphFrameColorView = pCst->gfxFrameTex.color.view;
-	VkImageView cmptFrameColorView = pCst->compFrameColorTex.view;
-
-	VkImage graphFrameColorImg = pCst->gfxFrameTex.color.image;
-	VkImage cmptFrameColorImg = pCst->compFrameColorTex.image;
-
-#define COMPOSITOR_DST_GRAPHICS_READ                                             \
-			.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
-							VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
-							VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
-							VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
-			.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
-			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+#define COMPOSITOR_DST_GRAPHICS_READ                                         \
+	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
+					VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
+					VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
+	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
+	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 
 	// Local Barriers
 	VkImageMemoryBarrier2 localAcquireBarriers[] = {
@@ -641,35 +653,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 		},
 	};
 
-	// Make sure atomics are only using barriers, not locks
-	for (int i = 0; i < nodeCt; ++i) {
-		assert(__atomic_always_lock_free(sizeof(localNodeShrd[i].timelineValue), &localNodeShrd[i].timelineValue));
-	}
-
-	// very common ones should be global to potentially share higher level cache
-	// but maybe do it anyways because it'd just be better? each func pointer is 8 bytes. 8 can fit on a cache line
-	VK_DEVICE_FUNC(CmdPipelineBarrier2)
-	VK_DEVICE_FUNC(ResetQueryPool)
-	VK_DEVICE_FUNC(GetQueryPoolResults)
-	VK_DEVICE_FUNC(CmdWriteTimestamp2)
-	VK_DEVICE_FUNC(CmdBeginRenderPass)
-	VK_DEVICE_FUNC(CmdBindPipeline)
-	VK_DEVICE_FUNC(CmdBlitImage)
-	VK_DEVICE_FUNC(CmdBindDescriptorSets)
-	VK_DEVICE_FUNC(CmdBindVertexBuffers)
-	VK_DEVICE_FUNC(CmdBindIndexBuffer)
-	VK_DEVICE_FUNC(CmdDrawIndexed)
-	VK_DEVICE_FUNC(CmdEndRenderPass)
-	VK_DEVICE_FUNC(EndCommandBuffer)
-	VK_DEVICE_FUNC(AcquireNextImageKHR)
-	VK_DEVICE_FUNC(CmdDrawMeshTasksEXT)
-	VK_DEVICE_FUNC(CmdPushDescriptorSetKHR);
-	VK_DEVICE_FUNC(CmdDispatch);
-
-	bool timestampRecorded = false;
-
-	u64 baseCycleValue = 0;
-
+	//// Loop
 run_loop:
 
 	timestampRecorded = false;
@@ -681,7 +665,7 @@ run_loop:
 	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
 
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
-	vkCmdResetBegin(gfxCmd);
+	CmdResetBegin(gfxCmd);
 
 	//// Update Node States Cycle
 	for (int iNode = 0; iNode < nodeCt; ++iNode) {
@@ -694,22 +678,22 @@ run_loop:
 		if (nodeTimeline < 1)
 			continue;
 
-		auto pNodeCompData = &nodeCstLocal[iNode];
+		auto pNodeCstData = &nodeCstLocal[iNode];
 
 		// We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
-		memcpy(&pNodeCompData->rootPose, &pNodeShrd->rootPose, sizeof(MidPose));
+		memcpy(&pNodeCstData->rootPose, &pNodeShrd->rootPose, sizeof(MidPose));
 		//nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
 
 		// update node model mat... this should happen every frame so user can move it in cst
-		pNodeCompData->nodeSetState.model = Mat4FromPosRot(pNodeCompData->rootPose.position, pNodeCompData->rootPose.rotation);
+		pNodeCstData->nodeSetState.model = Mat4FromPosRot(pNodeCstData->rootPose.position, pNodeCstData->rootPose.rotation);
 
-		if (nodeTimeline <= pNodeCompData->lastTimelineValue)
+		if (nodeTimeline <= pNodeCstData->lastTimelineValue)
 			continue;
 
 		//// Acquire new framebuffers from node
 		{
 			int  iNodeSwap = !(nodeTimeline % VK_SWAP_COUNT);
-			auto pNodeSwap = &pNodeCompData->swaps[iNodeSwap];
+			auto pNodeSwap = &pNodeCstData->swaps[iNodeSwap];
 
 			VkImageMemoryBarrier2* pAcqBars;
 			VkImageMemoryBarrier2* pFinBars;
@@ -739,9 +723,10 @@ run_loop:
 			pAcqBars[3].image = pNodeSwap->gBufferMip;
 			CmdPipelineImageBarriers2(gfxCmd, 4, pAcqBars);
 
-			ResetQueryPool(device, timeQryPool, 0, 2);
-			CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, 0);
+			vk.ResetQueryPool(device, timeQryPool, 0, 2);
+			vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, 0);
 
+			// TODO this could be pulled out of loop
 			ivec2 extent = IVEC2(pNodeShrd->swapWidth, pNodeShrd->swapHeight);
 			u32   pixelCt = extent.x * extent.y;
 			u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
@@ -753,56 +738,58 @@ run_loop:
 			auto pProcState = &pNodeShrd->processState;
 			pProcState->cameraNearZ = globCam.zNear;
 			pProcState->cameraFarZ = globCam.zFar;
-			memcpy(pCst->pProcessStateMapped, pProcState, sizeof(MxcProcessState));
+			memcpy(pProcessStateMapped, pProcState, sizeof(MxcProcessState));
 
-			CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCst->gbufProcessBlitUpPipe);
+			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessBlitUpPipe);
 
 			VkWriteDescriptorSet mipPushSets[] = {
-				BIND_WRITE_GBUFFER_PROCESS_STATE(pCst->processSetBuffer.buf),
+				BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf),
 				BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 				BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipView),
 			};
-			CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCst->gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, COUNT(mipPushSets), mipPushSets);
-			CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
+			vk.CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, COUNT(mipPushSets), mipPushSets);
+			vk.CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
 
-			CmdPipelineImageBarrier2Ext(
-				gfxCmd,
+			VkImageMemoryBarrier2 midBarr = {
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pNodeSwap->gBufferMip,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED);
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			};
+			CmdPipelineImageBarriers2(gfxCmd, 1, &midBarr);
 
 			VkWriteDescriptorSet pushSets[] = {
 				BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView),
 				BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView),
 			};
-			CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCst->gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, COUNT(pushSets), pushSets);
-			CmdDispatch(gfxCmd, 1, groupCt, 1);
+			vk.CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, COUNT(pushSets), pushSets);
+			vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
 			pFinBars[0].image = pNodeSwap->gBuffer;
 			CmdPipelineImageBarriers2(gfxCmd, 1, pFinBars);
 
-			CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQryPool, 1);
+			vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQryPool, 1);
 			timestampRecorded = true;
 
 			VkWriteDescriptorSet writeSets[] = {
-				BIND_WRITE_NODE_COLOR(pNodeCompData->nodeSet, pNodeSwap->colorView, finalLayout),
-				BIND_WRITE_NODE_GBUFFER(pNodeCompData->nodeSet, pNodeSwap->gBufferView, finalLayout),
+				BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, pNodeSwap->colorView, finalLayout),
+				BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, pNodeSwap->gBufferView, finalLayout),
 			};
 			vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 		}
 
-		pNodeCompData->lastTimelineValue = nodeTimeline;
+		pNodeCstData->lastTimelineValue = nodeTimeline;
 
 		//// Calc new node uniform and shared data
 		{
 			// move the globalSetState that was previously used to render into the nodeSetState to use in cst
-			memcpy(&pNodeCompData->nodeSetState.view, (void*)&pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
-			pNodeCompData->nodeSetState.ulUV = pNodeShrd->ulClipUV;
-			pNodeCompData->nodeSetState.lrUV = pNodeShrd->lrClipUV;
+			memcpy(&pNodeCstData->nodeSetState.view, (void*)&pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
+			pNodeCstData->nodeSetState.ulUV = pNodeShrd->ulClipUV;
+			pNodeCstData->nodeSetState.lrUV = pNodeShrd->lrClipUV;
 
-			memcpy(pNodeCompData->pSetMapped, &pNodeCompData->nodeSetState, sizeof(MxcNodeCompositorSetState));
+			memcpy(pNodeCstData->pSetMapped, &pNodeCstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
 
 			float radius = pNodeShrd->compositorRadius;
 
@@ -823,7 +810,7 @@ run_loop:
 			vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
 			for (int i = 0; i < cornerCt; ++i) {
 				vec4 Model = VEC4(corners[i], 1.0f);
-				vec4 World = Vec4MulMat4(pNodeCompData->nodeSetState.model, Model);
+				vec4 World = Vec4MulMat4(pNodeCstData->nodeSetState.model, Model);
 				vec4 Clip = Vec4MulMat4(globSetState.view, World);
 				vec3 NDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, Clip));
 				vec2 UV = UVFromNDC(NDC);
@@ -838,21 +825,21 @@ run_loop:
 			vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
 			vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
 
-			vkLineClear(pLine);
-			vkLineAdd(pLine, luf, lub);
-			vkLineAdd(pLine, lub, rub);
-			vkLineAdd(pLine, rub, ruf);
-			vkLineAdd(pLine, ruf, luf);
+			vkLineClear(pLineBuf);
+			vkLineAdd(pLineBuf, luf, lub);
+			vkLineAdd(pLineBuf, lub, rub);
+			vkLineAdd(pLineBuf, rub, ruf);
+			vkLineAdd(pLineBuf, ruf, luf);
 
-			vkLineAdd(pLine, rdf, rdb);
-			vkLineAdd(pLine, rdb, ldb);
-			vkLineAdd(pLine, ldb, ldf);
-			vkLineAdd(pLine, ldf, rdf);
+			vkLineAdd(pLineBuf, rdf, rdb);
+			vkLineAdd(pLineBuf, rdb, ldb);
+			vkLineAdd(pLineBuf, ldb, ldf);
+			vkLineAdd(pLineBuf, ldf, rdf);
 
-			vkLineAdd(pLine, luf, ldf);
-			vkLineAdd(pLine, lub, ldb);
-			vkLineAdd(pLine, ruf, rdf);
-			vkLineAdd(pLine, rub, rdb);
+			vkLineAdd(pLineBuf, luf, ldf);
+			vkLineAdd(pLineBuf, lub, ldb);
+			vkLineAdd(pLineBuf, ruf, rdf);
+			vkLineAdd(pLineBuf, rub, rdb);
 
 			// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
 			pNodeShrd->cameraPose = globCamPose;
@@ -883,12 +870,12 @@ run_loop:
 
 		vkCmdSetViewport(gfxCmd, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
 		vkCmdSetScissor(gfxCmd, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
-		CmdBeginRenderPass(gfxCmd, basicPass, gfxFrame, VK_PASS_CLEAR_COLOR, graphFrameView.color, graphFrameView.normal, graphFrameView.depth);
+		CmdBeginRenderPass(gfxCmd, basicPass, gfxFrame, VK_PASS_CLEAR_COLOR, gfxFrameColorView, gfxFrameNormalView, gfxFrameDepthView);
 
 		//// Graphic Node Commands
 		{
-			CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeQuadPipe);
-			CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
+			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeQuadPipe);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
 
 			for (int i = 0; i < nodeCt; ++i) {
 				auto pNodShrd = activeNodeShrd[i];
@@ -903,23 +890,20 @@ run_loop:
 				// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 				switch (pNodShrd->compositorMode) {
 					case MXC_COMPOSITOR_MODE_QUAD:
-						CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
-						CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quad_buf}, (VkDeviceSize[]){quad_offsets.vertexOffset});
-						CmdBindIndexBuffer(gfxCmd, quad_buf, 0, VK_INDEX_TYPE_UINT16);
-						CmdDrawIndexed(gfxCmd, quad_offsets.indexCount, 1, 0, 0, 0);
-						//						graphicsBlit = true;
+						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
+						vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadMeshBuf}, (VkDeviceSize[]){quadMeshOffsets.vertexOffset});
+						vk.CmdBindIndexBuffer(gfxCmd, quadMeshBuf, 0, VK_INDEX_TYPE_UINT16);
+						vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 						break;
 					case MXC_COMPOSITOR_MODE_TESSELATION:
-						CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
-						CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadPatch_buf}, (VkDeviceSize[]){quadPatch_offsets.vertexOffset});
-						CmdBindIndexBuffer(gfxCmd, quadPatch_buf, quadPatch_offsets.indexOffset, VK_INDEX_TYPE_UINT16);
-						CmdDrawIndexed(gfxCmd, quadPatch_offsets.indexCount, 1, 0, 0, 0);
-						//						graphicsBlit = true;
+						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
+						vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadPatchBuf}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
+						vk.CmdBindIndexBuffer(gfxCmd, quadPatchBuf, quadPatchOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
+						vk.CmdDrawIndexed(gfxCmd, quadPatchOffsets.indexCount, 1, 0, 0, 0);
 						break;
 					case MXC_COMPOSITOR_MODE_TASK_MESH:
-						CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
-						CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
-						//						graphicsBlit = true;
+						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
+						vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 						break;
 					default:
 						break;
@@ -929,21 +913,21 @@ run_loop:
 
 		//// Graphic Line Commands
 		{
-			CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
-			CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
+			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
 
 			VkLineMaterialState lineState = {.primaryColor = VEC4(1, 1, 1, 0.5f)};
 			vkCmdPushLineMaterial(gfxCmd, lineState);
 
 			vkCmdSetLineWidth(gfxCmd, 1.0f);
 
-			memcpy(pLine->pMapped, &pLine->state, sizeof(vec3) * pLine->count);
+			memcpy(pLineBuf->pMapped, &pLineBuf->state, sizeof(vec3) * pLineBuf->count);
 
-			CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pCst->lineBuf.buffer.buf}, (VkDeviceSize[]){0});
-			vkCmdDraw(gfxCmd, pCst->lineBuf.count, 1, 0, 0);
+			vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
+			vkCmdDraw(gfxCmd, pLineBuf->count, 1, 0, 0);
 		}
 
-		CmdEndRenderPass(gfxCmd);
+		vk.CmdEndRenderPass(gfxCmd);
 	}
 
 //		ResetQueryPool(device, timeQueryPool, 0, 2);
@@ -951,9 +935,9 @@ run_loop:
 
 	/// Compute Recording Cycle. We really must separate into Compute and Graphics lists
 	{
-		CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
-		CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
-		CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutSet, 0, NULL);
+		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutSet, 0, NULL);
 
 //		vkCmdClearColorImage(graphCmd, cmptFbColorImg, VK_IMAGE_LAYOUT_GENERAL, &VK_PASS_CLEAR_COLOR, 1, &VK_COLOR_SUBRESOURCE_RANGE);
 
@@ -975,7 +959,7 @@ run_loop:
 			// really all the nodes need to be set in UBO array and the compute shader do this loop
 			switch (pNodShrd->compositorMode) {
 				case MXC_COMPOSITOR_MODE_COMPUTE:
-					CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &nodeCstLocal[iNode].nodeSet, 0, NULL);
+					vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &nodeCstLocal[iNode].nodeSet, 0, NULL);
 
 					// can be saved
 					ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
@@ -983,8 +967,8 @@ run_loop:
 					int   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 //						int   quadGroupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_QUAD_COUNT;
 
-					CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
-					CmdDispatch(gfxCmd, 1, groupCt, 1);
+					vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
+					vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
 //					// TODO THIS SHOULD BE HAPPENING EVERY FOR LOOP ITERATION
 //					VkImageMemoryBarrier2 postCmptBarr[] = {
@@ -1007,8 +991,8 @@ run_loop:
 //					};
 //					CmdPipelineImageBarriers2(graphCmd, COUNT(postCmptBarr), postCmptBarr);
 
-					CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
-					CmdDispatch(gfxCmd, 1, groupCt, 1);
+					vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
+					vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
 					break;
 				default:
@@ -1022,15 +1006,15 @@ run_loop:
 
 	/// Blit Framebuffer
 	{
-		u32 swapIndex; AcquireNextImageKHR(device, swapCtx.chain, UINT64_MAX, swapCtx.acquireSemaphore, VK_NULL_HANDLE, &swapIndex);
+		u32 swapIndex; vk.AcquireNextImageKHR(device, swapCtx.chain, UINT64_MAX, swapCtx.acquireSemaphore, VK_NULL_HANDLE, &swapIndex);
 		atomic_store_explicit(&compositorContext.swapIdx, swapIndex, memory_order_release);
 		VkImage swapImage = swapCtx.images[compositorContext.swapIdx];
 		VkImageView swapView = swapCtx.views[compositorContext.swapIdx];
 
-		VkImageMemoryBarrier2 cmptBlitBarr[] = {
+		CMD_PIPELINE_IMAGE_BARRIERS(gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = graphFrameColorImg,
+				.image = gfxFrameColorImg,
 				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
@@ -1038,7 +1022,7 @@ run_loop:
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = cmptFrameColorImg,
+				.image = compFrameColorImg,
 				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
@@ -1052,26 +1036,25 @@ run_loop:
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
-		};
-		CmdPipelineImageBarriers2(gfxCmd, COUNT(cmptBlitBarr), cmptBlitBarr);
+		);
 
 		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 		u32   pixelCt = extent.x * extent.y;
 		u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
-		CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCst->finalBlitPipe);
+		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipe);
 		VkWriteDescriptorSet blitPushSets[] = {
-			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(graphFrameColorView, cmptFrameColorView),
+			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(gfxFrameColorView, compFrameColorView),
 			BIND_WRITE_FINAL_BLIT_DST(swapView),
 		};
-		CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, pCst->finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT, COUNT(blitPushSets), blitPushSets);
-		CmdDispatch(gfxCmd, 1, groupCt, 1);
+		vk.CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT, COUNT(blitPushSets), blitPushSets);
+		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
-		VkImageMemoryBarrier2 endBlitBarrier[] = {
+		CMD_PIPELINE_IMAGE_BARRIERS(gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = swapImage,
 				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-				.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT  ,
+				.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
 				.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
 				.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
@@ -1079,17 +1062,16 @@ run_loop:
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = cmptFrameColorImg,
+				.image = compFrameColorImg,
 				VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
 				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
-		};
-		CmdPipelineImageBarriers2(gfxCmd, COUNT(endBlitBarrier), endBlitBarrier);
+		);
 	}
 
-	EndCommandBuffer(gfxCmd);
+	vk.EndCommandBuffer(gfxCmd);
 
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
 
@@ -1100,7 +1082,7 @@ run_loop:
 
 		if (timestampRecorded) {
 			uint64_t timestampsNS[2];
-			GetQueryPoolResults(device, timeQryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
+			vk.GetQueryPoolResults(device, timeQryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
 			double timestampsMS[2];
 			for (uint32_t i = 0; i < 2; ++i) {
 				timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms

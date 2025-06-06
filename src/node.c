@@ -19,6 +19,8 @@ u16                    nodeCt = 0;
 MxcNodeCompositorLocal nodeCstLocal[MXC_NODE_CAPACITY] = {};
 MxcNodeShared*         activeNodeShrd[MXC_NODE_CAPACITY] = {};
 
+NodeHandle activeComputeNode[MXC_COMPOSITOR_MODE_COUNT][MXC_NODE_CAPACITY] = {};
+
 // Only used for local thread nodes. Node from other process will use shared memory.
 // Maybe I could just always make it use shared memory for consistency’s sake?
 MxcNodeShared localNodeShrd[MXC_NODE_CAPACITY] = {};

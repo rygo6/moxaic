@@ -29,7 +29,7 @@
 typedef uint8_t MxcRingBufferHandle;
 #define MXC_RING_BUFFER_CAPACITY 256
 #define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
-_Static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY, "RingBufferHandle type can't store capacity.");
+static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY, "RingBufferHandle type can't store capacity.");
 typedef struct MxcRingBuffer {
 	MxcRingBufferHandle head;
 	MxcRingBufferHandle tail;
@@ -336,6 +336,8 @@ extern MxcNodeContext nodeCtx[MXC_NODE_CAPACITY];
 extern MxcNodeShared localNodeShrd[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
 extern MxcNodeShared* activeNodeShrd[MXC_NODE_CAPACITY];
+// Holds pointer to nodes in each compositor mode
+extern NodeHandle activeComputeNode[MXC_COMPOSITOR_MODE_COUNT][MXC_NODE_CAPACITY];
 
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
@@ -371,7 +373,7 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 	__atomic_thread_fence(__ATOMIC_ACQUIRE);
 	bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
 	while (pendingBuffer) {
-		vkmSubmitCommandBuffer(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
+		CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
 
 		submitNodeQueueStart = (submitNodeQueueStart + 1) % MXC_NODE_CAPACITY;
 		__atomic_thread_fence(__ATOMIC_RELEASE);

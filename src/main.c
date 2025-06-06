@@ -169,13 +169,13 @@ int main(void)
 
 			__atomic_thread_fence(__ATOMIC_ACQUIRE);
 			// itd be good to come up with a mechanism that can actually deal with real multiple queues for debugging
-			midVkSubmitPresentCommandBuffer(compositorContext.gfxCmd,
-											compositorContext.swapCtx.chain,
-											compositorContext.swapCtx.acquireSemaphore,
-											compositorContext.swapCtx.renderCompleteSemaphore,
-											compositorContext.swapIdx,
-											compositorContext.timeline,
-											compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
+			CmdSubmitPresent(compositorContext.gfxCmd,
+							 compositorContext.swapCtx.chain,
+							 compositorContext.swapCtx.acquireSemaphore,
+							 compositorContext.swapCtx.renderCompleteSemaphore,
+							 compositorContext.swapIdx,
+							 compositorContext.timeline,
+							 compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
 			// Try submitting nodes before waiting to update window again.
 			// We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
