@@ -46,6 +46,7 @@
 
 // move everything to this
 #ifndef PFN_FUNCS
+
 #define PFN_FUNCS                     \
 	PFN_FUNC(WaitSemaphores)          \
 	PFN_FUNC(ResetCommandBuffer)      \
@@ -63,7 +64,17 @@
 	PFN_FUNC(EndCommandBuffer)        \
 	PFN_FUNC(CmdPipelineBarrier2)     \
 	PFN_FUNC(CmdPushDescriptorSetKHR) \
-	PFN_FUNC(CmdClearColorImage)
+	PFN_FUNC(CmdClearColorImage)      \
+	PFN_FUNC(ResetQueryPool)          \
+	PFN_FUNC(GetQueryPoolResults)     \
+	PFN_FUNC(CmdWriteTimestamp2)      \
+	PFN_FUNC(CmdBlitImage)            \
+	PFN_FUNC(AcquireNextImageKHR)     \
+	PFN_FUNC(CmdDrawMeshTasksEXT)     \
+	PFN_FUNC(SignalSemaphore)         \
+	PFN_FUNC(QueueSubmit2)            \
+	PFN_FUNC(QueuePresentKHR)
+
 #endif
 
 #ifdef _WIN32
@@ -308,9 +319,11 @@ typedef struct CACHE_ALIGN Vk {
 	VkInstance   instance;
 	VkContext    context;
 	VkSurfaceKHR surfaces[VK_SURFACE_CAPACITY];
+
 #define PFN_FUNC(_func) PFN_vk##_func _func;
 	PFN_FUNCS
 #undef PFN_FUNC
+
 } Vk;
 extern Vk vk;
 
@@ -521,27 +534,15 @@ enum {
 
 #define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
 
-//////////////////////////////
-//// Mid Vulkan Inline Methods
+//////////////////////////////////
+//// Mid Vulkan Inline Cmd Methods
 ////
-// we want to move these to PFN struct
-#define CmdPipelineImageBarriers2(_cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers) PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, _imageMemoryBarrierCount, _pImageMemoryBarriers)
-#define CmdPipelineImageBarrier2Ext(_cmd, ...)                                                         \
-	({                                                                                                 \
-		VkImageMemoryBarrier2 pBarriers[] = {{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, __VA_ARGS__}}; \
-		PFN_CmdPipelineImageBarriers2(CmdPipelineBarrier2, _cmd, COUNT(pBarriers), pBarriers);         \
-	})
-INLINE void PFN_CmdPipelineImageBarriers2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
-{
-	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
+#define CMD_PIPELINE_IMAGE_BARRIERS(_cmd, ...) CmdPipelineImageBarriers2((_cmd), sizeof((VkImageMemoryBarrier2[]){__VA_ARGS__}) / sizeof(VkImageMemoryBarrier2), (VkImageMemoryBarrier2[]){__VA_ARGS__})
+INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
+	vk.CmdPipelineBarrier2(cmd, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-#define CmdPipelineImageBarrier2(gfxCmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, graphicsCmd, pImageMemoryBarrier)
-INLINE void PFN_CmdPipelineImageBarrierFunc2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier)
-{
-	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
-}
-#define CmdBlitImageFullScreen(gfxCmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, graphicsCmd, srcImage, dstImage)
-INLINE void PFN_CmdBlitImageFullScreen(PFN_vkCmdBlitImage func, VkCommandBuffer cmd, VkImage srcImage, VkImage dstImage)
+
+INLINE void CmdBlitImageFullScreen(VkCommandBuffer cmd, VkImage srcImage, VkImage dstImage)
 {
 	VkImageBlit imageBlit = {
 		.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
@@ -549,21 +550,20 @@ INLINE void PFN_CmdBlitImageFullScreen(PFN_vkCmdBlitImage func, VkCommandBuffer 
 		.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
 		.dstOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
 	};
-	func(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
+	vk.CmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
-#define CmdBeginRenderPass(_cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView) PFN_CmdBeginRenderPass(CmdBeginRenderPass, _cmd, _renderPass, _framebuffer, _clearColor, _colorView, _normalView, _depthView)
-INLINE void PFN_CmdBeginRenderPass(
-	PFN_vkCmdBeginRenderPass func,
-	VkCommandBuffer          cmd,
-	VkRenderPass             renderPass,
-	VkFramebuffer            framebuffer,
-	VkClearColorValue        clearColor,
-	VkImageView              colorView,
-	VkImageView              normalView,
-	VkImageView              depthView)
+
+INLINE void CmdBeginRenderPass(
+	VkCommandBuffer   cmd,
+	VkRenderPass      renderPass,
+	VkFramebuffer     framebuffer,
+	VkClearColorValue clearColor,
+	VkImageView       colorView,
+	VkImageView       normalView,
+	VkImageView       depthView)
 {
 	VkRenderPassBeginInfo renderPassBeginInfo = {
-		.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
 		.pNext = &(VkRenderPassAttachmentBeginInfo){
 			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
 			.attachmentCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
@@ -583,16 +583,16 @@ INLINE void PFN_CmdBeginRenderPass(
 			[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = {.depthStencil = {0.0f, 0}},
 		},
 	};
-	func(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+	vk.CmdBeginRenderPass(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 }
-// todo needs PFN version
-INLINE void vkCmdResetBegin(VkCommandBuffer cmd)
+
+INLINE void CmdResetBegin(VkCommandBuffer cmd)
 {
-	vkResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-	vkBeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+	vk.ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+	vk.BeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 }
-// todo needs PFN version
-INLINE void midVkSubmitPresentCommandBuffer(
+
+INLINE void CmdSubmitPresent(
 	VkCommandBuffer cmd,
 	VkSwapchainKHR chain,
 	VkSemaphore acquireSemaphore,
@@ -601,8 +601,8 @@ INLINE void midVkSubmitPresentCommandBuffer(
 	VkSemaphore timeline,
 	uint64_t timelineSignalValue)
 {
-	VkSubmitInfo2 submitInfo2 = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+	VkSubmitInfo2 submitInfo = {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		.waitSemaphoreInfoCount = 1,
 		.pWaitSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
 			{
@@ -634,22 +634,22 @@ INLINE void midVkSubmitPresentCommandBuffer(
 
 		},
 	};
-	VK_CHECK(vkQueueSubmit2(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo2, VK_NULL_HANDLE));
+	VK_CHECK(vk.QueueSubmit2(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo, VK_NULL_HANDLE));
 	VkPresentInfoKHR presentInfo = {
-		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
 		.pWaitSemaphores = &renderCompleteSemaphore,
 		.swapchainCount = 1,
 		.pSwapchains = &chain,
 		.pImageIndices = &swapIndex,
 	};
-	VK_CHECK(vkQueuePresentKHR(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
+	VK_CHECK(vk.QueuePresentKHR(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
 }
 // todo needs PFN version
-INLINE void vkmSubmitCommandBuffer(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, uint64_t signal)
+INLINE void CmdSubmit(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, uint64_t signal)
 {
-	VkSubmitInfo2 submitInfo2 = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+	VkSubmitInfo2 submitInfo = {
+		VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		.commandBufferInfoCount = 1,
 		.pCommandBufferInfos = (VkCommandBufferSubmitInfo[]){
 			{
@@ -667,9 +667,9 @@ INLINE void vkmSubmitCommandBuffer(VkCommandBuffer cmd, VkQueue queue, VkSemapho
 			},
 		},
 	};
-	VK_CHECK(vkQueueSubmit2(queue, 1, &submitInfo2, VK_NULL_HANDLE));
+	VK_CHECK(vk.QueueSubmit2(queue, 1, &submitInfo, VK_NULL_HANDLE));
 }
-// todo needs PFN version
+
 INLINE void vkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore timeline)
 {
 	VkSemaphoreWaitInfo semaphoreWaitInfo = {
@@ -678,17 +678,17 @@ INLINE void vkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore time
 		.pSemaphores = &timeline,
 		.pValues = &waitValue,
 	};
-	VK_CHECK(vkWaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
+	VK_CHECK(vk.WaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
-// todo needs PFN version
+
 INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
 {
-	VkSemaphoreSignalInfo semaphoreSignalInfo = {
+	VkSemaphoreSignalInfo signalInfo = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
 		.semaphore = timeline,
 		.value = signalValue,
 	};
-	VK_CHECK(vkSignalSemaphore(device, &semaphoreSignalInfo));
+	VK_CHECK(vk.SignalSemaphore(device, &signalInfo));
 }
 
 INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
