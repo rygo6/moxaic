@@ -205,15 +205,15 @@ void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTexture
 ////
 typedef struct MxcCompositorContext {
 	// read multiple threads, write 1 thread
-	ATOMIC u32 swapIndex;
+	ATOMIC u32 swapIdx;
 
 	// read by multiple threads
-	VkCommandBuffer graphicsCmd;
-	VkSemaphore     compositorTimeline;
-	VkSwapContext   swap;
+	VkCommandBuffer gfxCmd;
+	VkSemaphore     timeline;
+	VkSwapContext   swapCtx;
 
 	// cold data
-	VkCommandPool graphicsPool;
+	VkCommandPool gfxPool;
 	pthread_t     threadId;
 
 } MxcCompositorContext;
@@ -253,9 +253,9 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 	MxcNodeCompositorSetState* pSetMapped;
 	VkSharedBuffer             nodeSetBuffer;
 	VkDescriptorSet            nodeSet;
-	//	VkSharedBuffer             setBuffer;
+	//	VkSharedBuffer setBuffer;
 	// should make them share buffer? probably
-	//	VkSharedBuffer       SetBuffer;
+	//	VkSharedBuffer SetBuffer;
 
 	struct CACHE_ALIGN {
 		VkImage               color;
@@ -329,19 +329,19 @@ typedef struct MxcVulkanNodeContext {
 
 typedef u8 NodeHandle;
 // move these into struct
-extern u16 nodeCount;
+extern u16 nodeCt;
 // Cold storage for all node data
-extern MxcNodeContext        nodeContexts[MXC_NODE_CAPACITY];
+extern MxcNodeContext nodeCtx[MXC_NODE_CAPACITY];
 // Could be missing if node is external process
-extern MxcNodeShared localNodesShared[MXC_NODE_CAPACITY];
+extern MxcNodeShared localNodeShrd[MXC_NODE_CAPACITY];
 // Holds pointer to either local or external process shared memory
-extern MxcNodeShared* activeNodesShared[MXC_NODE_CAPACITY];
+extern MxcNodeShared* activeNodeShrd[MXC_NODE_CAPACITY];
 
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 // technically this should go into a comp node thread local....
-extern MxcNodeCompositorLocal nodeCompositorData[MXC_NODE_CAPACITY];
+extern MxcNodeCompositorLocal nodeCstLocal[MXC_NODE_CAPACITY];
 
 extern MxcVulkanNodeContext vkNode;
 
@@ -408,7 +408,7 @@ typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
 	MXC_INTERPROCESS_TARGET_COUNT,
 } MxcIpcFunc;
-static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
+static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buf size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
 // I could get rid of this and just do a comparison polling on every node state like OXR does
@@ -418,6 +418,6 @@ int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
-	for (int i = 0; i < nodeCount; ++i)
-		mxcIpcDequeue(&activeNodesShared[i]->nodeInterprocessFuncQueue, i);
+	for (int i = 0; i < nodeCt; ++i)
+		mxcIpcDequeue(&activeNodeShrd[i]->nodeInterprocessFuncQueue, i);
 }

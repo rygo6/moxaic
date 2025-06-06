@@ -12,16 +12,16 @@
 #include "test_node.h"
 
 // Compositor and Node Process both use
-MxcNodeContext           nodeContexts[MXC_NODE_CAPACITY] = {};
+MxcNodeContext nodeCtx[MXC_NODE_CAPACITY] = {};
 
 // Node state in Compositor Process
-u16                    nodeCount = 0;
-MxcNodeCompositorLocal nodeCompositorData[MXC_NODE_CAPACITY] = {};
-MxcNodeShared*         activeNodesShared[MXC_NODE_CAPACITY] = {};
+u16                    nodeCt = 0;
+MxcNodeCompositorLocal nodeCstLocal[MXC_NODE_CAPACITY] = {};
+MxcNodeShared*         activeNodeShrd[MXC_NODE_CAPACITY] = {};
 
 // Only used for local thread nodes. Node from other process will use shared memory.
 // Maybe I could just always make it use shared memory for consistency’s sake?
-MxcNodeShared localNodesShared[MXC_NODE_CAPACITY] = {};
+MxcNodeShared localNodeShrd[MXC_NODE_CAPACITY] = {};
 
 // Compositor state in Compositor Process
 MxcCompositorContext compositorContext = {};
@@ -235,12 +235,12 @@ int mxcClaimSwap(const MxcSwapInfo* pInfo)
 	int  i = BitScanFirstZero(sizeof(pPool->occupied), (bitset_t*)&pPool->occupied);
 	// should change all this to use mid_block stuff
 	if (i == -1) {
-		LOG_ERROR("Ran out of occupied claiming swap!\n");
+		LOG_ERROR("Ran out of occupied claiming swapCtx!\n");
 		return -1;
 	}
 
 	BITSET(pPool->occupied, i);
-	printf("Claimed swap %d\n", i);
+	printf("Claimed swapCtx %d\n", i);
 
 	if (!BITTEST(pPool->created, i)) {
 		BITSET(pPool->created, i);
@@ -262,7 +262,7 @@ void mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index)
 	auto pPool = &nodeSwapPool[poolIndex];
 	assert(index < COUNT(pPool->swaps));
 	BITCLEAR(pPool->occupied, index);
-	printf("Releasing swap %d\n", index);
+	printf("Releasing swapCtx %d\n", index);
 }
 
 /////////////////////////
@@ -275,23 +275,23 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
-	vkCreateSemaphoreExt(&semaphoreCreateInfo, &compositorContext.compositorTimeline);
+	vkCreateSemaphoreExt(&semaphoreCreateInfo, &compositorContext.timeline);
 
-	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorContext.swap);
+	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorContext.swapCtx);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.graphicsPool));
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.gfxPool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = compositorContext.graphicsPool,
+		.commandPool = compositorContext.gfxPool,
 		.commandBufferCount = 1,
 	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.graphicsCmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorContext.graphicsCmd, "CompositorCmd");
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.gfxCmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorContext.gfxCmd, "CompositorCmd");
 
 	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorContext), "Comp Node thread creation failed!");
 	printf("Request and Run CompNode Thread Success.\n");
@@ -302,21 +302,21 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 ////
 NodeHandle RequestLocalNodeHandle()
 {
-	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
-	localNodesShared[handle] = (MxcNodeShared){};
-	activeNodesShared[handle] = &localNodesShared[handle];
+	NodeHandle handle = __atomic_fetch_add(&nodeCt, 1, __ATOMIC_RELEASE);
+	localNodeShrd[handle] = (MxcNodeShared){};
+	activeNodeShrd[handle] = &localNodeShrd[handle];
 	return handle;
 }
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
-	NodeHandle handle = __atomic_fetch_add(&nodeCount, 1, __ATOMIC_RELEASE);
-	activeNodesShared[handle] = pNodeShared;
+	NodeHandle handle = __atomic_fetch_add(&nodeCt, 1, __ATOMIC_RELEASE);
+	activeNodeShrd[handle] = pNodeShared;
 	return handle;
 }
 void ReleaseNode(NodeHandle handle)
 {
-	assert(nodeContexts[handle].type != MXC_NODE_TYPE_NONE);
-	int newCount = __atomic_sub_fetch(&nodeCount, 1, __ATOMIC_RELEASE);
+	assert(nodeCtx[handle].type != MXC_NODE_TYPE_NONE);
+	int newCount = __atomic_sub_fetch(&nodeCt, 1, __ATOMIC_RELEASE);
 	printf("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
@@ -327,7 +327,7 @@ void ReleaseNode(NodeHandle handle)
 	}
 static int CleanupNode(NodeHandle handle)
 {
-	auto pNodeCtxt = &nodeContexts[handle];
+	auto pNodeCtxt = &nodeCtx[handle];
 
 	ReleaseNode(handle);
 
@@ -382,7 +382,7 @@ static int CleanupNode(NodeHandle handle)
 	VkWriteDescriptorSet writeSets[] = {
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].nodeSet,
+			.dstSet = nodeCstLocal[handle].nodeSet,
 			.dstBinding = 1,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -393,7 +393,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].nodeSet,
+			.dstSet = nodeCstLocal[handle].nodeSet,
 			.dstBinding = 2,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -404,7 +404,7 @@ static int CleanupNode(NodeHandle handle)
 		},
 		{
 			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = nodeCompositorData[handle].nodeSet,
+			.dstSet = nodeCstLocal[handle].nodeSet,
 			.dstBinding = 3,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -443,16 +443,16 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	printf("Requesting Node Thread.\n");
 	auto handle = RequestLocalNodeHandle();
 
-	auto pNodeCtxt = &nodeContexts[handle];
+	auto pNodeCtxt = &nodeCtx[handle];
 	*pNodeCtxt = (MxcNodeContext){};
 	pNodeCtxt->type = MXC_NODE_TYPE_THREAD;
 	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-	pNodeCtxt->compositorTimeline = compositorContext.compositorTimeline;
+	pNodeCtxt->compositorTimeline = compositorContext.timeline;
 
 	// maybe have the thread allocate this and submit it once ready to get rid of < 1 check
 	// then could also get rid of pNodeContext->pNodeShared?
 	// no how would something on another process do that
-	auto pNodeShrd = &localNodesShared[handle];
+	auto pNodeShrd = &localNodeShrd[handle];
 	*pNodeShrd = (MxcNodeShared){};
 	pNodeCtxt->pNodeShared = pNodeShrd;
 	pNodeShrd->rootPose.rotation = QuatFromEuler(pNodeShrd->rootPose.euler);
@@ -485,14 +485,14 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->cmd, "TestNode");
 
-	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCompositorData[handle];
+	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCstLocal[handle];
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 
 	*pNodeHandle = handle;
 
-	CHECK(pthread_create(&nodeContexts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
+	CHECK(pthread_create(&nodeCtx[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
@@ -703,17 +703,17 @@ static void InterprocessServerAcceptNodeConnection()
 
 		NodeHandle handle = RequestExternalNodeHandle(pNodeShrd);
 
-		pNodeCompLcl = &nodeCompositorData[handle];
+		pNodeCompLcl = &nodeCstLocal[handle];
 		// Don't clear. State is recycled and pre-alloced on compositor creation.
 //		*pNodeCompositorLocal = (MxcNodeCompositorLocal){};
 
-		pNodeCtxt = &nodeContexts[handle];
+		pNodeCtxt = &nodeCtx[handle];
 		*pNodeCtxt = (MxcNodeContext){};
 
 		pNodeCtxt->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED;
 
 		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-		pNodeCtxt->compositorTimeline = compositorContext.compositorTimeline;
+		pNodeCtxt->compositorTimeline = compositorContext.timeline;
 
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
@@ -741,9 +741,9 @@ static void InterprocessServerAcceptNodeConnection()
 		WIN32_CHECK(DuplicateHandle(currentHandle, vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline), hNodeProc, &pImports->nodeTimelineHandle,
 									0, false, DUPLICATE_SAME_ACCESS),
 					"Duplicate nodeTimeline handle fail.");
-		WIN32_CHECK(DuplicateHandle(currentHandle, vkGetSemaphoreExternalHandle(compositorContext.compositorTimeline), hNodeProc, &pImports->compositorTimelineHandle,
+		WIN32_CHECK(DuplicateHandle(currentHandle, vkGetSemaphoreExternalHandle(compositorContext.timeline), hNodeProc, &pImports->compositorTimelineHandle,
 									0, false, DUPLICATE_SAME_ACCESS),
-					"Duplicate compTimeline handle fail.");
+					"Duplicate timeline handle fail.");
 
 		pNodeCompLcl->rootPose.rotation = QuatFromEuler(pNodeCompLcl->rootPose.euler);\
 	}
@@ -758,7 +758,7 @@ static void InterprocessServerAcceptNodeConnection()
 					"Duplicate sharedMemory handle fail.");
 		printf("Sending duplicatedExternalNodeMemoryHandle: %p Size: %llu\n", duplicatedExternalNodeMemoryHandle, sizeof(HANDLE));
 		int sendResult = send(clientSocket, (const char*)&duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0);
-		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send shared memory handle failed");
+		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send shared mem handle failed");
 		printf("Process Node Export Success.\n");
 		goto ExitSuccess;
 	}
@@ -824,7 +824,7 @@ void mxcInitializeInterprocessServer()
 {
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
-	printf("Min size of shared memory. Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
+	printf("Min size of shared mem. Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
 
 	ipcServer.listenSocket = INVALID_SOCKET;
 	CHECK(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
@@ -913,7 +913,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	{
 		NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 
-		pNodeContext = &nodeContexts[handle];
+		pNodeContext = &nodeCtx[handle];
 		*pNodeContext = (MxcNodeContext){};
 
 		pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
@@ -976,9 +976,9 @@ ExitSuccess:
 }
 void mxcShutdownInterprocessNode()
 {
-	for (int i = 0; i < nodeCount; ++i) {
+	for (int i = 0; i < nodeCt; ++i) {
 		// make another queue to evade ptr?
-		mxcIpcFuncEnqueue(&activeNodesShared[i]->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
+		mxcIpcFuncEnqueue(&activeNodeShrd[i]->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 	}
 }
 
@@ -991,7 +991,7 @@ int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target)
 	MxcRingBufferHandle head = pBuffer->head;
 	MxcRingBufferHandle tail = pBuffer->tail;
 	if (head + 1 == tail) {
-		LOG_ERROR("Ring buffer wrapped!\n");
+		LOG_ERROR("Ring buf wrapped!\n");
 		return 1;
 	}
 	pBuffer->targets[head] = target;
@@ -1025,16 +1025,16 @@ static void ipcFuncNodeClosed(NodeHandle handle)
 }
 static void ipcFuncClaimSwap(NodeHandle hNode)
 {
-	printf("Claiming swap for %d\n", hNode);
+	printf("Claiming swapCtx for %d\n", hNode);
 
-	auto pNodeCtx = &nodeContexts[hNode];
-	auto pNodeShrd = activeNodesShared[hNode];
-	auto pNodeCompData = &nodeCompositorData[hNode];
+	auto pNodeCtx = &nodeCtx[hNode];
+	auto pNodeShrd = activeNodeShrd[hNode];
+	auto pNodeCompData = &nodeCstLocal[hNode];
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_TYPE_THREAD;
 	int  swapCnt = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
 	if (pNodeShrd->swapWidth != DEFAULT_WIDTH || pNodeShrd->swapHeight != DEFAULT_HEIGHT) {
-		LOG_ERROR("Requested swap size not available! %d %d\n", pNodeShrd->swapWidth, pNodeShrd->swapHeight);
+		LOG_ERROR("Requested swapCtx size not available! %d %d\n", pNodeShrd->swapWidth, pNodeShrd->swapHeight);
 		pNodeShrd->swapType = XR_SWAP_TYPE_ERROR;
 		return;
 	}

@@ -32,7 +32,7 @@ void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 
 	NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShared);
-	MxcNodeContext* pNodeContext = &nodeContexts[nodeHandle];
+	MxcNodeContext* pNodeContext = &nodeCtx[nodeHandle];
 	*pNodeContext = (MxcNodeContext){};
 	pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
 	pNodeContext->pNodeShared = pNodeShared;
@@ -52,7 +52,7 @@ void xrReleaseSessionIndex(XrSessionIndex sessionIndex)
 
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	float radius = pNodeShared->compositorRadius * 2.0f;
 
@@ -62,7 +62,7 @@ void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds
 
 void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 	*pHandle = pImportParam->nodeTimelineHandle;
@@ -70,14 +70,14 @@ void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 
 void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	atomic_store_explicit(&pNodeShared->timelineValue, timelineValue, memory_order_release);
 }
 
 void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 	*pHandle = pImportParam->compositorTimelineHandle;
@@ -85,7 +85,7 @@ void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle)
 
 void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType)
 {
-	auto pNodeCtxt = &nodeContexts[sessionIndex];
+	auto pNodeCtxt = &nodeCtx[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 
@@ -101,13 +101,13 @@ void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo
 		WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 
 		if (pNodeShrd->swapType == XR_SWAP_TYPE_ERROR)
-			LOG_ERROR("OXR could not acquire swap!");
+			LOG_ERROR("OXR could not acquire swapCtx!");
 	}
 }
 
 void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle)
 {
-	auto pNodeCtxt = &nodeContexts[sessionIndex];
+	auto pNodeCtxt = &nodeCtx[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 	switch (usage) {
@@ -122,7 +122,7 @@ void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HAND
 
 void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ)
 {
-	auto pNodeCtxt = &nodeContexts[sessionIndex];
+	auto pNodeCtxt = &nodeCtx[sessionIndex];
 	auto pImports = &pImportedExternalMemory->imports;
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 	pNodeShrd->processState.depth.minDepth = minDepth;
@@ -136,7 +136,7 @@ void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth,
 
 void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 	uint8_t index = (timelineValue % VK_SWAP_COUNT);
@@ -148,7 +148,7 @@ void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex)
 
 void xrReleaseSwapIndex(XrSessionIndex sessionIndex, uint8_t index)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 //	printf("Releasing swap index %d timeline %llu\n", index, timelineValue);
@@ -161,7 +161,7 @@ void xrReleaseSwapIndex(XrSessionIndex sessionIndex, uint8_t index)
 
 void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	timelineValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
 	pNodeShared->compositorBaseCycleValue = timelineValue + MXC_CYCLE_COUNT;
@@ -170,21 +170,21 @@ void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t t
 
 void xrGetCompositorTimelineValue(XrSessionIndex sessionIndex, bool synchronized, uint64_t* pTimelineValue)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
 }
 
 void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue, bool synchronized)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
 
 XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	double hz = 240.0 / (double)(pNodeShared->compositorCycleSkip);
 	XrTime hzTime = xrHzToXrTime(hz);
@@ -194,7 +194,7 @@ XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized)
 
 void xrGetHeadPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	pPose->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
@@ -202,7 +202,7 @@ void xrGetHeadPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose)
 
 void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView)
 {
-	MxcNodeContext* pNodeContext = &nodeContexts[sessionIndex];
+	MxcNodeContext* pNodeContext = &nodeCtx[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	pEyeView->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
@@ -215,7 +215,7 @@ void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEy
 
 #define UPDATE_CLICK(button, chirality)                           \
 	({                                                            \
-		auto pNodeShared = activeNodesShared[sessionIndex];       \
+		auto pNodeShared = activeNodeShrd[sessionIndex];       \
 		atomic_thread_fence(memory_order_acquire);                \
 		auto pController = &pNodeShared->chirality;               \
 		auto changed = pState->isActive != pController->active || \
@@ -275,7 +275,7 @@ int xrInputMenuClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 
 #define UPDATE_POSE(pose, chirality)                                                                              \
 	({                                                                                                            \
-		auto pNodeShared = activeNodesShared[sessionIndex];                                                       \
+		auto pNodeShared = activeNodeShrd[sessionIndex];                                                       \
 		atomic_thread_fence(memory_order_acquire);                                                                \
 		auto pController = &pNodeShared->chirality;                                                               \
 		auto changed = pState->isActive != pController->active ||                                                 \

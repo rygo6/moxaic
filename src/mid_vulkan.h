@@ -192,8 +192,8 @@ typedef struct VkSharedMemory {
 } VkSharedMemory;
 
 typedef struct VkSharedBuffer {
-	VkSharedMemory    memory;
-	VkBuffer          buffer;
+	VkSharedMemory    mem;
+	VkBuffer          buf;
 } VkSharedBuffer;
 
 //typedef struct VkTexture {
@@ -216,8 +216,8 @@ typedef struct VkMeshOffsets {
 } VkMeshOffsets;
 
 typedef struct VkMesh {
-	VkDeviceMemory memory;
-	VkBuffer       buffer;
+	VkDeviceMemory mem;
+	VkBuffer       buf;
 	VkMeshOffsets  offsets;
 } VkMesh;
 
@@ -388,17 +388,18 @@ enum {
 	VK_SET_BIND_INDEX_GLOBAL_BUFFER,
 	VK_SET_BIND_INDEX_COUNT,
 };
-#define VK_BIND_WRITE_GLOBAL_BUFFER(set, buf)                \
-	(VkWriteDescriptorSet) {                                 \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
-		.dstSet = set,                                       \
-		.dstBinding = VK_SET_BIND_INDEX_GLOBAL_BUFFER,       \
-		.descriptorCount = 1,                                \
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-		.pBufferInfo = &(VkDescriptorBufferInfo){            \
-			.buffer = buf,                                   \
-			.range = sizeof(VkGlobalSetState),               \
-		},                                                   \
+#define VK_BIND_WRITE_GLOBAL_BUFFER(_set, _buf)                  \
+	(VkWriteDescriptorSet)                                       \
+	{                                                            \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                  \
+			.dstSet = _set,                                      \
+			.dstBinding = VK_SET_BIND_INDEX_GLOBAL_BUFFER,       \
+			.descriptorCount = 1,                                \
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+			.pBufferInfo = &(VkDescriptorBufferInfo){            \
+				.buffer = _buf,                                  \
+				.range = sizeof(VkGlobalSetState),               \
+			},                                                   \
 	}
 
 enum {
@@ -406,46 +407,49 @@ enum {
 	VK_SET_BIND_INDEX_MATERIAL_IMAGE,
 	VK_SET_BIND_INDEX_MATERIAL_COUNT,
 };
-#define VK_BIND_WRITE_MATERIAL_COLOR(set, buf)               \
-	(VkWriteDescriptorSet) {                                 \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
-		.dstSet = set,                                       \
-		.dstBinding = VK_SET_BIND_INDEX_MATERIAL_COLOR,     \
-		.descriptorCount = 1,                                \
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-		.pBufferInfo = &(VkDescriptorBufferInfo){            \
-			.buffer = buf,                                   \
-			.range = sizeof(VkMaterialSetState),             \
-		},                                                   \
+#define VK_BIND_WRITE_MATERIAL_COLOR(_set, _buf)                 \
+	(VkWriteDescriptorSet)                                       \
+	{                                                            \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                  \
+			.dstSet = _set,                                      \
+			.dstBinding = VK_SET_BIND_INDEX_MATERIAL_COLOR,      \
+			.descriptorCount = 1,                                \
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+			.pBufferInfo = &(VkDescriptorBufferInfo){            \
+				.buffer = _buf,                                  \
+				.range = sizeof(VkMaterialSetState),             \
+			},                                                   \
 	}
-#define VK_BIND_WRITE_MATERIAL_IMAGE(set, view)                      \
-	(VkWriteDescriptorSet) {                                         \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
-		.dstSet = set,                                               \
-		.dstBinding = VK_SET_BIND_INDEX_MATERIAL_IMAGE,              \
-		.descriptorCount = 1,                                        \
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-		.pImageInfo = &(VkDescriptorImageInfo){                      \
-			.imageView = view,                                       \
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
-		},                                                           \
+#define VK_BIND_WRITE_MATERIAL_IMAGE(_set, _view)                        \
+	(VkWriteDescriptorSet)                                               \
+	{                                                                    \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                          \
+			.dstSet = _set,                                              \
+			.dstBinding = VK_SET_BIND_INDEX_MATERIAL_IMAGE,              \
+			.descriptorCount = 1,                                        \
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+			.pImageInfo = &(VkDescriptorImageInfo){                      \
+				.imageView = _view,                                      \
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, \
+			},                                                           \
 	}
 
 enum {
 	VK_SET_BIND_INDEX_OBJECT_BUFFER,
 	VK_SET_BIND_INDEX_OBJECT_COUNT,
 };
-#define VK_BIND_WRITE_OBJECT_BUFFER(set, buf)                \
-	(VkWriteDescriptorSet) {                                 \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
-		.dstSet = set,                                       \
-		.dstBinding = VK_SET_BIND_INDEX_OBJECT_BUFFER,       \
-		.descriptorCount = 1,                                \
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-		.pBufferInfo = &(VkDescriptorBufferInfo){            \
-			.buffer = buf,                                   \
-			.range = sizeof(VkObjectSetState),               \
-		},                                                   \
+#define VK_BIND_WRITE_OBJECT_BUFFER(_set, _buf)                  \
+	(VkWriteDescriptorSet)                                       \
+	{                                                            \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                  \
+			.dstSet = _set,                                      \
+			.dstBinding = VK_SET_BIND_INDEX_OBJECT_BUFFER,       \
+			.descriptorCount = 1,                                \
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+			.pBufferInfo = &(VkDescriptorBufferInfo){            \
+				.buffer = _buf,                                  \
+				.range = sizeof(VkObjectSetState),               \
+			},                                                   \
 	}
 
 
@@ -531,12 +535,12 @@ INLINE void PFN_CmdPipelineImageBarriers2(PFN_vkCmdPipelineBarrier2 func, VkComm
 {
 	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
-#define CmdPipelineImageBarrier2(graphicsCmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, graphicsCmd, pImageMemoryBarrier)
+#define CmdPipelineImageBarrier2(gfxCmd, pImageMemoryBarrier) PFN_CmdPipelineImageBarrierFunc2(CmdPipelineBarrier2, graphicsCmd, pImageMemoryBarrier)
 INLINE void PFN_CmdPipelineImageBarrierFunc2(PFN_vkCmdPipelineBarrier2 func, VkCommandBuffer cmd, const VkImageMemoryBarrier2* pImageMemoryBarrier)
 {
 	func(cmd, &(VkDependencyInfo){.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = pImageMemoryBarrier});
 }
-#define CmdBlitImageFullScreen(graphicsCmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, graphicsCmd, srcImage, dstImage)
+#define CmdBlitImageFullScreen(gfxCmd, srcImage, dstImage) PFN_CmdBlitImageFullScreen(CmdBlitImage, graphicsCmd, srcImage, dstImage)
 INLINE void PFN_CmdBlitImageFullScreen(PFN_vkCmdBlitImage func, VkCommandBuffer cmd, VkImage srcImage, VkImage dstImage)
 {
 	VkImageBlit imageBlit = {
@@ -689,23 +693,23 @@ INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore 
 
 INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
 {
-	assert(shareMemory.state == VK_SHARED_MEMORY_STATE_BOUND && "Shared buffer not bound!");
+	assert(shareMemory.state == VK_SHARED_MEMORY_STATE_BOUND && "Shared buf not bound!");
 	return ((char*)pMappedMemory[shareMemory.type]) + shareMemory.offset;
 }
 INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
 {
-	return vkSharedMemoryPtr(shareBuffer.memory);
+	return vkSharedMemoryPtr(shareBuffer.mem);
 }
 INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 {
-	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_UNITIALIZED ,"Shared buffer has not been requested!");
-	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_BOUND, "Shared buffer already bound!");
-	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_FREED, "Shared buffer has been freed!");
-	CHECK(pBuffer->memory.state != VK_SHARED_MEMORY_STATE_REQUESTED, "Shared buffer has been requested!");
-	CHECK(pBuffer->memory.size <= 0, "Shared buffer has no size initialized!");
-	CHECK(pBuffer->memory.type <= 0 && pBuffer->memory.type >= VK_MAX_MEMORY_TYPES, "Shared buffer has no memory initialized!");
-	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buffer, deviceMemory[pBuffer->memory.type], pBuffer->memory.offset));
-	pBuffer->memory.state = VK_SHARED_MEMORY_STATE_BOUND;
+	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_UNITIALIZED ,"Shared buf has not been requested!");
+	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_BOUND, "Shared buf already bound!");
+	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_FREED, "Shared buf has been freed!");
+	CHECK(pBuffer->mem.state != VK_SHARED_MEMORY_STATE_REQUESTED, "Shared buf has been requested!");
+	CHECK(pBuffer->mem.size <= 0, "Shared buf has no size initialized!");
+	CHECK(pBuffer->mem.type <= 0 && pBuffer->mem.type >= VK_MAX_MEMORY_TYPES, "Shared buf has no mem initialized!");
+	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buf, deviceMemory[pBuffer->mem.type], pBuffer->mem.offset));
+	pBuffer->mem.state = VK_SHARED_MEMORY_STATE_BOUND;
 }
 
 // probably move to math lib and take copy to pointer out
@@ -1780,7 +1784,7 @@ static uint32_t FindMemoryTypeIndex(
 		}
 	}
 	PrintMemoryPropertyFlags(memPropFlags);
-	PANIC("Failed to find memory with properties!");
+	PANIC("Failed to find mem with properties!");
 	return -1;
 }
 
@@ -1916,9 +1920,9 @@ void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffe
 		.size = pRequest->size,
 		.usage = pRequest->usage,
 	};
-	VK_CHECK(vkCreateBuffer(vk.context.device, &bufferCreateInfo, VK_ALLOC, &pBuffer->buffer));
+	VK_CHECK(vkCreateBuffer(vk.context.device, &bufferCreateInfo, VK_ALLOC, &pBuffer->buf));
 
-	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pBuffer->buffer};
+	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pBuffer->buf};
 	VkMemoryDedicatedRequirements   dedicatedReqs = { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS, .pNext = NULL };
 	VkMemoryRequirements2           memReqs2 = { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
 	vkGetBufferMemoryRequirements2(vk.context.device, &bufMemReqInfo2, &memReqs2);
@@ -1934,13 +1938,13 @@ void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffe
 
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 	vkGetPhysicalDeviceMemoryProperties2(vk.context.physicalDevice, &memProps2);
-	pBuffer->memory.type = FindMemoryTypeIndex(memProps2.memoryProperties.memoryTypeCount, memProps2.memoryProperties.memoryTypes, memReqs2.memoryRequirements.memoryTypeBits, pRequest->memoryPropertyFlags);
-	pBuffer->memory.offset = requestedMemoryAllocSize[pBuffer->memory.type] + (requestedMemoryAllocSize[pBuffer->memory.type] % memReqs2.memoryRequirements.alignment);
-	pBuffer->memory.size = memReqs2.memoryRequirements.size;
+	pBuffer->mem.type = FindMemoryTypeIndex(memProps2.memoryProperties.memoryTypeCount, memProps2.memoryProperties.memoryTypes, memReqs2.memoryRequirements.memoryTypeBits, pRequest->memoryPropertyFlags);
+	pBuffer->mem.offset = requestedMemoryAllocSize[pBuffer->mem.type] + (requestedMemoryAllocSize[pBuffer->mem.type] % memReqs2.memoryRequirements.alignment);
+	pBuffer->mem.size = memReqs2.memoryRequirements.size;
 
-	requestedMemoryAllocSize[pBuffer->memory.type] += memReqs2.memoryRequirements.size;
+	requestedMemoryAllocSize[pBuffer->mem.type] += memReqs2.memoryRequirements.size;
 
-	pBuffer->memory.state = VK_SHARED_MEMORY_STATE_REQUESTED;
+	pBuffer->mem.state = VK_SHARED_MEMORY_STATE_REQUESTED;
 
 #ifdef VK_DEBUG_MEMORY_ALLOC
 	printf("Request Shared MemoryType: %d Allocation: %zu ", pMemory->type, memReqs2.memoryRequirements.size);
@@ -1988,17 +1992,17 @@ void vkCreateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh
 void vkBindUpdateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh)
 {
 	// Ensure size is same
-	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->sharedBuffer.buffer};
+	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->sharedBuffer.buf};
 	VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
 	vkGetBufferMemoryRequirements2(vk.context.device, &bufMemReqInfo2, &memReqs2);
-	CHECK(pMesh->sharedBuffer.memory.size != memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
+	CHECK(pMesh->sharedBuffer.mem.size != memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
 
 	// bind populate
-	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->sharedBuffer.buffer, deviceMemory[pMesh->sharedBuffer.memory.type], pMesh->sharedBuffer.memory.offset));
-	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, sizeof(uint16_t) * pMesh->offsets.indexCount, pMesh->sharedBuffer.buffer);
-	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(MidVertex) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buffer);
+	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->sharedBuffer.buf, deviceMemory[pMesh->sharedBuffer.mem.type], pMesh->sharedBuffer.mem.offset));
+	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, sizeof(uint16_t) * pMesh->offsets.indexCount, pMesh->sharedBuffer.buf);
+	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(MidVertex) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buf);
 
-	pMesh->sharedBuffer.memory.state = VK_SHARED_MEMORY_STATE_BOUND;
+	pMesh->sharedBuffer.mem.state = VK_SHARED_MEMORY_STATE_BOUND;
 }
 void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 {
@@ -2009,9 +2013,9 @@ void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 	pMesh->offsets.indexOffset = 0;
 	pMesh->offsets.vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
 
-	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->offsets.vertexOffset + vertexBufferSize, VK_BUFFER_USAGE_MESH, VK_LOCALITY_CONTEXT, &pMesh->memory, &pMesh->buffer);
-	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, indexBufferSize, pMesh->buffer);
-	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, vertexBufferSize, pMesh->buffer);
+	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->offsets.vertexOffset + vertexBufferSize, VK_BUFFER_USAGE_MESH, VK_LOCALITY_CONTEXT, &pMesh->mem, &pMesh->buf);
+	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, indexBufferSize, pMesh->buf);
+	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, vertexBufferSize, pMesh->buf);
 }
 
 //----------------------------------------------------------------------------------
@@ -2849,7 +2853,7 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 
 	uint32_t swapCount;
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
-	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
+	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swapCtx image count does not match requested swapCtx count!");
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, pSwap->images));
 	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 		VkImageViewCreateInfo viewCreateInfo = {

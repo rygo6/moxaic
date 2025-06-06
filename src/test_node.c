@@ -78,7 +78,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 //	memcpy(&gBufferMipViews, &pNode->gBufferMipViews, sizeof(gBufferMipViews));
 
 	uint32_t     sphereIndexCount = pNode->sphereMesh.offsets.indexCount;
-	VkBuffer     sphereBuffer = pNode->sphereMesh.buffer;
+	VkBuffer     sphereBuffer = pNode->sphereMesh.buf;
 	VkDeviceSize sphereIndexOffset = pNode->sphereMesh.offsets.indexOffset;
 	VkDeviceSize sphereVertexOffset = pNode->sphereMesh.offsets.vertexOffset;
 
@@ -227,7 +227,7 @@ run_loop:
 		}
 
 		mxcIpcFuncEnqueue(&pNodeShared->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
-		printf("Waiting on swap claim.");
+		printf("Waiting on swapCtx claim.");
 		WaitForSingleObject(pNodeContext->swapsSyncedHandle, INFINITE);
 		printf("Swaps claimed.");
 

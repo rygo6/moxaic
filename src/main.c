@@ -135,7 +135,7 @@ int main(void)
 		while (isRunning) {
 
 			// we may not have to even wait... this could go faster
-			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.compositorTimeline);
+			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
 
 			// interprocess polling could be a different thread?
 			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
@@ -148,7 +148,7 @@ int main(void)
 			__atomic_thread_fence(__ATOMIC_RELEASE);
 
 			// signal input ready to process!
-			vkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.compositorTimeline);
+			vkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
 
 			// MXC_CYCLE_COMPOSITOR_RECORD occurs here
 
@@ -163,18 +163,18 @@ int main(void)
 			//      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
 			// wait for recording to be done
-			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.compositorTimeline);
+			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
 
 			compositorBaseCycleValue += MXC_CYCLE_COUNT;
 
 			__atomic_thread_fence(__ATOMIC_ACQUIRE);
 			// itd be good to come up with a mechanism that can actually deal with real multiple queues for debugging
-			midVkSubmitPresentCommandBuffer(compositorContext.graphicsCmd,
-											compositorContext.swap.chain,
-											compositorContext.swap.acquireSemaphore,
-											compositorContext.swap.renderCompleteSemaphore,
-											compositorContext.swapIndex,
-											compositorContext.compositorTimeline,
+			midVkSubmitPresentCommandBuffer(compositorContext.gfxCmd,
+											compositorContext.swapCtx.chain,
+											compositorContext.swapCtx.acquireSemaphore,
+											compositorContext.swapCtx.renderCompleteSemaphore,
+											compositorContext.swapIdx,
+											compositorContext.timeline,
 											compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
 			// Try submitting nodes before waiting to update window again.
