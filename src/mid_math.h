@@ -16,6 +16,7 @@
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
+
 SIMD_TYPE(float, float2, 2);
 SIMD_TYPE(uint32_t, int2, 2);
 SIMD_TYPE(float, float3, 4);
@@ -26,8 +27,10 @@ SIMD_TYPE(uint32_t, int4, 4);
 // with no negative when accessing 16 byte rows
 // https://godbolt.org/z/Gbssve8rf
 SIMD_TYPE(float, mat4, 16);
+
 #undef SIMD_TYPE
-// should I rename simd to vec and get rid of vec_name?
+
+
 #define VEC_UNION(name, type, simd_type, align, count, vec_name, ...) \
 	typedef union __attribute((aligned(align))) name {                \
 		simd_type vec_name;                                           \
@@ -35,6 +38,7 @@ SIMD_TYPE(float, mat4, 16);
 			type __VA_ARGS__;                                         \
 		};                                                            \
 	} name;
+
 VEC_UNION(vec2, float, float2_vec, 8, 2, vec, x, y)
 VEC_UNION(ivec2, uint32_t, int2_vec, 8, 2, vec, x, y)
 VEC_UNION(vec3, float, float3_vec, 16, 3, vec, x, y, z)
@@ -42,8 +46,24 @@ VEC_UNION(ivec3, uint32_t, int3_vec, 16, 3, vec, x, y, z)
 VEC_UNION(vec4, float, float4_vec, 16, 4, vec, x, y, z, w)
 VEC_UNION(ivec4, uint32_t, int4_vec, 16, 4, vec, x, y, z, w)
 VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
+
 #undef VEC_UNION
-#define VEC2(x, y) (vec2) {{x, y}}
+
+// I think we want a basic VEC2 then a more advanced TO_VEC2 for conversions
+#define VEC2(_x, _y) (vec2){{(_x), (_y)}}
+#define TO_VEC2_1(_0) _Generic((_0),   \
+	float: (vec2){{(_0), (_0)}},    \
+	int: (vec2){{(_0), (_0)}},      \
+	u32: (vec2){{(_0), (_0)}},      \
+	vec2: (vec2){{(_0).x, (_0).y}})
+#define TO_VEC2_2(_0, _1) _Generic((_0), \
+	float: (vec2){{(_0), (_1)}},      \
+	int: (vec2){{(_0), (_1)}},        \
+	u32: (vec2){{(_0), (_1)}})
+#define TO_VEC2_MACRO(_1, _2, NAME, ...) NAME
+#define TO_VEC2(...) VEC2_MACRO(__VA_ARGS__, TO_VEC2_2, TO_VEC2_1)(__VA_ARGS__)
+
+
 #define IVEC2(x, y) (ivec2) {{x, y}}
 #define VEC3(x, y, z) (vec3) {{x, y, z}}
 #define IVEC3(x, y, z) (ivec3) {{x, y, z}}
@@ -130,6 +150,10 @@ static const mat4 MAT4_IDENT = {{
 #define MATH_INLINE       __attribute__((always_inline)) static inline
 #define SHUFFLE(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
 
+MATH_INLINE float Float2Sum(float2_vec float2) {
+	return float2[0] + float2[1];
+}
+
 MATH_INLINE float Float4Sum(float4_vec float4)
 {
 	// appears to make better SIMD assembly than a loop:
@@ -141,26 +165,36 @@ MATH_INLINE float Float4Sum(float4_vec float4)
 	sums = sums + shuf;
 	return sums[0];
 }
+
+MATH_INLINE float Vec2Dot(vec2 l, vec2 r) {
+	return Float2Sum(l.vec * r.vec);
+}
+
+MATH_INLINE float Vec4Dot(vec4 l, vec4 r) {
+	return Float4Sum(l.vec * r.vec);
+}
+
+MATH_INLINE float Vec2Mag(vec2 v) {
+	return sqrtf(Vec2Dot(v, v));
+}
+
+MATH_INLINE float Vec4Mag(vec4 v) {
+	return sqrtf(Vec4Dot(v, v));
+}
+
 MATH_INLINE mat4 Mat4Translation(vec3 v)
 {
 	mat4 out = MAT4_IDENT;
 	for (int i = 0; i < 3; ++i) out.col[3].row += MAT4_IDENT.col[i].row * v.vec[i];
 	return out;
 }
-MATH_INLINE float Vec4Dot(vec4 l, vec4 r)
-{
-	float4_vec product = l.vec * r.vec;
-	return Float4Sum(product);
-}
-MATH_INLINE float Vec4Mag(vec4 v)
-{
-	return sqrtf(Vec4Dot(v, v));
-}
+
 MATH_INLINE vec3 PosFromMat4(mat4 m)
 {
 	float w = m.c3.r3;
 	return (vec3){{m.c3.r0 / w, m.c3.r1 / w, m.c3.r2 / w}};
 }
+
 MATH_INLINE mat4 Mat4YInvert(mat4 m)
 {
 	m.c0.r1 = -m.c0.r1;
@@ -169,6 +203,7 @@ MATH_INLINE mat4 Mat4YInvert(mat4 m)
 	m.c3.r1 = -m.c3.r1;
 	return m;
 }
+
 MATH_INLINE mat4 Mat4XInvert(mat4 m)
 {
 	m.c0.r0 = -m.c0.r0;
@@ -177,6 +212,7 @@ MATH_INLINE mat4 Mat4XInvert(mat4 m)
 	m.c3.r0 = -m.c3.r0;
 	return m;
 }
+
 MATH_INLINE quat RotFromMat4(mat4 m)
 {
 	quat q;
@@ -211,6 +247,7 @@ MATH_INLINE quat RotFromMat4(mat4 m)
 	}
 	return q;
 }
+
 MATH_INLINE mat4 QuatToMat4(quat q)
 {
 	float norm = Vec4Mag(q);
@@ -252,6 +289,7 @@ MATH_INLINE mat4 QuatToMat4(quat q)
 	out.c3.r3 = 1.0f;
 	return out;
 }
+
 // Turns out this is the fastest way. Write out the multiplication on the 16 byte vecs and GCC will produce the best SIMD
 // Accessing a simd through a union of a different type will apply simd optimizations
 // https://godbolt.org/z/Wb1hP5dv7
@@ -286,6 +324,7 @@ MATH_INLINE mat4 Mat4Mul(mat4 l, mat4 r)
 	dest.c3.r3 = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
 	return dest;
 }
+
 MATH_INLINE mat4 Mat4Inv(mat4 src)
 {
 	// todo SIMDIZE
@@ -345,6 +384,7 @@ MATH_INLINE mat4 Mat4Inv(mat4 src)
 
 	return out;
 }
+
 MATH_INLINE mat4 Mat4ZRot(mat4 m)
 {
 	mat4 zRot = {{
@@ -355,6 +395,7 @@ MATH_INLINE mat4 Mat4ZRot(mat4 m)
 	}};
 	return Mat4Mul(m, zRot);
 }
+
 MATH_INLINE mat4 Mat4FromPosRot(vec3 pos, quat rot)
 {
 	mat4 translationMat4 = Mat4Translation(pos);
@@ -371,7 +412,7 @@ typedef struct mat4_proj_packed {
 	float c3r2;
 } mat4_proj_packed;
 
-// Perspective matrix in Vulkan Reverse Z
+//// Perspective matrix in Vulkan Reverse Z
 MATH_INLINE mat4 Mat4PerspectiveVulkanReverseZ(float yFovRad, float aspect, float zNear, float zFar)
 {
 	const float tanHalfYFov = tan(yFovRad / 2.0f);
@@ -387,6 +428,7 @@ MATH_INLINE vec3 Vec3Cross(float3_vec l, float3_vec r)
 				  l[Z] * r[X] - r[Z] * l[X],
 				  l[X] * r[Y] - r[X] * l[Y]}};
 }
+
 MATH_INLINE vec3 Vec3Rot(quat q, vec3 v)
 {
 	vec3 uv = Vec3Cross(q.vec, v.vec);
@@ -395,6 +437,7 @@ MATH_INLINE vec3 Vec3Rot(quat q, vec3 v)
 	for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
 	return out;
 }
+
 MATH_INLINE vec4 Vec4Rot(quat q, vec4 v)
 {
 	vec3 uv = Vec3Cross(q.vec, v.vec);
@@ -403,6 +446,7 @@ MATH_INLINE vec4 Vec4Rot(quat q, vec4 v)
 	for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
 	return out;
 }
+
 MATH_INLINE quat QuatFromEuler(vec3 euler)
 {
 	vec3 c, s;
@@ -418,10 +462,12 @@ MATH_INLINE quat QuatFromEuler(vec3 euler)
 	out.z = c.x * c.y * s.z - s.x * s.y * c.z;
 	return out;
 }
+
 MATH_INLINE quat QuatNegate(quat src)
 {
 	return (quat){.x = -src.x, .y = -src.y, .z = -src.z, .w = src.w};
 }
+
 MATH_INLINE quat QuatMul(quat src, quat mul)
 {
 	return (quat){
@@ -431,6 +477,7 @@ MATH_INLINE quat QuatMul(quat src, quat mul)
 		.w = src.w * mul.w - src.x * mul.x - src.y * mul.y - src.z * mul.z,
 	};
 }
+
 MATH_INLINE quat QuatInverse(quat q)
 {
 	// is this correct?
@@ -444,6 +491,7 @@ MATH_INLINE quat QuatInverse(quat q)
 	quat conjugate = {{q.w, -q.x, -q.y, -q.z}};
 	return (quat){conjugate.vec / magnitudeSquared};
 }
+
 MATH_INLINE vec4 Vec4MulMat4(mat4 m, vec4 v)
 {
 	vec4 out;
@@ -453,37 +501,44 @@ MATH_INLINE vec4 Vec4MulMat4(mat4 m, vec4 v)
 	out.w = m.c0.r3 * v.x + m.c1.r3 * v.y + m.c2.r3 * v.z + m.c3.r3 * v.w;
 	return out;
 }
+
 MATH_INLINE vec3 Vec4WDivide(vec4 v)
 {
 	return (vec3){.vec = v.vec / v.vec[W]};
 }
+
 MATH_INLINE vec2 Vec2FromVec3(vec3 ndc)
 {
 	return (vec2){.x = ndc.x, .y = ndc.y};
 }
+
 MATH_INLINE vec2 UVFromNDC(vec3 ndc)
 {
 	vec2 out = Vec2FromVec3(ndc);
 	out.vec = out.vec * 0.5f + 0.5f;
 	return out;
 }
+
 MATH_INLINE ivec2 iVec2CeiDivide(ivec2 v, int d)
 {
 	vec2 fv = {.vec = {v.vec[X], v.vec[Y]}};
 	fv.vec = fv.vec / (float)d;
 	return (ivec2){{ceilf(fv.vec[X]), ceilf(fv.vec[Y])}};
 }
+
 MATH_INLINE ivec2 iVec2ShiftRightCeil(ivec2 v, int shift)
 {
 	if (shift <= 0) return v;
 	return (ivec2){(v.vec >> shift) + (v.vec % 2)};
 }
+
 MATH_INLINE ivec2 iVec2Min(ivec2 v, u32 min)
 {
 	ivec2 out;
 	for (int i = 0; i < 2; ++i) out.vec[i] = v.vec[i] < min ? min : v.vec[i];
 	return out;
 }
+
 MATH_INLINE vec2 Vec2Clamp(vec2 v, float min, float max)
 {
 	float2_vec minVec = {min, min};
@@ -495,22 +550,53 @@ MATH_INLINE vec2 Vec2Clamp(vec2 v, float min, float max)
 	}
 	return clamped;
 }
+
 MATH_INLINE vec2 Vec2Min(vec2 a, vec2 b)
 {
 	vec2 out;
 	for (int i = 0; i < 2; ++i) out.vec[i] = a.vec[i] < b.vec[i] ? a.vec[i] : b.vec[i];
 	return out;
 }
+
 MATH_INLINE vec2 Vec2Max(vec2 a, vec2 b)
 {
 	vec2 out;
 	for (int i = 0; i < 2; ++i) out.vec[i] = a.vec[i] > b.vec[i] ? a.vec[i] : b.vec[i];
 	return out;
 }
+
+MATH_INLINE bool Vec2PointOnLineSegment(vec2 p, vec2 start, vec2 end, float tolerance)
+{
+	float d1 = Vec2Mag(VEC2(p.x - start.x, p.y - start.y));
+	float d2 = Vec2Mag(VEC2(p.x - end.x, p.y - end.y));
+	float lineLen = Vec2Mag(VEC2(end.x - start.x, end.y - start.y));
+	return d1 + d2 >= lineLen - tolerance && d1 + d2 <= lineLen + tolerance;
+}
+
+MATH_INLINE bool Vec2LineIntersect(vec2 a1, vec2 a2, vec2 b1, vec2 b2, vec2* intersection)
+{
+	float denominator = (b2.y - b1.y) * (a2.x - a1.x) - (b2.x - b1.x) * (a2.y - a1.y);
+	if (denominator == 0) return false;
+
+	float ua = ((b2.x - b1.x) * (a1.y - b1.y) - (b2.y - b1.y) * (a1.x - b1.x)) / denominator;
+	float ub = ((a2.x - a1.x) * (a1.y - b1.y) - (a2.y - a1.y) * (a1.x - b1.x)) / denominator;
+
+	if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+		if (intersection) {
+			intersection->x = a1.x + ua * (a2.x - a1.x);
+			intersection->y = a1.y + ua * (a2.y - a1.y);
+		}
+		return true;
+	}
+
+	return false;
+}
+
 MATH_INLINE float Lerp(float a, float b, float t)
 {
 	return a + t * (b - a);
 }
+
 MATH_INLINE float Clamp(float v, float min, float max)
 {
 	return fmax(fmin(v, min), max);
@@ -524,6 +610,8 @@ MATH_INLINE void Mat4Print(mat4 m)
 		   m.c0.r2, m.c1.r2, m.c2.r2, m.c3.r2,
 		   m.c0.r3, m.c1.r3, m.c2.r3, m.c3.r3);
 }
+
+
 
 #undef MATH_INLINE
 #undef SHUFFLE

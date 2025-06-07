@@ -129,10 +129,10 @@ int main(void)
 	}
 
 	if (isCompositor) {  // Compositor Loop
-		const VkDevice device = vk.context.device;
-		const VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+		VkDevice device = vk.context.device;
+		VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		uint64_t compositorBaseCycleValue = 0;
-		while (isRunning) {
+		while (atomic_load_explicit(&midWindow.running, memory_order_acquire)) {
 
 			// we may not have to even wait... this could go faster
 			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
@@ -143,9 +143,8 @@ int main(void)
 
 			// somewhere input state needs to be copied to a node and only update when it knows the node needs it
 			midUpdateWindowInput();
-			isRunning = midWindow.running;
 			mxcProcessWindowInput();
-			__atomic_thread_fence(__ATOMIC_RELEASE);
+			atomic_thread_fence(memory_order_release);
 
 			// signal input ready to process!
 			vkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
@@ -167,7 +166,7 @@ int main(void)
 
 			compositorBaseCycleValue += MXC_CYCLE_COUNT;
 
-			__atomic_thread_fence(__ATOMIC_ACQUIRE);
+			atomic_thread_fence(memory_order_acquire);
 			// itd be good to come up with a mechanism that can actually deal with real multiple queues for debugging
 			CmdSubmitPresent(compositorContext.gfxCmd,
 							 compositorContext.swapCtx.chain,

@@ -537,7 +537,7 @@ enum {
 //////////////////////////////////
 //// Mid Vulkan Inline Cmd Methods
 ////
-#define CMD_PIPELINE_IMAGE_BARRIERS(_cmd, ...) CmdPipelineImageBarriers2((_cmd), sizeof((VkImageMemoryBarrier2[]){__VA_ARGS__}) / sizeof(VkImageMemoryBarrier2), (VkImageMemoryBarrier2[]){__VA_ARGS__})
+#define CMD_IMAGE_BARRIERS(_cmd, ...) CmdPipelineImageBarriers2((_cmd), sizeof((VkImageMemoryBarrier2[]){__VA_ARGS__}) / sizeof(VkImageMemoryBarrier2), (VkImageMemoryBarrier2[]){__VA_ARGS__})
 INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
 	vk.CmdPipelineBarrier2(cmd, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
@@ -2309,7 +2309,7 @@ void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
 {
 	int      texChannels, width, height;
 	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
-	CHECK(width == 0 || height == 0, "Image height or width is equal to zero.")
+	CHECK(width == 0 || height == 0, "Image windowHeight or windowWidth is equal to zero.")
 
 	VkTextureCreateInfo createInfo = {
 		.debugName = pPath,

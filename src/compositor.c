@@ -653,6 +653,8 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 		},
 	};
 
+	bool lineHover = false;
+
 	//// Loop
 run_loop:
 
@@ -662,6 +664,7 @@ run_loop:
 
 	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
+
 	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
 
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
@@ -750,15 +753,14 @@ run_loop:
 			vk.CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, COUNT(mipPushSets), mipPushSets);
 			vk.CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
 
-			VkImageMemoryBarrier2 midBarr = {
+			CMD_IMAGE_BARRIERS(gfxCmd, {
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pNodeSwap->gBufferMip,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			};
-			CmdPipelineImageBarriers2(gfxCmd, 1, &midBarr);
+			});
 
 			VkWriteDescriptorSet pushSets[] = {
 				BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView),
@@ -791,55 +793,71 @@ run_loop:
 
 			memcpy(pNodeCstData->pSetMapped, &pNodeCstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
 
+			enum : u8 {
+				CORNER_LUB,
+				CORNER_LUF,
+				CORNER_LDB,
+				CORNER_LDF,
+				CORNER_RUB,
+				CORNER_RUF,
+				CORNER_RDB,
+				CORNER_RDF,
+				CORNER_COUNT,
+			};
+			constexpr u8 cubeCornerSegments[] = {
+			CORNER_LUF, CORNER_LUB,
+			CORNER_LUB, CORNER_RUB,
+			CORNER_RUB, CORNER_RUF,
+			CORNER_RUF, CORNER_LUF,
+
+			CORNER_RDF, CORNER_RDB,
+			CORNER_RDB, CORNER_LDB,
+			CORNER_LDB, CORNER_LDF,
+			CORNER_LDF, CORNER_RDF,
+
+			CORNER_LUF, CORNER_LDF,
+			CORNER_LUB, CORNER_LDB,
+			CORNER_RUF, CORNER_RDF,
+			CORNER_RUB, CORNER_RDB,
+			};
+
 			float radius = pNodeShrd->compositorRadius;
-
-			vec3 lub = VEC3(-radius, -radius, -radius);
-			vec3 luf = VEC3(-radius, -radius, radius);
-			vec3 ldb = VEC3(-radius, radius, -radius);
-			vec3 ldf = VEC3(-radius, radius, radius);
-
-			vec3 rub = VEC3(radius, -radius, -radius);
-			vec3 ruf = VEC3(radius, -radius, radius);
-			vec3 rdb = VEC3(radius, radius, -radius);
-			vec3 rdf = VEC3(radius, radius, radius);
-
-			constexpr int cornerCt = 8;
-			vec3          corners[cornerCt] = {lub, luf, ldb, ldf, rub, ruf, rdb, rdf};
+			vec3 corners[CORNER_COUNT] = {
+				[CORNER_LUB] = VEC3(-radius, -radius, -radius),
+				[CORNER_LUF] = VEC3(-radius, -radius, radius),
+				[CORNER_LDB] = VEC3(-radius, radius, -radius),
+				[CORNER_LDF] = VEC3(-radius, radius, radius),
+				[CORNER_RUB] = VEC3(radius, -radius, -radius),
+				[CORNER_RUF] = VEC3(radius, -radius, radius),
+				[CORNER_RDB] = VEC3(radius, radius, -radius),
+				[CORNER_RDF] = VEC3(radius, radius, radius),
+			};
+			vec2 uvCorners[CORNER_COUNT];
 
 			vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
 			vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
-			for (int i = 0; i < cornerCt; ++i) {
-				vec4 Model = VEC4(corners[i], 1.0f);
-				vec4 World = Vec4MulMat4(pNodeCstData->nodeSetState.model, Model);
-				vec4 Clip = Vec4MulMat4(globSetState.view, World);
-				vec3 NDC = Vec4WDivide(Vec4MulMat4(globSetState.proj, Clip));
-				vec2 UV = UVFromNDC(NDC);
-				uvMin.x = MIN(uvMin.x, UV.x);
-				uvMin.y = MIN(uvMin.y, UV.y);
-				uvMax.x = MAX(uvMax.x, UV.x);
-				uvMax.y = MAX(uvMax.y, UV.y);
+			for (int i = 0; i < CORNER_COUNT; ++i) {
+				vec4 model = VEC4(corners[i], 1.0f);
+				vec4 world = Vec4MulMat4(pNodeCstData->nodeSetState.model, model);
+				vec4 clip = Vec4MulMat4(globSetState.view, world);
+				vec3 ndc = Vec4WDivide(Vec4MulMat4(globSetState.proj, clip));
+				vec2 uv = UVFromNDC(ndc);
+				uvMin.x = MIN(uvMin.x, uv.x);
+				uvMin.y = MIN(uvMin.y, uv.y);
+				uvMax.x = MAX(uvMax.x, uv.x);
+				uvMax.y = MAX(uvMax.y, uv.y);
+				uvCorners[i] = uv;
 			}
 
-
-			vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
-			vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
-			vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
+			vec2 mouseUV = mxcWindowInput.mouseUV;
 
 			vkLineClear(pLineBuf);
-			vkLineAdd(pLineBuf, luf, lub);
-			vkLineAdd(pLineBuf, lub, rub);
-			vkLineAdd(pLineBuf, rub, ruf);
-			vkLineAdd(pLineBuf, ruf, luf);
-
-			vkLineAdd(pLineBuf, rdf, rdb);
-			vkLineAdd(pLineBuf, rdb, ldb);
-			vkLineAdd(pLineBuf, ldb, ldf);
-			vkLineAdd(pLineBuf, ldf, rdf);
-
-			vkLineAdd(pLineBuf, luf, ldf);
-			vkLineAdd(pLineBuf, lub, ldb);
-			vkLineAdd(pLineBuf, ruf, rdf);
-			vkLineAdd(pLineBuf, rub, rdb);
+			lineHover = false;
+			for (u32 i = 0; i < COUNT(cubeCornerSegments); i += 2) {
+				vkLineAdd(pLineBuf, corners[cubeCornerSegments[i]], corners[cubeCornerSegments[i+1]]);
+				if (Vec2PointOnLineSegment(mouseUV, uvCorners[cubeCornerSegments[i]], uvCorners[cubeCornerSegments[i+1]], 0.0005f))
+					lineHover = true;
+			}
 
 			// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
 			pNodeShrd->cameraPose = globCamPose;
@@ -857,6 +875,11 @@ run_loop:
 
 			// write current global set state to node's global set state to use for next node render with new the framebuffer size
 			memcpy(&pNodeShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
+
+			vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
+			vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
+			vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
+
 			pNodeShrd->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
 			pNodeShrd->ulClipUV = uvMinClamp;
 			pNodeShrd->lrClipUV = uvMaxClamp;
@@ -912,11 +935,18 @@ run_loop:
 		}
 
 		//// Graphic Line Commands
+		// TODO this could be another thread and run at a lower rate
 		{
 			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
 			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
 
-			VkLineMaterialState lineState = {.primaryColor = VEC4(1, 1, 1, 0.5f)};
+//			for (int i = 0; i < pLineBuf->count; ++i) {
+//
+//			}
+
+			auto lineState = lineHover ?
+								 (VkLineMaterialState){.primaryColor = VEC4(0, 1, 0, 0.5f)} :
+								 (VkLineMaterialState){.primaryColor = VEC4(1, 1, 1, 0.5f)};
 			vkCmdPushLineMaterial(gfxCmd, lineState);
 
 			vkCmdSetLineWidth(gfxCmd, 1.0f);
@@ -1011,14 +1041,14 @@ run_loop:
 		VkImage swapImage = swapCtx.images[compositorContext.swapIdx];
 		VkImageView swapView = swapCtx.views[compositorContext.swapIdx];
 
-		CMD_PIPELINE_IMAGE_BARRIERS(gfxCmd,
+		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = gfxFrameColorImg,
 				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1026,7 +1056,7 @@ run_loop:
 				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1034,7 +1064,7 @@ run_loop:
 				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_UNDEFINED,
 				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
 			},
 		);
 
@@ -1049,7 +1079,7 @@ run_loop:
 		vk.CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT, COUNT(blitPushSets), blitPushSets);
 		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
-		CMD_PIPELINE_IMAGE_BARRIERS(gfxCmd,
+		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = swapImage,

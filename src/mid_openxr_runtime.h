@@ -1831,7 +1831,7 @@ XR_PROC xrGetReferenceSpaceBoundsRect(
 	auto pSession = (Session*)session;
 	xrGetReferenceSpaceBounds(pSession->index, bounds);
 
-	printf("xrGetReferenceSpaceBoundsRect %s width: %f height: %f\n", string_XrReferenceSpaceType(referenceSpaceType), bounds->width, bounds->height);
+	printf("xrGetReferenceSpaceBoundsRect %s windowWidth: %f windowHeight: %f\n", string_XrReferenceSpaceType(referenceSpaceType), bounds->width, bounds->height);
 
 	return XR_SUCCESS;
 }
@@ -2223,8 +2223,8 @@ XR_PROC xrCreateSwapchain(
 
 	LOG("  format: %lld\n", createInfo->format);
 	LOG("  sampleCount: %u\n", createInfo->sampleCount);
-	LOG("  width: %u\n", createInfo->width);
-	LOG("  height: %u\n", createInfo->height);
+	LOG("  windowWidth: %u\n", createInfo->width);
+	LOG("  windowHeight: %u\n", createInfo->height);
 	LOG("  faceCount: %u\n", createInfo->faceCount);
 	LOG("  arraySize: %u\n", createInfo->arraySize);
 	LOG("  mipCount: %u\n", createInfo->mipCount);

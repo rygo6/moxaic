@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdatomic.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -27,7 +28,8 @@
 typedef struct MidWindow {
 	HINSTANCE hInstance;
 	HWND      hWnd;
-	int       width, height;
+	int       windowWidth, windowHeight;
+	int       viewWidth, viewHeight;
 	POINT     localCenter, globalCenter;
 	uint64_t  frequency, start, current;
 	bool      running;
@@ -173,7 +175,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return 0;
 
 		case WM_CLOSE:
-			midWindow.running = false;
+			atomic_store_explicit(&midWindow.running, false, memory_order_release);
 			return 0;
 		default:
 			return DefWindowProc(hWnd, uMsg, wParam, lParam);
@@ -224,19 +226,24 @@ void midCreateWindow()
 {
 	CHECK(midWindow.hInstance != NULL, "Window already created!");
 	midWindow.hInstance = GetModuleHandle(NULL);
-	midWindow.running = true;
-
+	atomic_store_explicit(&midWindow.running, true, memory_order_release);
 
 	WNDCLASS wc = {.lpfnWndProc = WindowProc, .hInstance = midWindow.hInstance, .lpszClassName = CLASS_NAME};
 	RegisterClass(&wc);
 
 	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
-	RECT  rect = {.right = DEFAULT_WIDTH, .bottom = DEFAULT_HEIGHT};
-	AdjustWindowRect(&rect, windowStyle, FALSE);
+	DWORD windowExStyle = WS_EX_APPWINDOW;
+	midWindow.viewWidth = DEFAULT_WIDTH;
+	midWindow.viewHeight = DEFAULT_HEIGHT;
+	RECT  rect = {.right = midWindow.viewWidth, .bottom = midWindow.viewHeight};
+	AdjustWindowRectEx(&rect, windowStyle, FALSE, windowExStyle);
 
-	midWindow.width = rect.right - rect.left;
-	midWindow.height = rect.bottom - rect.top;
-	midWindow.hWnd = CreateWindowEx(0, CLASS_NAME, WINDOW_NAME, windowStyle, DEFAULT_WINDOW_X_POSITION, DEFAULT_WINDOW_Y_POSITION, midWindow.width, midWindow.height, NULL, NULL, midWindow.hInstance, NULL);
+	midWindow.windowWidth = rect.right - rect.left;
+	midWindow.windowHeight = rect.bottom - rect.top;
+	midWindow.hWnd = CreateWindowEx(windowExStyle, CLASS_NAME, WINDOW_NAME, windowStyle,
+									DEFAULT_WINDOW_X_POSITION, DEFAULT_WINDOW_Y_POSITION,
+									midWindow.windowWidth, midWindow.windowHeight,
+									NULL, NULL, midWindow.hInstance, NULL);
 	CHECK(midWindow.hWnd == NULL, "Failed to create window.");
 
 	ShowWindow(midWindow.hWnd, SW_SHOW);
