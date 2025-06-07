@@ -1196,7 +1196,7 @@ static void CreateBasicSamplers()
 		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 	};
-	VK_CHECK(vkCreateSampler(vk.context.device, &linearCreateInfo, VK_ALLOC, &vk.context.nearestSampler));
+	VK_CHECK(vkCreateSampler(vk.context.device, &nearestCreateInfo, VK_ALLOC, &vk.context.nearestSampler));
 	vkSetDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)vk.context.nearestSampler, "NearestSampler");
 }
 
