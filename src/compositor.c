@@ -3,14 +3,10 @@
 #include "mid_window.h"
 #include "window.h"
 
-#include <_mingw_mac.h>
 #include <stdatomic.h>
 #include <assert.h>
 #include <float.h>
 #include <vulkan/vk_enum_string_helper.h>
-
-#define VkDescriptorSetLayoutCreateInfo(...) (VkDescriptorSetLayoutCreateInfo) {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, __VA_ARGS__ }
-#define VkDescriptorSetLayoutBindingElement(bind_index, ...) [bind_index] = { .binding = bind_index, __VA_ARGS__ }
 
 //////////////
 //// Constants
@@ -31,7 +27,7 @@ constexpr VkShaderStageFlags MXC_COMPOSITOR_MODE_STAGE_FLAGS[] = {
 	[MXC_COMPOSITOR_MODE_QUAD] =       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 	[MXC_COMPOSITOR_MODE_TASK_MESH] =   VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
-//	[MXC_COMPOSITOR_MODE_COMPUTE] =     VK_SHADER_STAGE_COMPUTE_BIT,
+	[MXC_COMPOSITOR_MODE_COMPUTE] =     VK_SHADER_STAGE_COMPUTE_BIT,
 };
 
 //// Node Pipe
@@ -44,27 +40,32 @@ enum {
 
 static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* pLayout)
 {
-	auto createInfo = VkDescriptorSetLayoutCreateInfo(
-			.bindingCount = SET_BIND_INDEX_NODE_COUNT,
-			.pBindings = (VkDescriptorSetLayoutBinding[]){
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_NODE_STATE,
-					.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-					.descriptorCount = 1,
-					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode]),
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_NODE_COLOR,
-					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.descriptorCount = 1,
-					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
-					.pImmutableSamplers = &vk.context.linearSampler),
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_NODE_GBUFFER,
-					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.descriptorCount = 1,
-					.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
-					.pImmutableSamplers = &vk.context.linearSampler),
-			});
+	VkDescriptorSetLayoutCreateInfo createInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = SET_BIND_INDEX_NODE_COUNT,
+		.pBindings = (VkDescriptorSetLayoutBinding[]){
+			{
+				SET_BIND_INDEX_NODE_STATE,
+				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				.descriptorCount = 1,
+				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+			},
+			{
+				SET_BIND_INDEX_NODE_COLOR,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+				.pImmutableSamplers = &vk.context.nearestSampler,
+			},
+			{
+				SET_BIND_INDEX_NODE_GBUFFER,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+				.pImmutableSamplers = &vk.context.nearestSampler,
+			},
+		},
+	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
 }
 #define BIND_WRITE_NODE_STATE(_set, _buf)                        \
@@ -136,20 +137,24 @@ enum {
 
 static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
 {
-	auto createInfo = VkDescriptorSetLayoutCreateInfo(
-			.bindingCount = SET_BIND_INDEX_NODE_COMPUTE_COUNT,
-			.pBindings = (VkDescriptorSetLayoutBinding[]){
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT,
-					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					.descriptorCount = 1,
-					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT,
-					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					.descriptorCount = 1,
-					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
-			});
+	VkDescriptorSetLayoutCreateInfo createInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = SET_BIND_INDEX_NODE_COMPUTE_COUNT,
+		.pBindings = (VkDescriptorSetLayoutBinding[]){
+			{
+				SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			},
+			{
+				SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			},
+		},
+	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
 }
 #define BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(set, view)         \
@@ -211,33 +216,39 @@ enum {
 
 static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 {
-	auto createInfo = VkDescriptorSetLayoutCreateInfo(
-			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-			.bindingCount = SET_BIND_INDEX_GBUFFER_PROCESS_COUNT,
-			.pBindings = (VkDescriptorSetLayoutBinding[]){
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_GBUFFER_PROCESS_STATE,
-					.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-					.descriptorCount = 1,
-					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
-					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.descriptorCount = 1,
-					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-					.pImmutableSamplers = &vk.context.nearestSampler),
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
-					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.descriptorCount = 1,
-					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-					.pImmutableSamplers = &vk.context.nearestSampler),
-				VkDescriptorSetLayoutBindingElement(
-					SET_BIND_INDEX_GBUFFER_PROCESS_DST,
-					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					.descriptorCount = 1,
-					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT),
-			});
+	VkDescriptorSetLayoutCreateInfo createInfo = {
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+		.bindingCount = SET_BIND_INDEX_GBUFFER_PROCESS_COUNT,
+		.pBindings = (VkDescriptorSetLayoutBinding[]){
+			{
+				SET_BIND_INDEX_GBUFFER_PROCESS_STATE,
+				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			},
+			{
+				SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.pImmutableSamplers = &vk.context.nearestSampler,
+			},
+			{
+				SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.pImmutableSamplers = &vk.context.nearestSampler,
+			},
+			{
+				SET_BIND_INDEX_GBUFFER_PROCESS_DST,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.descriptorCount = 1,
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			},
+		},
+	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
 }
 
@@ -655,6 +666,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 
 	bool lineHover = false;
 
+	/////////
 	//// Loop
 run_loop:
 
@@ -670,26 +682,21 @@ run_loop:
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
 	CmdResetBegin(gfxCmd);
 
+
+
+	/////////////////////////////
 	//// Update Node States Cycle
 	for (int iNode = 0; iNode < nodeCt; ++iNode) {
 		auto pNodeShrd = activeNodeShrd[iNode];
-
-		// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
-		// shared: 569 - semaphore: 315416 ratio: 554.333919
-		u64 nodeTimeline = atomic_load_explicit(&pNodeShrd->timelineValue, memory_order_acquire);
-
-		if (nodeTimeline < 1)
-			continue;
-
 		auto pNodeCstData = &nodeCstLocal[iNode];
 
 		// We need logic here. Some node you'd want to allow to move themselves. Other locked in specific place. Other move their offset.
 		memcpy(&pNodeCstData->rootPose, &pNodeShrd->rootPose, sizeof(MidPose));
-		//nodeCompositorData[i].rootPose.rotation = QuatFromEuler(nodeCompositorData[i].rootPose.euler);
-
-		// update node model mat... this should happen every frame so user can move it in cst
 		pNodeCstData->nodeSetState.model = Mat4FromPosRot(pNodeCstData->rootPose.position, pNodeCstData->rootPose.rotation);
 
+		// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
+		// shared: 569 - semaphore: 315416 ratio: 554.333919
+		u64 nodeTimeline = atomic_load_explicit(&pNodeShrd->timelineValue, memory_order_acquire);
 		if (nodeTimeline <= pNodeCstData->lastTimelineValue)
 			continue;
 
@@ -729,7 +736,8 @@ run_loop:
 			vk.ResetQueryPool(device, timeQryPool, 0, 2);
 			vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, 0);
 
-			// TODO this could be pulled out of loop
+			// TODO this needs ot be construct the UL LR uv that was rendered into
+			// gBuffer size should be dynamically chosen?
 			ivec2 extent = IVEC2(pNodeShrd->swapWidth, pNodeShrd->swapHeight);
 			u32   pixelCt = extent.x * extent.y;
 			u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
@@ -887,6 +895,7 @@ run_loop:
 		}
 	}
 
+	////////////////////////////
 	/// Graphics Recording Cycle
 	{
 		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, timeline);
@@ -902,13 +911,6 @@ run_loop:
 
 			for (int i = 0; i < nodeCt; ++i) {
 				auto pNodShrd = activeNodeShrd[i];
-
-				// find a way to get rid of this load and check
-				u64 nodTimlnVal = atomic_load_explicit(&pNodShrd->timelineValue, memory_order_acquire);
-
-				// I don't like this but it waits until the node renders something. Prediction should be okay here.
-				if (nodTimlnVal < 1)
-					continue;
 
 				// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 				switch (pNodShrd->compositorMode) {
@@ -963,7 +965,9 @@ run_loop:
 //		ResetQueryPool(device, timeQueryPool, 0, 2);
 //		CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
 
-	/// Compute Recording Cycle. We really must separate into Compute and Graphics lists
+	////////////////////////////
+	//// Compute Recording Cycle
+	// We really must separate into Compute and Graphics lists
 	{
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
@@ -973,17 +977,6 @@ run_loop:
 
 		for (int iNode = 0; iNode < nodeCt; ++iNode) {
 			auto pNodShrd = activeNodeShrd[iNode];
-
-			// find a way to get rid of this load and check
-			u64 nodeTimlnVal = atomic_load_explicit(&pNodShrd->timelineValue, memory_order_acquire);
-
-			// I don't like this but it waits until the node renders something. Prediction should be okay here.
-			if (nodeTimlnVal < 1)
-				continue;
-
-//			auto pNodeCompstData = &nodeCompositorData[iNode];
-//			int  iNodeSwap = !(nodeTimlnVal % VK_SWAP_COUNT);
-//			auto pNodeSwap = &pNodeCompstData->swaps[iNodeSwap];
 
 			// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 			// really all the nodes need to be set in UBO array and the compute shader do this loop
@@ -1034,7 +1027,8 @@ run_loop:
 	// should have separate compute and graphics queries
 //		CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
 
-	/// Blit Framebuffer
+	/////////////////////
+	//// Blit Framebuffer
 	{
 		u32 swapIndex; vk.AcquireNextImageKHR(device, swapCtx.chain, UINT64_MAX, swapCtx.acquireSemaphore, VK_NULL_HANDLE, &swapIndex);
 		atomic_store_explicit(&compositorContext.swapIdx, swapIndex, memory_order_release);

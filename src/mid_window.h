@@ -122,6 +122,19 @@ MidWindow      midWindow;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg) {
+
+		case WM_SETCURSOR:
+
+			switch (LOWORD(lParam)) {
+				case HTCLIENT:
+					SetCursor(LoadCursor(NULL, IDC_ARROW));  // Standard arrow
+					// SetCursor(LoadCursor(NULL, IDC_HAND));   // Hand cursor
+					// SetCursor(LoadCursor(NULL, IDC_CROSS));  // Crosshair
+					return TRUE;
+			}
+
+			return DefWindowProc(hWnd, uMsg, wParam, lParam);
+
 		case WM_MOUSEMOVE:
 			int newX = GET_X_LPARAM(lParam);
 			int newY = GET_Y_LPARAM(lParam);
@@ -150,6 +163,22 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			return 0;
 
+		case WM_KEYDOWN:
+			if (wParam >= '0' && wParam <= 'Z')
+				midWindowInput.keyChar[wParam - '0'] = MID_PHASE_PRESS;
+
+			return 0;
+
+		case WM_KEYUP:
+			if (wParam >= '0' && wParam <= 'Z')
+				midWindowInput.keyChar[wParam - '0'] = MID_PHASE_RELEASE;
+
+			return 0;
+
+		case WM_CLOSE:
+			atomic_store_explicit(&midWindow.running, false, memory_order_release);
+			return 0;
+
 #define MOUSE_PHASE(macro_prefix, button_prefix)                      \
 	case WM_##macro_prefix##BUTTONDOWN:                               \
 		midWindowInput.button_prefix##Mouse = MID_PHASE_PRESS;        \
@@ -160,25 +189,16 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_##macro_prefix##BUTTONDBLCLK:                             \
 		midWindowInput.button_prefix##Mouse = MID_PHASE_DOUBLE_CLICK; \
 		return 0;
+
 			MOUSE_PHASE(L, left)
 			MOUSE_PHASE(R, right)
 			MOUSE_PHASE(M, middle)
+
 #undef MOUSE_PHASE
 
-		case WM_KEYDOWN:
-			if (wParam >= '0' && wParam <= 'Z')
-				midWindowInput.keyChar[wParam - '0'] = MID_PHASE_PRESS;
-			return 0;
-		case WM_KEYUP:
-			if (wParam >= '0' && wParam <= 'Z')
-				midWindowInput.keyChar[wParam - '0'] = MID_PHASE_RELEASE;
-			return 0;
-
-		case WM_CLOSE:
-			atomic_store_explicit(&midWindow.running, false, memory_order_release);
-			return 0;
 		default:
 			return DefWindowProc(hWnd, uMsg, wParam, lParam);
+
 	}
 }
 
