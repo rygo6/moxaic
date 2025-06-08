@@ -244,7 +244,7 @@ typedef struct MxcNodeCompositorSetState {
 // Data compositor needs for each node. Could this go in CompositorContext?
 typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 
-	MidPose                    rootPose;
+//	MidPose                    rootPose;
 	uint64_t                   lastTimelineValue;
 
 	// Does it actually make difference to keep local copy?

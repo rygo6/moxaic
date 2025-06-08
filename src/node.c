@@ -490,7 +490,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	MxcNodeCompositorLocal* pNodeCompositorData = &nodeCstLocal[handle];
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
-	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
+//	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 
 	*pNodeHandle = handle;
 
@@ -643,7 +643,7 @@ static void InterprocessServerAcceptNodeConnection()
 	MxcNodeContext*         pNodeCtxt = NULL;
 	MxcNodeShared*          pNodeShrd = NULL;
 	MxcNodeImports*         pImports = NULL;
-	MxcNodeCompositorLocal* pNodeCompLcl = NULL;
+//	MxcNodeCompositorLocal* pNodeCompLocal = NULL;
 	HANDLE                  hNodeProc = INVALID_HANDLE_VALUE;
 	HANDLE                  hExtNodeMem = INVALID_HANDLE_VALUE;
 	MxcExternalNodeMemory*  pExtNodeMem = NULL;
@@ -685,11 +685,11 @@ static void InterprocessServerAcceptNodeConnection()
 		WIN32_CHECK(hExtNodeMem != NULL, "Could not create file mapping object");
 		pExtNodeMem = MapViewOfFile(hExtNodeMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
 		WIN32_CHECK(pExtNodeMem != NULL, "Could not map view of file");
-		*pExtNodeMem = (MxcExternalNodeMemory){};
 	}
 
 	// Initialize Context
 	{
+		*pExtNodeMem = (MxcExternalNodeMemory){};
 		pImports = &pExtNodeMem->imports;
 		pNodeShrd = &pExtNodeMem->shared;
 
@@ -705,7 +705,8 @@ static void InterprocessServerAcceptNodeConnection()
 
 		NodeHandle handle = RequestExternalNodeHandle(pNodeShrd);
 
-		pNodeCompLcl = &nodeCstLocal[handle];
+		// TODO we probably do want to clear? put all the buffers and sets into one big shared buffer
+//		pNodeCompLocal = &nodeCstLocal[handle];
 		// Don't clear. State is recycled and pre-alloced on compositor creation.
 //		*pNodeCompositorLocal = (MxcNodeCompositorLocal){};
 
@@ -746,8 +747,6 @@ static void InterprocessServerAcceptNodeConnection()
 		WIN32_CHECK(DuplicateHandle(currentHandle, vkGetSemaphoreExternalHandle(compositorContext.timeline), hNodeProc, &pImports->compositorTimelineHandle,
 									0, false, DUPLICATE_SAME_ACCESS),
 					"Duplicate timeline handle fail.");
-
-		pNodeCompLcl->rootPose.rotation = QuatFromEuler(pNodeCompLcl->rootPose.euler);\
 	}
 
 	// Send shared memory handle

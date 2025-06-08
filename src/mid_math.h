@@ -213,7 +213,7 @@ MATH_INLINE mat4 Mat4XInvert(mat4 m)
 	return m;
 }
 
-MATH_INLINE quat RotFromMat4(mat4 m)
+MATH_INLINE quat quatFromMat4(mat4 m)
 {
 	quat q;
 	float trace = m.c0.r0 + m.c1.r1 + m.c2.r2;
