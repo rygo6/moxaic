@@ -689,7 +689,7 @@ run_loop:
 		auto pNodeShrd = activeNodeShrd[iNode];
 		auto pNodeCstData = &nodeCstLocal[iNode];
 
-		pNodeShrd->rootPose.position = VEC3(0, 0, 0);
+		pNodeShrd->rootPose.position = VEC3(.5f, 0, 0);
 		pNodeCstData->nodeSetState.model = Mat4FromPosRot(pNodeShrd->rootPose.position, pNodeShrd->rootPose.rotation);
 
 		// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
@@ -793,18 +793,9 @@ run_loop:
 		//// Calc new node uniform and shared data
 		{
 			// Move the globalSetState that was previously used to render into the nodeSetState to use in cst
-			auto pGlobSetState = &pNodeShrd->globalSetState;
-			auto pNodeSetState = &pNodeCstData->nodeSetState;
-			// Offset by cst node pos/rot
-			mat4 invModel = Mat4Inv(pNodeSetState->model);
-			pNodeSetState->view = Mat4Mul(pGlobSetState->view, invModel);
-			pNodeSetState->proj = pGlobSetState->proj;
-			pNodeSetState->viewProj = Mat4Mul(pNodeSetState->proj, pNodeSetState->view);
-			pNodeSetState->invView = Mat4Inv(pNodeSetState->view);
-			pNodeSetState->invProj = pGlobSetState->invProj;
-			pNodeSetState->invViewProj = Mat4Inv(pNodeSetState->viewProj);
-			pNodeSetState->ulUV = pNodeShrd->ulClipUV;
-			pNodeSetState->lrUV = pNodeShrd->lrClipUV;
+			memcpy(&pNodeCstData->nodeSetState.view, &pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
+			pNodeCstData->nodeSetState.ulUV = pNodeShrd->ulClipUV;
+			pNodeCstData->nodeSetState.lrUV = pNodeShrd->lrClipUV;
 
 			memcpy(pNodeCstData->pSetMapped, &pNodeCstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
 
@@ -847,6 +838,7 @@ run_loop:
 				[CORNER_RDB] = VEC3(radius, radius, -radius),
 				[CORNER_RDF] = VEC3(radius, radius, radius),
 			};
+			vec3 worldCorners[CORNER_COUNT];
 			vec2 uvCorners[CORNER_COUNT];
 
 			vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
@@ -861,21 +853,27 @@ run_loop:
 				uvMin.y = MIN(uvMin.y, uv.y);
 				uvMax.x = MAX(uvMax.x, uv.x);
 				uvMax.y = MAX(uvMax.y, uv.y);
+				worldCorners[i] = TO_VEC3(world);
 				uvCorners[i] = uv;
 			}
+
+			vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
+			vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
+			vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
 
 			vec2 mouseUV = mxcWindowInput.mouseUV;
 
 			vkLineClear(pLineBuf);
 			lineHover = false;
 			for (u32 i = 0; i < COUNT(cubeCornerSegments); i += 2) {
-				vkLineAdd(pLineBuf, corners[cubeCornerSegments[i]], corners[cubeCornerSegments[i+1]]);
+				vkLineAdd(pLineBuf, worldCorners[cubeCornerSegments[i]], worldCorners[cubeCornerSegments[i+1]]);
 				if (Vec2PointOnLineSegment(mouseUV, uvCorners[cubeCornerSegments[i]], uvCorners[cubeCornerSegments[i+1]], 0.0005f))
 					lineHover = true;
 			}
 
 			// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
 			pNodeShrd->cameraPose = globCamPose;
+			pNodeShrd->cameraPose.position.vec -= pNodeShrd->rootPose.position.vec;
 			pNodeShrd->camera = globCam;
 
 			pNodeShrd->left.active = false;
@@ -889,11 +887,14 @@ run_loop:
 			pNodeShrd->right.selectClick = mxcWindowInput.leftMouseButton;
 
 			// write current global set state to node's global set state to use for next node render with new the framebuffer size
-			memcpy(&pNodeShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-
-			vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
-			vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
-			vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
+//			memcpy(&pNodeShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
+//			mat4 invModel = Mat4Inv(pNodeCstData->nodeSetState.model);
+			pNodeShrd->globalSetState.view = globSetState.view;
+			pNodeShrd->globalSetState.proj = globSetState.proj;
+			pNodeShrd->globalSetState.viewProj = Mat4Mul(pNodeShrd->globalSetState.proj, pNodeShrd->globalSetState.view);
+			pNodeShrd->globalSetState.invView = Mat4Inv(pNodeShrd->globalSetState.view);
+			pNodeShrd->globalSetState.invProj = globSetState.invProj;
+			pNodeShrd->globalSetState.invViewProj = Mat4Inv(pNodeShrd->globalSetState.viewProj);
 
 			pNodeShrd->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
 			pNodeShrd->ulClipUV = uvMinClamp;

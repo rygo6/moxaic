@@ -17,7 +17,7 @@ add_executable(${TARGET_NAME}
 )
 
 
-set(VULKAN_SDK_PATH "C:/VulkanSDK/1.3.290.0")
+set(VULKAN_SDK_PATH "C:/VulkanSDK/1.4.313.1")
 set(OPENXR_SDK_INCLUDE_PATH "C:/OpenXRSDK/openxr_loader_windows-1.1.42/include")
 set(OPENXR_SDK_LINK_PATH "C:/OpenXRSDK/openxr_loader_windows-1.1.42/x64/bin")
 

@@ -27,8 +27,8 @@ void mxcProcessWindowInput()
 
 	switch (midWindowInput.cursorLocked) {
 		case MID_INPUT_LOCK_CURSOR_ENABLED:
-			mxcWindowInput.mouseDelta.x = midWindowInput.mouseDeltaX;
-			mxcWindowInput.mouseDelta.y = midWindowInput.mouseDeltaY;
+			mxcWindowInput.mouseDelta.x = midWindowInput.fMouseDeltaX;
+			mxcWindowInput.mouseDelta.y = midWindowInput.fMouseDeltaY;
 			break;
 		default: break;
 	}

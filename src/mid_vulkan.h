@@ -645,7 +645,7 @@ INLINE void CmdSubmitPresent(
 	};
 	VK_CHECK(vk.QueuePresentKHR(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
 }
-// todo needs PFN version
+
 INLINE void CmdSubmit(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, uint64_t signal)
 {
 	VkSubmitInfo2 submitInfo = {
@@ -1744,30 +1744,29 @@ void vkAllocateDescriptorSet(VkDescriptorPool descriptorPool, const VkDescriptor
 ///////////
 //// Memory
 ////
-static void PrintFlags(VkMemoryPropertyFlags propFlags, const char* (*string_Method)(VkFlags flags))
+static void LogFlags(const char* prefix, const char* postfix, VkFlags flags, const char* (*string_Method)(VkFlags flags))
 {
 	int index = 0;
-	while (propFlags) {
-		if (propFlags & 1) {
-			printf("%s ", string_Method(1U << index));
-		}
+	while (flags) {
+		if (flags & 1)
+			LOG("%s%s%s", prefix, string_Method(1U << index), postfix);
+
 		++index;
-		propFlags >>= 1;
+		flags >>= 1;
 	}
-	printf("\n");
 }
 
+// could be combined with above
 static void PrintMemoryPropertyFlags(VkMemoryPropertyFlags propFlags)
 {
 	int index = 0;
 	while (propFlags) {
-		if (propFlags & 1) {
-			printf("%s ", strlen("VK_MEMORY_PROPERTY_") + string_VkMemoryPropertyFlagBits(1U << index));
-		}
+		if (propFlags & 1)
+			LOG("%s ", strlen("VK_MEMORY_PROPERTY_") + string_VkMemoryPropertyFlagBits(1U << index));
+
 		++index;
 		propFlags >>= 1;
 	}
-	printf("\n");
 }
 
 static uint32_t FindMemoryTypeIndex(
@@ -1784,6 +1783,7 @@ static uint32_t FindMemoryTypeIndex(
 		}
 	}
 	PrintMemoryPropertyFlags(memPropFlags);
+	LOG("\n");
 	PANIC("Failed to find mem with properties!");
 	return -1;
 }
@@ -2065,12 +2065,13 @@ static void CreateAllocImage(const VkTextureCreateInfo* pCreateInfo, VkDedicated
 		};
 		VK_CHECK(vkGetPhysicalDeviceImageFormatProperties2(vk.context.physicalDevice, &imageInfo, &imageProperties));
 
-//		printf("externalMemoryFeatures: ");
-//		PrintFlags(externalImageProperties.externalMemoryProperties.externalMemoryFeatures, string_VkExternalMemoryFeatureFlagBits);
-//		printf("exportFromImportedHandleTypes: ");
-//		PrintFlags(externalImageProperties.externalMemoryProperties.exportFromImportedHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
-//		printf("compatibleHandleTypes: ");
-//		PrintFlags(externalImageProperties.externalMemoryProperties.compatibleHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
+		LOG("Importing Texture: %s %d %d\n", string_VkFormat(pCreateInfo->pImageCreateInfo->format), pCreateInfo->pImageCreateInfo->extent.width, pCreateInfo->pImageCreateInfo->extent.height);
+		LOG("  externalMemoryFeatures:\n");
+		LogFlags("    ", "\n",externalImageProperties.externalMemoryProperties.externalMemoryFeatures, string_VkExternalMemoryFeatureFlagBits);
+		LOG("  exportFromImportedHandleTypes:\n");
+		LogFlags("    ", "\n",externalImageProperties.externalMemoryProperties.exportFromImportedHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
+		LOG("  compatibleHandleTypes:\n");
+		LogFlags("    ", "\n",externalImageProperties.externalMemoryProperties.compatibleHandleTypes, string_VkExternalMemoryHandleTypeFlagBits);
 
 		requiresExternalDedicated = externalImageProperties.externalMemoryProperties.externalMemoryFeatures & VK_EXTERNAL_MEMORY_FEATURE_DEDICATED_ONLY_BIT;
 	}
@@ -2289,7 +2290,7 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		NULL,
 		&IID_ID3D12Resource,
 		(void**)&pTexture->texture));
-	printf("Created DX12 Texture Format: %d\n", textureDesc.Format);
+	LOG("Created DX12 Texture: %s %d %d\n", string_VkFormat(pCreateInfo->format), pCreateInfo->extent.width, pCreateInfo->extent.height);
 
 	DX_CHECK(ID3D12Device_CreateSharedHandle(
 		d3d12.device,
@@ -2522,7 +2523,7 @@ static uint32_t FindQueueIndex(VkPhysicalDevice physicalDevice, const VkmQueueFa
 			string_Support[pQueueDesc->supportsGraphics],
 			string_Support[pQueueDesc->supportsCompute],
 			string_Support[pQueueDesc->supportsTransfer],
-			string_VkQueueGlobalPriorityKHR(pQueueDesc->globalPriority));
+			string_VkQueueGlobalPriority(pQueueDesc->globalPriority));
 	PANIC("Can't find queue family");
 	return -1;
 }
@@ -2846,14 +2847,15 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 		.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 //		.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR,
-		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
+//		.presentMode = VK_PRESENT_MODE_FIFO_KHR,
+		.presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
 		.clipped = VK_TRUE,
 	};
 	VK_CHECK(vkCreateSwapchainKHR(vk.context.device, &info, VK_ALLOC, &pSwap->chain));
 
 	uint32_t swapCount;
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
-	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swapCtx image count does not match requested swapCtx count!");
+	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, pSwap->images));
 	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 		VkImageViewCreateInfo viewCreateInfo = {
@@ -3019,12 +3021,30 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore)
 void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
 {
 	VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+		VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
 		.hinstance = hInstance,
 		.hwnd = hWnd,
 	};
 	VK_INSTANCE_FUNC(CreateWin32SurfaceKHR);
 	VK_CHECK(CreateWin32SurfaceKHR(vk.instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
+
+	VkSurfaceCapabilitiesKHR capabilities;
+	VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.context.physicalDevice, *pSurface, &capabilities));
+
+	LOG("Created Win32 Surface:\n");
+	LOG("  minImageCount: %d\n", capabilities.minImageCount);
+	LOG("  maxImageCount: %d\n", capabilities.maxImageCount);
+	LOG("  currentExtent: %d %d\n", capabilities.currentExtent.width, capabilities.currentExtent.height);
+	LOG("  minImageExtent: %d %d\n", capabilities.minImageExtent.width, capabilities.minImageExtent.height);
+	LOG("  maxImageExtent: %d %d\n", capabilities.maxImageExtent.width, capabilities.maxImageExtent.height);
+	LOG("  maxImageArrayLayers: %d\n", capabilities.maxImageArrayLayers);
+	LOG("  supportedTransforms:\n");
+	LogFlags("    ", "\n", capabilities.currentTransform, string_VkSurfaceTransformFlagBitsKHR);
+	LOG("  currentTransform: %s\n", string_VkSurfaceTransformFlagBitsKHR(capabilities.currentTransform));
+	LOG("  supportedTransforms:\n");
+	LogFlags("    ", "\n", capabilities.supportedCompositeAlpha, string_VkCompositeAlphaFlagBitsKHR);
+	LOG("  supportedTransforms:\n");
+	LogFlags("    ", "\n", capabilities.supportedUsageFlags, string_VkImageUsageFlagBits);
 }
 #endif
 

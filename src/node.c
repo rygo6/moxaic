@@ -242,7 +242,7 @@ int mxcClaimSwap(const MxcSwapInfo* pInfo)
 	}
 
 	BITSET(pPool->occupied, i);
-	printf("Claimed swapCtx %d\n", i);
+	printf("Claimed S %d\n", i);
 
 	if (!BITTEST(pPool->created, i)) {
 		BITSET(pPool->created, i);
@@ -251,7 +251,7 @@ int mxcClaimSwap(const MxcSwapInfo* pInfo)
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 		};
 		mxcCreateSwap(pInfo, &texInfo, &pPool->swaps[i]);
-		printf("Created Swap. Index: %d Width: %d Height: %d\n", i, texInfo.extent.width, texInfo.extent.height);
+		printf("Created Swap %d: %d %d\n", i, texInfo.extent.width, texInfo.extent.height);
 	}
 
 	return i;
@@ -1026,7 +1026,7 @@ static void ipcFuncNodeClosed(NodeHandle handle)
 }
 static void ipcFuncClaimSwap(NodeHandle hNode)
 {
-	printf("Claiming swapCtx for %d\n", hNode);
+	printf("Claiming Swap for Node %d\n", hNode);
 
 	auto pNodeCtx = &nodeCtx[hNode];
 	auto pNodeShrd = activeNodeShrd[hNode];

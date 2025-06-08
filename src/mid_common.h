@@ -27,7 +27,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
 // Check if the condition is 0=Success or 0=False
 #define CHECK(_err, _message)                      \
-	if (__builtin_expect(!!(_err), 0)) {           \
+	if (UNLIKELY(_err)) {                          \
 		fprintf(stderr, "Error Code: %d\n", _err); \
 		PANIC(_message);                           \
 	}

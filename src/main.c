@@ -67,7 +67,6 @@ int main(void)
 		midCreateWindow();
 
 		vkInitializeInstance();
-		vkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
 
 		VkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
@@ -97,6 +96,8 @@ int main(void)
 			},
 		};
 		vkCreateContext(&contextCreateInfo);
+
+		vkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
 
 		vkCreateBasicGraphics();
 		vkCreateLineGraphics();

@@ -58,10 +58,10 @@ typedef struct MidWindowInput {
 	int iMouseDeltaX;
 	int iMouseDeltaY;
 
-	float mouseX;
-	float mouseY;
-	float mouseDeltaX;
-	float mouseDeltaY;
+	float fMouseX;
+	float fMouseY;
+	float fMouseDeltaX;
+	float fMouseDeltaY;
 
 	MidInputPhase leftMouse;
 	MidInputPhase rightMouse;
@@ -156,10 +156,10 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			midWindowInput.iMouseX = newX;
 			midWindowInput.iMouseY = newY;
 
-			midWindowInput.mouseDeltaX = (float)midWindowInput.iMouseDeltaX;
-			midWindowInput.mouseDeltaY = (float)midWindowInput.iMouseDeltaY;
-			midWindowInput.mouseX = (float)midWindowInput.iMouseX;
-			midWindowInput.mouseY = (float)midWindowInput.iMouseY;
+			midWindowInput.fMouseDeltaX = (float)midWindowInput.iMouseDeltaX;
+			midWindowInput.fMouseDeltaY = (float)midWindowInput.iMouseDeltaY;
+			midWindowInput.fMouseX = (float)midWindowInput.iMouseX;
+			midWindowInput.fMouseY = (float)midWindowInput.iMouseY;
 
 			return 0;
 
@@ -218,8 +218,8 @@ void midUpdateWindowInput()
 	if (midWindowInput.rightMouse == MID_PHASE_RELEASE) midWindowInput.rightMouse = MID_PHASE_NONE;
 	if (midWindowInput.middleMouse == MID_PHASE_RELEASE) midWindowInput.middleMouse = MID_PHASE_NONE;
 
-	midWindowInput.mouseDeltaX = 0;
-	midWindowInput.mouseDeltaY = 0;
+	midWindowInput.fMouseDeltaX = 0;
+	midWindowInput.fMouseDeltaY = 0;
 
 	static MSG msg;
 	while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
