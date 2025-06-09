@@ -1,8 +1,9 @@
-layout (set = 1, binding = 0) uniform NodeState {
+layout (std140, set = 1, binding = 0) uniform NodeState {
+
     mat4 model;
 
-    // Laid out to be alignment with GlobalSet
-
+    // Laid out flat to align with std140
+    // GlobalSetState
     mat4 view;
     mat4 proj;
     mat4 viewProj;
@@ -11,6 +12,7 @@ layout (set = 1, binding = 0) uniform NodeState {
     mat4 invViewProj;
     ivec2 framebufferSize;
 
+    // Cliup
     vec2 ulUV;
     vec2 lrUV;
 } nodeState;

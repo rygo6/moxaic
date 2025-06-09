@@ -1,4 +1,4 @@
-layout(set = 1, binding = 0) uniform  MaterialState {
+layout(std140, set = 1, binding = 0) uniform  MaterialState {
     vec4 color;
 } materialState;
 

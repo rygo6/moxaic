@@ -89,13 +89,17 @@ typedef struct MxcProcessState {
 	float cameraFarZ;
 } MxcProcessState;
 
+typedef struct MxcClip {
+	vec2 ulUV;
+	vec2 lrUV;
+} MxcClip;
+
 typedef struct MxcNodeShared {
 	// read/write every cycle
 	ATOMIC u64 timelineValue;
 
 	VkGlobalSetState globalSetState;
-	vec2             ulClipUV;
-	vec2             lrClipUV;
+	MxcClip          clip;
 
 	MxcProcessState processState;
 
@@ -226,9 +230,11 @@ extern MxcCompositorContext compositorContext;
 //// Compositor Node Types and Data
 ////
 typedef struct MxcNodeCompositorSetState {
+
 	mat4 model;
 
-	// Laid out same as GlobalSetState for memcpy
+	// Laid out flat to align with std140
+	// GlobalSetState
 	mat4  view;
 	mat4  proj;
 	mat4  viewProj;
@@ -237,25 +243,31 @@ typedef struct MxcNodeCompositorSetState {
 	mat4  invViewProj;
 	ivec2 framebufferSize;
 
+	// MxcClip
 	vec2 ulUV;
 	vec2 lrUV;
+
 } MxcNodeCompositorSetState;
 
-// Data compositor needs for each node. Could this go in CompositorContext?
+typedef enum MxcNodeInteractionState{
+	NODE_INTERACTION_STATE_NONE,
+	NODE_INTERACTION_STATE_HOVER,
+	NODE_INTERACTION_STATE_SELECT,
+	NODE_INTERACTION_STATE_COUNT,
+} MxcNodeInteractionState;
+
 typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 
-//	MidPose                    rootPose;
+	MxcNodeInteractionState interactionState;
+
+	MidPose                    rootPose;
 	uint64_t                   lastTimelineValue;
 
-	// Does it actually make difference to keep local copy?
-	// Should keep it anyways in case we do need to start flushing buffers
+	// This should go in one big shared buffer for all nodes
 	MxcNodeCompositorSetState  nodeSetState;
 	MxcNodeCompositorSetState* pSetMapped;
 	VkSharedBuffer             nodeSetBuffer;
 	VkDescriptorSet            nodeSet;
-	//	VkSharedBuffer setBuffer;
-	// should make them share buffer? probably
-	//	VkSharedBuffer SetBuffer;
 
 	struct CACHE_ALIGN {
 		VkImage               color;
@@ -270,30 +282,23 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 
 } MxcNodeCompositorLocal;
 
-///////////////
+/////////////////
 //// Node Context
 ////
 typedef struct MxcNodeContext {
-	MxcNodeType type;
 
-	// these could be a union if truly only one or the other
-	// Node Data
-	VkCommandPool   pool;
-	VkCommandBuffer cmd;
+	MxcNodeType type;
 
 	// Compositor Data
 
 	// Node/Compositor Duplicated
 	// If thread the node/compositor both directly access this.
 	// If IPC it is replicated via duplicated handles from NodeImports.
-	// Maybe these should be their own struct? MxcNodeDuplicated
 	HANDLE      swapsSyncedHandle;
-	// Should be a handle? Maybe. Although when replicated to a node it won't have a handle.
-	// these don't need to be VkImage on non vk nodes... so ya
 	MxcSwap     swap[VK_SWAP_COUNT * 2];
-
 	VkSemaphore nodeTimeline;
 	VkSemaphore compositorTimeline;
+
 
 	// Node/Compositor Shared
 	MxcNodeShared* pNodeShared;
@@ -303,9 +308,10 @@ typedef struct MxcNodeContext {
 	// these could be a union too
 	// MXC_NODE_TYPE_THREAD
 	pthread_t       threadId;
+	VkCommandPool   pool;
+	VkCommandBuffer cmd;
 
-	// really this can be shared by multiple node thread contexts on a node
-	// it should go into generic ipc struct
+
 	// MXC_NODE_TYPE_INTERPROCESS
 	DWORD                  processId;
 	HANDLE                 processHandle;

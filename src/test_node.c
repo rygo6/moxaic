@@ -317,8 +317,8 @@ run_loop:
 
 	{
 		VkViewport viewport = {
-			.x = -pNodeShared->ulClipUV.x * DEFAULT_WIDTH,
-			.y = -pNodeShared->ulClipUV.y * DEFAULT_HEIGHT,
+			.x = -pNodeShared->clip.ulUV.x * DEFAULT_WIDTH,
+			.y = -pNodeShared->clip.ulUV.y * DEFAULT_HEIGHT,
 			.width = DEFAULT_WIDTH,
 			.height = DEFAULT_HEIGHT,
 			.maxDepth = 1.0f,

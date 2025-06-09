@@ -792,10 +792,8 @@ run_loop:
 
 		//// Calc new node uniform and shared data
 		{
-			// Move the globalSetState that was previously used to render into the nodeSetState to use in cst
 			memcpy(&pNodeCstData->nodeSetState.view, &pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
-			pNodeCstData->nodeSetState.ulUV = pNodeShrd->ulClipUV;
-			pNodeCstData->nodeSetState.lrUV = pNodeShrd->lrClipUV;
+			memcpy(&pNodeCstData->nodeSetState.ulUV, &pNodeShrd->clip, sizeof(MxcClip));
 
 			memcpy(pNodeCstData->pSetMapped, &pNodeCstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
 
@@ -886,19 +884,12 @@ run_loop:
 			pNodeShrd->right.aimPose = globCamPose;
 			pNodeShrd->right.selectClick = mxcWindowInput.leftMouseButton;
 
-			// write current global set state to node's global set state to use for next node render with new the framebuffer size
-//			memcpy(&pNodeShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-//			mat4 invModel = Mat4Inv(pNodeCstData->nodeSetState.model);
-			pNodeShrd->globalSetState.view = globSetState.view;
-			pNodeShrd->globalSetState.proj = globSetState.proj;
-			pNodeShrd->globalSetState.viewProj = Mat4Mul(pNodeShrd->globalSetState.proj, pNodeShrd->globalSetState.view);
-			pNodeShrd->globalSetState.invView = Mat4Inv(pNodeShrd->globalSetState.view);
-			pNodeShrd->globalSetState.invProj = globSetState.invProj;
-			pNodeShrd->globalSetState.invViewProj = Mat4Inv(pNodeShrd->globalSetState.viewProj);
-
+			// Write current GlobalSetState to NodeShared for node to use in next frame
+			// - sizeof(ivec2) so we can fill in framebufferSize constrained to node swap
+			memcpy(&pNodeShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
 			pNodeShrd->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
-			pNodeShrd->ulClipUV = uvMinClamp;
-			pNodeShrd->lrClipUV = uvMaxClamp;
+			pNodeShrd->clip.ulUV = uvMinClamp;
+			pNodeShrd->clip.lrUV = uvMaxClamp;
 			atomic_thread_fence(memory_order_release);
 		}
 	}

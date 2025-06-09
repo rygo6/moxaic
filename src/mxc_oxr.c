@@ -207,8 +207,8 @@ void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEy
 	pEyeView->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
 	pEyeView->fovRad = (XrVector2f){pNodeShared->camera.yFovRad, pNodeShared->camera.yFovRad};
-	pEyeView->upperLeftClip = *(XrVector2f*)&pNodeShared->ulClipUV;
-	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->lrClipUV;
+	pEyeView->upperLeftClip = *(XrVector2f*)&pNodeShared->clip.ulUV;
+	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->clip.lrUV;
 	if (viewIndex == 1)
 		pEyeView->position.x += 0.1f;
 }
