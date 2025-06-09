@@ -1795,7 +1795,7 @@ XR_PROC xrCreateReferenceSpace(
 	const XrReferenceSpaceCreateInfo* createInfo,
 	XrSpace*                          space)
 {
-	LOG("xrCreateReferenceSpace %s pos: " FORMAT_STRUCT_F(XrVector3f) FORMAT_STRUCT_F(XrQuaternionf) "\n",
+	LOG("xrCreateReferenceSpace %s origin: " FORMAT_STRUCT_F(XrVector3f) FORMAT_STRUCT_F(XrQuaternionf) "\n",
 		string_XrReferenceSpaceType(createInfo->referenceSpaceType),
 		EXPAND_STRUCT(XrVector3f, createInfo->poseInReferenceSpace.position),
 		EXPAND_STRUCT(XrQuaternionf, createInfo->poseInReferenceSpace.orientation));

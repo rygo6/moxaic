@@ -59,16 +59,16 @@ typedef struct MxcCompositor {
 
 } MxcCompositor;
 
-INLINE void vkLineClear(VkSharedLineBuffer* pLine)
-{
-	pLine->count = 0;
-}
+//INLINE void vkLineClear(VkSharedLineBuffer* pLine)
+//{
+//	pLine->count = 0;
+//}
 
-INLINE void vkLineAdd(VkSharedLineBuffer* pLine, vec3 start, vec3 end)
-{
-	pLine->state[pLine->count++] = start;
-	pLine->state[pLine->count++] = end;
-}
+//INLINE void vkLineAdd(VkSharedLineBuffer* pLine, vec3 start, vec3 end)
+//{
+//	pLine->state[pLine->count++] = start;
+//	pLine->state[pLine->count++] = end;
+//}
 
 void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCompositor);
 void* mxcCompNodeThread(MxcCompositorContext* pContext);

@@ -229,6 +229,8 @@ extern MxcCompositorContext compositorContext;
 ///////////////////////////////////
 //// Compositor Node Types and Data
 ////
+
+// State uploaded to node descriptor set
 typedef struct MxcNodeCompositorSetState {
 
 	mat4 model;
@@ -249,6 +251,36 @@ typedef struct MxcNodeCompositorSetState {
 
 } MxcNodeCompositorSetState;
 
+typedef enum MxcCubeCorners: u8 {
+	CORNER_LUB,
+	CORNER_LUF,
+	CORNER_LDB,
+	CORNER_LDF,
+	CORNER_RUB,
+	CORNER_RUF,
+	CORNER_RDB,
+	CORNER_RDF,
+	CORNER_COUNT,
+} MxcCubeCorners;
+
+#define MXC_CUBE_SEGMENT_COUNT 24
+constexpr u8 MXC_CUBE_SEGMENTS[MXC_CUBE_SEGMENT_COUNT] = {
+	CORNER_LUF, CORNER_LUB,
+	CORNER_LUB, CORNER_RUB,
+	CORNER_RUB, CORNER_RUF,
+	CORNER_RUF, CORNER_LUF,
+
+	CORNER_RDF, CORNER_RDB,
+	CORNER_RDB, CORNER_LDB,
+	CORNER_LDB, CORNER_LDF,
+	CORNER_LDF, CORNER_RDF,
+
+	CORNER_LUF, CORNER_LDF,
+	CORNER_LUB, CORNER_LDB,
+	CORNER_RUF, CORNER_RDF,
+	CORNER_RUB, CORNER_RDB,
+};
+
 typedef enum MxcNodeInteractionState{
 	NODE_INTERACTION_STATE_NONE,
 	NODE_INTERACTION_STATE_HOVER,
@@ -256,7 +288,8 @@ typedef enum MxcNodeInteractionState{
 	NODE_INTERACTION_STATE_COUNT,
 } MxcNodeInteractionState;
 
-typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
+// Hot data used by compositor for each node
+typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
 	MxcNodeInteractionState interactionState;
 
@@ -280,11 +313,17 @@ typedef struct CACHE_ALIGN MxcNodeCompositorLocal {
 		VkImageView           gBufferMipView;
 	} swaps[VK_SWAP_COUNT];
 
-} MxcNodeCompositorLocal;
+	vec3 worldSegments[MXC_CUBE_SEGMENT_COUNT];
+	vec3 worldCorners[CORNER_COUNT];
+	vec2 uvCorners[CORNER_COUNT];
+
+} MxcNodeCompositorData;
 
 /////////////////
 //// Node Context
 ////
+
+// All data related to node
 typedef struct MxcNodeContext {
 
 	MxcNodeType type;
@@ -335,21 +374,25 @@ typedef struct MxcVulkanNodeContext {
 
 typedef u8 NodeHandle;
 // move these into struct
-extern u16 nodeCt;
-// Cold storage for all node data
-extern MxcNodeContext nodeCtx[MXC_NODE_CAPACITY];
-// Could be missing if node is external process
-extern MxcNodeShared localNodeShrd[MXC_NODE_CAPACITY];
-// Holds pointer to either local or external process shared memory
-extern MxcNodeShared* activeNodeShrd[MXC_NODE_CAPACITY];
-// Holds pointer to nodes in each compositor mode
-extern NodeHandle activeComputeNode[MXC_COMPOSITOR_MODE_COUNT][MXC_NODE_CAPACITY];
+extern u16 nodeCount;
 
+// Cold storage for all node data
+extern MxcNodeContext nodeContext[MXC_NODE_CAPACITY];
+
+// Could be missing if node is an external process... maybe I should malloc these?
+extern MxcNodeShared localNodeShared[MXC_NODE_CAPACITY];
+// Holds pointer to either local or external process shared memory
+extern MxcNodeShared* pDuplicatedNodeShared[MXC_NODE_CAPACITY];
+
+// Holds pointer to nodes in each compositor mode
+extern NodeHandle activeNode[MXC_COMPOSITOR_MODE_COUNT][MXC_NODE_CAPACITY];
+
+// Only one import into a node from a compositor?
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
-// technically this should go into a comp node thread local....
-extern MxcNodeCompositorLocal nodeCstLocal[MXC_NODE_CAPACITY];
+// Move into a comp node thread local...
+extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 
 extern MxcVulkanNodeContext vkNode;
 
@@ -426,6 +469,6 @@ int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
-	for (int i = 0; i < nodeCt; ++i)
-		mxcIpcDequeue(&activeNodeShrd[i]->nodeInterprocessFuncQueue, i);
+	for (int i = 0; i < nodeCount; ++i)
+		mxcIpcDequeue(&pDuplicatedNodeShared[i]->nodeInterprocessFuncQueue, i);
 }

@@ -191,7 +191,7 @@ void main()
     vec2 globalNDC = NDCFromUV(globalUV);
     vec4 globalClipPos = ClipPosFromNDC(globalNDC, DEPTH_NEAR);
     vec3 globalWorldPos = WorldPosFromGlobalClipPos(globalClipPos);
-    vec3 globalWorldDir = WorldRayDirFromGlobalNDC2(globalNDC);
+    vec3 globalWorldDir = WorldRayDirFromGlobalNDC(globalNDC);
 
     // We can assume this will hit because the if check above will retun if the node framebuffer is not in the global framebuffer
     vec3 intersectWorldPos = IntersectPlane(globalWorldPos, globalWorldDir, nodeOriginWorldPos, nodeOriginWorldDir);

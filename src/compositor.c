@@ -664,8 +664,6 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 		},
 	};
 
-	bool lineHover = false;
-
 	/////////
 	//// Loop
 run_loop:
@@ -682,15 +680,36 @@ run_loop:
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
 	CmdResetBegin(gfxCmd);
 
+	vec2 mouseUV = mxcWindowInput.mouseUV;
+	vec2 priorMouseUV = vec2Sub(mouseUV, mxcWindowInput.mouseUVDelta);
 
 	/////////////////////////////
 	//// Update Node States Cycle
-	for (int iNode = 0; iNode < nodeCt; ++iNode) {
-		auto pNodeShrd = activeNodeShrd[iNode];
-		auto pNodeCstData = &nodeCstLocal[iNode];
+	for (int iNode = 0; iNode < nodeCount; ++iNode) {
+		auto pNodeShrd = pDuplicatedNodeShared[iNode];
+		auto pNodeCstData = &nodeCompositorData[iNode];
 
-		pNodeShrd->rootPose.position = VEC3(.5f, 0, 0);
-		pNodeCstData->nodeSetState.model = Mat4FromPosRot(pNodeShrd->rootPose.position, pNodeShrd->rootPose.rotation);
+		vec3 worldDiff = VEC3_ZERO;
+		switch(pNodeCstData->interactionState) {
+			case NODE_INTERACTION_STATE_SELECT:
+				Ray priorScreenRay = rayFromScreenUV(priorMouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
+				Ray screenRay = rayFromScreenUV(mouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
+
+				vec4 nodeOrigin = vec4MulMat4(pNodeCstData->nodeSetState.model, VEC4_IDENT);
+				Plane plane = {.origin = TO_VEC3(nodeOrigin), .normal = VEC3(0, 0, 1)};
+
+				vec3  hitPoints[2];
+				if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) &&
+					rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
+					worldDiff = vec3Sub(hitPoints[0], hitPoints[1]);
+				}
+
+				break;
+			default: break;
+		}
+
+		pNodeShrd->rootPose.position.vec -= worldDiff.vec;
+		pNodeCstData->nodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.position, pNodeShrd->rootPose.rotation);
 
 		// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 		// shared: 569 - semaphore: 315416 ratio: 554.333919
@@ -706,7 +725,7 @@ run_loop:
 			VkImageMemoryBarrier2* pAcqrBars;
 			VkImageMemoryBarrier2* pEndBars;
 			VkImageLayout          finalLayout;
-			// we want to seperates this into compute and graphics loops
+			// we want to seperate this into compute and graphics loops
 			switch (pNodeShrd->compositorMode) {
 
 				case MXC_COMPOSITOR_MODE_QUAD:
@@ -792,38 +811,10 @@ run_loop:
 
 		//// Calc new node uniform and shared data
 		{
+			// Copy previously used global state from node to compositor data for the compositor to use in subsequent reprojections
 			memcpy(&pNodeCstData->nodeSetState.view, &pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
 			memcpy(&pNodeCstData->nodeSetState.ulUV, &pNodeShrd->clip, sizeof(MxcClip));
-
 			memcpy(pNodeCstData->pSetMapped, &pNodeCstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
-
-			enum : u8 {
-				CORNER_LUB,
-				CORNER_LUF,
-				CORNER_LDB,
-				CORNER_LDF,
-				CORNER_RUB,
-				CORNER_RUF,
-				CORNER_RDB,
-				CORNER_RDF,
-				CORNER_COUNT,
-			};
-			constexpr u8 cubeCornerSegments[] = {
-			CORNER_LUF, CORNER_LUB,
-			CORNER_LUB, CORNER_RUB,
-			CORNER_RUB, CORNER_RUF,
-			CORNER_RUF, CORNER_LUF,
-
-			CORNER_RDF, CORNER_RDB,
-			CORNER_RDB, CORNER_LDB,
-			CORNER_LDB, CORNER_LDF,
-			CORNER_LDF, CORNER_RDF,
-
-			CORNER_LUF, CORNER_LDF,
-			CORNER_LUB, CORNER_LDB,
-			CORNER_RUF, CORNER_RDF,
-			CORNER_RUB, CORNER_RDB,
-			};
 
 			float radius = pNodeShrd->compositorRadius;
 			vec3 corners[CORNER_COUNT] = {
@@ -836,37 +827,41 @@ run_loop:
 				[CORNER_RDB] = VEC3(radius, radius, -radius),
 				[CORNER_RDF] = VEC3(radius, radius, radius),
 			};
-			vec3 worldCorners[CORNER_COUNT];
-			vec2 uvCorners[CORNER_COUNT];
 
 			vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
 			vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
 			for (int i = 0; i < CORNER_COUNT; ++i) {
 				vec4 model = VEC4(corners[i], 1.0f);
-				vec4 world = Vec4MulMat4(pNodeCstData->nodeSetState.model, model);
-				vec4 clip = Vec4MulMat4(globSetState.view, world);
-				vec3 ndc = Vec4WDivide(Vec4MulMat4(globSetState.proj, clip));
+				vec4 world = vec4MulMat4(pNodeCstData->nodeSetState.model, model);
+				vec4 clip = vec4MulMat4(globSetState.view, world);
+				vec3 ndc = Vec4WDivide(vec4MulMat4(globSetState.proj, clip));
 				vec2 uv = UVFromNDC(ndc);
 				uvMin.x = MIN(uvMin.x, uv.x);
 				uvMin.y = MIN(uvMin.y, uv.y);
 				uvMax.x = MAX(uvMax.x, uv.x);
 				uvMax.y = MAX(uvMax.y, uv.y);
-				worldCorners[i] = TO_VEC3(world);
-				uvCorners[i] = uv;
+				pNodeCstData->worldCorners[i] = TO_VEC3(world);
+				pNodeCstData->uvCorners[i] = uv;
 			}
-
 			vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
 			vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
 			vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
 
-			vec2 mouseUV = mxcWindowInput.mouseUV;
+			// This line and interaction logic should probably go into a threaded node.
+			// Maybe? With lines potentially staggered and changed at every compositor step, you do want to redraw them every frame.
+			// But also you probably couldn't really tell if the lines only updated at 60 fps and was a frame or two off for some node
+			pNodeCstData->interactionState = NODE_INTERACTION_STATE_NONE;
+			for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
 
-			vkLineClear(pLineBuf);
-			lineHover = false;
-			for (u32 i = 0; i < COUNT(cubeCornerSegments); i += 2) {
-				vkLineAdd(pLineBuf, worldCorners[cubeCornerSegments[i]], worldCorners[cubeCornerSegments[i+1]]);
-				if (Vec2PointOnLineSegment(mouseUV, uvCorners[cubeCornerSegments[i]], uvCorners[cubeCornerSegments[i+1]], 0.0005f))
-					lineHover = true;
+				vec3 start = pNodeCstData->worldCorners[MXC_CUBE_SEGMENTS[i]];
+				vec3 end = pNodeCstData->worldCorners[MXC_CUBE_SEGMENTS[i + 1]];
+				pNodeCstData->worldSegments[i] = start;
+				pNodeCstData->worldSegments[i + 1] = end;
+
+				vec2 uvStart = pNodeCstData->uvCorners[MXC_CUBE_SEGMENTS[i]];
+				vec2 uvEnd = pNodeCstData->uvCorners[MXC_CUBE_SEGMENTS[i + 1]];
+				if (Vec2PointOnLineSegment(mouseUV, uvStart, uvEnd, 0.0005f))
+					pNodeCstData->interactionState = mxcWindowInput.leftMouseButton ? NODE_INTERACTION_STATE_SELECT : NODE_INTERACTION_STATE_HOVER;
 			}
 
 			// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
@@ -908,25 +903,25 @@ run_loop:
 			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeQuadPipe);
 			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
 
-			for (int i = 0; i < nodeCt; ++i) {
-				auto pNodShrd = activeNodeShrd[i];
+			for (int i = 0; i < nodeCount; ++i) {
+				auto pNodShrd = pDuplicatedNodeShared[i];
 
 				// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 				switch (pNodShrd->compositorMode) {
 					case MXC_COMPOSITOR_MODE_QUAD:
-						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
+						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
 						vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadMeshBuf}, (VkDeviceSize[]){quadMeshOffsets.vertexOffset});
 						vk.CmdBindIndexBuffer(gfxCmd, quadMeshBuf, 0, VK_INDEX_TYPE_UINT16);
 						vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 						break;
 					case MXC_COMPOSITOR_MODE_TESSELATION:
-						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
+						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
 						vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadPatchBuf}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
 						vk.CmdBindIndexBuffer(gfxCmd, quadPatchBuf, quadPatchOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
 						vk.CmdDrawIndexed(gfxCmd, quadPatchOffsets.indexCount, 1, 0, 0, 0);
 						break;
 					case MXC_COMPOSITOR_MODE_TASK_MESH:
-						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCstLocal[i].nodeSet, 0, NULL);
+						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
 						vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 						break;
 					default:
@@ -941,21 +936,30 @@ run_loop:
 			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
 			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
 
-//			for (int i = 0; i < pLineBuf->count; ++i) {
-//
-//			}
-
-			auto lineState = lineHover ?
-								 (VkLineMaterialState){.primaryColor = VEC4(0, 1, 0, 0.5f)} :
-								 (VkLineMaterialState){.primaryColor = VEC4(1, 1, 1, 0.5f)};
-			vkCmdPushLineMaterial(gfxCmd, lineState);
-
 			vkCmdSetLineWidth(gfxCmd, 1.0f);
 
-			memcpy(pLineBuf->pMapped, &pLineBuf->state, sizeof(vec3) * pLineBuf->count);
+			for (int iNode = 0; iNode < nodeCount; ++iNode) {
+				auto pNodeShrd = pDuplicatedNodeShared[iNode];
+				auto pNodeCstData = &nodeCompositorData[iNode];
 
-			vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
-			vkCmdDraw(gfxCmd, pLineBuf->count, 1, 0, 0);
+				auto lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)} ;
+				switch(pNodeCstData->interactionState) {
+					case NODE_INTERACTION_STATE_HOVER:
+						lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)} ;
+						break;
+					case NODE_INTERACTION_STATE_SELECT:
+						lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)} ;
+						break;
+					default: break;
+				}
+
+				vkCmdPushLineMaterial(gfxCmd, lineState);
+
+				memcpy(pLineBuf->pMapped, &pNodeCstData->worldSegments, sizeof(vec3) * MXC_CUBE_SEGMENT_COUNT);
+
+				vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
+				vkCmdDraw(gfxCmd, MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
+			}
 		}
 
 		vk.CmdEndRenderPass(gfxCmd);
@@ -974,14 +978,14 @@ run_loop:
 
 //		vkCmdClearColorImage(graphCmd, cmptFbColorImg, VK_IMAGE_LAYOUT_GENERAL, &VK_PASS_CLEAR_COLOR, 1, &VK_COLOR_SUBRESOURCE_RANGE);
 
-		for (int iNode = 0; iNode < nodeCt; ++iNode) {
-			auto pNodShrd = activeNodeShrd[iNode];
+		for (int iNode = 0; iNode < nodeCount; ++iNode) {
+			auto pNodShrd = pDuplicatedNodeShared[iNode];
 
 			// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 			// really all the nodes need to be set in UBO array and the compute shader do this loop
 			switch (pNodShrd->compositorMode) {
 				case MXC_COMPOSITOR_MODE_COMPUTE:
-					vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &nodeCstLocal[iNode].nodeSet, 0, NULL);
+					vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositorData[iNode].nodeSet, 0, NULL);
 
 					// can be saved
 					ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
@@ -1250,7 +1254,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.size = sizeof(MxcNodeCompositorSetState),
 			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 		};
-		vkCreateSharedBuffer(&requestInfo, &nodeCstLocal[i].nodeSetBuffer);
+		vkCreateSharedBuffer(&requestInfo, &nodeCompositorData[i].nodeSetBuffer);
 
 		VkDescriptorSetAllocateInfo setCreateInfo = {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1258,8 +1262,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.descriptorSetCount = 1,
 			.pSetLayouts = &pCompositor->nodeSetLayout,
 		};
-		vkAllocateDescriptorSets(vk.context.device, &setCreateInfo, &nodeCstLocal[i].nodeSet);
-		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCstLocal[i].nodeSet, "NodeSet");
+		vkAllocateDescriptorSets(vk.context.device, &setCreateInfo, &nodeCompositorData[i].nodeSet);
+		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
 	}
 
 	/// Graphics Framebuffers
@@ -1380,13 +1384,13 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably
 		// should also share the same descriptor set with an array
-		vkBindSharedBuffer(&nodeCstLocal[i].nodeSetBuffer);
-		nodeCstLocal[i].pSetMapped = vkSharedBufferPtr(nodeCstLocal[i].nodeSetBuffer);
-		*nodeCstLocal[i].pSetMapped = (MxcNodeCompositorSetState){};
+		vkBindSharedBuffer(&nodeCompositorData[i].nodeSetBuffer);
+		nodeCompositorData[i].pSetMapped = vkSharedBufferPtr(nodeCompositorData[i].nodeSetBuffer);
+		*nodeCompositorData[i].pSetMapped = (MxcNodeCompositorSetState){};
 
 		// thes could be push descriptors???
 		VkWriteDescriptorSet writeSets[] = {
-			BIND_WRITE_NODE_STATE(nodeCstLocal[i].nodeSet, nodeCstLocal[i].nodeSetBuffer.buf),
+			BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buf),
 		};
 		vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 	}

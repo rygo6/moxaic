@@ -227,9 +227,9 @@ void midUpdateWindowInput()
 		DispatchMessage(&msg);
 	}
 
-	uint64_t prior = midWindow.current;
+	u64 prior = midWindow.current;
 	QueryPerformanceCounter((LARGE_INTEGER*)&midWindow.current);
-	uint64_t delta = ((midWindow.current - prior) * 1000000) / midWindow.frequency;
+	u64 delta = ((midWindow.current - prior) * 1000000) / midWindow.frequency;
 	midWindowInput.deltaTime = (double)delta * 0.000001f;
 
 	static int titleUpdateRate = 64;
@@ -237,7 +237,7 @@ void midUpdateWindowInput()
 		titleUpdateRate = 64;
 		constexpr int titleBufferSize = 64;
 		static char   titleBuffer[titleBufferSize];
-		snprintf(titleBuffer, titleBufferSize, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0f / midWindowInput.deltaTime, timeQueryMs);
+		snprintf(titleBuffer, titleBufferSize, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0 / midWindowInput.deltaTime, timeQueryMs);
 		SetWindowText(midWindow.hWnd, titleBuffer);
 	}
 }

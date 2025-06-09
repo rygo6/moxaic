@@ -717,25 +717,25 @@ INLINE void vkUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkGl
 {
 	pState->framebufferSize = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar);
-	pState->invProj = Mat4Inv(pState->proj);
-	pState->invView = Mat4FromPosRot(cameraPose.position, cameraPose.rotation);
-	pState->view = Mat4Inv(pState->invView);
-	pState->viewProj = Mat4Mul(pState->proj, pState->view);
-	pState->invViewProj = Mat4Inv(pState->viewProj);
+	pState->invProj = mat4Inv(pState->proj);
+	pState->invView = mat4FromPosRot(cameraPose.position, cameraPose.rotation);
+	pState->view = mat4Inv(pState->invView);
+	pState->viewProj = mat4Mul(pState->proj, pState->view);
+	pState->invViewProj = mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
 INLINE void vkUpdateGlobalSetView(MidPose* pCameraTransform, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
-	pState->invView = Mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
-	pState->view = Mat4Inv(pState->invView);
-	pState->viewProj = Mat4Mul(pState->proj, pState->view);
-	pState->invViewProj = Mat4Inv(pState->viewProj);
+	pState->invView = mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
+	pState->view = mat4Inv(pState->invView);
+	pState->viewProj = mat4Mul(pState->proj, pState->view);
+	pState->invViewProj = mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
 INLINE void vkUpdateObjectSet(MidPose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
 {
 	pTransform->rotation = QuatFromEuler(pTransform->euler);
-	pState->model = Mat4FromPosRot(pTransform->position, pTransform->rotation);
+	pState->model = mat4FromPosRot(pTransform->position, pTransform->rotation);
 	memcpy(pSphereObjectSetMapped, pState, sizeof(VkObjectSetState));
 }
 
@@ -750,7 +750,7 @@ INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPos
 // move[] = Forward, Back, Left, Right
 INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
 {
-	vec3  localTranslate = Vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .y = move[5] - move[4], .z = move[1] - move[0]});
+	vec3  localTranslate = vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .y = move[5] - move[4], .z = move[1] - move[0]});
 	float moveSensitivity = deltaTime * 0.8f;
 	for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }
