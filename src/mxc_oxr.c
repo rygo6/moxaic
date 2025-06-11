@@ -197,7 +197,7 @@ void xrGetHeadPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose)
 	MxcNodeContext* pNodeContext = &nodeContext[sessionIndex];
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	pPose->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
-	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
+	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
 }
 
 void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView)
@@ -205,7 +205,7 @@ void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEy
 	MxcNodeContext* pNodeContext = &nodeContext[sessionIndex];
 	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	pEyeView->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
-	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.position;
+	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
 	pEyeView->fovRad = (XrVector2f){pNodeShared->camera.yFovRad, pNodeShared->camera.yFovRad};
 	pEyeView->upperLeftClip = *(XrVector2f*)&pNodeShared->clip.ulUV;
 	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->clip.lrUV;
@@ -273,18 +273,18 @@ int xrInputMenuClick_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 	return 0;
 }
 
-#define UPDATE_POSE(pose, chirality)                                                                              \
-	({                                                                                                            \
-		auto pNodeShared = pDuplicatedNodeShared[sessionIndex];                                                       \
-		atomic_thread_fence(memory_order_acquire);                                                                \
-		auto pController = &pNodeShared->chirality;                                                               \
-		auto changed = pState->isActive != pController->active ||                                                 \
-					   memcmp(&pState->eulerPoseValue.euler, &pController->pose.euler, sizeof(XrVector3f)) ||     \
-					   memcmp(&pState->eulerPoseValue.position, &pController->pose.position, sizeof(XrVector3f)); \
-		pState->isActive = pController->active;                                                                   \
-		pState->eulerPoseValue.euler = *(XrVector3f*)&pController->pose.euler;                                    \
-		pState->eulerPoseValue.position = *(XrVector3f*)&pController->pose.position;                              \
-		changed;                                                                                                  \
+#define UPDATE_POSE(pose, chirality)                                                                          \
+	({                                                                                                        \
+		auto pNodeShared = pDuplicatedNodeShared[sessionIndex];                                               \
+		atomic_thread_fence(memory_order_acquire);                                                            \
+		auto pController = &pNodeShared->chirality;                                                           \
+		auto changed = pState->isActive != pController->active ||                                             \
+					   memcmp(&pState->eulerPoseValue.euler, &pController->pose.euler, sizeof(XrVector3f)) || \
+					   memcmp(&pState->eulerPoseValue.position, &pController->pose.pos, sizeof(XrVector3f));  \
+		pState->isActive = pController->active;                                                               \
+		pState->eulerPoseValue.euler = *(XrVector3f*)&pController->pose.euler;                                \
+		pState->eulerPoseValue.position = *(XrVector3f*)&pController->pose.pos;                               \
+		changed;                                                                                              \
 	})
 int xrInputGripPose_Left(XrSessionIndex sessionIndex, SubactionState* pState)
 {

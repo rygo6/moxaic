@@ -77,8 +77,8 @@ typedef enum MxcCompositorMode : u8 {
 
 typedef struct MxcController {
 	bool    active;
-	MidPose gripPose;
-	MidPose aimPose;
+	pose    gripPose;
+	pose    aimPose;
 	bool    selectClick;
 	bool    menuClick;
 	float   triggerValue;
@@ -105,12 +105,12 @@ typedef struct MxcNodeShared {
 	MxcProcessState processState;
 
 	// I don't think I need this either?
-	MidPose           rootPose;
+	pose rootPose;
 
 	// I don't think I need this?
 	// should maybe in context?
-	MidPose           cameraPose;
-	MidCamera         camera;
+	pose              cameraPose;
+	cam               camera;
 
 	MxcController left;
 	MxcController right;
@@ -296,7 +296,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
 	MxcNodeInteractionState interactionState;
 
-	MidPose                    rootPose;
+	pose                       rootPose;
 	uint64_t                   lastTimelineValue;
 
 	// This should go in one big shared buffer for all nodes

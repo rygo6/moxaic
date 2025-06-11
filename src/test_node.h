@@ -28,7 +28,7 @@ typedef struct MxcTestNode {
 	VkDedicatedTexture checkerTexture;
 
 	VkMesh  sphereMesh;
-	MidPose sphereTransform;
+	pose    sphereTransform;
 
 	VkObjectSetState  sphereObjectState;
 	VkObjectSetState* pSphereObjectSetMapped;

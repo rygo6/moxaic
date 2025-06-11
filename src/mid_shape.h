@@ -32,7 +32,7 @@ void vkCreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* p
       indices[index++] = v3;
     }
   }
-  MidVertex   vertices[info.vertexCount];
+  vert        vertices[info.vertexCount];
   float slices = (float)slicesCount;
   float stacks = (float)stackCount;
   float dtheta = 2.0f * PI / slices;
@@ -47,9 +47,9 @@ void vkCreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* p
       float x = radius * sinf(phi) * cosf(theta);
       float y = radius * sinf(phi) * sinf(theta);
       float z = radius * cosf(phi);
-      vertices[vertex++] = (MidVertex){
-          .position = VEC3(x, y, z),
-          .normal = VEC3(x, y, z),
+      vertices[vertex++] = (vert){
+          .pos = VEC3(x, y, z),
+          .norm = VEC3(x, y, z),
           .uv = VEC2(ji / slices, fi / stacks),
       };
     }
@@ -61,11 +61,11 @@ void vkCreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* p
 
 void vkCreateQuadMesh(float size, VkMesh* pMesh) {
   uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
-  MidVertex vertices[] = {
-      {.position = VEC3(-size, -size, 0), .uv = VEC2(0, 0)},
-      {.position = VEC3(size, -size, 0),  .uv = VEC2(1, 0)},
-      {.position = VEC3(-size, size, 0),  .uv = VEC2(0, 1)},
-      {.position = VEC3(size, size, 0),   .uv = VEC2(1, 1)},
+  vert      vertices[] = {
+      {.pos = VEC3(-size, -size, 0), .uv = VEC2(0, 0)},
+      {.pos = VEC3(size, -size, 0),  .uv = VEC2(1, 0)},
+      {.pos = VEC3(-size, size, 0),  .uv = VEC2(0, 1)},
+      {.pos = VEC3(size, size, 0),   .uv = VEC2(1, 1)},
   };
   VkMeshCreateInfo info = {
       .indexCount = 6,
@@ -83,11 +83,11 @@ void vkCreateQuadMesh(float size, VkMesh* pMesh) {
 	};
 #define QUAD_PATCH_MESH_VERTICES_INDICES                       \
 	info.pIndices = (uint16_t[]){0, 1, 3, 2};                  \
-	info.pVertices = (MidVertex[]){                            \
-		{.position = VEC3(-size, -size, 0), .uv = VEC2(0, 0)}, \
-		{.position = VEC3(size, -size, 0),  .uv = VEC2(1, 0)},  \
-		{.position = VEC3(-size, size, 0),  .uv = VEC2(0, 1)},  \
-		{.position = VEC3(size, size, 0),   .uv = VEC2(1, 1)},   \
+	info.pVertices = (vert[]){                            \
+		{.pos = VEC3(-size, -size, 0), .uv = VEC2(0, 0)}, \
+		{.pos = VEC3(size, -size, 0),  .uv = VEC2(1, 0)},  \
+		{.pos = VEC3(-size, size, 0),  .uv = VEC2(0, 1)},  \
+		{.pos = VEC3(size, size, 0),   .uv = VEC2(1, 1)},   \
 	};
 
 void vkCreateQuadPatchMeshSharedMemory(VkSharedMesh* pMesh) {

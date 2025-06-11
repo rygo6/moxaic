@@ -457,7 +457,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	auto pNodeShrd = &localNodeShared[handle];
 	*pNodeShrd = (MxcNodeShared){};
 	pNodeCtxt->pNodeShared = pNodeShrd;
-	pNodeShrd->rootPose.rotation = QuatFromEuler(pNodeShrd->rootPose.euler);
+	pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
 
 	pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
 	pNodeShrd->camera.zNear = 0.1f;
@@ -693,7 +693,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pImports = &pExtNodeMem->imports;
 		pNodeShrd = &pExtNodeMem->shared;
 
-		pNodeShrd->rootPose.rotation = QuatFromEuler(pNodeShrd->rootPose.euler);
+		pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
 		pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
 		pNodeShrd->camera.zNear = 0.1f;
 		pNodeShrd->camera.zFar = 100.0f;

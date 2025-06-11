@@ -474,16 +474,16 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 
 	u64 baseCycleValue = 0;
 
-	MidCamera globCam = {
+	cam globCam = {
 		.yFovRad = RAD_FROM_DEG(45.0f),
 		.zNear = 0.1f,
 		.zFar = 100.0f,
 	};
-	MidPose globCamPose = {
-		.position = VEC3(0.0f, 0.0f, 2.0f),
+	pose globCamPose = {
+		.pos = VEC3(0.0f, 0.0f, 2.0f),
 		.euler = VEC3(0.0f, 0.0f, 0.0f),
 	};
-	globCamPose.rotation = QuatFromEuler(globCamPose.euler);
+	globCamPose.rot = QuatFromEuler(globCamPose.euler);
 
 	VkGlobalSetState  globSetState = (VkGlobalSetState){};
 	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState, pGlobSetMapped);
@@ -717,8 +717,8 @@ run_loop:
 		vec3 worldDiff = VEC3_ZERO;
 		switch(pNodeCstData->interactionState) {
 			case NODE_INTERACTION_STATE_SELECT:
-				Ray priorScreenRay = rayFromScreenUV(priorMouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
-				Ray screenRay = rayFromScreenUV(mouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
+				ray priorScreenRay = rayFromScreenUV(priorMouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
+				ray screenRay = rayFromScreenUV(mouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
 
 				vec4 nodeOrigin = vec4MulMat4(pNodeCstData->nodeSetState.model, VEC4_IDENT);
 				Plane plane = {.origin = TO_VEC3(nodeOrigin), .normal = VEC3(0, 0, 1)};
@@ -733,8 +733,8 @@ run_loop:
 			default: break;
 		}
 
-		pNodeShrd->rootPose.position.vec -= worldDiff.vec;
-		pNodeCstData->nodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.position, pNodeShrd->rootPose.rotation);
+		pNodeShrd->rootPose.pos.vec -= worldDiff.vec;
+		pNodeCstData->nodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.pos, pNodeShrd->rootPose.rot);
 
 		// tests show reading from shared memory is 500~ x faster than vkGetSemaphoreCounterValue
 		// shared: 569 - semaphore: 315416 ratio: 554.333919
@@ -912,7 +912,7 @@ run_loop:
 
 			// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
 			pNodeShrd->cameraPose = globCamPose;
-			pNodeShrd->cameraPose.position.vec -= pNodeShrd->rootPose.position.vec;
+			pNodeShrd->cameraPose.pos.vec -= pNodeShrd->rootPose.pos.vec;
 			pNodeShrd->camera = globCam;
 
 			pNodeShrd->left.active = false;

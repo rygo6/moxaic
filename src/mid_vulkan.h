@@ -131,26 +131,6 @@
 #define VK_COLOR_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
 #define VK_DEPTH_SUBRESOURCE_RANGE (VkImageSubresourceRange) { VK_IMAGE_ASPECT_DEPTH_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS }
 
-///////////////
-//// Math Types
-////
-// these should go in math. Can I make MidVk not depend on specific math lib?
-typedef struct MidPose {
-	vec3 position;
-	vec3 euler;
-	quat rotation;
-} MidPose;
-typedef struct MidVertex {
-	vec3 position;
-	vec3 normal;
-	vec2 uv;
-} MidVertex;
-typedef struct MidCamera {
-	float   zNear;
-	float   zFar;
-	float   yFovRad;
-} MidCamera;
-
 /////////////////
 //// Vulkan Types
 ////
@@ -722,46 +702,46 @@ INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 }
 
 // probably move to math lib and take copy to pointer out
-INLINE void vkUpdateGlobalSetViewProj(MidCamera camera, MidPose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
+INLINE void vkUpdateGlobalSetViewProj(cam camera, pose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
 	pState->framebufferSize = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar);
 	pState->invProj = mat4Inv(pState->proj);
-	pState->invView = mat4FromPosRot(cameraPose.position, cameraPose.rotation);
+	pState->invView = mat4FromPosRot(cameraPose.pos, cameraPose.rot);
 	pState->view = mat4Inv(pState->invView);
 	pState->viewProj = mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
-INLINE void vkUpdateGlobalSetView(MidPose* pCameraTransform, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
+INLINE void vkUpdateGlobalSetView(pose* pCameraTransform, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
 {
-	pState->invView = mat4FromPosRot(pCameraTransform->position, pCameraTransform->rotation);
+	pState->invView = mat4FromPosRot(pCameraTransform->pos, pCameraTransform->rot);
 	pState->view = mat4Inv(pState->invView);
 	pState->viewProj = mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = mat4Inv(pState->viewProj);
 	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
-INLINE void vkUpdateObjectSet(MidPose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
+INLINE void vkUpdateObjectSet(pose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
 {
-	pTransform->rotation = QuatFromEuler(pTransform->euler);
-	pState->model = mat4FromPosRot(pTransform->position, pTransform->rotation);
+	pTransform->rot = QuatFromEuler(pTransform->euler);
+	pState->model = mat4FromPosRot(pTransform->pos, pTransform->rot);
 	memcpy(pSphereObjectSetMapped, pState, sizeof(VkObjectSetState));
 }
 
 // this should go in mid math
-INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPose* pCameraTransform)
+INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, pose* pCameraTransform)
 {
 	pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
 	pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
-	pCameraTransform->rotation = QuatFromEuler(pCameraTransform->euler);
+	pCameraTransform->rot = QuatFromEuler(pCameraTransform->euler);
 }
 
 // move[] = Forward, Back, Left, Right
-INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
+INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], pose* pCameraTransform)
 {
-	vec3  localTranslate = vec3Rot(pCameraTransform->rotation, (vec3){.x = move[3] - move[2], .y = move[5] - move[4], .z = move[1] - move[0]});
+	vec3  localTranslate = vec3Rot(pCameraTransform->rot, (vec3){.x = move[3] - move[2], .y = move[5] - move[4], .z = move[1] - move[0]});
 	float moveSensitivity = deltaTime * 0.8f;
-	for (int i = 0; i < 3; ++i) pCameraTransform->position.vec[i] += localTranslate.vec[i] * moveSensitivity;
+	for (int i = 0; i < 3; ++i) pCameraTransform->pos.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }
 
 INLINE void vkCmdImageBarriers(VkCommandBuffer commandBuffer, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
@@ -799,7 +779,7 @@ typedef struct VkMeshCreateInfo {
 	uint32_t         indexCount;
 	uint32_t         vertexCount;
 	const uint16_t*  pIndices;
-	const MidVertex* pVertices;
+	const vert* pVertices;
 } VkMeshCreateInfo;
 void vkCreateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh);
 void vkBindUpdateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh);
@@ -1233,30 +1213,30 @@ enum {
 		.vertexBindingDescriptionCount = 1,                                     \
 		.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]) {     \
 			{                                                                   \
-				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                    \
-				.stride = sizeof(MidVertex),                                    \
+				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                  \
+				.stride = sizeof(vert),                                         \
 				.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,                       \
 			},                                                                  \
 		},                                                                      \
 		.vertexAttributeDescriptionCount = 3,                                   \
 		.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]) { \
 			{                                                                   \
-				.location = VK_PIPE_VERTEX_ATTRIBUTE_BASIC_POSITION_INDEX,        \
-				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                    \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_BASIC_POSITION_INDEX,      \
+				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                  \
 				.format = VK_FORMAT_R32G32B32_SFLOAT,                           \
-				.offset = offsetof(MidVertex, position),                        \
+				.offset = offsetof(vert, pos),                                  \
 			},                                                                  \
 			{                                                                   \
-				.location = VK_PIPE_VERTEX_ATTRIBUTE_BASIC_NORMAL_INDEX,          \
-				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                    \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_BASIC_NORMAL_INDEX,        \
+				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                  \
 				.format = VK_FORMAT_R32G32B32_SFLOAT,                           \
-				.offset = offsetof(MidVertex, normal),                          \
+				.offset = offsetof(vert, norm),                               \
 			},                                                                  \
 			{                                                                   \
-				.location = VK_PIPE_VERTEX_ATTRIBUTE_BASIC_UV_INDEX,              \
-				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                    \
+				.location = VK_PIPE_VERTEX_ATTRIBUTE_BASIC_UV_INDEX,            \
+				.binding = VK_PIPE_VERTEX_BINDING_BASIC_INDEX,                  \
 				.format = VK_FORMAT_R32G32_SFLOAT,                              \
-				.offset = offsetof(MidVertex, uv),                              \
+				.offset = offsetof(vert, uv),                                   \
 			},                                                                  \
 		},                                                                      \
 	}
@@ -1983,7 +1963,7 @@ void vkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDev
 void vkCreateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh)
 {
 	pMesh->offsets.vertexCount = pCreateInfo->vertexCount;
-	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->offsets.vertexCount;
+	uint32_t vertexBufferSize = sizeof(vert) * pMesh->offsets.vertexCount;
 	pMesh->offsets.vertexOffset = 0;
 	pMesh->offsets.indexCount = pCreateInfo->indexCount;
 	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->offsets.indexCount;
@@ -2009,7 +1989,7 @@ void vkBindUpdateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* p
 	// bind populate
 	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->sharedBuffer.buf, deviceMemory[pMesh->sharedBuffer.mem.type], pMesh->sharedBuffer.mem.offset));
 	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, sizeof(uint16_t) * pMesh->offsets.indexCount, pMesh->sharedBuffer.buf);
-	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(MidVertex) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buf);
+	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(vert) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buf);
 
 	pMesh->sharedBuffer.mem.state = VK_SHARED_MEMORY_STATE_BOUND;
 }
@@ -2018,9 +1998,9 @@ void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 	pMesh->offsets.indexCount = pCreateInfo->indexCount;
 	pMesh->offsets.vertexCount = pCreateInfo->vertexCount;
 	uint32_t indexBufferSize = sizeof(uint16_t) * pMesh->offsets.indexCount;
-	uint32_t vertexBufferSize = sizeof(MidVertex) * pMesh->offsets.vertexCount;
+	uint32_t vertexBufferSize = sizeof(vert) * pMesh->offsets.vertexCount;
 	pMesh->offsets.indexOffset = 0;
-	pMesh->offsets.vertexOffset = indexBufferSize + (indexBufferSize % sizeof(MidVertex));
+	pMesh->offsets.vertexOffset = indexBufferSize + (indexBufferSize % sizeof(vert));
 
 	CreateAllocBindBuffer(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, pMesh->offsets.vertexOffset + vertexBufferSize, VK_BUFFER_USAGE_MESH, VK_LOCALITY_CONTEXT, &pMesh->mem, &pMesh->buf);
 	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, indexBufferSize, pMesh->buf);

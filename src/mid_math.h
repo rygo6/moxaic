@@ -89,16 +89,17 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 #define IVEC4(x, y, z, w) (ivec4) {{x, y, z, w}}
 
 #define VEC4_MACRO(_1, _2, _3, _4, NAME, ...) NAME
-#define VEC4_1(_v)  _Generic((_v),            \
-	float: (vec4){{(_v).x, 0.0f, 0.0f, 0.0f}}, \
+
+#define VEC4_1(_v) _Generic((_v),               \
+	f32: (vec4){{(_v).x, 0.0f, 0.0f, 0.0f}},    \
 	vec2: (vec4){{(_v).x, (_v).y, 0.0f, 0.0f}}, \
 	vec3: (vec4){{(_v).x, (_v).y, (_v).z, 0.0f}})
-#define VEC4_2(_v, _arg0) _Generic((_v),        \
-	float: (vec4){{(_v).x, (_arg0), (_arg0), (_arg0)}}, \
+#define VEC4_2(_v, _arg0) _Generic((_v),              \
+	f32: (vec4){{(_v).x, (_arg0), (_arg0), (_arg0)}}, \
 	vec2: (vec4){{(_v).x, (_v).y, (_arg0), (_arg0)}}, \
 	vec3: (vec4){{(_v).x, (_v).y, (_v).z, (_arg0)}})
 #define VEC4_3(_v, _arg0, _1) _Generic((_v), \
-	float: (vec4){{(_v).x, _arg0, _1, _1}},    \
+	f32: (vec4){{(_v).x, _arg0, _1, _1}},    \
 	vec2: (vec4){{(_v).x, (_v).y, (_arg0), (_1)}})
 #define VEC4_4(_arg0, _1, _2, _3) (vec4){{(_arg0), (_1), (_2), (_3)}}
 #define VEC4(...) VEC4_MACRO(__VA_ARGS__, VEC4_4 ,VEC4_3, VEC4_2, VEC4_1)(__VA_ARGS__)
@@ -125,10 +126,28 @@ MAT_UNION(mat4, mat4_row, mat4_vec, 16, 4, col, c0, c1, c2, c3)
 
 typedef vec4 quat;
 
-typedef struct Ray {
+typedef struct ray {
 	vec3 origin;
 	vec3 dir;
-} Ray;
+} ray;
+
+typedef struct pose {
+	vec3 pos;
+	vec3 euler;
+	quat rot;
+} pose;
+
+typedef struct cam {
+	f32 zNear;
+	f32 zFar;
+	f32 yFovRad;
+} cam;
+
+typedef struct vert {
+	vec3 pos;
+	vec3 norm;
+	vec2 uv;
+} vert;
 
 #define VEC_NIL -1
 enum VecComponents {
@@ -606,7 +625,7 @@ typedef struct Plane {
 	vec3 origin;
 } Plane;
 
-MATH_INLINE Ray rayFromScreenUV(vec2 uv, mat4 invProj, mat4 invView, mat4 invViewProj)
+MATH_INLINE ray rayFromScreenUV(vec2 uv, mat4 invProj, mat4 invView, mat4 invViewProj)
 {
 	vec2 ndc = { uv.vec * 2.0f - 1.0f };
 	vec4 clipRayPos = VEC4(ndc.x, ndc.y, 0.0f, 1.0f);
@@ -617,10 +636,10 @@ MATH_INLINE Ray rayFromScreenUV(vec2 uv, mat4 invProj, mat4 invView, mat4 invVie
 	vec4 viewDir = VEC4(viewSpace.x, viewSpace.y, 1, 0);
 	vec4 worldRayDir = vec4MulMat4(invView, viewDir);
 
-	return (Ray) {.origin = TO_VEC3(clipWorldPos), .dir = TO_VEC3(worldRayDir)};
+	return (ray) {.origin = TO_VEC3(clipWorldPos), .dir = TO_VEC3(worldRayDir)};
 }
 
-MATH_INLINE bool rayIntersetPlane(Ray ray, Plane plane, vec3* outPoint)
+MATH_INLINE bool rayIntersetPlane(ray ray, Plane plane, vec3* outPoint)
 {
 	float facingRatio = vec3Dot(plane.normal, ray.dir);
 	if (fabsf(facingRatio) < 0.0001f) return false;
