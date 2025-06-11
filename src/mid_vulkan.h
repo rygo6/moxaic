@@ -500,6 +500,15 @@ enum {
 	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
 	.newLayout = VK_IMAGE_LAYOUT_GENERAL
 
+#define VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE                                  \
+	.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,                      \
+	.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT, \
+	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
+#define VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE                                  \
+	.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,                      \
+	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT, \
+	.newLayout = VK_IMAGE_LAYOUT_GENERAL
+
 #define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE                  \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
 	.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,         \

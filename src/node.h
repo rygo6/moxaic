@@ -67,6 +67,7 @@ typedef struct MxcDepthState {
 } MxcDepthState;
 
 typedef enum MxcCompositorMode : u8 {
+	MXC_COMPOSITOR_MODE_NONE,
 	MXC_COMPOSITOR_MODE_QUAD,
 	MXC_COMPOSITOR_MODE_TESSELATION,
 	MXC_COMPOSITOR_MODE_TASK_MESH,
@@ -291,6 +292,8 @@ typedef enum MxcNodeInteractionState{
 // Hot data used by compositor for each node
 typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
+	MxcCompositorMode compositorMode;
+
 	MxcNodeInteractionState interactionState;
 
 	MidPose                    rootPose;
@@ -302,6 +305,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	VkSharedBuffer             nodeSetBuffer;
 	VkDescriptorSet            nodeSet;
 
+	u8 swapIndex;
 	struct CACHE_ALIGN {
 		VkImage               color;
 		VkImage               depth;

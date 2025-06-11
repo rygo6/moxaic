@@ -457,6 +457,8 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 	auto compFrameColorView = pCst->compFrameColorTex.view;
 
 	auto gfxFrameColorImg = pCst->gfxFrameTex.color.image;
+
+	auto compFrameAtomicImg = pCst->compFrameAtomicTex.image;
 	auto compFrameColorImg = pCst->compFrameColorTex.image;
 
 	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuf.mem);
@@ -664,6 +666,25 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 		},
 	};
 
+	VkImageMemoryBarrier2 computeCompositePostBarrier[] = {
+		(VkImageMemoryBarrier2){
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = compFrameAtomicImg,
+			VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
+			VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		},
+		(VkImageMemoryBarrier2){
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = compFrameColorImg,
+			VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
+			VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		},
+	};
+
 	/////////
 	//// Loop
 run_loop:
@@ -688,6 +709,10 @@ run_loop:
 	for (int iNode = 0; iNode < nodeCount; ++iNode) {
 		auto pNodeShrd = pDuplicatedNodeShared[iNode];
 		auto pNodeCstData = &nodeCompositorData[iNode];
+
+		atomic_thread_fence(memory_order_acquire);
+
+		pNodeCstData->compositorMode = pNodeShrd->compositorMode;
 
 		vec3 worldDiff = VEC3_ZERO;
 		switch(pNodeCstData->interactionState) {
@@ -719,14 +744,14 @@ run_loop:
 
 		//// Acquire new framebuffers from node
 		{
-			int  iNodeSwap = !(nodeTimeline % VK_SWAP_COUNT);
-			auto pNodeSwap = &pNodeCstData->swaps[iNodeSwap];
+			pNodeCstData->swapIndex = !(nodeTimeline % VK_SWAP_COUNT);
+			auto pNodeSwap = &pNodeCstData->swaps[pNodeCstData->swapIndex];
 
 			VkImageMemoryBarrier2* pAcqrBars;
 			VkImageMemoryBarrier2* pEndBars;
 			VkImageLayout          finalLayout;
 			// we want to seperate this into compute and graphics loops
-			switch (pNodeShrd->compositorMode) {
+			switch (pNodeCstData->compositorMode) {
 
 				case MXC_COMPOSITOR_MODE_QUAD:
 				case MXC_COMPOSITOR_MODE_TESSELATION:
@@ -850,7 +875,7 @@ run_loop:
 			// This line and interaction logic should probably go into a threaded node.
 			// Maybe? With lines potentially staggered and changed at every compositor step, you do want to redraw them every frame.
 			// But also you probably couldn't really tell if the lines only updated at 60 fps and was a frame or two off for some node
-			pNodeCstData->interactionState = NODE_INTERACTION_STATE_NONE;
+			bool isHovering = false;
 			for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
 
 				vec3 start = pNodeCstData->worldCorners[MXC_CUBE_SEGMENTS[i]];
@@ -860,8 +885,29 @@ run_loop:
 
 				vec2 uvStart = pNodeCstData->uvCorners[MXC_CUBE_SEGMENTS[i]];
 				vec2 uvEnd = pNodeCstData->uvCorners[MXC_CUBE_SEGMENTS[i + 1]];
-				if (Vec2PointOnLineSegment(mouseUV, uvStart, uvEnd, 0.0005f))
-					pNodeCstData->interactionState = mxcWindowInput.leftMouseButton ? NODE_INTERACTION_STATE_SELECT : NODE_INTERACTION_STATE_HOVER;
+				isHovering |= Vec2PointOnLineSegment(mouseUV, uvStart, uvEnd, 0.0005f);
+			}
+
+			switch (pNodeCstData->interactionState){
+
+				case NODE_INTERACTION_STATE_NONE:
+					pNodeCstData->interactionState = isHovering ?
+														 NODE_INTERACTION_STATE_HOVER :
+														 NODE_INTERACTION_STATE_NONE;
+					break;
+				case NODE_INTERACTION_STATE_HOVER:
+					pNodeCstData->interactionState = isHovering ?
+														 mxcWindowInput.leftMouseButton ?
+														 NODE_INTERACTION_STATE_SELECT :
+														 NODE_INTERACTION_STATE_HOVER :
+														 NODE_INTERACTION_STATE_NONE;
+					break;
+				case NODE_INTERACTION_STATE_SELECT:
+					pNodeCstData->interactionState = mxcWindowInput.leftMouseButton ?
+														 NODE_INTERACTION_STATE_SELECT :
+														 NODE_INTERACTION_STATE_NONE;
+					break;
+				default: break;
 			}
 
 			// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
@@ -978,45 +1024,28 @@ run_loop:
 
 //		vkCmdClearColorImage(graphCmd, cmptFbColorImg, VK_IMAGE_LAYOUT_GENERAL, &VK_PASS_CLEAR_COLOR, 1, &VK_COLOR_SUBRESOURCE_RANGE);
 
+		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
+		int   pixelCt = extent.x * extent.y;
+		int   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
+
 		for (int iNode = 0; iNode < nodeCount; ++iNode) {
-			auto pNodShrd = pDuplicatedNodeShared[iNode];
+			auto pNodeCstData = &nodeCompositorData[iNode];
+			auto pNodeSwap = &pNodeCstData->swaps[pNodeCstData->swapIndex];
 
 			// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
 			// really all the nodes need to be set in UBO array and the compute shader do this loop
-			switch (pNodShrd->compositorMode) {
+			switch (pNodeCstData->compositorMode) {
 				case MXC_COMPOSITOR_MODE_COMPUTE:
+					// TODO we should bind once and all node be descriptor array
 					vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositorData[iNode].nodeSet, 0, NULL);
-
-					// can be saved
-					ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
-					int   pixelCt = extent.x * extent.y;
-					int   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
-//						int   quadGroupCt = pixlCt / GRID_SUBGROUP_CAPACITY / GRID_WORKGROUP_SUBGROUP_COUNT / GRID_QUAD_COUNT;
 
 					vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
 					vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
-//					// TODO THIS SHOULD BE HAPPENING EVERY FOR LOOP ITERATION
-//					VkImageMemoryBarrier2 postCmptBarr[] = {
-//						{
-//							VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-//							.image = pNodeSwap->color,
-//							.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-//							VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-//							VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-//							VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-//						},
-//						{
-//							VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-//							.image = pNodeSwap->gBuffer,
-//							.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-//							VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-//							VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-//							VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-//						},
-//					};
-//					CmdPipelineImageBarriers2(graphCmd, COUNT(postCmptBarr), postCmptBarr);
+//					// TODO THIS SHOULD NOT BE HAPPENING EVERY FOR LOOP ITERATION
+//					CmdPipelineImageBarriers2(gfxCmd, COUNT(computeCompositePostBarrier), computeCompositePostBarrier);
 
+					// TODO we should have a compute command buffer
 					vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
 					vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
@@ -1050,7 +1079,7 @@ run_loop:
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = compFrameColorImg,
-				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
@@ -1091,7 +1120,7 @@ run_loop:
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = compFrameColorImg,
 				VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
@@ -1125,15 +1154,15 @@ run_loop:
 ///////////
 //// Create
 ////
-void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCompositor)
+void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 {
 	/// Graphics Pipes
 	{
-		CreateNodeSetLayout(pInfo->compMode, &pCompositor->nodeSetLayout);
-		CreateGraphicsNodePipeLayout(pCompositor->nodeSetLayout, &pCompositor->nodePipeLayout);
+		CreateNodeSetLayout(pInfo->compMode, &pCst->nodeSetLayout);
+		CreateGraphicsNodePipeLayout(pCst->nodeSetLayout, &pCst->nodePipeLayout);
 
-		vkCreateQuadMesh(0.5f, &pCompositor->quadMesh);
-		vkCreateQuadPatchMeshSharedMemory(&pCompositor->quadPatchMesh);
+		vkCreateQuadMesh(0.5f, &pCst->quadMesh);
+		vkCreateQuadPatchMeshSharedMemory(&pCst->quadPatchMesh);
 
 		// we need all of these modes available, this should be flags
 		switch (pInfo->compMode) {
@@ -1141,8 +1170,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 				vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
 								  "./shaders/basic_comp.frag.spv",
 								  vk.context.basicPass,
-								  pCompositor->nodePipeLayout,
-								  &pCompositor->nodeQuadPipe);
+								  pCst->nodePipeLayout,
+								  &pCst->nodeQuadPipe);
 				break;
 			case MXC_COMPOSITOR_MODE_TESSELATION:
 				vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
@@ -1150,8 +1179,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 											  "./shaders/tess_comp.tese.spv",
 											  "./shaders/tess_comp.frag.spv",
 											  vk.context.basicPass,
-											  pCompositor->nodePipeLayout,
-											  &pCompositor->nodeQuadPipe);
+											  pCst->nodePipeLayout,
+											  &pCst->nodeQuadPipe);
 
 				break;
 			case MXC_COMPOSITOR_MODE_TASK_MESH:
@@ -1159,8 +1188,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 										  "./shaders/mesh_comp.mesh.spv",
 										  "./shaders/mesh_comp.frag.spv",
 										  vk.context.basicPass,
-										  pCompositor->nodePipeLayout,
-										  &pCompositor->nodeQuadPipe);
+										  pCst->nodePipeLayout,
+										  &pCst->nodeQuadPipe);
 				break;
 			default: PANIC("Compositor mode not supported!");
 		}
@@ -1172,21 +1201,21 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.locality = VK_LOCALITY_CONTEXT,
 			.dedicated = VK_DEDICATED_MEMORY_FALSE,
 		};
-		vkCreateSharedBuffer(&lineRequest, &pCompositor->lineBuf.buffer);
+		vkCreateSharedBuffer(&lineRequest, &pCst->lineBuf.buffer);
 	}
 
 	/// Compute Pipe
 	{
-		CreateComputeOutputSetLayout(&pCompositor->compOutputSetLayout);
-		CreateNodeComputePipeLayout(pCompositor->nodeSetLayout,
-									pCompositor->compOutputSetLayout,
-									&pCompositor->nodeCompPipeLayout);
+		CreateComputeOutputSetLayout(&pCst->compOutputSetLayout);
+		CreateNodeComputePipeLayout(pCst->nodeSetLayout,
+									pCst->compOutputSetLayout,
+									&pCst->nodeCompPipeLayout);
 		vkCreateComputePipe("./shaders/compute_compositor.comp.spv",
-							pCompositor->nodeCompPipeLayout,
-							&pCompositor->nodeCompPipe);
+							pCst->nodeCompPipeLayout,
+							&pCst->nodeCompPipe);
 		vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv",
-							pCompositor->nodeCompPipeLayout,
-							&pCompositor->nodePostCompPipe);
+							pCst->nodeCompPipeLayout,
+							&pCst->nodePostCompPipe);
 	}
 
 	/// Pools
@@ -1196,7 +1225,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.queryType = VK_QUERY_TYPE_TIMESTAMP,
 			.queryCount = 2,
 		};
-		VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, VK_ALLOC, &pCompositor->timeQryPool));
+		VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, VK_ALLOC, &pCst->timeQryPool));
 
 		VkDescriptorPoolCreateInfo poolInfo = {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -1214,20 +1243,20 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 	/// Global
 	{
-		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pCompositor->globalSet);
+		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pCst->globalSet);
 		VkRequestAllocationInfo requestInfo = {
 			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			.size = sizeof(VkGlobalSetState),
 			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 		};
-		vkCreateSharedBuffer(&requestInfo, &pCompositor->globalBuf);
+		vkCreateSharedBuffer(&requestInfo, &pCst->globalBuf);
 	}
 
 	/// GBuffer Process
 	{
-		CreateGBufferProcessSetLayout(&pCompositor->gbufProcessSetLayout);
-		CreateGBufferProcessPipeLayout(pCompositor->gbufProcessSetLayout, &pCompositor->gbufProcessPipeLayout);
-		vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", pCompositor->gbufProcessPipeLayout, &pCompositor->gbufProcessBlitUpPipe);
+		CreateGBufferProcessSetLayout(&pCst->gbufProcessSetLayout);
+		CreateGBufferProcessPipeLayout(pCst->gbufProcessSetLayout, &pCst->gbufProcessPipeLayout);
+		vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", pCst->gbufProcessPipeLayout, &pCst->gbufProcessBlitUpPipe);
 
 		vkCreateSharedBuffer(
 			&(VkRequestAllocationInfo){
@@ -1235,14 +1264,14 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 				.size = sizeof(MxcProcessState),
 				.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			},
-			&pCompositor->processSetBuffer);
+			&pCst->processSetBuffer);
 	}
 
 	/// Final Blit
 	{
-		CreateFinalBlitSetLayout(&pCompositor->finalBlitSetLayout);
-		CreateFinalBlitPipeLayout(pCompositor->finalBlitSetLayout, &pCompositor->finalBlitPipeLayout);
-		vkCreateComputePipe("./shaders/compositor_final_blit.comp.spv", pCompositor->finalBlitPipeLayout, &pCompositor->finalBlitPipe);
+		CreateFinalBlitSetLayout(&pCst->finalBlitSetLayout);
+		CreateFinalBlitPipeLayout(pCst->finalBlitSetLayout, &pCst->finalBlitPipeLayout);
+		vkCreateComputePipe("./shaders/compositor_final_blit.comp.spv", pCst->finalBlitPipeLayout, &pCst->finalBlitPipe);
 	}
 
 	/// Node Sets
@@ -1260,7 +1289,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = threadContext.descriptorPool,
 			.descriptorSetCount = 1,
-			.pSetLayouts = &pCompositor->nodeSetLayout,
+			.pSetLayouts = &pCst->nodeSetLayout,
 		};
 		vkAllocateDescriptorSets(vk.context.device, &setCreateInfo, &nodeCompositorData[i].nodeSet);
 		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)nodeCompositorData[i].nodeSet, "NodeSet");
@@ -1273,12 +1302,12 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.locality = VK_LOCALITY_CONTEXT,
 			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 		};
-		vkCreateBasicFramebufferTextures(&framebufferTextureInfo, &pCompositor->gfxFrameTex);
+		vkCreateBasicFramebufferTextures(&framebufferTextureInfo, &pCst->gfxFrameTex);
 		VkBasicFramebufferCreateInfo framebufferInfo = {
 			.debugName = "CompositeFramebuffer",
 			.renderPass = vk.context.basicPass,
 		};
-		vkCreateBasicFramebuffer(&framebufferInfo, &pCompositor->gfxFrame);
+		vkCreateBasicFramebuffer(&framebufferInfo, &pCst->gfxFrame);
 	}
 
 	/// Compute Output
@@ -1298,7 +1327,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = VK_LOCALITY_CONTEXT,
 		};
-		vkCreateTexture(&atomicCreateInfo, &pCompositor->compFrameAtomicTex);
+		vkCreateTexture(&atomicCreateInfo, &pCst->compFrameAtomicTex);
 
 		VkTextureCreateInfo colorCreateInfo = {
 			.debugName = "ComputeColorFramebuffer",
@@ -1315,20 +1344,20 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = VK_LOCALITY_CONTEXT,
 		};
-		vkCreateTexture(&colorCreateInfo, &pCompositor->compFrameColorTex);
+		vkCreateTexture(&colorCreateInfo, &pCst->compFrameColorTex);
 
 		VkDescriptorSetAllocateInfo setInfo = {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = threadContext.descriptorPool,
 			.descriptorSetCount = 1,
-			.pSetLayouts = &pCompositor->compOutputSetLayout,
+			.pSetLayouts = &pCst->compOutputSetLayout,
 		};
-		VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pCompositor->compOutSet));
-		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCompositor->compOutSet, "ComputeOutputSet");
+		VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pCst->compOutSet));
+		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCst->compOutSet, "ComputeOutputSet");
 
 		VkWriteDescriptorSet writeSets[] = {
-			BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCompositor->compOutSet, pCompositor->compFrameAtomicTex.view),
-			BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCompositor->compOutSet, pCompositor->compFrameColorTex.view),
+			BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCst->compOutSet, pCst->compFrameAtomicTex.view),
+			BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCst->compOutSet, pCst->compFrameColorTex.view),
 		};
 		vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
@@ -1337,7 +1366,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			VkImageMemoryBarrier2 barrs[] = {
 				(VkImageMemoryBarrier2){
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = pCompositor->compFrameAtomicTex.image,
+					.image = pCst->compFrameAtomicTex.image,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 					VK_IMAGE_BARRIER_SRC_UNDEFINED,
 					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
@@ -1345,7 +1374,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 				},
 				(VkImageMemoryBarrier2){
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = pCompositor->compFrameColorTex.image,
+					.image = pCst->compFrameColorTex.image,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 					VK_IMAGE_BARRIER_SRC_UNDEFINED,
 					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,

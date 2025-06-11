@@ -70,6 +70,6 @@ typedef struct MxcCompositor {
 //	pLine->state[pLine->count++] = end;
 //}
 
-void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCompositor);
+void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst);
 void* mxcCompNodeThread(MxcCompositorContext* pContext);
 void  mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst);
