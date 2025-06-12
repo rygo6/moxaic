@@ -73,7 +73,8 @@
 	PFN_FUNC(CmdDrawMeshTasksEXT)     \
 	PFN_FUNC(SignalSemaphore)         \
 	PFN_FUNC(QueueSubmit2)            \
-	PFN_FUNC(QueuePresentKHR)
+	PFN_FUNC(QueuePresentKHR)         \
+	PFN_FUNC(UpdateDescriptorSets)
 
 #endif
 
@@ -919,9 +920,24 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
-#define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType) \
+#define CMD_BIND_DESCRIPTOR_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                          \
+	VkDescriptorSet bindSets[] = {__VA_ARGS__};                                                                      \
+	vk.CmdBindDescriptorSets(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(bindSets), bindSets, 0, NULL); \
+})
+
+#define CMD_PUSH_DESCRIPTOR_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                   \
+	VkWriteDescriptorSet pushSets[] = {__VA_ARGS__};                                                          \
+	vk.CmdPushDescriptorSetKHR(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(pushSets), pushSets); \
+})
+
+#define VK_UPDATE_DESCRIPTOR_SETS(...) ({                                             \
+	VkWriteDescriptorSet writeSets[] = {__VA_ARGS__};                                 \
+	vk.UpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL); \
+})
+
+#define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType)                   \
 	for (VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(familyType); \
-		 cmd != VK_NULL_HANDLE;                               \
+		 cmd != VK_NULL_HANDLE;                                           \
 		 vkEndImmediateCommandBuffer(familyType, cmd), cmd = VK_NULL_HANDLE)
 
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType);
@@ -1313,7 +1329,9 @@ enum {
 		},                                                                 \
 	}
 
-static void CreateBasicPipeLayout()
+#define SAFE /* the code already doesn't have memory bugs so do nothing */
+
+SAFE static void CreateBasicPipeLayout()
 {
 	VkDescriptorSetLayout pSetLayouts[] = {
         [VK_PIPE_SET_INDEX_BASIC_GLOBAL] = vk.context.globalSetLayout,
@@ -1328,7 +1346,7 @@ static void CreateBasicPipeLayout()
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.basicPipeLayout));
 }
 
-static void CreateGlobalSetLayout()
+SAFE static void CreateGlobalSetLayout()
 {
 	VkDescriptorSetLayoutCreateInfo info = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,

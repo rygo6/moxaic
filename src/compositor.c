@@ -391,17 +391,19 @@ static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout)
 	}
 
 enum {
+	PIPE_SET_INDEX_FINAL_BLIT_GLOBAL,
 	PIPE_SET_INDEX_FINAL_BLIT_INOUT,
 	PIPE_SET_INDEX_FINAL_BLIT_COUNT,
 };
 typedef VkPipelineLayout FinalBlitPipeLayout;
-static void CreateFinalBlitPipeLayout(FinalBlitSetLayout layout, FinalBlitPipeLayout* pPipeLayout)
+static void CreateFinalBlitPipeLayout(FinalBlitSetLayout inOutLayout, FinalBlitPipeLayout* pPipeLayout)
 {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_FINAL_BLIT_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
-			[PIPE_SET_INDEX_FINAL_BLIT_INOUT] = layout,
+			[PIPE_SET_INDEX_FINAL_BLIT_GLOBAL] = vk.context.globalSetLayout,
+			[PIPE_SET_INDEX_FINAL_BLIT_INOUT] = inOutLayout,
 		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
@@ -1098,11 +1100,13 @@ run_loop:
 		u32   pixelCt = extent.x * extent.y;
 		u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipe);
-		VkWriteDescriptorSet blitPushSets[] = {
+		CMD_BIND_DESCRIPTOR_SETS(
+			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_GLOBAL,
+			globalSet);
+		CMD_PUSH_DESCRIPTOR_SETS(
+			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT,
 			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(gfxFrameColorView, compFrameColorView),
-			BIND_WRITE_FINAL_BLIT_DST(swapView),
-		};
-		vk.CmdPushDescriptorSetKHR(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT, COUNT(blitPushSets), blitPushSets);
+			BIND_WRITE_FINAL_BLIT_DST(swapView));
 		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
 		CMD_IMAGE_BARRIERS(gfxCmd,
@@ -1355,11 +1359,9 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 		VK_CHECK(vkAllocateDescriptorSets(vk.context.device, &setInfo, &pCst->compOutSet));
 		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)pCst->compOutSet, "ComputeOutputSet");
 
-		VkWriteDescriptorSet writeSets[] = {
+		VK_UPDATE_DESCRIPTOR_SETS(
 			BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCst->compOutSet, pCst->compFrameAtomicTex.view),
-			BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCst->compOutSet, pCst->compFrameColorTex.view),
-		};
-		vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+			BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCst->compOutSet, pCst->compFrameColorTex.view));
 
 		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)
 		{
@@ -1409,7 +1411,8 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	pCst->pProcessStateMapped = vkSharedBufferPtr(pCst->processSetBuffer);
 	*pCst->pProcessStateMapped = (MxcProcessState){};
 
-	vkUpdateDescriptorSets(vk.context.device, 1, &VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuf.buf), 0, NULL);
+	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuf.buf));
+
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably
 		// should also share the same descriptor set with an array
@@ -1417,11 +1420,8 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 		nodeCompositorData[i].pSetMapped = vkSharedBufferPtr(nodeCompositorData[i].nodeSetBuffer);
 		*nodeCompositorData[i].pSetMapped = (MxcNodeCompositorSetState){};
 
-		// thes could be push descriptors???
-		VkWriteDescriptorSet writeSets[] = {
-			BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buf),
-		};
-		vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+		// these could be push descriptors???
+		VK_UPDATE_DESCRIPTOR_SETS(BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buf));
 	}
 }
 
