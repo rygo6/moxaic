@@ -13,15 +13,54 @@ layout (local_size_x = SUBGROUP_COUNT, local_size_y = WORKGROUP_SUBGROUP_COUNT, 
 layout (set = 1, binding = 0, rgba8) uniform readonly image2D src[];
 layout (set = 1, binding = 1, rgba8) uniform writeonly image2D dst;
 
+#define STEPS 32
+#define DIST 0.01
 
+float trace(vec3 origin, vec3 dir) {
+    float t = 0.0;
+    int i;
+    for (i = 0; i < STEPS; i++) {
+        vec3 pos = origin + t * dir;
+        float d = length(mod(pos, 1.0) - 0.5);
+        if (d < DIST) break;
+        t += d;
+    }
+    return 1.0 - float(i) / float(STEPS);
+}
+
+vec3 WorldRayDirFromNDC(vec2 ndc, mat4 invProj, mat4 invView)
+{
+    vec4 clipRayDir = vec4(ndc, 0, 1);
+    vec4 viewSpace = invProj * clipRayDir;
+    vec4 viewDir = vec4(viewSpace.xy, -1, 0); // we look down -1 z in view space for vulkan?
+    vec3 worldRayDir = normalize((invView * viewDir).xyz);
+    return worldRayDir;
+}
+
+vec2 NDCFromUV(vec2 uv)
+{
+    return uv * 2.0f - 1.0f;
+}
 
 void main()
 {
     ivec2 outputSize = imageSize(dst);
     InitializeSubgroupGridInfo(outputSize);
 
+    vec2 ndc = NDCFromUV(grid_GlobalUV);
+    vec3 camDir = WorldRayDirFromNDC(ndc,  globalUBO.invProj,  globalUBO.invView );
+    vec4 camPos = globalUBO.invView * vec4(0,0,0,1);
+
+    float grid = trace(camPos.xyz, camDir);
+
+
     vec4 graphicsSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER], grid_GlobalCoord);
     vec4 computeSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER], grid_GlobalCoord);
-    vec4 finalColor = computeSample.a > 0 ? computeSample : graphicsSample;
+    vec4 finalColor = computeSample.a > 0 ?
+                        computeSample :
+                        graphicsSample.a > 0 ?
+                            graphicsSample :
+                            vec4(grid);
     imageStore(dst, grid_GlobalCoord, finalColor);
 }
+
