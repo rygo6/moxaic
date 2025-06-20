@@ -4,6 +4,10 @@ float Lerp(float a, float b, float t) {
     return a + ((b - a) * t);
 }
 
+float linearStep(float edge0, float edge1, float x) {
+    return clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+}
+
 vec4 LinearizeDepth(vec4 zNear, vec4 zFar, vec4 projectionDepth) {
     return zNear * zFar / (zFar - projectionDepth * (zFar - zNear));
 }

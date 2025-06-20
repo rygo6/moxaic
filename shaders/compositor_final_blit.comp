@@ -41,7 +41,11 @@ vec3 WorldRayDirFromNDC2(vec2 ndc, mat4 invViewProj)
     return normalize(nearToFarRay);
 }
 
+vec2 NDCFromUV(vec2 uv) { return uv * 2.0f - 1.0f; }
+
 float DDATrace(vec3 rayOrigin, vec3 rayDirNormalized) {
+
+    const int stepCount = 16;
 
     vec3 rayDirInv = 1.0f / rayDirNormalized;
     vec3 rayDirSign = sign(rayDirNormalized);
@@ -55,43 +59,44 @@ float DDATrace(vec3 rayOrigin, vec3 rayDirNormalized) {
     ivec3 voxel = ivec3(floor(rayOrigin));
     float color = 0;
 
-    const float maxDistance = 16;
-    const int MAX_ITERATIONS = 32;
-    for (int i = 0; i < MAX_ITERATIONS; i++) {
+    // Technically this background could be rendered at lower rate in the UI/Shell thread/process
+    for (int i = 0; i < stepCount; i++) {
+
         bvec3 mask = lessThanEqual(sideDist.xyz, min(sideDist.yzx, sideDist.zxy));
+
         sideDist += vec3(mask) * deltaDist;
         voxel += ivec3(mask) * deltaVoxel;
 
-        vec3 hit = voxel + vec3(lessThan(deltaVoxel, ivec3(0.0)));
-        vec3 hitRay = hit - rayOrigin;
-        float hitRayDistance = length(hitRay);
-        float hitRayDistanceNormalized = hitRayDistance / maxDistance;
-
-        vec3 hitRayNormalized = (hitRay / rayDirNormalized);
-        float t = mask.x ? hitRayNormalized.x : mask.y ? hitRayNormalized.y : mask.z ? hitRayNormalized.z : 0;
+        bvec3 isNegativeDelta = lessThan(deltaVoxel, ivec3(0.0));
+        ivec3 hitVoxelSide = voxel + ivec3(isNegativeDelta); // + 1 if left/negative side
+        vec3 hitRay = (hitVoxelSide - rayOrigin) / rayDirNormalized;
+        float t = mask.x ? hitRay.x : mask.y ? hitRay.y : mask.z ? hitRay.z : 0;
 
         vec3 hitPos = rayOrigin + rayDirNormalized * t;
+        float hitPosDistance = distance(rayOrigin, hitPos);
+        float hitPosDistanceFade = linearStep(stepCount, 0.0, hitPosDistance);
+        float nearFade = clamp(hitPosDistance * hitPosDistance - 0.5, 0.0, 1.0);
+
         vec3 localPos = hitPos - voxel;
         vec2 local2DPos = mask.x ? localPos.yz : mask.y ? localPos.xz : mask.z ? localPos.xy : vec2(0.5);
         vec2 local2DPosCenter = abs(local2DPos - 0.5) * 2.0;
+
         float local2DPosCenterBoxDistance = max(local2DPosCenter.x, local2DPosCenter.y);
         float local2DPosCenterCircleDistance = length(local2DPosCenter);
         float local2DPosCenterCornerDistance = 1.0 - length(1.0 - local2DPosCenter);
 
-        // we need som more clamping and work here
-        float threshold = 0.002 * hitRayDistance;
-        float edge = smoothstep(1.0 - threshold, 1.0, local2DPosCenterBoxDistance);
-        float cornerEdges = clamp(edge - (2.0 - local2DPosCenterCircleDistance * 1.0), 0.0, 1.0); // combine into one smoothstep
-        float circles = smoothstep(.99 - threshold, .99, local2DPosCenterCornerDistance);
-        float cornerEdgeCircles = cornerEdges + circles;
+        float threshold = 0.002 * hitPosDistance;
+        float circleEdgeSubtract = (1.0 - local2DPosCenterCornerDistance);
+        float edge = smoothstep(1.0 - threshold, 1.0, local2DPosCenterBoxDistance) - circleEdgeSubtract;
 
-        color = max(color, cornerEdgeCircles * (1.0 - hitRayDistanceNormalized));
+        float circles = smoothstep(.98 - threshold, .99, local2DPosCenterCornerDistance);
+        float cornerEdgeCircles = circles + (edge * 0.2);
+
+        color = max(color, cornerEdgeCircles * hitPosDistanceFade * nearFade);
     }
 
     return color;
 }
-
-vec2 NDCFromUV(vec2 uv) { return uv * 2.0f - 1.0f; }
 
 void main()
 {
