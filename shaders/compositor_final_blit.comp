@@ -16,18 +16,6 @@ layout (set = 1, binding = 1, rgba8) uniform writeonly image2D dst;
 #define STEPS 32
 #define DIST 0.01
 
-float trace(vec3 origin, vec3 dir) {
-    float t = 0.0;
-    int i;
-    for (i = 0; i < STEPS; i++) {
-        vec3 pos = origin + t * dir;
-        float d = length(mod(pos, 1.0) - 0.5);
-        if (d < DIST) break;
-        t += d;
-    }
-    return 1.0 - float(i) / float(STEPS);
-}
-
 vec3 WorldRayDirFromNDC(vec2 ndc, mat4 invProj, mat4 invView)
 {
     vec4 clipRayDir = vec4(ndc, 0, 1);
@@ -53,10 +41,6 @@ vec3 WorldRayDirFromNDC2(vec2 ndc, mat4 invViewProj)
     return normalize(nearToFarRay);
 }
 
-float unclampedLinearstep(float edge0, float edge1, float x) {
-    return (x - edge0) / (edge1 - edge0);
-}
-
 float DDATrace(vec3 rayOrigin, vec3 rayDirNormalized) {
 
     vec3 rayDirInv = 1.0f / rayDirNormalized;
@@ -71,9 +55,8 @@ float DDATrace(vec3 rayOrigin, vec3 rayDirNormalized) {
     ivec3 voxel = ivec3(floor(rayOrigin));
     float color = 0;
 
-    // Traversal loop with early termination
-    const float maxDistance = 12;
-    const int MAX_ITERATIONS = 16;
+    const float maxDistance = 16;
+    const int MAX_ITERATIONS = 32;
     for (int i = 0; i < MAX_ITERATIONS; i++) {
         bvec3 mask = lessThanEqual(sideDist.xyz, min(sideDist.yzx, sideDist.zxy));
         sideDist += vec3(mask) * deltaDist;
@@ -90,20 +73,25 @@ float DDATrace(vec3 rayOrigin, vec3 rayDirNormalized) {
         vec3 hitPos = rayOrigin + rayDirNormalized * t;
         vec3 localPos = hitPos - voxel;
         vec2 local2DPos = mask.x ? localPos.yz : mask.y ? localPos.xz : mask.z ? localPos.xy : vec2(0.5);
-        float localLength = length(local2DPos);
-        float threshold = Lerp(0.0002, 0.04, hitRayDistanceNormalized);
-        vec4 accumulateColor = vec4(smoothstep(vec2(threshold), vec2(0.0), local2DPos), smoothstep(vec2(1.0 - threshold), vec2(1.0), local2DPos));
+        vec2 local2DPosCenter = abs(local2DPos - 0.5) * 2.0;
+        float local2DPosCenterBoxDistance = max(local2DPosCenter.x, local2DPosCenter.y);
+        float local2DPosCenterCircleDistance = length(local2DPosCenter);
+        float local2DPosCenterCornerDistance = 1.0 - length(1.0 - local2DPosCenter);
 
-        color = max(color, dot(accumulateColor, vec4(1.0)) * (1.0 - hitRayDistanceNormalized));
+        // we need som more clamping and work here
+        float threshold = 0.002 * hitRayDistance;
+        float edge = smoothstep(1.0 - threshold, 1.0, local2DPosCenterBoxDistance);
+        float cornerEdges = clamp(edge - (2.0 - local2DPosCenterCircleDistance * 1.0), 0.0, 1.0); // combine into one smoothstep
+        float circles = smoothstep(.99 - threshold, .99, local2DPosCenterCornerDistance);
+        float cornerEdgeCircles = cornerEdges + circles;
+
+        color = max(color, cornerEdgeCircles * (1.0 - hitRayDistanceNormalized));
     }
 
     return color;
 }
 
-vec2 NDCFromUV(vec2 uv)
-{
-    return uv * 2.0f - 1.0f;
-}
+vec2 NDCFromUV(vec2 uv) { return uv * 2.0f - 1.0f; }
 
 void main()
 {
@@ -112,20 +100,14 @@ void main()
 
     vec2 ndc = NDCFromUV(grid_GlobalUV);
     vec3 camDir = WorldRayDirFromNDC(ndc,  globalUBO.invProj,  globalUBO.invView);
-//    vec3 camDir = WorldRayDirFromNDC2(ndc,  globalUBO.invViewProj);
     vec3 camPos = (globalUBO.invView * vec4(0,0,0,1)).xyz;
 
     float result = DDATrace(camPos, camDir);
-    vec4 fragColor = vec4(result,result,result,result);
-
+    vec4 traceColor = vec4(result,result,result,1.0);
 
     vec4 graphicsSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER], grid_GlobalCoord);
     vec4 computeSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER], grid_GlobalCoord);
-    vec4 finalColor = computeSample.a > 0 ?
-                        computeSample :
-                        graphicsSample.a > 0 ?
-                            graphicsSample :
-                            fragColor;
-    imageStore(dst, grid_GlobalCoord, fragColor);
+    vec4 finalColor = computeSample.a > 0 ? computeSample : graphicsSample.a > 0 ? graphicsSample : traceColor;
+    imageStore(dst, grid_GlobalCoord, finalColor);
 }
 
