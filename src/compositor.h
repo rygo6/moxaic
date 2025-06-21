@@ -13,7 +13,7 @@ typedef struct VkSharedLineBuffer {
 } VkSharedLineBuffer;
 
 typedef struct MxcCompositorCreateInfo {
-	MxcCompositorMode compMode;
+	bool enabledCompositorModes[MXC_COMPOSITOR_MODE_COUNT];
 } MxcCompositorCreateInfo;
 
 typedef struct MxcCompositor {

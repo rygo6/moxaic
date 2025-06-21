@@ -48,6 +48,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define LIKELY(x) __builtin_expect(!!(x), 1)
 #define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
+#define FLAG(b) (1 << (b))
 #define CONTAINS(_array, _count, _)        \
 	({                                     \
 		bool found = false;                \

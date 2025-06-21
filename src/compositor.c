@@ -23,14 +23,8 @@
 //// Pipes
 ////
 
-constexpr VkShaderStageFlags MXC_COMPOSITOR_MODE_STAGE_FLAGS[] = {
-	[MXC_COMPOSITOR_MODE_QUAD] =       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_TASK_MESH] =   VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_COMPUTE] =     VK_SHADER_STAGE_COMPUTE_BIT,
-};
-
 //// Node Pipe
+
 enum {
 	SET_BIND_INDEX_NODE_STATE,
 	SET_BIND_INDEX_NODE_COLOR,
@@ -38,8 +32,20 @@ enum {
 	SET_BIND_INDEX_NODE_COUNT
 };
 
-static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* pLayout)
+constexpr VkShaderStageFlags COMPOSITOR_MODE_STAGE_FLAGS[] = {
+	[MXC_COMPOSITOR_MODE_QUAD] =       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TASK_MESH] =   VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_COMPUTE] =     VK_SHADER_STAGE_COMPUTE_BIT,
+};
+
+static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout* pLayout)
 {
+	VkShaderStageFlags stageFlags = 0;
+	for (int i = 0; i < MXC_COMPOSITOR_MODE_COUNT; ++i) {
+		if (pModes[i]) stageFlags |= COMPOSITOR_MODE_STAGE_FLAGS[i];
+	}
+
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = SET_BIND_INDEX_NODE_COUNT,
@@ -48,25 +54,27 @@ static void CreateNodeSetLayout(MxcCompositorMode mode, VkDescriptorSetLayout* p
 				SET_BIND_INDEX_NODE_STATE,
 				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 				.descriptorCount = 1,
-				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+				.stageFlags = stageFlags,
 			},
 			{
 				SET_BIND_INDEX_NODE_COLOR,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
-				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+				.stageFlags = stageFlags,
+				// probably get rid of sampler on this?
 				.pImmutableSamplers = &vk.context.nearestSampler,
 			},
 			{
 				SET_BIND_INDEX_NODE_GBUFFER,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
-				.stageFlags = MXC_COMPOSITOR_MODE_STAGE_FLAGS[mode],
+				.stageFlags = stageFlags,
 				.pImmutableSamplers = &vk.context.nearestSampler,
 			},
 		},
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
+	vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (u64)*pLayout, "NodeSetLayout");
 }
 #define BIND_WRITE_NODE_STATE(_set, _buf)                        \
 	(VkWriteDescriptorSet)                                       \
@@ -126,6 +134,7 @@ static void CreateGraphicsNodePipeLayout(
 		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
+	vkSetDebugName(VK_OBJECT_TYPE_PIPELINE_LAYOUT, (u64)*pPipeLayout, "NodePipeLayout");
 }
 
 //// Compute Node Pipe
@@ -421,7 +430,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 	EXTRACT_FIELD(pCstCtx, gfxCmd);
 	EXTRACT_FIELD(pCstCtx, timeline);
 
-	EXTRACT_FIELD(pInfo, compMode);
+	EXTRACT_FIELD(pInfo, enabledCompositorModes);
 
 	EXTRACT_FIELD(pCst, gfxFrame);
 	EXTRACT_FIELD(pCst, globalSet);
@@ -1045,7 +1054,7 @@ run_loop:
 					vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
 //					// TODO THIS SHOULD NOT BE HAPPENING EVERY FOR LOOP ITERATION
-//					CmdPipelineImageBarriers2(gfxCmd, COUNT(computeCompositePostBarrier), computeCompositePostBarrier);
+					CmdPipelineImageBarriers2(gfxCmd, COUNT(computeCompositePostBarrier), computeCompositePostBarrier);
 
 					// TODO we should have a compute command buffer
 					vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
@@ -1160,44 +1169,57 @@ run_loop:
 ////
 void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 {
+	CreateNodeSetLayout((MxcCompositorMode*)pInfo->enabledCompositorModes, &pCst->nodeSetLayout);
+	CreateGraphicsNodePipeLayout(pCst->nodeSetLayout, &pCst->nodePipeLayout);
+	
 	/// Graphics Pipes
-	{
-		CreateNodeSetLayout(pInfo->compMode, &pCst->nodeSetLayout);
-		CreateGraphicsNodePipeLayout(pCst->nodeSetLayout, &pCst->nodePipeLayout);
-
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_QUAD]) {
 		vkCreateQuadMesh(0.5f, &pCst->quadMesh);
+		vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
+						  "./shaders/basic_comp.frag.spv",
+						  vk.context.basicPass,
+						  pCst->nodePipeLayout,
+						  &pCst->nodeQuadPipe);
+	}
+
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TESSELATION]) {
 		vkCreateQuadPatchMeshSharedMemory(&pCst->quadPatchMesh);
+		vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
+									  "./shaders/tess_comp.tesc.spv",
+									  "./shaders/tess_comp.tese.spv",
+									  "./shaders/tess_comp.frag.spv",
+									  vk.context.basicPass,
+									  pCst->nodePipeLayout,
+									  &pCst->nodeTessPipe);
+	}
 
-		// we need all of these modes available, this should be flags
-		switch (pInfo->compMode) {
-			case MXC_COMPOSITOR_MODE_QUAD:
-				vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
-								  "./shaders/basic_comp.frag.spv",
-								  vk.context.basicPass,
-								  pCst->nodePipeLayout,
-								  &pCst->nodeQuadPipe);
-				break;
-			case MXC_COMPOSITOR_MODE_TESSELATION:
-				vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
-											  "./shaders/tess_comp.tesc.spv",
-											  "./shaders/tess_comp.tese.spv",
-											  "./shaders/tess_comp.frag.spv",
-											  vk.context.basicPass,
-											  pCst->nodePipeLayout,
-											  &pCst->nodeQuadPipe);
+//	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
+//		vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
+//								  "./shaders/mesh_comp.mesh.spv",
+//								  "./shaders/mesh_comp.frag.spv",
+//								  vk.context.basicPass,
+//								  pCst->nodePipeLayout,
+//								  &pCst->nodeTaskMeshPipe);
+//	}
 
-				break;
-			case MXC_COMPOSITOR_MODE_TASK_MESH:
-				vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
-										  "./shaders/mesh_comp.mesh.spv",
-										  "./shaders/mesh_comp.frag.spv",
-										  vk.context.basicPass,
-										  pCst->nodePipeLayout,
-										  &pCst->nodeQuadPipe);
-				break;
-			default: PANIC("Compositor mode not supported!");
-		}
+	/// Compute Pipe
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
+		CreateComputeOutputSetLayout(&pCst->compOutputSetLayout);
+		
+		CreateNodeComputePipeLayout(pCst->nodeSetLayout,
+									pCst->compOutputSetLayout,
+									&pCst->nodeCompPipeLayout);
+		
+		vkCreateComputePipe("./shaders/compute_compositor.comp.spv",
+							pCst->nodeCompPipeLayout,
+							&pCst->nodeCompPipe);
+		vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv",
+							pCst->nodeCompPipeLayout,
+							&pCst->nodePostCompPipe);
+	}
 
+	/// Line Pipe
+	{
 		VkRequestAllocationInfo lineRequest = {
 			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 			.size = sizeof(vec3) * 64,
@@ -1206,20 +1228,6 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.dedicated = VK_DEDICATED_MEMORY_FALSE,
 		};
 		vkCreateSharedBuffer(&lineRequest, &pCst->lineBuf.buffer);
-	}
-
-	/// Compute Pipe
-	{
-		CreateComputeOutputSetLayout(&pCst->compOutputSetLayout);
-		CreateNodeComputePipeLayout(pCst->nodeSetLayout,
-									pCst->compOutputSetLayout,
-									&pCst->nodeCompPipeLayout);
-		vkCreateComputePipe("./shaders/compute_compositor.comp.spv",
-							pCst->nodeCompPipeLayout,
-							&pCst->nodeCompPipe);
-		vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv",
-							pCst->nodeCompPipeLayout,
-							&pCst->nodePostCompPipe);
 	}
 
 	/// Pools
@@ -1390,28 +1398,28 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 {
-	switch (pInfo->compMode) {
-		case MXC_COMPOSITOR_MODE_QUAD:
-			break;
-		case MXC_COMPOSITOR_MODE_TESSELATION:
-			break;
-		case MXC_COMPOSITOR_MODE_TASK_MESH:
-			break;
-		default: PANIC("Compositor mode not supported!");
-	}
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_QUAD]) {
 
-	vkBindUpdateQuadPatchMesh(0.5f, &pCst->quadPatchMesh);
+	}
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TESSELATION]) {
+		vkBindUpdateQuadPatchMesh(0.5f, &pCst->quadPatchMesh);
+	}
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
+
+	}
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_COMPUTE]) {
+
+	}
 
 	vkBindSharedBuffer(&pCst->lineBuf.buffer);
 	pCst->lineBuf.pMapped = vkSharedBufferPtr(pCst->lineBuf.buffer);
 
 	vkBindSharedBuffer(&pCst->globalBuf);
+	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuf.buf));
 
 	vkBindSharedBuffer(&pCst->processSetBuffer);
 	pCst->pProcessStateMapped = vkSharedBufferPtr(pCst->processSetBuffer);
 	*pCst->pProcessStateMapped = (MxcProcessState){};
-
-	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuf.buf));
 
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably
@@ -1420,7 +1428,7 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 		nodeCompositorData[i].pSetMapped = vkSharedBufferPtr(nodeCompositorData[i].nodeSetBuffer);
 		*nodeCompositorData[i].pSetMapped = (MxcNodeCompositorSetState){};
 
-		// these could be push descriptors???
+		// this needs to be descriptor array
 		VK_UPDATE_DESCRIPTOR_SETS(BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buf));
 	}
 }
@@ -1429,13 +1437,12 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 {
 	MxcCompositor compositor = {};
 	MxcCompositorCreateInfo info = {
-		// compute is always running...
-		// really this needs to be a flag
-		// these need to all be supported simultaneously
-		.compMode = MXC_COMPOSITOR_MODE_QUAD,
-//		.mode = MXC_COMPOSITOR_MODE_TESSELATION,
-//		.mode = MXC_COMPOSITOR_MODE_COMPUTE,
-	};
+		.enabledCompositorModes = {
+			[MXC_COMPOSITOR_MODE_QUAD] = true,
+			[MXC_COMPOSITOR_MODE_TESSELATION] = true,
+			[MXC_COMPOSITOR_MODE_TASK_MESH] = true,
+			[MXC_COMPOSITOR_MODE_COMPUTE] = true,
+		}};
 
 	vkBeginAllocationRequests();
 	mxcCreateCompositor(&info, &compositor);

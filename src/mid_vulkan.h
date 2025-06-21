@@ -1069,11 +1069,12 @@ void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShad
 	char*  pCode;
 	vkReadFile(pShaderPath, &size, &pCode);
 	VkShaderModuleCreateInfo info = {
-		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 		.codeSize = size,
 		.pCode = (uint32_t*)pCode,
 	};
 	VK_CHECK(vkCreateShaderModule(vk.context.device, &info, VK_ALLOC, pShaderModule));
+	vkSetDebugName(VK_OBJECT_TYPE_SHADER_MODULE, (u64)*pShaderModule, pShaderPath);
 	free(pCode);
 }
 
