@@ -25,6 +25,7 @@ typedef struct MxcWindowInput {
 	vec2 mouseDelta;
 
 	vec2 mouseUVDelta;
+	vec2 priorMouseUV;
 	vec2 mouseUV;
 
 	// forward, back, left, right, up, down

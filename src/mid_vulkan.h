@@ -546,6 +546,17 @@ enum {
 //////////////////////////////////
 //// Mid Vulkan Inline Cmd Methods
 ////
+#define CMD_PUSH_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                                              \
+	VkWriteDescriptorSet descriptorWrites[] = {__VA_ARGS__};                                                                  \
+	vk.CmdPushDescriptorSetKHR(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(descriptorWrites), descriptorWrites); \
+})
+
+#define CMD_WRITE_SINGLE_SETS(_device, ...) ({                                           \
+	VkWriteDescriptorSet descriptorWrites[] = {__VA_ARGS__};                             \
+	vkUpdateDescriptorSets(_device, COUNT(descriptorWrites), descriptorWrites, 0, NULL); \
+})
+
+
 #define CMD_IMAGE_BARRIERS(_cmd, ...) CmdPipelineImageBarriers2((_cmd), sizeof((VkImageMemoryBarrier2[]){__VA_ARGS__}) / sizeof(VkImageMemoryBarrier2), (VkImageMemoryBarrier2[]){__VA_ARGS__})
 INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
 	vk.CmdPipelineBarrier2(cmd, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});

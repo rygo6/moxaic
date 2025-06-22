@@ -289,8 +289,6 @@ typedef enum MxcNodeInteractionState{
 // Hot data used by compositor for each node
 typedef struct CACHE_ALIGN MxcNodeCompositorData {
 
-	MxcCompositorMode compositorMode;
-
 	MxcNodeInteractionState interactionState;
 
 	pose                       rootPose;
