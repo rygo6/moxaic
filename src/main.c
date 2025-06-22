@@ -170,10 +170,8 @@ int main(void)
 			atomic_thread_fence(memory_order_acquire);
 			// itd be good to come up with a mechanism that can actually deal with real multiple queues for debugging
 			CmdSubmitPresent(compositorContext.gfxCmd,
-							 compositorContext.swapCtx.chain,
-							 compositorContext.swapCtx.acquireSemaphore,
-							 compositorContext.swapCtx.renderCompleteSemaphore,
-							 compositorContext.swapIdx,
+							 VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
+							 compositorContext.swapCtx,
 							 compositorContext.timeline,
 							 compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 

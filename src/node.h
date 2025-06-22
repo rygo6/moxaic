@@ -209,9 +209,6 @@ void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTexture
 //// Compositor Types and Data
 ////
 typedef struct MxcCompositorContext {
-	// read multiple threads, write 1 thread
-	ATOMIC u32 swapIdx;
-
 	// read by multiple threads
 	VkCommandBuffer gfxCmd;
 	VkSemaphore     timeline;

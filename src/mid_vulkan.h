@@ -6,6 +6,8 @@
 #include "mid_common.h"
 #include "mid_math.h"
 
+#include <stdatomic.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -110,6 +112,12 @@
 		CHECK(result, string_VkResult(result)); \
 	})
 
+#define VK_ASSERT(_command)                         \
+	({                                              \
+		VkResult _result = _command;                \
+		assert(_result == VK_SUCCESS && #_command); \
+	})
+
 #define VK_INSTANCE_FUNC(_func)                                                                \
 	PFN_vk##_func _func = (PFN_##vk##_func)vkGetInstanceProcAddr(vk.instance, "vk" #_func); \
 	CHECK(_func == NULL, "Couldn't load " #_func)
@@ -160,12 +168,18 @@ typedef enum VkLocality : u8 {
 	(_ == VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE || \
 	 _ == VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY)
 
+typedef struct VkSwapFrame {
+	VkSemaphore completeSemaphore;
+	VkImage     image;
+	VkImageView view;
+} VkSwapFrame;
+
 typedef struct VkSwapContext {
 	VkSwapchainKHR chain;
-	VkSemaphore    acquireSemaphore;
-	VkSemaphore    renderCompleteSemaphore;
-	VkImage        images[VK_SWAP_COUNT];
-	VkImageView    views[VK_SWAP_COUNT];
+	u32            acquireIdx;
+	VkSemaphore    acquireSemaphores[VK_SWAP_COUNT];
+	u32            frameIdx;
+	VkSwapFrame    frames[VK_SWAP_COUNT];
 } VkSwapContext;
 
 typedef enum VkSharedMemoryState {
@@ -500,6 +514,11 @@ enum {
 	.srcAccessMask = VK_ACCESS_2_NONE,                               \
 	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
 
+#define VK_IMAGE_BARRIER_DST_PRESENT          \
+	.dstStageMask = VK_PIPELINE_STAGE_2_NONE, \
+	.dstAccessMask = VK_ACCESS_2_NONE,        \
+	.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+
 #define VK_IMAGE_BARRIER_SRC_BLIT_WRITE                  \
 	.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,        \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
@@ -578,62 +597,67 @@ INLINE void CmdBeginRenderPass(
 
 INLINE void CmdResetBegin(VkCommandBuffer cmd)
 {
-	vk.ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-	vk.BeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+	VK_ASSERT(vk.ResetCommandBuffer(cmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT));
+	VK_ASSERT(vk.BeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT}));
+}
+
+INLINE void CmdSwapAcquire(VkDevice device, VkSwapContext* pSwapCtx, u32* pFrameIdx)
+{
+	pSwapCtx->acquireIdx = (pSwapCtx->acquireIdx + 1) % VK_SWAP_COUNT;
+	VK_ASSERT(vk.AcquireNextImageKHR(device, pSwapCtx->chain, UINT64_MAX, pSwapCtx->acquireSemaphores[pSwapCtx->acquireIdx], VK_NULL_HANDLE, &pSwapCtx->frameIdx));
+	atomic_thread_fence(memory_order_release); // We are going to move the submit queue logic into here so we will need some memory barriers
+	*pFrameIdx = pSwapCtx->frameIdx;
 }
 
 INLINE void CmdSubmitPresent(
-	VkCommandBuffer cmd,
-	VkSwapchainKHR chain,
-	VkSemaphore acquireSemaphore,
-	VkSemaphore renderCompleteSemaphore,
-	uint32_t swapIndex,
-	VkSemaphore timeline,
-	uint64_t timelineSignalValue)
+	VkCommandBuffer   cmd,
+	VkQueueFamilyType queueFamilyType,
+	VkSwapContext     swapCtx,
+	VkSemaphore       timeline,
+	uint64_t          timelineSignalValue)
 {
 	VkSubmitInfo2 submitInfo = {
 		VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		.waitSemaphoreInfoCount = 1,
 		.pWaitSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-				.semaphore = acquireSemaphore,
-				.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+				.semaphore = swapCtx.acquireSemaphores[swapCtx.acquireIdx],
+				.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
 			},
 		},
 		.commandBufferInfoCount = 1,
 		.pCommandBufferInfos = (VkCommandBufferSubmitInfo[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+				VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
 				.commandBuffer = cmd,
 			},
 		},
 		.signalSemaphoreInfoCount = 2,
 		.pSignalSemaphoreInfos = (VkSemaphoreSubmitInfo[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-				.semaphore = renderCompleteSemaphore,
-				.stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+				VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+				.semaphore = swapCtx.frames[swapCtx.frameIdx].completeSemaphore,
+				.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 			},
 			{
-				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+				VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 				.value = timelineSignalValue,
 				.semaphore = timeline,
-				.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 			},
-
 		},
 	};
-	VK_CHECK(vk.QueueSubmit2(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, 1, &submitInfo, VK_NULL_HANDLE));
+	VK_ASSERT(vk.QueueSubmit2(vk.context.queueFamilies[queueFamilyType].queue, 1, &submitInfo, VK_NULL_HANDLE));
 	VkPresentInfoKHR presentInfo = {
 		VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = &renderCompleteSemaphore,
+		.pWaitSemaphores = &swapCtx.frames[swapCtx.frameIdx].completeSemaphore,
 		.swapchainCount = 1,
-		.pSwapchains = &chain,
-		.pImageIndices = &swapIndex,
+		.pSwapchains = &swapCtx.chain,
+		.pImageIndices = &swapCtx.frameIdx,
 	};
-	VK_CHECK(vk.QueuePresentKHR(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue, &presentInfo));
+	VK_ASSERT(vk.QueuePresentKHR(vk.context.queueFamilies[queueFamilyType].queue, &presentInfo));
 }
 
 INLINE void CmdSubmit(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, uint64_t signal)
@@ -2616,9 +2640,13 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
 		CHECK(physicalDeviceProperties.properties.apiVersion < VK_VERSION, "Insufficient Vulkan API Version");
 
+		VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT physicalDeviceSwapchainMaintenance1Features = {
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
+			.pNext = NULL,
+		};
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT,
-			.pNext = NULL,
+			.pNext = &physicalDeviceSwapchainMaintenance1Features,
 		};
 		VkPhysicalDevicePipelineRobustnessFeaturesEXT physicalDevicePipelineRobustnessFeatures = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PIPELINE_ROBUSTNESS_FEATURES_EXT,
@@ -2660,6 +2688,8 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 
 #define CHECK_AVAILABLE(feature) CHECK(feature == VK_FALSE, #feature " unavailable!");
 
+//		CHECK_AVAILABLE(physicalDeviceSwapchainMaintenance1Features.swapchainMaintenance1);
+
 		CHECK_AVAILABLE(physicalDeviceLineRasterizationFeatures.rectangularLines);
 		CHECK_AVAILABLE(physicalDeviceLineRasterizationFeatures.bresenhamLines);
 		CHECK_AVAILABLE(physicalDeviceLineRasterizationFeatures.smoothLines);
@@ -2677,11 +2707,13 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 	/// Device
 	{
 		// Features
-//		VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features = {
-//			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
-//		};
+		VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT physicalDeviceSwapchainMaintenance1Features = {
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
+			.swapchainMaintenance1 = VK_TRUE,
+		};
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT,
+			&physicalDeviceSwapchainMaintenance1Features,
 			.rectangularLines = VK_TRUE,
 			.bresenhamLines = VK_TRUE,
 			.smoothLines = VK_TRUE,
@@ -2800,7 +2832,6 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
 			VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
 		};
-
 		VkDeviceCreateInfo deviceCreateInfo = {
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 			&physicalDeviceFeatures,
@@ -2808,7 +2839,6 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			.pQueueCreateInfos = activeQueueCreateInfos,
 			.enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
 			.ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
-			.pEnabledFeatures = NULL,
 		};
 		VK_CHECK(vkCreateDevice(vk.context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &vk.context.device));
 	}
@@ -2864,25 +2894,30 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 	uint32_t swapCount;
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
 	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
-	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, pSwap->images));
+	VkImage images[VK_SWAP_COUNT];
+	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, images));
+
 	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
+		pSwap->frames[i].image = images[i];
+		vkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)images[i], "SwapImage");
+
 		VkImageViewCreateInfo viewCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = pSwap->images[i],
+			.image = pSwap->frames[i].image,
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
 			.format = VK_SWAP_FORMAT,
 			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		};
-		VK_CHECK(vkCreateImageView(vk.context.device, &viewCreateInfo, VK_ALLOC, &pSwap->views[i]));
-		vkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pSwap->images[i], "SwapImage");
-		vkSetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)pSwap->views[i], "SwapImageView");
-	}
+		VK_CHECK(vkCreateImageView(vk.context.device, &viewCreateInfo, VK_ALLOC, &pSwap->frames[i].view));
+		vkSetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)pSwap->frames[i].view, "SwapImageView");
 
-	VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-	VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->acquireSemaphore));
-	VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->renderCompleteSemaphore));
-	vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->acquireSemaphore, "SwapAcquireSemaphore");
-	vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->renderCompleteSemaphore, "SwapRenderCompleteSemaphore");
+		VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0 };
+		VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->frames[i].completeSemaphore));
+		vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->frames[i].completeSemaphore, "SwapCompleteSemaphore");
+
+		VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->acquireSemaphores[i]));
+		vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->acquireSemaphores[i], "SwapAcquireSemaphore");
+	}
 }
 
 void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence)

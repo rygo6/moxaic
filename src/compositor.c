@@ -33,18 +33,17 @@ enum {
 };
 
 constexpr VkShaderStageFlags COMPOSITOR_MODE_STAGE_FLAGS[] = {
-	[MXC_COMPOSITOR_MODE_QUAD] =       VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_TASK_MESH] =   VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_COMPUTE] =     VK_SHADER_STAGE_COMPUTE_BIT,
+	[MXC_COMPOSITOR_MODE_QUAD]        = VK_SHADER_STAGE_VERTEX_BIT   | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_VERTEX_BIT   | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TASK_MESH]   = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT             | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_COMPUTE]     = VK_SHADER_STAGE_COMPUTE_BIT,
 };
 
 static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout* pLayout)
 {
 	VkShaderStageFlags stageFlags = 0;
-	for (int i = 0; i < MXC_COMPOSITOR_MODE_COUNT; ++i) {
+	for (int i = 0; i < MXC_COMPOSITOR_MODE_COUNT; ++i)
 		if (pModes[i]) stageFlags |= COMPOSITOR_MODE_STAGE_FLAGS[i];
-	}
 
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -421,14 +420,14 @@ static void CreateFinalBlitPipeLayout(FinalBlitSetLayout inOutLayout, FinalBlitP
 ////////
 //// Run
 ////
-void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
+void mxcCompositorNodeRun(const MxcCompositorCreateInfo* pInfo, MxcCompositorContext* pCtx, MxcCompositor* pCst)
 {
 	//// Local Extract
 	EXTRACT_FIELD(&vk.context, device);
 	EXTRACT_FIELD(&vk.context, basicPass);
 
-	EXTRACT_FIELD(pCstCtx, gfxCmd);
-	EXTRACT_FIELD(pCstCtx, timeline);
+	EXTRACT_FIELD(pCtx, gfxCmd);
+	EXTRACT_FIELD(pCtx, timeline);
 
 	EXTRACT_FIELD(pInfo, enabledCompositorModes);
 
@@ -452,7 +451,8 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 	auto processSetBuf = pCst->processSetBuffer.buf;
 
 	EXTRACT_FIELD(pCst, timeQryPool);
-	EXTRACT_FIELD(pCstCtx, swapCtx);
+
+	auto pSwapCtx = &pCtx->swapCtx;
 
 	auto quadMeshOffsets = pCst->quadMesh.offsets;
 	auto quadMeshBuf = pCst->quadMesh.buf;
@@ -475,7 +475,7 @@ void mxcCompositorNodeRun(const MxcCompositorContext* pCstCtx, const MxcComposit
 	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuf.mem);
 
 	// We copy everything locally. Set null to ensure not used!
-	pCstCtx = NULL;
+	pCtx = NULL;
 	pInfo = NULL;
 	pCst = NULL;
 
@@ -1073,10 +1073,8 @@ run_loop:
 	/////////////////////
 	//// Blit Framebuffer
 	{
-		u32 swapIndex; vk.AcquireNextImageKHR(device, swapCtx.chain, UINT64_MAX, swapCtx.acquireSemaphore, VK_NULL_HANDLE, &swapIndex);
-		atomic_store_explicit(&compositorContext.swapIdx, swapIndex, memory_order_release);
-		VkImage swapImage = swapCtx.images[compositorContext.swapIdx];
-		VkImageView swapView = swapCtx.views[compositorContext.swapIdx];
+		u32 frameIdx; CmdSwapAcquire(device, pSwapCtx, &frameIdx);
+		auto pSwap = &pSwapCtx->frames[frameIdx];
 
 		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
@@ -1097,7 +1095,7 @@ run_loop:
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = swapImage,
+				.image = pSwap->image,
 				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_UNDEFINED,
 				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
@@ -1115,17 +1113,15 @@ run_loop:
 		CMD_PUSH_DESCRIPTOR_SETS(
 			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT,
 			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(gfxFrameColorView, compFrameColorView),
-			BIND_WRITE_FINAL_BLIT_DST(swapView));
+			BIND_WRITE_FINAL_BLIT_DST(pSwap->view));
 		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
 		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = swapImage,
+				.image = pSwap->image,
 				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-				.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
-				.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR,
-				.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				VK_IMAGE_BARRIER_DST_PRESENT,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
@@ -1162,6 +1158,8 @@ run_loop:
 
 	CHECK_RUNNING;
 	goto run_loop;
+
+	LOG_ERROR("Compositor Loop Error!"); // So far assuming this will never happen
 }
 
 ///////////
@@ -1450,7 +1448,7 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 
 	mxcBindUpdateCompositor(&info, &compositor);
 
-	mxcCompositorNodeRun(pContext, &info, &compositor);
+	mxcCompositorNodeRun(&info, pContext, &compositor);
 
 	return NULL;
 }
