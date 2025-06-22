@@ -133,7 +133,7 @@ int main(void)
 		VkDevice device = vk.context.device;
 		VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		uint64_t compositorBaseCycleValue = 0;
-		while (atomic_load_explicit(&midWindow.running, memory_order_acquire)) {
+		while (isRunning) {
 
 			// we may not have to even wait... this could go faster
 			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
@@ -145,6 +145,7 @@ int main(void)
 			// somewhere input state needs to be copied to a node and only update when it knows the node needs it
 			midUpdateWindowInput();
 			mxcProcessWindowInput();
+			isRunning = midWindow.running;
 			atomic_thread_fence(memory_order_release);
 
 			// signal input ready to process!

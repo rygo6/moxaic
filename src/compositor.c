@@ -429,14 +429,14 @@ void mxcCompositorNodeRun(const MxcCompositorCreateInfo* pInfo, MxcCompositorCon
 	EXTRACT_FIELD(pCtx, gfxCmd);
 	EXTRACT_FIELD(pCtx, timeline);
 
-	EXTRACT_FIELD(pInfo, enabledCompositorModes);
-
 	EXTRACT_FIELD(pCst, gfxFrame);
 	EXTRACT_FIELD(pCst, globalSet);
 	EXTRACT_FIELD(pCst, compOutSet);
 
 	EXTRACT_FIELD(pCst, nodePipeLayout);
 	EXTRACT_FIELD(pCst, nodeQuadPipe);
+	EXTRACT_FIELD(pCst, nodeTessPipe);
+	EXTRACT_FIELD(pCst, nodeTaskMeshPipe);
 
 	EXTRACT_FIELD(pCst, nodeCompPipeLayout);
 	EXTRACT_FIELD(pCst, nodeCompPipe);
@@ -955,35 +955,48 @@ run_loop:
 		vkCmdSetScissor(gfxCmd, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
 		CmdBeginRenderPass(gfxCmd, basicPass, gfxFrame, VK_PASS_CLEAR_COLOR, gfxFrameColorView, gfxFrameNormalView, gfxFrameDepthView);
 
-		//// Graphic Node Commands
-		{
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
+
+		//// Graphics Quad Node Commands
+		if (activeNodes[MXC_COMPOSITOR_MODE_QUAD].ct > 0) {
+			auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_QUAD];
 			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeQuadPipe);
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
+			vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadMeshBuf}, (VkDeviceSize[]){quadMeshOffsets.vertexOffset});
+			vk.CmdBindIndexBuffer(gfxCmd, quadMeshBuf, quadMeshOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
 
-			for (int i = 0; i < nodeCount; ++i) {
-				auto pNodShrd = pDuplicatedNodeShared[i];
+			for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
+				auto hNode = pActiveNodes->handles[iNode];
+				auto pNodeCstData = &nodeCompositorData[hNode];
+				vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+				vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
+			}
+		}
 
-				// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
-				switch (pNodShrd->compositorMode) {
-					case MXC_COMPOSITOR_MODE_QUAD:
-						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
-						vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadMeshBuf}, (VkDeviceSize[]){quadMeshOffsets.vertexOffset});
-						vk.CmdBindIndexBuffer(gfxCmd, quadMeshBuf, 0, VK_INDEX_TYPE_UINT16);
-						vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
-						break;
-					case MXC_COMPOSITOR_MODE_TESSELATION:
-						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
-						vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadPatchBuf}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
-						vk.CmdBindIndexBuffer(gfxCmd, quadPatchBuf, quadPatchOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
-						vk.CmdDrawIndexed(gfxCmd, quadPatchOffsets.indexCount, 1, 0, 0, 0);
-						break;
-					case MXC_COMPOSITOR_MODE_TASK_MESH:
-						vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &nodeCompositorData[i].nodeSet, 0, NULL);
-						vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
-						break;
-					default:
-						break;
-				}
+		//// Graphics Tesselation Node Commands
+		if (activeNodes[MXC_COMPOSITOR_MODE_TESSELATION].ct > 0) {
+			auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_TESSELATION];
+			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeTessPipe);
+			vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadPatchBuf}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
+			vk.CmdBindIndexBuffer(gfxCmd, quadPatchBuf, quadPatchOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
+
+			for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
+				auto hNode = pActiveNodes->handles[iNode];
+				auto pNodeCstData = &nodeCompositorData[hNode];
+				vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+				vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
+			}
+		}
+
+		//// Graphics Task Mesh Node Commands
+		if (activeNodes[MXC_COMPOSITOR_MODE_TASK_MESH].ct > 0) {
+			auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_TASK_MESH];
+			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeTaskMeshPipe);
+
+			for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
+				auto hNode = pActiveNodes->handles[iNode];
+				auto pNodeCstData = &nodeCompositorData[hNode];
+				vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+				vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 			}
 		}
 
@@ -1027,20 +1040,20 @@ run_loop:
 
 	////////////////////////////
 	//// Compute Recording Cycle
-	// We really must separate into Compute and Graphics lists
 	{
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutSet, 0, NULL);
 
-//		vkCmdClearColorImage(graphCmd, cmptFbColorImg, VK_IMAGE_LAYOUT_GENERAL, &VK_PASS_CLEAR_COLOR, 1, &VK_COLOR_SUBRESOURCE_RANGE);
+		MxcActiveNodes* pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_COMPUTE];
 
 		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 		int   pixelCt = extent.x * extent.y;
 		int   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
-		for (int iNode = 0; iNode < nodeCount; ++iNode) {
-			auto pNodeCstData = &nodeCompositorData[iNode];
+		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
+			auto hNode = pActiveNodes->handles[iNode];
+			auto pNodeCstData = &nodeCompositorData[hNode];
 			auto pNodeSwap = &pNodeCstData->swaps[pNodeCstData->swapIndex];
 
 			// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
@@ -1434,13 +1447,15 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 void* mxcCompNodeThread(MxcCompositorContext* pContext)
 {
 	MxcCompositor compositor = {};
+
 	MxcCompositorCreateInfo info = {
 		.enabledCompositorModes = {
 			[MXC_COMPOSITOR_MODE_QUAD] = true,
 			[MXC_COMPOSITOR_MODE_TESSELATION] = true,
 			[MXC_COMPOSITOR_MODE_TASK_MESH] = true,
 			[MXC_COMPOSITOR_MODE_COMPUTE] = true,
-		}};
+		},
+	};
 
 	vkBeginAllocationRequests();
 	mxcCreateCompositor(&info, &compositor);

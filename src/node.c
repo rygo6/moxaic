@@ -19,7 +19,7 @@ u16                   nodeCount = 0;
 MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
 MxcNodeShared*        pDuplicatedNodeShared[MXC_NODE_CAPACITY] = {};
 
-NodeHandle activeComputeNode[MXC_COMPOSITOR_MODE_COUNT][MXC_NODE_CAPACITY] = {};
+MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT] = {};
 
 // Only used for local thread nodes. Node from other process will use shared memory.
 // Maybe I could just always make it use shared memory for consistency’s sake?
@@ -74,7 +74,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 	{
 		VkImageCreateInfo info = {
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = &(VkExternalMemoryImageCreateInfo){
+			&(VkExternalMemoryImageCreateInfo){
 				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
@@ -102,7 +102,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCrea
 	{
 		VkImageCreateInfo info = {
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.pNext = &(VkExternalMemoryImageCreateInfo){
+			&(VkExternalMemoryImageCreateInfo){
 				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
 				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			},
@@ -643,7 +643,6 @@ static void InterprocessServerAcceptNodeConnection()
 	MxcNodeContext*         pNodeCtxt = NULL;
 	MxcNodeShared*          pNodeShrd = NULL;
 	MxcNodeImports*         pImports = NULL;
-//	MxcNodeCompositorLocal* pNodeCompLocal = NULL;
 	HANDLE                  hNodeProc = INVALID_HANDLE_VALUE;
 	HANDLE                  hExtNodeMem = INVALID_HANDLE_VALUE;
 	MxcExternalNodeMemory*  pExtNodeMem = NULL;
@@ -677,7 +676,7 @@ static void InterprocessServerAcceptNodeConnection()
 		CHECK(nodeProcId == 0, "Invalid node process id");
 	}
 
-	// Create shared memory
+	// Create Shared Memory
 	{
 		hNodeProc = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcId);
 		WIN32_CHECK(hNodeProc != NULL && hNodeProc != INVALID_HANDLE_VALUE, "Duplicate process handle failed");
@@ -693,6 +692,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pImports = &pExtNodeMem->imports;
 		pNodeShrd = &pExtNodeMem->shared;
 
+		// Init Node Shared
 		pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
 		pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
 		pNodeShrd->camera.zNear = 0.1f;
@@ -700,16 +700,35 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
 //		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
-//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
-		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
+//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
+		switch (pNodeShrd->compositorMode) {
+			case MXC_COMPOSITOR_MODE_QUAD:
+			case MXC_COMPOSITOR_MODE_TESSELATION:
+			case MXC_COMPOSITOR_MODE_TASK_MESH:
+			case MXC_COMPOSITOR_MODE_COMPUTE:
+				break;
+			default:
+				LOG_ERROR("Compositor mode not supported!");
+				goto Exit;
+		}
+
+		// Claim handle and add to active nodes
 		NodeHandle handle = RequestExternalNodeHandle(pNodeShrd);
+		{
+			auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
+			pActiveNode->handles[pActiveNode->ct] = handle;
+			pActiveNode->ct++;
+			atomic_thread_fence(memory_order_release);
+		}
 
 		// TODO we probably do want to clear? put all the buffers and sets into one big shared buffer
 //		pNodeCompLocal = &nodeCstLocal[handle];
 		// Don't clear. State is recycled and pre-alloced on compositor creation.
 //		*pNodeCompositorLocal = (MxcNodeCompositorLocal){};
 
+		// Init Node Context
 		pNodeCtxt = &nodeContext[handle];
 		*pNodeCtxt = (MxcNodeContext){};
 
@@ -808,9 +827,8 @@ static void* RunInterProcessServer(void* arg)
 	WSA_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Socket bind failed");
 	WSA_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
 
-	while (isRunning) {
+	while (atomic_load_explicit(&isRunning, memory_order_acquire))
 		InterprocessServerAcceptNodeConnection();
-	}
 
 Exit:
 	if (ipcServer.listenSocket != INVALID_SOCKET)

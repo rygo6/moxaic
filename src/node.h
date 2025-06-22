@@ -386,7 +386,11 @@ extern MxcNodeShared localNodeShared[MXC_NODE_CAPACITY];
 extern MxcNodeShared* pDuplicatedNodeShared[MXC_NODE_CAPACITY];
 
 // Holds pointer to nodes in each compositor mode
-extern NodeHandle activeNode[MXC_COMPOSITOR_MODE_COUNT][MXC_NODE_CAPACITY];
+typedef struct MxcActiveNodes {
+	u16        ct;
+	NodeHandle handles[MXC_NODE_CAPACITY];
+} MxcActiveNodes;
+extern MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT];
 
 // Only one import into a node from a compositor?
 extern HANDLE                 importedExternalMemoryHandle;
