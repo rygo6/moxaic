@@ -700,8 +700,8 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
 //		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
-		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
-//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
+		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 		switch (pNodeShrd->compositorMode) {
 			case MXC_COMPOSITOR_MODE_QUAD:

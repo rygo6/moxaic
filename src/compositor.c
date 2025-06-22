@@ -417,6 +417,20 @@ static void CreateFinalBlitPipeLayout(FinalBlitSetLayout inOutLayout, FinalBlitP
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
 }
 
+enum {
+	TIME_QUERY_GBUFFER_PROCESS_BEGIN,
+	TIME_QUERY_GBUFFER_PROCESS_END,
+	TIME_QUERY_QUAD_RENDER_BEGIN,
+	TIME_QUERY_QUAD_RENDER_END,
+	TIME_QUERY_TESS_RENDER_BEGIN,
+	TIME_QUERY_TESS_RENDER_END,
+	TIME_QUERY_TASKMESH_RENDER_BEGIN,
+	TIME_QUERY_TASKMESH_RENDER_END,
+	TIME_QUERY_COMPUTE_RENDER_BEGIN,
+	TIME_QUERY_COMPUTE_RENDER_END,
+	TIME_QUERY_COUNT,
+};
+
 ////////
 //// Run
 ////
@@ -480,8 +494,6 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 
 
 	//// Local State
-	bool timestampRecorded = false;
-
 	u64 baseCycleValue = 0;
 
 	cam globCam = {
@@ -699,31 +711,33 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 	//// Loop
 run_loop:
 
-	timestampRecorded = false;
-
-	vkTimelineWait(device, baseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
-
-	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
-	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
-
-	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
-
-	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
-	CmdResetBegin(gfxCmd);
+	//// Process Input
+	{
+		vkTimelineWait(device, baseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
+		midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
+		midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
+		vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
+	}
 
 	vec2 mouseUV = mxcWindowInput.mouseUV;
 	vec2 priorMouseUV = vec2Sub(mouseUV, mxcWindowInput.mouseUVDelta);
 
-	/////////////////////////////
-	//// Update Node States Cycle
+	//// Update Node States
+	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
+	CmdResetBegin(gfxCmd);
+	vk.ResetQueryPool(device, timeQryPool, 0, TIME_QUERY_COUNT);
+
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
 	for (int iNode = 0; iNode < nodeCount; ++iNode) {
+
+		atomic_thread_fence(memory_order_acquire);
 		auto pNodeShrd = pDuplicatedNodeShared[iNode];
 		auto pNodeCstData = &nodeCompositorData[iNode];
 
-		atomic_thread_fence(memory_order_acquire);
-
 		pNodeCstData->compositorMode = pNodeShrd->compositorMode;
 
+		// Update InteractionState and RootPose every cycle no matter what so that app stays responsive to moving.
+		// This should probably be in a threaded node.
 		vec3 worldDiff = VEC3_ZERO;
 		switch(pNodeCstData->interactionState) {
 			case NODE_INTERACTION_STATE_SELECT:
@@ -751,6 +765,8 @@ run_loop:
 		u64 nodeTimeline = atomic_load_explicit(&pNodeShrd->timelineValue, memory_order_acquire);
 		if (nodeTimeline <= pNodeCstData->lastTimelineValue)
 			continue;
+
+		pNodeCstData->lastTimelineValue = nodeTimeline;
 
 		//// Acquire new framebuffers from node
 		{
@@ -784,9 +800,6 @@ run_loop:
 			pAcqrBars[2].image = pNodeSwap->gBuffer;
 			pAcqrBars[3].image = pNodeSwap->gBufferMip;
 			CmdPipelineImageBarriers2(gfxCmd, 4, pAcqrBars);
-
-			vk.ResetQueryPool(device, timeQryPool, 0, 2);
-			vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, 0);
 
 			// TODO this needs ot be construct the UL LR uv that was rendered into
 			// gBuffer size should be dynamically chosen?
@@ -832,17 +845,12 @@ run_loop:
 			pEndBars[0].image = pNodeSwap->gBuffer;
 			CmdPipelineImageBarriers2(gfxCmd, 1, pEndBars);
 
-			vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQryPool, 1);
-			timestampRecorded = true;
-
 			VkWriteDescriptorSet writeSets[] = {
 				BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, pNodeSwap->colorView, finalLayout),
 				BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, pNodeSwap->gBufferView, finalLayout),
 			};
 			vkUpdateDescriptorSets(device, COUNT(writeSets), writeSets, 0, NULL);
 		}
-
-		pNodeCstData->lastTimelineValue = nodeTimeline;
 
 		//// Calc new node uniform and shared data
 		{
@@ -944,6 +952,7 @@ run_loop:
 			atomic_thread_fence(memory_order_release);
 		}
 	}
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_END);
 
 	////////////////////////////
 	/// Graphics Recording Cycle
@@ -957,6 +966,7 @@ run_loop:
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
 
 		//// Graphics Quad Node Commands
+		vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
 		if (activeNodes[MXC_COMPOSITOR_MODE_QUAD].ct > 0) {
 			auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_QUAD];
 			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeQuadPipe);
@@ -970,8 +980,10 @@ run_loop:
 				vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 			}
 		}
+		vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_END);
 
 		//// Graphics Tesselation Node Commands
+		vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
 		if (activeNodes[MXC_COMPOSITOR_MODE_TESSELATION].ct > 0) {
 			auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_TESSELATION];
 			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeTessPipe);
@@ -985,8 +997,10 @@ run_loop:
 				vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 			}
 		}
+		vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_END);
 
 		//// Graphics Task Mesh Node Commands
+		vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
 		if (activeNodes[MXC_COMPOSITOR_MODE_TASK_MESH].ct > 0) {
 			auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_TASK_MESH];
 			vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeTaskMeshPipe);
@@ -998,6 +1012,7 @@ run_loop:
 				vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 			}
 		}
+		vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_END);
 
 		//// Graphic Line Commands
 		// TODO this could be another thread and run at a lower rate
@@ -1034,55 +1049,31 @@ run_loop:
 		vk.CmdEndRenderPass(gfxCmd);
 	}
 
-//		ResetQueryPool(device, timeQueryPool, 0, 2);
-//		CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_NONE, timeQueryPool, 0);
-
-	////////////////////////////
 	//// Compute Recording Cycle
-	{
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_BEGIN);
+	if (activeNodes[MXC_COMPOSITOR_MODE_COMPUTE].ct > 0) {
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutSet, 0, NULL);
-
-		MxcActiveNodes* pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_COMPUTE];
 
 		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 		int   pixelCt = extent.x * extent.y;
 		int   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
+		MxcActiveNodes* pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_COMPUTE];
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
-			auto pNodeSwap = &pNodeCstData->swaps[pNodeCstData->swapIndex];
-
-			// these should be different 'active' arrays so all of a similiar type can run at once and we dont have to switch
-			// really all the nodes need to be set in UBO array and the compute shader do this loop
-			switch (pNodeCstData->compositorMode) {
-				case MXC_COMPOSITOR_MODE_COMPUTE:
-					// TODO we should bind once and all node be descriptor array
-					vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &nodeCompositorData[iNode].nodeSet, 0, NULL);
-
-					vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
-					vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
-
-//					// TODO THIS SHOULD NOT BE HAPPENING EVERY FOR LOOP ITERATION
-					CmdPipelineImageBarriers2(gfxCmd, COUNT(computeCompositePostBarrier), computeCompositePostBarrier);
-
-					// TODO we should have a compute command buffer
-					vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
-					vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
-
-					break;
-				default:
-					break;
-			}
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 		}
+
+		CmdPipelineImageBarriers2(gfxCmd, COUNT(computeCompositePostBarrier), computeCompositePostBarrier);
+		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
+		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 	}
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_END);
 
-	// should have separate compute and graphics queries
-//		CmdWriteTimestamp2(graphCmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, timeQueryPool, 1);
-
-	/////////////////////
 	//// Blit Framebuffer
 	{
 		u32 frameIdx; CmdSwapAcquire(device, pSwapCtx, &frameIdx);
@@ -1148,30 +1139,25 @@ run_loop:
 		);
 	}
 
-	vk.EndCommandBuffer(gfxCmd);
+	//// End Command, Submit, Cycle
+	{
+		vk.EndCommandBuffer(gfxCmd);
+		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
+		baseCycleValue += MXC_CYCLE_COUNT;
+	}
 
-	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);
-
-	baseCycleValue += MXC_CYCLE_COUNT;
-
-	{ // wait for end and output query, probably don't need this wait if not querying?
+	//// Time Query Poll
+	{
 		vkTimelineWait(device, baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, timeline);
-
-		if (timestampRecorded) {
-			uint64_t timestampsNS[2];
-			vk.GetQueryPoolResults(device, timeQryPool, 0, 2, sizeof(uint64_t) * 2, timestampsNS, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
-			double timestampsMS[2];
-			for (uint32_t i = 0; i < 2; ++i) {
-				timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
-			}
-			timeQueryMs = timestampsMS[1] - timestampsMS[0];
-		}
+		u64 timestampsNS[TIME_QUERY_COUNT];
+		VK_ASSERT(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
+		double timestampsMS[TIME_QUERY_COUNT];
+		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i)	timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
 	}
 
 	CHECK_RUNNING;
 	goto run_loop;
-
-	LOG_ERROR("Compositor Loop Error!"); // So far assuming this will never happen
 }
 
 ///////////
@@ -1245,7 +1231,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 		VkQueryPoolCreateInfo queryInfo = {
 			VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
 			.queryType = VK_QUERY_TYPE_TIMESTAMP,
-			.queryCount = 2,
+			.queryCount = TIME_QUERY_COUNT,
 		};
 		VK_CHECK(vkCreateQueryPool(vk.context.device, &queryInfo, VK_ALLOC, &pCst->timeQryPool));
 
