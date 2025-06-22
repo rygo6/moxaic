@@ -420,7 +420,7 @@ static void CreateFinalBlitPipeLayout(FinalBlitSetLayout inOutLayout, FinalBlitP
 ////////
 //// Run
 ////
-void mxcCompositorNodeRun(const MxcCompositorCreateInfo* pInfo, MxcCompositorContext* pCtx, MxcCompositor* pCst)
+void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 {
 	//// Local Extract
 	EXTRACT_FIELD(&vk.context, device);
@@ -457,8 +457,8 @@ void mxcCompositorNodeRun(const MxcCompositorCreateInfo* pInfo, MxcCompositorCon
 	auto quadMeshOffsets = pCst->quadMesh.offsets;
 	auto quadMeshBuf = pCst->quadMesh.buf;
 
-	auto quadPatchOffsets = pCst->quadMesh.offsets;
-	auto quadPatchBuf = pCst->quadMesh.buf;
+	auto quadPatchOffsets = pCst->quadPatchMesh.offsets;
+	auto quadPatchBuf = pCst->quadPatchMesh.sharedBuffer.buf;
 
 	auto pLineBuf = &pCst->lineBuf;
 
@@ -476,7 +476,6 @@ void mxcCompositorNodeRun(const MxcCompositorCreateInfo* pInfo, MxcCompositorCon
 
 	// We copy everything locally. Set null to ensure not used!
 	pCtx = NULL;
-	pInfo = NULL;
 	pCst = NULL;
 
 
@@ -1444,7 +1443,7 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	}
 }
 
-void* mxcCompNodeThread(MxcCompositorContext* pContext)
+void* mxcCompNodeThread(MxcCompositorContext* pCtx)
 {
 	MxcCompositor compositor = {};
 
@@ -1463,7 +1462,7 @@ void* mxcCompNodeThread(MxcCompositorContext* pContext)
 
 	mxcBindUpdateCompositor(&info, &compositor);
 
-	mxcCompositorNodeRun(&info, pContext, &compositor);
+	mxcCompositorNodeRun(pCtx, &compositor);
 
 	return NULL;
 }

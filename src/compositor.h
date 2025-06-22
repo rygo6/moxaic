@@ -71,5 +71,5 @@ typedef struct MxcCompositor {
 //}
 
 void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst);
-void* mxcCompNodeThread(MxcCompositorContext* pContext);
+void* mxcCompNodeThread(MxcCompositorContext* pCtx);
 void  mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst);
