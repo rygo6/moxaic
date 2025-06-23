@@ -706,6 +706,7 @@ INLINE void vkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore time
 	VK_CHECK(vk.WaitSemaphores(device, &semaphoreWaitInfo, UINT64_MAX));
 }
 
+// I probably want to remove the vk from this to somehow make it clear you are using PFN cached functions
 INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore timeline)
 {
 	VkSemaphoreSignalInfo signalInfo = {

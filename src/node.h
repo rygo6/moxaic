@@ -97,7 +97,7 @@ typedef struct MxcClip {
 
 typedef struct MxcNodeShared {
 	// read/write every cycle
-	ATOMIC u64 timelineValue;
+	u64 timelineValue;
 
 	VkGlobalSetState globalSetState;
 	MxcClip          clip;
