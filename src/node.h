@@ -39,18 +39,15 @@ typedef struct MxcRingBuffer {
 /////////////////
 //// Shared Types
 ////
-typedef enum MxcNodeType {
-	MXC_NODE_TYPE_NONE,
-	MXC_NODE_TYPE_THREAD,
-	// don't think api matters anymore?
-	MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_OPENGL_EXPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_OPENGL_IMPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_EXPORTED,
-	MXC_NODE_TYPE_INTERPROCESS_IMPORTED,
-	MXC_NODE_TYPE_COUNT
-} MxcNodeType;
+typedef u8 NodeHandle;
+
+typedef enum MxcNodeInterprocessMode {
+	MXC_NODE_INTERPROCESS_MODE_NONE,
+	MXC_NODE_INTERPROCESS_MODE_THREAD,
+	MXC_NODE_INTERPROCESS_MODE_EXPORTED,
+	MXC_NODE_INTERPROCESS_MODE_IMPORTED,
+	MXC_NODE_INTERPROCESS_MODE_COUNT,
+} MxcNodeInterprocessMode;
 
 typedef enum MxcSwapScale : u8{
 	MXC_SWAP_SCALE_FULL,
@@ -96,6 +93,7 @@ typedef struct MxcClip {
 } MxcClip;
 
 typedef struct MxcNodeShared {
+
 	// read/write every cycle
 	u64 timelineValue;
 
@@ -123,6 +121,8 @@ typedef struct MxcNodeShared {
 
 	// Interprocess
 	MxcRingBuffer nodeInterprocessFuncQueue;
+	NodeHandle    cstNodeHandle;
+	NodeHandle    appNodeHandle;
 
 	// Swap
 	XrSwapType  swapType;
@@ -152,22 +152,21 @@ typedef struct MxcExternalNodeMemory {
 	MxcNodeImports imports;
 } MxcExternalNodeMemory;
 
-//////////////
-//// Swap Pool
+/////////
+//// Swap
 ////
-typedef uint16_t swap_index_t;
 typedef struct MxcSwapInfo {
 	XrSwapType        type;
+	MxcCompositorMode compositorMode;
 	XrSwapOutputFlags usage;
 
 	// not sure if I will use these
 	MxcSwapScale xScale;
 	MxcSwapScale yScale;
 
-	u16 width;
-	u16 height;
+	VkExtent3D extent;
 
-	MxcCompositorMode compositorMode;
+	VkLocality locality;
 } MxcSwapInfo;
 
 typedef struct MxcSwap {
@@ -180,30 +179,6 @@ typedef struct MxcSwap {
 	VkWin32ExternalTexture depthExternal;
 #endif
 } MxcSwap;
-
-typedef bitset64_t swap_bitset_t;
-typedef struct MxcNodeSwapPool {
-	swap_bitset_t occupied;
-	swap_bitset_t created;
-	MxcSwap       swaps[BITNSIZE(swap_bitset_t)];
-} MxcNodeSwapPool;
-
-constexpr int MXC_SWAP_TYPE_POOL_INDEX[] = {
-	[XR_SWAP_TYPE_UNKNOWN] = 0,
-	[XR_SWAP_TYPE_MONO_SINGLE] = 0,
-	[XR_SWAP_TYPE_STEREO_SINGLE] = 0,
-	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 2,
-};
-constexpr int MXC_SWAP_TYPE_POOL_COUNT = 3;
-
-//extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_SCALE_COUNT][MXC_SWAP_SCALE_COUNT];
-extern MxcNodeSwapPool nodeSwapPool[MXC_SWAP_TYPE_POOL_COUNT];
-
-MxcSwap* mxcGetSwap(const MxcSwapInfo* pInfo, swap_index_t index);
-int      mxcClaimSwap(const MxcSwapInfo* pInfo);
-void     mxcReleaseSwap(const MxcSwapInfo* pInfo, const swap_index_t index);
-void     mxcCreateSwap(const MxcSwapInfo* pInfo, const VkBasicFramebufferTextureCreateInfo* pTexInfo, MxcSwap* pSwap);
 
 //////////////////////////////
 //// Compositor Types and Data
@@ -301,7 +276,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	VkDescriptorSet            nodeSet;
 
 	u8 swapIndex;
-	struct CACHE_ALIGN {
+	struct CACHE_ALIGN PACK {
 		VkImage               color;
 		VkImage               depth;
 		VkImage               gBuffer;
@@ -322,10 +297,12 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 //// Node Context
 ////
 
+constexpr int MXC_NODE_SWAP_CAPACITY = VK_SWAP_COUNT * 2;
+
 // All data related to node
 typedef struct MxcNodeContext {
 
-	MxcNodeType type;
+	MxcNodeInterprocessMode type;
 
 	// Compositor Data
 
@@ -333,7 +310,7 @@ typedef struct MxcNodeContext {
 	// If thread the node/compositor both directly access this.
 	// If IPC it is replicated via duplicated handles from NodeImports.
 	HANDLE      swapsSyncedHandle;
-	MxcSwap     swap[VK_SWAP_COUNT * 2];
+	MxcSwap     swap[MXC_NODE_SWAP_CAPACITY];
 	VkSemaphore nodeTimeline;
 	VkSemaphore compositorTimeline;
 
@@ -353,6 +330,8 @@ typedef struct MxcNodeContext {
 	// MXC_NODE_TYPE_INTERPROCESS
 	DWORD                  processId;
 	HANDLE                 processHandle;
+	// Multiple nodes may share memory chunk in other process
+	// maybe this shouldn't be in NodeContext, but instead a ProcessContext?
 	HANDLE                 exportedExternalMemoryHandle;
 	MxcExternalNodeMemory* pExportedExternalMemory;
 
@@ -371,7 +350,6 @@ typedef struct MxcVulkanNodeContext {
 #define MXC_NODE_CAPACITY 4
 #endif
 
-typedef u8 NodeHandle;
 // move these into struct
 extern u16 nodeCount;
 

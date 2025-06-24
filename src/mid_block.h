@@ -1,186 +1,159 @@
 #pragma once
 
+#include "mid_common.h"
+#include "mid_bit.h"
+
+///////////
+//// Handle
+////
+typedef u16 map_handle;
+typedef map_handle mHnd;
+
+typedef u16 block_handle;
+typedef u32 block_key;
+
+typedef block_handle bHnd;
+typedef block_key    bKey;
+
+#define HANDLE_INDEX_BIT_COUNT 12
+#define HANDLE_INDEX_MASK      0x0FFF
+#define HANDLE_INDEX_MAX       ((1u << HANDLE_INDEX_BIT_COUNT) - 1)
+
+#define HANDLE_INDEX(handle)            (handle & HANDLE_INDEX_MASK)
+#define HANDLE_INDEX_SET(handle, value) ((handle & HANDLE_GENERATION_MASK) | (value & HANDLE_INDEX_MASK))
+
+#define HANDLE_GENERATION_BIT_COUNT 4
+#define HANDLE_GENERATION_MASK      0xF000
+#define HANDLE_GENERATION_MAX       ((1u << HANDLE_GENERATION_BIT_COUNT) - 1)
+
+#define HANDLE_GENERATION(handle)            ((handle & HANDLE_GENERATION_MASK) >> HANDLE_INDEX_BIT_COUNT)
+#define HANDLE_GENERATION_SET(handle, value) (value << HANDLE_INDEX_BIT_COUNT) | HANDLE_INDEX(handle)
+
+// Generation 0 to signify it as invalid. Max index to make it assert errors if still used.
+#define HANDLE_DEFAULT ((0 & HANDLE_GENERATION_MASK) | (UINT16_MAX & HANDLE_INDEX_MASK))
+
+#define HANDLE_VALID(handle) (HANDLE_GENERATION(handle) != 0)
+
+#define HANDLE_GENERATION_INCREMENT(handle) ({          \
+	u8 g = HANDLE_GENERATION(handle);                   \
+	g = g == HANDLE_GENERATION_MAX ? 1 : (g + 1) & 0xF; \
+	HANDLE_GENERATION_SET(handle, g);                   \
+})
+
+#define HANDLE_CHECK(handle, error) \
+	if (!HANDLE_VALID(handle)) {    \
+		LOG_ERROR(#error "\n");     \
+		return error;               \
+	}
+
+//////////
+//// Block
+////
+#define BLOCK_DECL(type, n)       \
+	struct {                      \
+		BITSET_DECL(occupied, n); \
+		block_key keys[n];        \
+		type      blocks[n];      \
+		u8        generations[n]; \
+	}
+
+static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
+{
+	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
+	if (i == -1) return HANDLE_DEFAULT;
+	BITSET(pOccupiedSet, i);
+	pKeys[i] = key;
+	pGenerations[i] = pGenerations[i] == HANDLE_GENERATION_MAX ? 1 : (pGenerations[i] + 1) & 0xF;
+	return HANDLE_GENERATION_SET(i, pGenerations[i]);
+}
+static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* pGenerations, block_key hash)
+{
+	for (int i = 0; i < hashCount; ++i) {
+		if (pHashes[i] == hash)
+			return HANDLE_GENERATION_SET(i, pGenerations[i]);
+	}
+	return HANDLE_DEFAULT;
+}
+
+#define BLOCK_CLAIM(block, key)                                                                                           \
+	({                                                                                                                    \
+		int _handle = ClaimBlock(sizeof(block.occupied), (bitset_t*)&block.occupied, block.keys, block.generations, key); \
+		assert(_handle >= 0 && #block ": Claiming handle. Out of capacity.");                                             \
+		(block_handle) _handle;                                                                                           \
+	})
+#define BLOCK_RELEASE(block, handle)                                                                                                                       \
+	({                                                                                                                                                     \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Releasing block handle. Out of range."); \
+		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing block handle. Should be occupied.");                                     \
+		BITCLEAR(block.occupied, (int)HANDLE_INDEX(handle));                                                                                               \
+	})
+#define BLOCK_FIND(block, hash)                                                   \
+	({                                                                            \
+		assert(hash != 0);                                                        \
+		FindBlockByHash(sizeof(block.keys), block.keys, block.generations, hash); \
+	})
+#define BLOCK_HANDLE(block, p)                                                                                                \
+	({                                                                                                                        \
+		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting block handle. Out of range."); \
+		HANDLE_GENERATION_SET((p - block.blocks), block.generations[(p - block.blocks)]);                                     \
+	})
+#define BLOCK_KEY(block, p)                                                                                                \
+	({                                                                                                                     \
+		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting block key. Out of range."); \
+		block.keys[p - block.blocks];                                                                                      \
+	})
+#define BLOCK_PTR(block, handle)                                                                                                       \
+	({                                                                                                                                 \
+		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Getting block ptr. Out of range."); \
+		&block.blocks[HANDLE_INDEX(handle)];                                                                                           \
+	})
 
 
+////////
+//// Map
+////
+typedef struct MapBase {
+	u32       count;
+	block_key keys[];
+	// keys could be any size
+	//	block_handle handles[];
+} MapBase;
 
-//typedef struct SlubSlot {
-//	bool occupied : 1;
-//} SlubSlot;
-//
-//typedef bitset64_t slab_bitset_t;
+#define MAP_DECL(n)              \
+	struct {                     \
+		u32          count;      \
+		block_key    keys[n];    \
+		block_handle handles[n]; \
+	}
 
-// I don't know if wnat a SLUB... SLAB might be better in all scenarios? Maybe a SLUB for a the bigger, fewer, allocs?
-//#define CACHE_SIZE 64
-//typedef struct __attribute((aligned(CACHE_SIZE))) {
-//	uint8_t data[CACHE_SIZE];
-//} SlubBlock;
-//
-//#define POOL_BLOCK_COUNT 1U << 16
-//typedef uint16_t SlubHandle;
-//typedef struct {
-//	SlubSlot    slots[POOL_BLOCK_COUNT];
-//	SlubBlock   blocks[POOL_BLOCK_COUNT];
-//} SlubMemory;
-//
-//typedef struct {
-//	// explore 24 and 20 bit hashes
-//	uint32_t value;
-//} Hash;
-//
-//#define POOL_HANDLE_MAX_CAPACITY 1U << 8
-//typedef uint8_t PoolHandle;
-//typedef struct {
-//	SlubSlot    slots[POOL_HANDLE_MAX_CAPACITY];
-//	SlubHandle  handles[POOL_HANDLE_MAX_CAPACITY];
-//	Hash        hashes[POOL_HANDLE_MAX_CAPACITY];
-//	size_t      blockSize;
-//} HashedPool;
-//
-//#define POOL_STRUCT(_type, _capacity)                                                                                  \
-//	typedef struct {                                                                                                   \
-//		SlubSlot   slots[_capacity];                                                                                   \
-//		SlubHandle handles[_capacity];                                                                                 \
-//		Hash       hashes[_capacity];                                                                                  \
-//	} _type##HashedPool;                                                                                               \
-//	_Static_assert(_capacity <= POOL_HANDLE_MAX_CAPACITY, #_type " " #_capacity " exceeds POOL_HANDLE_MAX_CAPACITY."); \
-//	static inline void ClaimSessionPoolHandle(_type##HashedPool* pPool, PoolHandle* pPoolHandle)                       \
-//	{                                                                                                                  \
-//		ClaimPoolHandle(sizeof(_type), _capacity, pPool->slots, pPool->handles, pPool->hashes, pPoolHandle);           \
-//	}
-//
-//extern SlubMemory poolMemory;
-//
-//static XrResult ClaimBlockHandle(size_t size, SlubHandle* pBlockHandle)
-//{
-//	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
-//	uint32_t blockCount = (size / CACHE_SIZE) + 1;
-//	printf("Scanning blockCount size %d\n", blockCount);
-//
-//	uint32_t  requiredBlockCount = blockCount;
-//	uint32_t  blockHandle = UINT32_MAX;
-//	for (int i = 0; i < POOL_BLOCK_COUNT; ++i) {
-//		if (poolMemory.slots[i].occupied) {
-//			requiredBlockCount = blockCount;
-//			continue;
-//		}
-//
-//		if (--requiredBlockCount != 0)
-//			continue;
-//
-//		blockHandle = i;
-//		break;
-//	}
-//
-//	if (blockHandle == UINT32_MAX) {
-//		LOG_ERROR("Couldn't find required blockCount size.\n");
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//
-//	*pBlockHandle = blockHandle;
-//
-//	printf("Found blockHandle %d\n", blockHandle);
-//	return XR_SUCCESS;
-//}
-//static void ReleaseBlockHandle(size_t size, SlubHandle blockHandle)
-//{
-//	assert((size / CACHE_SIZE) < POOL_BLOCK_COUNT);
-//	uint8_t blockCount = (size / CACHE_SIZE) + 1;
-//	printf("Releasing blockCount size %d\n", blockCount);
-//
-//	for (int i = 0; i < blockCount; ++i) {
-//		assert((blockHandle + i) < POOL_BLOCK_COUNT);
-//		poolMemory.slots[blockHandle + i].occupied = false;
-//	}
-//}
-//
-//static XrResult ClaimPoolHandle(int blockSize, int poolCapacity, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle* pPoolHandle)
-//{
-//	uint32_t poolHandle = UINT32_MAX;
-//	for (int i = 0; i < poolCapacity; ++i) {
-//		if (pSlots[i].occupied) {
-//			continue;
-//		}
-//
-//		pSlots[i].occupied = true;
-//		poolHandle = i;
-//		break;
-//	}
-//
-//	if (poolHandle == UINT32_MAX) {
-//		LOG_ERROR("Couldn't find available handle.\n");
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//
-//	SlubHandle blockHandle;
-//	if (ClaimBlockHandle(blockSize, &blockHandle) != XR_SUCCESS) {
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//
-//	pBlockHandles[poolHandle] = blockHandle;
-//
-//	*pPoolHandle = poolHandle;
-//
-//	printf("Found PoolHandle %d\n", poolHandle);
-//	return XR_SUCCESS;
-//}
-//static XrResult ReleasePoolHandle(int blockSize, SlubSlot* pSlots, SlubHandle* pBlockHandles, Hash* pHashes, PoolHandle poolHandle)
-//{
-//	assert(pSlots[poolHandle].occupied);
-//
-//	ReleaseBlockHandle(blockSize, pBlockHandles[poolHandle]);
-//	pSlots[poolHandle].occupied = false;
-//	pHashes[poolHandle].value = 0;
-//
-//	printf("Released PoolHandle %d\n", poolHandle);
-//	return XR_SUCCESS;
-//}
+static inline block_handle* MapHandles(int capacity, MapBase* pMap)
+{
+	return (block_handle*)(pMap->keys + capacity);
+}
 
+// these could be implementation
+static inline map_handle MapAdd(int capacity, MapBase* pMap, block_handle handle, block_key key)
+{
+	int i = pMap->count;
+	if (i == capacity)
+		return HANDLE_DEFAULT;
 
-//#define ClaimHandleHashed(_pool, _pValue, _hash) XR_CHECK(_ClaimHandleHashed((Pool*)&_pool, sizeof(_pool.data[0]), COUNT(_pool.data), (void**)&_pValue, _hash))
-//static XrResult _ClaimHandleHashed(Pool* pPool, int stride, int capacity, void** ppValue, XrHash _hash)
-//{
-//	if (pPool->currentIndex >= capacity) {
-//		fprintf(stderr, "XR_ERROR_LIMIT_REACHED");
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//	const uint32_t handle = pPool->currentIndex++;
-//	*ppValue = &pPool->data + (handle * stride);
-//	XrHash* pHashStart = (XrHash*)(&pPool->data + (capacity * stride));
-//	XrHash* pHash = pHashStart + (handle * sizeof(XrHash));
-//	*pHash = _hash;
-//	return XR_SUCCESS;
-//}
-//#define ClaimHandle(_pool, _pValue) XR_CHECK(_ClaimHandle(_pool.slots, _pool.data, sizeof(_pool.data[0]), COUNT(_pool.slots), (void**)&_pValue))
-//static XrResult _ClaimHandle(SlubSlot* pSlots, void* pData, int stride, int capacity, void** ppValue)
-//{
-//	uint32_t handle = UINT32_MAX;
-//	for (int i = 0; i < capacity; ++i) {
-//		if (pSlots[i].occupied) {
-//			continue;
-//		}
-//
-//		pSlots[i].occupied = true;
-//		handle = i;
-//		break;
-//	}
-//
-//	if (handle == UINT32_MAX) {
-//		LOG_ERROR("XR_ERROR_LIMIT_REACHED\n");
-//		return XR_ERROR_LIMIT_REACHED;
-//	}
-//
-//	*ppValue = pData + (handle * stride);
-//	return XR_SUCCESS;
-//}
-//#define ReleaseHandle(_pool, _handle) XR_CHECK(_ReleaseHandle(_pool.slots, _handle))
-//static XrResult _ReleaseHandle(SlubSlot* pSlots, Handle_dep handle)
-//{
-//	assert(pSlots[handle].occupied == true);
-//	pSlots[handle].occupied = false;
-//	return XR_SUCCESS;
-//}
-//#define GetHandle(_pool, _pValue) _GetHandle(_pool.data, sizeof(_pool.data[0]), _pValue)
-//static Handle_dep _GetHandle(void* pData, int stride, const void* pValue)
-//{
-//	return (Handle_dep)((pValue - pData) / stride);
-//}
+	MapHandles(capacity, pMap)[i] = handle;
+	pMap->keys[i] = key;
+	pMap->count++;
+
+	return HANDLE_GENERATION_INCREMENT(i);
+}
+
+static inline block_handle MapFind(int capacity, MapBase* pMap, block_key key)
+{
+	for (u32 i = 0; i < pMap->count; ++i) {
+		if (pMap->keys[i] == key)
+			return MapHandles(capacity, pMap)[i];
+	}
+
+	return HANDLE_DEFAULT;
+}
+
+#define MAP_ADD(map, handle, key) MapAdd(COUNT(map.keys), (MapBase*)&map, handle, key)
+#define MAP_FIND(map, key) MapFind(COUNT(map.keys), (MapBase*)&map, key)

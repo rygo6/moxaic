@@ -464,78 +464,83 @@ enum {
 //////////////////////////////
 //// Mid Vulkan Image Barriers
 ////
-#define VK_IMAGE_BARRIER_SRC_UNDEFINED        \
-	.srcStageMask = VK_PIPELINE_STAGE_2_NONE, \
-	.srcAccessMask = VK_ACCESS_2_NONE,        \
-	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
+#define VK_IMAGE_BARRIER_SRC_UNDEFINED         \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_NONE, \
+	.srcAccessMask = VK_ACCESS_2_NONE,         \
+	.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED
 
 #define VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE              \
-	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT,   \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
-	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+	.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 #define VK_IMAGE_BARRIER_DST_TRANSFER_WRITE              \
-	.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_TRANSFER_BIT,   \
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
-	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+	.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 
-#define VK_IMAGE_BARRIER_SRC_COMPUTE_READ                   \
-	.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
-	.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,           \
-	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
-#define VK_IMAGE_BARRIER_DST_COMPUTE_READ                   \
-	.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
-	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,           \
-	.newLayout = VK_IMAGE_LAYOUT_GENERAL
-#define VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE                  \
-	.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
-	.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
-	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
-#define VK_IMAGE_BARRIER_DST_COMPUTE_WRITE                  \
-	.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
-	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,          \
-	.newLayout = VK_IMAGE_LAYOUT_GENERAL
+#define VK_IMAGE_BARRIER_SRC_COMPUTE_READ                    \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+	.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
+	.oldLayout     = VK_IMAGE_LAYOUT_GENERAL
+#define VK_IMAGE_BARRIER_DST_COMPUTE_READ                    \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
+	.newLayout     = VK_IMAGE_LAYOUT_GENERAL
+#define VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE                   \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+	.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,           \
+	.oldLayout     = VK_IMAGE_LAYOUT_GENERAL
+#define VK_IMAGE_BARRIER_DST_COMPUTE_WRITE                   \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
+	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,           \
+	.newLayout     = VK_IMAGE_LAYOUT_GENERAL
+
+#define VK_IMAGE_BARRIER_DST_COMPUTE_NONE      \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_NONE, \
+	.dstAccessMask = VK_ACCESS_2_NONE,         \
+	.newLayout     = VK_IMAGE_LAYOUT_GENERAL
 
 #define VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE                                  \
-	.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,                      \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,                     \
 	.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT, \
-	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
+	.oldLayout     = VK_IMAGE_LAYOUT_GENERAL
 #define VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE                                  \
-	.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,                      \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,                     \
 	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT, \
-	.newLayout = VK_IMAGE_LAYOUT_GENERAL
+	.newLayout     = VK_IMAGE_LAYOUT_GENERAL
 
-#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE                  \
-	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
-	.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,         \
-	.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE                   \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
+	.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,          \
+	.oldLayout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 
-#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_UNDEFINED              \
-	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
-	.srcAccessMask = VK_ACCESS_2_NONE,                               \
-	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED
+#define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_UNDEFINED               \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
+	.srcAccessMask = VK_ACCESS_2_NONE,                                \
+	.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED
 
-#define VK_IMAGE_BARRIER_DST_PRESENT          \
-	.dstStageMask = VK_PIPELINE_STAGE_2_NONE, \
-	.dstAccessMask = VK_ACCESS_2_NONE,        \
-	.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+#define VK_IMAGE_BARRIER_DST_PRESENT           \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_NONE, \
+	.dstAccessMask = VK_ACCESS_2_NONE,         \
+	.newLayout     = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 
 #define VK_IMAGE_BARRIER_SRC_BLIT_WRITE                  \
-	.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,        \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,       \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
-	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+	.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 #define VK_IMAGE_BARRIER_DST_BLIT_WRITE                  \
-	.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,        \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,       \
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
-	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+	.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
 
 #define VK_IMAGE_BARRIER_SRC_BLIT_READ                  \
-	.srcStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,       \
+	.srcStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,      \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
-	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+	.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 #define VK_IMAGE_BARRIER_DST_BLIT_READ                  \
-	.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,       \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_BLIT_BIT,      \
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
-	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+	.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 
 #define VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED       \
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
@@ -556,8 +561,31 @@ enum {
 	vkUpdateDescriptorSets(_device, COUNT(descriptorWrites), descriptorWrites, 0, NULL); \
 })
 
+#define CMD_IMAGE_BARRIERS(_cmd, ...) ({                          \
+	VkImageMemoryBarrier2 barriers[] = {__VA_ARGS__};             \
+	CmdPipelineImageBarriers2((_cmd), COUNT(barriers), barriers); \
+})
 
-#define CMD_IMAGE_BARRIERS(_cmd, ...) CmdPipelineImageBarriers2((_cmd), sizeof((VkImageMemoryBarrier2[]){__VA_ARGS__}) / sizeof(VkImageMemoryBarrier2), (VkImageMemoryBarrier2[]){__VA_ARGS__})
+#define CMD_BIND_DESCRIPTOR_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                          \
+	VkDescriptorSet bindSets[] = {__VA_ARGS__};                                                                      \
+	vk.CmdBindDescriptorSets(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(bindSets), bindSets, 0, NULL); \
+})
+
+#define CMD_PUSH_DESCRIPTOR_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                   \
+	VkWriteDescriptorSet pushSets[] = {__VA_ARGS__};                                                          \
+	vk.CmdPushDescriptorSetKHR(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(pushSets), pushSets); \
+})
+
+#define VK_UPDATE_DESCRIPTOR_SETS(...) ({                                             \
+	VkWriteDescriptorSet writeSets[] = {__VA_ARGS__};                                 \
+	vk.UpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL); \
+})
+
+#define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType)                   \
+	for (VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(familyType); \
+		 cmd != VK_NULL_HANDLE;                                           \
+		 vkEndImmediateCommandBuffer(familyType, cmd), cmd = VK_NULL_HANDLE)
+
 INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
 	vk.CmdPipelineBarrier2(cmd, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
@@ -566,9 +594,9 @@ INLINE void CmdBlitImageFullScreen(VkCommandBuffer cmd, VkImage srcImage, VkImag
 {
 	VkImageBlit imageBlit = {
 		.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
-		.srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
+		.srcOffsets     = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
 		.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
-		.dstOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
+		.dstOffsets     = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
 	};
 	vk.CmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
@@ -584,8 +612,8 @@ INLINE void CmdBeginRenderPass(
 {
 	VkRenderPassBeginInfo renderPassBeginInfo = {
 		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-		.pNext = &(VkRenderPassAttachmentBeginInfo){
-			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
+		&(VkRenderPassAttachmentBeginInfo){
+			VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
 			.attachmentCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
 			.pAttachments = (VkImageView[]){
 				[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = colorView,
@@ -955,26 +983,6 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetFenceExternalHandle(VkFence fence);
 VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
-
-#define CMD_BIND_DESCRIPTOR_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                          \
-	VkDescriptorSet bindSets[] = {__VA_ARGS__};                                                                      \
-	vk.CmdBindDescriptorSets(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(bindSets), bindSets, 0, NULL); \
-})
-
-#define CMD_PUSH_DESCRIPTOR_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                   \
-	VkWriteDescriptorSet pushSets[] = {__VA_ARGS__};                                                          \
-	vk.CmdPushDescriptorSetKHR(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(pushSets), pushSets); \
-})
-
-#define VK_UPDATE_DESCRIPTOR_SETS(...) ({                                             \
-	VkWriteDescriptorSet writeSets[] = {__VA_ARGS__};                                 \
-	vk.UpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL); \
-})
-
-#define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType)                   \
-	for (VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(familyType); \
-		 cmd != VK_NULL_HANDLE;                                           \
-		 vkEndImmediateCommandBuffer(familyType, cmd), cmd = VK_NULL_HANDLE)
 
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType);
 void            vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuffer cmd);

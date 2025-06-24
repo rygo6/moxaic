@@ -22,7 +22,6 @@ void xrSwapConfig(XrSystemId systemId, XrSwapConfig* pConfig)
 	pConfig->outputs = 1;
 }
 
-
 // maybe should be external handle?
 void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 {
@@ -31,13 +30,17 @@ void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	MxcNodeShared*  pNodeShared = &pImportedExternalMemory->shared;
 
+	// I believe both a session and a composition layer will end up constituting different Nodes
+	// and requesting a SessionIndex will simply mean the base compositionlayer index
 	NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShared);
 	MxcNodeContext* pNodeContext = &nodeContext[nodeHandle];
 	*pNodeContext = (MxcNodeContext){};
-	pNodeContext->type = MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED;
+	pNodeContext->type = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
 	pNodeContext->pNodeShared = pNodeShared;
 	pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
 	printf("Importing node handle %d as OpenXR session\n", nodeHandle);
+
+	pNodeShared->appNodeHandle = nodeHandle;
 
 	// openxr session = moxaic node
 	*sessionIndex = nodeHandle;
@@ -46,8 +49,23 @@ void xrClaimSessionIndex(XrSessionIndex* sessionIndex)
 void xrReleaseSessionIndex(XrSessionIndex sessionIndex)
 {
 	printf("Releasing Moxaic OpenXR Session.\n");
+	auto pNodeCtxt = &nodeContext[sessionIndex];
+	auto pImports = &pImportedExternalMemory->imports;
+	auto pNodeShrd = &pImportedExternalMemory->shared;
+
 	NodeHandle nodeHandle = sessionIndex;
 	ReleaseNode(nodeHandle);
+
+	pNodeShrd->appNodeHandle = -1; // I want to use the block stuff from mid oxr for this
+
+	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
+}
+
+void xrClaimCompositionLayerIndex(XrSessionIndex* sessionIndex)
+{
+	// I believe both a session and a composition layer will end up constituting different Nodes
+	// and requesting a SessionIndex will simply mean the base compositionlayer index
+	// where Compositionlayers will also request an index of different nodes
 }
 
 void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds)

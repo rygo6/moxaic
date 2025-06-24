@@ -987,6 +987,7 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
+			// TODO this should bne a descriptor array
 			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}

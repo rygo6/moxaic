@@ -50,7 +50,7 @@ enum PipeSetNodeProcessIndices {
 void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 {
 	auto nodeType = pNodeContext->type;
-	auto needsImport = nodeType != MXC_NODE_TYPE_THREAD;
+	auto needsImport = nodeType != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	MxcNodeImports* pImports = pNodeContext->pNodeImports;
@@ -103,7 +103,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 	uint32_t              releaseBarrierCount = 0;
 	for (int i = 0; i < swapCount; ++i) {
 		switch (pNodeContext->type) {
-			case MXC_NODE_TYPE_THREAD:
+			case MXC_NODE_INTERPROCESS_MODE_THREAD:
 				// Acquire not needed from thread.
 				releaseBarrierCount = 0;
 //				releaseBarriers[i][0] = (VkImageMemoryBarrier2){
@@ -116,7 +116,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 //				};
 
 				break;
-			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_IMPORTED:
+			case MXC_NODE_INTERPROCESS_MODE_IMPORTED:
 
 				acquireBarrierCount = 2;
 				acquireBarriers[i][0] = (VkImageMemoryBarrier2){
@@ -169,7 +169,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 				};
 
 				break;
-			case MXC_NODE_TYPE_INTERPROCESS_VULKAN_EXPORTED:
+			case MXC_NODE_INTERPROCESS_MODE_EXPORTED:
 				PANIC("Shouldn't be rendering an exported node from this process.");
 			default:
 				PANIC("nodeType not supported");

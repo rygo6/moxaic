@@ -38,6 +38,7 @@ extern void Panic(const char* file, int line, const char* message);
 ////////////
 //// Utility
 ////
+#define PACK __attribute__((packed))
 #define HOT    __attribute__((hot))
 #define CONCAT(_a, _b) #_a #_b
 #define CACHE_ALIGN __attribute((aligned(64)))
