@@ -1,9 +1,3 @@
-/*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
-│ vi: set et ft=c ts=2 sts=2 sw=2 fenc=utf-8                               :vi │
-╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2020 Ryan Goodrich                                                 │
-╚─────────────────────────────────────────────────────────────────────────────*/
-
 #include "compositor.h"
 #include "mid_shape.h"
 #include "mid_window.h"
@@ -426,10 +420,13 @@ enum {
 
 /////////////
 //// Barriers
-#define COMPOSITOR_DST_GRAPHICS_READ                                                                                  \
-	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |      \
-	                VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
-	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT, .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+#define COMPOSITOR_DST_GRAPHICS_READ                                          \
+	.dstStageMask  = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
+	                 VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
+	                 VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
+	                 VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
+	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                             \
+	.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 
 VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 	{
@@ -680,6 +677,8 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst) {
 
 	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuf.mem);
 
+	u32 mainGraphicsIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+
 	// We copy everything locally. Set null to ensure not used!
 	pCtx = NULL;
 	pCst = NULL;
@@ -794,10 +793,15 @@ CompositeLoop:
 				pNodeCstData->swapIndex = !(nodeTimeline % VK_SWAP_COUNT);
 				auto pNodeSwap = &pNodeCstData->swaps[pNodeCstData->swapIndex];
 
+				// I hate this we need a better way
 				pAcquireBarriers[0].image = pNodeSwap->color;
+				pAcquireBarriers[0].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[1].image = pNodeSwap->depth;
+				pAcquireBarriers[1].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[2].image = pNodeSwap->gBuffer;
+				pAcquireBarriers[2].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[3].image = pNodeSwap->gBufferMip;
+				pAcquireBarriers[3].dstQueueFamilyIndex = mainGraphicsIndex,
 				CmdPipelineImageBarriers2(gfxCmd, processAcquireBarrierCount, pAcquireBarriers);
 
 				// TODO this needs to be specifically only the rect which was rendered into
