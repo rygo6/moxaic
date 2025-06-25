@@ -1,43 +1,46 @@
 BasedOnStyle: LLVM
-AlignConsecutiveAssignments:
-  Enabled: true
-  AcrossEmptyLines: false
-  AcrossComments: false
-  AlignCompound: true
-  PadOperators: true
+
+AlignConsecutiveAssignments: false
+
 AlignConsecutiveDeclarations:
   Enabled: true
   AcrossEmptyLines: false
   AcrossComments: false
+
 AlignConsecutiveMacros:
   Enabled: true
   AcrossEmptyLines: false
   AcrossComments: false
+
 AlignConsecutiveBitFields:
   Enabled: true
   AcrossEmptyLines: false
   AcrossComments: false
+
 AlignConsecutiveShortCaseStatements:
   Enabled: true
   AcrossEmptyLines: false
   AcrossComments: false
   AlignCaseColons: false
-AlignAfterOpenBracket: Align
-AlwaysBreakAfterReturnType: None
+
+AlignAfterOpenBracket: DontAlign
+Cpp11BracedListStyle: true
+
 PointerAlignment: Left
 IndentCaseLabels: true
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: true
 IndentPPDirectives: None
+
 IndentWidth: 4
 ContinuationIndentWidth: 4
 TabWidth: 4
-UseTab: ForContinuationAndIndentation
-ReflowComments: false
+UseTab: AlignWithSpaces
+AlignEscapedNewlines: LeftWithLastLine
+ReflowComments: Never
+
+BreakBeforeBraces: Custom
 BraceWrapping:
-  AfterClass: false
-  AfterControlStatement: false
-  AfterEnum: false
   AfterFunction: false
   AfterNamespace: false
   AfterStruct: false
@@ -48,54 +51,39 @@ BraceWrapping:
   SplitEmptyFunction: false
   SplitEmptyRecord: false
   SplitEmptyNamespace: false
+
 MaxEmptyLinesToKeep: 2
 SpacesBeforeTrailingComments: 2
+
 AlignTrailingComments:
   Kind: Always
   OverEmptyLines: 1
+
 IndentGotoLabels: true
-BreakAfterAttributes: Leave
+
 UseCRLF: false
+
 AllowShortLoopsOnASingleLine: true
+
 AlignOperands: true
-BreakBeforeTernaryOperators: false
+
+BreakBeforeTernaryOperators: true
+
 ColumnLimit: 0
+
 AlwaysBreakAfterDefinitionReturnType: None
+
 AllowShortBlocksOnASingleLine: Always
+
 BreakAdjacentStringLiterals: false
+
 BreakArrays: false
+
 BreakBeforeBinaryOperators: None
-BreakAfterJavaFieldAnnotations: false
-BreakBeforeConceptDeclarations: false
-BreakBeforeInheritanceComma: false
-BreakBeforeInlineASMColon: Never
+
 BreakStringLiterals: false
-BreakBeforeBraces: Linux
-BreakConstructorInitializers: AfterColon
-BreakConstructorInitializersBeforeComma: false
-BreakInheritanceList: AfterColon
+
 SortIncludes: Never
-
-#---
-#BasedOnStyle: Google
-#StatementMacros:
-#  - INITIALIZER
-#AlignConsecutiveMacros: true
-#AlignConsecutiveDeclarations: false
-#AlwaysBreakBeforeMultilineStrings: false
-#AllowShortFunctionsOnASingleLine: false
-#AllowShortLoopsOnASingleLine: false
-#AllowShortIfStatementsOnASingleLine: false
-#KeepEmptyLinesAtTheStartOfBlocks: true
-#ConstructorInitializerAllOnOneLineOrOnePerLine: true
-#IncludeBlocks: Merge
-#---
-#Language: Cpp
-#AllowShortFunctionsOnASingleLine: false
-#---
-#Language: Proto
-#...
-
 
 
 

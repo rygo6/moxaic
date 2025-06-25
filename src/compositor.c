@@ -1,3 +1,9 @@
+/*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
+│ vi: set et ft=c ts=2 sts=2 sw=2 fenc=utf-8                               :vi │
+╞══════════════════════════════════════════════════════════════════════════════╡
+│ Copyright 2020 Ryan Goodrich                                                 │
+╚─────────────────────────────────────────────────────────────────────────────*/
+
 #include "compositor.h"
 #include "mid_shape.h"
 #include "mid_window.h"
@@ -12,11 +18,11 @@
 //// Constants
 ////
 
-#define GRID_QUAD_SQUARE_SIZE  2
-#define GRID_QUAD_COUNT  4
-#define GRID_SUBGROUP_SQUARE_SIZE  4
+#define GRID_QUAD_SQUARE_SIZE         2
+#define GRID_QUAD_COUNT               4
+#define GRID_SUBGROUP_SQUARE_SIZE     4
 #define GRID_SUBGROUP_COUNT           16
-#define GRID_WORKGROUP_SQUARE_SIZE 8
+#define GRID_WORKGROUP_SQUARE_SIZE    8
 #define GRID_WORKGROUP_SUBGROUP_COUNT 64
 
 //////////
@@ -29,18 +35,23 @@ enum {
 	SET_BIND_INDEX_NODE_STATE,
 	SET_BIND_INDEX_NODE_COLOR,
 	SET_BIND_INDEX_NODE_GBUFFER,
-	SET_BIND_INDEX_NODE_COUNT
+	SET_BIND_INDEX_NODE_COUNT,
 };
 
 constexpr VkShaderStageFlags COMPOSITOR_MODE_STAGE_FLAGS[] = {
-	[MXC_COMPOSITOR_MODE_QUAD]        = VK_SHADER_STAGE_VERTEX_BIT   | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_VERTEX_BIT   | VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-	[MXC_COMPOSITOR_MODE_TASK_MESH]   = VK_SHADER_STAGE_TASK_BIT_EXT | VK_SHADER_STAGE_MESH_BIT_EXT             | VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_QUAD]        = VK_SHADER_STAGE_VERTEX_BIT |
+	                                    VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_SHADER_STAGE_VERTEX_BIT |
+	                                    VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT |
+	                                    VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT |
+	                                    VK_SHADER_STAGE_FRAGMENT_BIT,
+	[MXC_COMPOSITOR_MODE_TASK_MESH]   = VK_SHADER_STAGE_TASK_BIT_EXT |
+	                                    VK_SHADER_STAGE_MESH_BIT_EXT |
+	                                    VK_SHADER_STAGE_FRAGMENT_BIT,
 	[MXC_COMPOSITOR_MODE_COMPUTE]     = VK_SHADER_STAGE_COMPUTE_BIT,
 };
 
-static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout* pLayout)
-{
+static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout* pLayout) {
 	VkShaderStageFlags stageFlags = 0;
 	for (int i = 0; i < MXC_COMPOSITOR_MODE_COUNT; ++i)
 		if (pModes[i]) stageFlags |= COMPOSITOR_MODE_STAGE_FLAGS[i];
@@ -75,44 +86,41 @@ static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
 	vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, (u64)*pLayout, "NodeSetLayout");
 }
-#define BIND_WRITE_NODE_STATE(_set, _buf)                        \
-	(VkWriteDescriptorSet)                                       \
-	{                                                            \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                  \
-			.dstSet = _set,                                      \
-			.dstBinding = SET_BIND_INDEX_NODE_STATE,             \
-			.descriptorCount = 1,                                \
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-			.pBufferInfo = &(VkDescriptorBufferInfo){            \
-				.buffer = _buf,                                  \
-				.range = sizeof(MxcNodeCompositorSetState),      \
-			},                                                   \
+#define BIND_WRITE_NODE_STATE(_set, _buf)                    \
+	(VkWriteDescriptorSet) {                                 \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
+		.dstSet = _set,                                      \
+		.dstBinding = SET_BIND_INDEX_NODE_STATE,             \
+		.descriptorCount = 1,                                \
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+		.pBufferInfo = &(VkDescriptorBufferInfo){            \
+			.buffer = _buf,                                  \
+			.range = sizeof(MxcNodeCompositorSetState),      \
+		},                                                   \
 	}
-#define BIND_WRITE_NODE_COLOR(_set, _view, _layout)                      \
-	(VkWriteDescriptorSet)                                               \
-	{                                                                    \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                          \
-			.dstSet = _set,                                              \
-			.dstBinding = SET_BIND_INDEX_NODE_COLOR,                     \
-			.descriptorCount = 1,                                        \
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-			.pImageInfo = &(VkDescriptorImageInfo){                      \
-				.imageView = _view,                                      \
-				.imageLayout = _layout,                                  \
-			},                                                           \
+#define BIND_WRITE_NODE_COLOR(_set, _view, _layout)                  \
+	(VkWriteDescriptorSet) {                                         \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
+		.dstSet = _set,                                              \
+		.dstBinding = SET_BIND_INDEX_NODE_COLOR,                     \
+		.descriptorCount = 1,                                        \
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+		.pImageInfo = &(VkDescriptorImageInfo){                      \
+			.imageView = _view,                                      \
+			.imageLayout = _layout,                                  \
+		},                                                           \
 	}
-#define BIND_WRITE_NODE_GBUFFER(_set, _view, _layout)                    \
-	(VkWriteDescriptorSet)                                               \
-	{                                                                    \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                          \
-			.dstSet = _set,                                              \
-			.dstBinding = SET_BIND_INDEX_NODE_GBUFFER,                   \
-			.descriptorCount = 1,                                        \
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-			.pImageInfo = &(VkDescriptorImageInfo){                      \
-				.imageView = _view,                                      \
-				.imageLayout = _layout,                                  \
-			},                                                           \
+#define BIND_WRITE_NODE_GBUFFER(_set, _view, _layout)                \
+	(VkWriteDescriptorSet) {                                         \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
+		.dstSet = _set,                                              \
+		.dstBinding = SET_BIND_INDEX_NODE_GBUFFER,                   \
+		.descriptorCount = 1,                                        \
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+		.pImageInfo = &(VkDescriptorImageInfo){                      \
+			.imageView = _view,                                      \
+			.imageLayout = _layout,                                  \
+		},                                                           \
 	}
 
 enum {
@@ -120,16 +128,13 @@ enum {
 	PIPE_SET_INDEX_NODE_GRAPHICS_NODE,
 	PIPE_SET_INDEX_NODE_GRAPHICS_COUNT,
 };
-static void CreateGraphicsNodePipeLayout(
-	VkDescriptorSetLayout nodeSetLayout,
-	VkPipelineLayout* pPipeLayout)
-{
+static void CreateGraphicsNodePipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pPipeLayout) {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_NODE_GRAPHICS_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
 			[PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL] = vk.context.globalSetLayout,
-			[PIPE_SET_INDEX_NODE_GRAPHICS_NODE]   = nodeSetLayout,
+			[PIPE_SET_INDEX_NODE_GRAPHICS_NODE] = nodeSetLayout,
 		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, pPipeLayout));
@@ -143,8 +148,7 @@ enum {
 	SET_BIND_INDEX_NODE_COMPUTE_COUNT,
 };
 
-static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
-{
+static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout) {
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = SET_BIND_INDEX_NODE_COMPUTE_COUNT,
@@ -165,29 +169,29 @@ static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
 }
-#define BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(set, view)         \
-	(VkWriteDescriptorSet) {                                     \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                  \
-            .dstSet = set,                                       \
+#define BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(set, view)             \
+	(VkWriteDescriptorSet) {                                         \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
+			.dstSet = set,                                           \
 			.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT, \
-			.descriptorCount = 1,                                \
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  \
-			.pImageInfo = &(VkDescriptorImageInfo){              \
-				.imageView = view,                               \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,          \
-			},                                                   \
+			.descriptorCount = 1,                                    \
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,      \
+			.pImageInfo = &(VkDescriptorImageInfo){                  \
+				.imageView = view,                                   \
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,              \
+			},                                                       \
 	}
-#define BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(set, view)         \
-	(VkWriteDescriptorSet) {                                    \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                 \
-            .dstSet = set,                                      \
+#define BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(set, view)             \
+	(VkWriteDescriptorSet) {                                        \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                     \
+			.dstSet = set,                                          \
 			.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT, \
-			.descriptorCount = 1,                               \
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
-			.pImageInfo = &(VkDescriptorImageInfo){             \
-				.imageView = view,                              \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,         \
-			},                                                  \
+			.descriptorCount = 1,                                   \
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,     \
+			.pImageInfo = &(VkDescriptorImageInfo){                 \
+				.imageView = view,                                  \
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,             \
+			},                                                      \
 	}
 
 enum {
@@ -196,17 +200,15 @@ enum {
 	PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT,
 	PIPE_SET_INDEX_NODE_COMPUTE_COUNT,
 };
-static void CreateNodeComputePipeLayout(
-	VkDescriptorSetLayout nodeSetLayout,
-	VkDescriptorSetLayout computeOutputSetLayout,
-	VkPipelineLayout* pPipeLayout)
-{
+
+static void
+CreateNodeComputePipeLayout(VkDescriptorSetLayout nodeSetLayout, VkDescriptorSetLayout computeOutputSetLayout, VkPipelineLayout* pPipeLayout) {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_NODE_COMPUTE_COUNT,
 		.pSetLayouts = (VkDescriptorSetLayout[]){
 			[PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL] = vk.context.globalSetLayout,
-			[PIPE_SET_INDEX_NODE_COMPUTE_NODE]   = nodeSetLayout,
+			[PIPE_SET_INDEX_NODE_COMPUTE_NODE] = nodeSetLayout,
 			[PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT] = computeOutputSetLayout,
 		},
 	};
@@ -222,8 +224,7 @@ enum {
 	SET_BIND_INDEX_GBUFFER_PROCESS_COUNT
 };
 
-static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
-{
+static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout) {
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
@@ -260,63 +261,58 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
 }
 
-#define BIND_WRITE_GBUFFER_PROCESS_STATE(_view)                  \
-	(VkWriteDescriptorSet)                                       \
-	{                                                            \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                  \
-			.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_STATE,  \
-			.descriptorCount = 1,                                \
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
-			.pBufferInfo = &(VkDescriptorBufferInfo){            \
-				.buffer = _view,                                 \
-				.range = sizeof(MxcProcessState),                \
-			},                                                   \
+#define BIND_WRITE_GBUFFER_PROCESS_STATE(_view)              \
+	(VkWriteDescriptorSet) {                                 \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_STATE,  \
+		.descriptorCount = 1,                                \
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+		.pBufferInfo = &(VkDescriptorBufferInfo){            \
+			.buffer = _view,                                 \
+			.range = sizeof(MxcProcessState),                \
+		},                                                   \
 	}
-#define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(_view)                      \
-	(VkWriteDescriptorSet)                                               \
-	{                                                                    \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                          \
-			.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,      \
-			.descriptorCount = 1,                                        \
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-			.pImageInfo = &(VkDescriptorImageInfo){                      \
-				.imageView = _view,                                      \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
-			},                                                           \
+#define BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(_view)                  \
+	(VkWriteDescriptorSet) {                                         \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,      \
+		.descriptorCount = 1,                                        \
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+		.pImageInfo = &(VkDescriptorImageInfo){                      \
+			.imageView = _view,                                      \
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
+		},                                                           \
 	}
-#define BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(_view)                        \
-	(VkWriteDescriptorSet)                                               \
-	{                                                                    \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                          \
-			.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,        \
-			.descriptorCount = 1,                                        \
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-			.pImageInfo = &(VkDescriptorImageInfo){                      \
-				.imageView = _view,                                      \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
-			},                                                           \
+#define BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(_view)                    \
+	(VkWriteDescriptorSet) {                                         \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,        \
+		.descriptorCount = 1,                                        \
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
+		.pImageInfo = &(VkDescriptorImageInfo){                      \
+			.imageView = _view,                                      \
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
+		},                                                           \
 	}
-#define BIND_WRITE_GBUFFER_PROCESS_DST(_view)                   \
-	(VkWriteDescriptorSet)                                      \
-	{                                                           \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                 \
-			.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_DST,   \
-			.descriptorCount = 1,                               \
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
-			.pImageInfo = (VkDescriptorImageInfo[]){            \
-				{                                               \
-					.imageView = _view,                         \
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL,     \
-				},                                              \
-			},                                                  \
+#define BIND_WRITE_GBUFFER_PROCESS_DST(_view)               \
+	(VkWriteDescriptorSet) {                                \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,             \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_DST,   \
+		.descriptorCount = 1,                               \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
+		.pImageInfo = (VkDescriptorImageInfo[]){            \
+			{                                               \
+				.imageView = _view,                         \
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,     \
+			},                                              \
+		},                                                  \
 	}
 
 enum {
 	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
 	PIPE_SET_INDEX_GBUFFER_PROCESS_COUNT,
 };
-static void CreateGBufferProcessPipeLayout(VkDescriptorSetLayout layout, VkPipelineLayout* pPipeLayout)
-{
+static void CreateGBufferProcessPipeLayout(VkDescriptorSetLayout layout, VkPipelineLayout* pPipeLayout) {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_GBUFFER_PROCESS_COUNT,
@@ -331,7 +327,7 @@ static void CreateGBufferProcessPipeLayout(VkDescriptorSetLayout layout, VkPipel
 enum {
 	SET_BIND_INDEX_FINAL_BLIT_SRC,
 	SET_BIND_INDEX_FINAL_BLIT_DST,
-	SET_BIND_INDEX_FINAL_BLIT_COUNT
+	SET_BIND_INDEX_FINAL_BLIT_COUNT,
 };
 enum {
 	BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER,
@@ -340,8 +336,8 @@ enum {
 };
 
 typedef VkDescriptorSetLayout FinalBlitSetLayout;
-static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout)
-{
+
+static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout) {
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
@@ -365,8 +361,7 @@ static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout)
 }
 
 #define BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(_graphicsView, _computeView) \
-	(VkWriteDescriptorSet)                                                          \
-	{                                                                               \
+	(VkWriteDescriptorSet) {                                                        \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                     \
 			.dstBinding = SET_BIND_INDEX_FINAL_BLIT_SRC,                            \
 			.descriptorCount = BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COUNT,               \
@@ -382,20 +377,15 @@ static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout)
 				},                                                                  \
 			},                                                                      \
 	}
-#define BIND_WRITE_FINAL_BLIT_DST(_view)                        \
-	(VkWriteDescriptorSet)                                      \
-	{                                                           \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                 \
-			.dstBinding = SET_BIND_INDEX_FINAL_BLIT_DST,        \
-			.descriptorCount = 1,                               \
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, \
-			.pImageInfo = (VkDescriptorImageInfo[])             \
-		{                                                       \
-			{                                                   \
-				.imageView = _view,                             \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,         \
-			},                                                  \
-		}                                                       \
+#define BIND_WRITE_FINAL_BLIT_DST(_view)                                                                           \
+	(VkWriteDescriptorSet) {                                                                                       \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = SET_BIND_INDEX_FINAL_BLIT_DST, .descriptorCount = 1, \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .pImageInfo = (VkDescriptorImageInfo[]) {              \
+			{                                                                                                      \
+				.imageView = _view,                                                                                \
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                                                            \
+			},                                                                                                     \
+		}                                                                                                          \
 	}
 
 enum {
@@ -403,9 +393,10 @@ enum {
 	PIPE_SET_INDEX_FINAL_BLIT_INOUT,
 	PIPE_SET_INDEX_FINAL_BLIT_COUNT,
 };
+
 typedef VkPipelineLayout FinalBlitPipeLayout;
-static void CreateFinalBlitPipeLayout(FinalBlitSetLayout inOutLayout, FinalBlitPipeLayout* pPipeLayout)
-{
+
+static void CreateFinalBlitPipeLayout(FinalBlitSetLayout inOutLayout, FinalBlitPipeLayout* pPipeLayout) {
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_FINAL_BLIT_COUNT,
@@ -435,25 +426,22 @@ enum {
 
 /////////////
 //// Barriers
-#define COMPOSITOR_DST_GRAPHICS_READ                                         \
-	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
-					VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
-					VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
-	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
-	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+#define COMPOSITOR_DST_GRAPHICS_READ                                                                                  \
+	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |      \
+	                VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
+	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT, .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 
 VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 	{
 		// Color
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		COMPOSITOR_DST_GRAPHICS_READ,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Depth
@@ -469,24 +457,24 @@ VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 	{
 		// Gbuffer
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Gbuffer Mip
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 };
 
@@ -495,59 +483,59 @@ VkImageMemoryBarrier2 gfxProcessAcquireBarriers[] = {
 	{
 		// Color
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		COMPOSITOR_DST_GRAPHICS_READ,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-		.dstQueueFamilyIndex = 0,// vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		.dstQueueFamilyIndex = 0,  // vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Depth
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-		.dstQueueFamilyIndex = 0, //vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		.dstQueueFamilyIndex = 0,  //vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Gbuffer
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Gbuffer Mip
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 };
 VkImageMemoryBarrier2 gfxProcessEndBarriers[] = {
 	{
 		// Gbuffer
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 		COMPOSITOR_DST_GRAPHICS_READ,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 };
 
@@ -556,59 +544,59 @@ VkImageMemoryBarrier2 compProcessAcquireBarriers[] = {
 	{
 		// Color
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-		.dstQueueFamilyIndex = 0, //vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		.dstQueueFamilyIndex = 0,  //vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Depth
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_EXTERNAL,
-		.dstQueueFamilyIndex = 0, //vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		.dstQueueFamilyIndex = 0,  //vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Gbuffer
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Gbuffer Mip
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 };
 VkImageMemoryBarrier2 compProcessEndBarriers[] = {
 	{
 		// Gbuffer
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 };
 
@@ -618,29 +606,28 @@ constexpr u32 processAcquireBarrierCount = COUNT(gfxProcessAcquireBarriers);
 constexpr u32 processEndBarrierCount = COUNT(gfxProcessEndBarriers);
 
 VkImageMemoryBarrier2* processAcquireBarriers[] = {
-	[MXC_COMPOSITOR_MODE_QUAD]        = gfxProcessAcquireBarriers,
+	[MXC_COMPOSITOR_MODE_QUAD] = gfxProcessAcquireBarriers,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = gfxProcessAcquireBarriers,
-	[MXC_COMPOSITOR_MODE_TASK_MESH]   = gfxProcessAcquireBarriers,
-	[MXC_COMPOSITOR_MODE_COMPUTE]     = compProcessAcquireBarriers,
+	[MXC_COMPOSITOR_MODE_TASK_MESH] = gfxProcessAcquireBarriers,
+	[MXC_COMPOSITOR_MODE_COMPUTE] = compProcessAcquireBarriers,
 };
 VkImageMemoryBarrier2* processEndBarriers[] = {
-	[MXC_COMPOSITOR_MODE_QUAD]        = gfxProcessEndBarriers,
+	[MXC_COMPOSITOR_MODE_QUAD] = gfxProcessEndBarriers,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = gfxProcessEndBarriers,
-	[MXC_COMPOSITOR_MODE_TASK_MESH]   = gfxProcessEndBarriers,
-	[MXC_COMPOSITOR_MODE_COMPUTE]     = compProcessEndBarriers,
+	[MXC_COMPOSITOR_MODE_TASK_MESH] = gfxProcessEndBarriers,
+	[MXC_COMPOSITOR_MODE_COMPUTE] = compProcessEndBarriers,
 };
 VkImageLayout processFinalLayout[] = {
-	[MXC_COMPOSITOR_MODE_QUAD]        = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	[MXC_COMPOSITOR_MODE_QUAD] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	[MXC_COMPOSITOR_MODE_TASK_MESH]   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-	[MXC_COMPOSITOR_MODE_COMPUTE]     = VK_IMAGE_LAYOUT_GENERAL,
+	[MXC_COMPOSITOR_MODE_TASK_MESH] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	[MXC_COMPOSITOR_MODE_COMPUTE] = VK_IMAGE_LAYOUT_GENERAL,
 };
 
 ////////
 //// Run
 ////
-void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
-{
+void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst) {
 	//// Local Extract
 	EXTRACT_FIELD(&vk.context, device);
 	EXTRACT_FIELD(&vk.context, basicPass);
@@ -712,7 +699,7 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 	};
 	globCamPose.rot = QuatFromEuler(globCamPose.euler);
 
-	VkGlobalSetState  globSetState = (VkGlobalSetState){};
+	VkGlobalSetState globSetState = (VkGlobalSetState){};
 	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState, pGlobSetMapped);
 
 	VkImageMemoryBarrier2 compCstPostBarriers[] = {
@@ -757,8 +744,7 @@ CompositeLoop:
 	// this should be a method as the CPU ops do not run every loop. Really it should be a different thread.
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 		atomic_thread_fence(memory_order_acquire);
-		if (activeNodes[iCstMode].ct == 0)
-			continue;
+		if (activeNodes[iCstMode].ct == 0) continue;
 
 		VkImageMemoryBarrier2* pAcquireBarriers = processAcquireBarriers[iCstMode];
 		VkImageMemoryBarrier2* pEndBarriers = processEndBarriers[iCstMode];
@@ -785,8 +771,7 @@ CompositeLoop:
 						Plane plane = {.origin = TO_VEC3(nodeOrigin), .normal = VEC3(0, 0, 1)};
 
 						vec3 hitPoints[2];
-						if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) &&
-							rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
+						if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) && rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
 							worldDiff = vec3Sub(hitPoints[0], hitPoints[1]);
 						}
 
@@ -799,8 +784,7 @@ CompositeLoop:
 			}
 
 			u64 nodeTimeline = pNodeShrd->timelineValue;
-			if (nodeTimeline <= pNodeCstData->lastTimelineValue)
-				continue;
+			if (nodeTimeline <= pNodeCstData->lastTimelineValue) continue;
 
 			pNodeCstData->lastTimelineValue = nodeTimeline;
 			atomic_thread_fence(memory_order_release);
@@ -833,33 +817,33 @@ CompositeLoop:
 
 				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessBlitUpPipe);
 
-				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-					BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf),
-					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
+				CMD_PUSH_SETS(
+					gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+					BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf), BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipView));
 				vk.CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
 
-				CMD_IMAGE_BARRIERS(gfxCmd,
-				   {
-					   VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					   .image = pNodeSwap->gBufferMip,
-					   .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-					   VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-					   VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-					   VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				   });
+				CMD_IMAGE_BARRIERS(
+					gfxCmd, {
+								VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+								.image = pNodeSwap->gBufferMip,
+								.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+								VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+								VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+								VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+							});
 
-				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView),
-					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView));
+				CMD_PUSH_SETS(
+					gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView), BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView));
 				vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
 				pEndBarriers[0].image = pNodeSwap->gBuffer;
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
 
-				CMD_WRITE_SINGLE_SETS(device,
-				  BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, pNodeSwap->colorView, finalLayout),
-				  BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, pNodeSwap->gBufferView, finalLayout));
+				CMD_WRITE_SINGLE_SETS(
+					device, BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, pNodeSwap->colorView, finalLayout),
+					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, pNodeSwap->gBufferView, finalLayout));
 			}
 
 			//// Calc new node uniform and shared data
@@ -870,16 +854,16 @@ CompositeLoop:
 				memcpy(pNodeCstData->pSetMapped, &pNodeCstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
 
 				float radius = pNodeShrd->compositorRadius;
-				vec3 corners[CORNER_COUNT] = {
-					[CORNER_LUB] = VEC3(-radius, -radius, -radius),
-					[CORNER_LUF] = VEC3(-radius, -radius, radius),
-					[CORNER_LDB] = VEC3(-radius, radius, -radius),
-					[CORNER_LDF] = VEC3(-radius, radius, radius),
-					[CORNER_RUB] = VEC3(radius, -radius, -radius),
-					[CORNER_RUF] = VEC3(radius, -radius, radius),
-					[CORNER_RDB] = VEC3(radius, radius, -radius),
-					[CORNER_RDF] = VEC3(radius, radius, radius),
-				};
+				vec3  corners[CORNER_COUNT] = {
+                    [CORNER_LUB] = VEC3(-radius, -radius, -radius),
+                    [CORNER_LUF] = VEC3(-radius, -radius, radius),
+                    [CORNER_LDB] = VEC3(-radius, radius, -radius),
+                    [CORNER_LDF] = VEC3(-radius, radius, radius),
+                    [CORNER_RUB] = VEC3(radius, -radius, -radius),
+                    [CORNER_RUF] = VEC3(radius, -radius, radius),
+                    [CORNER_RDB] = VEC3(radius, radius, -radius),
+                    [CORNER_RDF] = VEC3(radius, radius, radius),
+                };
 
 				vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
 				vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
@@ -916,24 +900,23 @@ CompositeLoop:
 					isHovering |= Vec2PointOnLineSegment(mxcWindowInput.mouseUV, uvStart, uvEnd, 0.0005f);
 				}
 
-				switch (pNodeCstData->interactionState){
-
+				switch (pNodeCstData->interactionState) {
 					case NODE_INTERACTION_STATE_NONE:
-						pNodeCstData->interactionState = isHovering ?
-															 NODE_INTERACTION_STATE_HOVER :
-															 NODE_INTERACTION_STATE_NONE;
+						pNodeCstData->interactionState = isHovering
+						                                     ? NODE_INTERACTION_STATE_HOVER
+						                                     : NODE_INTERACTION_STATE_NONE;
 						break;
 					case NODE_INTERACTION_STATE_HOVER:
-						pNodeCstData->interactionState = isHovering ?
-															 mxcWindowInput.leftMouseButton ?
-															 NODE_INTERACTION_STATE_SELECT :
-															 NODE_INTERACTION_STATE_HOVER :
-															 NODE_INTERACTION_STATE_NONE;
+						pNodeCstData->interactionState = isHovering
+						                                     ? mxcWindowInput.leftMouseButton
+						                                           ? NODE_INTERACTION_STATE_SELECT
+						                                           : NODE_INTERACTION_STATE_HOVER
+						                                     : NODE_INTERACTION_STATE_NONE;
 						break;
 					case NODE_INTERACTION_STATE_SELECT:
-						pNodeCstData->interactionState = mxcWindowInput.leftMouseButton ?
-															 NODE_INTERACTION_STATE_SELECT :
-															 NODE_INTERACTION_STATE_NONE;
+						pNodeCstData->interactionState = mxcWindowInput.leftMouseButton
+						                                     ? NODE_INTERACTION_STATE_SELECT
+						                                     : NODE_INTERACTION_STATE_NONE;
 						break;
 					default: break;
 				}
@@ -988,7 +971,8 @@ CompositeLoop:
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
 			// TODO this should bne a descriptor array
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(
+				gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}
 	}
@@ -1005,7 +989,8 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(
+				gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}
 	}
@@ -1020,7 +1005,8 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(
+				gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 		}
 	}
@@ -1037,15 +1023,11 @@ CompositeLoop:
 		auto pNodeShrd = pDuplicatedNodeShared[iNode];
 		auto pNodeCstData = &nodeCompositorData[iNode];
 
-		auto lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)} ;
-		switch(pNodeCstData->interactionState) {
-			case NODE_INTERACTION_STATE_HOVER:
-				lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)} ;
-				break;
-			case NODE_INTERACTION_STATE_SELECT:
-				lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)} ;
-				break;
-			default: break;
+		auto lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)};
+		switch (pNodeCstData->interactionState) {
+			case NODE_INTERACTION_STATE_HOVER:  lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)}; break;
+			case NODE_INTERACTION_STATE_SELECT: lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)}; break;
+			default:                            break;
 		}
 
 		vkCmdPushLineMaterial(gfxCmd, lineState);
@@ -1073,7 +1055,8 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(
+				gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 		}
 
@@ -1085,17 +1068,19 @@ CompositeLoop:
 
 	//// Blit Framebuffer
 	{
-		u32 frameIdx; CmdSwapAcquire(device, pSwapCtx, &frameIdx);
+		u32 frameIdx;
+		CmdSwapAcquire(device, pSwapCtx, &frameIdx);
 		auto pSwap = &pSwapCtx->frames[frameIdx];
 
-		CMD_IMAGE_BARRIERS(gfxCmd,
+		CMD_IMAGE_BARRIERS(
+			gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = gfxFrameColorImg,
 				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1103,7 +1088,7 @@ CompositeLoop:
 				VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			},
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1111,24 +1096,24 @@ CompositeLoop:
 				VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_UNDEFINED,
 				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
-			},
-		);
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			});
 
 		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 		u32   pixelCt = extent.x * extent.y;
 		u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipe);
 		CMD_BIND_DESCRIPTOR_SETS(
-			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_GLOBAL,
-			globalSet);
+			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout,
+			PIPE_SET_INDEX_FINAL_BLIT_GLOBAL, globalSet);
 		CMD_PUSH_DESCRIPTOR_SETS(
 			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT,
 			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(gfxFrameColorView, compFrameColorView),
 			BIND_WRITE_FINAL_BLIT_DST(pSwap->view));
 		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
-		CMD_IMAGE_BARRIERS(gfxCmd,
+		CMD_IMAGE_BARRIERS(
+			gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pSwap->image,
@@ -1144,15 +1129,14 @@ CompositeLoop:
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-			},
-		);
+			});
 	}
 
 	vk.EndCommandBuffer(gfxCmd);
 
 	///////////////////////////////
 	//// MXC_CYCLE_RENDER_COMPOSITE
-	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline); // Signal will submit gfxCmd on main
+	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);  // Signal will submit gfxCmd on main
 	baseCycleValue += MXC_CYCLE_COUNT;
 
 	//////////////////////////////////
@@ -1162,7 +1146,7 @@ CompositeLoop:
 		u64 timestampsNS[TIME_QUERY_COUNT];
 		VK_ASSERT(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
 		double timestampsMS[TIME_QUERY_COUNT];
-		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i)	timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
 		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
 	}
 
@@ -1173,55 +1157,50 @@ CompositeLoop:
 ///////////
 //// Create
 ////
-void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
-{
+void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
 	CreateNodeSetLayout((MxcCompositorMode*)pInfo->enabledCompositorModes, &pCst->nodeSetLayout);
 	CreateGraphicsNodePipeLayout(pCst->nodeSetLayout, &pCst->nodePipeLayout);
-	
+
 	/// Graphics Pipes
 	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_QUAD]) {
 		vkCreateQuadMesh(0.5f, &pCst->quadMesh);
-		vkCreateBasicPipe("./shaders/basic_comp.vert.spv",
-						  "./shaders/basic_comp.frag.spv",
-						  vk.context.basicPass,
-						  pCst->nodePipeLayout,
-						  &pCst->nodeQuadPipe);
+		vkCreateBasicPipe(
+			"./shaders/basic_comp.vert.spv",
+			"./shaders/basic_comp.frag.spv",
+			vk.context.basicPass,
+			pCst->nodePipeLayout,
+			&pCst->nodeQuadPipe);
 	}
 
 	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TESSELATION]) {
 		vkCreateQuadPatchMeshSharedMemory(&pCst->quadPatchMesh);
-		vkCreateBasicTessellationPipe("./shaders/tess_comp.vert.spv",
-									  "./shaders/tess_comp.tesc.spv",
-									  "./shaders/tess_comp.tese.spv",
-									  "./shaders/tess_comp.frag.spv",
-									  vk.context.basicPass,
-									  pCst->nodePipeLayout,
-									  &pCst->nodeTessPipe);
+		vkCreateBasicTessellationPipe(
+			"./shaders/tess_comp.vert.spv",
+			"./shaders/tess_comp.tesc.spv",
+			"./shaders/tess_comp.tese.spv",
+			"./shaders/tess_comp.frag.spv",
+			vk.context.basicPass,
+			pCst->nodePipeLayout,
+			&pCst->nodeTessPipe);
 	}
 
-//	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
-//		vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
-//								  "./shaders/mesh_comp.mesh.spv",
-//								  "./shaders/mesh_comp.frag.spv",
-//								  vk.context.basicPass,
-//								  pCst->nodePipeLayout,
-//								  &pCst->nodeTaskMeshPipe);
-//	}
+	//	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
+	//		vkCreateBasicTaskMeshPipe("./shaders/mesh_comp.task.spv",
+	//								  "./shaders/mesh_comp.mesh.spv",
+	//								  "./shaders/mesh_comp.frag.spv",
+	//								  vk.context.basicPass,
+	//								  pCst->nodePipeLayout,
+	//								  &pCst->nodeTaskMeshPipe);
+	//	}
 
 	/// Compute Pipe
 	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
 		CreateComputeOutputSetLayout(&pCst->compOutputSetLayout);
-		
-		CreateNodeComputePipeLayout(pCst->nodeSetLayout,
-									pCst->compOutputSetLayout,
-									&pCst->nodeCompPipeLayout);
-		
-		vkCreateComputePipe("./shaders/compute_compositor.comp.spv",
-							pCst->nodeCompPipeLayout,
-							&pCst->nodeCompPipe);
-		vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv",
-							pCst->nodeCompPipeLayout,
-							&pCst->nodePostCompPipe);
+
+		CreateNodeComputePipeLayout(pCst->nodeSetLayout, pCst->compOutputSetLayout, &pCst->nodeCompPipeLayout);
+
+		vkCreateComputePipe("./shaders/compute_compositor.comp.spv", pCst->nodeCompPipeLayout, &pCst->nodeCompPipe);
+		vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv", pCst->nodeCompPipeLayout, &pCst->nodePostCompPipe);
 	}
 
 	/// Line Pipe
@@ -1251,9 +1230,9 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.maxSets = MXC_NODE_CAPACITY * 3,
 			.poolSizeCount = 3,
 			.pPoolSizes = (VkDescriptorPoolSize[]){
-				{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         .descriptorCount = MXC_NODE_CAPACITY},
+				{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = MXC_NODE_CAPACITY},
 				{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MXC_NODE_CAPACITY},
-				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          .descriptorCount = MXC_NODE_CAPACITY},
+				{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = MXC_NODE_CAPACITY},
 			},
 		};
 		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
@@ -1332,16 +1311,17 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 	{
 		VkTextureCreateInfo atomicCreateInfo = {
 			.debugName = "ComputeAtomicFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo){
-				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_FORMAT_R32_UINT,
-				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_IMAGE_USAGE_STORAGE_BIT,
-			},
+			.pImageCreateInfo =
+				&(VkImageCreateInfo){
+					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = VK_FORMAT_R32_UINT,
+					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = VK_IMAGE_USAGE_STORAGE_BIT,
+				},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = VK_LOCALITY_CONTEXT,
 		};
@@ -1349,16 +1329,17 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 		VkTextureCreateInfo colorCreateInfo = {
 			.debugName = "ComputeColorFramebuffer",
-			.pImageCreateInfo = &(VkImageCreateInfo){
-				VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-				.imageType = VK_IMAGE_TYPE_2D,
-				.format = VK_FORMAT_R8G8B8A8_UNORM,
-				.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-				.mipLevels = 1,
-				.arrayLayers = 1,
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-			},
+			.pImageCreateInfo =
+				&(VkImageCreateInfo){
+					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = VK_FORMAT_R8G8B8A8_UNORM,
+					.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+				},
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = VK_LOCALITY_CONTEXT,
 		};
@@ -1377,8 +1358,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(pCst->compOutSet, pCst->compFrameAtomicTex.view),
 			BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(pCst->compOutSet, pCst->compFrameColorTex.view));
 
-		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)
-		{
+		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS) {
 			VkImageMemoryBarrier2 barrs[] = {
 				(VkImageMemoryBarrier2){
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1402,20 +1382,13 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 	}
 }
 
-void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
-{
-	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_QUAD]) {
-
-	}
+void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_QUAD]) {}
 	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TESSELATION]) {
 		vkBindUpdateQuadPatchMesh(0.5f, &pCst->quadPatchMesh);
 	}
-	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
-
-	}
-	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_COMPUTE]) {
-
-	}
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {}
+	if (pInfo->enabledCompositorModes[MXC_COMPOSITOR_MODE_COMPUTE]) {}
 
 	vkBindSharedBuffer(&pCst->lineBuf.buffer);
 	pCst->lineBuf.pMapped = vkSharedBufferPtr(pCst->lineBuf.buffer);
@@ -1439,8 +1412,7 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	}
 }
 
-void* mxcCompNodeThread(MxcCompositorContext* pCtx)
-{
+void* mxcCompNodeThread(MxcCompositorContext* pCtx) {
 	MxcCompositor compositor = {};
 
 	MxcCompositorCreateInfo info = {
