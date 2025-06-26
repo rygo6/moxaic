@@ -41,7 +41,7 @@ ReflowComments: Never
 
 BreakBeforeBraces: Custom
 BraceWrapping:
-  AfterFunction: false
+  AfterFunction: true
   AfterNamespace: false
   AfterStruct: false
   AfterUnion: false

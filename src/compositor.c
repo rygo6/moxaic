@@ -45,7 +45,8 @@ constexpr VkShaderStageFlags COMPOSITOR_MODE_STAGE_FLAGS[] = {
 	[MXC_COMPOSITOR_MODE_COMPUTE]     = VK_SHADER_STAGE_COMPUTE_BIT,
 };
 
-static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout* pLayout) {
+static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout* pLayout)
+{
 	VkShaderStageFlags stageFlags = 0;
 	for (int i = 0; i < MXC_COMPOSITOR_MODE_COUNT; ++i)
 		if (pModes[i]) stageFlags |= COMPOSITOR_MODE_STAGE_FLAGS[i];
@@ -122,7 +123,8 @@ enum {
 	PIPE_SET_INDEX_NODE_GRAPHICS_NODE,
 	PIPE_SET_INDEX_NODE_GRAPHICS_COUNT,
 };
-static void CreateGraphicsNodePipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pPipeLayout) {
+static void CreateGraphicsNodePipeLayout(VkDescriptorSetLayout nodeSetLayout, VkPipelineLayout* pPipeLayout)
+{
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_NODE_GRAPHICS_COUNT,
@@ -142,7 +144,8 @@ enum {
 	SET_BIND_INDEX_NODE_COMPUTE_COUNT,
 };
 
-static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout) {
+static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout)
+{
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = SET_BIND_INDEX_NODE_COMPUTE_COUNT,
@@ -166,26 +169,26 @@ static void CreateComputeOutputSetLayout(VkDescriptorSetLayout* pLayout) {
 #define BIND_WRITE_NODE_COMPUTE_ATOMIC_OUTPUT(set, view)             \
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
-			.dstSet = set,                                           \
-			.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT, \
-			.descriptorCount = 1,                                    \
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,      \
-			.pImageInfo = &(VkDescriptorImageInfo){                  \
-				.imageView = view,                                   \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,              \
-			},                                                       \
+		.dstSet = set,                                           \
+		.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_ATOMIC_OUTPUT, \
+		.descriptorCount = 1,                                    \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,      \
+		.pImageInfo = &(VkDescriptorImageInfo){                  \
+			.imageView = view,                                   \
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,              \
+		},                                                       \
 	}
 #define BIND_WRITE_NODE_COMPUTE_COLOR_OUTPUT(set, view)             \
 	(VkWriteDescriptorSet) {                                        \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                     \
-			.dstSet = set,                                          \
-			.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT, \
-			.descriptorCount = 1,                                   \
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,     \
-			.pImageInfo = &(VkDescriptorImageInfo){                 \
-				.imageView = view,                                  \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,             \
-			},                                                      \
+		.dstSet = set,                                          \
+		.dstBinding = SET_BIND_INDEX_NODE_COMPUTE_COLOR_OUTPUT, \
+		.descriptorCount = 1,                                   \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,     \
+		.pImageInfo = &(VkDescriptorImageInfo){                 \
+			.imageView = view,                                  \
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,             \
+		},                                                      \
 	}
 
 enum {
@@ -195,8 +198,8 @@ enum {
 	PIPE_SET_INDEX_NODE_COMPUTE_COUNT,
 };
 
-static void
-CreateNodeComputePipeLayout(VkDescriptorSetLayout nodeSetLayout, VkDescriptorSetLayout computeOutputSetLayout, VkPipelineLayout* pPipeLayout) {
+static void CreateNodeComputePipeLayout(VkDescriptorSetLayout nodeSetLayout, VkDescriptorSetLayout computeOutputSetLayout, VkPipelineLayout* pPipeLayout)
+{
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_NODE_COMPUTE_COUNT,
@@ -218,7 +221,8 @@ enum {
 	SET_BIND_INDEX_GBUFFER_PROCESS_COUNT
 };
 
-static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout) {
+static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
+{
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
@@ -306,7 +310,8 @@ enum {
 	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
 	PIPE_SET_INDEX_GBUFFER_PROCESS_COUNT,
 };
-static void CreateGBufferProcessPipeLayout(VkDescriptorSetLayout layout, VkPipelineLayout* pPipeLayout) {
+static void CreateGBufferProcessPipeLayout(VkDescriptorSetLayout layout, VkPipelineLayout* pPipeLayout)
+{
 	VkPipelineLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = PIPE_SET_INDEX_GBUFFER_PROCESS_COUNT,
@@ -331,7 +336,8 @@ enum {
 
 typedef VkDescriptorSetLayout FinalBlitSetLayout;
 
-static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout) {
+static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout)
+{
 	VkDescriptorSetLayoutCreateInfo createInfo = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
@@ -357,29 +363,31 @@ static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout) {
 #define BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(_graphicsView, _computeView) \
 	(VkWriteDescriptorSet) {                                                        \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                     \
-			.dstBinding = SET_BIND_INDEX_FINAL_BLIT_SRC,                            \
-			.descriptorCount = BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COUNT,               \
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,                     \
-			.pImageInfo = (VkDescriptorImageInfo[]){                                \
-				[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER] = {          \
-					.imageView = _graphicsView,                                     \
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                         \
-				},                                                                  \
-				[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER] = {           \
-					.imageView = _computeView,                                      \
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                         \
-				},                                                                  \
+		.dstBinding = SET_BIND_INDEX_FINAL_BLIT_SRC,                                \
+		.descriptorCount = BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COUNT,                   \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,                         \
+		.pImageInfo = (VkDescriptorImageInfo[]){                                    \
+			[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER] = {              \
+				.imageView = _graphicsView,                                         \
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                             \
 			},                                                                      \
+			[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER] = {               \
+				.imageView = _computeView,                                          \
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                             \
+			},                                                                      \
+		},                                                                          \
 	}
-#define BIND_WRITE_FINAL_BLIT_DST(_view)                                                                           \
-	(VkWriteDescriptorSet) {                                                                                       \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = SET_BIND_INDEX_FINAL_BLIT_DST, .descriptorCount = 1, \
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .pImageInfo = (VkDescriptorImageInfo[]) {              \
-			{                                                                                                      \
-				.imageView = _view,                                                                                \
-				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                                                            \
-			},                                                                                                     \
-		}                                                                                                          \
+#define BIND_WRITE_FINAL_BLIT_DST(_view)                                                              \
+	(VkWriteDescriptorSet) {                                                                          \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                                       \
+		.dstBinding = SET_BIND_INDEX_FINAL_BLIT_DST,                                                  \
+		.descriptorCount = 1,                                                                         \
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .pImageInfo = (VkDescriptorImageInfo[]) { \
+			{                                                                                         \
+				.imageView = _view,                                                                   \
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                                               \
+			},                                                                                        \
+		}                                                                                             \
 	}
 
 enum {
@@ -624,7 +632,8 @@ VkImageLayout processFinalLayout[] = {
 ////////
 //// Run
 ////
-void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst) {
+void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
+{
 	//// Local Extract
 	EXTRACT_FIELD(&vk.context, device);
 	EXTRACT_FIELD(&vk.context, basicPass);
@@ -1161,7 +1170,8 @@ CompositeLoop:
 ///////////
 //// Create
 ////
-void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
+void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
+{
 	CreateNodeSetLayout((MxcCompositorMode*)pInfo->enabledCompositorModes, &pCst->nodeSetLayout);
 	CreateGraphicsNodePipeLayout(pCst->nodeSetLayout, &pCst->nodePipeLayout);
 
@@ -1416,7 +1426,8 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	}
 }
 
-void* mxcCompNodeThread(MxcCompositorContext* pCtx) {
+void* mxcCompNodeThread(MxcCompositorContext* pCtx)
+{
 	MxcCompositor compositor = {};
 
 	MxcCompositorCreateInfo info = {
