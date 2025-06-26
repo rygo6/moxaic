@@ -2911,7 +2911,7 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 
 	uint32_t swapCount;
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
-	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swap image count does not match requested swap count!");
+	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swaps image count does not match requested swaps count!");
 	VkImage images[VK_SWAP_COUNT];
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, images));
 

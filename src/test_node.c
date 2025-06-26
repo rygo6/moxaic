@@ -54,7 +54,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	MxcNodeImports* pImports = pNodeContext->pNodeImports;
-	MxcSwap*        pSwap = pNodeContext->swap;
+	MxcSwap*        pSwap = pNodeContext->swaps;
 
 	VkDevice        device = pNode->device;
 	VkCommandBuffer cmd = pNodeContext->cmd;

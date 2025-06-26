@@ -808,9 +808,7 @@ CompositeLoop:
 				pAcquireBarriers[1].image = pNodeSwap->depth;
 				pAcquireBarriers[1].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[2].image = pNodeSwap->gBuffer;
-				pAcquireBarriers[2].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[3].image = pNodeSwap->gBufferMip;
-				pAcquireBarriers[3].dstQueueFamilyIndex = mainGraphicsIndex,
 				CmdPipelineImageBarriers2(gfxCmd, processAcquireBarrierCount, pAcquireBarriers);
 
 				// TODO this needs to be specifically only the rect which was rendered into

@@ -312,32 +312,43 @@ static int CleanupNode(NodeHandle handle)
 			}
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_EXPORTED:
-			// we don't want to close local handle, only the duplicated handle
+
+			// Don't close handles unless we are actually free'ing
 //			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-//				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeCtxt->swap[i].color.memory));
-//				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeCtxt->swap[i]..memory));
-//				CLOSE_HANDLE(vkGetMemoryExternalHandle(pNodeCtxt->swap[i].gbuffer.memory));
+//				CLOSE_HANDLE(pNodeCtxt->swap[i].colorExternal.handle);
+//				CLOSE_HANDLE(pNodeCtxt->swap[i].depthExternal.handle);
 //			}
-//			CLOSE_HANDLE(vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline));
+//			CLOSE_HANDLE(pNodeCtxt->compositorTimelineHandle);
+//			CLOSE_HANDLE(pNodeCtxt->nodeTimelineHandle);
+
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_IMPORTED:
-			// this should probably run on the node when closing, but it also seems to clean itself up fine ?
-//			for (int i = 0; i < MIDVK_SWAP_COUNT; ++i) {
-//				CLOSE_HANDLE(pImportedExternalMemory->importParam.framebufferHandles[i].color);
-//				CLOSE_HANDLE(pImportedExternalMemory->importParam.framebufferHandles[i].normal);
-//				CLOSE_HANDLE(pImportedExternalMemory->importParam.framebufferHandles[i].gbuffer);
-//			}
-//			CLOSE_HANDLE(pImportedExternalMemory->importParam.nodeTimelineHandle);
-//			CLOSE_HANDLE(pImportedExternalMemory->importParam.compTimelineHandle);
-//			if (!UnmapViewOfFile(pImportedExternalMemory)) {
-//				DWORD dwError = GetLastError();
-//				printf("Could not unmap view of file (%d).\n", dwError);
-//			}
-//			CLOSE_HANDLE(pImportedExternalMemory);
-//			CLOSE_HANDLE(pNodeContext->processHandle);
+			// The process which imported the handle must close them.
+			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
+				CLOSE_HANDLE(pImportedExternalMemory->imports.colorSwapHandles[i]);
+				CLOSE_HANDLE(pImportedExternalMemory->imports.depthSwapHandles[i]);
+			}
+			CLOSE_HANDLE(pImportedExternalMemory->imports.swapsSyncedHandle);
+			CLOSE_HANDLE(pImportedExternalMemory->imports.nodeTimelineHandle);
+			CLOSE_HANDLE(pImportedExternalMemory->imports.compositorTimelineHandle);
+			if (!UnmapViewOfFile(pImportedExternalMemory)) {
+				DWORD dwError = GetLastError();
+				printf("Could not unmap view of file (%lu).\n", dwError);
+			}
+			CLOSE_HANDLE(pNodeCtxt->processHandle);
 			break;
 		default: PANIC("Node type not supported");
 	}
+
+	int swapBlockIndex = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeCtxt->swapType];
+	for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
+		if (HANDLE_VALID(pNodeCtxt->hSwaps[i]))
+			BLOCK_RELEASE(node.block.swap[swapBlockIndex], pNodeCtxt->hSwaps[i]);
+	}
+
+
+	// Do I actually want to release data?!
+	// This needs an option
 
 	// must first release command buffer
 //	vkDestroySemaphore(vk.context.device, pNodeCtxt->nodeTimeline, VK_ALLOC);
@@ -697,7 +708,9 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
 
 		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+
 		pNodeCtxt->compositorTimeline = compositorContext.timeline;
+		pNodeCtxt->compositorTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->compositorTimeline);
 
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
@@ -705,6 +718,7 @@ static void InterprocessServerAcceptNodeConnection()
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
 		vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->nodeTimeline);
+		pNodeCtxt->nodeTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline);
 
 		pNodeCtxt->pNodeShared = pNodeShrd;
 
@@ -719,15 +733,21 @@ static void InterprocessServerAcceptNodeConnection()
 	// Create node data
 	{
 		HANDLE currentHandle = GetCurrentProcess();
-		WIN32_CHECK(DuplicateHandle(currentHandle, pNodeCtxt->swapsSyncedHandle, hNodeProc, &pImports->swapsSyncedHandle,
-									0, false, DUPLICATE_SAME_ACCESS),
-					"Duplicate nodeFenceHandle handle fail.");
-		WIN32_CHECK(DuplicateHandle(currentHandle, vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline), hNodeProc, &pImports->nodeTimelineHandle,
-									0, false, DUPLICATE_SAME_ACCESS),
-					"Duplicate nodeTimeline handle fail.");
-		WIN32_CHECK(DuplicateHandle(currentHandle, vkGetSemaphoreExternalHandle(compositorContext.timeline), hNodeProc, &pImports->compositorTimelineHandle,
-									0, false, DUPLICATE_SAME_ACCESS),
-					"Duplicate timeline handle fail.");
+		WIN32_CHECK(DuplicateHandle(
+						currentHandle, pNodeCtxt->swapsSyncedHandle,
+						hNodeProc, &pImports->swapsSyncedHandle,
+						0, false, DUPLICATE_SAME_ACCESS),
+			"Duplicate nodeFenceHandle handle fail.");
+		WIN32_CHECK(DuplicateHandle(
+						currentHandle, pNodeCtxt->nodeTimelineHandle,
+						hNodeProc, &pImports->nodeTimelineHandle,
+						0, false, DUPLICATE_SAME_ACCESS),
+			"Duplicate nodeTimeline handle fail.");
+		WIN32_CHECK(DuplicateHandle(
+						currentHandle, pNodeCtxt->compositorTimelineHandle,
+						hNodeProc, &pImports->compositorTimelineHandle,
+						0, false, DUPLICATE_SAME_ACCESS),
+			"Duplicate timeline handle fail.");
 	}
 
 	// Send shared memory handle
@@ -1036,16 +1056,22 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		.locality       = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 	};
 
+	pNodeCtx->swapType = pNodeShrd->swapType; // we need something elegant to signify this is duplicated state between shared import and context
 	int swapBlockIndex = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShrd->swapType];
 	for (int si = 0; si < swapCt; ++si) {
 
 		bHnd hSwap = BLOCK_CLAIM(node.block.swap[swapBlockIndex], 0);
 		if (!HANDLE_VALID(hSwap)) {
-			LOG_ERROR("Fail to claim swap!\n");
+			LOG_ERROR("Fail to claim swaps!\n");
 			goto ExitError;
 		}
 
+		pNodeCtx->hSwaps[si] = hSwap;
+
 		auto pSwap = BLOCK_PTR(node.block.swap[swapBlockIndex], hSwap);
+
+		// Should we release or always recreate images?
+		// Until they are sharing different size probably better to release
 		if (pSwap->color.image == NULL) {
 			mxcCreateSwap(&swapInfo, pSwap);
 			printf("Created Swap %d: %d %d\n", si, pNodeShrd->swapWidth, pNodeShrd->swapHeight);

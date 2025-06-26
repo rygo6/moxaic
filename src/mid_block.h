@@ -81,11 +81,11 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 		assert(_handle >= 0 && #block ": Claiming handle. Out of capacity.");                                             \
 		(block_handle) _handle;                                                                                           \
 	})
-#define BLOCK_RELEASE(block, handle)                                                                                                                       \
-	({                                                                                                                                                     \
-		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Releasing block handle. Out of range."); \
-		assert(BITSET(block.occupied, HANDLE_INDEX(handle)) && #block ": Releasing block handle. Should be occupied.");                                     \
-		BITCLEAR(block.occupied, (int)HANDLE_INDEX(handle));                                                                                               \
+#define BLOCK_RELEASE(_block, _handle)                                                                                                           \
+	({                                                                                                                                           \
+		assert(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_block.blocks) && #_block ": Releasing block handle. Out of range."); \
+		assert(BITSET(_block.occupied, HANDLE_INDEX(_handle)) && #_block ": Releasing block handle. Should be occupied.");                       \
+		BITCLEAR(_block.occupied, (int)HANDLE_INDEX(_handle));                                                                                   \
 	})
 #define BLOCK_FIND(block, hash)                                                   \
 	({                                                                            \

@@ -2149,7 +2149,7 @@ XR_PROC xrCreateSwapchain(
 				HANDLE colorHandle;
 				xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
 				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, colorHandle);
-				printf("Imported gl swap texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
+				printf("Imported gl swaps texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
 			}
 			#undef DEFAULT_IMAGE_CREATE_INFO
 			break;
@@ -2165,7 +2165,7 @@ XR_PROC xrCreateSwapchain(
 						HANDLE colorHandle;
 						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
 						assert(colorHandle != NULL);
-						LOG("Importing d3d11 color swap. Device: %p Handle: %p\n", (void*)device5, colorHandle);
+						LOG("Importing d3d11 color swaps. Device: %p Handle: %p\n", (void*)device5, colorHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
 						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
 						// For color the local resource can directly be the transfer resource.
@@ -2176,11 +2176,11 @@ XR_PROC xrCreateSwapchain(
 						HANDLE gbufferHandle;
 						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_DEPTH, &gbufferHandle);
 						assert(gbufferHandle != NULL);
-						LOG("Importing d3d11 transferTexture swap. Device: %p Handle: %p\n", (void*)device5, gbufferHandle);
+						LOG("Importing d3d11 transferTexture swaps. Device: %p Handle: %p\n", (void*)device5, gbufferHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, gbufferHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
 						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
 
-						LOG("Create d3d11 swap depth. Device: %p\n", (void*)device5);
+						LOG("Create d3d11 swaps depth. Device: %p\n", (void*)device5);
 						D3D11_TEXTURE2D_DESC desc = {
 							.Width = createInfo->width,
 							.Height = createInfo->height,
