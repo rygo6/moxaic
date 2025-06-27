@@ -762,7 +762,7 @@ CompositeLoop:
 		for (u32 iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			atomic_thread_fence(memory_order_acquire);
 			auto hNode = pActiveNodes->handles[iNode];
-			auto pNodeShrd = pDuplicatedNodeShared[hNode];
+			auto pNodeShrd = node.pShared[hNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
 
 			//// Update Root Pose
@@ -834,15 +834,15 @@ CompositeLoop:
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipView));
 				vk.CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
 
-				CMD_IMAGE_BARRIERS(
-					gfxCmd, {
-								VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-								.image = pNodeSwap->gBufferMip,
-								.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-								VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-								VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-								VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-							});
+				CMD_IMAGE_BARRIERS(gfxCmd,
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pNodeSwap->gBufferMip,
+						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					});
 
 				CMD_PUSH_SETS(
 					gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
@@ -970,9 +970,14 @@ CompositeLoop:
 
 	vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
 
-	//// Graphics Quad Node Commands
+	bool hasGfx = false;
+	bool hasComp = false;
+
+		//// Graphics Quad Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
 	if (activeNodes[MXC_COMPOSITOR_MODE_QUAD].ct > 0) {
+		hasGfx = true;
+
 		auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_QUAD];
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeQuadPipe);
 		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadMeshBuf}, (VkDeviceSize[]){quadMeshOffsets.vertexOffset});
@@ -992,6 +997,8 @@ CompositeLoop:
 	//// Graphics Tesselation Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
 	if (activeNodes[MXC_COMPOSITOR_MODE_TESSELATION].ct > 0) {
+		hasGfx = true;
+
 		auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_TESSELATION];
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeTessPipe);
 		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadPatchBuf}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
@@ -1000,8 +1007,7 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
-			vk.CmdBindDescriptorSets(
-				gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}
 	}
@@ -1010,14 +1016,15 @@ CompositeLoop:
 	//// Graphics Task Mesh Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
 	if (activeNodes[MXC_COMPOSITOR_MODE_TASK_MESH].ct > 0) {
+		hasGfx = true;
+
 		auto pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_TASK_MESH];
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeTaskMeshPipe);
 
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
-			vk.CmdBindDescriptorSets(
-				gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 		}
 	}
@@ -1025,20 +1032,26 @@ CompositeLoop:
 
 	//// Graphic Line Commands
 	// TODO this could be another thread and run at a lower rate
+	hasGfx = true;
+
 	vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
 	vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
 
 	vkCmdSetLineWidth(gfxCmd, 1.0f);
 
 	for (int iNode = 0; iNode < nodeCount; ++iNode) {
-		auto pNodeShrd = pDuplicatedNodeShared[iNode];
+		auto pNodeShrd = node.pShared[iNode];
 		auto pNodeCstData = &nodeCompositorData[iNode];
 
 		auto lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)};
 		switch (pNodeCstData->interactionState) {
-			case NODE_INTERACTION_STATE_HOVER:  lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)}; break;
-			case NODE_INTERACTION_STATE_SELECT: lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)}; break;
-			default:                            break;
+			case NODE_INTERACTION_STATE_HOVER:
+				lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)};
+				break;
+			case NODE_INTERACTION_STATE_SELECT:
+				lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)};
+				break;
+			default: break;
 		}
 
 		vkCmdPushLineMaterial(gfxCmd, lineState);
@@ -1054,9 +1067,11 @@ CompositeLoop:
 	//// Compute Recording Cycle
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_BEGIN);
 	if (activeNodes[MXC_COMPOSITOR_MODE_COMPUTE].ct > 0) {
+		hasComp = true;
+
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipe);
-		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutSet, 0, NULL);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
 
 		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 		int   pixelCt = extent.x * extent.y;
@@ -1066,8 +1081,7 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
-			vk.CmdBindDescriptorSets(
-				gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
 			vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 		}
 
@@ -1083,8 +1097,7 @@ CompositeLoop:
 		CmdSwapAcquire(device, pSwapCtx, &frameIdx);
 		auto pSwap = &pSwapCtx->frames[frameIdx];
 
-		CMD_IMAGE_BARRIERS(
-			gfxCmd,
+		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = gfxFrameColorImg,
@@ -1114,17 +1127,13 @@ CompositeLoop:
 		u32   pixelCt = extent.x * extent.y;
 		u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipe);
-		CMD_BIND_DESCRIPTOR_SETS(
-			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout,
-			PIPE_SET_INDEX_FINAL_BLIT_GLOBAL, globalSet);
-		CMD_PUSH_DESCRIPTOR_SETS(
-			gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT,
-			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(gfxFrameColorView, compFrameColorView),
+		CMD_BIND_DESCRIPTOR_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_GLOBAL, globalSet);
+		CMD_PUSH_DESCRIPTOR_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT,
+			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(hasGfx ? gfxFrameColorView : VK_NULL_HANDLE, hasComp ? compFrameColorView : VK_NULL_HANDLE),
 			BIND_WRITE_FINAL_BLIT_DST(pSwap->view));
 		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
 
-		CMD_IMAGE_BARRIERS(
-			gfxCmd,
+		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = pSwap->image,

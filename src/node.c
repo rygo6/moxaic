@@ -17,13 +17,12 @@ MxcNodeContext nodeContext[MXC_NODE_CAPACITY] = {};
 // Node state in Compositor Process
 u16                   nodeCount = 0;
 MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
-MxcNodeShared*        pDuplicatedNodeShared[MXC_NODE_CAPACITY] = {};
 
 MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT] = {};
 
 // Only used for local thread nodes. Node from other process will use shared memory.
 // Maybe I could just always make it use shared memory for consistency’s sake?
-MxcNodeShared localNodeShared[MXC_NODE_CAPACITY] = {};
+MxcNodeShared localNodeShared[MXC_NODE_CAPACITY] = {}; // No lets get rid of this and use malloc
 
 // Compositor state in Compositor Process
 MxcCompositorContext compositorContext = {};
@@ -39,6 +38,8 @@ size_t                     submitNodeQueueEnd = 0;
 MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
 MxcVulkanNodeContext vkNode = {};
+
+struct Node node;
 
 //////////////
 //// Swap Pool
@@ -64,22 +65,6 @@ MxcVulkanNodeContext vkNode = {};
 	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
 	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
 
-constexpr int MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[] = {
-	[XR_SWAP_TYPE_UNKNOWN]              = 0,
-	[XR_SWAP_TYPE_MONO_SINGLE]          = 0,
-	[XR_SWAP_TYPE_STEREO_SINGLE]        = 0,
-	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE]   = 2,
-};
-constexpr int MXC_SWAP_TYPE_BLOCK_COUNT = 3;
-
-static struct {
-
-	struct {
-		BLOCK_DECL(MxcSwap, XR_SESSIONS_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];
-	} block;
-
-} node;
 
 void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 {
@@ -268,19 +253,36 @@ NodeHandle RequestLocalNodeHandle()
 	// TODO this claim/release handle needs to be a pooling logic
 	NodeHandle handle = atomic_fetch_add(&nodeCount, 1);
 	localNodeShared[handle] = (MxcNodeShared){};
-	pDuplicatedNodeShared[handle] = &localNodeShared[handle];
+	node.pShared[handle] = &localNodeShared[handle];
 	return handle;
 }
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
 	NodeHandle handle = atomic_fetch_add(&nodeCount, 1);
-	pDuplicatedNodeShared[handle] = pNodeShared;
+	node.pShared[handle] = pNodeShared;
 	return handle;
 }
 void ReleaseNode(NodeHandle handle)
 {
 	assert(nodeContext[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
-	int newCount = atomic_fetch_sub(&nodeCount, 1);
+	auto pNodeCtxt = &nodeContext[handle];
+	auto pNodeShrd = node.pShared[handle];
+	auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
+
+	// this needs to be done on the compositor thread
+	ATOMIC_FENCE_BLOCK {
+		int i = 0;
+		for (; i < pActiveNode->ct; ++i) {
+			if (pActiveNode->handles[i] == handle)
+				break;
+		}
+		for (; i < pActiveNode->ct - 1; ++i) {
+			pActiveNode->handles[i] = pActiveNode->handles[i + 1];
+		}
+		pActiveNode->ct--;
+	}
+
+	int newCount = atomic_fetch_sub(&nodeCount, 1) - 1;
 	printf("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
@@ -1036,7 +1038,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 	LOG("Claiming Swap for Node %d\n", hNode);
 
 	auto pNodeCtx = &nodeContext[hNode];
-	auto pNodeShrd = pDuplicatedNodeShared[hNode];
+	auto pNodeShrd = node.pShared[hNode];
 	auto pNodeCompData = &nodeCompositorData[hNode];
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_INTERPROCESS_MODE_THREAD;

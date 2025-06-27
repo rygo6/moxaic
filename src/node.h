@@ -155,6 +155,15 @@ typedef struct MxcExternalNodeMemory {
 /////////
 //// Swap
 ////
+constexpr int MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[] = {
+	[XR_SWAP_TYPE_UNKNOWN]              = 0,
+	[XR_SWAP_TYPE_MONO_SINGLE]          = 0,
+	[XR_SWAP_TYPE_STEREO_SINGLE]        = 0,
+	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
+	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE]   = 2,
+};
+constexpr int MXC_SWAP_TYPE_BLOCK_COUNT = 3;
+
 typedef struct MxcSwapInfo {
 	XrSwapType        type;
 	MxcCompositorMode compositorMode;
@@ -321,7 +330,7 @@ typedef struct MxcNodeContext {
 
 	// Node/Compositor Shared
 	MxcNodeShared* pNodeShared;
-	MxcNodeImports* pNodeImports;
+	MxcNodeImports* pNodeImports; // get rid of this?
 
 
 	// these could be a union too
@@ -362,8 +371,8 @@ extern MxcNodeContext nodeContext[MXC_NODE_CAPACITY];
 
 // Could be missing if node is an external process... maybe I should malloc these?
 extern MxcNodeShared localNodeShared[MXC_NODE_CAPACITY];
-// Holds pointer to either local or external process shared memory
-extern MxcNodeShared* pDuplicatedNodeShared[MXC_NODE_CAPACITY];
+
+//extern MxcNodeShared* pDuplicatedNodeShared[MXC_NODE_CAPACITY];
 
 // Holds pointer to nodes in each compositor mode
 typedef struct MxcActiveNodes {
@@ -380,6 +389,17 @@ extern MxcExternalNodeMemory* pImportedExternalMemory;
 extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 
 extern MxcVulkanNodeContext vkNode;
+
+extern struct Node {
+
+	// Holds pointer to either local or external process shared memory
+	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
+
+	struct {
+		BLOCK_DECL(MxcSwap, XR_SESSIONS_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];
+	} block;
+
+} node;
 
 ///////////////
 //// Node Queue
@@ -455,5 +475,5 @@ int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
 static inline void mxcNodeInterprocessPoll()
 {
 	for (int i = 0; i < nodeCount; ++i)
-		mxcIpcDequeue(&pDuplicatedNodeShared[i]->nodeInterprocessFuncQueue, i);
+		mxcIpcDequeue(&node.pShared[i]->nodeInterprocessFuncQueue, i);
 }
