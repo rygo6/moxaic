@@ -33,10 +33,11 @@ void mxcProcessWindowInput()
 		default: break;
 	}
 
-
 	mxcWindowInput.iMouseCoord = IVEC2(midWindowInput.iMouseX, midWindowInput.iMouseY);
 	mxcWindowInput.fMouseCoord = VEC2(midWindowInput.fMouseX, midWindowInput.fMouseY);
-	mxcWindowInput.fDimensions = VEC2(midWindow.viewWidth, midWindow.viewHeight);
+	mxcWindowInput.iDimensions = IVEC2(midWindow.clientWidth, midWindow.clientHeight);
+	mxcWindowInput.fDimensions = VEC2(midWindow.clientWidth, midWindow.clientHeight);
+
 	mxcWindowInput.priorMouseUV.vec = mxcWindowInput.mouseUV.vec;
 	mxcWindowInput.mouseUV.vec = mxcWindowInput.fMouseCoord.vec / mxcWindowInput.fDimensions.vec;
 	mxcWindowInput.mouseUVDelta.vec = mxcWindowInput.mouseUV.vec - mxcWindowInput.priorMouseUV.vec;

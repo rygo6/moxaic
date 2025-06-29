@@ -112,7 +112,7 @@ void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo
 		pImports->claimedDepthSwapCount = 0;
 		pNodeShrd->swapType = swapType;
 		pNodeShrd->swapWidth = createInfo->width;
-		pNodeShrd->swapHeight = createInfo->height;\
+		pNodeShrd->swapHeight = createInfo->height;
 
 		mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 

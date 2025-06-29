@@ -17,7 +17,8 @@ typedef enum MxMoveDirection {
 typedef struct MxcWindowInput {
 	bool leftMouseButton;
 
-	vec2 fDimensions;
+	ivec2 iDimensions;
+	vec2  fDimensions;
 
 	ivec2 iMouseCoord;
 	vec2  fMouseCoord;

@@ -416,24 +416,24 @@ extern MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY];
 
 static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer handle)
 {
-	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	submitNodeQueue[submitNodeQueueEnd] = handle;
-	submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
-	assert(submitNodeQueueEnd != submitNodeQueueStart);
-	__atomic_thread_fence(__ATOMIC_RELEASE);
+	ATOMIC_FENCE_BLOCK {
+		submitNodeQueue[submitNodeQueueEnd] = handle;
+		submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
+		assert(submitNodeQueueEnd != submitNodeQueueStart);
+	}
 }
 static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
 {
-	__atomic_thread_fence(__ATOMIC_ACQUIRE);
-	bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
-	while (pendingBuffer) {
-		CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
+	ATOMIC_FENCE_BLOCK {
+		bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
+		while (pendingBuffer) {
+			CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
+			submitNodeQueueStart = (submitNodeQueueStart + 1) % MXC_NODE_CAPACITY;
+			atomic_thread_fence(memory_order_release);
 
-		submitNodeQueueStart = (submitNodeQueueStart + 1) % MXC_NODE_CAPACITY;
-		__atomic_thread_fence(__ATOMIC_RELEASE);
-
-		__atomic_thread_fence(__ATOMIC_ACQUIRE);
-		pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
+			atomic_thread_fence(memory_order_acquire);
+			pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
+		}
 	}
 }
 
@@ -467,13 +467,15 @@ typedef enum MxcIpcFunc {
 static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buf size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
-// I could get rid of this and just do a comparison polling on every node state like OXR does
-// or I could move this queue mechanic into OXR and make that better?
-int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, const MxcIpcFunc target);
-int mxcIpcDequeue(MxcRingBuffer* pBuffer, const NodeHandle nodeHandle);
+// move to midQueue
+int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target);
+int midRingDequeue(MxcRingBuffer* pBuffer, MxcRingBufferHandle *pTarget);
+
+int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target);
+int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
 	for (int i = 0; i < nodeCount; ++i)
-		mxcIpcDequeue(&node.pShared[i]->nodeInterprocessFuncQueue, i);
+		mxcIpcFuncDequeue(&node.pShared[i]->nodeInterprocessFuncQueue, i);
 }

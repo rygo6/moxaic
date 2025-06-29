@@ -710,26 +710,6 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 	VkGlobalSetState globSetState = (VkGlobalSetState){};
 	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState, pGlobSetMapped);
 
-	VkImageMemoryBarrier2 compCstPostBarriers[] = {
-		(VkImageMemoryBarrier2){
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.image = compFrameAtomicImg,
-			VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
-			VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
-			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-		},
-		(VkImageMemoryBarrier2){
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.image = compFrameColorImg,
-			VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
-			VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
-			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-		},
-	};
-
-
 CompositeLoop:
 
 	////////////////////////////
@@ -748,6 +728,10 @@ CompositeLoop:
 
 	//// Iterate Node State Updates
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
+
+	ivec2 windowExtent = mxcWindowInput.iDimensions;
+	int   windowPixelCt = windowExtent.x * windowExtent.y;
+	int   windowGroupCt = windowPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
 	// this should be a method as the CPU ops do not run every loop. Really it should be a different thread.
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
@@ -812,12 +796,11 @@ CompositeLoop:
 				CmdPipelineImageBarriers2(gfxCmd, processAcquireBarrierCount, pAcquireBarriers);
 
 				// TODO this needs to be specifically only the rect which was rendered into
-				// gBuffer size should be dynamically chosen?
-				ivec2 extent = IVEC2(pNodeShrd->swapWidth, pNodeShrd->swapHeight);
-				u32   pixelCt = extent.x * extent.y;
-				u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
+				ivec2 nodeSwapExtent = IVEC2(pNodeShrd->swapWidth, pNodeShrd->swapHeight);
+				u32   nodeSwapPixelCt = nodeSwapExtent.x * nodeSwapExtent.y;
+				u32   nodeSwapGroupCt = nodeSwapPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
-				ivec2 mipExtent = {extent.vec >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT};
+				ivec2 mipExtent = {nodeSwapExtent.vec >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT};
 				u32   mipPixelCt = mipExtent.x * mipExtent.y;
 				u32   mipGroupCt = MAX(mipPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT, 1);
 
@@ -847,7 +830,7 @@ CompositeLoop:
 				CMD_PUSH_SETS(
 					gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
 					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView), BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView));
-				vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
+				vk.CmdDispatch(gfxCmd, 1, nodeSwapGroupCt, 1);
 
 				pEndBarriers[0].image = pNodeSwap->gBuffer;
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
@@ -900,7 +883,6 @@ CompositeLoop:
 				// But also you probably couldn't really tell if the lines only updated at 60 fps and was a frame or two off for some node
 				bool isHovering = false;
 				for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
-
 					vec3 start = pNodeCstData->worldCorners[MXC_CUBE_SEGMENTS[i]];
 					vec3 end = pNodeCstData->worldCorners[MXC_CUBE_SEGMENTS[i + 1]];
 					pNodeCstData->worldSegments[i] = start;
@@ -950,7 +932,7 @@ CompositeLoop:
 				// Write current GlobalSetState to NodeShared for node to use in next frame
 				// - sizeof(ivec2) so we can fill in framebufferSize constrained to node swap
 				memcpy(&pNodeShrd->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-				pNodeShrd->globalSetState.framebufferSize = IVEC2(uvDiff.x * DEFAULT_WIDTH, uvDiff.y * DEFAULT_HEIGHT);
+				pNodeShrd->globalSetState.framebufferSize = IVEC2(uvDiff.x * windowExtent.x, uvDiff.y * windowExtent.y);
 				pNodeShrd->clip.ulUV = uvMinClamp;
 				pNodeShrd->clip.lrUV = uvMaxClamp;
 			}
@@ -964,8 +946,8 @@ CompositeLoop:
 	//// Graphics Pipe
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, timeline);
 
-	vk.CmdSetViewport(gfxCmd, 0, 1, &(VkViewport){.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f});
-	vk.CmdSetScissor(gfxCmd, 0, 1, &(VkRect2D){.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}});
+	vk.CmdSetViewport(gfxCmd, 0, 1, &(VkViewport){.width = windowExtent.x, .height = windowExtent.y, .maxDepth = 1.0f});
+	vk.CmdSetScissor(gfxCmd, 0, 1, &(VkRect2D){.extent = {.width = windowExtent.x, .height = windowExtent.y}});
 	CmdBeginRenderPass(gfxCmd, basicPass, gfxFrame, VK_PASS_CLEAR_COLOR, gfxFrameColorView, gfxFrameNormalView, gfxFrameDepthView);
 
 	vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
@@ -973,7 +955,7 @@ CompositeLoop:
 	bool hasGfx = false;
 	bool hasComp = false;
 
-		//// Graphics Quad Node Commands
+	//// Graphics Quad Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
 	if (activeNodes[MXC_COMPOSITOR_MODE_QUAD].ct > 0) {
 		hasGfx = true;
@@ -1031,35 +1013,37 @@ CompositeLoop:
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_END);
 
 	//// Graphic Line Commands
-	// TODO this could be another thread and run at a lower rate
-	hasGfx = true;
+	{
+		// TODO this could be another thread and run at a lower rate
+		hasGfx = true;
 
-	vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
-	vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
+		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipe);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.context.linePipeLayout, VK_PIPE_SET_INDEX_LINE_GLOBAL, 1, &globalSet, 0, NULL);
 
-	vkCmdSetLineWidth(gfxCmd, 1.0f);
+		vkCmdSetLineWidth(gfxCmd, 1.0f);
 
-	for (int iNode = 0; iNode < nodeCount; ++iNode) {
-		auto pNodeShrd = node.pShared[iNode];
-		auto pNodeCstData = &nodeCompositorData[iNode];
+		for (int iNode = 0; iNode < nodeCount; ++iNode) {
+			auto pNodeShrd = node.pShared[iNode];
+			auto pNodeCstData = &nodeCompositorData[iNode];
 
-		auto lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)};
-		switch (pNodeCstData->interactionState) {
-			case NODE_INTERACTION_STATE_HOVER:
-				lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)};
-				break;
-			case NODE_INTERACTION_STATE_SELECT:
-				lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)};
-				break;
-			default: break;
+			VkLineMaterialState lineState = {.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)};
+			switch (pNodeCstData->interactionState) {
+				case NODE_INTERACTION_STATE_HOVER:
+					lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)};
+					break;
+				case NODE_INTERACTION_STATE_SELECT:
+					lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)};
+					break;
+				default: break;
+			}
+
+			vkCmdPushLineMaterial(gfxCmd, lineState);
+
+			memcpy(pLineBuf->pMapped, &pNodeCstData->worldSegments, sizeof(vec3) * MXC_CUBE_SEGMENT_COUNT);
+
+			vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
+			vkCmdDraw(gfxCmd, MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
 		}
-
-		vkCmdPushLineMaterial(gfxCmd, lineState);
-
-		memcpy(pLineBuf->pMapped, &pNodeCstData->worldSegments, sizeof(vec3) * MXC_CUBE_SEGMENT_COUNT);
-
-		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
-		vkCmdDraw(gfxCmd, MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
 	}
 
 	vk.CmdEndRenderPass(gfxCmd);
@@ -1073,21 +1057,34 @@ CompositeLoop:
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutSet, 0, NULL);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
 
-		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
-		int   pixelCt = extent.x * extent.y;
-		int   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
-
 		MxcActiveNodes* pActiveNodes = &activeNodes[MXC_COMPOSITOR_MODE_COMPUTE];
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &nodeCompositorData[hNode];
 			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
-			vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
+			vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 		}
 
-		CmdPipelineImageBarriers2(gfxCmd, COUNT(compCstPostBarriers), compCstPostBarriers);
+		CMD_IMAGE_BARRIERS(gfxCmd,
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = compFrameAtomicImg,
+				VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
+				VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			},
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = compFrameColorImg,
+				VK_IMAGE_BARRIER_SRC_COMPUTE_READ_WRITE,
+				VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+			});
+
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
-		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
+		vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 	}
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_END);
 
@@ -1123,15 +1120,12 @@ CompositeLoop:
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 			});
 
-		ivec2 extent = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
-		u32   pixelCt = extent.x * extent.y;
-		u32   groupCt = pixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipe);
 		CMD_BIND_DESCRIPTOR_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_GLOBAL, globalSet);
 		CMD_PUSH_DESCRIPTOR_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT,
 			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(hasGfx ? gfxFrameColorView : VK_NULL_HANDLE, hasComp ? compFrameColorView : VK_NULL_HANDLE),
 			BIND_WRITE_FINAL_BLIT_DST(pSwap->view));
-		vk.CmdDispatch(gfxCmd, 1, groupCt, 1);
+		vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 
 		CMD_IMAGE_BARRIERS(gfxCmd,
 			{

@@ -995,34 +995,45 @@ void mxcShutdownInterprocessNode()
 ///////////////////
 //// IPC Func Queue
 ////
-int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target)
+int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target)
 {
-	atomic_thread_fence(memory_order_acquire);
-	MxcRingBufferHandle head = pBuffer->head;
-	MxcRingBufferHandle tail = pBuffer->tail;
-	if (head + 1 == tail) {
-		LOG_ERROR("Ring buf wrapped!\n");
-		return 1;
+	ATOMIC_FENCE_BLOCK {
+		MxcRingBufferHandle head = pBuffer->head;
+		MxcRingBufferHandle tail = pBuffer->tail;
+		if (head + 1 == tail) {
+			LOG_ERROR("Ring Buffer Wrapped!\n");
+			return 1;
+		}
+		pBuffer->targets[head] = target;
+		pBuffer->head = (head + 1) % MXC_RING_BUFFER_CAPACITY;
 	}
-	pBuffer->targets[head] = target;
-	pBuffer->head = (head + 1) % MXC_RING_BUFFER_CAPACITY;
-	atomic_thread_fence(memory_order_release);
 	return 0;
 }
 
-int mxcIpcDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle)
+int midRingDequeue(MxcRingBuffer* pBuffer, MxcRingBufferHandle *pTarget)
 {
-	atomic_thread_fence(memory_order_acquire);
-	MxcRingBufferHandle head = pBuffer->head;
-	MxcRingBufferHandle tail = pBuffer->tail;
-	if (head == tail)
+	ATOMIC_FENCE_BLOCK	{
+		MxcRingBufferHandle head = pBuffer->head;
+		MxcRingBufferHandle tail = pBuffer->tail;
+		if (head == tail)
+			return 1;
+
+		*pTarget = (MxcIpcFunc)(pBuffer->targets[tail]);
+		pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
+	}
+	return 0;
+}
+
+int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target)
+{
+	return midRingEnqueue(pBuffer, target);
+}
+
+int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle)
+{
+	MxcRingBufferHandle target;
+	if (midRingDequeue(pBuffer, &target))
 		return 1;
-
-	LOG("IPC Polling %d %d...\n", head, tail);
-	MxcIpcFunc target = (MxcIpcFunc)(pBuffer->targets[tail]);
-	pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
-	atomic_thread_fence(memory_order_release);
-
 	LOG("Calling IPC Target %d...\n", target);
 	MXC_IPC_FUNCS[target](nodeHandle);
 	return 0;

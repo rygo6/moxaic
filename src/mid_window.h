@@ -28,8 +28,9 @@
 typedef struct MidWindow {
 	HINSTANCE hInstance;
 	HWND      hWnd;
+	bool      windowResized;
 	int       windowWidth, windowHeight;
-	int       viewWidth, viewHeight;
+	int       clientWidth, clientHeight;
 	POINT     localCenter, globalCenter;
 	uint64_t  frequency, start, current;
 	bool      running;
@@ -122,6 +123,26 @@ MidWindow      midWindow;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg) {
+
+		case WM_SIZE: if (wParam != SIZE_MINIMIZED) {
+				RECT clientRect;
+				GetClientRect(hWnd, &clientRect);
+				if (midWindow.clientWidth != clientRect.right ||
+					midWindow.clientHeight != clientRect.bottom)
+					midWindow.windowResized = true;
+				midWindow.clientWidth = clientRect.right;
+				midWindow.clientHeight = clientRect.bottom;
+
+				RECT windowRect;
+				GetWindowRect(hWnd, &windowRect);
+				if (midWindow.windowWidth != windowRect.right - windowRect.left ||
+					midWindow.windowHeight != windowRect.bottom - windowRect.top)
+					midWindow.windowResized = true;
+				midWindow.windowWidth = windowRect.right - windowRect.left;
+				midWindow.windowHeight = windowRect.bottom - windowRect.top;
+			}
+
+			return 0;
 
 		case WM_SETCURSOR:
 
@@ -253,9 +274,9 @@ void midCreateWindow()
 
 	DWORD windowStyle = WS_OVERLAPPEDWINDOW;
 	DWORD windowExStyle = WS_EX_APPWINDOW;
-	midWindow.viewWidth = DEFAULT_WIDTH;
-	midWindow.viewHeight = DEFAULT_HEIGHT;
-	RECT  rect = {.right = midWindow.viewWidth, .bottom = midWindow.viewHeight};
+	midWindow.clientWidth = DEFAULT_WIDTH;
+	midWindow.clientHeight = DEFAULT_HEIGHT;
+	RECT  rect = {.right = midWindow.clientWidth, .bottom = midWindow.clientHeight};
 	AdjustWindowRectEx(&rect, windowStyle, FALSE, windowExStyle);
 
 	midWindow.windowWidth = rect.right - rect.left;
