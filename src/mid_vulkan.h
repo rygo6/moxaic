@@ -1003,7 +1003,6 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 	VkDescriptorSet: VK_OBJECT_TYPE_DESCRIPTOR_SET,                        \
 	VkFramebuffer: VK_OBJECT_TYPE_FRAMEBUFFER,                             \
 	VkCommandPool: VK_OBJECT_TYPE_COMMAND_POOL,                            \
-	VkSamplerYcbcrConversion: VK_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION,     \
 	VkDescriptorUpdateTemplate: VK_OBJECT_TYPE_DESCRIPTOR_UPDATE_TEMPLATE, \
 	VkSurfaceKHR: VK_OBJECT_TYPE_SURFACE_KHR,                              \
 	VkSwapchainKHR: VK_OBJECT_TYPE_SWAPCHAIN_KHR,                          \
@@ -1271,8 +1270,8 @@ static void CreateBasicSamplers()
 		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 	};
-	VK_CHECK(vkCreateSampler(vk.context.device, &linearCreateInfo, VK_ALLOC, &vk.context.linearSampler));\
-	vkSetDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)vk.context.linearSampler, "LinearSampler");
+	VK_CHECK(vkCreateSampler(vk.context.device, &linearCreateInfo, VK_ALLOC, &vk.context.linearSampler));
+	VK_SET_DEBUG(vk.context.linearSampler);
 
 	VkSamplerCreateInfo nearestCreateInfo = {
 		VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -1286,7 +1285,7 @@ static void CreateBasicSamplers()
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 	};
 	VK_CHECK(vkCreateSampler(vk.context.device, &nearestCreateInfo, VK_ALLOC, &vk.context.nearestSampler));
-	vkSetDebugName(VK_OBJECT_TYPE_SAMPLER, (uint64_t)vk.context.nearestSampler, "NearestSampler");
+	VK_SET_DEBUG(vk.context.nearestSampler);
 }
 
 //// Basic Pipeline
@@ -2795,7 +2794,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		// Features
 		VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT physicalDeviceSwapchainMaintenance1Features = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
-			.swapchainMaintenance1 = VK_TRUE,
+			.swapchainMaintenance1 = VK_FALSE,
 		};
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT,

@@ -66,15 +66,12 @@ static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
 				.stageFlags = stageFlags,
-				// probably get rid of sampler on this?
-				.pImmutableSamplers = &vk.context.nearestSampler,
 			},
 			{
 				SET_BIND_INDEX_NODE_GBUFFER,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
 				.stageFlags = stageFlags,
-				.pImmutableSamplers = &vk.context.nearestSampler,
 			},
 		},
 	};
@@ -93,7 +90,7 @@ static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout
 			.range = sizeof(MxcNodeCompositorSetState),      \
 		},                                                   \
 	}
-#define BIND_WRITE_NODE_COLOR(_set, _view, _layout)                  \
+#define BIND_WRITE_NODE_COLOR(_set, _sampler, _view, _layout)        \
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
 		.dstSet = _set,                                              \
@@ -101,11 +98,12 @@ static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout
 		.descriptorCount = 1,                                        \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(VkDescriptorImageInfo){                      \
+			.sampler = _sampler,                                     \
 			.imageView = _view,                                      \
 			.imageLayout = _layout,                                  \
 		},                                                           \
 	}
-#define BIND_WRITE_NODE_GBUFFER(_set, _view, _layout)                \
+#define BIND_WRITE_NODE_GBUFFER(_set, _sampler, _view, _layout)      \
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
 		.dstSet = _set,                                              \
@@ -113,6 +111,7 @@ static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout
 		.descriptorCount = 1,                                        \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(VkDescriptorImageInfo){                      \
+			.sampler = _sampler,                                     \
 			.imageView = _view,                                      \
 			.imageLayout = _layout,                                  \
 		},                                                           \
@@ -840,8 +839,8 @@ CompositeLoop:
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
 
 				CMD_WRITE_SINGLE_SETS(device,
-					BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, pNodeSwap->colorView, finalLayout),
-					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, pNodeSwap->gBufferView, finalLayout));
+					BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, vk.context.nearestSampler, pNodeSwap->colorView, finalLayout),
+					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, vk.context.nearestSampler, pNodeSwap->gBufferView, finalLayout));
 			}
 
 			//// Calc new node uniform and shared data
@@ -1430,7 +1429,10 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 		*nodeCompositorData[i].pSetMapped = (MxcNodeCompositorSetState){};
 
 		// this needs to be descriptor array
-		VK_UPDATE_DESCRIPTOR_SETS(BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buf));
+		VK_UPDATE_DESCRIPTOR_SETS(
+			BIND_WRITE_NODE_STATE(nodeCompositorData[i].nodeSet, nodeCompositorData[i].nodeSetBuffer.buf),
+			BIND_WRITE_NODE_COLOR(nodeCompositorData[i].nodeSet, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
+			BIND_WRITE_NODE_GBUFFER(nodeCompositorData[i].nodeSet, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL));
 	}
 }
 

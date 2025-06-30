@@ -326,10 +326,10 @@ static int CleanupNode(NodeHandle hNode)
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_EXPORTED:
 
+			// really need a different way to do this
 //			CMD_WRITE_SINGLE_SETS(vk.context.device,
 //				BIND_WRITE_NODE_COLOR(nodeCompositorData[hNode].nodeSet, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
 //				BIND_WRITE_NODE_GBUFFER(nodeCompositorData[hNode].nodeSet, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL));
-
 			VkWriteDescriptorSet writeSets[] = {
 				{
 					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -338,6 +338,7 @@ static int CleanupNode(NodeHandle hNode)
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.pImageInfo = &(VkDescriptorImageInfo){
+						.sampler = vk.context.nearestSampler,
 						.imageView = VK_NULL_HANDLE,
 						.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 					},
@@ -349,6 +350,7 @@ static int CleanupNode(NodeHandle hNode)
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 					.pImageInfo = &(VkDescriptorImageInfo){
+						.sampler = vk.context.nearestSampler,
 						.imageView = VK_NULL_HANDLE,
 						.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 					},
