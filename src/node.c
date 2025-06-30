@@ -20,10 +20,6 @@ MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
 
 MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT] = {};
 
-// Only used for local thread nodes. Node from other process will use shared memory.
-// Maybe I could just always make it use shared memory for consistency’s sake?
-MxcNodeShared localNodeShared[MXC_NODE_CAPACITY] = {}; // No lets get rid of this and use malloc
-
 // Compositor state in Compositor Process
 MxcCompositorContext compositorContext = {};
 
@@ -267,16 +263,17 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 NodeHandle RequestLocalNodeHandle()
 {
 	// TODO this claim/release handle needs to be a pooling logic
-	NodeHandle handle = atomic_fetch_add(&nodeCt, 1);
-	localNodeShared[handle] = (MxcNodeShared){};
-	node.pShared[handle] = &localNodeShared[handle];
-	return handle;
+	NodeHandle hNode = atomic_fetch_add(&nodeCt, 1);
+	node.pShared[hNode] = calloc(1, sizeof(MxcNodeShared));
+	nodeContext[hNode].pNodeShared = node.pShared[hNode];
+	return hNode;
 }
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
 	NodeHandle hNode = atomic_fetch_add(&nodeCt, 1);
 	node.pShared[hNode] = pNodeShared;
+	nodeContext[hNode].pNodeShared = node.pShared[hNode];
 	return hNode;
 }
 
@@ -301,7 +298,7 @@ void ReleaseNode(NodeHandle handle)
 	}
 
 	int newCount = atomic_fetch_sub(&nodeCt, 1) - 1;
-	printf("Releasing Node %d. Count %d.\n", handle, newCount);
+	LOG("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
 #define CLOSE_HANDLE(_handle)                                                     \
@@ -313,6 +310,8 @@ static int CleanupNode(NodeHandle hNode)
 {
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 	auto pNodeCtxt = &nodeContext[hNode];
+	auto pNodeShared = node.pShared[hNode];
+
 	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeCtxt->swapType];
 
 	switch (pNodeCtxt->type) {
@@ -323,6 +322,10 @@ static int CleanupNode(NodeHandle hNode)
 			if (result != 0) {
 				perror("Thread join failed");
 			}
+
+			free(pNodeShared);
+			node.pShared[hNode] = NULL;
+
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_EXPORTED:
 
@@ -362,6 +365,7 @@ static int CleanupNode(NodeHandle hNode)
 				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
 					continue;
 
+				// We are fully clearing but at some point we want a mechanic to recycle and share node swaps
 				auto pSwap = BLOCK_RELEASE(node.block.swap[iSwapBlock], pNodeCtxt->hSwaps[i]);
 				mxcDestroySwap(pSwap);
 			}
@@ -370,6 +374,8 @@ static int CleanupNode(NodeHandle hNode)
 			CHECK_WIN32(UnmapViewOfFile(pNodeCtxt->pExportedExternalMemory));
 			CLOSE_HANDLE(pNodeCtxt->exportedExternalMemoryHandle);
 			CLOSE_HANDLE(pNodeCtxt->processHandle);
+
+			node.pShared[hNode] = NULL;
 
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_IMPORTED:
@@ -404,10 +410,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 	pNodeCtxt->compositorTimeline = compositorContext.timeline;
 
-	// maybe have the thread allocate this and submit it once ready to get rid of < 1 check
-	// then could also get rid of pNodeContext->pNodeShared?
-	// no how would something on another process do that
-	auto pNodeShrd = &localNodeShared[handle];
+	auto pNodeShrd = node.pShared[handle];
 	*pNodeShrd = (MxcNodeShared){};
 	pNodeCtxt->pNodeShared = pNodeShrd;
 	pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);

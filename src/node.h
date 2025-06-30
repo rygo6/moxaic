@@ -373,11 +373,6 @@ extern u16 nodeCt;
 // Cold storage for all node data
 extern MxcNodeContext nodeContext[MXC_NODE_CAPACITY];
 
-// Could be missing if node is an external process... maybe I should malloc these?
-extern MxcNodeShared localNodeShared[MXC_NODE_CAPACITY];
-
-//extern MxcNodeShared* pDuplicatedNodeShared[MXC_NODE_CAPACITY];
-
 // Holds pointer to nodes in each compositor mode
 typedef struct MxcActiveNodes {
 	u16        ct;
@@ -395,6 +390,9 @@ extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
 extern MxcVulkanNodeContext vkNode;
 
 extern struct Node {
+
+//	u16 ct;
+//	MxcNodeContext ctxts[MXC_NODE_CAPACITY];
 
 	// Holds pointer to either local or external process shared memory
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
