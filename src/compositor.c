@@ -960,6 +960,7 @@ CompositeLoop:
 
 	//// Graphics Quad Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
+	atomic_thread_fence(memory_order_acquire);
 	if (activeNodes[MXC_COMPOSITOR_MODE_QUAD].ct > 0) {
 		hasGfx = true;
 
@@ -981,6 +982,7 @@ CompositeLoop:
 
 	//// Graphics Tesselation Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
+	atomic_thread_fence(memory_order_acquire);
 	if (activeNodes[MXC_COMPOSITOR_MODE_TESSELATION].ct > 0) {
 		hasGfx = true;
 
@@ -1000,6 +1002,7 @@ CompositeLoop:
 
 	//// Graphics Task Mesh Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
+	atomic_thread_fence(memory_order_acquire);
 	if (activeNodes[MXC_COMPOSITOR_MODE_TASK_MESH].ct > 0) {
 		hasGfx = true;
 
@@ -1025,27 +1028,36 @@ CompositeLoop:
 
 		vkCmdSetLineWidth(gfxCmd, 1.0f);
 
-		for (int iNode = 0; iNode < nodeCt; ++iNode) {
-			auto pNodeShrd = node.pShared[iNode];
-			auto pNodeCstData = &nodeCompositorData[iNode];
+		for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
+			atomic_thread_fence(memory_order_acquire);
+			int activeNodeCt = activeNodes[iCstMode].ct;
+			if (activeNodeCt == 0)
+				continue;
 
-			VkLineMaterialState lineState = {.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)};
-			switch (pNodeCstData->interactionState) {
-				case NODE_INTERACTION_STATE_HOVER:
-					lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)};
-					break;
-				case NODE_INTERACTION_STATE_SELECT:
-					lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)};
-					break;
-				default: break;
+			auto pActiveNodes = &activeNodes[iCstMode];
+			for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
+				auto hNode = pActiveNodes->handles[iNode];
+				auto pNodeShrd = node.pShared[hNode];
+				auto pNodeCstData = &nodeCompositorData[iNode];
+
+				VkLineMaterialState lineState = {.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)};
+				switch (pNodeCstData->interactionState) {
+					case NODE_INTERACTION_STATE_HOVER:
+						lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)};
+						break;
+					case NODE_INTERACTION_STATE_SELECT:
+						lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)};
+						break;
+					default: break;
+				}
+
+				vkCmdPushLineMaterial(gfxCmd, lineState);
+
+				memcpy(pLineBuf->pMapped, &pNodeCstData->worldSegments, sizeof(vec3) * MXC_CUBE_SEGMENT_COUNT);
+
+				vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
+				vkCmdDraw(gfxCmd, MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
 			}
-
-			vkCmdPushLineMaterial(gfxCmd, lineState);
-
-			memcpy(pLineBuf->pMapped, &pNodeCstData->worldSegments, sizeof(vec3) * MXC_CUBE_SEGMENT_COUNT);
-
-			vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
-			vkCmdDraw(gfxCmd, MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
 		}
 	}
 

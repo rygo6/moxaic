@@ -11,11 +11,7 @@
 #include "node.h"
 #include "test_node.h"
 
-// Compositor and Node Process both use
-MxcNodeContext nodeContext[MXC_NODE_CAPACITY] = {};
 
-// Node state in Compositor Process
-u16                   nodeCt = 0;
 MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
 
 MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT] = {};
@@ -263,25 +259,25 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 NodeHandle RequestLocalNodeHandle()
 {
 	// TODO this claim/release handle needs to be a pooling logic
-	NodeHandle hNode = atomic_fetch_add(&nodeCt, 1);
+	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
 	node.pShared[hNode] = calloc(1, sizeof(MxcNodeShared));
-	nodeContext[hNode].pNodeShared = node.pShared[hNode];
+	node.ctxts[hNode].pNodeShared = node.pShared[hNode];
 	return hNode;
 }
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
-	NodeHandle hNode = atomic_fetch_add(&nodeCt, 1);
+	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
 	node.pShared[hNode] = pNodeShared;
-	nodeContext[hNode].pNodeShared = node.pShared[hNode];
+	node.ctxts[hNode].pNodeShared = node.pShared[hNode];
 	return hNode;
 }
 
 void ReleaseNode(NodeHandle handle)
 {
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
-	assert(nodeContext[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
-	auto pNodeCtxt = &nodeContext[handle];
+	assert(node.ctxts[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
+	auto pNodeCtxt = &node.ctxts[handle];
 	auto pNodeShrd = node.pShared[handle];
 	auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
 
@@ -297,7 +293,7 @@ void ReleaseNode(NodeHandle handle)
 		pActiveNode->ct--;
 	}
 
-	int newCount = atomic_fetch_sub(&nodeCt, 1) - 1;
+	int newCount = atomic_fetch_sub(&node.ct, 1) - 1;
 	LOG("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
@@ -309,7 +305,7 @@ void ReleaseNode(NodeHandle handle)
 static int CleanupNode(NodeHandle hNode)
 {
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
-	auto pNodeCtxt = &nodeContext[hNode];
+	auto pNodeCtxt = &node.ctxts[hNode];
 	auto pNodeShared = node.pShared[hNode];
 
 	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeCtxt->swapType];
@@ -404,7 +400,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	printf("Requesting Node Thread.\n");
 	auto handle = RequestLocalNodeHandle();
 
-	auto pNodeCtxt = &nodeContext[handle];
+	auto pNodeCtxt = &node.ctxts[handle];
 	*pNodeCtxt = (MxcNodeContext){};
 	pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_THREAD;
 	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -450,7 +446,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 	*pNodeHandle = handle;
 
-	CHECK(pthread_create(&nodeContext[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
+	CHECK(pthread_create(&node.ctxts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
@@ -665,7 +661,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 		// Init Node Context
-		pNodeCtxt = &nodeContext[hNode];
+		pNodeCtxt = &node.ctxts[hNode];
 		*pNodeCtxt = (MxcNodeContext){};
 		pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
 		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -881,7 +877,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	{
 		NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 
-		pNodeContext = &nodeContext[handle];
+		pNodeContext = &node.ctxts[handle];
 		*pNodeContext = (MxcNodeContext){};
 
 		pNodeContext->type = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
@@ -1009,7 +1005,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 {
 	LOG("Claiming Swap for Node %d\n", hNode);
 
-	auto pNodeCtx = &nodeContext[hNode];
+	auto pNodeCtx = &node.ctxts[hNode];
 	auto pNodeShrd = node.pShared[hNode];
 	auto pNodeCompData = &nodeCompositorData[hNode];
 

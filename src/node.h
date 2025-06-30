@@ -367,12 +367,6 @@ typedef struct MxcVulkanNodeContext {
 #define MXC_NODE_CAPACITY 4
 #endif
 
-// move these into struct
-extern u16 nodeCt;
-
-// Cold storage for all node data
-extern MxcNodeContext nodeContext[MXC_NODE_CAPACITY];
-
 // Holds pointer to nodes in each compositor mode
 typedef struct MxcActiveNodes {
 	u16        ct;
@@ -391,8 +385,8 @@ extern MxcVulkanNodeContext vkNode;
 
 extern struct Node {
 
-//	u16 ct;
-//	MxcNodeContext ctxts[MXC_NODE_CAPACITY];
+	u16 ct;
+	MxcNodeContext ctxts[MXC_NODE_CAPACITY];
 
 	// Holds pointer to either local or external process shared memory
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
