@@ -54,7 +54,8 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
 	MxcNodeImports* pImports = pNodeContext->pNodeImports;
-	MxcSwap*        pSwap = pNodeContext->swaps;
+//	MxcSwap*        pSwap = pNodeContext->swaps;
+	MxcSwap*        pSwap;
 
 	VkDevice        device = pNode->device;
 	VkCommandBuffer cmd = pNodeContext->cmd;
@@ -215,10 +216,10 @@ run_loop:
 					CloseHandle(pImports->depthSwapHandles[i]);
 			}
 
-			if (pSwap[i].color.image != VK_NULL_HANDLE) {
-				vkDestroyImage(device, pSwap[i].color.image, VK_ALLOC);
-				vkDestroyImageView(device, pSwap[i].color.view, VK_ALLOC);
-			}
+//			if (pSwap[i].color.image != VK_NULL_HANDLE) {
+//				vkDestroyImage(device, pSwap[i].color.image, VK_ALLOC);
+//				vkDestroyImageView(device, pSwap[i].color.view, VK_ALLOC);
+//			}
 
 //			if (pSwap[i].depth.image != VK_NULL_HANDLE) {
 //				vkDestroyImage(device, pSwap[i].depth.image, VK_ALLOC);
@@ -233,7 +234,7 @@ run_loop:
 
 		if (needsImport) {
 			for (int i = 0; i < swapCount; ++i) {
-				VkTextureCreateInfo colorCreateInfo = {
+				VkDedicatedTextureCreateInfo colorCreateInfo = {
 					.debugName = "ImportedColorSwap",
 					.pImageCreateInfo = &(VkImageCreateInfo){
 						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -254,9 +255,9 @@ run_loop:
 					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 					.importHandle = pNodeContext->pNodeImports->colorSwapHandles[i],
 				};
-				vkCreateTexture(&colorCreateInfo, &pSwap[i].color);
-				acquireBarriers[i][0].image = pSwap[i].color.image;
-				releaseBarriers[i][0].image = pSwap[i].color.image;
+//				vkCreateTexture(&colorCreateInfo, &pSwap[i].color);
+//				acquireBarriers[i][0].image = pSwap[i].color.image;
+//				releaseBarriers[i][0].image = pSwap[i].color.image;
 
 //				VkTextureCreateInfo gbufferCreateInfo = {
 //					.debugName = "ImportedGbufferSwap",
@@ -578,7 +579,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 //			};
 //			vkCreateTexture(&colorCreateInfo, &pNodeContext->colorFramebuffers[i]);
 
-			VkTextureCreateInfo normalCreateInfo = {
+VkDedicatedTextureCreateInfo normalCreateInfo = {
 				.debugName = "ImportedNormalFramebuffer",
 				.pImageCreateInfo = &(VkImageCreateInfo){
 					.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -594,7 +595,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT,
 			};
-			vkCreateTexture(&normalCreateInfo, &pNode->normalFramebuffers[i]);
+			vkCreateDedicatedTexture(&normalCreateInfo, &pNode->normalFramebuffers[i]);
 
 //			VkTextureCreateInfo depthCreateInfo = {
 //				.debugName = "ImportedDepthFramebuffer",
@@ -633,7 +634,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 //		vkCreateGlobalSet(&pNode->globalSet);
 
 		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.materialSetLayout, &pNode->checkerMaterialSet);
-		vkCreateTextureFromFile("textures/uvgrid.jpg", &pNode->checkerTexture);
+		vkCreateDedicatedTextureFromFile("textures/uvgrid.jpg", &pNode->checkerTexture);
 
 		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.objectSetLayout, &pNode->sphereObjectSet);
 		vkCreateAllocateBindMapBuffer(

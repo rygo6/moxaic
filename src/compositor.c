@@ -632,14 +632,14 @@ VkImageLayout processFinalLayout[] = {
 ////////
 //// Run
 ////
-void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
+void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 {
 	//// Local Extract
 	EXTRACT_FIELD(&vk.context, device);
 	EXTRACT_FIELD(&vk.context, basicPass);
 
-	EXTRACT_FIELD(pCtx, gfxCmd);
-	EXTRACT_FIELD(pCtx, timeline);
+	EXTRACT_FIELD(pCstCtx, gfxCmd);
+	auto compTimeline = pCstCtx->timeline;
 
 	EXTRACT_FIELD(pCst, gfxFrame);
 	EXTRACT_FIELD(pCst, globalSet);
@@ -664,7 +664,7 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 
 	EXTRACT_FIELD(pCst, timeQryPool);
 
-	auto pSwapCtx = &pCtx->swapCtx;
+	auto pSwapCtx = &pCstCtx->swapCtx;
 
 	auto quadMeshOffsets = pCst->quadMesh.offsets;
 	auto quadMeshBuf = pCst->quadMesh.buf;
@@ -689,12 +689,12 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 	u32 mainGraphicsIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 
 	// We copy everything locally. Set null to ensure not used!
-	pCtx = NULL;
+	pCstCtx = NULL;
 	pCst = NULL;
 
 
 	//// Local State
-	u64 baseCycleValue = 0;
+
 
 	cam globCam = {
 		.yFovRad = RAD_FROM_DEG(45.0f),
@@ -713,15 +713,21 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCtx, MxcCompositor* pCst)
 CompositeLoop:
 
 	////////////////////////////
+	//// MXC_CYCLE_UPDATE_WINDOW_STATE
+
+
+	////////////////////////////
 	//// MXC_CYCLE_PROCESS_INPUT
-	vkTimelineWait(device, baseCycleValue + MXC_CYCLE_PROCESS_INPUT, timeline);
+	vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
+	u64 baseCycleValue = compositorContext.baseCycleValue ;
+
 	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
 	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
 
 	////////////////////////////////
 	//// MXC_CYCLE_UPDATE_NODE_STATES
-	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, timeline);
+	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 
 	CmdResetBegin(gfxCmd);
 	vk.ResetQueryPool(device, timeQryPool, 0, TIME_QUERY_COUNT);
@@ -811,32 +817,30 @@ CompositeLoop:
 
 				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessBlitUpPipe);
 
-				CMD_PUSH_SETS(
-					gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
 					BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf), BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipView));
 				vk.CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
 
-				CMD_IMAGE_BARRIERS(gfxCmd,
-					{
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pNodeSwap->gBufferMip,
-						.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					});
+				CMD_IMAGE_BARRIERS(gfxCmd, {
+					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.image = pNodeSwap->gBufferMip,
+					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+				});
 
-				CMD_PUSH_SETS(
-					gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView), BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView));
+				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView),
+					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView));
 				vk.CmdDispatch(gfxCmd, 1, nodeSwapGroupCt, 1);
 
 				pEndBarriers[0].image = pNodeSwap->gBuffer;
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
 
-				CMD_WRITE_SINGLE_SETS(
-					device, BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, pNodeSwap->colorView, finalLayout),
+				CMD_WRITE_SINGLE_SETS(device,
+					BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, pNodeSwap->colorView, finalLayout),
 					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, pNodeSwap->gBufferView, finalLayout));
 			}
 
@@ -944,7 +948,7 @@ CompositeLoop:
 	//// MXC_CYCLE_COMPOSITOR_RECORD
 
 	//// Graphics Pipe
-	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, timeline);
+	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	vk.CmdSetViewport(gfxCmd, 0, 1, &(VkViewport){.width = windowExtent.x, .height = windowExtent.y, .maxDepth = 1.0f});
 	vk.CmdSetScissor(gfxCmd, 0, 1, &(VkRect2D){.extent = {.width = windowExtent.x, .height = windowExtent.y}});
@@ -1022,7 +1026,7 @@ CompositeLoop:
 
 		vkCmdSetLineWidth(gfxCmd, 1.0f);
 
-		for (int iNode = 0; iNode < nodeCount; ++iNode) {
+		for (int iNode = 0; iNode < nodeCt; ++iNode) {
 			auto pNodeShrd = node.pShared[iNode];
 			auto pNodeCstData = &nodeCompositorData[iNode];
 
@@ -1150,18 +1154,21 @@ CompositeLoop:
 
 	///////////////////////////////
 	//// MXC_CYCLE_RENDER_COMPOSITE
-	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, timeline);  // Signal will submit gfxCmd on main
-	baseCycleValue += MXC_CYCLE_COUNT;
+	{
+		// Signal will submit gfxCmd on main
+		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
+	}
 
 	//////////////////////////////////
 	//// MXC_CYCLE_UPDATE_WINDOW_STATE
 	{
-		vkTimelineWait(device, baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, timeline);
-		u64 timestampsNS[TIME_QUERY_COUNT];
-		VK_ASSERT(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
-		double timestampsMS[TIME_QUERY_COUNT];
-		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
-		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
+		u64 nextUpdateWindowStateCycle = baseCycleValue + MXC_CYCLE_COUNT + MXC_CYCLE_UPDATE_WINDOW_STATE;
+		vkTimelineWait(device, nextUpdateWindowStateCycle, compTimeline);
+//		u64 timestampsNS[TIME_QUERY_COUNT];
+//		VK_CHECK(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
+//		double timestampsMS[TIME_QUERY_COUNT];
+//		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+//		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
 	}
 
 	CHECK_RUNNING;
@@ -1324,7 +1331,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 
 	/// Compute Output
 	{
-		VkTextureCreateInfo atomicCreateInfo = {
+		VkDedicatedTextureCreateInfo atomicCreateInfo = {
 			.debugName = "ComputeAtomicFramebuffer",
 			.pImageCreateInfo =
 				&(VkImageCreateInfo){
@@ -1340,9 +1347,9 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = VK_LOCALITY_CONTEXT,
 		};
-		vkCreateTexture(&atomicCreateInfo, &pCst->compFrameAtomicTex);
+		vkCreateDedicatedTexture(&atomicCreateInfo, &pCst->compFrameAtomicTex);
 
-		VkTextureCreateInfo colorCreateInfo = {
+		VkDedicatedTextureCreateInfo colorCreateInfo = {
 			.debugName = "ComputeColorFramebuffer",
 			.pImageCreateInfo =
 				&(VkImageCreateInfo){
@@ -1358,7 +1365,7 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 			.locality = VK_LOCALITY_CONTEXT,
 		};
-		vkCreateTexture(&colorCreateInfo, &pCst->compFrameColorTex);
+		vkCreateDedicatedTexture(&colorCreateInfo, &pCst->compFrameColorTex);
 
 		VkDescriptorSetAllocateInfo setInfo = {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,

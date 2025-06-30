@@ -15,7 +15,7 @@
 MxcNodeContext nodeContext[MXC_NODE_CAPACITY] = {};
 
 // Node state in Compositor Process
-u16                   nodeCount = 0;
+u16                   nodeCt = 0;
 MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
 
 MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT] = {};
@@ -66,9 +66,12 @@ struct Node node;
 	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
 
 
-void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
+static void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 {
 	CHECK(pInfo->extent.width < 1024 || pInfo->extent.height < 1024, "Swap too small!")
+
+	*pSwap = (MxcSwap){};
+	pSwap->type = pInfo->type;
 
 	/// Color
 	{
@@ -86,8 +89,8 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 			.samples     = VK_SAMPLE_COUNT_1_BIT,
 			.usage       = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 		};
-		vkWin32CreateExternalTexture(&info, &pSwap->colorExternal);
-		VkTextureCreateInfo textureInfo = {
+		vkCreateExternalPlatformTexture(&info, &pSwap->colorExternal);
+		VkDedicatedTextureCreateInfo textureInfo = {
 			.debugName        = "ExportedColorFramebuffer",
 			.pImageCreateInfo = &info,
 			.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -95,7 +98,7 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 			.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 		};
-		vkCreateTexture(&textureInfo, &pSwap->color);
+		vkCreateDedicatedTexture(&textureInfo, &pSwap->color);
 	}
 
 	/// Depth
@@ -114,8 +117,8 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 			.samples     = VK_SAMPLE_COUNT_1_BIT,
 			.usage       = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 		};
-		vkWin32CreateExternalTexture(&info, &pSwap->depthExternal);
-		VkTextureCreateInfo textureInfo = {
+		vkCreateExternalPlatformTexture(&info, &pSwap->depthExternal);
+		VkDedicatedTextureCreateInfo textureInfo = {
 			.debugName        = "ExportedDepthFramebuffer",
 			.pImageCreateInfo = &info,
 			.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -123,46 +126,46 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 			.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 			.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 		};
-		vkCreateTexture(&textureInfo, &pSwap->depth);
+		vkCreateDedicatedTexture(&textureInfo, &pSwap->depth);
 	}
 
 	/// GBuffer
 	{
-		vkCreateTexture(
-			&(VkTextureCreateInfo){
-				.debugName        = "GBufferFramebuffer",
-				.pImageCreateInfo = &(VkImageCreateInfo){
-					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.imageType   = VK_IMAGE_TYPE_2D,
-					.format      = MXC_NODE_GBUFFER_FORMAT,
-					.extent      = pInfo->extent,
-					.mipLevels   = 1,
-					.arrayLayers = 1,
-					.samples     = VK_SAMPLE_COUNT_1_BIT,
-					.usage       = MXC_NODE_GBUFFER_USAGE,
-				},
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality   = VK_LOCALITY_CONTEXT},
-			&pSwap->gbuffer);
-
-		vkCreateTexture(
-			&(VkTextureCreateInfo){
-				.debugName        = "GBufferFramebufferMip",
+		vkCreateDedicatedTexture(
+			&(VkDedicatedTextureCreateInfo){
+				.debugName = "GBufferFramebuffer",
 				.pImageCreateInfo = &(VkImageCreateInfo){
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
-					.format    = MXC_NODE_GBUFFER_FORMAT,
-					// didn't use mips. Get rid of? Maybe not. If I did mip walking with linear sampling could still be much higher quality gbuffer.
-					.extent      = {pInfo->extent.width >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
-									pInfo->extent.height >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
-									pInfo->extent.depth},
-					.mipLevels   = 1,
+					.format = MXC_NODE_GBUFFER_FORMAT,
+					.extent = pInfo->extent,
+					.mipLevels = 1,
 					.arrayLayers = 1,
-					.samples     = VK_SAMPLE_COUNT_1_BIT,
-					.usage       = MXC_NODE_GBUFFER_USAGE,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = MXC_NODE_GBUFFER_USAGE,
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality   = VK_LOCALITY_CONTEXT},
+				.locality = VK_LOCALITY_CONTEXT},
+			&pSwap->gbuffer);
+
+		vkCreateDedicatedTexture(
+			&(VkDedicatedTextureCreateInfo){
+				.debugName = "GBufferFramebufferMip",
+				.pImageCreateInfo = &(VkImageCreateInfo){
+					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+					.imageType = VK_IMAGE_TYPE_2D,
+					.format = MXC_NODE_GBUFFER_FORMAT,
+					// didn't use mips. Get rid of? Maybe not. If I did mip walking with linear sampling could still be much higher quality gbuffer.
+					.extent = {pInfo->extent.width >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
+						pInfo->extent.height >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
+						pInfo->extent.depth},
+					.mipLevels = 1,
+					.arrayLayers = 1,
+					.samples = VK_SAMPLE_COUNT_1_BIT,
+					.usage = MXC_NODE_GBUFFER_USAGE,
+				},
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.locality = VK_LOCALITY_CONTEXT},
 			&pSwap->gbufferMip);
 	}
 
@@ -213,17 +216,29 @@ void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 	}
 }
 
+static void mxcDestroySwap(MxcSwap* pSwap)
+{
+	pSwap->type = XR_SWAP_TYPE_UNKNOWN;
+	vkDestroyDedicatedTexture(&pSwap->color);
+	vkDestroyDedicatedTexture(&pSwap->depth);
+	vkDestroyDedicatedTexture(&pSwap->gbuffer);
+	vkDestroyDedicatedTexture(&pSwap->gbufferMip);
+	vkDestroyExternalPlatformTexture(&pSwap->colorExternal);
+	vkDestroyExternalPlatformTexture(&pSwap->depthExternal);
+}
+
 /////////////////////////
 //// Compositor Lifecycle
 ////
 void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*))
 {
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
-		.debugName = "CompTimelineSemaphore",
 		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
 	vkCreateSemaphoreExt(&semaphoreCreateInfo, &compositorContext.timeline);
+	compositorContext.timelineHandle = vkGetSemaphoreExternalHandle(compositorContext.timeline);
+	VK_SET_DEBUG(compositorContext.timeline);
 
 	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorContext.swapCtx);
 
@@ -239,10 +254,11 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.commandBufferCount = 1,
 	};
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.gfxCmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)compositorContext.gfxCmd, "CompositorCmd");
+	VK_SET_DEBUG(compositorContext.gfxPool);
+	VK_SET_DEBUG(compositorContext.gfxCmd);
 
-	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorContext), "Comp Node thread creation failed!");
-	LOG("Request and Run CompNode Thread Success.\n");
+	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorContext), "Compositor Node thread creation failed!");
+	LOG("Request and Run Compositor Node Thread Success.\n");
 }
 
 ///////////////////
@@ -251,25 +267,27 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 NodeHandle RequestLocalNodeHandle()
 {
 	// TODO this claim/release handle needs to be a pooling logic
-	NodeHandle handle = atomic_fetch_add(&nodeCount, 1);
+	NodeHandle handle = atomic_fetch_add(&nodeCt, 1);
 	localNodeShared[handle] = (MxcNodeShared){};
 	node.pShared[handle] = &localNodeShared[handle];
 	return handle;
 }
+
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
-	NodeHandle handle = atomic_fetch_add(&nodeCount, 1);
-	node.pShared[handle] = pNodeShared;
-	return handle;
+	NodeHandle hNode = atomic_fetch_add(&nodeCt, 1);
+	node.pShared[hNode] = pNodeShared;
+	return hNode;
 }
+
 void ReleaseNode(NodeHandle handle)
 {
+	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 	assert(nodeContext[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
 	auto pNodeCtxt = &nodeContext[handle];
 	auto pNodeShrd = node.pShared[handle];
 	auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
 
-	// this needs to be done on the compositor thread
 	ATOMIC_FENCE_BLOCK {
 		int i = 0;
 		for (; i < pActiveNode->ct; ++i) {
@@ -282,7 +300,7 @@ void ReleaseNode(NodeHandle handle)
 		pActiveNode->ct--;
 	}
 
-	int newCount = atomic_fetch_sub(&nodeCount, 1) - 1;
+	int newCount = atomic_fetch_sub(&nodeCt, 1) - 1;
 	printf("Releasing Node %d. Count %d.\n", handle, newCount);
 }
 
@@ -291,19 +309,12 @@ void ReleaseNode(NodeHandle handle)
 		DWORD dwError = GetLastError();                                           \
 		printf("Could not close (%s) object handle (%lu).\n", #_handle, dwError); \
 	}
-static int CleanupNode(NodeHandle handle)
+static int CleanupNode(NodeHandle hNode)
 {
-	auto pNodeCtxt = &nodeContext[handle];
+	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
+	auto pNodeCtxt = &nodeContext[hNode];
+	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeCtxt->swapType];
 
-	ReleaseNode(handle);
-
-//	{ as long as mxcInterprocessQueuePoll is called after waiting on MXC_CYCLE_PROCESS_INPUT we don't have to wait here
-//		// we need to wait one cycle to get the compositor cmd buffer cleared
-//		uint64_t compBaseCycleValue = compositorNodeContext.compBaseCycleValue - (compositorNodeContext.compBaseCycleValue % MXC_CYCLE_COUNT);
-//		vkmTimelineWait(midVk.context.device, compBaseCycleValue + MXC_CYCLE_COUNT, compositorNodeContext.compTimeline);
-//	}
-
-	// Close external handles
 	switch (pNodeCtxt->type) {
 		case MXC_NODE_INTERPROCESS_MODE_THREAD:
 			vkFreeCommandBuffers(vk.context.device, pNodeCtxt->pool, 1, &pNodeCtxt->cmd);
@@ -315,13 +326,48 @@ static int CleanupNode(NodeHandle handle)
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_EXPORTED:
 
-			// Don't close handles unless we are actually free'ing
-//			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-//				CLOSE_HANDLE(pNodeCtxt->swap[i].colorExternal.handle);
-//				CLOSE_HANDLE(pNodeCtxt->swap[i].depthExternal.handle);
-//			}
-//			CLOSE_HANDLE(pNodeCtxt->compositorTimelineHandle);
-//			CLOSE_HANDLE(pNodeCtxt->nodeTimelineHandle);
+//			CMD_WRITE_SINGLE_SETS(vk.context.device,
+//				BIND_WRITE_NODE_COLOR(nodeCompositorData[hNode].nodeSet, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
+//				BIND_WRITE_NODE_GBUFFER(nodeCompositorData[hNode].nodeSet, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL));
+
+			VkWriteDescriptorSet writeSets[] = {
+				{
+					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+					.dstSet = nodeCompositorData[hNode].nodeSet,
+					.dstBinding = 1,
+					.descriptorCount = 1,
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.pImageInfo = &(VkDescriptorImageInfo){
+						.imageView = VK_NULL_HANDLE,
+						.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+					},
+				},
+				{
+					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+					.dstSet = nodeCompositorData[hNode].nodeSet,
+					.dstBinding = 2,
+					.descriptorCount = 1,
+					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+					.pImageInfo = &(VkDescriptorImageInfo){
+						.imageView = VK_NULL_HANDLE,
+						.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+					},
+				},
+			};
+			vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+
+			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
+				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
+					continue;
+
+				auto pSwap = BLOCK_RELEASE(node.block.swap[iSwapBlock], pNodeCtxt->hSwaps[i]);
+				mxcDestroySwap(pSwap);
+			}
+			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
+			CLOSE_HANDLE(pNodeCtxt->nodeTimelineHandle);
+			CHECK_WIN32(UnmapViewOfFile(pNodeCtxt->pExportedExternalMemory));
+			CLOSE_HANDLE(pNodeCtxt->exportedExternalMemoryHandle);
+			CLOSE_HANDLE(pNodeCtxt->processHandle);
 
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_IMPORTED:
@@ -333,84 +379,14 @@ static int CleanupNode(NodeHandle handle)
 			CLOSE_HANDLE(pImportedExternalMemory->imports.swapsSyncedHandle);
 			CLOSE_HANDLE(pImportedExternalMemory->imports.nodeTimelineHandle);
 			CLOSE_HANDLE(pImportedExternalMemory->imports.compositorTimelineHandle);
-			if (!UnmapViewOfFile(pImportedExternalMemory)) {
-				DWORD dwError = GetLastError();
-				printf("Could not unmap view of file (%lu).\n", dwError);
-			}
+			CHECK_WIN32(UnmapViewOfFile(pImportedExternalMemory));
+			CLOSE_HANDLE(importedExternalMemoryHandle);
 			CLOSE_HANDLE(pNodeCtxt->processHandle);
 			break;
 		default: PANIC("Node type not supported");
 	}
 
-	int swapBlockIndex = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeCtxt->swapType];
-	for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-		if (HANDLE_VALID(pNodeCtxt->hSwaps[i]))
-			BLOCK_RELEASE(node.block.swap[swapBlockIndex], pNodeCtxt->hSwaps[i]);
-	}
-
-
-	// Do I actually want to release data?!
-	// This needs an option
-
-	// must first release command buffer
-//	vkDestroySemaphore(vk.context.device, pNodeCtxt->nodeTimeline, VK_ALLOC);
-
-	// Clear compositor data
-//	VkWriteDescriptorSet writeSets[] = {
-//		{
-//			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-//			.dstSet = nodeCompositorData[handle].nodeSet,
-//			.dstBinding = 1,
-//			.descriptorCount = 1,
-//			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//			.pImageInfo = &(VkDescriptorImageInfo){
-//				.imageView = VK_NULL_HANDLE,
-//				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-//			},
-//		},
-//		{
-//			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-//			.dstSet = nodeCompositorData[handle].nodeSet,
-//			.dstBinding = 2,
-//			.descriptorCount = 1,
-//			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//			.pImageInfo = &(VkDescriptorImageInfo){
-//				.imageView = VK_NULL_HANDLE,
-//				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-//			},
-//		},
-//		{
-//			VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-//			.dstSet = nodeCompositorData[handle].nodeSet,
-//			.dstBinding = 3,
-//			.descriptorCount = 1,
-//			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-//			.pImageInfo = &(VkDescriptorImageInfo){
-//				.imageView = VK_NULL_HANDLE,
-//				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-//			},
-//		},
-//	};
-//	vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
-
-	// destroy images... this will eventually just return back to some pool
-	for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-//		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].color.view, VK_ALLOC);
-//		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].color.image, VK_ALLOC);
-//		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].color.memory, VK_ALLOC);
-//
-//		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].normal.view, VK_ALLOC);
-//		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].normal.image, VK_ALLOC);
-//		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].normal.memory, VK_ALLOC);
-//
-//		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].depth.view, VK_ALLOC);
-//		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].depth.image, VK_ALLOC);
-//		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].depth.memory, VK_ALLOC);
-//
-//		vkDestroyImageView(vk.context.device, pNodeContext->swaps[i].gbuffer.view, VK_ALLOC);
-//		vkDestroyImage(vk.context.device, pNodeContext->swaps[i].gbuffer.image, VK_ALLOC);
-//		vkFreeMemory(vk.context.device, pNodeContext->swaps[i].gbuffer.memory, VK_ALLOC);
-	}
+	*pNodeCtxt = (MxcNodeContext){};
 
 	return 0;
 }
@@ -593,6 +569,7 @@ static struct {
 const char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
 const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
+// these should really be CHECK_WIN32_ERROR_HANDLE or something
 // Checks WIN32 error code. Expects 1 for success.
 #define WIN32_CHECK(_command, _message)                             \
 	{                                                               \
@@ -612,6 +589,7 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 		}                                                             \
 	}
 
+/// Called when compositor accepts connection
 static void InterprocessServerAcceptNodeConnection()
 {
 	printf("Accepting connections on: '%s'\n", SOCKET_PATH);
@@ -659,14 +637,17 @@ static void InterprocessServerAcceptNodeConnection()
 		WIN32_CHECK(hExtNodeMem != NULL, "Could not create file mapping object");
 		pExtNodeMem = MapViewOfFile(hExtNodeMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
 		WIN32_CHECK(pExtNodeMem != NULL, "Could not map view of file");
-	}
-
-	// Initialize Context
-	{
 		*pExtNodeMem = (MxcExternalNodeMemory){};
 		pImports = &pExtNodeMem->imports;
 		pNodeShrd = &pExtNodeMem->shared;
 
+	}
+
+	// Claim Node Handle
+	NodeHandle hNode = RequestExternalNodeHandle(pNodeShrd);
+
+	// Initialize Context
+	{
 		// Init Node Shared
 		pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
 		pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
@@ -678,41 +659,13 @@ static void InterprocessServerAcceptNodeConnection()
 //		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
 		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
-		switch (pNodeShrd->compositorMode) {
-			case MXC_COMPOSITOR_MODE_QUAD:
-			case MXC_COMPOSITOR_MODE_TESSELATION:
-			case MXC_COMPOSITOR_MODE_TASK_MESH:
-			case MXC_COMPOSITOR_MODE_COMPUTE:
-				break;
-			default:
-				LOG_ERROR("Compositor mode not supported!");
-				goto ExitError;
-		}
-
-		// Claim handle and add to active nodes
-		NodeHandle handle = RequestExternalNodeHandle(pNodeShrd);
-		{
-			auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
-			pActiveNode->handles[pActiveNode->ct] = handle;
-			pActiveNode->ct++;
-			atomic_thread_fence(memory_order_release);
-		}
-
-		// TODO we probably do want to clear? put all the buffers and sets into one big shared buffer
-//		pNodeCompLocal = &nodeCstLocal[handle];
-		// Don't clear. State is recycled and pre-alloced on compositor creation.
-//		*pNodeCompositorLocal = (MxcNodeCompositorLocal){};
-
 		// Init Node Context
-		pNodeCtxt = &nodeContext[handle];
+		pNodeCtxt = &nodeContext[hNode];
 		*pNodeCtxt = (MxcNodeContext){};
-
 		pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
-
 		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-
 		pNodeCtxt->compositorTimeline = compositorContext.timeline;
-		pNodeCtxt->compositorTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->compositorTimeline);
+		pNodeCtxt->compositorTimelineHandle = compositorContext.timelineHandle;
 
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
@@ -721,19 +674,13 @@ static void InterprocessServerAcceptNodeConnection()
 		};
 		vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->nodeTimeline);
 		pNodeCtxt->nodeTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline);
-
 		pNodeCtxt->pNodeShared = pNodeShrd;
-
 		pNodeCtxt->processId = nodeProcId;
 		pNodeCtxt->processHandle = hNodeProc;
 		pNodeCtxt->exportedExternalMemoryHandle = hExtNodeMem;
 		pNodeCtxt->pExportedExternalMemory = pExtNodeMem;
 
-		printf("Exporting node handle %d\n", handle);
-	}
-
-	// Create node data
-	{
+		// Duplicate Handles
 		HANDLE currentHandle = GetCurrentProcess();
 		WIN32_CHECK(DuplicateHandle(
 						currentHandle, pNodeCtxt->swapsSyncedHandle,
@@ -749,10 +696,10 @@ static void InterprocessServerAcceptNodeConnection()
 						currentHandle, pNodeCtxt->compositorTimelineHandle,
 						hNodeProc, &pImports->compositorTimelineHandle,
 						0, false, DUPLICATE_SAME_ACCESS),
-			"Duplicate timeline handle fail.");
+			"Duplicate compositor timeline handle fail.");
 	}
 
-	// Send shared memory handle
+	// Send Shared Memory
 	{
 		HANDLE duplicatedExternalNodeMemoryHandle;
 		WIN32_CHECK(DuplicateHandle(
@@ -763,7 +710,16 @@ static void InterprocessServerAcceptNodeConnection()
 		printf("Sending duplicatedExternalNodeMemoryHandle: %p Size: %llu\n", duplicatedExternalNodeMemoryHandle, sizeof(HANDLE));
 		int sendResult = send(clientSocket, (const char*)&duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0);
 		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send shared mem handle failed");
-		printf("Process Node Export Success.\n");
+		LOG("Process Node Export Success.\n");
+
+	}
+
+	// Add Active node
+	{
+		auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
+		pActiveNode->handles[pActiveNode->ct] = hNode;
+		atomic_fetch_add(&pActiveNode->ct, 1);
+		LOG("Added active node handle: %d\n", hNode);
 		goto ExitSuccess;
 	}
 
@@ -795,6 +751,7 @@ ExitSuccess:
 		closesocket(clientSocket);
 }
 
+/// Server thread loop running on compositor
 static void* RunInterProcessServer(void* arg)
 {
 	SOCKADDR_UN address = {.sun_family = AF_UNIX};
@@ -822,6 +779,7 @@ ExitError:
 	WSACleanup();
 	return NULL;
 }
+
 /// Start Server Compositor
 void mxcInitializeInterprocessServer()
 {
@@ -1012,28 +970,24 @@ int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target)
 
 int midRingDequeue(MxcRingBuffer* pBuffer, MxcRingBufferHandle *pTarget)
 {
-	ATOMIC_FENCE_BLOCK	{
+	ATOMIC_FENCE_BLOCK {
 		MxcRingBufferHandle head = pBuffer->head;
 		MxcRingBufferHandle tail = pBuffer->tail;
-		if (head == tail)
-			return 1;
-
+		if (head == tail) return 1;
 		*pTarget = (MxcIpcFunc)(pBuffer->targets[tail]);
 		pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
 	}
 	return 0;
 }
 
-int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target)
-{
+int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target) {
 	return midRingEnqueue(pBuffer, target);
 }
 
 int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle)
 {
 	MxcRingBufferHandle target;
-	if (midRingDequeue(pBuffer, &target))
-		return 1;
+	if (midRingDequeue(pBuffer, &target)) return 1;
 	LOG("Calling IPC Target %d...\n", target);
 	MXC_IPC_FUNCS[target](nodeHandle);
 	return 0;
@@ -1042,8 +996,10 @@ int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle)
 static void ipcFuncNodeClosed(NodeHandle handle)
 {
 	LOG("Closing %d\n", handle);
+	ReleaseNode(handle);
 	CleanupNode(handle);
 }
+
 static void ipcFuncClaimSwap(NodeHandle hNode)
 {
 	LOG("Claiming Swap for Node %d\n", hNode);
@@ -1080,12 +1036,11 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		}
 
 		pNodeCtx->hSwaps[si] = hSwap;
-
 		auto pSwap = BLOCK_PTR(node.block.swap[swapBlockIndex], hSwap);
 
 		// Should we release or always recreate images?
 		// Until they are sharing different size probably better to release
-		if (pSwap->color.image == NULL) {
+		if (pSwap->type == XR_SWAP_TYPE_UNKNOWN) {
 			mxcCreateSwap(&swapInfo, pSwap);
 			printf("Created Swap %d: %d %d\n", si, pNodeShrd->swapWidth, pNodeShrd->swapHeight);
 		} else {

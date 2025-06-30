@@ -132,11 +132,10 @@ int main(void)
 	if (isCompositor) {  // Compositor Loop
 		VkDevice device = vk.context.device;
 		VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-		uint64_t compositorBaseCycleValue = 0;
 		while (isRunning) {
 
 			// we may not have to even wait... this could go faster
-			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
+			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
 
 			// interprocess polling could be a different thread?
 			// we must do it here when the comp thread is not rendering otherwise we can't clear resources if one closes
@@ -149,8 +148,7 @@ int main(void)
 			atomic_thread_fence(memory_order_release);
 
 			// signal input ready to process!
-			vkTimelineSignal(device, compositorBaseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
-
+			vkTimelineSignal(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
 			// MXC_CYCLE_COMPOSITOR_RECORD occurs here
 
 			// Compositor processes input and updates nodes.
@@ -164,21 +162,22 @@ int main(void)
 			//      mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 
 			// wait for recording to be done
-			vkTimelineWait(device, compositorBaseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
+			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
 
-			compositorBaseCycleValue += MXC_CYCLE_COUNT;
+//			compositorBaseCycleValue += MXC_CYCLE_COUNT;
+			compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
 
 			atomic_thread_fence(memory_order_acquire);
-			// itd be good to come up with a mechanism that can actually deal with real multiple queues for debugging
-			CmdSubmitPresent(compositorContext.gfxCmd,
-							 VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
-							 compositorContext.swapCtx,
-							 compositorContext.timeline,
-							 compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
+			CmdSubmitPresent(
+				compositorContext.gfxCmd,
+				VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
+				compositorContext.swapCtx,
+				compositorContext.timeline,
+				compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
 			// Try submitting nodes before waiting to update window again.
 			// We want input update and composite render to happen ASAP so main thread waits on those events, but tries to update other nodes in between.
-			mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
+//			mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 		}
 	} else {
 

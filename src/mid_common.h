@@ -25,15 +25,35 @@ typedef const char* str;
 ////
 extern void Panic(const char* file, int line, const char* message);
 #define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
-// Check if the condition is 0=Success or 0=False
-#define CHECK(_err, _message)                      \
-	if (UNLIKELY(_err)) {                          \
-		fprintf(stderr, "Error Code: %d\n", _err); \
-		PANIC(_message);                           \
+
+// I need different tiers of checks.
+// REQUIRE = Panic
+// ASSERT = release compile out
+// CHECK = error log return 0
+// TRY = error log goto ExitError
+
+// Check if the condition is 0=Success or 1=Fail
+#define CHECK(_err, _message)                \
+	if (UNLIKELY(_err)) {                    \
+		LOG_ERROR("Error Code: %d\n", _err); \
+		PANIC(_message);                     \
+	}
+// Check if the condition is 1=True or 0=False
+#define CHECK_TRUE(_err, _message)           \
+	if (UNLIKELY(!(_err))) {                 \
+		LOG_ERROR("Error Code: %d\n", _err); \
+		PANIC(_message);                     \
+	}
+#define CHECK_EQUAL(_a, _b, ...)                              \
+	if (UNLIKELY(((_a) != (_b)))) {                           \
+		PANIC("Error: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
+	}
+#define CHECK_NOT_EQUAL(_a, _b, ...)                          \
+	if (UNLIKELY(((_a) == (_b)))) {                           \
+		PANIC("Error: " #_a " == " #_b " " __VA_ARGS__ "\n"); \
 	}
 #define LOG(...) printf(__VA_ARGS__)
 #define LOG_ERROR(...) fprintf(stderr, "Error!!! " __VA_ARGS__)
-//#define LOG_ERROR(...) printf("Error!!! " __VA_ARGS__)
 
 ////////////
 //// Utility
@@ -78,20 +98,23 @@ extern void Panic(const char* file, int line, const char* message);
 
 static void LogWin32Error(HRESULT err)
 {
-	fprintf(stderr, "Win32 Error Code: 0x%08lX\n", err);
+	LOG_ERROR("Win32 Error Code: 0x%08lX\n", err);
 	char* errStr;
 	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-		fprintf(stderr, "%s\n", errStr);
+		LOG_ERROR("%s\n", errStr);
 		LocalFree(errStr);
 	}
 }
 
-#define CHECK_WIN32(condition, err) \
-	if (UNLIKELY(!(condition))) {   \
-		LogWin32Error(err);         \
-		PANIC("Win32 Error!");      \
-	}
+#define CHECK_WIN32(command)               \
+	({                                     \
+		auto error = command;              \
+		if (UNLIKELY(!error)) {            \
+			LogWin32Error(GetLastError()); \
+			PANIC("Win32 Error!");         \
+		}                                  \
+	})
 // this seems like it should be more generic?
 #define DX_CHECK(command)           \
 	({                              \

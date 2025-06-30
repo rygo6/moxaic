@@ -756,10 +756,10 @@ INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
 }
 INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 {
-	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_UNITIALIZED ,"Shared buf has not been requested!");
-	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_BOUND, "Shared buf already bound!");
-	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_FREED, "Shared buf has been freed!");
-	CHECK(pBuffer->mem.state != VK_SHARED_MEMORY_STATE_REQUESTED, "Shared buf has been requested!");
+	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_UNITIALIZED, "Shared buffer has not been requested!");
+	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_BOUND, "Shared buffer already bound!");
+	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_FREED, "Shared buffer has been freed!");
+	CHECK(pBuffer->mem.state != VK_SHARED_MEMORY_STATE_REQUESTED, "Shared buffer has been requested!");
 	CHECK(pBuffer->mem.size <= 0, "Shared buf has no size initialized!");
 	CHECK(pBuffer->mem.type <= 0 && pBuffer->mem.type >= VK_MAX_MEMORY_TYPES, "Shared buf has no mem initialized!");
 	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buf, deviceMemory[pBuffer->mem.type], pBuffer->mem.offset));
@@ -944,34 +944,29 @@ void vkCreateComputePipe(
 
 void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFamily, VkSwapContext* pSwap);
 
-typedef struct VkTextureCreateInfo {
+typedef struct VkDedicatedTextureCreateInfo {
 	const char*                        debugName;
 	VkImageAspectFlags                 aspectMask;
 	VkLocality                         locality;
 	VkExternalMemoryHandleTypeFlagBits handleType;
 	VK_EXTERNAL_HANDLE_PLATFORM        importHandle;
 	const VkImageCreateInfo*           pImageCreateInfo; // probably don't want this to be a ptr
-} VkTextureCreateInfo;
-void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture);
-void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
-
-typedef struct VkWin32ExternalTexture {
-	ID3D12Resource* texture;
-	HANDLE handle;
-} VkWin32ExternalTexture;
-void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture);
+} VkDedicatedTextureCreateInfo;
+void vkCreateDedicatedTexture(const VkDedicatedTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture);
+void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture);
+void vkDestroyDedicatedTexture(VkDedicatedTexture* pTexture);
 
 typedef struct vkSemaphoreCreateInfoExt {
-	const char*           debugName;
-	VkSemaphoreType       semaphoreType;
-	VkLocality            locality;
+	const char*                 debugName;
+	VkSemaphoreType             semaphoreType;
+	VkLocality                  locality;
 	VK_EXTERNAL_HANDLE_PLATFORM importHandle;
 } vkSemaphoreCreateInfoExt;
 void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemaphore* pSemaphore);
 
 typedef struct VkExternalFenceCreateInfo {
-	const char*           debugName;
-	VkLocality            locality;
+	const char*                 debugName;
+	VkLocality                  locality;
 	VK_EXTERNAL_HANDLE_PLATFORM importHandle;
 } VkExternalFenceCreateInfo;
 void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence* pFence);
@@ -982,6 +977,43 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetMemoryExternalHandle(VkDeviceMemory memory);
 VK_EXTERNAL_HANDLE_PLATFORM vkGetFenceExternalHandle(VkFence fence);
 VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 
+#define VK_OBJECT_TYPE(obj) _Generic((obj),                                \
+	VkBuffer: VK_OBJECT_TYPE_BUFFER,                                       \
+	VkImage: VK_OBJECT_TYPE_IMAGE,                                         \
+	VkInstance: VK_OBJECT_TYPE_INSTANCE,                                   \
+	VkPhysicalDevice: VK_OBJECT_TYPE_PHYSICAL_DEVICE,                      \
+	VkDevice: VK_OBJECT_TYPE_DEVICE,                                       \
+	VkQueue: VK_OBJECT_TYPE_QUEUE,                                         \
+	VkSemaphore: VK_OBJECT_TYPE_SEMAPHORE,                                 \
+	VkCommandBuffer: VK_OBJECT_TYPE_COMMAND_BUFFER,                        \
+	VkFence: VK_OBJECT_TYPE_FENCE,                                         \
+	VkDeviceMemory: VK_OBJECT_TYPE_DEVICE_MEMORY,                          \
+	VkEvent: VK_OBJECT_TYPE_EVENT,                                         \
+	VkQueryPool: VK_OBJECT_TYPE_QUERY_POOL,                                \
+	VkBufferView: VK_OBJECT_TYPE_BUFFER_VIEW,                              \
+	VkImageView: VK_OBJECT_TYPE_IMAGE_VIEW,                                \
+	VkShaderModule: VK_OBJECT_TYPE_SHADER_MODULE,                          \
+	VkPipelineCache: VK_OBJECT_TYPE_PIPELINE_CACHE,                        \
+	VkPipelineLayout: VK_OBJECT_TYPE_PIPELINE_LAYOUT,                      \
+	VkRenderPass: VK_OBJECT_TYPE_RENDER_PASS,                              \
+	VkPipeline: VK_OBJECT_TYPE_PIPELINE,                                   \
+	VkDescriptorSetLayout: VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,           \
+	VkSampler: VK_OBJECT_TYPE_SAMPLER,                                     \
+	VkDescriptorPool: VK_OBJECT_TYPE_DESCRIPTOR_POOL,                      \
+	VkDescriptorSet: VK_OBJECT_TYPE_DESCRIPTOR_SET,                        \
+	VkFramebuffer: VK_OBJECT_TYPE_FRAMEBUFFER,                             \
+	VkCommandPool: VK_OBJECT_TYPE_COMMAND_POOL,                            \
+	VkSamplerYcbcrConversion: VK_OBJECT_TYPE_SAMPLER_YCBCR_CONVERSION,     \
+	VkDescriptorUpdateTemplate: VK_OBJECT_TYPE_DESCRIPTOR_UPDATE_TEMPLATE, \
+	VkSurfaceKHR: VK_OBJECT_TYPE_SURFACE_KHR,                              \
+	VkSwapchainKHR: VK_OBJECT_TYPE_SWAPCHAIN_KHR,                          \
+	VkDisplayKHR: VK_OBJECT_TYPE_DISPLAY_KHR,                              \
+	VkDisplayModeKHR: VK_OBJECT_TYPE_DISPLAY_MODE_KHR,                     \
+	default: VK_OBJECT_TYPE_UNKNOWN)
+
+#define VK_SET_DEBUG(_) vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), #_)
+#define VK_SET_DEBUG_NAME(_, _name) vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), _name)
+
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType);
@@ -990,6 +1022,13 @@ VkCommandBuffer vkBeginImmediateTransferCommandBuffer();
 void            vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
 
 #ifdef _WIN32
+typedef struct VkExternalPlatformTexture {
+	ID3D12Resource* texture;
+	HANDLE handle;
+} VkExternalPlatformTexture;
+void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExternalPlatformTexture*pTexture);
+void vkDestroyExternalPlatformTexture(VkExternalPlatformTexture* pTexture);
+
 void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
 #endif
 
@@ -2075,7 +2114,7 @@ void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 //----------------------------------------------------------------------------------
 
 // could all image methods be condensed to one?
-static void CreateImageView(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
+static void CreateImageView(const VkDedicatedTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
 {
 	VkImageViewCreateInfo imageViewCreateInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -2090,7 +2129,7 @@ static void CreateImageView(const VkTextureCreateInfo* pCreateInfo, VkDedicatedT
 	};
 	VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, VK_ALLOC, &pTexture->view));
 }
-static void CreateAllocImage(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
+static void CreateAllocImage(const VkDedicatedTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
 {
 	VK_CHECK(vkCreateImage(vk.context.device, pCreateInfo->pImageCreateInfo, VK_ALLOC, &pTexture->image));
 
@@ -2165,22 +2204,101 @@ static void CreateAllocImage(const VkTextureCreateInfo* pCreateInfo, VkDedicated
 		requiresDedicated || requiresExternalDedicated ? &dedicatedAllocInfo : NULL,
 		&pTexture->memory);
 }
-static void CreateAllocBindImage(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
+static void CreateAllocBindImage(const VkDedicatedTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
 {
 	CreateAllocImage(pCreateInfo, pTexture);
 	VK_CHECK(vkBindImageMemory(vk.context.device, pTexture->image, pTexture->memory, 0));
 }
-static void CreateAllocateBindImageView(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
+static void CreateAllocateBindImageView(const VkDedicatedTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
 {
 	CreateAllocBindImage(pCreateInfo, pTexture);
 	CreateImageView(pCreateInfo, pTexture);
 }
 
-void vkCreateTexture(const VkTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
+void vkCreateDedicatedTexture(const VkDedicatedTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
 {
 	CreateAllocateBindImageView(pCreateInfo, pTexture);
 	vkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
+
+void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
+{
+	int      texChannels, width, height;
+	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
+	CHECK(width == 0 || height == 0, "Image windowHeight or windowWidth is equal to zero.")
+	
+	VkDedicatedTextureCreateInfo createInfo = {
+		.debugName = pPath,
+		.pImageCreateInfo = &(VkImageCreateInfo) {
+			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = VK_FORMAT_B8G8R8A8_SRGB,
+			.extent = (VkExtent3D){width, height, 1},
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		},
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+	};
+	vkCreateDedicatedTexture(&createInfo, pTexture);
+
+	VkDeviceSize   imageBufferSize = width * height * 4;
+	VkBuffer       stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
+	stbi_image_free(pImagePixels);
+
+	VkCommandBuffer commandBuffer = vkBeginImmediateTransferCommandBuffer();
+
+	VkImageMemoryBarrier2 beginCopyBarrier = {
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = pTexture->image,
+		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_SRC_UNDEFINED,
+		VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
+		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+	};
+	vkCmdImageBarriers(commandBuffer, 1, &beginCopyBarrier);
+
+	VkBufferImageCopy region = {
+		.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
+		.imageExtent = {width, height, 1},
+	};
+	vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+	VkImageMemoryBarrier2 endCopyBarrier = {
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = pTexture->image,
+		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
+		.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+		.dstAccessMask = VK_ACCESS_2_NONE,
+		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+	};
+	vkCmdImageBarriers(commandBuffer, 1, &endCopyBarrier);
+
+	vkEndImmediateTransferCommandBuffer(commandBuffer);
+
+	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
+	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);
+}
+
+void vkDestroyDedicatedTexture(VkDedicatedTexture* pTexture)
+{
+	CHECK_NOT_EQUAL(pTexture, NULL);
+	CHECK_NOT_EQUAL(pTexture->view, NULL);
+	CHECK_NOT_EQUAL(pTexture->image, NULL);
+	CHECK_NOT_EQUAL(pTexture->memory, NULL);
+	vkDestroyImageView(vk.context.device, pTexture->view, VK_ALLOC);
+	vkDestroyImage(vk.context.device, pTexture->image, VK_ALLOC);
+	vkFreeMemory(vk.context.device, pTexture->memory, VK_ALLOC);
+	pTexture->view = NULL;
+	pTexture->image = NULL;
+	pTexture->memory = NULL;
+}
+
 
 static struct {
 	IDXGIFactory4* factory;
@@ -2307,10 +2425,10 @@ static void CheckDXGI()
 	}
 }
 
-void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32ExternalTexture *pTexture)
+void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExternalPlatformTexture*pTexture)
 {
-	assert(vkDepthFormat(pCreateInfo->format) == false && "D3D Can't export depth formats.");
-	assert(pCreateInfo->mipLevels == 1 && "Importing mips to other APIs is problematic.");
+	CHECK_EQUAL(vkDepthFormat(pCreateInfo->format), false, "ExternalPlatformTexture cannot be depth!");
+	CHECK_EQUAL(pCreateInfo->mipLevels, 1, "ExternalPlatformTexture cannot have mips!");
 	CheckDXGI();
 
 	auto format = vkDXGIFormat(pCreateInfo->format);
@@ -2353,73 +2471,21 @@ void vkWin32CreateExternalTexture(const VkImageCreateInfo* pCreateInfo, VkWin32E
 		&pTexture->handle));
 
 	// I think I only need to keep the device alive?
+	// I should have explicit ExternalPlatform Init and Destroy methods
 //	IDXGIFactory4_Release(d3d12.factory);
 //	IDXGIAdapter1_Release(d3d12.adapter);
 //	ID3D12Device_Release(d3d12.device);
 }
 
-void vkCreateTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
+void vkDestroyExternalPlatformTexture(VkExternalPlatformTexture* pTexture)
 {
-	int      texChannels, width, height;
-	stbi_uc* pImagePixels = stbi_load(pPath, &width, &height, &texChannels, STBI_rgb_alpha);
-	CHECK(width == 0 || height == 0, "Image windowHeight or windowWidth is equal to zero.")
-
-	VkTextureCreateInfo createInfo = {
-		.debugName = pPath,
-		.pImageCreateInfo = &(VkImageCreateInfo) {
-			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_FORMAT_B8G8R8A8_SRGB,
-			.extent = (VkExtent3D){width, height, 1},
-			.mipLevels = 1,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		},
-		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-	};
-	vkCreateTexture(&createInfo, pTexture);
-
-	VkDeviceSize   imageBufferSize = width * height * 4;
-	VkBuffer       stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
-	stbi_image_free(pImagePixels);
-
-	VkCommandBuffer commandBuffer = vkBeginImmediateTransferCommandBuffer();
-
-	VkImageMemoryBarrier2 beginCopyBarrier = {
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-		.image = pTexture->image,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-		VK_IMAGE_BARRIER_SRC_UNDEFINED,
-		VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
-		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	};
-	vkCmdImageBarriers(commandBuffer, 1, &beginCopyBarrier);
-
-	VkBufferImageCopy region = {
-		.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
-		.imageExtent = {width, height, 1},
-	};
-	vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, pTexture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-	VkImageMemoryBarrier2 endCopyBarrier = {
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-		.image = pTexture->image,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-		VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
-		.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
-		.dstAccessMask = VK_ACCESS_2_NONE,
-		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	};
-	vkCmdImageBarriers(commandBuffer, 1, &endCopyBarrier);
-
-	vkEndImmediateTransferCommandBuffer(commandBuffer);
-
-	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
-	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);
+	CHECK_NOT_EQUAL(pTexture, NULL)
+	CHECK_NOT_EQUAL(pTexture->texture, NULL);
+	CHECK_NOT_EQUAL(pTexture->handle, NULL);
+	CHECK_WIN32(CloseHandle(pTexture->handle));
+	DX_CHECK(ID3D12Resource_Release(pTexture->texture));
+	pTexture->texture = NULL;
+	pTexture->handle = NULL;
 }
 
 void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer)
@@ -2472,7 +2538,7 @@ void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, V
 
 void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer)
 {
-	VkTextureCreateInfo colorCreateInfo = {
+	VkDedicatedTextureCreateInfo colorCreateInfo = {
 		.debugName = "ColorFramebuffer",
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 		.locality = pCreateInfo->locality,
@@ -2488,8 +2554,8 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 		},
 	};
-	vkCreateTexture(&colorCreateInfo, &pFrameBuffer->color);
-	VkTextureCreateInfo normalCreateInfo = {
+	vkCreateDedicatedTexture(&colorCreateInfo, &pFrameBuffer->color);
+	VkDedicatedTextureCreateInfo normalCreateInfo = {
 		.debugName = "NormalFramebuffer",
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 		.locality = pCreateInfo->locality,
@@ -2505,8 +2571,8 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 		},
 	};
-	vkCreateTexture(&normalCreateInfo, &pFrameBuffer->normal);
-	VkTextureCreateInfo depthCreateInfo = {
+	vkCreateDedicatedTexture(&normalCreateInfo, &pFrameBuffer->normal);
+	VkDedicatedTextureCreateInfo depthCreateInfo = {
 		.debugName = "DepthFramebuffer",
 		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 		.locality = pCreateInfo->locality,
@@ -2522,7 +2588,7 @@ void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo*
 			.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 		},
 	};
-	vkCreateTexture(&depthCreateInfo, &pFrameBuffer->depth);
+	vkCreateDedicatedTexture(&depthCreateInfo, &pFrameBuffer->depth);
 }
 
 //----------------------------------------------------------------------------------
@@ -3029,7 +3095,7 @@ void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemapho
 //	vkUpdateDescriptorSets(vk.context.device, 1, &VK_SET_WRITE_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
 //}
 
-void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName)
+void vkSetDebugName(VkObjectType objectType, u64 objectHandle, const char* pDebugName)
 {
 	VkDebugUtilsObjectNameInfoEXT debugInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -3057,7 +3123,7 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetFenceExternalHandle(VkFence fence)
 {
 	VK_INSTANCE_FUNC(GetFenceWin32HandleKHR);
 	VkFenceGetWin32HandleInfoKHR getWin32HandleInfo = {
-		.sType = VK_STRUCTURE_TYPE_FENCE_GET_WIN32_HANDLE_INFO_KHR,
+		VK_STRUCTURE_TYPE_FENCE_GET_WIN32_HANDLE_INFO_KHR,
 		.fence = fence,
 		.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM,
 	};
@@ -3069,7 +3135,7 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore)
 {
 	VK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
 	VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
+		VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
 		.semaphore = semaphore,
 		.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM,
 	};

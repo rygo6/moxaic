@@ -75,37 +75,39 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	return HANDLE_DEFAULT;
 }
 
-#define BLOCK_CLAIM(block, key)                                                                                           \
-	({                                                                                                                    \
-		int _handle = ClaimBlock(sizeof(block.occupied), (bitset_t*)&block.occupied, block.keys, block.generations, key); \
-		assert(_handle >= 0 && #block ": Claiming handle. Out of capacity.");                                             \
-		(block_handle) _handle;                                                                                           \
+// someway these should take ptrs... or should this be static block? STATIC_BLOCK_CLAIM ?
+#define BLOCK_CLAIM(_, _key)                                                                               \
+	({                                                                                                     \
+		int _handle = ClaimBlock(sizeof(_.occupied), (bitset_t*)&_.occupied, _.keys, _.generations, _key); \
+		assert(_handle >= 0 && #_ ": Claiming handle. Out of capacity.");                                  \
+		(block_handle) _handle;                                                                            \
 	})
-#define BLOCK_RELEASE(_block, _handle)                                                                                                           \
-	({                                                                                                                                           \
-		assert(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_block.blocks) && #_block ": Releasing block handle. Out of range."); \
-		assert(BITSET(_block.occupied, HANDLE_INDEX(_handle)) && #_block ": Releasing block handle. Should be occupied.");                       \
-		BITCLEAR(_block.occupied, (int)HANDLE_INDEX(_handle));                                                                                   \
-	})
-#define BLOCK_FIND(block, hash)                                                   \
-	({                                                                            \
-		assert(hash != 0);                                                        \
-		FindBlockByHash(sizeof(block.keys), block.keys, block.generations, hash); \
-	})
-#define BLOCK_HANDLE(block, p)                                                                                                \
-	({                                                                                                                        \
-		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting block handle. Out of range."); \
-		HANDLE_GENERATION_SET((p - block.blocks), block.generations[(p - block.blocks)]);                                     \
-	})
-#define BLOCK_KEY(block, p)                                                                                                \
-	({                                                                                                                     \
-		assert(p >= block.blocks && p < block.blocks + COUNT(block.blocks) && #block ": Getting block key. Out of range."); \
-		block.keys[p - block.blocks];                                                                                      \
-	})
-#define BLOCK_PTR(block, handle)                                                                                                       \
+#define BLOCK_RELEASE(_, _handle)                                                                                                      \
 	({                                                                                                                                 \
-		assert(HANDLE_INDEX(handle) >= 0 && HANDLE_INDEX(handle) < COUNT(block.blocks) && #block ": Getting block ptr. Out of range."); \
-		&block.blocks[HANDLE_INDEX(handle)];                                                                                           \
+		assert(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks) && #_ ": Releasing block handle. Out of range."); \
+		assert(BITSET(_.occupied, HANDLE_INDEX(_handle)) && #_ ": Releasing block handle. Should be occupied.");                       \
+		BITCLEAR(_.occupied, (int)HANDLE_INDEX(_handle));                                                                              \
+		&_.blocks[HANDLE_INDEX(_handle)];                                                                                              \
+	})
+#define BLOCK_FIND(_, _hash)                                           \
+	({                                                                 \
+		assert(_hash != 0);                                            \
+		FindBlockByHash(sizeof(_.keys), _.keys, _.generations, _hash); \
+	})
+#define BLOCK_HANDLE(_, _p)                                                                                      \
+	({                                                                                                           \
+		assert(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks) && #_ ": Getting block handle. Out of range."); \
+		HANDLE_GENERATION_SET((_p - _.blocks), _.generations[(_p - _.blocks)]);                                  \
+	})
+#define BLOCK_KEY(_, _p)                                                                                      \
+	({                                                                                                        \
+		assert(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks) && #_ ": Getting block key. Out of range."); \
+		_.keys[_p - _.blocks];                                                                                \
+	})
+#define BLOCK_PTR(_, _handle)                                                                                                     \
+	({                                                                                                                            \
+		assert(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks) && #_ ": Getting block ptr. Out of range."); \
+		&_.blocks[HANDLE_INDEX(_handle)];                                                                                         \
 	})
 
 

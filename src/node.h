@@ -179,13 +179,14 @@ typedef struct MxcSwapInfo {
 } MxcSwapInfo;
 
 typedef struct MxcSwap {
+	XrSwapType         type;
 	VkDedicatedTexture color;
 	VkDedicatedTexture depth;
 	VkDedicatedTexture gbuffer;
 	VkDedicatedTexture gbufferMip;
 #if _WIN32
-	VkWin32ExternalTexture colorExternal;
-	VkWin32ExternalTexture depthExternal;
+	VkExternalPlatformTexture colorExternal;
+	VkExternalPlatformTexture depthExternal;
 #endif
 } MxcSwap;
 
@@ -195,12 +196,15 @@ typedef struct MxcSwap {
 typedef struct MxcCompositorContext {
 	// read by multiple threads
 	VkCommandBuffer gfxCmd;
+	u64             baseCycleValue;
 	VkSemaphore     timeline;
 	VkSwapContext   swapCtx;
 
 	// cold data
 	VkCommandPool gfxPool;
 	pthread_t     threadId;
+
+	HANDLE timelineHandle;
 
 } MxcCompositorContext;
 
@@ -321,7 +325,7 @@ typedef struct MxcNodeContext {
 	XrSwapType   swapType;
 	HANDLE       swapsSyncedHandle;
 	block_handle hSwaps[MXC_NODE_SWAP_CAPACITY];
-	MxcSwap      swaps[MXC_NODE_SWAP_CAPACITY];
+//	MxcSwap      swaps[MXC_NODE_SWAP_CAPACITY];
 	HANDLE       nodeTimelineHandle;
 	VkSemaphore  nodeTimeline;
 	HANDLE       compositorTimelineHandle;
@@ -364,7 +368,7 @@ typedef struct MxcVulkanNodeContext {
 #endif
 
 // move these into struct
-extern u16 nodeCount;
+extern u16 nodeCt;
 
 // Cold storage for all node data
 extern MxcNodeContext nodeContext[MXC_NODE_CAPACITY];
@@ -476,6 +480,16 @@ int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
-	for (int i = 0; i < nodeCount; ++i)
-		mxcIpcFuncDequeue(&node.pShared[i]->nodeInterprocessFuncQueue, i);
+	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
+		atomic_thread_fence(memory_order_acquire);
+		int activeNodeCt = activeNodes[iCstMode].ct;
+		if (activeNodeCt == 0)
+			continue;
+
+		auto pActiveNodes = &activeNodes[iCstMode];
+		for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
+			auto hNode = pActiveNodes->handles[iNode];
+			mxcIpcFuncDequeue(&node.pShared[hNode]->nodeInterprocessFuncQueue, hNode);
+		}
+	}
 }
