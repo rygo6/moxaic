@@ -24,8 +24,6 @@ size_t                     submitNodeQueueStart = 0;
 size_t                     submitNodeQueueEnd = 0;
 MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
-MxcVulkanNodeContext vkNode = {};
-
 struct Node node;
 
 //////////////
@@ -445,112 +443,6 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
-}
-
-////////////////
-//// Node Render
-////
-static const VkImageUsageFlags NODE_PASS_USAGES[] = { // Do I want this?
-	[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-	[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-	[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-};
-
-void mxcCreateNodeRenderPass()
-{
-	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
-		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
-		.attachmentCount = 3,
-		.pAttachments = (VkAttachmentDescription2[]){
-			[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {
-				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			},
-			[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {
-				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			},
-			[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH] = {
-				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-				.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
-				.samples = VK_SAMPLE_COUNT_1_BIT,
-				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			},
-		},
-		.subpassCount = 1,
-		.pSubpasses = (VkSubpassDescription2[]){
-			{
-				VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
-				.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-				.colorAttachmentCount = 2,
-				.pColorAttachments = (VkAttachmentReference2[]){
-					[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR] = {
-						VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR,
-						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					},
-					[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL] = {
-						VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-						.attachment = VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL,
-						.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					},
-				},
-				.pDepthStencilAttachment = &(VkAttachmentReference2){
-					VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-					.attachment = VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH,
-					.layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-				},
-			},
-		},
-		.dependencyCount = 2,
-		.pDependencies = (VkSubpassDependency2[]){
-			// from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
-			{
-				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
-				.srcSubpass = VK_SUBPASS_EXTERNAL,
-				.dstSubpass = 0,
-				.srcStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-				.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-				.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-				.dependencyFlags = 0,
-			},
-			{
-				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
-				.srcSubpass = 0,
-				.dstSubpass = VK_SUBPASS_EXTERNAL,
-				.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-				.dependencyFlags = 0,
-			},
-		},
-	};
-	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, VK_ALLOC, &vkNode.basicPass));
-	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vkNode.basicPass, "NodeRenderPass");
 }
 
 //////////////////

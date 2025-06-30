@@ -352,12 +352,6 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-// I probably want to get rid of this and just use typical basic pass and put more barriers
-typedef struct MxcVulkanNodeContext {
-	VkPipeline  basicPipe;
-	VkRenderPass basicPass;
-} MxcVulkanNodeContext;
-
 // I am presuming a node simply won't need to have as many thread nodes within it
 #if defined(MOXAIC_COMPOSITOR)
 #define MXC_NODE_CAPACITY 64
@@ -374,8 +368,6 @@ typedef struct MxcActiveNodes {
 // Only one import into a node from a compositor?
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
-
-extern MxcVulkanNodeContext vkNode;
 
 extern struct Node {
 

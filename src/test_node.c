@@ -557,7 +557,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 		VkBasicFramebufferCreateInfo framebufferCreateInfo = {
 			.debugName = "TestNodeFramebuffer",
-			.renderPass = vkNode.basicPass,
+//			.renderPass = vkNode.basicPass,
 		};
 		vkCreateBasicFramebuffer(&framebufferCreateInfo, &pNode->framebuffer);
 
@@ -663,9 +663,9 @@ VkDedicatedTextureCreateInfo normalCreateInfo = {
 	{  // Copy needed state
 		// context is available to all now so don't need to do this
 		pNode->device = vk.context.device;
-		pNode->nodeRenderPass = vkNode.basicPass;
+//		pNode->nodeRenderPass = vkNode.basicPass;
 		pNode->pipeLayout = vk.context.basicPipeLayout;
-		pNode->basicPipe = vkNode.basicPipe;
+//		pNode->basicPipe = vkNode.basicPipe;
 	}
 }
 
