@@ -11,8 +11,6 @@
 #include "node.h"
 #include "test_node.h"
 
-MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT] = {};
-
 // Compositor state in Compositor Process
 MxcCompositorContext compositorContext = {};
 
@@ -276,7 +274,7 @@ void ReleaseNode(NodeHandle handle)
 	assert(node.ctxt[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
 	auto pNodeCtxt = &node.ctxt[handle];
 	auto pNodeShrd = node.pShared[handle];
-	auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
+	auto pActiveNode = &node.active[pNodeShrd->compositorMode];
 
 	ATOMIC_FENCE_BLOCK {
 		int i = 0;
@@ -714,7 +712,7 @@ static void InterprocessServerAcceptNodeConnection()
 
 	// Add Active node
 	{
-		auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
+		auto pActiveNode = &node.active[pNodeShrd->compositorMode];
 		pActiveNode->handles[pActiveNode->ct] = hNode;
 		atomic_fetch_add(&pActiveNode->ct, 1);
 		LOG("Added active node handle: %d\n", hNode);

@@ -372,7 +372,6 @@ typedef struct MxcActiveNodes {
 	u16        ct;
 	NodeHandle handles[MXC_NODE_CAPACITY];
 } MxcActiveNodes;
-extern MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT];
 
 // Only one import into a node from a compositor?
 extern HANDLE                 importedExternalMemoryHandle;
@@ -381,6 +380,8 @@ extern MxcExternalNodeMemory* pImportedExternalMemory;
 extern MxcVulkanNodeContext vkNode;
 
 extern struct Node {
+
+	MxcActiveNodes active[MXC_COMPOSITOR_MODE_COUNT];
 
 	u16 ct;
 	MxcNodeContext ctxt[MXC_NODE_CAPACITY];
@@ -471,11 +472,11 @@ static inline void mxcNodeInterprocessPoll()
 {
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 		atomic_thread_fence(memory_order_acquire);
-		int activeNodeCt = activeNodes[iCstMode].ct;
+		int activeNodeCt = node.active[iCstMode].ct;
 		if (activeNodeCt == 0)
 			continue;
 
-		auto pActiveNodes = &activeNodes[iCstMode];
+		auto pActiveNodes = &node.active[iCstMode];
 		for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			mxcIpcFuncDequeue(&node.pShared[hNode]->nodeInterprocessFuncQueue, hNode);
