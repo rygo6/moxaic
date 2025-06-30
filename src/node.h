@@ -378,18 +378,15 @@ extern MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT];
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
-// Move into a comp node thread local...
-extern MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY];
-
 extern MxcVulkanNodeContext vkNode;
 
 extern struct Node {
 
 	u16 ct;
-	MxcNodeContext ctxts[MXC_NODE_CAPACITY];
-
-	// Holds pointer to either local or external process shared memory
+	MxcNodeContext ctxt[MXC_NODE_CAPACITY];
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
+
+	MxcNodeCompositorData cstData[MXC_NODE_CAPACITY];
 
 	struct {
 		BLOCK_DECL(MxcSwap, XR_SESSIONS_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];

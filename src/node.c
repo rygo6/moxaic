@@ -11,9 +11,6 @@
 #include "node.h"
 #include "test_node.h"
 
-
-MxcNodeCompositorData nodeCompositorData[MXC_NODE_CAPACITY] = {};
-
 MxcActiveNodes activeNodes[MXC_COMPOSITOR_MODE_COUNT] = {};
 
 // Compositor state in Compositor Process
@@ -261,7 +258,7 @@ NodeHandle RequestLocalNodeHandle()
 	// TODO this claim/release handle needs to be a pooling logic
 	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
 	node.pShared[hNode] = calloc(1, sizeof(MxcNodeShared));
-	node.ctxts[hNode].pNodeShared = node.pShared[hNode];
+	node.ctxt[hNode].pNodeShared = node.pShared[hNode];
 	return hNode;
 }
 
@@ -269,15 +266,15 @@ NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
 	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
 	node.pShared[hNode] = pNodeShared;
-	node.ctxts[hNode].pNodeShared = node.pShared[hNode];
+	node.ctxt[hNode].pNodeShared = node.pShared[hNode];
 	return hNode;
 }
 
 void ReleaseNode(NodeHandle handle)
 {
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
-	assert(node.ctxts[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
-	auto pNodeCtxt = &node.ctxts[handle];
+	assert(node.ctxt[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
+	auto pNodeCtxt = &node.ctxt[handle];
 	auto pNodeShrd = node.pShared[handle];
 	auto pActiveNode = &activeNodes[pNodeShrd->compositorMode];
 
@@ -305,7 +302,7 @@ void ReleaseNode(NodeHandle handle)
 static int CleanupNode(NodeHandle hNode)
 {
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
-	auto pNodeCtxt = &node.ctxts[hNode];
+	auto pNodeCtxt = &node.ctxt[hNode];
 	auto pNodeShared = node.pShared[hNode];
 
 	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeCtxt->swapType];
@@ -332,7 +329,7 @@ static int CleanupNode(NodeHandle hNode)
 			VkWriteDescriptorSet writeSets[] = {
 				{
 					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = nodeCompositorData[hNode].nodeSet,
+					.dstSet = node.cstData[hNode].nodeSet,
 					.dstBinding = 1,
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -344,7 +341,7 @@ static int CleanupNode(NodeHandle hNode)
 				},
 				{
 					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = nodeCompositorData[hNode].nodeSet,
+					.dstSet = node.cstData[hNode].nodeSet,
 					.dstBinding = 2,
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -400,7 +397,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	printf("Requesting Node Thread.\n");
 	auto handle = RequestLocalNodeHandle();
 
-	auto pNodeCtxt = &node.ctxts[handle];
+	auto pNodeCtxt = &node.ctxt[handle];
 	*pNodeCtxt = (MxcNodeContext){};
 	pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_THREAD;
 	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -439,14 +436,14 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->cmd, "TestNode");
 
-	MxcNodeCompositorData* pNodeCompositorData = &nodeCompositorData[handle];
+	MxcNodeCompositorData* pNodeCompositorData = &node.cstData[handle];
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 //	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
 
 	*pNodeHandle = handle;
 
-	CHECK(pthread_create(&node.ctxts[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
+	CHECK(pthread_create(&node.ctxt[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
@@ -661,7 +658,7 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 		// Init Node Context
-		pNodeCtxt = &node.ctxts[hNode];
+		pNodeCtxt = &node.ctxt[hNode];
 		*pNodeCtxt = (MxcNodeContext){};
 		pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
 		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -877,7 +874,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	{
 		NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
 
-		pNodeContext = &node.ctxts[handle];
+		pNodeContext = &node.ctxt[handle];
 		*pNodeContext = (MxcNodeContext){};
 
 		pNodeContext->type = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
@@ -1005,9 +1002,9 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 {
 	LOG("Claiming Swap for Node %d\n", hNode);
 
-	auto pNodeCtx = &node.ctxts[hNode];
+	auto pNodeCtx = &node.ctxt[hNode];
 	auto pNodeShrd = node.pShared[hNode];
-	auto pNodeCompData = &nodeCompositorData[hNode];
+	auto pNodeCompData = &node.cstData[hNode];
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_INTERPROCESS_MODE_THREAD;
 	int  swapCt      = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
