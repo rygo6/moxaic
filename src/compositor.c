@@ -1072,7 +1072,7 @@ CompositeLoop:
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutSet, 0, NULL);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_GLOBAL, 1, &globalSet, 0, NULL);
 
-		MxcActiveNodes* pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_COMPUTE];
+		auto pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_COMPUTE];
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &node.cstData[hNode];

@@ -255,8 +255,9 @@ NodeHandle RequestLocalNodeHandle()
 {
 	// TODO this claim/release handle needs to be a pooling logic
 	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
-	node.pShared[hNode] = calloc(1, sizeof(MxcNodeShared));
-	node.ctxt[hNode].pNodeShared = node.pShared[hNode];
+	node.pShared[hNode] = malloc(sizeof(MxcNodeShared));
+	memset(node.pShared[hNode], 0, sizeof(MxcNodeShared));
+	memset(&node.ctxt[hNode], 0, sizeof(MxcNodeContext));
 	return hNode;
 }
 
@@ -264,7 +265,7 @@ NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
 	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
 	node.pShared[hNode] = pNodeShared;
-	node.ctxt[hNode].pNodeShared = node.pShared[hNode];
+	memset(&node.ctxt[hNode], 0, sizeof(MxcNodeContext));
 	return hNode;
 }
 
@@ -303,7 +304,7 @@ static int CleanupNode(NodeHandle hNode)
 	auto pNodeCtxt = &node.ctxt[hNode];
 	auto pNodeShared = node.pShared[hNode];
 
-	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeCtxt->swapType];
+	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShared->swapType];
 
 	switch (pNodeCtxt->type) {
 		case MXC_NODE_INTERPROCESS_MODE_THREAD:
@@ -403,7 +404,6 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 	auto pNodeShrd = node.pShared[handle];
 	*pNodeShrd = (MxcNodeShared){};
-	pNodeCtxt->pNodeShared = pNodeShrd;
 	pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
 
 	pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
@@ -657,7 +657,6 @@ static void InterprocessServerAcceptNodeConnection()
 
 		// Init Node Context
 		pNodeCtxt = &node.ctxt[hNode];
-		*pNodeCtxt = (MxcNodeContext){};
 		pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
 		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 		pNodeCtxt->compositorTimeline = compositorContext.timeline;
@@ -670,7 +669,6 @@ static void InterprocessServerAcceptNodeConnection()
 		};
 		vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->nodeTimeline);
 		pNodeCtxt->nodeTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline);
-		pNodeCtxt->pNodeShared = pNodeShrd;
 		pNodeCtxt->processId = nodeProcId;
 		pNodeCtxt->processHandle = hNodeProc;
 		pNodeCtxt->exportedExternalMemoryHandle = hExtNodeMem;
@@ -870,22 +868,18 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 	// Request and setup handle data
 	{
-		NodeHandle handle = RequestExternalNodeHandle(pNodeShared);
-
-		pNodeContext = &node.ctxt[handle];
-		*pNodeContext = (MxcNodeContext){};
-
+		NodeHandle hNode = RequestExternalNodeHandle(pNodeShared);
+		pNodeContext = &node.ctxt[hNode];
 		pNodeContext->type = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
-		pNodeContext->pNodeShared = pNodeShared;
 		pNodeContext->pNodeImports = pNodeImports;
 
 		pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
 		assert(pNodeContext->swapsSyncedHandle != NULL);
 
-		pNodeShared->cstNodeHandle = handle;
+		pNodeShared->cstNodeHandle = hNode;
 		pNodeShared->appNodeHandle = -1;
 
-		printf("Importing node handle %d\n", handle);
+		printf("Importing node handle %d\n", hNode);
 	}
 
 	// Create node data
@@ -1021,7 +1015,6 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		.locality       = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 	};
 
-	pNodeCtx->swapType = pNodeShrd->swapType; // we need something elegant to signify this is duplicated state between shared import and context
 	int swapBlockIndex = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShrd->swapType];
 	for (int si = 0; si < swapCt; ++si) {
 

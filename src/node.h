@@ -322,18 +322,16 @@ typedef struct MxcNodeContext {
 	// Node/Compositor Duplicated
 	// If thread the node/compositor both directly access this.
 	// If IPC it is replicated via duplicated handles from NodeImports.
-	XrSwapType   swapType;
 	HANDLE       swapsSyncedHandle;
-	block_handle hSwaps[MXC_NODE_SWAP_CAPACITY];
-//	MxcSwap      swaps[MXC_NODE_SWAP_CAPACITY];
 	HANDLE       nodeTimelineHandle;
-	VkSemaphore  nodeTimeline;
 	HANDLE       compositorTimelineHandle;
+
+	block_handle hSwaps[MXC_NODE_SWAP_CAPACITY];
+	VkSemaphore  nodeTimeline;
 	VkSemaphore  compositorTimeline;
 
 
 	// Node/Compositor Shared
-	MxcNodeShared* pNodeShared;
 	MxcNodeImports* pNodeImports; // get rid of this?
 
 

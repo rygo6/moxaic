@@ -52,7 +52,8 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 	auto nodeType = pNodeContext->type;
 	auto needsImport = nodeType != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
-	MxcNodeShared*  pNodeShared = pNodeContext->pNodeShared;
+//	MxcNodeShared*  pNodeShared = node.pShared->pNodeShared;
+	MxcNodeShared*  pNodeShared = NULL;
 	MxcNodeImports* pImports = pNodeContext->pNodeImports;
 //	MxcSwap*        pSwap = pNodeContext->swaps;
 	MxcSwap*        pSwap;
@@ -539,7 +540,8 @@ static void CreateNodeProcessPipe(const char* shaderPath, VkPipelineLayout layou
 }
 static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 {
-	auto pNodeShared = pNodeContext->pNodeShared;
+//	auto pNodeShared = pNodeContext->pNodeShared;
+	MxcNodeShared* pNodeShared = NULL;
 	int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
 
 	{	// Config
@@ -669,7 +671,8 @@ VkDedicatedTextureCreateInfo normalCreateInfo = {
 
 void* mxcTestNodeThread(MxcNodeContext* pNodeContext)
 {
-	auto pNodeShared = pNodeContext->pNodeShared;
+//	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
+	MxcNodeShared* pNodeShared = NULL;
 	pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
 //	pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
 
