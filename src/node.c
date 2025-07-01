@@ -306,9 +306,9 @@ static int CleanupNode(NodeHandle hNode)
 
 	switch (pNodeCtxt->type) {
 		case MXC_NODE_INTERPROCESS_MODE_THREAD:
-			vkFreeCommandBuffers(vk.context.device, pNodeCtxt->pool, 1, &pNodeCtxt->cmd);
-			vkDestroyCommandPool(vk.context.device, pNodeCtxt->pool, VK_ALLOC);
-			int result = pthread_join(pNodeCtxt->threadId, NULL);
+			vkFreeCommandBuffers(vk.context.device, pNodeCtxt->thread.pool, 1, &pNodeCtxt->thread.cmd);
+			vkDestroyCommandPool(vk.context.device, pNodeCtxt->thread.pool, VK_ALLOC);
+			int result = pthread_join(pNodeCtxt->thread.id, NULL);
 			if (result != 0) {
 				perror("Thread join failed");
 			}
@@ -360,10 +360,10 @@ static int CleanupNode(NodeHandle hNode)
 				mxcDestroySwap(pSwap);
 			}
 			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
-			CLOSE_HANDLE(pNodeCtxt->nodeTimelineHandle);
-			CHECK_WIN32(UnmapViewOfFile(pNodeCtxt->pExportedExternalMemory));
-			CLOSE_HANDLE(pNodeCtxt->exportedExternalMemoryHandle);
-			CLOSE_HANDLE(pNodeCtxt->processHandle);
+			CLOSE_HANDLE(pNodeCtxt->exported.nodeTimelineHandle);
+			CHECK_WIN32(UnmapViewOfFile(pNodeCtxt->exported.pExportedMemory));
+			CLOSE_HANDLE(pNodeCtxt->exported.exportedMemoryHandle);
+			CLOSE_HANDLE(pNodeCtxt->exported.handle);
 
 			node.pShared[hNode] = NULL;
 #endif
@@ -379,7 +379,7 @@ static int CleanupNode(NodeHandle hNode)
 			CLOSE_HANDLE(pImportedExternalMemory->imports.compositorTimelineHandle);
 			CHECK_WIN32(UnmapViewOfFile(pImportedExternalMemory));
 			CLOSE_HANDLE(importedExternalMemoryHandle);
-			CLOSE_HANDLE(pNodeCtxt->processHandle);
+			CLOSE_HANDLE(pNodeCtxt->exported.handle);
 			break;
 		default: PANIC("Node type not supported");
 	}
@@ -398,8 +398,8 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	auto pNodeCtxt = &node.ctxt[handle];
 	*pNodeCtxt = (MxcNodeContext){};
 	pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_THREAD;
-	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-	pNodeCtxt->compositorTimeline = compositorContext.timeline;
+	pNodeCtxt-> swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+	pNodeCtxt->exported.compositorTimeline = compositorContext.timeline;
 
 	auto pNodeShrd = node.pShared[handle];
 	*pNodeShrd = (MxcNodeShared){};
@@ -417,21 +417,21 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 		.locality = VK_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
-	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->nodeTimeline);
+	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->exported.nodeTimeline);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtxt->pool));
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtxt->thread.pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = pNodeCtxt->pool,
+		.commandPool = pNodeCtxt->thread.pool,
 		.commandBufferCount = 1,
 	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->cmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->cmd, "TestNode");
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->thread.cmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->thread.cmd, "TestNode");
 
 	MxcNodeCompositorData* pNodeCompositorData = &node.cst.data[handle];
 	// do not clear since set data is preallocated
@@ -440,7 +440,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 	*pNodeHandle = handle;
 
-	CHECK(pthread_create(&node.ctxt[handle].threadId, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
+	CHECK(pthread_create(&node.ctxt[handle].thread.id, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
@@ -514,23 +514,22 @@ static void InterprocessServerAcceptNodeConnection()
 	// Receive Node Process Handle
 	{
 		int receiveLength = recv(clientSocket, (char*)&nodeProcId, sizeof(DWORD), 0);
-		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node process id failed");
-		printf("Received node process id: %lu Size: %d\n", nodeProcId, receiveLength);
-		CHECK(nodeProcId == 0, "Invalid node process id");
+		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node exported id failed");
+		printf("Received node exported id: %lu Size: %d\n", nodeProcId, receiveLength);
+		CHECK(nodeProcId == 0, "Invalid node exported id");
 	}
 
 	// Create Shared Memory
 	{
 		hNodeProc = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcId);
-		WIN32_CHECK(hNodeProc != NULL && hNodeProc != INVALID_HANDLE_VALUE, "Duplicate process handle failed");
+		WIN32_CHECK(hNodeProc != NULL && hNodeProc != INVALID_HANDLE_VALUE, "Duplicate exported handle failed");
 		hExtNodeMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(MxcExternalNodeMemory), NULL);
 		WIN32_CHECK(hExtNodeMem != NULL, "Could not create file mapping object");
 		pExtNodeMem = MapViewOfFile(hExtNodeMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
 		WIN32_CHECK(pExtNodeMem != NULL, "Could not map view of file");
-		*pExtNodeMem = (MxcExternalNodeMemory){};
+		memset(pExtNodeMem, 0, sizeof(MxcExternalNodeMemory));
 		pImports = &pExtNodeMem->imports;
 		pNodeShrd = &pExtNodeMem->shared;
-
 	}
 
 	// Claim Node Handle
@@ -553,20 +552,20 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeCtxt = &node.ctxt[hNode];
 		pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
 		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-		pNodeCtxt->compositorTimeline = compositorContext.timeline;
-		pNodeCtxt->compositorTimelineHandle = compositorContext.timelineHandle;
-
+		pNodeCtxt->exported.compositorTimeline = compositorContext.timeline;
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
-		vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->nodeTimeline);
-		pNodeCtxt->nodeTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->nodeTimeline);
-		pNodeCtxt->processId = nodeProcId;
-		pNodeCtxt->processHandle = hNodeProc;
-		pNodeCtxt->exportedExternalMemoryHandle = hExtNodeMem;
-		pNodeCtxt->pExportedExternalMemory = pExtNodeMem;
+		vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->exported.nodeTimeline);
+
+		pNodeCtxt->exported.id = nodeProcId;
+		pNodeCtxt->exported.handle = hNodeProc;
+		pNodeCtxt->exported.exportedMemoryHandle = hExtNodeMem;
+		pNodeCtxt->exported.pExportedMemory = pExtNodeMem;
+		pNodeCtxt->exported.compositorTimelineHandle = compositorContext.timelineHandle;
+		pNodeCtxt->exported.nodeTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->exported.nodeTimeline);
 
 		// Duplicate Handles
 		HANDLE currentHandle = GetCurrentProcess();
@@ -576,12 +575,12 @@ static void InterprocessServerAcceptNodeConnection()
 						0, false, DUPLICATE_SAME_ACCESS),
 			"Duplicate nodeFenceHandle handle fail.");
 		WIN32_CHECK(DuplicateHandle(
-						currentHandle, pNodeCtxt->nodeTimelineHandle,
+						currentHandle, pNodeCtxt->exported.nodeTimelineHandle,
 						hNodeProc, &pImports->nodeTimelineHandle,
 						0, false, DUPLICATE_SAME_ACCESS),
 			"Duplicate nodeTimeline handle fail.");
 		WIN32_CHECK(DuplicateHandle(
-						currentHandle, pNodeCtxt->compositorTimelineHandle,
+						currentHandle, pNodeCtxt->exported.compositorTimelineHandle,
 						hNodeProc, &pImports->compositorTimelineHandle,
 						0, false, DUPLICATE_SAME_ACCESS),
 			"Duplicate compositor timeline handle fail.");
@@ -591,7 +590,7 @@ static void InterprocessServerAcceptNodeConnection()
 	{
 		HANDLE duplicatedExternalNodeMemoryHandle;
 		WIN32_CHECK(DuplicateHandle(
-						GetCurrentProcess(), pNodeCtxt->exportedExternalMemoryHandle,
+						GetCurrentProcess(), pNodeCtxt->exported.exportedMemoryHandle,
 						hNodeProc, &duplicatedExternalNodeMemoryHandle,
 						0, false, DUPLICATE_SAME_ACCESS),
 					"Duplicate sharedMemory handle fail.");
@@ -736,9 +735,9 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	// Send process id
 	{
 		DWORD currentProcessId = GetCurrentProcessId();
-		printf("Sending process handle: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
+		printf("Sending exported handle: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
 		int sendResult = send(clientSocket, (const char*)&currentProcessId, sizeof(DWORD), 0);
-		WSA_CHECK(sendResult == SOCKET_ERROR, "Send process id failed");
+		WSA_CHECK(sendResult == SOCKET_ERROR, "Send exported id failed");
 	}
 
 	// Receive shared memory
@@ -765,7 +764,6 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		NodeHandle hNode = RequestExternalNodeHandle(pNodeShared);
 		pNodeContext = &node.ctxt[hNode];
 		pNodeContext->type = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
-		pNodeContext->pNodeImports = pNodeImports;
 
 		pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
 		assert(pNodeContext->swapsSyncedHandle != NULL);
@@ -784,34 +782,34 @@ void mxcConnectInterprocessNode(bool createTestNode)
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pNodeImports->compositorTimelineHandle,
 		};
-		vkCreateSemaphoreExt(&compTimelineCreateInfo, &pNodeContext->compositorTimeline);
+		vkCreateSemaphoreExt(&compTimelineCreateInfo, &pNodeContext->exported.compositorTimeline);
 		vkSemaphoreCreateInfoExt nodeTimelineCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreImport",
 			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pNodeImports->nodeTimelineHandle,
 		};
-		vkCreateSemaphoreExt(&nodeTimelineCreateInfo, &pNodeContext->nodeTimeline);
+		vkCreateSemaphoreExt(&nodeTimelineCreateInfo, &pNodeContext->exported.nodeTimeline);
 
 		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 			.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 		};
-		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeContext->pool));
+		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeContext->thread.pool));
 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			.commandPool = pNodeContext->pool,
+			.commandPool = pNodeContext->thread.pool,
 			.commandBufferCount = 1,
 		};
-		VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->cmd));
-		vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->cmd, "TestNode");
+		VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->thread.cmd));
+		vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->thread.cmd, "TestNode");
 	}
 
 	// Start node thread
 	{
 		__atomic_thread_fence(__ATOMIC_RELEASE);
-		CHECK(pthread_create(&pNodeContext->threadId, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
+		CHECK(pthread_create(&pNodeContext->thread.id, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
 		printf("Node Request Process Import Success.\n");
 		goto ExitSuccess;
 	}
@@ -895,6 +893,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_INTERPROCESS_MODE_THREAD;
 	int  swapCt      = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
+
 	if (pNodeShrd->swapWidth != DEFAULT_WIDTH || pNodeShrd->swapHeight != DEFAULT_HEIGHT) {
 		LOG_ERROR("Requested swapCtx size not available! %d %d\n", pNodeShrd->swapWidth, pNodeShrd->swapHeight);
 		pNodeShrd->swapType = XR_SWAP_TYPE_ERROR;
@@ -945,12 +944,12 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		if (needsExport) {
 			WIN32_CHECK(DuplicateHandle(
 					GetCurrentProcess(), pSwap->colorExternal.handle,
-					pNodeCtx->processHandle, &pNodeCtx->pExportedExternalMemory->imports.colorSwapHandles[si],
+					pNodeCtx->exported.handle, &pNodeCtx->exported.pExportedMemory->imports.colorSwapHandles[si],
 					0, false, DUPLICATE_SAME_ACCESS),
 				"Duplicate localTexture handle fail");
 			WIN32_CHECK(DuplicateHandle(
 					GetCurrentProcess(), pSwap->depthExternal.handle,
-					pNodeCtx->processHandle, &pNodeCtx->pExportedExternalMemory->imports.depthSwapHandles[si],
+					pNodeCtx->exported.handle, &pNodeCtx->exported.pExportedMemory->imports.depthSwapHandles[si],
 					0, false, DUPLICATE_SAME_ACCESS),
 				"Duplicate depth handle fail");
 		}

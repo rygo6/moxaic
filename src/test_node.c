@@ -54,12 +54,13 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 //	MxcNodeShared*  pNodeShared = node.pShared->pNodeShared;
 	MxcNodeShared*  pNodeShared = NULL;
-	MxcNodeImports* pImports = pNodeContext->pNodeImports;
+//	MxcNodeImports* pImports = pNodeContext->pNodeImports;
+	MxcNodeImports* pImports = NULL;
 //	MxcSwap*        pSwap = pNodeContext->swaps;
 	MxcSwap*        pSwap;
 
 	VkDevice        device = pNode->device;
-	VkCommandBuffer cmd = pNodeContext->cmd;
+	VkCommandBuffer cmd = pNodeContext->thread.cmd;
 	VkRenderPass    nodeRenderPass = pNode->nodeRenderPass;
 	VkFramebuffer   framebuffer = pNode->framebuffer;
 
@@ -84,8 +85,8 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 	VkDeviceSize sphereIndexOffset = pNode->sphereMesh.offsets.indexOffset;
 	VkDeviceSize sphereVertexOffset = pNode->sphereMesh.offsets.vertexOffset;
 
-	VkSemaphore compTimeline = pNodeContext->compositorTimeline;
-	VkSemaphore nodeTimeline = pNodeContext->nodeTimeline;
+	VkSemaphore compTimeline = pNodeContext->thread.compositorTimeline;
+	VkSemaphore nodeTimeline = pNodeContext->thread.nodeTimeline;
 
 	uint64_t nodeTimelineValue = 0;
 
@@ -172,7 +173,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 				break;
 			case MXC_NODE_INTERPROCESS_MODE_EXPORTED:
-				PANIC("Shouldn't be rendering an exported node from this process.");
+				PANIC("Shouldn't be rendering an exported node from this exported.");
 			default:
 				PANIC("nodeType not supported");
 		}
@@ -211,10 +212,10 @@ run_loop:
 
 		for (int i = 0; i < swapCount; ++i) {
 			if (needsImport) {
-				if (pImports->colorSwapHandles[i] != NULL)
-					CloseHandle(pNodeContext->pNodeImports->colorSwapHandles[i]);
-				if (pImports->depthSwapHandles[i] != NULL)
-					CloseHandle(pImports->depthSwapHandles[i]);
+//				if (pImports->colorSwapHandles[i] != NULL)
+//					CloseHandle(pNodeContext->pNodeImports->colorSwapHandles[i]);
+//				if (pImports->depthSwapHandles[i] != NULL)
+//					CloseHandle(pImports->depthSwapHandles[i]);
 			}
 
 //			if (pSwap[i].color.image != VK_NULL_HANDLE) {
@@ -230,32 +231,32 @@ run_loop:
 
 		mxcIpcFuncEnqueue(&pNodeShared->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 		printf("Waiting on swapCtx claim.");
-		WaitForSingleObject(pNodeContext->swapsSyncedHandle, INFINITE);
+//		WaitForSingleObject(pNodeContext->swapsSyncedHandle, INFINITE);
 		printf("Swaps claimed.");
 
 		if (needsImport) {
 			for (int i = 0; i < swapCount; ++i) {
-				VkDedicatedTextureCreateInfo colorCreateInfo = {
-					.debugName = "ImportedColorSwap",
-					.pImageCreateInfo = &(VkImageCreateInfo){
-						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-						.pNext = &(VkExternalMemoryImageCreateInfo){
-							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-						},
-						.imageType = VK_IMAGE_TYPE_2D,
-						.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-						.mipLevels = 1,
-						.arrayLayers = 1,
-						.samples = VK_SAMPLE_COUNT_1_BIT,
-						.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-					},
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-					.importHandle = pNodeContext->pNodeImports->colorSwapHandles[i],
-				};
+//				VkDedicatedTextureCreateInfo colorCreateInfo = {
+//					.debugName = "ImportedColorSwap",
+//					.pImageCreateInfo = &(VkImageCreateInfo){
+//						.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+//						.pNext = &(VkExternalMemoryImageCreateInfo){
+//							.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+//							.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+//						},
+//						.imageType = VK_IMAGE_TYPE_2D,
+//						.format = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+//						.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
+//						.mipLevels = 1,
+//						.arrayLayers = 1,
+//						.samples = VK_SAMPLE_COUNT_1_BIT,
+//						.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+//					},
+//					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+//					.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+//					.handleType = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+//					.importHandle = pNodeContext->pNodeImports->colorSwapHandles[i],
+//				};
 //				vkCreateTexture(&colorCreateInfo, &pSwap[i].color);
 //				acquireBarriers[i][0].image = pSwap[i].color.image;
 //				releaseBarriers[i][0].image = pSwap[i].color.image;

@@ -317,38 +317,43 @@ typedef struct MxcNodeContext {
 
 	MxcNodeInterprocessMode type;
 
-	// Compositor Data
-
-	// Node/Compositor Duplicated
-	// If thread the node/compositor both directly access this.
-	// If IPC it is replicated via duplicated handles from NodeImports.
 	HANDLE       swapsSyncedHandle;
-	HANDLE       nodeTimelineHandle;
-	HANDLE       compositorTimelineHandle;
-
 	block_handle hSwaps[MXC_NODE_SWAP_CAPACITY];
-	VkSemaphore  nodeTimeline;
-	VkSemaphore  compositorTimeline;
 
+	union {
+		// MXC_NODE_INTERPROCESS_MODE_THREAD
+		struct {
+			pthread_t       id;
+			VkCommandPool   pool;
+			VkCommandBuffer cmd;
+			VkSemaphore     compositorTimeline;
+			VkSemaphore     nodeTimeline;
+		} thread;
 
-	// Node/Compositor Shared
-	MxcNodeImports* pNodeImports; // get rid of this?
+		// MXC_NODE_INTERPROCESS_MODE_EXPORTED
+		struct {
+			DWORD                  id;
+			HANDLE                 handle;
+			HANDLE                 exportedMemoryHandle;
+			MxcExternalNodeMemory* pExportedMemory;
 
+			VkSemaphore  compositorTimeline;
+			VkSemaphore  nodeTimeline;
 
-	// these could be a union too
-	// MXC_NODE_TYPE_THREAD
-	pthread_t       threadId;
-	VkCommandPool   pool;
-	VkCommandBuffer cmd;
+			HANDLE nodeTimelineHandle;
+			HANDLE compositorTimelineHandle;
+		} exported;
 
+		// MXC_NODE_INTERPROCESS_MODE_IMPORTED
+		struct {
+			// use this
+//			HANDLE                 importedExternalMemoryHandle;
+//			MxcExternalNodeMemory* pImportedExternalMemory;
 
-	// MXC_NODE_TYPE_INTERPROCESS
-	DWORD                  processId;
-	HANDLE                 processHandle;
-	// Multiple nodes may share memory chunk in other process
-	// maybe this shouldn't be in NodeContext, but instead a ProcessContext?
-	HANDLE                 exportedExternalMemoryHandle;
-	MxcExternalNodeMemory* pExportedExternalMemory;
+			HANDLE nodeTimelineHandle;
+			HANDLE compositorTimelineHandle;
+		} imported;
+	};
 
 } MxcNodeContext;
 
@@ -359,7 +364,6 @@ typedef struct MxcNodeContext {
 #define MXC_NODE_CAPACITY 4
 #endif
 
-// Holds pointer to nodes in each compositor mode
 typedef struct MxcActiveNodes {
 	u16        ct;
 	NodeHandle handles[MXC_NODE_CAPACITY];
@@ -391,6 +395,13 @@ extern struct Node {
 		} block;
 
 	} cst;
+
+#endif
+
+#if defined(MOXAIC_NODE)
+
+	HANDLE                 importedExternalMemoryHandle;
+	MxcExternalNodeMemory* pImportedExternalMemory;
 
 #endif
 
