@@ -370,18 +370,29 @@ extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 extern struct Node {
-
 	MxcActiveNodes active[MXC_COMPOSITOR_MODE_COUNT];
 
 	u16 ct;
 	MxcNodeContext ctxt[MXC_NODE_CAPACITY];
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
 
-	MxcNodeCompositorData cstData[MXC_NODE_CAPACITY];
+#if defined(MOXAIC_COMPOSITOR)
 
 	struct {
-		BLOCK_DECL(MxcSwap, MXC_NODE_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];
-	} block;
+		MxcNodeCompositorData data[MXC_NODE_CAPACITY];
+
+		MxcNodeCompositorSetState  setState[MXC_NODE_CAPACITY];
+		MxcNodeCompositorSetState* pSetMapped;
+		VkSharedBuffer             setBuffer;
+		VkDescriptorSet            set;
+
+		struct {
+			BLOCK_DECL(MxcSwap, MXC_NODE_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];
+		} block;
+
+	} cst;
+
+#endif
 
 } node;
 

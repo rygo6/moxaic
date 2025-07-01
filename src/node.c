@@ -318,7 +318,7 @@ static int CleanupNode(NodeHandle hNode)
 
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_EXPORTED:
-
+#if defined(MOXAIC_COMPOSITOR)
 			// really need a different way to do this
 //			CMD_WRITE_SINGLE_SETS(vk.context.device,
 //				BIND_WRITE_NODE_COLOR(nodeCompositorData[hNode].nodeSet, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
@@ -326,7 +326,7 @@ static int CleanupNode(NodeHandle hNode)
 			VkWriteDescriptorSet writeSets[] = {
 				{
 					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = node.cstData[hNode].nodeSet,
+					.dstSet = node.cst.data[hNode].nodeSet,
 					.dstBinding = 1,
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -338,7 +338,7 @@ static int CleanupNode(NodeHandle hNode)
 				},
 				{
 					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = node.cstData[hNode].nodeSet,
+					.dstSet = node.cst.data[hNode].nodeSet,
 					.dstBinding = 2,
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -356,7 +356,7 @@ static int CleanupNode(NodeHandle hNode)
 					continue;
 
 				// We are fully clearing but at some point we want a mechanic to recycle and share node swaps
-				auto pSwap = BLOCK_RELEASE(node.block.swap[iSwapBlock], pNodeCtxt->hSwaps[i]);
+				auto pSwap = BLOCK_RELEASE(node.cst.block.swap[iSwapBlock], pNodeCtxt->hSwaps[i]);
 				mxcDestroySwap(pSwap);
 			}
 			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
@@ -366,7 +366,7 @@ static int CleanupNode(NodeHandle hNode)
 			CLOSE_HANDLE(pNodeCtxt->processHandle);
 
 			node.pShared[hNode] = NULL;
-
+#endif
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_IMPORTED:
 			// The process which imported the handle must close them.
@@ -391,6 +391,7 @@ static int CleanupNode(NodeHandle hNode)
 
 void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* pNodeHandle)
 {
+#if defined(MOXAIC_COMPOSITOR)
 	printf("Requesting Node Thread.\n");
 	auto handle = RequestLocalNodeHandle();
 
@@ -432,7 +433,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->cmd, "TestNode");
 
-	MxcNodeCompositorData* pNodeCompositorData = &node.cstData[handle];
+	MxcNodeCompositorData* pNodeCompositorData = &node.cst.data[handle];
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 //	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
@@ -443,6 +444,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 	printf("Request Node Thread Success. Handle: %d\n", handle);
 	// todo this needs error handling
+#endif
 }
 
 //////////////////
@@ -884,11 +886,12 @@ static void ipcFuncNodeClosed(NodeHandle handle)
 
 static void ipcFuncClaimSwap(NodeHandle hNode)
 {
+#if defined(MOXAIC_COMPOSITOR)
 	LOG("Claiming Swap for Node %d\n", hNode);
 
 	auto pNodeCtx = &node.ctxt[hNode];
 	auto pNodeShrd = node.pShared[hNode];
-	auto pNodeCompData = &node.cstData[hNode];
+	auto pNodeCompData = &node.cst.data[hNode];
 
 	bool needsExport = pNodeCtx->type != MXC_NODE_INTERPROCESS_MODE_THREAD;
 	int  swapCt      = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
@@ -910,14 +913,14 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 	int swapBlockIndex = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShrd->swapType];
 	for (int si = 0; si < swapCt; ++si) {
 
-		bHnd hSwap = BLOCK_CLAIM(node.block.swap[swapBlockIndex], 0);
+		bHnd hSwap = BLOCK_CLAIM(node.cst.block.swap[swapBlockIndex], 0);
 		if (!HANDLE_VALID(hSwap)) {
 			LOG_ERROR("Fail to claim swaps!\n");
 			goto ExitError;
 		}
 
 		pNodeCtx->hSwaps[si] = hSwap;
-		auto pSwap = BLOCK_PTR(node.block.swap[swapBlockIndex], hSwap);
+		auto pSwap = BLOCK_PTR(node.cst.block.swap[swapBlockIndex], hSwap);
 
 		// Should we release or always recreate images?
 		// Until they are sharing different size probably better to release
@@ -957,6 +960,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 
 ExitError:
 	// ya we need some error handling
+#endif
 }
 const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
 	[MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcIpcFuncPtr const)ipcFuncNodeClosed,
