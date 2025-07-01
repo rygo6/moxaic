@@ -14,6 +14,7 @@ typedef unsigned char bitset_t;
 
 // so I can make this SIMD by doing four comparisons at once
 #define DEFINE_BITSET_N(_size) typedef unsigned char bitset##_size##_t __attribute__((vector_size(sizeof(bitset_t) * BITNSLOTS(_size))));
+DEFINE_BITSET_N(4);
 DEFINE_BITSET_N(8);
 DEFINE_BITSET_N(16);
 DEFINE_BITSET_N(64);

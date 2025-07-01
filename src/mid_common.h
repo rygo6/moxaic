@@ -58,6 +58,7 @@ extern void Panic(const char* file, int line, const char* message);
 ////////////
 //// Utility
 ////
+#define UNUSED __attribute__((unused))
 #define PACK __attribute__((packed))
 #define HOT    __attribute__((hot))
 #define CONCAT(_a, _b) #_a #_b
@@ -96,7 +97,7 @@ extern void Panic(const char* file, int line, const char* message);
 
 #include <windows.h>
 
-static void LogWin32Error(HRESULT err)
+UNUSED static void LogWin32Error(HRESULT err)
 {
 	LOG_ERROR("Win32 Error Code: 0x%08lX\n", err);
 	char* errStr;

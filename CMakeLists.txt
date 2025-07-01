@@ -22,9 +22,10 @@ set(OPENXR_SDK_INCLUDE_PATH "C:/OpenXRSDK/openxr_loader_windows-1.1.42/include")
 set(OPENXR_SDK_LINK_PATH "C:/OpenXRSDK/openxr_loader_windows-1.1.42/x64/bin")
 
 set(SANITIZER_FLAGS -fsanitize=address -fsanitize=undefined -fsanitize=leak)
-set(DEBUG_FLAGS -fno-omit-frame-pointer)
-set(WARNING_FLAGS -Wall -Wextra -Werror -pedantic -Wformat -Wformat-security)
 set(SECURITY_FLAGS -fstack-protector-all -D_FORTIFY_SOURCE=2 -fPIE -pie)
+
+set(DEBUG_FLAGS -fno-omit-frame-pointer)
+set(WARNING_FLAGS -Wall -Wextra -Werror -Wformat -Wformat-security )
 set(DISABLE_WARNINGS -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=unused-const-variable -Wno-error=pedantic)
 
 # make switch to not compile oxr into main comp app
@@ -105,9 +106,10 @@ target_compile_definitions(${TARGET_NAME} PUBLIC
 )
 target_compile_options(${TARGET_NAME} PRIVATE
 #        ${SANITIZER_FLAGS}
+#        ${SECURITY_FLAGS}
+
         ${DEBUG_FLAGS}
         ${WARNING_FLAGS}
-#        ${SECURITY_FLAGS}
         ${DISABLE_WARNINGS}
 
         -include globals.h

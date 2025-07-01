@@ -1,3 +1,8 @@
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdatomic.h>
@@ -307,3 +312,5 @@ int xrOutputHaptic_Right(XrSessionIndex sessionIndex, SubactionState* pState)
 {
 	return 0;
 }
+
+#pragma GCC diagnostic pop

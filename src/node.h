@@ -41,7 +41,7 @@ typedef struct MxcRingBuffer {
 ////
 typedef u8 NodeHandle;
 
-typedef enum MxcNodeInterprocessMode {
+typedef enum MxcNodeInterprocessMode : u8 {
 	MXC_NODE_INTERPROCESS_MODE_NONE,
 	MXC_NODE_INTERPROCESS_MODE_THREAD,
 	MXC_NODE_INTERPROCESS_MODE_EXPORTED,
@@ -380,7 +380,7 @@ extern struct Node {
 	MxcNodeCompositorData cstData[MXC_NODE_CAPACITY];
 
 	struct {
-		BLOCK_DECL(MxcSwap, XR_SESSIONS_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];
+		BLOCK_DECL(MxcSwap, MXC_NODE_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];
 	} block;
 
 } node;
@@ -423,8 +423,6 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 
 void mxcRequestAndRunCompositorNodeThread(VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*));
 void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* pNodeHandle);
-
-void mxcCreateNodeRenderPass();
 
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
