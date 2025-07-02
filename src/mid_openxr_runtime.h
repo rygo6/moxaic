@@ -1598,7 +1598,7 @@ XR_PROC xrDestroySession(
 	LOG_METHOD(xrDestroySession);
 
 	auto pSession = (Session*)session;
-	auto hSession = BLOCK_HANDLE(B.session, pSession);
+	bHnd hSession = BLOCK_HANDLE(B.session, pSession);
 	BLOCK_RELEASE(B.session, hSession);
 
 	xrReleaseSessionIndex(pSession->index);
@@ -2028,7 +2028,7 @@ XR_PROC xrEnumerateSwapchainFormats(
 	LOG_METHOD(xrEnumerateSwapchainFormats);
 
 	auto pSess = (Session*)session;
-	auto hSess = BLOCK_HANDLE(B.session, pSess);
+	bHnd hSess = BLOCK_HANDLE(B.session, pSess);
 	HANDLE_CHECK(hSess, XR_ERROR_HANDLE_INVALID);
 
 	switch (xr.instance.graphicsApi) {
@@ -2133,8 +2133,8 @@ XR_PROC xrCreateSwapchain(
 	bool isDepth = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	pSwap->output = isColor ? XR_SWAP_OUTPUT_FLAG_COLOR : XR_SWAP_OUTPUT_FLAG_DEPTH;
 
-	// This is making a big assumption that all swaps wil be the same size... we should probably enable individual request
-	// unfortunately you can't know all swaps itll want up front and you dont know it till it calls this
+	// This is making a big assumption that all swaps will be the same size... we should probably enable individual request
+	// unfortunately you can't know all swaps it'll want up front and you don't know it till it calls this
 	xrCreateSwapImages(pSess->index, createInfo, pSess->swapType);
 
 	switch (xr.instance.graphicsApi) {
@@ -2211,12 +2211,40 @@ XR_PROC xrCreateSwapchain(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrDestroySwapchain(
-	XrSwapchain swapchain)
+XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
-	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySwapchain\n");
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+	auto pSwap = (Swapchain*)swapchain;
+	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
+
+	switch (xr.instance.graphicsApi) {
+		case XR_GRAPHICS_API_OPENGL: {
+			printf("Destroying OpenGL Swap");
+			break;
+		}
+		case XR_GRAPHICS_API_D3D11_4: {
+			printf("Destroying D3D11 Swap\n");
+			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
+			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
+
+			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
+				if (pSwap->texture[i].d3d11.localResource != NULL)
+					ID3D11Resource_Release(pSwap->texture[i].d3d11.localResource);
+				if (pSwap->texture[i].d3d11.localTexture != NULL)
+					ID3D11Texture2D_Release(pSwap->texture[i].d3d11.localTexture);
+			}
+
+			break;
+		}
+		case XR_GRAPHICS_API_VULKAN:
+		default:
+			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
+	}
+
+	bHnd hSwap = BLOCK_HANDLE(B.swap, pSwap);
+	BLOCK_RELEASE(B.swap, hSwap);
+
+	return XR_SUCCESS;
 }
 
 XR_PROC xrEnumerateSwapchainImages(

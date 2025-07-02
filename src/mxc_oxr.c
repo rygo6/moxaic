@@ -131,6 +131,19 @@ void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HAND
 	}
 }
 
+void xrReleaseSwapImage(XrSessionIndex sessionIndex, HANDLE pHandle)
+{
+	auto pImports = &pImportedExternalMemory->imports;
+//	switch (usage) {
+//		case XR_SWAP_OUTPUT_FLAG_COLOR:
+//			*pHandle = pImports->colorSwapHandles[pImports->claimedColorSwapCount++];
+//			break;
+//		case XR_SWAP_OUTPUT_FLAG_DEPTH:
+//			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
+//			break;
+//	}
+}
+
 void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ)
 {
 	MxcNodeShared* pNodeShrd = node.pShared[sessionIndex];

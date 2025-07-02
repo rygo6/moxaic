@@ -75,6 +75,10 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	return HANDLE_DEFAULT;
 }
 
+#define IS_TYPE(_var, _type) _Generic((_var), _type: 1, default: 0)
+#define SAME_TYPE(_a, _b) _Generic((typeof(_a)){}, typeof(_b): 1, default: 0)
+#define STATIC_ASSERT_TYPE(_var, _type) static_assert(IS_TYPE(_var, _type), #_var " is not typeof " #_type)
+
 // someway these should take ptrs... or should this be static block? STATIC_BLOCK_CLAIM ?
 #define BLOCK_CLAIM(_, _key)                                                                               \
 	({                                                                                                     \
@@ -84,6 +88,7 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	})
 #define BLOCK_RELEASE(_, _handle)                                                                                                      \
 	({                                                                                                                                 \
+		STATIC_ASSERT_TYPE(_handle, block_handle);                                                                                     \
 		assert(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks) && #_ ": Releasing block handle. Out of range."); \
 		assert(BITSET(_.occupied, HANDLE_INDEX(_handle)) && #_ ": Releasing block handle. Should be occupied.");                       \
 		BITCLEAR(_.occupied, (int)HANDLE_INDEX(_handle));                                                                              \
@@ -97,15 +102,16 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 #define BLOCK_HANDLE(_, _p)                                                                                      \
 	({                                                                                                           \
 		assert(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks) && #_ ": Getting block handle. Out of range."); \
-		HANDLE_GENERATION_SET((_p - _.blocks), _.generations[(_p - _.blocks)]);                                  \
+		(block_handle)(HANDLE_GENERATION_SET((_p - _.blocks), _.generations[(_p - _.blocks)]));                  \
 	})
 #define BLOCK_KEY(_, _p)                                                                                      \
 	({                                                                                                        \
 		assert(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks) && #_ ": Getting block key. Out of range."); \
-		_.keys[_p - _.blocks];                                                                                \
+		(block_key)(_.keys[_p - _.blocks]);                                                                   \
 	})
 #define BLOCK_PTR(_, _handle)                                                                                                     \
 	({                                                                                                                            \
+		STATIC_ASSERT_TYPE(_handle, block_handle);                                                                                \
 		assert(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks) && #_ ": Getting block ptr. Out of range."); \
 		&_.blocks[HANDLE_INDEX(_handle)];                                                                                         \
 	})
