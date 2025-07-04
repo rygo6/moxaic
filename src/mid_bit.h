@@ -35,13 +35,28 @@ static_assert(sizeof(bitset512_t) == 64, "");
 #define TRAILING_ONES(_) ((int)__builtin_stdc_trailing_ones(_))
 #endif
 
+#ifdef MID_IDE_ANALYSIS
+#define BIT_COUNT_ONES(_) 0
+#elif __clang__
+#define BIT_COUNT_ONES(_) static_assert(false, "BIT_COUNT_ONES not implemented in clang!")
+#elif __GNUC__
+#define BIT_COUNT_ONES(_) __builtin_popcount(_);
+#endif
+
 static inline int BitScanFirstZero(int setCount, bitset_t* pSet)
 {
 	int i = 0;
 	for (; i < setCount; ++i)
-		if (pSet[i] != 0xFF)
-			break;
+		if (pSet[i] != 0xFF) break;
 	return i == setCount ? -1 : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
+}
+
+static inline int BitCountOnes(int setCount, bitset_t* pSet)
+{
+	int count = 0;
+	for (int i = 0; i < setCount; ++i)
+		count += BIT_COUNT_ONES(pSet[i]);
+	return count;
 }
 
 //typedef unsigned char nibset_t;

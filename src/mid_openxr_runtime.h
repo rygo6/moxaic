@@ -494,6 +494,13 @@ static struct {
 
 } xr;
 
+typedef block_handle space_handle;
+typedef block_handle session_handle;
+
+// Do I want to do this?
+static space_handle SpaceClaim(int key) { return BLOCK_CLAIM(xr.block.space, key); }
+static Space* SpacePtr(space_handle handle) { return BLOCK_PTR(xr.block.space, handle); }
+
 #define B xr.block
 
 ////////////
@@ -1106,12 +1113,12 @@ XR_PROC xrPollEvent(
 	CHECK_INSTANCE(instance);
 
 	// technicall could be worth iterating map in instance?
-	for (int i = 0; i < XR_SESSIONS_CAPACITY; ++i) {
+	for (block_handle hSess = 0; hSess < XR_SESSIONS_CAPACITY; ++hSess) {
 
-		if (!BITSET(B.session.occupied, i))
+		if (!BLOCK_OCCUPIED(B.session, hSess))
 			continue;
 
-		auto pSess = &B.session.blocks[i];
+		auto pSess = BLOCK_PTR(B.session, hSess);
 
 		if (pSess->activeSessionState != pSess->pendingSessionState) {
 
@@ -1589,11 +1596,11 @@ XR_PROC xrCreateSession(
 	pSess->activeIsUserPresent = XR_FALSE;
 	pSess->pendingIsUserPresent = XR_TRUE;
 
+	LOG("%d sessions in use\n", BLOCK_COUNT(B.session));
 	return XR_SUCCESS;
 }
 
-XR_PROC xrDestroySession(
-	XrSession session)
+XR_PROC xrDestroySession(XrSession session)
 {
 	LOG_METHOD(xrDestroySession);
 
@@ -1603,6 +1610,7 @@ XR_PROC xrDestroySession(
 
 	xrReleaseSessionIndex(pSession->index);
 
+	LOG("%d sessions in use\n", BLOCK_COUNT(B.session));
 	return XR_SUCCESS;
 }
 
@@ -1639,6 +1647,13 @@ XR_PROC xrEnumerateReferenceSpaces(
 	return XR_SUCCESS;
 }
 
+#define IS_EXACT_TYPEDEF(var, typedef_name) \
+	_Generic((var),                         \
+		typedef_name: 1,                    \
+		default: 0)
+
+
+
 XR_PROC xrCreateReferenceSpace(
 	XrSession                         session,
 	const XrReferenceSpaceCreateInfo* createInfo,
@@ -1652,10 +1667,10 @@ XR_PROC xrCreateReferenceSpace(
 
 	auto pSess = (Session*)session;
 
-	auto hSpace = BLOCK_CLAIM(B.path, 0);
+	space_handle hSpace = SpaceClaim(0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
 
-	auto pSpace = BLOCK_PTR(B.space, hSpace);
+	auto pSpace = SpacePtr(hSpace);
 	pSpace->type = createInfo->type;
 	pSpace->hSession = BLOCK_HANDLE(B.session, pSess);
 	pSpace->poseInSpace = createInfo->poseInReferenceSpace;
@@ -1667,6 +1682,7 @@ XR_PROC xrCreateReferenceSpace(
 
 	*space = (XrSpace)pSpace;
 
+	LOG("%d spaces in use\n", BLOCK_COUNT(B.space));
 	return XR_SUCCESS;
 }
 
@@ -1709,6 +1725,7 @@ XR_PROC xrCreateActionSpace(
 
 	*space = (XrSpace)pSpace;
 
+	LOG("%d spaces in use\n", BLOCK_COUNT(B.space));
 	return XR_SUCCESS;
 }
 
@@ -1799,12 +1816,18 @@ XR_PROC xrLocateSpace(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrDestroySpace(
-	XrSpace space)
+XR_PROC xrDestroySpace(XrSpace space)
 {
 	LOG_METHOD(xrDestroySpace);
-	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroySpace\n");
-	return XR_ERROR_FUNCTION_UNSUPPORTED;
+	auto pSpace = (Space*)space;
+	auto pSess = BLOCK_PTR(B.space, pSpace->hSession);
+	bHnd hSpace = BLOCK_HANDLE(B.space, pSpace);
+	BLOCK_RELEASE(B.space, hSpace);
+
+	// Should I release things on pSpace?
+
+	LOG("%d spaces in use\n", BLOCK_COUNT(B.space));
+	return XR_SUCCESS;
 }
 
 XR_PROC xrEnumerateViewConfigurations(
@@ -2244,6 +2267,7 @@ XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 	bHnd hSwap = BLOCK_HANDLE(B.swap, pSwap);
 	BLOCK_RELEASE(B.swap, hSwap);
 
+	LOG("%d swaps in use\n", BLOCK_COUNT(B.swap));
 	return XR_SUCCESS;
 }
 
