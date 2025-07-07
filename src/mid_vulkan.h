@@ -1031,6 +1031,13 @@ void vkDestroyExternalPlatformTexture(VkExternalPlatformTexture* pTexture);
 void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
 #endif
 
+typedef struct VkExternalTexture {
+	VkDedicatedTexture texture;
+#if _WIN32
+	VkExternalPlatformTexture platform;
+#endif
+} VkExternalTexture;
+
 
 //////////////////////////////
 //// Mid Vulkan Implementation
@@ -2976,7 +2983,7 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 
 	uint32_t swapCount;
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
-	CHECK(swapCount != VK_SWAP_COUNT, "Resulting swaps image count does not match requested swaps count!");
+	CHECK(swapCount != VK_SWAP_COUNT, "Resulting viewSwaps image count does not match requested viewSwaps count!");
 	VkImage images[VK_SWAP_COUNT];
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, images));
 

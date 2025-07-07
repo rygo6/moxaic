@@ -50,72 +50,106 @@ struct Node node;
 	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
 	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
 
-
-static void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
+// this couild go in mid vk
+static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTexture* pSwapTexture)
 {
-	CHECK(pInfo->extent.width < 1024 || pInfo->extent.height < 1024, "Swap too small!")
+	VkImageCreateInfo info = {
+		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		&(VkExternalMemoryImageCreateInfo){
+			VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+			.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+		},
+		.imageType   = VK_IMAGE_TYPE_2D,
+		.format      = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+		.extent      = {pInfo->windowWidth, pInfo->windowHeight, 1},
+		.mipLevels   = 1,
+		.arrayLayers = 1,
+		.samples     = VK_SAMPLE_COUNT_1_BIT,
+		.usage       = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+	};
+	vkCreateExternalPlatformTexture(&info, &pSwapTexture->platform);
+	VkDedicatedTextureCreateInfo textureInfo = {
+		.debugName        = "ExportedColorFramebuffer",
+		.pImageCreateInfo = &info,
+		.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
+		.importHandle     = pSwapTexture->platform.handle,
+		.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+		.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+	};
+	vkCreateDedicatedTexture(&textureInfo, &pSwapTexture->texture);
 
-	*pSwap = (MxcSwap){};
-	pSwap->type = pInfo->type;
-
-	/// Color
+	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)
 	{
-		VkImageCreateInfo info = {
-			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			&(VkExternalMemoryImageCreateInfo){
-				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			},
-			.imageType   = VK_IMAGE_TYPE_2D,
-			.format      = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-			.extent      = pInfo->extent,
-			.mipLevels   = 1,
-			.arrayLayers = 1,
-			.samples     = VK_SAMPLE_COUNT_1_BIT,
-			.usage       = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-		};
-		vkCreateExternalPlatformTexture(&info, &pSwap->colorExternal);
-		VkDedicatedTextureCreateInfo textureInfo = {
-			.debugName        = "ExportedColorFramebuffer",
-			.pImageCreateInfo = &info,
-			.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
-			.importHandle     = pSwap->colorExternal.handle,
-			.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-		};
-		vkCreateDedicatedTexture(&textureInfo, &pSwap->color);
+		CMD_IMAGE_BARRIERS(cmd,	{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = pSwapTexture->texture.image,
+			VK_IMAGE_BARRIER_SRC_UNDEFINED,
+			.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+			.dstAccessMask = VK_ACCESS_2_NONE,
+			// could I do this elsewhere?
+			//.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		});
 	}
+}
 
-	/// Depth
+static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTexture* pSwapTexture)
+{
+	VkImageCreateInfo info = {
+		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		&(VkExternalMemoryImageCreateInfo){
+			VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+			.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+		},
+		.imageType   = VK_IMAGE_TYPE_2D,
+		.format      = VK_FORMAT_R16_UNORM,
+		.extent      = {pInfo->windowWidth, pInfo->windowHeight, 1},
+		.mipLevels   = 1,
+		.arrayLayers = 1,
+		.samples     = VK_SAMPLE_COUNT_1_BIT,
+		.usage       = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+	};
+	vkCreateExternalPlatformTexture(&info, &pSwapTexture->platform);
+	VkDedicatedTextureCreateInfo textureInfo = {
+		.debugName        = "ExportedDepthFramebuffer",
+		.pImageCreateInfo = &info,
+		.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
+		.importHandle     = pSwapTexture->platform.handle,
+		.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+		.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
+	};
+	vkCreateDedicatedTexture(&textureInfo, &pSwapTexture->texture);
+
+	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)
 	{
-		VkImageCreateInfo info = {
-			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			&(VkExternalMemoryImageCreateInfo){
-				VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
-				.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			},
-			.imageType   = VK_IMAGE_TYPE_2D,
-			.format      = VK_FORMAT_R16_UNORM,
-			.extent      = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1.0f},
-			.mipLevels   = 1,
-			.arrayLayers = 1,
-			.samples     = VK_SAMPLE_COUNT_1_BIT,
-			.usage       = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-		};
-		vkCreateExternalPlatformTexture(&info, &pSwap->depthExternal);
-		VkDedicatedTextureCreateInfo textureInfo = {
-			.debugName        = "ExportedDepthFramebuffer",
-			.pImageCreateInfo = &info,
-			.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
-			.importHandle     = pSwap->depthExternal.handle,
-			.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
-			.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-		};
-		vkCreateDedicatedTexture(&textureInfo, &pSwap->depth);
+		CMD_IMAGE_BARRIERS(cmd,	{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = pSwapTexture->texture.image,
+			VK_IMAGE_BARRIER_SRC_UNDEFINED,
+			.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+			.dstAccessMask = VK_ACCESS_2_NONE,
+			// could I do this elsewhere?
+			//.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		});
 	}
+}
 
-	/// GBuffer
-	{
+static void CreateNodeGBuffer(NodeHandle hNode)
+{
+// I need to get compositor specific and node specific code into different files
+#if defined(MOXAIC_COMPOSITOR)
+	auto pNodeCtxt = &node.ctxt[hNode];
+	auto pNodeCompData = &node.cst.data[hNode];
+	auto pNodeShrd = node.pShared[hNode];
+
+	CHECK(pNodeShrd->swapMaxWidth < 1024 || pNodeShrd->swapMaxHeight < 1024, "Swap too small!")
+
+	for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
 		vkCreateDedicatedTexture(
 			&(VkDedicatedTextureCreateInfo){
 				.debugName = "GBufferFramebuffer",
@@ -123,7 +157,11 @@ static void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
 					.format = MXC_NODE_GBUFFER_FORMAT,
-					.extent = pInfo->extent,
+					.extent = {
+						pNodeShrd->swapMaxWidth,
+						pNodeShrd->swapMaxHeight,
+						1,
+					},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
@@ -131,7 +169,7 @@ static void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT},
-			&pSwap->gbuffer);
+			&pNodeCtxt->gbuffer[i].texture);
 
 		vkCreateDedicatedTexture(
 			&(VkDedicatedTextureCreateInfo){
@@ -140,10 +178,11 @@ static void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
 					.format = MXC_NODE_GBUFFER_FORMAT,
-					// didn't use mips. Get rid of? Maybe not. If I did mip walking with linear sampling could still be much higher quality gbuffer.
-					.extent = {pInfo->extent.width >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
-						pInfo->extent.height >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
-						pInfo->extent.depth},
+					.extent = {
+						pNodeShrd->swapMaxWidth  >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
+						pNodeShrd->swapMaxHeight >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
+						1,
+					},
 					.mipLevels = 1,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
@@ -151,66 +190,46 @@ static void mxcCreateSwap(const MxcSwapInfo* pInfo, MxcSwap* pSwap)
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT},
-			&pSwap->gbufferMip);
-	}
+			&pNodeCtxt->gbuffer[i].mipTexture);
 
-	if (VK_LOCALITY_INTERPROCESS_EXPORTED(pInfo->locality)) {
-		// Transfer on main because not all transfer queues can do compute transfer
-		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)	{
+		// Pack data for compositor hot access
+		pNodeCompData->gbuffer[i].image = pNodeCtxt->gbuffer[i].texture.image;
+		pNodeCompData->gbuffer[i].view = pNodeCtxt->gbuffer[i].texture.view;
+		pNodeCompData->gbuffer[i].mipImage = pNodeCtxt->gbuffer[i].mipTexture.image;
+		pNodeCompData->gbuffer[i].mipView = pNodeCtxt->gbuffer[i].mipTexture.view;
 
-			CMD_IMAGE_BARRIERS(cmd, {
-				   VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				   .image            = pSwap->color.image,
-				   .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				   VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				   .dstStageMask  = VK_PIPELINE_STAGE_2_NONE,
-				   .dstAccessMask = VK_ACCESS_2_NONE,
-				   // could I do this elsewhere?
-				   .newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				   VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				}, {
-				   VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				   .image            = pSwap->depth.image,
-				   .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				   VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				   .dstStageMask  = VK_PIPELINE_STAGE_2_NONE,
-				   .dstAccessMask = VK_ACCESS_2_NONE,
-				   // Doesn't get used in compositor. Depth gets blit to gbuffer.
-				   .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-				   VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				}, {
-				   VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				   .image            = pSwap->gbuffer.image,
-				   .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				   VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				   .dstStageMask  = VK_PIPELINE_STAGE_2_NONE,
-				   .dstAccessMask = VK_ACCESS_2_NONE,
-				   // could I do this elsewhere?
-				   .newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-				   VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				}, {
-				   VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				   .image            = pSwap->gbufferMip.image,
-				   .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				   VK_IMAGE_BARRIER_SRC_UNDEFINED,  // only ever used in compute blit
-				   VK_IMAGE_BARRIER_DST_COMPUTE_NONE,
-				   VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
-				});
-
+		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS) {
+			CMD_IMAGE_BARRIERS(cmd,	{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pNodeCtxt->gbuffer[i].texture.image,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,
+				VK_IMAGE_BARRIER_DST_COMPUTE_NONE,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			},
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pNodeCtxt->gbuffer[i].mipTexture.image,
+				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+				VK_IMAGE_BARRIER_SRC_UNDEFINED,  // only ever used in compute blit
+				VK_IMAGE_BARRIER_DST_COMPUTE_NONE,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			});
 		}
 	}
+#endif
 }
 
-static void mxcDestroySwap(MxcSwap* pSwap)
-{
-	pSwap->type = XR_SWAP_TYPE_UNKNOWN;
-	vkDestroyDedicatedTexture(&pSwap->color);
-	vkDestroyDedicatedTexture(&pSwap->depth);
-	vkDestroyDedicatedTexture(&pSwap->gbuffer);
-	vkDestroyDedicatedTexture(&pSwap->gbufferMip);
-	vkDestroyExternalPlatformTexture(&pSwap->colorExternal);
-	vkDestroyExternalPlatformTexture(&pSwap->depthExternal);
-}
+//static void mxcDestroySwap(MxcSwap* pSwap)
+//{
+//	pSwap->type = XR_SWAP_TYPE_UNKNOWN;
+//	vkDestroyDedicatedTexture(&pSwap->color);
+//	vkDestroyDedicatedTexture(&pSwap->depth);
+//	vkDestroyDedicatedTexture(&pSwap->gbuffer);
+//	vkDestroyDedicatedTexture(&pSwap->gbufferMip);
+//	vkDestroyExternalPlatformTexture(&pSwap->colorExternal);
+//	vkDestroyExternalPlatformTexture(&pSwap->depthExternal);
+//}
 
 /////////////////////////
 //// Compositor Lifecycle
@@ -267,18 +286,30 @@ NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 	return hNode;
 }
 
-void ReleaseNode(NodeHandle handle)
+void SetNodeActive(NodeHandle hNode, MxcCompositorMode mode)
 {
-	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
-	assert(node.ctxt[handle].type != MXC_NODE_INTERPROCESS_MODE_NONE);
-	auto pNodeCtxt = &node.ctxt[handle];
-	auto pNodeShrd = node.pShared[handle];
-	auto pActiveNode = &node.active[pNodeShrd->compositorMode];
+#if defined(MOXAIC_COMPOSITOR)
+	auto pNodeCstData = &node.cst.data[hNode];
+	auto pActiveNode = &node.active[mode];
+	pActiveNode->handles[pActiveNode->ct] = hNode;
+	pNodeCstData->activeCompositorMode = mode;
+	atomic_fetch_add(&pActiveNode->ct, 1);
+	LOG("Added node %d to %s\n", hNode, string_MxcCompositorMode(mode));
+#endif
+}
+
+void ReleaseNodeActive(NodeHandle hNode)
+{
+#if defined(MOXAIC_COMPOSITOR)
+	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
+	assert(node.ctxt[hNode].interprocessMode != MXC_NODE_INTERPROCESS_MODE_NONE);
+	auto pNodeCstData = &node.cst.data[hNode];
+	auto pActiveNode = &node.active[pNodeCstData->activeCompositorMode];
 
 	ATOMIC_FENCE_BLOCK {
 		int i = 0;
 		for (; i < pActiveNode->ct; ++i) {
-			if (pActiveNode->handles[i] == handle)
+			if (pActiveNode->handles[i] == hNode)
 				break;
 		}
 		for (; i < pActiveNode->ct - 1; ++i) {
@@ -288,7 +319,8 @@ void ReleaseNode(NodeHandle handle)
 	}
 
 	int newCount = atomic_fetch_sub(&node.ct, 1) - 1;
-	LOG("Releasing Node %d. Count %d.\n", handle, newCount);
+	LOG("Releasing Node %d. Count %d.\n", hNode, newCount);
+#endif
 }
 
 #define CLOSE_HANDLE(_handle)                                                     \
@@ -298,13 +330,13 @@ void ReleaseNode(NodeHandle handle)
 	}
 static int CleanupNode(NodeHandle hNode)
 {
-	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNode not in MXC_CYCLE_UPDATE_WINDOW_STATE");
+	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 	auto pNodeCtxt = &node.ctxt[hNode];
 	auto pNodeShared = node.pShared[hNode];
 
-	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShared->swapType];
+//	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShared->swapType];
 
-	switch (pNodeCtxt->type) {
+	switch (pNodeCtxt->interprocessMode) {
 		case MXC_NODE_INTERPROCESS_MODE_THREAD:
 			vkFreeCommandBuffers(vk.context.device, pNodeCtxt->thread.pool, 1, &pNodeCtxt->thread.cmd);
 			vkDestroyCommandPool(vk.context.device, pNodeCtxt->thread.pool, VK_ALLOC);
@@ -351,14 +383,14 @@ static int CleanupNode(NodeHandle hNode)
 			};
 			vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
-			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
-					continue;
+//			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
+//				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
+//					continue;
 
 				// We are fully clearing but at some point we want a mechanic to recycle and share node swaps
-				auto pSwap = BLOCK_RELEASE(node.cst.block.swap[iSwapBlock], pNodeCtxt->hSwaps[i]);
-				mxcDestroySwap(pSwap);
-			}
+//				auto pSwap = BLOCK_RELEASE(node.cst.block.swap[iSwapBlock], pNodeCtxt->hSwaps[i]);
+//				mxcDestroySwap(pSwap);
+//			}
 			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
 			CLOSE_HANDLE(pNodeCtxt->exported.nodeTimelineHandle);
 			CHECK_WIN32(UnmapViewOfFile(pNodeCtxt->exported.pExportedMemory));
@@ -370,10 +402,10 @@ static int CleanupNode(NodeHandle hNode)
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_IMPORTED:
 			// The process which imported the handle must close them.
-			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-				CLOSE_HANDLE(pImportedExternalMemory->imports.colorSwapHandles[i]);
-				CLOSE_HANDLE(pImportedExternalMemory->imports.depthSwapHandles[i]);
-			}
+//			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
+//				CLOSE_HANDLE(pImportedExternalMemory->imports.colorSwapHandles[i]);
+//				CLOSE_HANDLE(pImportedExternalMemory->imports.depthSwapHandles[i]);
+//			}
 			CLOSE_HANDLE(pImportedExternalMemory->imports.swapsSyncedHandle);
 			CLOSE_HANDLE(pImportedExternalMemory->imports.nodeTimelineHandle);
 			CLOSE_HANDLE(pImportedExternalMemory->imports.compositorTimelineHandle);
@@ -381,7 +413,7 @@ static int CleanupNode(NodeHandle hNode)
 			CLOSE_HANDLE(importedExternalMemoryHandle);
 			CLOSE_HANDLE(pNodeCtxt->exported.handle);
 			break;
-		default: PANIC("Node type not supported");
+		default: PANIC("Node interprocessMode not supported");
 	}
 
 	*pNodeCtxt = (MxcNodeContext){};
@@ -397,7 +429,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 	auto pNodeCtxt = &node.ctxt[handle];
 	*pNodeCtxt = (MxcNodeContext){};
-	pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_THREAD;
+	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_THREAD;
 	pNodeCtxt-> swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 	pNodeCtxt->exported.compositorTimeline = compositorContext.timeline;
 
@@ -433,7 +465,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->thread.cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->thread.cmd, "TestNode");
 
-	MxcNodeCompositorData* pNodeCompositorData = &node.cst.data[handle];
+	MxcCompositorNodeHot* pNodeCompositorData = &node.cst.data[handle];
 	// do not clear since set data is preallocated
 //	*pNodeCompositorData = (MxcNodeCompositorData){};
 //	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
@@ -479,7 +511,7 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 		}                                                             \
 	}
 
-/// Called when compositor accepts connection
+// Called when compositor accepts connection
 static void InterprocessServerAcceptNodeConnection()
 {
 	printf("Accepting connections on: '%s'\n", SOCKET_PATH);
@@ -495,7 +527,7 @@ static void InterprocessServerAcceptNodeConnection()
 	WSA_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
 	printf("Accepted Connection.\n");
 
-	// Receive Node Ack Message
+	/// Receive Node Ack Message
 	{
 		char buffer[sizeof(nodeIPCAckMessage)] = {};
 		int  receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
@@ -504,14 +536,14 @@ static void InterprocessServerAcceptNodeConnection()
 		CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
 	}
 
-	// Send Server Ack message
+	/// Send Server Ack message
 	{
 		printf("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
 		int sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
 		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send server ack failed");
 	}
 
-	// Receive Node Process Handle
+	/// Receive Node Process Handle
 	{
 		int receiveLength = recv(clientSocket, (char*)&nodeProcId, sizeof(DWORD), 0);
 		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node exported id failed");
@@ -519,7 +551,7 @@ static void InterprocessServerAcceptNodeConnection()
 		CHECK(nodeProcId == 0, "Invalid node exported id");
 	}
 
-	// Create Shared Memory
+	/// Create Shared Memory
 	{
 		hNodeProc = OpenProcess(PROCESS_DUP_HANDLE, FALSE, nodeProcId);
 		WIN32_CHECK(hNodeProc != NULL && hNodeProc != INVALID_HANDLE_VALUE, "Duplicate exported handle failed");
@@ -532,10 +564,10 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd = &pExtNodeMem->shared;
 	}
 
-	// Claim Node Handle
+	/// Claim Node Handle
 	NodeHandle hNode = RequestExternalNodeHandle(pNodeShrd);
 
-	// Initialize Context
+	/// Initialize Context
 	{
 		// Init Node Shared
 		pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
@@ -544,28 +576,38 @@ static void InterprocessServerAcceptNodeConnection()
 		pNodeShrd->camera.zFar = 100.0f;
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
+		pNodeShrd->swapMaxWidth = DEFAULT_WIDTH;
+		pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
 //		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
 //		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
 		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
-		// Init Node Context
-		pNodeCtxt = &node.ctxt[hNode];
-		pNodeCtxt->type = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
-		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-		pNodeCtxt->exported.compositorTimeline = compositorContext.timeline;
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
-		vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->exported.nodeTimeline);
+		VkSemaphore nodeTimeline; vkCreateSemaphoreExt(&semaphoreCreateInfo, &nodeTimeline);
+
+		// Init Node Context
+		// TODO should more of this setup go in RequestExternalNodeHandle ?
+		pNodeCtxt = &node.ctxt[hNode];
+		pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
+
+		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 
 		pNodeCtxt->exported.id = nodeProcId;
 		pNodeCtxt->exported.handle = hNodeProc;
+
 		pNodeCtxt->exported.exportedMemoryHandle = hExtNodeMem;
 		pNodeCtxt->exported.pExportedMemory = pExtNodeMem;
+
+		pNodeCtxt->exported.nodeTimeline = nodeTimeline;
+		pNodeCtxt->exported.nodeTimelineHandle = vkGetSemaphoreExternalHandle(nodeTimeline);
+
+		pNodeCtxt->exported.compositorTimeline = compositorContext.timeline;
 		pNodeCtxt->exported.compositorTimelineHandle = compositorContext.timelineHandle;
-		pNodeCtxt->exported.nodeTimelineHandle = vkGetSemaphoreExternalHandle(pNodeCtxt->exported.nodeTimeline);
+
 
 		// Duplicate Handles
 		HANDLE currentHandle = GetCurrentProcess();
@@ -586,7 +628,7 @@ static void InterprocessServerAcceptNodeConnection()
 			"Duplicate compositor timeline handle fail.");
 	}
 
-	// Send Shared Memory
+	/// Send Shared Memory
 	{
 		HANDLE duplicatedExternalNodeMemoryHandle;
 		WIN32_CHECK(DuplicateHandle(
@@ -601,17 +643,15 @@ static void InterprocessServerAcceptNodeConnection()
 
 	}
 
-	// Add Active node
+	/// Add Active node
 	{
-		auto pActiveNode = &node.active[pNodeShrd->compositorMode];
-		pActiveNode->handles[pActiveNode->ct] = hNode;
-		atomic_fetch_add(&pActiveNode->ct, 1);
-		LOG("Added active node handle: %d\n", hNode);
+		// Add to COMPOSITOR_MODE_NONE initially to start processing
+		SetNodeActive(hNode, MXC_COMPOSITOR_MODE_NONE);
 		goto ExitSuccess;
 	}
 
 ExitError:
-	if (pImports != NULL) {
+//	if (pImports != NULL) {
 //		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 //			if (pImportParam->framebufferHandles[i].color != INVALID_HANDLE_VALUE)
 //				CloseHandle(pImportParam->framebufferHandles[i].color);
@@ -622,17 +662,17 @@ ExitError:
 //		}
 //		if (pImportParam->nodeFenceHandle != INVALID_HANDLE_VALUE)
 //			CloseHandle(pImportParam->nodeFenceHandle);
-		if (pImports->nodeTimelineHandle != INVALID_HANDLE_VALUE)
-			CloseHandle(pImports->nodeTimelineHandle);
-		if (pImports->compositorTimelineHandle != INVALID_HANDLE_VALUE)
-			CloseHandle(pImports->compositorTimelineHandle);
-	}
-	if (pExtNodeMem != NULL)
-		UnmapViewOfFile(pExtNodeMem);
-	if (hExtNodeMem != INVALID_HANDLE_VALUE)
-		CloseHandle(hExtNodeMem);
-	if (hNodeProc != INVALID_HANDLE_VALUE)
-		CloseHandle(hNodeProc);
+//		if (pImports->nodeTimelineHandle != INVALID_HANDLE_VALUE)
+//			CloseHandle(pImports->nodeTimelineHandle);
+//		if (pImports->compositorTimelineHandle != INVALID_HANDLE_VALUE)
+//			CloseHandle(pImports->compositorTimelineHandle);
+//	}
+//	if (pExtNodeMem != NULL)
+//		UnmapViewOfFile(pExtNodeMem);
+//	if (hExtNodeMem != INVALID_HANDLE_VALUE)
+//		CloseHandle(hExtNodeMem);
+//	if (hNodeProc != INVALID_HANDLE_VALUE)
+//		CloseHandle(hNodeProc);
 ExitSuccess:
 	if (clientSocket != INVALID_SOCKET)
 		closesocket(clientSocket);
@@ -688,7 +728,7 @@ void mxcShutdownInterprocessServer()
 	WSACleanup();
 }
 
-//// Create Node on Server Compositor to send over IPC
+//// Connect Node to Server Compositor over IPC
 void mxcConnectInterprocessNode(bool createTestNode)
 {
 	if (pImportedExternalMemory != NULL && importedExternalMemoryHandle != NULL) {
@@ -763,13 +803,10 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	{
 		NodeHandle hNode = RequestExternalNodeHandle(pNodeShared);
 		pNodeContext = &node.ctxt[hNode];
-		pNodeContext->type = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
+		pNodeContext->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
 
 		pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
 		assert(pNodeContext->swapsSyncedHandle != NULL);
-
-		pNodeShared->cstNodeHandle = hNode;
-		pNodeShared->appNodeHandle = -1;
 
 		printf("Importing node handle %d\n", hNode);
 	}
@@ -808,7 +845,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 	// Start node thread
 	{
-		__atomic_thread_fence(__ATOMIC_RELEASE);
+		atomic_thread_fence(memory_order_release);
 		CHECK(pthread_create(&pNodeContext->thread.id, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
 		printf("Node Request Process Import Success.\n");
 		goto ExitSuccess;
@@ -875,11 +912,23 @@ int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle)
 	return 0;
 }
 
-static void ipcFuncNodeClosed(NodeHandle handle)
+static void ipcFuncNodeOpened(NodeHandle hNode)
 {
-	LOG("Closing %d\n", handle);
-	ReleaseNode(handle);
-	CleanupNode(handle);
+	LOG("Opened %d\n", hNode);
+	auto pNodeShrd = node.pShared[hNode];
+
+	CreateNodeGBuffer(hNode);
+
+	// Move out of COMPOSITOR_MODE_NONE and set to real COMPOSITOR_MODE to begin compositing
+	ReleaseNodeActive(hNode);
+	SetNodeActive(hNode, pNodeShrd->compositorMode);
+}
+
+static void ipcFuncNodeClosed(NodeHandle hNode)
+{
+	LOG("Closing %d\n", hNode);
+	ReleaseNodeActive(hNode);
+	CleanupNode(hNode);
 }
 
 static void ipcFuncClaimSwap(NodeHandle hNode)
@@ -887,81 +936,68 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 #if defined(MOXAIC_COMPOSITOR)
 	LOG("Claiming Swap for Node %d\n", hNode);
 
-	auto pNodeCtx = &node.ctxt[hNode];
 	auto pNodeShrd = node.pShared[hNode];
-	auto pNodeCompData = &node.cst.data[hNode];
+	auto pNodeCstData = &node.cst.data[hNode];
+	auto pNodeCtxt = &node.ctxt[hNode];
+	auto pImports = &pNodeCtxt->exported.pExportedMemory->imports;
+	bool needsExport = pNodeCtxt->interprocessMode != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
-	bool needsExport = pNodeCtx->type != MXC_NODE_INTERPROCESS_MODE_THREAD;
-	int  swapCt      = XR_SWAP_TYPE_COUNTS[pNodeShrd->swapType] * XR_SWAP_COUNT;
+//	if (pNodeShrd->swapWidth != DEFAULT_WIDTH || pNodeShrd->swapHeight != DEFAULT_HEIGHT) {
+//		LOG_ERROR("Requested swapCtx size not available! %d %d\n", pNodeShrd->swapWidth, pNodeShrd->swapHeight);
+//		pNodeShrd->swapType = XR_SWAP_TYPE_ERROR;
+//		return;
+//	}
 
-	if (pNodeShrd->swapWidth != DEFAULT_WIDTH || pNodeShrd->swapHeight != DEFAULT_HEIGHT) {
-		LOG_ERROR("Requested swapCtx size not available! %d %d\n", pNodeShrd->swapWidth, pNodeShrd->swapHeight);
-		pNodeShrd->swapType = XR_SWAP_TYPE_ERROR;
-		return;
-	}
+	for (int iNodeSwap = 0; iNodeSwap < XR_SWAPCHAIN_CAPACITY; ++iNodeSwap) {
+		if (pNodeShrd->swapStates[iNodeSwap] != XR_SWAP_STATE_REQUESTED)
+			continue;
 
-	MxcSwapInfo swapInfo = {
-		.type           = pNodeShrd->swapType,
-		.yScale         = MXC_SWAP_SCALE_FULL,
-		.xScale         = MXC_SWAP_SCALE_FULL,
-		.extent         = {pNodeShrd->swapWidth, pNodeShrd->swapHeight, 1},
-		.compositorMode = pNodeShrd->compositorMode,
-		.locality       = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
-	};
-
-	int swapBlockIndex = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShrd->swapType];
-	for (int si = 0; si < swapCt; ++si) {
-
-		bHnd hSwap = BLOCK_CLAIM(node.cst.block.swap[swapBlockIndex], 0);
+		block_h hSwap = BLOCK_CLAIM(node.cst.block.swap, 0); // key should be hash of swap info to find recycled swaps
 		if (!HANDLE_VALID(hSwap)) {
-			LOG_ERROR("Fail to claim swaps!\n");
+			LOG_ERROR("Fail to claim SwapImage!\n");
 			goto ExitError;
 		}
+		LOG("Claimed Swap %d for Node %d\n", HANDLE_INDEX(hSwap), hNode);
 
-		pNodeCtx->hSwaps[si] = hSwap;
-		auto pSwap = BLOCK_PTR(node.cst.block.swap[swapBlockIndex], hSwap);
+		auto pSwap = BLOCK_PTR(node.cst.block.swap, hSwap);
+		assert(pSwap->state == XR_SWAP_STATE_UNITIALIZED && "Trying to create already created SwapImage!");
+		pSwap->state = XR_SWAP_STATE_REQUESTED;
+		pSwap->info = pNodeShrd->swapInfos[iNodeSwap];
+		bool isColor = pSwap->info.usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+		bool isDepth = pSwap->info.usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-		// Should we release or always recreate images?
-		// Until they are sharing different size probably better to release
-		if (pSwap->type == XR_SWAP_TYPE_UNKNOWN) {
-			mxcCreateSwap(&swapInfo, pSwap);
-			printf("Created Swap %d: %d %d\n", si, pNodeShrd->swapWidth, pNodeShrd->swapHeight);
-		} else {
-			printf("Recycled Swap %d: %d %d\n", si, pNodeShrd->swapWidth, pNodeShrd->swapHeight);
+		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
+			// We could determine color in CreateColorSwapTexture. Really should just make a VkExternalTexture.
+			if      (isColor) CreateColorSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
+			else if (isDepth) CreateDepthSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
+			else    assert(false && "SwapImage is neither color nor depth!");
+
+			if (needsExport) {
+				WIN32_CHECK(DuplicateHandle(GetCurrentProcess(),
+						pSwap->externalTexture[iImg].platform.handle,
+						pNodeCtxt->exported.handle,
+						&pImports->swapImageHandles[iNodeSwap][iImg],
+						0, false, DUPLICATE_SAME_ACCESS),
+					"Duplicate localTexture handle fail");
+			}
+
+			pNodeCstData->swaps[iNodeSwap][iImg].image = pSwap->externalTexture[iImg].texture.image;
+			pNodeCstData->swaps[iNodeSwap][iImg].view = pSwap->externalTexture[iImg].texture.view;
 		}
 
-		// pack VkHandles for hot access
-		auto pCompSwap = &pNodeCompData->swaps[si];
-		pCompSwap->color          = pSwap->color.image;
-		pCompSwap->colorView      = pSwap->color.view;
-		pCompSwap->depth          = pSwap->depth.image;
-		pCompSwap->depthView      = pSwap->depth.view;
-		pCompSwap->gBuffer        = pSwap->gbuffer.image;
-		pCompSwap->gBufferView    = pSwap->gbuffer.view;
-		pCompSwap->gBufferMip     = pSwap->gbufferMip.image;
-		pCompSwap->gBufferMipView = pSwap->gbufferMip.view;
-
-		if (needsExport) {
-			WIN32_CHECK(DuplicateHandle(
-					GetCurrentProcess(), pSwap->colorExternal.handle,
-					pNodeCtx->exported.handle, &pNodeCtx->exported.pExportedMemory->imports.colorSwapHandles[si],
-					0, false, DUPLICATE_SAME_ACCESS),
-				"Duplicate localTexture handle fail");
-			WIN32_CHECK(DuplicateHandle(
-					GetCurrentProcess(), pSwap->depthExternal.handle,
-					pNodeCtx->exported.handle, &pNodeCtx->exported.pExportedMemory->imports.depthSwapHandles[si],
-					0, false, DUPLICATE_SAME_ACCESS),
-				"Duplicate depth handle fail");
-		}
+		pNodeCtxt->hSwaps[iNodeSwap] = hSwap;
+		pNodeShrd->swapStates[iNodeSwap] = XR_SWAP_STATE_CREATED;
+		pSwap->state = XR_SWAP_STATE_CREATED;
 	}
 
-	SetEvent(pNodeCtx->swapsSyncedHandle);
+	SetEvent(pNodeCtxt->swapsSyncedHandle);
 
 ExitError:
-	// ya we need some error handling
+	// TODO
 #endif
 }
 const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
+	[MXC_INTERPROCESS_TARGET_NODE_OPENED] = (MxcIpcFuncPtr const)ipcFuncNodeOpened,
 	[MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcIpcFuncPtr const)ipcFuncNodeClosed,
 	[MXC_INTERPROCESS_TARGET_SYNC_SWAPS] = (MxcIpcFuncPtr const)ipcFuncClaimSwap,
 };

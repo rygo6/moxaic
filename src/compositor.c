@@ -736,7 +736,7 @@ CompositeLoop:
 	//// Iterate Node State Updates
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
 
-	ivec2 windowExtent = mxcWindowInput.iDimensions;
+	ivec2 windowExtent  = mxcWindowInput.iDimensions;
 	int   windowPixelCt = windowExtent.x * windowExtent.y;
 	int   windowGroupCt = windowPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
@@ -746,8 +746,8 @@ CompositeLoop:
 		if (node.active[iCstMode].ct == 0) continue;
 
 		VkImageMemoryBarrier2* pAcquireBarriers = processAcquireBarriers[iCstMode];
-		VkImageMemoryBarrier2* pEndBarriers = processEndBarriers[iCstMode];
-		VkImageLayout          finalLayout = processFinalLayout[iCstMode];
+		VkImageMemoryBarrier2* pEndBarriers     = processEndBarriers[iCstMode];
+		VkImageLayout          finalLayout      = processFinalLayout[iCstMode];
 
 		auto pActiveNodes = &node.active[iCstMode];
 		for (u32 iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
@@ -782,28 +782,42 @@ CompositeLoop:
 				pNodeCstData->nodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.pos, pNodeShrd->rootPose.rot);
 			}
 
-			u64 nodeTimeline = pNodeShrd->timelineValue;
-			if (nodeTimeline <= pNodeCstData->lastTimelineValue) continue;
+			u64 nodeTimelineVal = pNodeShrd->timelineValue;
+			if (nodeTimelineVal <= pNodeCstData->lastTimelineValue)
+				continue;
 
-			pNodeCstData->lastTimelineValue = nodeTimeline;
+			pNodeCstData->lastTimelineValue = nodeTimelineVal;
 			atomic_thread_fence(memory_order_release);
 
 			//// Acquire new frame from node
 			ATOMIC_FENCE_BLOCK {
-				pNodeCstData->swapIndex = !(nodeTimeline % VK_SWAP_COUNT);
-				auto pNodeSwap = &pNodeCstData->swaps[pNodeCstData->swapIndex];
+				int iSwapImg = !(nodeTimelineVal % VK_SWAP_COUNT);
+
+				int iLeftColorImgId = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].colorId;
+				int iLeftDepthImgId = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].depthId;
+				int iRightColorImgId = pNodeShrd->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].colorId;
+				int iRightDepthImgId = pNodeShrd->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].depthId;
+
+				auto pNodeCtxt = &node.ctxt[hNode];
+				auto pLeftColorSwap  = &pNodeCstData->swaps[iLeftColorImgId][iSwapImg];
+				auto pLeftDepthSwap  = &pNodeCstData->swaps[iLeftDepthImgId][iSwapImg];
+				auto pRightColorSwap = &pNodeCstData->swaps[iRightColorImgId][iSwapImg];
+				auto pRightDepthSwap = &pNodeCstData->swaps[iRightDepthImgId][iSwapImg];
+
+				auto pLeftGBuffer = &pNodeCstData->gbuffer[XR_VIEW_ID_LEFT_STEREO];
+				auto pRightGBuffer = &pNodeCstData->gbuffer[XR_VIEW_ID_RIGHT_STEREO];
 
 				// I hate this we need a better way
-				pAcquireBarriers[0].image = pNodeSwap->color;
+				pAcquireBarriers[0].image = pLeftColorSwap->image;
 				pAcquireBarriers[0].dstQueueFamilyIndex = mainGraphicsIndex,
-				pAcquireBarriers[1].image = pNodeSwap->depth;
+				pAcquireBarriers[1].image = pLeftDepthSwap->image;
 				pAcquireBarriers[1].dstQueueFamilyIndex = mainGraphicsIndex,
-				pAcquireBarriers[2].image = pNodeSwap->gBuffer;
-				pAcquireBarriers[3].image = pNodeSwap->gBufferMip;
+				pAcquireBarriers[2].image = pLeftGBuffer->image;
+				pAcquireBarriers[3].image = pLeftGBuffer->mipImage;
 				CmdPipelineImageBarriers2(gfxCmd, processAcquireBarrierCount, pAcquireBarriers);
 
 				// TODO this needs to be specifically only the rect which was rendered into
-				ivec2 nodeSwapExtent = IVEC2(pNodeShrd->swapWidth, pNodeShrd->swapHeight);
+				ivec2 nodeSwapExtent = IVEC2(pNodeShrd->swapMaxWidth, pNodeShrd->swapMaxHeight);
 				u32   nodeSwapPixelCt = nodeSwapExtent.x * nodeSwapExtent.y;
 				u32   nodeSwapGroupCt = nodeSwapPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
@@ -819,13 +833,14 @@ CompositeLoop:
 				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessBlitUpPipe);
 
 				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-					BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf), BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pNodeSwap->depthView),
-					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferMipView));
+					BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf),
+					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftDepthSwap->view),
+					BIND_WRITE_GBUFFER_PROCESS_DST(pLeftGBuffer->mipView));
 				vk.CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
 
 				CMD_IMAGE_BARRIERS(gfxCmd, {
 					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = pNodeSwap->gBufferMip,
+					.image = pLeftGBuffer->image,
 					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
 					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
@@ -833,16 +848,16 @@ CompositeLoop:
 				});
 
 				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pNodeSwap->gBufferMipView),
-					BIND_WRITE_GBUFFER_PROCESS_DST(pNodeSwap->gBufferView));
+					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pLeftGBuffer->mipView),
+					BIND_WRITE_GBUFFER_PROCESS_DST(pLeftGBuffer->view));
 				vk.CmdDispatch(gfxCmd, 1, nodeSwapGroupCt, 1);
 
-				pEndBarriers[0].image = pNodeSwap->gBuffer;
+				pEndBarriers[0].image = pLeftGBuffer->image;
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
 
 				CMD_WRITE_SINGLE_SETS(device,
-					BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, vk.context.nearestSampler, pNodeSwap->colorView, finalLayout),
-					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, vk.context.nearestSampler, pNodeSwap->gBufferView, finalLayout));
+					BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, vk.context.nearestSampler, pLeftColorSwap->view, finalLayout),
+					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, vk.context.nearestSampler, pLeftGBuffer->view, finalLayout));
 			}
 
 			//// Calc new node uniform and shared data

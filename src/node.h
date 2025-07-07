@@ -29,7 +29,7 @@
 typedef uint8_t MxcRingBufferHandle;
 #define MXC_RING_BUFFER_CAPACITY 256
 #define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
-static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY, "RingBufferHandle type can't store capacity.");
+static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY, "RingBufferHandle interprocessMode can't store capacity.");
 typedef struct MxcRingBuffer {
 	MxcRingBufferHandle head;
 	MxcRingBufferHandle tail;
@@ -64,13 +64,24 @@ typedef struct MxcDepthState {
 } MxcDepthState;
 
 typedef enum MxcCompositorMode : u8 {
-	MXC_COMPOSITOR_MODE_NONE,
+	MXC_COMPOSITOR_MODE_NONE, // Used to process messages with no compositing.
 	MXC_COMPOSITOR_MODE_QUAD,
 	MXC_COMPOSITOR_MODE_TESSELATION,
 	MXC_COMPOSITOR_MODE_TASK_MESH,
 	MXC_COMPOSITOR_MODE_COMPUTE,
 	MXC_COMPOSITOR_MODE_COUNT,
 } MxcCompositorMode;
+
+static const char* string_MxcCompositorMode(MxcCompositorMode mode) {
+	switch(mode){
+		case MXC_COMPOSITOR_MODE_NONE:        return "MXC_COMPOSITOR_MODE_NONE";
+		case MXC_COMPOSITOR_MODE_QUAD:        return "MXC_COMPOSITOR_MODE_QUAD";
+		case MXC_COMPOSITOR_MODE_TESSELATION: return "MXC_COMPOSITOR_MODE_TESSELATION";
+		case MXC_COMPOSITOR_MODE_TASK_MESH:   return "MXC_COMPOSITOR_MODE_TASK_MESH";
+		case MXC_COMPOSITOR_MODE_COMPUTE:     return "MXC_COMPOSITOR_MODE_COMPUTE";
+		default:                              return "N/A";
+	}
+}
 
 typedef struct MxcController {
 	bool    active;
@@ -94,7 +105,7 @@ typedef struct MxcClip {
 
 typedef struct MxcNodeShared {
 
-	// read/write every cycle
+	// Read/Write every cycle
 	u64 timelineValue;
 
 	VkGlobalSetState globalSetState;
@@ -102,7 +113,6 @@ typedef struct MxcNodeShared {
 
 	MxcProcessState processState;
 
-	// I don't think I need this either?
 	pose rootPose;
 
 	// I don't think I need this?
@@ -110,10 +120,15 @@ typedef struct MxcNodeShared {
 	pose              cameraPose;
 	cam               camera;
 
+	struct {
+		u8 colorId;
+		u8 depthId;
+	} viewSwaps[XR_MAX_VIEW_COUNT];
+
 	MxcController left;
 	MxcController right;
 
-	// read every cycle, occasional write
+	// Read every cycle. Occasional write.
 	f32               compositorRadius;
 	u32               compositorCycleSkip;
 	uint64_t          compositorBaseCycleValue;
@@ -121,25 +136,21 @@ typedef struct MxcNodeShared {
 
 	// Interprocess
 	MxcRingBuffer nodeInterprocessFuncQueue;
-	NodeHandle    cstNodeHandle;
-	NodeHandle    appNodeHandle;
 
 	// Swap
-	XrSwapType  swapType;
-	u16 swapWidth;
-	u16 swapHeight;
+//	XrSwapType      swapType;
+	u16             swapMaxWidth;
+	u16             swapMaxHeight;
+	XrSwapState     swapStates[XR_SWAPCHAIN_CAPACITY];
+	XrSwapchainInfo swapInfos[XR_SWAPCHAIN_CAPACITY];
 
 } MxcNodeShared;
 
 typedef struct MxcNodeImports {
 
+	// We could do sync handle per swap but it's also not an issue if nodes wait a little.
 	HANDLE swapsSyncedHandle;
-
-	// We need to do * 2 in case we are mult-pass framebuffer which needs a framebuffer for each eye
-	HANDLE colorSwapHandles[XR_SWAP_COUNT * XR_MAX_VIEW_COUNT];
-	HANDLE depthSwapHandles[XR_SWAP_COUNT * XR_MAX_VIEW_COUNT];
-	u8     claimedColorSwapCount;
-	u8     claimedDepthSwapCount;
+	HANDLE swapImageHandles[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
 	HANDLE nodeTimelineHandle;
 	HANDLE compositorTimelineHandle;
@@ -155,40 +166,51 @@ typedef struct MxcExternalNodeMemory {
 /////////
 //// Swap
 ////
-constexpr int MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[] = {
-	[XR_SWAP_TYPE_UNKNOWN]              = 0,
-	[XR_SWAP_TYPE_MONO_SINGLE]          = 0,
-	[XR_SWAP_TYPE_STEREO_SINGLE]        = 0,
-	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE]   = 2,
-};
-constexpr int MXC_SWAP_TYPE_BLOCK_COUNT = 3;
+//constexpr int MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[] = {
+//	[XR_SWAP_TYPE_UNKNOWN]              = 0,
+//	[XR_SWAP_TYPE_MONO_SINGLE]          = 0,
+//	[XR_SWAP_TYPE_STEREO_SINGLE]        = 0,
+//	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
+//	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE]   = 2,
+//};
+//constexpr int MXC_SWAP_TYPE_BLOCK_COUNT = 3;
 
-typedef struct MxcSwapInfo {
-	XrSwapType        type;
-	MxcCompositorMode compositorMode;
-	XrSwapOutputFlags usage;
+//constexpr int MXC_SWAP_SHARED_RESOLUTIONS[] = {
+//	[XR_SWAP_TYPE_UNKNOWN]              = 0,
+//	[1024]          = 0
+//};
 
-	// not sure if I will use these
-	MxcSwapScale xScale;
-	MxcSwapScale yScale;
+//typedef struct MxcSwapInfo {
+//	XrSwapType        type;
+//	MxcCompositorMode compositorMode;
+//	XrSwapOutput      usage;
+//
+//	// not sure if I will use these
+//	MxcSwapScale xScale;
+//	MxcSwapScale yScale;
+//
+//	VkExtent3D extent;
+//
+//	VkLocality locality;
+//} MxcSwapInfo;
 
-	VkExtent3D extent;
+//typedef struct MxcSwap {
+//	XrSwapType         type;
+//	VkDedicatedTexture color;
+//	VkDedicatedTexture depth;
+//	VkDedicatedTexture gbuffer;
+//	VkDedicatedTexture gbufferMip;
+//#if _WIN32
+//	VkExternalPlatformTexture colorExternal;
+//	VkExternalPlatformTexture depthExternal;
+//#endif
+//} MxcSwap;
 
-	VkLocality locality;
-} MxcSwapInfo;
-
-typedef struct MxcSwap {
-	XrSwapType         type;
-	VkDedicatedTexture color;
-	VkDedicatedTexture depth;
-	VkDedicatedTexture gbuffer;
-	VkDedicatedTexture gbufferMip;
-#if _WIN32
-	VkExternalPlatformTexture colorExternal;
-	VkExternalPlatformTexture depthExternal;
-#endif
-} MxcSwap;
+typedef struct MxcSwapTexture {
+	VkExternalTexture externalTexture[XR_SWAPCHAIN_IMAGE_COUNT];
+	XrSwapState       state;
+	XrSwapchainInfo   info;
+} MxcSwapTexture;
 
 //////////////////////////////
 //// Compositor Types and Data
@@ -274,13 +296,16 @@ typedef enum MxcNodeInteractionState{
 	NODE_INTERACTION_STATE_COUNT,
 } MxcNodeInteractionState;
 
-// Hot data used by compositor for each node
-typedef struct CACHE_ALIGN MxcNodeCompositorData {
+// Hot data used by the compositor for each node
+// should I call it Hot or Data?
+// Context = Cold. Data = Hot?
+typedef struct CACHE_ALIGN MxcCompositorNodeHot {
 
 	MxcNodeInteractionState interactionState;
+	MxcCompositorMode       activeCompositorMode;
 
-	pose                       rootPose;
-	uint64_t                   lastTimelineValue;
+	pose rootPose;
+	u64  lastTimelineValue;
 
 	// This should go in one big shared buffer for all nodes
 	MxcNodeCompositorSetState  nodeSetState;
@@ -288,23 +313,29 @@ typedef struct CACHE_ALIGN MxcNodeCompositorData {
 	VkSharedBuffer             nodeSetBuffer;
 	VkDescriptorSet            nodeSet;
 
-	u8 swapIndex;
 	struct CACHE_ALIGN PACK {
-		VkImage               color;
-		VkImage               depth;
-		VkImage               gBuffer;
-		VkImage               gBufferMip;
-		VkImageView           colorView;
-		VkImageView           depthView;
-		VkImageView           gBufferView;
-		VkImageView           gBufferMipView;
-	} swaps[VK_SWAP_COUNT];
+		VkImage               image;
+		VkImageView           view;
+	} swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
+	struct CACHE_ALIGN PACK {
+		VkImage               image;
+		VkImage               mipImage;
+		VkImageView           view;
+		VkImageView           mipView;
+	} gbuffer[XR_MAX_VIEW_COUNT];
+//	} gbuffer[XR_MAX_VIEW_COUNT][XR_SWAPCHAIN_IMAGE_COUNT];
+	// If I ever need to retain gbuffers, I will need more gbuffers.
+	// However, as long as gbuffer process is on the compositor thread
+	// it can sync a single gbuffer with composite render loop
+
+
+  	// this should go a UI thread node
 	vec3 worldSegments[MXC_CUBE_SEGMENT_COUNT];
 	vec3 worldCorners[CORNER_COUNT];
 	vec2 uvCorners[CORNER_COUNT];
 
-} MxcNodeCompositorData;
+} MxcCompositorNodeHot;
 
 /////////////////
 //// Node Context
@@ -315,10 +346,15 @@ constexpr int MXC_NODE_SWAP_CAPACITY = VK_SWAP_COUNT * 2;
 // All data related to node
 typedef struct MxcNodeContext {
 
-	MxcNodeInterprocessMode type;
+	MxcNodeInterprocessMode interprocessMode;
 
 	HANDLE       swapsSyncedHandle;
-	block_handle hSwaps[MXC_NODE_SWAP_CAPACITY];
+	block_handle hSwaps[XR_SWAPCHAIN_CAPACITY];
+
+	struct {
+		VkDedicatedTexture texture;
+		VkDedicatedTexture mipTexture;
+	} gbuffer[XR_MAX_VIEW_COUNT];
 
 	union {
 		// MXC_NODE_INTERPROCESS_MODE_THREAD
@@ -382,8 +418,10 @@ extern struct Node {
 
 #if defined(MOXAIC_COMPOSITOR)
 
+	// this should be in a cst anon struct?!?
+	// node. equal node data then cst.node equal node data for cst?
 	struct {
-		MxcNodeCompositorData data[MXC_NODE_CAPACITY];
+		MxcCompositorNodeHot data[MXC_NODE_CAPACITY];
 
 		MxcNodeCompositorSetState  setState[MXC_NODE_CAPACITY];
 		MxcNodeCompositorSetState* pSetMapped;
@@ -391,7 +429,7 @@ extern struct Node {
 		VkDescriptorSet            set;
 
 		struct {
-			BLOCK_DECL(MxcSwap, MXC_NODE_CAPACITY) swap[MXC_SWAP_TYPE_BLOCK_COUNT];
+			BLOCK_DECL(MxcSwapTexture, MXC_NODE_CAPACITY) swap;
 		} block;
 
 	} cst;
@@ -448,7 +486,7 @@ void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* 
 
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
-void ReleaseNode(NodeHandle handle);
+void       ReleaseNodeActive(NodeHandle hNode);
 
 
 ///////////////////////
@@ -464,6 +502,7 @@ void mxcShutdownInterprocessNode();
 ////
 typedef void (*MxcIpcFuncPtr)(const NodeHandle);
 typedef enum MxcIpcFunc {
+	MXC_INTERPROCESS_TARGET_NODE_OPENED,
 	MXC_INTERPROCESS_TARGET_NODE_CLOSED,
 	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
 	MXC_INTERPROCESS_TARGET_COUNT,
@@ -480,7 +519,7 @@ int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
-	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
+	for (u32 iCstMode = 0; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 		atomic_thread_fence(memory_order_acquire);
 		int activeNodeCt = node.active[iCstMode].ct;
 		if (activeNodeCt == 0)

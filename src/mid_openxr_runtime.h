@@ -3,6 +3,34 @@
 //////////////////////
 #pragma once
 
+/*
+	Style
+
+	variable names can signify the type with a character prefix
+	iValue = index
+	pValue = pointer
+	hValue = handle
+
+ 	primitive types are snake_case
+
+	extern struct types are PrefixPascalCase
+ 	static struct types are PascalCase
+
+ 	macros and constants are CAPITAL_SNAKE_CASE
+
+ 	static methods are PascalCase
+ 	extern methods are prefixCamelCase with a prefix less than 3 chars
+
+ 	global fields should be an anonymous struct to namespace
+
+ 	auto can be used if the name of the type is obvious from somewhere else in the assignment line
+ 	auto should be used if the exact name of the type is elsewhere in the assignment line, such as compound literals
+ 	if the type name is 8 or less chars
+
+ 	typedef of abbreviated type names should be used if possible
+ 	abbreviations should be 8 or less chars
+*/
+
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -68,6 +96,37 @@
 //// Mid OpenXR Types
 ////
 
+typedef enum XrViewId {
+	// XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT
+	XR_VIEW_ID_CENTER_FIRST_PERSON = 0,
+	XR_VIEW_ID_FIRST_PERSON_COUNT  = 0,
+
+	// XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO
+	XR_VIEW_ID_CENTER_MONO         = 0,
+	XR_VIEW_ID_MONO_COUNT          = 1,
+
+	// XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO
+	XR_VIEW_ID_LEFT_STEREO         = 0,
+	XR_VIEW_ID_RIGHT_STEREO        = 1,
+	XR_VIEW_ID_STEREO_COUNT        = 2,
+
+	// XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET
+	XR_VIEW_ID_LEFT_OUTER_FOVEATED = 0,
+	XR_VIEW_ID_RIGHT_OUTER_FOVEATED= 1,
+	XR_VIEW_ID_LEFT_INSET_FOVEATED = 2,
+	XR_VIEW_ID_RIGHT_INSET_FOVEATED= 3,
+	XR_VIEW_ID_FOVEATED_COUNT      = 4,
+
+	// XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO
+	XR_VIEW_ID_LEFT_CONTEXT_QUAD   = 0,
+	XR_VIEW_ID_LEFT_FOCUS_QUAD     = 1,
+	XR_VIEW_ID_RIGHT_CONTEXT_QUAD  = 2,
+	XR_VIEW_ID_RIGHT_FOCUS_QUAD    = 3,
+	XR_VIEW_ID_QUAD_COUNT          = 4,
+} XrViewId;
+
+#define XR_MAX_VIEW_COUNT XR_VIEW_ID_STEREO_COUNT // we don't support QUAD currently
+
 typedef enum XrGraphicsApi : u8 {
 	XR_GRAPHICS_API_OPENGL,
 	XR_GRAPHICS_API_VULKAN,
@@ -75,21 +134,31 @@ typedef enum XrGraphicsApi : u8 {
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
-typedef enum XrSwapOutputFlags : u8 {
-	XR_SWAP_OUTPUT_FLAG_COLOR,
-	XR_SWAP_OUTPUT_FLAG_DEPTH,
-} XrSwapOutputFlags;
-#define XR_SWAP_OUTPUT_FLAG_COUNT 2
+typedef enum XrSwapOutput : u8 {
+	XR_SWAP_OUTPUT_UNKNOWN,
+	XR_SWAP_OUTPUT_COLOR,
+	XR_SWAP_OUTPUT_DEPTH,
+	XR_SWAP_OUTPUT_COUNT,
+} XrSwapOutput;
 
-typedef enum XrSwapType : u8 {
-	XR_SWAP_TYPE_UNKNOWN,
-	XR_SWAP_TYPE_MONO_SINGLE,
-	XR_SWAP_TYPE_STEREO_SINGLE,
-	XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
-	XR_SWAP_TYPE_STEREO_DOUBLE_WIDE,
-	XR_SWAP_TYPE_ERROR,
-	XR_SWAP_TYPE_COUNT,
-} XrSwapType;
+static inline const char* string_XrSwapOutput(XrSwapOutput output) {
+	switch (output) {
+		case XR_SWAP_OUTPUT_UNKNOWN: return "XR_SWAP_OUTPUT_UNKNOWN";
+		case XR_SWAP_OUTPUT_COLOR:   return "XR_SWAP_OUTPUT_COLOR";
+		case XR_SWAP_OUTPUT_DEPTH:   return "XR_SWAP_OUTPUT_DEPTH";
+		default:                     return "N/A";
+	}
+}
+
+//typedef enum XrSwapType : u8 {
+//	XR_SWAP_TYPE_UNKNOWN,
+//	XR_SWAP_TYPE_MONO_SINGLE,
+//	XR_SWAP_TYPE_STEREO_SINGLE,
+//	XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
+//	XR_SWAP_TYPE_STEREO_DOUBLE_WIDE,
+//	XR_SWAP_TYPE_ERROR,
+//	XR_SWAP_TYPE_COUNT,
+//} XrSwapType;
 
 typedef enum XrSwapClip : u8 {
 	XR_SWAP_CLIP_NONE,
@@ -98,14 +167,32 @@ typedef enum XrSwapClip : u8 {
 	XR_SWAP_CLIP_COUNT,
 } XrSwapClip;
 
-typedef struct XrSwapConfig {
-	u16               width;
-	u16               height;
-	u8                samples : 4;
-	XrSwapOutputFlags outputs : 4;
-	XrSwapType        type    : 4;
-	XrSwapClip        clip    : 4;
-} XrSwapConfig;
+typedef enum XrSwapState : u8 {
+	XR_SWAP_STATE_UNITIALIZED,
+	XR_SWAP_STATE_REQUESTED,
+	XR_SWAP_STATE_CREATED,
+	XR_SWAP_STATE_ERROR,
+	XR_SWAP_STATE_COUNT,
+} XrSwapState;
+
+typedef struct XrSwapchainInfo {
+	XrSwapchainCreateFlags createFlags;
+	XrSwapchainUsageFlags  usageFlags;
+	VkFormat               format;
+	u16                    windowWidth;
+	u16                    windowHeight;
+	u8                     sampleCount;
+	u8                     faceCount;
+	u8                     arraySize;
+	u8                     mipCount;
+} XrSwapchainInfo;
+
+//typedef struct XrSwapConfig {
+//	u16               width;
+//	u16               height;
+//	u8                samples : 4;
+//	XrSwapType        type    : 4;
+//} XrSwapConfig;
 
 typedef float XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
 
@@ -137,45 +224,55 @@ typedef struct XrEulerPosef {
 	XrVector3f position;
 } XrEulerPosef;
 
-constexpr int XR_SWAP_TYPE_COUNTS[] = {
-	[XR_SWAP_TYPE_UNKNOWN] = 0,
-	[XR_SWAP_TYPE_MONO_SINGLE] = 1,
-	[XR_SWAP_TYPE_STEREO_SINGLE] = 2,
-	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
-};
+//constexpr int XR_SWAP_TYPE_COUNTS[] = {
+//	[XR_SWAP_TYPE_UNKNOWN] = 0,
+//	[XR_SWAP_TYPE_MONO_SINGLE] = 1,
+//	[XR_SWAP_TYPE_STEREO_SINGLE] = 2,
+//	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
+//	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
+//};
 
-#define XR_SPACE_LOCATION_ALL_TRACKED XR_SPACE_LOCATION_ORIENTATION_VALID_BIT | XR_SPACE_LOCATION_POSITION_VALID_BIT | \
-										  XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | XR_SPACE_LOCATION_POSITION_TRACKED_BIT
+#define XR_SPACE_LOCATION_ALL_TRACKED           \
+	XR_SPACE_LOCATION_ORIENTATION_VALID_BIT   | \
+	XR_SPACE_LOCATION_POSITION_VALID_BIT      | \
+	XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | \
+	XR_SPACE_LOCATION_POSITION_TRACKED_BIT
 
-typedef uint16_t XrSessionIndex;
+typedef u16 XrSessionId;
+typedef u16 XrSwapchainId;
+typedef XrSwapchainId swap_i;
 
 /////////////////////////////////
 //// External Method Declarations
 ////
 void xrInitialize();
-void xrSwapConfig(XrSystemId systemId, XrSwapConfig* pConfig);
+void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pView);
 
-void xrClaimSessionIndex(XrSessionIndex* pSessionIndex);
+// this should be sessionId and swapId. Id should be the external identifier
+void xrClaimSessionId(XrSessionId* pSessionIndex);
 
-void xrReleaseSessionIndex(XrSessionIndex sessionIndex);
-void xrGetReferenceSpaceBounds(XrSessionIndex sessionIndex, XrExtent2Df* pBounds);
-void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType);
-void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle);
-void xrSetDepthInfo(XrSessionIndex sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ);
+void xrReleaseSessionId(XrSessionId sessionIndex);
+void xrGetReferenceSpaceBounds(XrSessionId sessionIndex, XrExtent2Df* pBounds);
+void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId);
+void xrGetSwapchainImage(XrSessionId sessionId, XrSwapchainId swapIndex, int imageId, HANDLE* pHandle);
+//void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType);
+//void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle);
+void xrSetColorSwap(XrSessionId sessionIndex, XrViewId viewId, XrSwapchainId swapIndex);
+void xrSetDepthSwap(XrSessionId sessionIndex, XrViewId viewId, XrSwapchainId swapIndex);
+void xrSetDepthInfo(XrSessionId sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ);
 
-void xrGetSessionTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
-void xrSetSessionTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
+void xrGetSessionTimeline(XrSessionId sessionIndex, HANDLE* pHandle);
+void xrSetSessionTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue);
 
-void xrClaimSwapIndex(XrSessionIndex sessionIndex, uint8_t* pIndex);
-void xrReleaseSwapIndex(XrSessionIndex sessionIndex, uint8_t index);
+void xrClaimSwapIndex(XrSessionId sessionIndex, uint8_t* pIndex);
+void xrReleaseSwapIndex(XrSessionId sessionIndex, uint8_t index);
 
-void xrGetCompositorTimeline(XrSessionIndex sessionIndex, HANDLE* pHandle);
-void xrSetInitialCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue);
-void xrGetCompositorTimelineValue(XrSessionIndex sessionIndex, bool synchronized, uint64_t* pTimelineValue);
-void xrProgressCompositorTimelineValue(XrSessionIndex sessionIndex, uint64_t timelineValue, bool synchronized);
+void xrGetCompositorTimeline(XrSessionId sessionIndex, HANDLE* pHandle);
+void xrSetInitialCompositorTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue);
+void xrGetCompositorTimelineValue(XrSessionId sessionIndex, bool synchronized, uint64_t* pTimelineValue);
+void xrProgressCompositorTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue, bool synchronized);
 
-void xrGetHeadPose(XrSessionIndex sessionIndex, XrEulerPosef* pPose);
+void xrGetHeadPose(XrSessionId sessionIndex, XrEulerPosef* pPose);
 
 typedef struct XrEyeView {
 	XrVector3f euler;
@@ -184,9 +281,9 @@ typedef struct XrEyeView {
 	XrVector2f upperLeftClip;
 	XrVector2f lowerRightClip;
 } XrEyeView;
-void xrGetEyeView(XrSessionIndex sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView);
+void xrGetEyeView(XrSessionId sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView);
 
-XrTime xrGetFrameInterval(XrSessionIndex sessionIndex, bool synchronized);
+XrTime xrGetFrameInterval(XrSessionId sessionIndex, bool synchronized);
 
 static inline XrTime xrHzToXrTime(double hz)
 {
@@ -198,36 +295,31 @@ static inline XrTime xrHzToXrTime(double hz)
 ////
 typedef struct SubactionState SubactionState;
 
-int xrInputSelectClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputSelectClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputSqueezeValue_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputSqueezeValue_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputSqueezeClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputSqueezeClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputTriggerValue_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputTriggerValue_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputTriggerClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputTriggerClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputMenuClick_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputMenuClick_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputGripPose_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputGripPose_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputAimPose_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrInputAimPose_Right(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrOutputHaptic_Left(XrSessionIndex sessionIndex, SubactionState* pState);
-int xrOutputHaptic_Right(XrSessionIndex sessionIndex, SubactionState* pState);
+int xrInputSelectClick_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputSelectClick_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputSqueezeValue_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputSqueezeValue_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputSqueezeClick_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputSqueezeClick_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputTriggerValue_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputTriggerValue_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputTriggerClick_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputTriggerClick_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputMenuClick_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputMenuClick_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputGripPose_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputGripPose_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputAimPose_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputAimPose_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrOutputHaptic_Left(XrSessionId sessionIndex, SubactionState* pState);
+int xrOutputHaptic_Right(XrSessionId sessionIndex, SubactionState* pState);
 
 /////////////////////
 //// OpenXR Constants
 ////
 #define XR_FORCE_STEREO_TO_MONO
 
-//#define XR_DEFAULT_WIDTH   1024
-//#define XR_DEFAULT_HEIGHT  1024
-//#define XR_DEFAULT_SAMPLES 1
-
-#define XR_SWAP_COUNT 2
-#define XR_MAX_VIEW_COUNT 2
+#define XR_SWAPCHAIN_IMAGE_COUNT 2
 
 #define XR_OPENGL_MAJOR_VERSION 4
 #define XR_OPENGL_MINOR_VERSION 6
@@ -260,6 +352,11 @@ typedef struct SetBase {
 /////////////////
 //// OpenXR Types
 ////
+
+typedef block_handle swap_h;
+typedef block_handle space_h;
+typedef block_handle sess_h;
+
 #define XR_PATH_CAPACITY 256
 typedef struct Path {
 	char string[XR_MAX_PATH_LENGTH];
@@ -298,7 +395,7 @@ typedef struct SubactionState {
 #define XR_BINDINGS_CAPACITY 256
 typedef struct Binding {
 	bHnd hPath;
-	int (*func)(XrSessionIndex, SubactionState*);
+	int (*func)(XrSessionId, SubactionState*);
 } Binding;
 
 #define XR_MAX_SUBACTION_PATHS 2
@@ -352,12 +449,11 @@ typedef struct Space {
 
 #define XR_SWAPCHAIN_CAPACITY 8
 typedef struct Swapchain {
-	block_handle hSession;
-	XrSwapOutputFlags output;
-	u8           swapIndex;
-	u32          width;
-	u32          height;
+	block_handle    hSession;
+	XrSwapOutput    output;
+	XrSwapchainInfo info;
 
+	u8 acquiredSwapIndex;
 	union {
 		struct {
 			GLuint texture;
@@ -369,24 +465,23 @@ typedef struct Swapchain {
 			ID3D11Resource*  localResource;
 			ID3D11Resource*  transferResource;
 		} d3d11;
-	} texture[XR_SWAP_COUNT];
+	} texture[XR_SWAPCHAIN_IMAGE_COUNT];
 
 } Swapchain;
-typedef block_handle swap_handle; // do this?
 
 #define XR_SESSIONS_CAPACITY 8
 #define XR_MAX_SPACES 8
 typedef struct Session {
 	//// Info
 	CACHE_ALIGN
-	XrSessionIndex          index;
+	XrSessionId             index;
 	XrSystemId              systemId;
 	XrViewConfigurationType primaryViewConfigurationType;
 
 	//// Swap
 	CACHE_ALIGN
-	swap_handle hSwap;
-	XrSwapType  swapType;
+	swap_h      hSwap;
+//	XrSwapType  swapType;
 	XrSwapClip  swapClip;
 
 	//// Timing
@@ -455,6 +550,7 @@ typedef struct Instance {
 	XrSystemId        systemId;
 	XrFormFactor      systemFormFactor;
 	XrGraphicsApi     graphicsApi;
+	bool userPresenceEnabled;
 
 	//// Interaction
 	MAP_DECL(XR_INTERACTION_PROFILE_CAPACITY) interactionProfiles;
@@ -494,12 +590,9 @@ static struct {
 
 } xr;
 
-typedef block_handle space_handle;
-typedef block_handle session_handle;
-
 // Do I want to do this?
-static space_handle SpaceClaim(int key) { return BLOCK_CLAIM(xr.block.space, key); }
-static Space* SpacePtr(space_handle handle) { return BLOCK_PTR(xr.block.space, handle); }
+static space_h SpaceClaim(int key) { return BLOCK_CLAIM(xr.block.space, key); }
+static Space* SpacePtr(space_h handle) { return BLOCK_PTR(xr.block.space, handle); }
 
 #define B xr.block
 
@@ -688,7 +781,7 @@ static XrResult RegisterBinding(
 	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
 	Path*               pBindingPath,
-	int (*func)(XrSessionIndex, SubactionState*))
+	int (*func)(XrSessionId, SubactionState*))
 {
 	auto bindPathHash = BLOCK_KEY(B.path, pBindingPath);
 	for (u32 i = 0; i < pInteractionProfile->bindings.count; ++i) {
@@ -709,7 +802,7 @@ static XrResult RegisterBinding(
 }
 
 typedef struct BindingDefinition {
-	int (*func)(XrSessionIndex, SubactionState*);
+	int (*func)(XrSessionId, SubactionState*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
 static XrResult InitBinding(const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
@@ -759,7 +852,7 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 
 static XrResult InitStandardBindings()
 {
-#define BINDING_DEFINITION(_func, _path) {(int (*)(XrSessionIndex, SubactionState*)) _func, _path}
+#define BINDING_DEFINITION(_func, _path) {(int (*)(XrSessionId, SubactionState*)) _func, _path}
 
 	{
 		BindingDefinition bindingDefinitions[] = {
@@ -888,11 +981,11 @@ XR_PROC xrEnumerateInstanceExtensionProperties(
 			.extensionName = XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
 			.extensionVersion = XR_KHR_visibility_mask_SPEC_VERSION,
 		},
-//		{
-//			.type = XR_TYPE_EXTENSION_PROPERTIES,
-//			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
-//			.extensionVersion = XR_EXT_user_presence_SPEC_VERSION,
-//		},
+		{
+			.type = XR_TYPE_EXTENSION_PROPERTIES,
+			.extensionName = XR_EXT_USER_PRESENCE_EXTENSION_NAME,
+			.extensionVersion = XR_EXT_user_presence_SPEC_VERSION,
+		},
 //		{
 //			.type = XR_TYPE_EXTENSION_PROPERTIES,
 //			.extensionName = XR_EXT_CONFORMANCE_AUTOMATION_EXTENSION_NAME,
@@ -1003,8 +1096,10 @@ XR_PROC xrCreateInstance(
 		printf("Enabled Extension: %s\n", createInfo->enabledExtensionNames[i]);
 		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_OPENGL_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
 			xr.instance.graphicsApi = XR_GRAPHICS_API_OPENGL;
-		if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
+		else if (strncmp(createInfo->enabledExtensionNames[i], XR_KHR_D3D11_ENABLE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
 			xr.instance.graphicsApi = XR_GRAPHICS_API_D3D11_4;
+		else if (strncmp(createInfo->enabledExtensionNames[i], XR_EXT_USER_PRESENCE_EXTENSION_NAME, XR_MAX_EXTENSION_NAME_SIZE) == 0)
+			xr.instance.userPresenceEnabled = true;
 	}
 
 	memcpy(&xr.instance.applicationInfo, &createInfo->applicationInfo, sizeof(XrApplicationInfo));
@@ -1066,8 +1161,7 @@ XR_PROC xrCreateInstance(
 	}
 }
 
-XR_PROC xrDestroyInstance(
-	XrInstance instance)
+XR_PROC xrDestroyInstance(XrInstance instance)
 {
 	LOG_METHOD(xrDestroyInstance);
 	CHECK_INSTANCE(instance);
@@ -1275,7 +1369,7 @@ XR_PROC xrPollEvent(
 			return XR_SUCCESS;
 		}
 
-		if (pSess->activeIsUserPresent != pSess->pendingIsUserPresent) {
+		if (xr.instance.userPresenceEnabled && pSess->activeIsUserPresent != pSess->pendingIsUserPresent) {
 
 			eventData->type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT;
 
@@ -1375,7 +1469,7 @@ XR_PROC xrGetSystemProperties(
 	LOG_METHOD(xrGetSystemProperties);
 	CHECK_INSTANCE(instance);
 
-	XrSwapConfig swapConfig; xrSwapConfig(systemId, &swapConfig);
+	XrViewConfigurationView viewConfig; xrGetViewConfigurationView(systemId, &viewConfig);
 
 	switch ((SystemId)systemId) {
 		case SYSTEM_ID_HANDHELD_AR:
@@ -1383,8 +1477,8 @@ XR_PROC xrGetSystemProperties(
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicDesktop", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-			properties->graphicsProperties.maxSwapchainImageWidth = swapConfig.width;
-			properties->graphicsProperties.maxSwapchainImageHeight = swapConfig.height;
+			properties->graphicsProperties.maxSwapchainImageWidth = viewConfig.maxImageRectWidth;
+			properties->graphicsProperties.maxSwapchainImageHeight = viewConfig.maxImageRectHeight;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
 			return XR_SUCCESS;
@@ -1393,8 +1487,8 @@ XR_PROC xrGetSystemProperties(
 			properties->vendorId = 0;
 			strncpy(properties->systemName, "MoxaicHMD", XR_MAX_SYSTEM_NAME_SIZE);
 			properties->graphicsProperties.maxLayerCount = XR_MIN_COMPOSITION_LAYERS_SUPPORTED;
-			properties->graphicsProperties.maxSwapchainImageWidth = swapConfig.width;
-			properties->graphicsProperties.maxSwapchainImageHeight = swapConfig.height;
+			properties->graphicsProperties.maxSwapchainImageWidth = viewConfig.maxImageRectWidth;
+			properties->graphicsProperties.maxSwapchainImageHeight = viewConfig.maxImageRectHeight;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
 			return XR_SUCCESS;
@@ -1465,7 +1559,7 @@ XR_PROC xrCreateSession(
 		return XR_ERROR_SYSTEM_INVALID;
 	}
 
-	printf("SystemId: %llu\n", createInfo->systemId);
+	LOG("SystemId: %llu\n", createInfo->systemId);
 	if (xr.instance.systemId != createInfo->systemId) {
 		LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
 		return XR_ERROR_SYSTEM_INVALID;
@@ -1476,21 +1570,16 @@ XR_PROC xrCreateSession(
 		return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
 	}
 
-	XrSessionIndex sessionIndex;
-	xrClaimSessionIndex(&sessionIndex);
-	printf("Claimed SessionIndex %d\n", sessionIndex);
+	XrSessionId sessionIndex; xrClaimSessionId(&sessionIndex);
+	LOG("Claimed SessionIndex %d\n", sessionIndex);
 
 	auto hSess = BLOCK_CLAIM(B.session, sessionIndex);
 	auto pSess = BLOCK_PTR(B.session, hSess);
 	*pSess = (Session){};
-
 	pSess->index = sessionIndex;
 
-	HANDLE compositorFenceHandle;
-	xrGetCompositorTimeline(sessionIndex, &compositorFenceHandle);
-
-	HANDLE sessionFenceHandle;
-	xrGetSessionTimeline(sessionIndex, &sessionFenceHandle);
+	HANDLE compositorFenceHandle; xrGetCompositorTimeline(sessionIndex, &compositorFenceHandle);
+	HANDLE sessionFenceHandle; xrGetSessionTimeline(sessionIndex, &sessionFenceHandle);
 
 	if (createInfo->next == NULL) {
 		LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
@@ -1608,7 +1697,7 @@ XR_PROC xrDestroySession(XrSession session)
 	bHnd hSession = BLOCK_HANDLE(B.session, pSession);
 	BLOCK_RELEASE(B.session, hSession);
 
-	xrReleaseSessionIndex(pSession->index);
+	xrReleaseSessionId(pSession->index);
 
 	LOG("%d sessions in use\n", BLOCK_COUNT(B.session));
 	return XR_SUCCESS;
@@ -1628,7 +1717,7 @@ XR_PROC xrEnumerateReferenceSpaces(
 		XR_REFERENCE_SPACE_TYPE_VIEW,
 		XR_REFERENCE_SPACE_TYPE_LOCAL,
 //		XR_REFERENCE_SPACE_TYPE_STAGE,
-//		XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR,
+		XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR,
 //		XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT,
 	};
 
@@ -1667,7 +1756,7 @@ XR_PROC xrCreateReferenceSpace(
 
 	auto pSess = (Session*)session;
 
-	space_handle hSpace = SpaceClaim(0);
+	space_h hSpace = SpaceClaim(0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
 
 	auto pSpace = SpacePtr(hSpace);
@@ -1775,13 +1864,13 @@ XR_PROC xrLocateSpace(
 					isActive = true;
 					break;
 				default:
-					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space type %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
+					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space interprocessMode %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
 					return XR_ERROR_VALIDATION_FAILURE;
 			}
 
 			break;
 		default:
-			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space type %s\n", string_XrStructureType(pSpace->type));
+			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space interprocessMode %s\n", string_XrStructureType(pSpace->type));
 			return XR_ERROR_VALIDATION_FAILURE;
 	}
 
@@ -1962,18 +2051,8 @@ XR_PROC xrEnumerateViewConfigurationViews(
 			return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
 	}
 
-	XrSwapConfig swapConfig; xrSwapConfig(systemId, &swapConfig);
-
-	for (u32 i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i) {
-		views[i] = (XrViewConfigurationView){
-			.recommendedImageRectWidth = swapConfig.width,
-			.maxImageRectWidth = swapConfig.width,
-			.recommendedImageRectHeight = swapConfig.height,
-			.maxImageRectHeight = swapConfig.height,
-			.recommendedSwapchainSampleCount = swapConfig.samples,
-			.maxSwapchainSampleCount = swapConfig.samples,
-		};
-	};
+	for (u32 i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i)
+		xrGetViewConfigurationView(systemId, &views[i]);
 
 	return XR_SUCCESS;
 }
@@ -2009,38 +2088,53 @@ constexpr i64 D3D11_DEPTH_SWAP_FORMATS[] = {
 };
 constexpr i64 D3D11_DEPTH_SWAP_FORMATS_TYPELESS[] = {
 	// unity supported
-	[DXGI_FORMAT_D16_UNORM] = DXGI_FORMAT_R16_TYPELESS,
+	[DXGI_FORMAT_D16_UNORM]            = DXGI_FORMAT_R16_TYPELESS,
 	[DXGI_FORMAT_D32_FLOAT_S8X24_UINT] = DXGI_FORMAT_R32G8X24_TYPELESS,
 };
+constexpr i64 DXGI_TO_VK_FORMAT[] = {
+	[DXGI_FORMAT_R8G8B8A8_UNORM]       = VK_FORMAT_R8G8B8A8_UNORM,
+	[DXGI_FORMAT_R8G8B8A8_UNORM_SRGB]  = VK_FORMAT_R8G8B8A8_SRGB,
+	[DXGI_FORMAT_D16_UNORM]            = VK_FORMAT_D16_UNORM,
+	[DXGI_FORMAT_D32_FLOAT_S8X24_UINT] = VK_FORMAT_D24_UNORM_S8_UINT,
+	[DXGI_FORMAT_R16_TYPELESS]         = VK_FORMAT_D16_UNORM,
+	[DXGI_FORMAT_R32G8X24_TYPELESS]    = VK_FORMAT_D24_UNORM_S8_UINT,
+};
 
-static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_FLAG_COUNT] = {
+static const i64* TO_VK_FORMATS[XR_GRAPHICS_API_COUNT] = {
+	[XR_GRAPHICS_API_OPENGL]  = DXGI_TO_VK_FORMAT,
+	[XR_GRAPHICS_API_VULKAN]  = DXGI_TO_VK_FORMAT,
+	[XR_GRAPHICS_API_D3D11_4] = DXGI_TO_VK_FORMAT,
+};
+
+static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_COUNT] = {
 	[XR_GRAPHICS_API_OPENGL] = {
-		[XR_SWAP_OUTPUT_FLAG_COLOR] = colorGlSwapFormats,
-		[XR_SWAP_OUTPUT_FLAG_DEPTH] = depthGlSwapFormats,
+		[XR_SWAP_OUTPUT_COLOR] = colorGlSwapFormats,
+		[XR_SWAP_OUTPUT_DEPTH] = depthGlSwapFormats,
 	},
 	[XR_GRAPHICS_API_VULKAN] = {
-		[XR_SWAP_OUTPUT_FLAG_COLOR] = colorVkSwapFormats,
-		[XR_SWAP_OUTPUT_FLAG_DEPTH] = depthVkSwapFormats,
+		[XR_SWAP_OUTPUT_COLOR] = colorVkSwapFormats,
+		[XR_SWAP_OUTPUT_DEPTH] = depthVkSwapFormats,
 	},
 	[XR_GRAPHICS_API_D3D11_4] = {
-		[XR_SWAP_OUTPUT_FLAG_COLOR] = colorDxSwapFormats,
-		[XR_SWAP_OUTPUT_FLAG_DEPTH] = D3D11_DEPTH_SWAP_FORMATS,
+		[XR_SWAP_OUTPUT_COLOR] = colorDxSwapFormats,
+		[XR_SWAP_OUTPUT_DEPTH] = D3D11_DEPTH_SWAP_FORMATS,
 	},
 };
-constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_FLAG_COUNT] = {
+constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_COUNT] = {
 	[XR_GRAPHICS_API_OPENGL] = {
-		[XR_SWAP_OUTPUT_FLAG_COLOR] = COUNT(colorGlSwapFormats),
-		[XR_SWAP_OUTPUT_FLAG_DEPTH] = COUNT(depthGlSwapFormats),
+		[XR_SWAP_OUTPUT_COLOR] = COUNT(colorGlSwapFormats),
+		[XR_SWAP_OUTPUT_DEPTH] = COUNT(depthGlSwapFormats),
 	},
 	[XR_GRAPHICS_API_VULKAN] = {
-		[XR_SWAP_OUTPUT_FLAG_COLOR] = COUNT(colorVkSwapFormats),
-		[XR_SWAP_OUTPUT_FLAG_DEPTH] = COUNT(depthVkSwapFormats),
+		[XR_SWAP_OUTPUT_COLOR] = COUNT(colorVkSwapFormats),
+		[XR_SWAP_OUTPUT_DEPTH] = COUNT(depthVkSwapFormats),
 	},
 	[XR_GRAPHICS_API_D3D11_4] = {
-		[XR_SWAP_OUTPUT_FLAG_COLOR] = COUNT(colorDxSwapFormats),
-		[XR_SWAP_OUTPUT_FLAG_DEPTH] = COUNT(D3D11_DEPTH_SWAP_FORMATS),
+		[XR_SWAP_OUTPUT_COLOR] = COUNT(colorDxSwapFormats),
+		[XR_SWAP_OUTPUT_DEPTH] = COUNT(D3D11_DEPTH_SWAP_FORMATS),
 	},
 };
+
 
 XR_PROC xrEnumerateSwapchainFormats(
 	XrSession session,
@@ -2064,15 +2158,18 @@ XR_PROC xrEnumerateSwapchainFormats(
 			return XR_ERROR_RUNTIME_FAILURE;
 	}
 
-	const i64* colorFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_COLOR];
-	const i64* depthFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_DEPTH];
-	u32 colorCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_COLOR];
-	u32 depthCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_FLAG_DEPTH];
+	const i64* colorFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_COLOR];
+	const i64* depthFormats = swapFormats[xr.instance.graphicsApi][XR_SWAP_OUTPUT_DEPTH];
+	u32 colorCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_COLOR];
+	u32 depthCount = swapFormatCounts[xr.instance.graphicsApi][XR_SWAP_OUTPUT_DEPTH];
 	*formatCountOutput = colorCount + depthCount;
+
 	if (formats == NULL)
 		return XR_SUCCESS;
+
 	if (formatCapacityInput < colorCount + depthCount)
 		return XR_ERROR_SIZE_INSUFFICIENT;
+
 	int index = 0;
 	for (u32 i = 0; i < colorCount; ++i) {
 		printf("Enumerating Color Format: %llu\n", colorFormats[i]);
@@ -2086,6 +2183,15 @@ XR_PROC xrEnumerateSwapchainFormats(
 	return XR_SUCCESS;
 }
 
+#define LOG_FLAGS(_flag, _bit)   \
+	if (_flags & _flag)             \
+		LOG("flag: " #_flag "\n");
+#define LOG_XrSwapchainCreateFlags(_)                   \
+	({                                                  \
+		XrFlags64 _flags = _;                           \
+		XR_LIST_BITS_XrSwapchainCreateFlags(LOG_FLAGS); \
+	})
+
 XR_PROC xrCreateSwapchain(
 	XrSession                    session,
 	const XrSwapchainCreateInfo* createInfo,
@@ -2093,7 +2199,13 @@ XR_PROC xrCreateSwapchain(
 {
 	LOG_METHOD(xrCreateSwapchain);
 
-	LOG("  format: %lld\n", createInfo->format);
+	bool isColor = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
+	bool isDepth = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	VkFormat vkFormat = TO_VK_FORMATS[xr.instance.graphicsApi][createInfo->format];
+	XrSwapOutput output = isColor ? XR_SWAP_OUTPUT_COLOR : isDepth ? XR_SWAP_OUTPUT_DEPTH : XR_SWAP_OUTPUT_UNKNOWN;
+
+	LOG("  output: %s\n", string_XrSwapOutput(output));
+	LOG("  vkFormat: %s\n", string_VkFormat(vkFormat));
 	LOG("  sampleCount: %u\n", createInfo->sampleCount);
 	LOG("  windowWidth: %u\n", createInfo->width);
 	LOG("  windowHeight: %u\n", createInfo->height);
@@ -2101,7 +2213,8 @@ XR_PROC xrCreateSwapchain(
 	LOG("  arraySize: %u\n", createInfo->arraySize);
 	LOG("  mipCount: %u\n", createInfo->mipCount);
 
-	// move up to log section
+	LOG_XrSwapchainCreateFlags(createInfo->createFlags);
+
 #define PRINT_CREATE_FLAGS(_flag, _bit)  \
 	if (createInfo->createFlags & _flag) \
 		printf("flag: " #_flag "\n");
@@ -2119,46 +2232,56 @@ XR_PROC xrCreateSwapchain(
 		return XR_ERROR_FEATURE_UNSUPPORTED;
 	}
 
+	if (output == XR_SWAP_OUTPUT_UNKNOWN) {
+		LOG_ERROR("XR_ERROR_VALIDATION_FAILURE Swap is neither color nor depth!\n");
+		return XR_ERROR_VALIDATION_FAILURE;
+	}
+
 	auto pSess = (Session*)session;
 	bHnd hSess = BLOCK_HANDLE(B.session, pSess);
 
-	XrSwapConfig swapConfig; xrSwapConfig(pSess->systemId, &swapConfig);
+//	XrSwapConfig swapConfig; xrSwapConfig(pSess->systemId, &swapConfig);
+//
+//	if (createInfo->width == swapConfig.width && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+//		pSess->swapType = XR_SWAP_TYPE_MONO_SINGLE;
+//		printf("Setting XR_SWAP_TYPE_MONO_SINGLE for session.\n");
+//	} else if (createInfo->width == swapConfig.width && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
+//		pSess->swapType = XR_SWAP_TYPE_STEREO_SINGLE;
+//		printf("Setting XR_SWAP_TYPE_STEREO_SINGLE for session.\n");
+//	} else if (createInfo->width * 2 == swapConfig.width) {
+//		pSess->swapType = XR_SWAP_TYPE_STEREO_DOUBLE_WIDE;
+//		swapConfig.width *= 2;
+//		printf("Setting XR_SWAP_TYPE_STEREO_DOUBLE_WIDE for session.\n");
+//	} else if (createInfo->arraySize > 1) {
+//		pSess->swapType = XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY;
+//		printf("Setting XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY for session.\n");
+//	}
+//
+//	if (createInfo->width != swapConfig.width || createInfo->height != swapConfig.height) {
+//		LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED Requested: %d %d Result: %d %d\n",
+//			createInfo->width, createInfo->height, swapConfig.width, swapConfig.height);
+//		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
+//	}
 
-	if (createInfo->width == swapConfig.width && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-		pSess->swapType = XR_SWAP_TYPE_MONO_SINGLE;
-		printf("Setting XR_SWAP_TYPE_MONO_SINGLE for session.\n");
-	} else if (createInfo->width == swapConfig.width && pSess->primaryViewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO) {
-		pSess->swapType = XR_SWAP_TYPE_STEREO_SINGLE;
-		printf("Setting XR_SWAP_TYPE_STEREO_SINGLE for session.\n");
-	} else if (createInfo->width * 2 == swapConfig.width) {
-		pSess->swapType = XR_SWAP_TYPE_STEREO_DOUBLE_WIDE;
-		swapConfig.width *= 2;
-		printf("Setting XR_SWAP_TYPE_STEREO_DOUBLE_WIDE for session.\n");
-	} else if (createInfo->arraySize > 1) {
-		pSess->swapType = XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY;
-		printf("Setting XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY for session.\n");
-	}
-
-	if (createInfo->width != swapConfig.width || createInfo->height != swapConfig.height) {
-		LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED %d %d\n", swapConfig.width, swapConfig.height);
-		return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
-	}
-
-	bHnd hSwap = BLOCK_CLAIM(B.swap, 0);
+	swap_h hSwap = BLOCK_CLAIM(B.swap, 0);
 	HANDLE_CHECK(hSwap, XR_ERROR_LIMIT_REACHED);
 	Swapchain* pSwap = BLOCK_PTR(B.swap, hSwap);
+	XrSwapchainId iNodeSwap = HANDLE_INDEX(hSwap);
 
 	pSwap->hSession = hSess;
-	pSwap->width = createInfo->width;
-	pSwap->height = createInfo->height;
-
-	bool isColor = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-	bool isDepth = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-	pSwap->output = isColor ? XR_SWAP_OUTPUT_FLAG_COLOR : XR_SWAP_OUTPUT_FLAG_DEPTH;
-
-	// This is making a big assumption that all swaps will be the same size... we should probably enable individual request
-	// unfortunately you can't know all swaps it'll want up front and you don't know it till it calls this
-	xrCreateSwapImages(pSess->index, createInfo, pSess->swapType);
+	pSwap->output = output;
+	pSwap->info = (XrSwapchainInfo){
+		.createFlags = createInfo->createFlags,
+		.usageFlags = createInfo->usageFlags,
+		.windowWidth = createInfo->width,
+		.windowHeight = createInfo->height,
+		.format = vkFormat,
+		.sampleCount = createInfo->sampleCount,
+		.faceCount = createInfo->faceCount,
+		.arraySize = createInfo->arraySize,
+		.mipCount = createInfo->mipCount,
+	};
+	xrCreateSwapchainImages(pSess->index, &pSwap->info, iNodeSwap);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -2168,13 +2291,13 @@ XR_PROC xrCreateSwapchain(
 				gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
 				gl.CreateTextures(GL_TEXTURE_2D, 1, &_texture);                                                           \
 				gl.TextureStorageMem2DEXT(_texture, 1, _format, _width, _height, _memObject, 0);
-			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				HANDLE colorHandle;
-				xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
-				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, colorHandle);
-				printf("Imported gl swaps texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
-			}
-			#undef DEFAULT_IMAGE_CREATE_INFO
+//			for (int i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
+//				HANDLE colorHandle;
+//				xrGetSwapchainImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
+//				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, colorHandle);
+//				printf("Imported gl swaps texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
+//			}
+//			#undef DEFAULT_IMAGE_CREATE_INFO
 			break;
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
@@ -2182,28 +2305,26 @@ XR_PROC xrCreateSwapchain(
 			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
 			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
 
-			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
-				switch (pSwap->output) {
-					case XR_SWAP_OUTPUT_FLAG_COLOR:
-						HANDLE colorHandle;
-						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
+			for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
+				switch (output) {
+					case XR_SWAP_OUTPUT_COLOR:
+						HANDLE colorHandle;	xrGetSwapchainImage(pSess->index, iNodeSwap, iImg, &colorHandle);
 						assert(colorHandle != NULL);
-						LOG("Importing d3d11 color swaps. Device: %p Handle: %p\n", (void*)device5, colorHandle);
-						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
-						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
+						LOG("Importing d3d11 color viewSwaps. Device: %p Handle: %p\n", (void*)device5, colorHandle);
+						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
+						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[iImg].d3d11.transferTexture));
 						// For color the local resource can directly be the transfer resource.
-						pSwap->texture[i].d3d11.localResource = pSwap->texture[i].d3d11.transferResource;
-						pSwap->texture[i].d3d11.localTexture = pSwap->texture[i].d3d11.transferTexture;
+						pSwap->texture[iImg].d3d11.localResource = pSwap->texture[iImg].d3d11.transferResource;
+						pSwap->texture[iImg].d3d11.localTexture = pSwap->texture[iImg].d3d11.transferTexture;
 						break;
-					case XR_SWAP_OUTPUT_FLAG_DEPTH:
-						HANDLE gbufferHandle;
-						xrClaimSwapImage(pSess->index, XR_SWAP_OUTPUT_FLAG_DEPTH, &gbufferHandle);
-						assert(gbufferHandle != NULL);
-						LOG("Importing d3d11 transferTexture swaps. Device: %p Handle: %p\n", (void*)device5, gbufferHandle);
-						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, gbufferHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.transferResource));
-						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[i].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[i].d3d11.transferTexture));
+					case XR_SWAP_OUTPUT_DEPTH:
+						HANDLE depthHandle; xrGetSwapchainImage(pSess->index, iNodeSwap, iImg, &depthHandle);
+						assert(depthHandle != NULL);
+						LOG("Importing d3d11 transferTexture viewSwaps. Device: %p Handle: %p\n", (void*)device5, depthHandle);
+						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, depthHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
+						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[iImg].d3d11.transferTexture));
 
-						LOG("Create d3d11 swaps depth. Device: %p\n", (void*)device5);
+						LOG("Create d3d11 viewSwaps depth. Device: %p\n", (void*)device5);
 						D3D11_TEXTURE2D_DESC desc = {
 							.Width = createInfo->width,
 							.Height = createInfo->height,
@@ -2217,9 +2338,12 @@ XR_PROC xrCreateSwapchain(
 							.CPUAccessFlags = 0,
 							.MiscFlags = 0,
 						};
-						DX_CHECK(ID3D11Device5_CreateTexture2D(device5, &desc, NULL, &pSwap->texture[i].d3d11.localTexture));
-						DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->texture[i].d3d11.localTexture, &IID_ID3D11Resource, (void**)&pSwap->texture[i].d3d11.localResource));
+						DX_CHECK(ID3D11Device5_CreateTexture2D(device5, &desc, NULL, &pSwap->texture[iImg].d3d11.localTexture));
+						DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->texture[iImg].d3d11.localTexture, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.localResource));
 						break;
+					default:
+						LOG_ERROR("XR_ERROR_VALIDATION_FAILURE Swap is neither color nor depth!\n");
+						return XR_ERROR_VALIDATION_FAILURE;
 				}
 			}
 
@@ -2250,7 +2374,7 @@ XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
 			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
 
-			for (int i = 0; i < XR_SWAP_COUNT; ++i) {
+			for (int i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
 				if (pSwap->texture[i].d3d11.localResource != NULL)
 					ID3D11Resource_Release(pSwap->texture[i].d3d11.localResource);
 				if (pSwap->texture[i].d3d11.localTexture != NULL)
@@ -2267,7 +2391,7 @@ XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 	bHnd hSwap = BLOCK_HANDLE(B.swap, pSwap);
 	BLOCK_RELEASE(B.swap, hSwap);
 
-	LOG("%d swaps in use\n", BLOCK_COUNT(B.swap));
+	LOG("%d viewSwaps in use\n", BLOCK_COUNT(B.swap));
 	return XR_SUCCESS;
 }
 
@@ -2279,12 +2403,12 @@ XR_PROC xrEnumerateSwapchainImages(
 {
 	LOG_METHOD_ONCE(xrEnumerateSwapchainImages);
 
-	*imageCountOutput = XR_SWAP_COUNT;
+	*imageCountOutput = XR_SWAPCHAIN_IMAGE_COUNT;
 
 	if (images == NULL)
 		return XR_SUCCESS;
 
-	if (imageCapacityInput != XR_SWAP_COUNT)
+	if (imageCapacityInput != XR_SWAPCHAIN_IMAGE_COUNT)
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
 	auto pSwap = (Swapchain*)swapchain;
@@ -2293,7 +2417,7 @@ XR_PROC xrEnumerateSwapchainImages(
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
 			LOG("Enumerating gl Swapchain Images\n");
 			auto pImage = (XrSwapchainImageOpenGLKHR*)images;
-			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
+			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
 				pImage[i].image = pSwap->texture[i].gl.texture;
 			}
 			break;
@@ -2301,13 +2425,13 @@ XR_PROC xrEnumerateSwapchainImages(
 		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
 			LOG("Enumerating d3d11 Swapchain Images\n");
 			auto pImage = (XrSwapchainImageD3D11KHR*)images;
-			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAP_COUNT; ++i) {
+			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
 				pImage[i].texture = pSwap->texture[i].d3d11.localTexture;
 			}
 			break;
 		}
 		default:
-			LOG_ERROR("Swap type not currently supported\n");
+			LOG_ERROR("Swap interprocessMode not currently supported\n");
 			return XR_ERROR_HANDLE_INVALID;
 	}
 
@@ -2325,9 +2449,9 @@ XR_PROC xrAcquireSwapchainImage(
 	auto pSwap = (Swapchain*)swapchain;
 	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
 
-	xrClaimSwapIndex(pSess->index, &pSwap->swapIndex);
+	xrClaimSwapIndex(pSess->index, &pSwap->acquiredSwapIndex);
 
-	*index = pSwap->swapIndex;
+	*index = pSwap->acquiredSwapIndex;
 
 	return XR_SUCCESS;
 }
@@ -2366,7 +2490,7 @@ XR_PROC xrReleaseSwapchainImage(
 	auto pSwap = (Swapchain*)swapchain;
 	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
 
-	xrReleaseSwapIndex(pSess->index, pSwap->swapIndex);
+	xrReleaseSwapIndex(pSess->index, pSwap->acquiredSwapIndex);
 
 	ID3D11DeviceContext4*   context4 = pSess->binding.d3d11.context4;
 
@@ -2492,7 +2616,11 @@ XR_PROC xrWaitFrame(
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
 
-	XrTimeWaitWin32(&pSess->frameBegan, pSess->frameWaited);
+	if (pSess->frameBegan != pSess->frameWaited) {
+		LOG_ERROR("XR_ERROR_VALIDATION_FAILURE frameBegan: %llu != frameWaited: %llu! Difference: %llu\n",
+			pSess->frameBegan, pSess->frameWaited, pSess->frameWaited - pSess->frameBegan);
+		return XR_ERROR_VALIDATION_FAILURE;
+	}
 
 	if (pSess->lastDisplayTime == 0) {
 		uint64_t initialTimelineValue;
@@ -2597,6 +2725,11 @@ XR_PROC xrBeginFrame(
 	return discardFrame ? XR_FRAME_DISCARDED : XR_SUCCESS;
 }
 
+//#define SWAP_P(_name, _value) Swapchain* _name = (Swapchain*)(_value) // should I do this?
+//					SWAP_P(pSwap, pView->subImage.swapchain);
+//#define var __auto_type // do this and go back to C17?
+//					var pSwap = (Swapchain*)pView->subImage.swapchain;
+
 XR_PROC xrEndFrame(
 	XrSession             session,
 	const XrFrameEndInfo* frameEndInfo)
@@ -2633,6 +2766,7 @@ XR_PROC xrEndFrame(
 		return XR_ERROR_TIME_INVALID;
 	}
 
+	/// Process Layers
 	for (u32 layer = 0; layer < frameEndInfo->layerCount; ++layer) {
 
 		if (frameEndInfo->layers[layer] == NULL) {
@@ -2644,50 +2778,73 @@ XR_PROC xrEndFrame(
 		auto context4 = pSess->binding.d3d11.context4;
 
 		switch (frameEndInfo->layers[layer]->type) {
+			///Projection Layer
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
 				auto pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
-				assert(pProjectionLayer->viewCount == 2);
+				assert(pProjectionLayer->viewCount == XR_MAX_VIEW_COUNT); // need to deal with all layers at some point
 
-				for (u32 view = 0; view < pProjectionLayer->viewCount; ++view) {
-					auto pView = &pProjectionLayer->views[view];
-					auto pSwap = (Swapchain*)pView->subImage.swapchain;
-					u8 swapIndex = pSwap->swapIndex;
-//					LOG("color subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) "\n",
-//						pView->subImage.swapchain,
-//						EXPAND_STRUCT(XrOffset2Di, pView->subImage.imageRect.offset),
-//						EXPAND_STRUCT(XrExtent2Di, pView->subImage.imageRect.extent));
+				for (u32 iView = 0; iView < pProjectionLayer->viewCount; ++iView) {
+					auto pView = &pProjectionLayer->views[iView];
+
+					/// Projection Layer View Color
+					{
+						auto   pColorSwap = (Swapchain*)pView->subImage.swapchain;
+						swap_h hColorSwap = BLOCK_HANDLE(B.swap, pColorSwap);
+						swap_i iColorSwap = HANDLE_INDEX(hColorSwap);
+						u8     iColorSwapImg = pColorSwap->acquiredSwapIndex;
+
+						xrSetColorSwap(pSess->index, iView, iColorSwap);
+
+						LOG_ONCE("Color subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) "\n",
+							pView->subImage.swapchain,
+							EXPAND_STRUCT(XrOffset2Di, pView->subImage.imageRect.offset),
+							EXPAND_STRUCT(XrExtent2Di, pView->subImage.imageRect.extent));
+					}
 
 					switch (pView->next != NULL ? *(XrStructureType*)pView->next : 0) {
+						/// Projection Layer View Depth
 						case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
-							auto pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
-							auto pDepthSwap = (Swapchain*)pDepthInfo->subImage.swapchain;
-							u8 depthSwapIndex = pDepthSwap->swapIndex;
-//							LOG("depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
-//								pDepthInfo->subImage.swapchain,
-//								EXPAND_STRUCT(XrOffset2Di, pDepthInfo->subImage.imageRect.offset),
-//								EXPAND_STRUCT(XrExtent2Di, pDepthInfo->subImage.imageRect.extent),
-//								pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
+							auto   pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
+							auto   pDepthSwap = (Swapchain*)pDepthInfo->subImage.swapchain;
+							swap_h hDepthSwap = BLOCK_HANDLE(B.swap, pDepthSwap);
+							swap_i iDepthSwap = HANDLE_INDEX(hDepthSwap);
+							u8     iDepthSwapImg = pDepthSwap->acquiredSwapIndex;
 
-							ID3D11DeviceContext4_CopyResource(
-								context4,
-								pDepthSwap->texture[swapIndex].d3d11.transferResource,
-								pDepthSwap->texture[swapIndex].d3d11.localResource);
+							ID3D11DeviceContext4_CopyResource(context4,
+								pDepthSwap->texture[iDepthSwapImg].d3d11.transferResource,
+								pDepthSwap->texture[iDepthSwapImg].d3d11.localResource);
+
 							xrSetDepthInfo(pSess->index, pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
+							xrSetDepthSwap(pSess->index, iView, iDepthSwap);
+
+							LOG_ONCE("Depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
+								pDepthInfo->subImage.swapchain,
+								EXPAND_STRUCT(XrOffset2Di, pDepthInfo->subImage.imageRect.offset),
+								EXPAND_STRUCT(XrExtent2Di, pDepthInfo->subImage.imageRect.extent),
+								pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
 
 							break;
 						}
+
 						default:
 							LOG_ERROR("Unknown XrCompositionLayerProjection.next %p\n", pView->next);
 							break;
 					}
-
 				}
 
 				break;
 			}
-			case XR_TYPE_COMPOSITION_LAYER_QUAD:
-				LOG("XR_TYPE_COMPOSITION_LAYER_QUAD");
+
+			case XR_TYPE_COMPOSITION_LAYER_ALPHA_BLEND_FB:
+				LOG_ERROR("XR_TYPE_COMPOSITION_LAYER_ALPHA_BLEND_FB not implemented.");
 				break;
+			case XR_TYPE_COMPOSITION_LAYER_CUBE_KHR:
+				LOG_ERROR("XR_TYPE_COMPOSITION_LAYER_CUBE_KHR not implemented.");
+				break;
+			case XR_TYPE_COMPOSITION_LAYER_QUAD:
+				LOG_ERROR("XR_TYPE_COMPOSITION_LAYER_QUAD not implemented.");
+				break;
+
 			default:
 				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
 		}
@@ -3026,8 +3183,7 @@ XR_PROC xrCreateActionSet(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrDestroyActionSet(
-	XrActionSet actionSet)
+XR_PROC xrDestroyActionSet(XrActionSet actionSet)
 {
 	LOG_METHOD(xrDestroyActionSet);
 	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyActionSet\n");
@@ -3103,8 +3259,7 @@ XR_PROC xrCreateAction(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrDestroyAction(
-	XrAction action)
+XR_PROC xrDestroyAction(XrAction action)
 {
 	LOG_METHOD(xrDestroyAction);
 	LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED xrDestroyAction\n");
@@ -4159,7 +4314,7 @@ XR_PROC xrGetInstanceProcAddr(
 
 #undef CHECK_PROC_ADDR
 
-	LOG_ERROR("xrGetInstanceProcAddr XR_ERROR_FUNCTION_UNSUPPORTED %s\n", name);
+//	LOG_ERROR("xrGetInstanceProcAddr XR_ERROR_FUNCTION_UNSUPPORTED %s\n", name);
 	return XR_ERROR_FUNCTION_UNSUPPORTED;
 }
 

@@ -49,7 +49,7 @@ enum PipeSetNodeProcessIndices {
 
 void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 {
-	auto nodeType = pNodeContext->type;
+	auto nodeType = pNodeContext->interprocessMode;
 	auto needsImport = nodeType != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
 //	MxcNodeShared*  pNodeShared = node.pShared->pNodeShared;
@@ -57,7 +57,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 //	MxcNodeImports* pImports = pNodeContext->pNodeImports;
 	MxcNodeImports* pImports = NULL;
 //	MxcSwap*        pSwap = pNodeContext->swaps;
-	MxcSwap*        pSwap;
+//	MxcSwap*        pSwap;
 
 	VkDevice        device = pNode->device;
 	VkCommandBuffer cmd = pNodeContext->thread.cmd;
@@ -99,13 +99,14 @@ void mxcTestNodeRun(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 
 	assert(__atomic_always_lock_free(sizeof(pNodeShared->timelineValue), &pNodeShared->timelineValue));
 
-	int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+//	int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+	int  swapCount = 0;
 	VkImageMemoryBarrier2 acquireBarriers[swapCount][2];
 	uint32_t              acquireBarrierCount = 0;
 	VkImageMemoryBarrier2 releaseBarriers[swapCount][2];
 	uint32_t              releaseBarrierCount = 0;
 	for (int i = 0; i < swapCount; ++i) {
-		switch (pNodeContext->type) {
+		switch (pNodeContext->interprocessMode) {
 			case MXC_NODE_INTERPROCESS_MODE_THREAD:
 				// Acquire not needed from thread.
 				releaseBarrierCount = 0;
@@ -543,10 +544,10 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 {
 //	auto pNodeShared = pNodeContext->pNodeShared;
 	MxcNodeShared* pNodeShared = NULL;
-	int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
+//	int  swapCount = XR_SWAP_TYPE_COUNTS[pNodeShared->swapType] * VK_SWAP_COUNT;
 
 	{	// Config
-		pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
+//		pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
 //		pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
 	}
 
@@ -562,7 +563,7 @@ static void mxcCreateTestNode(MxcNodeContext* pNodeContext, MxcTestNode* pNode)
 		};
 		vkCreateBasicFramebuffer(&framebufferCreateInfo, &pNode->framebuffer);
 
-		for (int i = 0; i < swapCount; ++i) {
+//		for (int i = 0; i < swapCount; ++i) {
 
 //			VkTextureCreateInfo colorCreateInfo = {
 //				.debugName = "ImportedColorFramebuffer",
@@ -598,7 +599,7 @@ VkDedicatedTextureCreateInfo normalCreateInfo = {
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT,
 			};
-			vkCreateDedicatedTexture(&normalCreateInfo, &pNode->normalFramebuffers[i]);
+//			vkCreateDedicatedTexture(&normalCreateInfo, &pNode->normalFramebuffers[i]);
 
 //			VkTextureCreateInfo depthCreateInfo = {
 //				.debugName = "ImportedDepthFramebuffer",
@@ -659,7 +660,7 @@ VkDedicatedTextureCreateInfo normalCreateInfo = {
 		vkUpdateObjectSet(&pNode->sphereTransform, &pNode->sphereObjectState, pNode->pSphereObjectSetMapped);
 
 		vkCreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);
-	}
+//	}
 
 	{  // Copy needed state
 		// context is available to all now so don't need to do this
@@ -674,7 +675,7 @@ void* mxcTestNodeThread(MxcNodeContext* pNodeContext)
 {
 //	MxcNodeShared* pNodeShared = pNodeContext->pNodeShared;
 	MxcNodeShared* pNodeShared = NULL;
-	pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
+//	pNodeShared->swapType = XR_SWAP_TYPE_MONO_SINGLE;
 //	pNodeShared->swapUsage = XR_SWAP_USAGE_COLOR_AND_DEPTH;
 
 	MxcTestNode testNode;

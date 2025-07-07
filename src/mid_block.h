@@ -15,6 +15,17 @@ typedef u32 block_key;
 typedef block_handle bHnd;
 typedef block_key    bKey;
 
+typedef block_handle block_h; // lets go to this
+
+// it seems you cannot pack 4 and 12 bits
+//typedef unsigned _BitInt(4) u4;
+//typedef unsigned _BitInt(12) u12;
+//typedef struct PACKED block_handle2 {
+//	u4 generation : 4;
+//	u12 handle : 12;
+//} block_handle2;
+
+
 #define HANDLE_INDEX_BIT_COUNT 12
 #define HANDLE_INDEX_MASK      0x0FFF
 #define HANDLE_INDEX_MAX       ((1u << HANDLE_INDEX_BIT_COUNT) - 1)
@@ -57,8 +68,9 @@ typedef block_key    bKey;
 		u8        generations[n]; \
 	}
 
-static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
+static block_handle BlockClaim(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
 {
+
 	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
 	if (i == -1) return HANDLE_DEFAULT;
 	BITSET(pOccupiedSet, i);
@@ -66,7 +78,7 @@ static block_handle ClaimBlock(int occupiedCount, bitset_t* pOccupiedSet, block_
 	pGenerations[i] = pGenerations[i] == HANDLE_GENERATION_MAX ? 1 : (pGenerations[i] + 1) & 0xF;
 	return HANDLE_GENERATION_SET(i, pGenerations[i]);
 }
-static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* pGenerations, block_key hash)
+static block_handle BlockFindByHash(int hashCount, block_key* pHashes, uint8_t* pGenerations, block_key hash)
 {
 	for (int i = 0; i < hashCount; ++i) {
 		if (pHashes[i] == hash)
@@ -75,7 +87,7 @@ static block_handle FindBlockByHash(int hashCount, block_key* pHashes, uint8_t* 
 	return HANDLE_DEFAULT;
 }
 
-static block_handle CountOccupiedBlock(int occupiedCount, bitset_t* pOccupiedSet)
+static block_handle BlockCountOccupied(int occupiedCount, bitset_t* pOccupiedSet)
 {
 	return BitCountOnes(occupiedCount, pOccupiedSet);
 }
@@ -84,40 +96,40 @@ static block_handle CountOccupiedBlock(int occupiedCount, bitset_t* pOccupiedSet
 #define IS_TYPE(_var, _type) _Generic((_var), _type: 1, default: 0)
 #define SAME_TYPE(_a, _b) _Generic((typeof(_a)){}, typeof(_b): 1, default: 0)
 
-#define ASSERT(...) assert(__VA_ARGS__)
+#define ASSERT(_assert, _message) assert(_assert && _message)
 #define STATIC_ASSERT_HAS_FIELD(_, _field) static_assert(HAS_FIELD(_, _field), #_ " does not have field " #_field)
 #define STATIC_ASSERT_TYPE(_var, _type) static_assert(IS_TYPE(_var, _type), #_var " is not typeof " #_type)
-#define ASSERT_HANDLE_RANGE(_, _handle, _message) ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks) && _message);
+#define ASSERT_HANDLE_RANGE(_, _handle, _message) ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks), _message);
 
 // someway these should take ptrs... or should this be static block? STATIC_BLOCK_CLAIM ?
 #define BLOCK_CLAIM(_, _key)                                                                               \
 	({                                                                                                     \
-		int _handle = ClaimBlock(sizeof(_.occupied), (bitset_t*)&_.occupied, _.keys, _.generations, _key); \
-		ASSERT(_handle >= 0 && #_ ": Claiming handle. Out of capacity.");                                  \
+		int _handle = BlockClaim(sizeof(_.occupied), (bitset_t*)&_.occupied, _.keys, _.generations, _key); \
+		ASSERT(_handle >= 0, #_ ": Claiming handle. Out of capacity.");                                    \
 		(block_handle) _handle;                                                                            \
 	})
-#define BLOCK_RELEASE(_, _handle)                                                                                                      \
-	({                                                                                                                                 \
-		STATIC_ASSERT_TYPE(_handle, block_handle);                                                                                     \
-		ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks) && #_ ": Releasing block handle. Out of range."); \
-		ASSERT(BITTEST(_.occupied, HANDLE_INDEX(_handle)) && #_ ": Releasing block handle Should be occupied.");                       \
-		BITCLEAR(_.occupied, (int)HANDLE_INDEX(_handle));                                                                              \
-		&_.blocks[HANDLE_INDEX(_handle)];                                                                                              \
+#define BLOCK_RELEASE(_, _handle)                                                                                                    \
+	({                                                                                                                               \
+		STATIC_ASSERT_TYPE(_handle, block_handle);                                                                                   \
+		ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks), #_ ": Releasing block handle. Out of range."); \
+		ASSERT(BITTEST(_.occupied, HANDLE_INDEX(_handle)), #_ ": Releasing block handle Should be occupied.");                       \
+		BITCLEAR(_.occupied, (int)HANDLE_INDEX(_handle));                                                                            \
+		&_.blocks[HANDLE_INDEX(_handle)];                                                                                            \
 	})
 #define BLOCK_FIND(_, _hash)                                           \
 	({                                                                 \
-		ASSERT(_hash != 0);                                            \
-		FindBlockByHash(sizeof(_.keys), _.keys, _.generations, _hash); \
+		ASSERT(_hash != 0, "Trying to search for 0 hash!");            \
+		BlockFindByHash(sizeof(_.keys), _.keys, _.generations, _hash); \
 	})
-#define BLOCK_HANDLE(_, _p)                                                                                      \
-	({                                                                                                           \
-		ASSERT(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks) && #_ ": Getting block handle. Out of range."); \
-		(block_handle)(HANDLE_GENERATION_SET((_p - _.blocks), _.generations[(_p - _.blocks)]));                  \
+#define BLOCK_HANDLE(_, _p)                                                                                    \
+	({                                                                                                         \
+		ASSERT(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks), #_ ": Getting block handle. Out of range."); \
+		(block_handle)(HANDLE_GENERATION_SET((_p - _.blocks), _.generations[(_p - _.blocks)]));                \
 	})
-#define BLOCK_KEY(_, _p)                                                                                      \
-	({                                                                                                        \
-		ASSERT(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks) && #_ ": Getting block key. Out of range."); \
-		(block_key)(_.keys[_p - _.blocks]);                                                                   \
+#define BLOCK_KEY(_, _p)                                                                                    \
+	({                                                                                                      \
+		ASSERT(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks), #_ ": Getting block key. Out of range."); \
+		(block_key)(_.keys[_p - _.blocks]);                                                                 \
 	})
 #define BLOCK_PTR(_, _handle)                                                     \
 	({                                                                            \
