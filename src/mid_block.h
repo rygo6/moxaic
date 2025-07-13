@@ -87,17 +87,12 @@ static block_handle BlockFindByHash(int hashCount, block_key* pHashes, uint8_t* 
 	return HANDLE_DEFAULT;
 }
 
-static block_handle BlockCountOccupied(int occupiedCount, bitset_t* pOccupiedSet)
-{
+static block_handle BlockCountOccupied(int occupiedCount, bitset_t* pOccupiedSet) {
 	return BitCountOnes(occupiedCount, pOccupiedSet);
 }
 
-#define HAS_FIELD(_, _field) (offsetof(_, _field) >= 0)
 #define IS_TYPE(_var, _type) _Generic((_var), _type: 1, default: 0)
-#define SAME_TYPE(_a, _b) _Generic((typeof(_a)){}, typeof(_b): 1, default: 0)
-
 #define ASSERT(_assert, _message) assert(_assert && _message)
-#define STATIC_ASSERT_HAS_FIELD(_, _field) static_assert(HAS_FIELD(_, _field), #_ " does not have field " #_field)
 #define STATIC_ASSERT_TYPE(_var, _type) static_assert(IS_TYPE(_var, _type), #_var " is not typeof " #_type)
 #define ASSERT_HANDLE_RANGE(_, _handle, _message) ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks), _message);
 

@@ -519,7 +519,8 @@ int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle);
 
 static inline void mxcNodeInterprocessPoll()
 {
-	for (u32 iCstMode = 0; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
+	// We still want to poll MXC_COMPOSITOR_MODE_NONE so it can send events when not being composited.
+	for (u32 iCstMode = MXC_COMPOSITOR_MODE_NONE; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 		atomic_thread_fence(memory_order_acquire);
 		int activeNodeCt = node.active[iCstMode].ct;
 		if (activeNodeCt == 0)

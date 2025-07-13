@@ -220,16 +220,15 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 #endif
 }
 
-//static void mxcDestroySwap(MxcSwap* pSwap)
-//{
-//	pSwap->type = XR_SWAP_TYPE_UNKNOWN;
-//	vkDestroyDedicatedTexture(&pSwap->color);
-//	vkDestroyDedicatedTexture(&pSwap->depth);
-//	vkDestroyDedicatedTexture(&pSwap->gbuffer);
-//	vkDestroyDedicatedTexture(&pSwap->gbufferMip);
-//	vkDestroyExternalPlatformTexture(&pSwap->colorExternal);
-//	vkDestroyExternalPlatformTexture(&pSwap->depthExternal);
-//}
+static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
+{
+	pSwap->state = XR_SWAP_STATE_UNITIALIZED;
+	pSwap->info = (XrSwapchainInfo){};
+	for (int i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
+		vkDestroyDedicatedTexture(&pSwap->externalTexture[i].texture);
+		vkDestroyExternalPlatformTexture(&pSwap->externalTexture[i].platform);
+	}
+}
 
 /////////////////////////
 //// Compositor Lifecycle
@@ -286,6 +285,13 @@ NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 	return hNode;
 }
 
+void ReleaseNodeHandle(NodeHandle hNode)
+{
+	// TODO this needs to use block
+	int priorCount = atomic_fetch_sub(&node.ct, 1);
+	LOG("Releasing Node Handle %d. Prior Count %d.\n", hNode, priorCount);
+}
+
 void SetNodeActive(NodeHandle hNode, MxcCompositorMode mode)
 {
 #if defined(MOXAIC_COMPOSITOR)
@@ -298,6 +304,7 @@ void SetNodeActive(NodeHandle hNode, MxcCompositorMode mode)
 #endif
 }
 
+// Release Node from active lists while still retaining node handle.
 void ReleaseNodeActive(NodeHandle hNode)
 {
 #if defined(MOXAIC_COMPOSITOR)
@@ -317,9 +324,6 @@ void ReleaseNodeActive(NodeHandle hNode)
 		}
 		pActiveNode->ct--;
 	}
-
-	int newCount = atomic_fetch_sub(&node.ct, 1) - 1;
-	LOG("Releasing Node %d. Count %d.\n", hNode, newCount);
 #endif
 }
 
@@ -383,14 +387,20 @@ static int CleanupNode(NodeHandle hNode)
 			};
 			vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
-//			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-//				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
-//					continue;
+			// We are fully destroying swaps and gbuffer but may want to retain them someday
+			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
+				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
+					continue;
 
+				auto pSwap = BLOCK_RELEASE(node.cst.block.swap, pNodeCtxt->hSwaps[i]);
+				mxcDestroySwapTexture(pSwap);
+			}
+			for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
 				// We are fully clearing but at some point we want a mechanic to recycle and share node swaps
-//				auto pSwap = BLOCK_RELEASE(node.cst.block.swap[iSwapBlock], pNodeCtxt->hSwaps[i]);
-//				mxcDestroySwap(pSwap);
-//			}
+				vkDestroyDedicatedTexture(&pNodeCtxt->gbuffer[i].texture);
+				vkDestroyDedicatedTexture(&pNodeCtxt->gbuffer[i].mipTexture);
+			}
+
 			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
 			CLOSE_HANDLE(pNodeCtxt->exported.nodeTimelineHandle);
 			CHECK_WIN32(UnmapViewOfFile(pNodeCtxt->exported.pExportedMemory));
@@ -402,10 +412,11 @@ static int CleanupNode(NodeHandle hNode)
 			break;
 		case MXC_NODE_INTERPROCESS_MODE_IMPORTED:
 			// The process which imported the handle must close them.
-//			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-//				CLOSE_HANDLE(pImportedExternalMemory->imports.colorSwapHandles[i]);
-//				CLOSE_HANDLE(pImportedExternalMemory->imports.depthSwapHandles[i]);
-//			}
+			for (int iSwap = 0; iSwap < XR_SWAPCHAIN_CAPACITY; ++iSwap) {
+				for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
+					CLOSE_HANDLE(pImportedExternalMemory->imports.swapImageHandles[iSwap][iImg]);
+				}
+			}
 			CLOSE_HANDLE(pImportedExternalMemory->imports.swapsSyncedHandle);
 			CLOSE_HANDLE(pImportedExternalMemory->imports.nodeTimelineHandle);
 			CLOSE_HANDLE(pImportedExternalMemory->imports.compositorTimelineHandle);
@@ -525,20 +536,20 @@ static void InterprocessServerAcceptNodeConnection()
 
 	SOCKET clientSocket = accept(ipcServer.listenSocket, NULL, NULL);
 	WSA_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
-	printf("Accepted Connection.\n");
+	LOG("Accepted Connection.\n");
 
 	/// Receive Node Ack Message
 	{
 		char buffer[sizeof(nodeIPCAckMessage)] = {};
 		int  receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
 		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv nodeIPCAckMessage failed");
-		printf("Received node ack: %s Size: %d\n", buffer, receiveLength);
+		LOG("Received node ack: %s Size: %d\n", buffer, receiveLength);
 		CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
 	}
 
 	/// Send Server Ack message
 	{
-		printf("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
+		LOG("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
 		int sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
 		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send server ack failed");
 	}
@@ -547,7 +558,7 @@ static void InterprocessServerAcceptNodeConnection()
 	{
 		int receiveLength = recv(clientSocket, (char*)&nodeProcId, sizeof(DWORD), 0);
 		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node exported id failed");
-		printf("Received node exported id: %lu Size: %d\n", nodeProcId, receiveLength);
+		LOG("Received node exported id: %lu Size: %d\n", nodeProcId, receiveLength);
 		CHECK(nodeProcId == 0, "Invalid node exported id");
 	}
 
@@ -929,6 +940,7 @@ static void ipcFuncNodeClosed(NodeHandle hNode)
 	LOG("Closing %d\n", hNode);
 	ReleaseNodeActive(hNode);
 	CleanupNode(hNode);
+	ReleaseNodeHandle(hNode);
 }
 
 static void ipcFuncClaimSwap(NodeHandle hNode)
