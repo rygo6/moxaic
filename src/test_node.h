@@ -20,7 +20,7 @@ typedef struct MxcTestNode {
 	VkDevice device;
 
 	VkGlobalSetState*     pGlobalMapped;
-	VkSharedDescriptorSet globalSet;
+	VkSharedDescriptor    globalSet;
 
 	VkDescriptorSet checkerMaterialSet;
 	VkDescriptorSet sphereObjectSet;

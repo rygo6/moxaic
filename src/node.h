@@ -239,7 +239,7 @@ extern MxcCompositorContext compositorContext;
 ////
 
 // State uploaded to node descriptor set
-typedef struct MxcNodeCompositorSetState {
+typedef struct MxcCompositorNodeSetState {
 
 	mat4 model;
 
@@ -257,7 +257,7 @@ typedef struct MxcNodeCompositorSetState {
 	vec2 ulUV;
 	vec2 lrUV;
 
-} MxcNodeCompositorSetState;
+} MxcCompositorNodeSetState;
 
 typedef enum MxcCubeCorners: u8 {
 	CORNER_LUB,
@@ -299,7 +299,7 @@ typedef enum MxcNodeInteractionState{
 // Hot data used by the compositor for each node
 // should I call it Hot or Data?
 // Context = Cold. Data = Hot?
-typedef struct CACHE_ALIGN MxcCompositorNodeHot {
+typedef struct CACHE_ALIGN MxcCompositorNodeData {
 
 	MxcNodeInteractionState interactionState;
 	MxcCompositorMode       activeCompositorMode;
@@ -308,10 +308,8 @@ typedef struct CACHE_ALIGN MxcCompositorNodeHot {
 	u64  lastTimelineValue;
 
 	// This should go in one big shared buffer for all nodes
-	MxcNodeCompositorSetState  nodeSetState;
-	MxcNodeCompositorSetState* pSetMapped;
-	VkSharedBuffer             nodeSetBuffer;
-	VkDescriptorSet            nodeSet;
+	MxcCompositorNodeSetState nodeSetState;
+	VkSharedDescriptor        nodeDesc;
 
 	struct CACHE_ALIGN PACK {
 		VkImage               image;
@@ -335,7 +333,7 @@ typedef struct CACHE_ALIGN MxcCompositorNodeHot {
 	vec3 worldCorners[CORNER_COUNT];
 	vec2 uvCorners[CORNER_COUNT];
 
-} MxcCompositorNodeHot;
+} MxcCompositorNodeData;
 
 /////////////////
 //// Node Context
@@ -421,10 +419,10 @@ extern struct Node {
 	// this should be in a cst anon struct?!?
 	// node. equal node data then cst.node equal node data for cst?
 	struct {
-		MxcCompositorNodeHot data[MXC_NODE_CAPACITY];
+		MxcCompositorNodeData data[MXC_NODE_CAPACITY];
 
-		MxcNodeCompositorSetState  setState[MXC_NODE_CAPACITY];
-		MxcNodeCompositorSetState* pSetMapped;
+		MxcCompositorNodeSetState  setState[MXC_NODE_CAPACITY];
+		MxcCompositorNodeSetState* pSetMapped;
 		VkSharedBuffer             setBuffer;
 		VkDescriptorSet            set;
 
@@ -492,8 +490,8 @@ void       ReleaseNodeActive(NodeHandle hNode);
 ///////////////////////
 //// Process Connection
 ////
-void mxcInitializeInterprocessServer();
-void mxcShutdownInterprocessServer();
+void mxcServerInitializeInterprocess();
+void mxcServerShutdownInterprocess();
 void mxcConnectInterprocessNode(bool createTestNode);
 void mxcShutdownInterprocessNode();
 
@@ -507,7 +505,7 @@ typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
 	MXC_INTERPROCESS_TARGET_COUNT,
 } MxcIpcFunc;
-static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buf size.");
+static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
 // move to midQueue

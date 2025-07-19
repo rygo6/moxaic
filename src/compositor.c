@@ -89,7 +89,7 @@ static void CreateNodeSetLayout(MxcCompositorMode* pModes, VkDescriptorSetLayout
 		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
 		.pBufferInfo = &(VkDescriptorBufferInfo){            \
 			.buffer = _buf,                                  \
-			.range = sizeof(MxcNodeCompositorSetState),      \
+			.range = sizeof(MxcCompositorNodeSetState),      \
 		},                                                   \
 	}
 #define BIND_WRITE_NODE_COLOR(_set, _sampler, _view, _layout)        \
@@ -661,7 +661,7 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(pCst, gbufProcessBlitUpPipe);
 	EXTRACT_FIELD(pCst, gbufProcessPipeLayout);
 	EXTRACT_FIELD(pCst, pProcessStateMapped);
-	auto processSetBuf = pCst->processSetBuffer.buf;
+	auto processSetBuf = pCst->processSetBuffer.buffer;
 
 	EXTRACT_FIELD(pCst, timeQryPool);
 
@@ -671,7 +671,7 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	auto quadMeshBuf = pCst->quadMesh.buf;
 
 	auto quadPatchOffsets = pCst->quadPatchMesh.offsets;
-	auto quadPatchBuf = pCst->quadPatchMesh.sharedBuffer.buf;
+	auto quadPatchBuf = pCst->quadPatchMesh.sharedBuffer.buffer;
 
 	auto pLineBuf = &pCst->lineBuf;
 
@@ -685,7 +685,7 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	auto compFrameAtomicImg = pCst->compFrameAtomicTex.image;
 	auto compFrameColorImg = pCst->compFrameColorTex.image;
 
-	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuf.mem);
+	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuf.memory);
 
 	u32 mainGraphicsIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 
@@ -782,6 +782,7 @@ CompositeLoop:
 				pNodeCstData->nodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.pos, pNodeShrd->rootPose.rot);
 			}
 
+			LOG("%llu   %llu   %llu\n", pNodeShrd->timelineValue, pNodeCstData->lastTimelineValue, pNodeShrd->timelineValue - pNodeCstData->lastTimelineValue);
 			u64 nodeTimelineVal = pNodeShrd->timelineValue;
 			if (nodeTimelineVal <= pNodeCstData->lastTimelineValue)
 				continue;
@@ -856,8 +857,8 @@ CompositeLoop:
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
 
 				CMD_WRITE_SINGLE_SETS(device,
-					BIND_WRITE_NODE_COLOR(pNodeCstData->nodeSet, vk.context.nearestSampler, pLeftColorSwap->view, finalLayout),
-					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeSet, vk.context.nearestSampler, pLeftGBuffer->view, finalLayout));
+					BIND_WRITE_NODE_COLOR(pNodeCstData->nodeDesc.set, vk.context.nearestSampler, pLeftColorSwap->view, finalLayout),
+					BIND_WRITE_NODE_GBUFFER(pNodeCstData->nodeDesc.set, vk.context.nearestSampler, pLeftGBuffer->view, finalLayout));
 			}
 
 			//// Calc new node uniform and shared data
@@ -865,7 +866,7 @@ CompositeLoop:
 				// Copy previously used global state from node to compositor data for the compositor to use in subsequent reprojections
 				memcpy(&pNodeCstData->nodeSetState.view, &pNodeShrd->globalSetState, sizeof(VkGlobalSetState));
 				memcpy(&pNodeCstData->nodeSetState.ulUV, &pNodeShrd->clip, sizeof(MxcClip));
-				memcpy(pNodeCstData->pSetMapped, &pNodeCstData->nodeSetState, sizeof(MxcNodeCompositorSetState));
+				memcpy(pNodeCstData->nodeDesc.pMapped, &pNodeCstData->nodeSetState, sizeof(MxcCompositorNodeSetState));
 
 				float radius = pNodeShrd->compositorRadius;
 				vec3  corners[CORNER_COUNT] = {
@@ -991,7 +992,7 @@ CompositeLoop:
 			auto pNodeCstData = &node.cst.data[hNode];
 			// TODO this should bne a descriptor array
 			vk.CmdBindDescriptorSets(
-				gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+				gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeDesc.set, 0, NULL);
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}
 	}
@@ -1011,7 +1012,7 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &node.cst.data[hNode];
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeDesc.set, 0, NULL);
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}
 	}
@@ -1029,7 +1030,7 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &node.cst.data[hNode];
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_NODE, 1, &pNodeCstData->nodeDesc.set, 0, NULL);
 			vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 		}
 	}
@@ -1072,7 +1073,7 @@ CompositeLoop:
 
 				memcpy(pLineBuf->pMapped, &pNodeCstData->worldSegments, sizeof(vec3) * MXC_CUBE_SEGMENT_COUNT);
 
-				vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buf}, (VkDeviceSize[]){0});
+				vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buffer}, (VkDeviceSize[]){0});
 				vkCmdDraw(gfxCmd, MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
 			}
 		}
@@ -1093,7 +1094,7 @@ CompositeLoop:
 		for (int iNode = 0; iNode < pActiveNodes->ct; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
 			auto pNodeCstData = &node.cst.data[hNode];
-			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeSet, 0, NULL);
+			vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeCompPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE, 1, &pNodeCstData->nodeDesc.set, 0, NULL);
 			vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 		}
 
@@ -1335,10 +1336,10 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 		// TODO this should be a descriptor array
 		VkRequestAllocationInfo requestInfo = {
 			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-			.size = sizeof(MxcNodeCompositorSetState),
+			.size = sizeof(MxcCompositorNodeSetState),
 			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 		};
-		vkCreateSharedBuffer(&requestInfo, &node.cst.data[i].nodeSetBuffer);
+		vkCreateSharedBuffer(&requestInfo, &node.cst.data[i].nodeDesc.buffer);
 
 		VkDescriptorSetAllocateInfo setCreateInfo = {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -1346,8 +1347,8 @@ void mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pC
 			.descriptorSetCount = 1,
 			.pSetLayouts = &pCst->nodeSetLayout,
 		};
-		vkAllocateDescriptorSets(vk.context.device, &setCreateInfo, &node.cst.data[i].nodeSet);
-		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)node.cst.data[i].nodeSet, "NodeSet");
+		vkAllocateDescriptorSets(vk.context.device, &setCreateInfo, &node.cst.data[i].nodeDesc.set);
+		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)node.cst.data[i].nodeDesc.set, "NodeSet");
 	}
 
 	/// Graphics Framebuffers
@@ -1452,7 +1453,7 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	pCst->lineBuf.pMapped = vkSharedBufferPtr(pCst->lineBuf.buffer);
 
 	vkBindSharedBuffer(&pCst->globalBuf);
-	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuf.buf));
+	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuf.buffer));
 
 	vkBindSharedBuffer(&pCst->processSetBuffer);
 	pCst->pProcessStateMapped = vkSharedBufferPtr(pCst->processSetBuffer);
@@ -1461,15 +1462,15 @@ void mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably
 		// should also share the same descriptor set with an array
-		vkBindSharedBuffer(&node.cst.data[i].nodeSetBuffer);
-		node.cst.data[i].pSetMapped = vkSharedBufferPtr(node.cst.data[i].nodeSetBuffer);
-		*node.cst.data[i].pSetMapped = (MxcNodeCompositorSetState){};
+		vkBindSharedBuffer(&node.cst.data[i].nodeDesc.buffer);
+		node.cst.data[i].nodeDesc.pMapped = vkSharedBufferPtr(node.cst.data[i].nodeDesc.buffer);
+		memset(node.cst.data[i].nodeDesc.pMapped, 0, sizeof(MxcCompositorNodeSetState));
 
 		// this needs to be descriptor array
 		VK_UPDATE_DESCRIPTOR_SETS(
-			BIND_WRITE_NODE_STATE(node.cst.data[i].nodeSet, node.cst.data[i].nodeSetBuffer.buf),
-			BIND_WRITE_NODE_COLOR(node.cst.data[i].nodeSet, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
-			BIND_WRITE_NODE_GBUFFER(node.cst.data[i].nodeSet, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL));
+			BIND_WRITE_NODE_STATE(node.cst.data[i].nodeDesc.set, node.cst.data[i].nodeDesc.buffer.buffer),
+			BIND_WRITE_NODE_COLOR(node.cst.data[i].nodeDesc.set, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
+			BIND_WRITE_NODE_GBUFFER(node.cst.data[i].nodeDesc.set, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL));
 	}
 }
 

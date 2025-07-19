@@ -114,7 +114,7 @@ int main(void)
 		printf("Moxaic Compositor\n");
 		isCompositor = true;
 		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
-		mxcInitializeInterprocessServer();
+		mxcServerInitializeInterprocess();
 
 //#define TEST_NODE
 #ifdef TEST_NODE
@@ -200,7 +200,7 @@ int main(void)
 	//  }
 
 #if defined(MOXAIC_COMPOSITOR)
-	mxcShutdownInterprocessServer();
+	mxcServerShutdownInterprocess();
 #elif defined(MOXAIC_NODE)
 	mxcShutdownInterprocessNode();
 #endif

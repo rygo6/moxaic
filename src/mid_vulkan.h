@@ -198,8 +198,8 @@ typedef struct VkSharedMemory {
 } VkSharedMemory;
 
 typedef struct VkSharedBuffer {
-	VkSharedMemory    mem;
-	VkBuffer          buf;
+	VkBuffer          buffer;
+	VkSharedMemory    memory;
 } VkSharedBuffer;
 
 //typedef struct VkTexture {
@@ -276,10 +276,11 @@ typedef struct VkmQueueFamily {
 	uint32_t      index;
 } VkmQueueFamily;
 
-typedef struct VkSharedDescriptorSet {
-	VkSharedBuffer    sharedBuffer;
-	VkDescriptorSet   set;
-} VkSharedDescriptorSet;
+typedef struct VkSharedDescriptor {
+	VkDescriptorSet set;
+	void*           pMapped;
+	VkSharedBuffer  buffer;
+} VkSharedDescriptor;
 
 //////////////////////////
 //// Vulkan Global Context
@@ -747,23 +748,23 @@ INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore 
 
 INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
 {
-	assert(shareMemory.state == VK_SHARED_MEMORY_STATE_BOUND && "Shared buf not bound!");
+	assert(shareMemory.state == VK_SHARED_MEMORY_STATE_BOUND && "Shared buffer not bound!");
 	return ((char*)pMappedMemory[shareMemory.type]) + shareMemory.offset;
 }
 INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
 {
-	return vkSharedMemoryPtr(shareBuffer.mem);
+	return vkSharedMemoryPtr(shareBuffer.memory);
 }
 INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 {
-	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_UNITIALIZED, "Shared buffer has not been requested!");
-	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_BOUND, "Shared buffer already bound!");
-	CHECK(pBuffer->mem.state == VK_SHARED_MEMORY_STATE_FREED, "Shared buffer has been freed!");
-	CHECK(pBuffer->mem.state != VK_SHARED_MEMORY_STATE_REQUESTED, "Shared buffer has been requested!");
-	CHECK(pBuffer->mem.size <= 0, "Shared buf has no size initialized!");
-	CHECK(pBuffer->mem.type <= 0 && pBuffer->mem.type >= VK_MAX_MEMORY_TYPES, "Shared buf has no mem initialized!");
-	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buf, deviceMemory[pBuffer->mem.type], pBuffer->mem.offset));
-	pBuffer->mem.state = VK_SHARED_MEMORY_STATE_BOUND;
+	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_UNITIALIZED, "Shared buffer has not been requested!");
+	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_BOUND, "Shared buffer already bound!");
+	CHECK(pBuffer->memory.state == VK_SHARED_MEMORY_STATE_FREED, "Shared buffer has been freed!");
+	CHECK(pBuffer->memory.state != VK_SHARED_MEMORY_STATE_REQUESTED, "Shared buffer has been requested!");
+	CHECK(pBuffer->memory.size <= 0, "Shared buffer has no size initialized!");
+	CHECK(pBuffer->memory.type <= 0 && pBuffer->memory.type >= VK_MAX_MEMORY_TYPES, "Shared buffer has no memory initialized!");
+	VK_CHECK(vkBindBufferMemory(vk.context.device, pBuffer->buffer, deviceMemory[pBuffer->memory.type], pBuffer->memory.offset));
+	pBuffer->memory.state = VK_SHARED_MEMORY_STATE_BOUND;
 }
 
 // probably move to math lib and take copy to pointer out
@@ -1881,7 +1882,7 @@ static uint32_t FindMemoryTypeIndex(
 	}
 	PrintMemoryPropertyFlags(memPropFlags);
 	LOG("\n");
-	PANIC("Failed to find mem with properties!");
+	PANIC("Failed to find memory with properties!");
 	return -1;
 }
 
@@ -2017,9 +2018,9 @@ void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffe
 		.size = pRequest->size,
 		.usage = pRequest->usage,
 	};
-	VK_CHECK(vkCreateBuffer(vk.context.device, &bufferCreateInfo, VK_ALLOC, &pBuffer->buf));
+	VK_CHECK(vkCreateBuffer(vk.context.device, &bufferCreateInfo, VK_ALLOC, &pBuffer->buffer));
 
-	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pBuffer->buf};
+	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pBuffer->buffer};
 	VkMemoryDedicatedRequirements   dedicatedReqs = { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS, .pNext = NULL };
 	VkMemoryRequirements2           memReqs2 = { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, .pNext = &dedicatedReqs};
 	vkGetBufferMemoryRequirements2(vk.context.device, &bufMemReqInfo2, &memReqs2);
@@ -2035,13 +2036,13 @@ void vkCreateSharedBuffer(const VkRequestAllocationInfo* pRequest, VkSharedBuffe
 
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 	vkGetPhysicalDeviceMemoryProperties2(vk.context.physicalDevice, &memProps2);
-	pBuffer->mem.type = FindMemoryTypeIndex(memProps2.memoryProperties.memoryTypeCount, memProps2.memoryProperties.memoryTypes, memReqs2.memoryRequirements.memoryTypeBits, pRequest->memoryPropertyFlags);
-	pBuffer->mem.offset = requestedMemoryAllocSize[pBuffer->mem.type] + (requestedMemoryAllocSize[pBuffer->mem.type] % memReqs2.memoryRequirements.alignment);
-	pBuffer->mem.size = memReqs2.memoryRequirements.size;
+	pBuffer->memory.type = FindMemoryTypeIndex(memProps2.memoryProperties.memoryTypeCount, memProps2.memoryProperties.memoryTypes, memReqs2.memoryRequirements.memoryTypeBits, pRequest->memoryPropertyFlags);
+	pBuffer->memory.offset = requestedMemoryAllocSize[pBuffer->memory.type] + (requestedMemoryAllocSize[pBuffer->memory.type] % memReqs2.memoryRequirements.alignment);
+	pBuffer->memory.size = memReqs2.memoryRequirements.size;
 
-	requestedMemoryAllocSize[pBuffer->mem.type] += memReqs2.memoryRequirements.size;
+	requestedMemoryAllocSize[pBuffer->memory.type] += memReqs2.memoryRequirements.size;
 
-	pBuffer->mem.state = VK_SHARED_MEMORY_STATE_REQUESTED;
+	pBuffer->memory.state = VK_SHARED_MEMORY_STATE_REQUESTED;
 
 #ifdef VK_DEBUG_MEMORY_ALLOC
 	printf("Request Shared MemoryType: %d Allocation: %zu ", pMemory->type, memReqs2.memoryRequirements.size);
@@ -2089,17 +2090,17 @@ void vkCreateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh
 void vkBindUpdateSharedMesh(const VkMeshCreateInfo* pCreateInfo, VkSharedMesh* pMesh)
 {
 	// Ensure size is same
-	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->sharedBuffer.buf};
+	VkBufferMemoryRequirementsInfo2 bufMemReqInfo2 = {.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2, .buffer = pMesh->sharedBuffer.buffer};
 	VkMemoryRequirements2                 memReqs2 = {.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
 	vkGetBufferMemoryRequirements2(vk.context.device, &bufMemReqInfo2, &memReqs2);
-	CHECK(pMesh->sharedBuffer.mem.size != memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
+	CHECK(pMesh->sharedBuffer.memory.size != memReqs2.memoryRequirements.size, "Trying to create mesh with a requested allocated of a different size.");
 
 	// bind populate
-	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->sharedBuffer.buf, deviceMemory[pMesh->sharedBuffer.mem.type], pMesh->sharedBuffer.mem.offset));
-	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, sizeof(uint16_t) * pMesh->offsets.indexCount, pMesh->sharedBuffer.buf);
-	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(vert) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buf);
+	VK_CHECK(vkBindBufferMemory(vk.context.device, pMesh->sharedBuffer.buffer, deviceMemory[pMesh->sharedBuffer.memory.type], pMesh->sharedBuffer.memory.offset));
+	vkUpdateBufferViaStaging(pCreateInfo->pIndices, pMesh->offsets.indexOffset, sizeof(uint16_t) * pMesh->offsets.indexCount, pMesh->sharedBuffer.buffer);
+	vkUpdateBufferViaStaging(pCreateInfo->pVertices, pMesh->offsets.vertexOffset, sizeof(vert) * pMesh->offsets.vertexCount, pMesh->sharedBuffer.buffer);
 
-	pMesh->sharedBuffer.mem.state = VK_SHARED_MEMORY_STATE_BOUND;
+	pMesh->sharedBuffer.memory.state = VK_SHARED_MEMORY_STATE_BOUND;
 }
 void vkCreateMesh(const VkMeshCreateInfo* pCreateInfo, VkMesh* pMesh)
 {
