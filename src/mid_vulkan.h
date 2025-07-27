@@ -587,9 +587,9 @@ enum {
 })
 
 #define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType)                   \
-	for (VkCommandBuffer gfxCmd = vkBeginImmediateCommandBuffer(familyType); \
-		 gfxCmd != VK_NULL_HANDLE;                                           \
-		 vkEndImmediateCommandBuffer(familyType, gfxCmd), gfxCmd = VK_NULL_HANDLE)
+	for (VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(familyType); \
+		 cmd != VK_NULL_HANDLE;                                           \
+		 vkEndImmediateCommandBuffer(familyType, cmd), cmd = VK_NULL_HANDLE)
 
 INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
 	vk.CmdPipelineBarrier2(cmd, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});

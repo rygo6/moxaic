@@ -1,3 +1,5 @@
+#if defined(MOXAIC_COMPOSITOR) // we need diferent src list for comp and node
+
 #pragma once
 
 #include "mid_vulkan.h"
@@ -26,3 +28,5 @@ typedef struct MxcTestNode {
 } MxcTestNode;
 
 void* mxcTestNodeThread(MxcNodeContext* pNode);
+
+#endif

@@ -2321,7 +2321,7 @@ XR_PROC xrCreateSwapchain(
 					case XR_SWAP_OUTPUT_DEPTH:
 						HANDLE depthHandle;
 						xrGetSwapchainImportedImage(pSess->index, iNodeSwap, iImg, &depthHandle);
-						ASSERT(depthHandle != NULL, depthHandle == NULL);
+						ASSERT(depthHandle != NULL, "depthHandle == NULL");
 						LOG("Importing d3d11 transferTexture viewSwaps. Device: %p Handle: %p\n", (void*)device5, depthHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, depthHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
 						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[iImg].d3d11.transferTexture));

@@ -1,3 +1,5 @@
+#if defined(MOXAIC_COMPOSITOR)
+
 #include <assert.h>
 #include <stdatomic.h>
 
@@ -465,3 +467,5 @@ void* mxcTestNodeThread(MxcNodeContext* pNodeCtx) // we should pass in hNode
 	//			ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> (1 - 1)}, 32), 1);
 	//			CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
 	//		}
+
+#endif

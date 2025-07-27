@@ -891,9 +891,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 	// Start node thread
 	{
+#if defined(MOXAIC_COMPOSITOR)
+		PANIC("We need a new test scene...");
 		atomic_thread_fence(memory_order_release);
 		CHECK(pthread_create(&pNodeContext->thread.id, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
 		printf("Node Request Process Import Success.\n");
+#endif
 		goto ExitSuccess;
 	}
 
