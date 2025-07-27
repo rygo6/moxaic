@@ -12,6 +12,7 @@
 #include "test_node.h"
 
 // Compositor state in Compositor Process
+// There is one compositor context in the Compositor Process and it can be accessed directly
 MxcCompositorContext compositorContext = {};
 
 // State imported into Node Process
@@ -49,6 +50,26 @@ struct Node node;
 	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
 	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
 	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
+
+// move here? need to think about combining openxr concepts and moxaic concepts
+//void mxcRequestSwapImage(NodeHandle hNode, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId)
+//{
+//	auto pNodeCtxt = &node.context[hNode];
+//	auto pNodeShrd = node.pShared[hNode];
+//
+//	assert(pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_UNITIALIZED && "Trying to create swapchain images with used swap index!");
+//
+//	pNodeShrd->swapStates[swapId] = XR_SWAP_STATE_REQUESTED;
+//	pNodeShrd->swapInfos[swapId] = *pSwapInfo;
+//
+//	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
+//	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
+//
+//	if (pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_ERROR) {
+//		LOG_ERROR("OpenXR failed to acquire swap!");
+//		pNodeShrd->swapStates[swapId] = XR_SWAP_STATE_UNITIALIZED;
+//	}
+//}
 
 // this couild go in mid vk
 static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTexture* pSwapTexture)
@@ -143,7 +164,7 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 {
 // I need to get compositor specific and node specific code into different files
 #if defined(MOXAIC_COMPOSITOR)
-	auto pNodeCtxt = &node.ctxt[hNode];
+	auto pNodeCtxt = &node.context[hNode];
 	auto pNodeCompData = &node.cst.data[hNode];
 	auto pNodeShrd = node.pShared[hNode];
 
@@ -269,26 +290,29 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 ////
 NodeHandle RequestLocalNodeHandle()
 {
-	// TODO this claim/release handle needs to be a pooling logic
-	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
+	// TODO this claim/release handle needs to be a pooling logic. Switch to use mid block
+	NodeHandle hNode = atomic_fetch_add(&node.count, 1);
+	// malloc to reflect this being shared memory malloc over IPC when not local thread.
 	node.pShared[hNode] = malloc(sizeof(MxcNodeShared));
 	memset(node.pShared[hNode], 0, sizeof(MxcNodeShared));
-	memset(&node.ctxt[hNode], 0, sizeof(MxcNodeContext));
+	memset(&node.context[hNode], 0, sizeof(MxcNodeContext));
+	node.context[hNode].hNode = hNode;
 	return hNode;
 }
 
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 {
-	NodeHandle hNode = atomic_fetch_add(&node.ct, 1);
+	NodeHandle hNode = atomic_fetch_add(&node.count, 1);
 	node.pShared[hNode] = pNodeShared;
-	memset(&node.ctxt[hNode], 0, sizeof(MxcNodeContext));
+	memset(&node.context[hNode], 0, sizeof(MxcNodeContext));
+	node.context[hNode].hNode = hNode;
 	return hNode;
 }
 
 void ReleaseNodeHandle(NodeHandle hNode)
 {
 	// TODO this needs to use block
-	int priorCount = atomic_fetch_sub(&node.ct, 1);
+	int priorCount = atomic_fetch_sub(&node.count, 1);
 	LOG("Releasing Node Handle %d. Prior Count %d.\n", hNode, priorCount);
 }
 
@@ -297,9 +321,9 @@ void SetNodeActive(NodeHandle hNode, MxcCompositorMode mode)
 #if defined(MOXAIC_COMPOSITOR)
 	auto pNodeCstData = &node.cst.data[hNode];
 	auto pActiveNode = &node.active[mode];
-	pActiveNode->handles[pActiveNode->ct] = hNode;
+	pActiveNode->handles[pActiveNode->count] = hNode;
 	pNodeCstData->activeCompositorMode = mode;
-	atomic_fetch_add(&pActiveNode->ct, 1);
+	atomic_fetch_add(&pActiveNode->count, 1);
 	LOG("Added node %d to %s\n", hNode, string_MxcCompositorMode(mode));
 #endif
 }
@@ -309,20 +333,20 @@ void ReleaseNodeActive(NodeHandle hNode)
 {
 #if defined(MOXAIC_COMPOSITOR)
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
-	assert(node.ctxt[hNode].interprocessMode != MXC_NODE_INTERPROCESS_MODE_NONE);
+	assert(node.context[hNode].interprocessMode != MXC_NODE_INTERPROCESS_MODE_NONE);
 	auto pNodeCstData = &node.cst.data[hNode];
 	auto pActiveNode = &node.active[pNodeCstData->activeCompositorMode];
 
 	ATOMIC_FENCE_BLOCK {
 		int i = 0;
-		for (; i < pActiveNode->ct; ++i) {
+		for (; i < pActiveNode->count; ++i) {
 			if (pActiveNode->handles[i] == hNode)
 				break;
 		}
-		for (; i < pActiveNode->ct - 1; ++i) {
+		for (; i < pActiveNode->count - 1; ++i) {
 			pActiveNode->handles[i] = pActiveNode->handles[i + 1];
 		}
-		pActiveNode->ct--;
+		pActiveNode->count--;
 	}
 #endif
 }
@@ -335,14 +359,14 @@ void ReleaseNodeActive(NodeHandle hNode)
 static int CleanupNode(NodeHandle hNode)
 {
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
-	auto pNodeCtxt = &node.ctxt[hNode];
+	auto pNodeCtxt = &node.context[hNode];
 	auto pNodeShared = node.pShared[hNode];
 
 //	int  iSwapBlock = MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[pNodeShared->swapType];
 
 	switch (pNodeCtxt->interprocessMode) {
 		case MXC_NODE_INTERPROCESS_MODE_THREAD:
-			vkFreeCommandBuffers(vk.context.device, pNodeCtxt->thread.pool, 1, &pNodeCtxt->thread.cmd);
+			vkFreeCommandBuffers(vk.context.device, pNodeCtxt->thread.pool, 1, &pNodeCtxt->thread.gfxCmd);
 			vkDestroyCommandPool(vk.context.device, pNodeCtxt->thread.pool, VK_ALLOC);
 			int result = pthread_join(pNodeCtxt->thread.id, NULL);
 			if (result != 0) {
@@ -432,60 +456,62 @@ static int CleanupNode(NodeHandle hNode)
 	return 0;
 }
 
-void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* pNodeHandle)
+void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHandle)
 {
 #if defined(MOXAIC_COMPOSITOR)
-	printf("Requesting Node Thread.\n");
-	auto handle = RequestLocalNodeHandle();
+	LOG("Requesting Node Thread.\n");
+	NodeHandle hNode = RequestLocalNodeHandle();
 
-	auto pNodeCtxt = &node.ctxt[handle];
-	*pNodeCtxt = (MxcNodeContext){};
-	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_THREAD;
-	pNodeCtxt-> swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-	pNodeCtxt->exported.compositorTimeline = compositorContext.timeline;
+	auto pNodeCtx = &node.context[hNode];
+	memset(pNodeCtx, 0, sizeof(MxcNodeContext));
+	pNodeCtx->interprocessMode = MXC_NODE_INTERPROCESS_MODE_THREAD;
+	pNodeCtx->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 
-	auto pNodeShrd = node.pShared[handle];
-	*pNodeShrd = (MxcNodeShared){};
-	pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
+	auto pNodeShr = node.pShared[hNode];
+	memset(pNodeShr, 0, sizeof(MxcNodeShared));
+	pNodeShr->rootPose.rot = QuatFromEuler(pNodeShr->rootPose.euler);
 
-	pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
-	pNodeShrd->camera.zNear = 0.1f;
-	pNodeShrd->camera.zFar = 100.0f;
+	pNodeShr->camera.yFovRad = RAD_FROM_DEG(45.0f);
+	pNodeShr->camera.zNear = 0.1f;
+	pNodeShr->camera.zFar = 100.0f;
 
-	pNodeShrd->compositorRadius = 0.5;
-	pNodeShrd->compositorCycleSkip = 8;
+	pNodeShr->compositorRadius = 0.5;
+	pNodeShr->compositorCycleSkip = 8;
 
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
 		.locality = VK_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
-	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->exported.nodeTimeline);
+	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtx->thread.nodeTimeline);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtxt->thread.pool));
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtx->thread.pool));
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = pNodeCtxt->thread.pool,
+		.commandPool = pNodeCtx->thread.pool,
 		.commandBufferCount = 1,
 	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->thread.cmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->thread.cmd, "TestNode");
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtx->thread.gfxCmd));
+	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtx->thread.gfxCmd, "TestNode");
 
-	MxcCompositorNodeData* pNodeCompositorData = &node.cst.data[handle];
-	// do not clear since set data is preallocated
-//	*pNodeCompositorData = (MxcNodeCompositorData){};
-//	pNodeCompositorData->rootPose.rotation = QuatFromEuler(pNodeCompositorData->rootPose.euler);
+	auto pCstNodeData = &node.cst.data[hNode];
+	pCstNodeData = &node.cst.data[hNode];
 
-	*pNodeHandle = handle;
+	// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retian any state in CstNodeData
+	VkSharedDescriptor nodeDesc = pCstNodeData->nodeDesc;
+	memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
+	pCstNodeData->nodeDesc = nodeDesc;
 
-	CHECK(pthread_create(&node.ctxt[handle].thread.id, NULL, (void* (*)(void*))runFunc, pNodeCtxt), "Node thread creation failed!");
+	*pNodeHandle = hNode;
 
-	printf("Request Node Thread Success. Handle: %d\n", handle);
+	CHECK(pthread_create(&node.context[hNode].thread.id, NULL, (void* (*)(void*))runFunc, pNodeCtx), "Node thread creation failed!");
+
+	LOG("Request Node Thread Success. Handle: %d\n", hNode);
 	// todo this needs error handling
 #endif
 }
@@ -530,7 +556,7 @@ static void ServerInterprocessAcceptNodeConnection()
 	MxcNodeContext*         pNodeCtx = NULL;
 	MxcNodeShared*          pNodeShrd = NULL;
 	MxcNodeImports*         pImports = NULL;
-	MxcCompositorNodeData*  pCstNodeData = NULL;
+	MxcNodeCompositeData*  pCstNodeData = NULL;
 	HANDLE                  hNodeProc = INVALID_HANDLE_VALUE;
 	HANDLE                  hExtNodeMem = INVALID_HANDLE_VALUE;
 	MxcExternalNodeMemory*  pExtNodeMem = NULL;
@@ -604,7 +630,7 @@ static void ServerInterprocessAcceptNodeConnection()
 
 		// Init Node Context
 		// TODO should more of this setup go in RequestExternalNodeHandle ?
-		pNodeCtx = &node.ctxt[hNode];
+		pNodeCtx = &node.context[hNode];
 		pNodeCtx->interprocessMode = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
 
 		pNodeCtx->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -623,7 +649,7 @@ static void ServerInterprocessAcceptNodeConnection()
 
 		pCstNodeData = &node.cst.data[hNode];
 		VkSharedDescriptor nodeDesc = pCstNodeData->nodeDesc;
-		memset(pCstNodeData, 0, sizeof(MxcCompositorNodeData));
+		memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
 		// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retian any state in CstNodeData
 		pCstNodeData->nodeDesc = nodeDesc;
 
@@ -822,7 +848,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	// Request and setup handle data
 	{
 		NodeHandle hNode = RequestExternalNodeHandle(pNodeShared);
-		pNodeContext = &node.ctxt[hNode];
+		pNodeContext = &node.context[hNode];
 		pNodeContext->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
 
 		pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
@@ -859,8 +885,8 @@ void mxcConnectInterprocessNode(bool createTestNode)
 			.commandPool = pNodeContext->thread.pool,
 			.commandBufferCount = 1,
 		};
-		VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->thread.cmd));
-		vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->thread.cmd, "TestNode");
+		VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeContext->thread.gfxCmd));
+		vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeContext->thread.gfxCmd, "TestNode");
 	}
 
 	// Start node thread
@@ -952,6 +978,7 @@ static void ipcFuncNodeClosed(NodeHandle hNode)
 	ReleaseNodeHandle(hNode);
 }
 
+/// Scan Node Swapchains for requests and create them if needed.
 static void ipcFuncClaimSwap(NodeHandle hNode)
 {
 #if defined(MOXAIC_COMPOSITOR)
@@ -959,15 +986,8 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 
 	auto pNodeShrd = node.pShared[hNode];
 	auto pNodeCstData = &node.cst.data[hNode];
-	auto pNodeCtxt = &node.ctxt[hNode];
-	auto pImports = &pNodeCtxt->exported.pExportedMemory->imports;
+	auto pNodeCtxt = &node.context[hNode];
 	bool needsExport = pNodeCtxt->interprocessMode != MXC_NODE_INTERPROCESS_MODE_THREAD;
-
-//	if (pNodeShrd->swapWidth != DEFAULT_WIDTH || pNodeShrd->swapHeight != DEFAULT_HEIGHT) {
-//		LOG_ERROR("Requested swapCtx size not available! %d %d\n", pNodeShrd->swapWidth, pNodeShrd->swapHeight);
-//		pNodeShrd->swapType = XR_SWAP_TYPE_ERROR;
-//		return;
-//	}
 
 	for (int iNodeSwap = 0; iNodeSwap < XR_SWAPCHAIN_CAPACITY; ++iNodeSwap) {
 		if (pNodeShrd->swapStates[iNodeSwap] != XR_SWAP_STATE_REQUESTED)
@@ -994,6 +1014,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 			else    assert(false && "SwapImage is neither color nor depth!");
 
 			if (needsExport) {
+				auto pImports = &pNodeCtxt->exported.pExportedMemory->imports;
 				WIN32_CHECK(DuplicateHandle(GetCurrentProcess(),
 						pSwap->externalTexture[iImg].platform.handle,
 						pNodeCtxt->exported.handle,

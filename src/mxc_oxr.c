@@ -30,7 +30,7 @@ void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pV
 }
 
 // maybe should be external handle?
-void xrClaimSessionId(XrSessionId* sessionId)
+void xrClaimSessionId(XrSessionId* pSessionId)
 {
 	LOG("Creating Moxaic OpenXR Session.\n");
 
@@ -38,13 +38,13 @@ void xrClaimSessionId(XrSessionId* sessionId)
 
 	// I believe both a session and a composition layer will end up constituting different Nodes
 	// and requesting a SessionId will simply mean the base compositionlayer index
-	NodeHandle      nodeHandle = RequestExternalNodeHandle(pNodeShrd);
-	MxcNodeContext* pNodeContext = &node.ctxt[nodeHandle];
+	NodeHandle      hNode = RequestExternalNodeHandle(pNodeShrd);
+	MxcNodeContext* pNodeContext = &node.context[hNode];
 	pNodeContext->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
 	pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
-	LOG("Importing node handle %d as OpenXR session\n", nodeHandle);
+	LOG("Importing node handle %d as OpenXR session\n", hNode);
 
-	*sessionId = nodeHandle; // openxr sessionId == moxaic node handle
+	*pSessionId = hNode; // openxr sessionId == moxaic node handle
 
 	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 }
@@ -82,10 +82,11 @@ void xrGetSessionTimeline(XrSessionId sessionId, HANDLE* pHandle)
 	*pHandle = pImportParam->nodeTimelineHandle;
 }
 
+/// Set the new session timeline value to signal to the compositor there is a new frame.
+// should this be finish frame? and merged with SetColorSwapId and SetDepthSwapid? Probably
 void xrSetSessionTimelineValue(XrSessionId sessionId, uint64_t timelineValue)
 {
 	MxcNodeShared*  pNodeShared = node.pShared[sessionId];
-	LOG("xrSetSessionTimelineValue %llu\n", pNodeShared->timelineValue);
 	atomic_store_explicit(&pNodeShared->timelineValue, timelineValue, memory_order_release);
 }
 
@@ -97,7 +98,7 @@ void xrGetCompositorTimeline(XrSessionId sessionId, HANDLE* pHandle)
 
 void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId)
 {
-	auto pNodeCtxt = &node.ctxt[sessionId];
+	auto pNodeCtxt = &node.context[sessionId];
 	auto pNodeShrd = node.pShared[sessionId];
 
 	assert(pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_UNITIALIZED && "Trying to create swapchain images with used swap index!");
@@ -114,29 +115,7 @@ void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwap
 	}
 }
 
-//void xrCreateSwapImage(XrSessionId sessionId, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType)
-//{
-//	auto pNodeCtxt = &node.ctxt[sessionId];
-//	auto pImports = &pImportedExternalMemory->imports;
-//	MxcNodeShared* pNodeShrd = node.pShared[sessionId];
-//
-//	if (pNodeShrd->swapType != swapType) {
-//		pImports->claimedColorSwapCount = 0;
-//		pImports->claimedDepthSwapCount = 0;
-//		pNodeShrd->swapType = swapType;
-//		pNodeShrd->swapWidth = createInfo->width;
-//		pNodeShrd->swapHeight = createInfo->height;
-//
-//		mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
-//
-//		WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
-//
-//		if (pNodeShrd->swapType == XR_SWAP_TYPE_ERROR)
-//			LOG_ERROR("OXR could not acquire swapCtx!");
-//	}
-//}
-
-void xrGetSwapchainImage(XrSessionId sessionId, XrSwapchainId swapIndex, int imageId, HANDLE* pHandle)
+void xrGetSwapchainImportedImage(XrSessionId sessionId, XrSwapchainId swapIndex, int imageId, HANDLE* pHandle)
 {
 	auto pNodeShrd = node.pShared[sessionId];
 	auto pImports = &pImportedExternalMemory->imports;
@@ -144,39 +123,13 @@ void xrGetSwapchainImage(XrSessionId sessionId, XrSwapchainId swapIndex, int ima
 	*pHandle = pImports->swapImageHandles[swapIndex][imageId];
 }
 
-//void xrClaimSwapImage(XrSessionId sessionId, XrSwapOutputFlags usage, HANDLE* pHandle)
-//{
-//	auto pImports = &pImportedExternalMemory->imports;
-//	switch (usage) {
-//		case XR_SWAP_OUTPUT_FLAG_COLOR:
-//			*pHandle = pImports->colorSwapHandles[pImports->claimedColorSwapCount++];
-//			break;
-//		case XR_SWAP_OUTPUT_FLAG_DEPTH:
-//			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
-//			break;
-//	}
-//}
-
-void xrReleaseSwapImage(XrSessionId sessionId, HANDLE pHandle)
-{
-	auto pImports = &pImportedExternalMemory->imports;
-//	switch (usage) {
-//		case XR_SWAP_OUTPUT_FLAG_COLOR:
-//			*pHandle = pImports->colorSwapHandles[pImports->claimedColorSwapCount++];
-//			break;
-//		case XR_SWAP_OUTPUT_FLAG_DEPTH:
-//			*pHandle = pImports->depthSwapHandles[pImports->claimedDepthSwapCount++];
-//			break;
-//	}
-}
-
-void xrSetColorSwap(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId)
+void xrSetColorSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId)
 {
 	MxcNodeShared* pNodeShrd = node.pShared[sessionId];
 	pNodeShrd->viewSwaps[viewId].colorId = swapId;
 }
 
-void xrSetDepthSwap(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId)
+void xrSetDepthSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId)
 {
 	MxcNodeShared* pNodeShrd = node.pShared[sessionId];
 	pNodeShrd->viewSwaps[viewId].depthId = swapId;
@@ -217,8 +170,8 @@ void xrReleaseSwapIndex(XrSessionId sessionId, uint8_t index)
 void xrSetInitialCompositorTimelineValue(XrSessionId sessionId, uint64_t timelineValue)
 {
 	MxcNodeShared* pNodeShared = node.pShared[sessionId];
-	timelineValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
-	pNodeShared->compositorBaseCycleValue = timelineValue + MXC_CYCLE_COUNT;
+	u64 timelineCycleStartValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
+	pNodeShared->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 //	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
 }
 

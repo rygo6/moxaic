@@ -127,6 +127,7 @@ int main(void)
 		isCompositor = false;
 		mxcConnectInterprocessNode(true);
 #endif
+
 	}
 
 	if (isCompositor) {  // Compositor Loop

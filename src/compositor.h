@@ -13,7 +13,7 @@ typedef struct VkSharedLineBuffer {
 } VkSharedLineBuffer;
 
 typedef struct MxcCompositorCreateInfo {
-	bool enabledCompositorModes[MXC_COMPOSITOR_MODE_COUNT];
+	bool pEnabledCompositorModes[MXC_COMPOSITOR_MODE_COUNT];
 } MxcCompositorCreateInfo;
 
 typedef struct MxcCompositor {
@@ -40,13 +40,12 @@ typedef struct MxcCompositor {
   MxcProcessState*      pProcessStateMapped;
   VkSharedBuffer        processSetBuffer;
 
-  VkSharedBuffer  globalBuf;
+  VkSharedBuffer  globalBuffer;
   VkDescriptorSet globalSet;
 
   VkMesh quadMesh;
   VkSharedMesh quadPatchMesh;
 
-  VkFramebuffer             gfxFrame;
   VkBasicFramebufferTexture gfxFrameTex;
 
   VkDedicatedTexture compFrameAtomicTex;
@@ -59,17 +58,4 @@ typedef struct MxcCompositor {
 
 } MxcCompositor;
 
-//INLINE void vkLineClear(VkSharedLineBuffer* pLine)
-//{
-//	pLine->count = 0;
-//}
-
-//INLINE void vkLineAdd(VkSharedLineBuffer* pLine, vec3 start, vec3 end)
-//{
-//	pLine->state[pLine->count++] = start;
-//	pLine->state[pLine->count++] = end;
-//}
-
-void  mxcCreateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst);
 void* mxcCompNodeThread(MxcCompositorContext* pCtx);
-void  mxcBindUpdateCompositor(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst);

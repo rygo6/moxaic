@@ -171,6 +171,7 @@ typedef enum XrSwapState : u8 {
 	XR_SWAP_STATE_UNITIALIZED,
 	XR_SWAP_STATE_REQUESTED,
 	XR_SWAP_STATE_CREATED,
+//	XR_SWAP_STATE_RETRIEVED, ???
 	XR_SWAP_STATE_ERROR,
 	XR_SWAP_STATE_COUNT,
 } XrSwapState;
@@ -249,16 +250,16 @@ void xrInitialize();
 void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pView);
 
 // this should be sessionId and swapId. Id should be the external identifier
-void xrClaimSessionId(XrSessionId* pSessionIndex);
+void xrClaimSessionId(XrSessionId* pSessionId);
 
 void xrReleaseSessionId(XrSessionId sessionIndex);
 void xrGetReferenceSpaceBounds(XrSessionId sessionIndex, XrExtent2Df* pBounds);
 void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId);
-void xrGetSwapchainImage(XrSessionId sessionId, XrSwapchainId swapIndex, int imageId, HANDLE* pHandle);
+void xrGetSwapchainImportedImage(XrSessionId sessionId, XrSwapchainId swapIndex, int imageId, HANDLE* pHandle);
 //void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType);
 //void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle);
-void xrSetColorSwap(XrSessionId sessionIndex, XrViewId viewId, XrSwapchainId swapIndex);
-void xrSetDepthSwap(XrSessionId sessionIndex, XrViewId viewId, XrSwapchainId swapIndex);
+void xrSetColorSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId);
+void xrSetDepthSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId);
 void xrSetDepthInfo(XrSessionId sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ);
 
 void xrGetSessionTimeline(XrSessionId sessionIndex, HANDLE* pHandle);
@@ -592,7 +593,7 @@ static struct {
 
 // Do I want to do this?
 static space_h SpaceClaim(int key) { return BLOCK_CLAIM(xr.block.space, key); }
-static Space* SpacePtr(space_h handle) { return BLOCK_PTR(xr.block.space, handle); }
+static Space*  SpacePtr(space_h handle) { return BLOCK_PTR(xr.block.space, handle); }
 
 #define B xr.block
 
@@ -2301,15 +2302,15 @@ XR_PROC xrCreateSwapchain(
 			break;
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
-			printf("Creating D3D11 Swap\n");
+			LOG("Creating D3D11 Swap\n");
 			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
 			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
-
 			for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 				switch (output) {
 					case XR_SWAP_OUTPUT_COLOR:
-						HANDLE colorHandle;	xrGetSwapchainImage(pSess->index, iNodeSwap, iImg, &colorHandle);
-						assert(colorHandle != NULL);
+						HANDLE colorHandle;
+						xrGetSwapchainImportedImage(pSess->index, iNodeSwap, iImg, &colorHandle);
+						ASSERT(colorHandle != NULL, "colorHandle == NULL");
 						LOG("Importing d3d11 color viewSwaps. Device: %p Handle: %p\n", (void*)device5, colorHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
 						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[iImg].d3d11.transferTexture));
@@ -2318,12 +2319,12 @@ XR_PROC xrCreateSwapchain(
 						pSwap->texture[iImg].d3d11.localTexture = pSwap->texture[iImg].d3d11.transferTexture;
 						break;
 					case XR_SWAP_OUTPUT_DEPTH:
-						HANDLE depthHandle; xrGetSwapchainImage(pSess->index, iNodeSwap, iImg, &depthHandle);
-						assert(depthHandle != NULL);
+						HANDLE depthHandle;
+						xrGetSwapchainImportedImage(pSess->index, iNodeSwap, iImg, &depthHandle);
+						ASSERT(depthHandle != NULL, depthHandle == NULL);
 						LOG("Importing d3d11 transferTexture viewSwaps. Device: %p Handle: %p\n", (void*)device5, depthHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, depthHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
 						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[iImg].d3d11.transferTexture));
-
 						LOG("Create d3d11 viewSwaps depth. Device: %p\n", (void*)device5);
 						D3D11_TEXTURE2D_DESC desc = {
 							.Width = createInfo->width,
@@ -2793,7 +2794,7 @@ XR_PROC xrEndFrame(
 						swap_i iColorSwap = HANDLE_INDEX(hColorSwap);
 						u8     iColorSwapImg = pColorSwap->acquiredSwapIndex;
 
-						xrSetColorSwap(pSess->index, iView, iColorSwap);
+						xrSetColorSwapId(pSess->index, iView, iColorSwap);
 
 						LOG_ONCE("Color subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) "\n",
 							pView->subImage.swapchain,
@@ -2815,7 +2816,7 @@ XR_PROC xrEndFrame(
 								pDepthSwap->texture[iDepthSwapImg].d3d11.localResource);
 
 							xrSetDepthInfo(pSess->index, pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
-							xrSetDepthSwap(pSess->index, iView, iDepthSwap);
+							xrSetDepthSwapId(pSess->index, iView, iDepthSwap);
 
 							LOG_ONCE("Depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
 								pDepthInfo->subImage.swapchain,

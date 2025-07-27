@@ -5,26 +5,14 @@
 #include "node.h"
 
 typedef struct MxcTestNode {
-	VkRenderPass     nodeRenderPass;
-	VkPipelineLayout pipeLayout;
-	VkPipeline       basicPipe;
-
-	VkFramebuffer framebuffer;
-	VkDedicatedTexture normalFramebuffers[VK_SWAP_COUNT * 2];
-
-	VkDescriptorSetLayout nodeProcessSetLayout;
-	VkPipelineLayout      nodeProcessPipeLayout;
-	VkPipeline            nodeProcessBlitMipAveragePipe;
-	VkPipeline            nodeProcessBlitDownPipe;
 
 	VkDevice device;
 
-	VkGlobalSetState*     pGlobalMapped;
-	VkSharedDescriptor    globalSet;
+	VkSharedBuffer  globalBuffer;
+	VkDescriptorSet globalSet;
 
 	VkDescriptorSet checkerMaterialSet;
 	VkDescriptorSet sphereObjectSet;
-
 	VkDedicatedTexture checkerTexture;
 
 	VkMesh  sphereMesh;
@@ -37,4 +25,4 @@ typedef struct MxcTestNode {
 
 } MxcTestNode;
 
-void* mxcTestNodeThread(MxcNodeContext* pNodeContext);
+void* mxcTestNodeThread(MxcNodeContext* pNode);

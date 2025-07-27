@@ -32,6 +32,13 @@ extern void Panic(const char* file, int line, const char* message);
 // CHECK = error log return 0
 // TRY = error log goto ExitError
 
+
+#define REQUIRE(_err, _message)              \
+	if (UNLIKELY(!(_err))) {                 \
+		LOG_ERROR("Error Code: %d\n", _err); \
+		PANIC(_message);                     \
+	}
+
 // Check if the condition is 0=Success or 1=Fail
 #define CHECK(_err, _message)                \
 	if (UNLIKELY(_err)) {                    \

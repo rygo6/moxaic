@@ -299,12 +299,12 @@ typedef enum MxcNodeInteractionState{
 // Hot data used by the compositor for each node
 // should I call it Hot or Data?
 // Context = Cold. Data = Hot?
-typedef struct CACHE_ALIGN MxcCompositorNodeData {
+typedef struct CACHE_ALIGN MxcNodeCompositeData {
 
 	MxcNodeInteractionState interactionState;
 	MxcCompositorMode       activeCompositorMode;
 
-	pose rootPose;
+//	pose rootPose;
 	u64  lastTimelineValue;
 
 	// This should go in one big shared buffer for all nodes
@@ -333,7 +333,7 @@ typedef struct CACHE_ALIGN MxcCompositorNodeData {
 	vec3 worldCorners[CORNER_COUNT];
 	vec2 uvCorners[CORNER_COUNT];
 
-} MxcCompositorNodeData;
+} MxcNodeCompositeData;
 
 /////////////////
 //// Node Context
@@ -341,8 +341,8 @@ typedef struct CACHE_ALIGN MxcCompositorNodeData {
 
 constexpr int MXC_NODE_SWAP_CAPACITY = VK_SWAP_COUNT * 2;
 
-// All data related to node
 typedef struct MxcNodeContext {
+	NodeHandle hNode; // I can get rid of this once I use mid block with BLOCK_HANDLE
 
 	MxcNodeInterprocessMode interprocessMode;
 
@@ -357,17 +357,19 @@ typedef struct MxcNodeContext {
 	union {
 		// MXC_NODE_INTERPROCESS_MODE_THREAD
 		struct {
-			pthread_t       id;
+			pthread_t id;
+
 			VkCommandPool   pool;
-			VkCommandBuffer cmd;
-			VkSemaphore     compositorTimeline;
-			VkSemaphore     nodeTimeline;
+			VkCommandBuffer gfxCmd;
+
+			VkSemaphore nodeTimeline;
 		} thread;
 
 		// MXC_NODE_INTERPROCESS_MODE_EXPORTED
 		struct {
-			DWORD                  id;
-			HANDLE                 handle;
+			DWORD  id;
+			HANDLE handle;
+
 			HANDLE                 exportedMemoryHandle;
 			MxcExternalNodeMemory* pExportedMemory;
 
@@ -380,7 +382,7 @@ typedef struct MxcNodeContext {
 
 		// MXC_NODE_INTERPROCESS_MODE_IMPORTED
 		struct {
-			// use this
+			// Use this. even if it points ot same shared memory. Although its not a tragedy if each has their own shared memory
 //			HANDLE                 importedExternalMemoryHandle;
 //			MxcExternalNodeMemory* pImportedExternalMemory;
 
@@ -399,7 +401,7 @@ typedef struct MxcNodeContext {
 #endif
 
 typedef struct MxcActiveNodes {
-	u16        ct;
+	u16        count;
 	NodeHandle handles[MXC_NODE_CAPACITY];
 } MxcActiveNodes;
 
@@ -410,8 +412,8 @@ extern MxcExternalNodeMemory* pImportedExternalMemory;
 extern struct Node {
 	MxcActiveNodes active[MXC_COMPOSITOR_MODE_COUNT];
 
-	u16 ct;
-	MxcNodeContext ctxt[MXC_NODE_CAPACITY];
+	u16            count;
+	MxcNodeContext context[MXC_NODE_CAPACITY];
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
 
 #if defined(MOXAIC_COMPOSITOR)
@@ -419,12 +421,13 @@ extern struct Node {
 	// this should be in a cst anon struct?!?
 	// node. equal node data then cst.node equal node data for cst?
 	struct {
-		MxcCompositorNodeData data[MXC_NODE_CAPACITY];
+		MxcNodeCompositeData data[MXC_NODE_CAPACITY];
 
-		MxcCompositorNodeSetState  setState[MXC_NODE_CAPACITY];
-		MxcCompositorNodeSetState* pSetMapped;
-		VkSharedBuffer             setBuffer;
-		VkDescriptorSet            set;
+		// TODO use this as one big array desc set
+//		MxcCompositorNodeSetState  setState[MXC_NODE_CAPACITY];
+//		MxcCompositorNodeSetState* pSetMapped;
+//		VkSharedBuffer             setBuffer;
+//		VkDescriptorSet            set;
 
 		struct {
 			BLOCK_DECL(MxcSwapTexture, MXC_NODE_CAPACITY) swap;
@@ -480,7 +483,7 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 }
 
 void mxcRequestAndRunCompositorNodeThread(VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*));
-void mxcRequestNodeThread(void* (*runFunc)(struct MxcNodeContext*), NodeHandle* pNodeHandle);
+void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHandle);
 
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
@@ -520,7 +523,7 @@ static inline void mxcNodeInterprocessPoll()
 	// We still want to poll MXC_COMPOSITOR_MODE_NONE so it can send events when not being composited.
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_NONE; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 		atomic_thread_fence(memory_order_acquire);
-		int activeNodeCt = node.active[iCstMode].ct;
+		int activeNodeCt = node.active[iCstMode].count;
 		if (activeNodeCt == 0)
 			continue;
 

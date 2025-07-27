@@ -76,7 +76,8 @@
 	PFN_FUNC(SignalSemaphore)         \
 	PFN_FUNC(QueueSubmit2)            \
 	PFN_FUNC(QueuePresentKHR)         \
-	PFN_FUNC(UpdateDescriptorSets)
+	PFN_FUNC(UpdateDescriptorSets)    \
+	PFN_FUNC(GetSemaphoreCounterValue)
 
 #endif
 
@@ -296,11 +297,14 @@ typedef struct VkContext {
 
 	VkDescriptorSetLayout materialPushSetLayout;
 
-	VkRenderPass basicPass;
+	VkRenderPass  basicPass;
+	// this should probably just be depthFramebuffer for simplicity
+	VkFramebuffer depthNormalFramebuffer;
 
 	VkPipelineLayout basicPipeLayout;
 	VkPipelineLayout linePipeLayout;
 
+	VkPipeline basicPipe;
 	VkPipeline linePipe;
 
 	VkSampler nearestSampler;
@@ -583,9 +587,9 @@ enum {
 })
 
 #define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType)                   \
-	for (VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(familyType); \
-		 cmd != VK_NULL_HANDLE;                                           \
-		 vkEndImmediateCommandBuffer(familyType, cmd), cmd = VK_NULL_HANDLE)
+	for (VkCommandBuffer gfxCmd = vkBeginImmediateCommandBuffer(familyType); \
+		 gfxCmd != VK_NULL_HANDLE;                                           \
+		 vkEndImmediateCommandBuffer(familyType, gfxCmd), gfxCmd = VK_NULL_HANDLE)
 
 INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
 	vk.CmdPipelineBarrier2(cmd, &(VkDependencyInfo){ VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
@@ -602,7 +606,7 @@ INLINE void CmdBlitImageFullScreen(VkCommandBuffer cmd, VkImage srcImage, VkImag
 	vk.CmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
 }
 
-INLINE void CmdBeginRenderPass(
+INLINE void CmdBeginDepthNormalRenderPass(
 	VkCommandBuffer   cmd,
 	VkRenderPass      renderPass,
 	VkFramebuffer     framebuffer,
@@ -901,29 +905,31 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo);
 
 void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShaderModule);
 
-typedef struct VkBasicFramebufferTextureCreateInfo {
-	const char* debugName; // use somehow?
+// these might be VkDepthNormal instead of Basic?
+typedef struct VkDepthNormalFramebufferTextureCreateInfo {
 	VkExtent3D extent;
 	VkLocality locality;
-} VkBasicFramebufferTextureCreateInfo;
-void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer);
+} VkDepthNormalFramebufferTextureCreateInfo;
+void vkCreateDepthNormalFramebufferTextures(const VkDepthNormalFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer);
 
-typedef struct VkBasicFramebufferCreateInfo {
-	const char* debugName;
-	VkRenderPass renderPass;
-} VkBasicFramebufferCreateInfo;
-void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer);
+typedef struct VkDepthNormalFramebufferCreateInfo {
+	u32 width;
+	u32 height;
+	u32 layerCount;
+} VkDepthNormalFramebufferCreateInfo;
+void vkCreateDepthNormalFramebuffer(const VkDepthNormalFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer);
 
 void vkCreateBasicGraphics();
 void vkCreateLineGraphics();
 
-void vkCreateBasicPipe(
+// GeometryPipe and get rid of Basic?
+void vkCreateTrianglePipe(
 	const char* vertShaderPath,
 	const char* fragShaderPath,
 	VkRenderPass renderPass,
 	VkPipelineLayout layout,
 	VkPipeline* pPipe);
-void vkCreateBasicTessellationPipe(
+void vkCreateTessellationPipe(
 	const char* vertShaderPath,
 	const char* tescShaderPath,
 	const char* teseShaderPath,
@@ -931,7 +937,7 @@ void vkCreateBasicTessellationPipe(
 	VkRenderPass renderPass,
 	VkPipelineLayout layout,
 	VkPipeline* pPipe);
-void vkCreateBasicTaskMeshPipe(
+void vkCreateTaskMeshPipe(
 	const char* taskShaderPath,
 	const char* meshShaderPath,
 	const char* fragShaderPath,
@@ -1086,10 +1092,14 @@ static VkBool32 VkmDebugUtilsCallback(
 	}
 }
 
+//////////////////////////////
+//// Immediate Command Buffers
+////
+// One shot command buffers for convenience in non-performance-critical commands. Like initial buffer priming.
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType)
 {
 	VkCommandBufferAllocateInfo allocateInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = vk.context.queueFamilies[queueFamilyType].pool,
 		.commandBufferCount = 1,
 	};
@@ -1097,7 +1107,7 @@ VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType)
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &allocateInfo, &cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd, "ImmediateCommandBuffer");
 	VkCommandBufferBeginInfo beginInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 	};
 	VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
@@ -1108,7 +1118,7 @@ void vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuf
 {
 	VK_CHECK(vkEndCommandBuffer(cmd));
 	VkSubmitInfo info = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.commandBufferCount = 1,
 		.pCommandBuffers = &cmd,
 	};
@@ -1120,7 +1130,7 @@ void vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuf
 VkCommandBuffer vkBeginImmediateTransferCommandBuffer()
 {
 	VkCommandBufferAllocateInfo allocateInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool,
 		.commandBufferCount = 1,
 	};
@@ -1128,7 +1138,7 @@ VkCommandBuffer vkBeginImmediateTransferCommandBuffer()
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &allocateInfo, &cmd));
 	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd, "ImmediateTransferCommandBuffer");
 	VkCommandBufferBeginInfo beginInfo = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 	};
 	VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
@@ -1139,7 +1149,7 @@ void vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
 {
 	VK_CHECK(vkEndCommandBuffer(cmd));
 	VkSubmitInfo info = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.commandBufferCount = 1,
 		.pCommandBuffers = &cmd,
 	};
@@ -1168,6 +1178,7 @@ void vkCreateShaderModuleFromPath(const char* pShaderPath, VkShaderModule* pShad
 	free(pCode);
 }
 
+// DepthNormalRenderPass
 static void CreateBasicRenderPass()
 {
 	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
@@ -1262,7 +1273,7 @@ static void CreateBasicRenderPass()
 		},
 	};
 	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, VK_ALLOC, &vk.context.basicPass));
-	vkSetDebugName(VK_OBJECT_TYPE_RENDER_PASS, (uint64_t)vk.context.basicPass, "BasicRenderPass");
+	VK_SET_DEBUG(vk.context.basicPass);
 }
 
 static void CreateBasicSamplers()
@@ -1420,31 +1431,30 @@ enum {
 		},                                                                 \
 	}
 
-#define SAFE /* the code already doesn't have memory bugs so do nothing */
-
-SAFE static void CreateBasicPipeLayout()
+static void CreateBasicPipeLayout()
 {
 	VkDescriptorSetLayout pSetLayouts[] = {
-        [VK_PIPE_SET_INDEX_BASIC_GLOBAL] = vk.context.globalSetLayout,
+        [VK_PIPE_SET_INDEX_BASIC_GLOBAL]   = vk.context.globalSetLayout,
         [VK_PIPE_SET_INDEX_BASIC_MATERIAL] = vk.context.materialSetLayout,
-        [VK_PIPE_SET_INDEX_BASIC_OBJECT] = vk.context.objectSetLayout,
+        [VK_PIPE_SET_INDEX_BASIC_OBJECT]   = vk.context.objectSetLayout,
     };
 	VkPipelineLayoutCreateInfo createInfo = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = VK_PIPE_SET_INDEX_BASIC_COUNT,
-		.pSetLayouts = pSetLayouts,
+		.pSetLayouts    = pSetLayouts,
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.basicPipeLayout));
+	VK_SET_DEBUG(vk.context.basicPipeLayout);
 }
 
-SAFE static void CreateGlobalSetLayout()
+static void CreateGlobalSetLayout()
 {
 	VkDescriptorSetLayoutCreateInfo info = {
 		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
 		.pBindings = &(VkDescriptorSetLayoutBinding){
-			.binding = VK_SET_BIND_INDEX_GLOBAL_BUFFER,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.binding         = VK_SET_BIND_INDEX_GLOBAL_BUFFER,
+			.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
 			.stageFlags =
 				// these need to be enabled by some flags...
@@ -1457,6 +1467,7 @@ SAFE static void CreateGlobalSetLayout()
 		},
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &info, VK_ALLOC, &vk.context.globalSetLayout));
+	VK_SET_DEBUG(vk.context.globalSetLayout);
 }
 
 static void CreateMaterialSetLayout()
@@ -1466,24 +1477,26 @@ static void CreateMaterialSetLayout()
 		.bindingCount = 2,
 		.pBindings = (VkDescriptorSetLayoutBinding[]){
 			{
-				.binding = VK_SET_BIND_INDEX_MATERIAL_COLOR,
-				.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+				.binding         = VK_SET_BIND_INDEX_MATERIAL_COLOR,
+				.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 				.descriptorCount = 1,
-				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+				.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT,
 			},
 			{
-				.binding = VK_SET_BIND_INDEX_MATERIAL_IMAGE,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.descriptorCount = 1,
-				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+				.binding            = VK_SET_BIND_INDEX_MATERIAL_IMAGE,
+				.descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount    = 1,
+				.stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
 				.pImmutableSamplers = &vk.context.linearSampler,
 			},
 		},
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.materialSetLayout));
+	VK_SET_DEBUG(vk.context.materialSetLayout);
 
 	createInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.materialPushSetLayout));
+	VK_SET_DEBUG(vk.context.materialPushSetLayout);
 }
 
 static void CreateObjectSetLayout()
@@ -1500,9 +1513,10 @@ static void CreateObjectSetLayout()
 		},
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.objectSetLayout));
+	VK_SET_DEBUG(vk.context.objectSetLayout);
 }
 
-void vkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
+void vkCreateTrianglePipe(const char* vertShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule vertShader;
 	vkCreateShaderModuleFromPath(vertShaderPath, &vertShader);
@@ -1515,15 +1529,15 @@ void vkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, V
 		.pStages = (VkPipelineShaderStageCreateInfo[]){
 			{
 				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_VERTEX_BIT,
+				.stage  = VK_SHADER_STAGE_VERTEX_BIT,
 				.module = vertShader,
-				.pName = "main",
+				.pName  = "main",
 			},
 			{
 				VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+				.stage  = VK_SHADER_STAGE_FRAGMENT_BIT,
 				.module = fragShader,
-				.pName = "main",
+				.pName  = "main",
 			},
 		},
 		.pVertexInputState = &DEFAULT_VERTEX_INPUT_STATE,
@@ -1548,7 +1562,7 @@ void vkCreateBasicPipe(const char* vertShaderPath, const char* fragShaderPath, V
 	vkDestroyShaderModule(vk.context.device, vertShader, VK_ALLOC);
 }
 
-void vkCreateBasicTessellationPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
+void vkCreateTessellationPipe(const char* vertShaderPath, const char* tescShaderPath, const char* teseShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule vertShader;
 	vkCreateShaderModuleFromPath(vertShaderPath, &vertShader);
@@ -1616,7 +1630,7 @@ void vkCreateBasicTessellationPipe(const char* vertShaderPath, const char* tescS
 	vkDestroyShaderModule(vk.context.device, vertShader, VK_ALLOC);
 }
 
-void vkCreateBasicTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
+void vkCreateTaskMeshPipe(const char* taskShaderPath, const char* meshShaderPath, const char* fragShaderPath, VkRenderPass renderPass, VkPipelineLayout layout, VkPipeline* pPipe)
 {
 	VkShaderModule taskShader;
 	vkCreateShaderModuleFromPath(taskShaderPath, &taskShader);
@@ -1808,10 +1822,27 @@ void vkCreateBasicGraphics()
 {
 	CreateBasicSamplers();
 	CreateBasicRenderPass();
+
+	VkDepthNormalFramebufferCreateInfo framebufferInfo = {
+		.width = DEFAULT_WIDTH,
+		.height = DEFAULT_HEIGHT,
+		.layerCount = 1,
+	};
+	vkCreateDepthNormalFramebuffer(&framebufferInfo, &vk.context.depthNormalFramebuffer);
+	VK_SET_DEBUG(vk.context.depthNormalFramebuffer);
+
 	CreateGlobalSetLayout();
 	CreateMaterialSetLayout();
 	CreateObjectSetLayout();
+
 	CreateBasicPipeLayout();
+	vkCreateTrianglePipe(
+		"./shaders/basic_material.vert.spv",
+		"./shaders/basic_material.frag.spv",
+		vk.context.basicPass,
+		vk.context.basicPipeLayout,
+		&vk.context.basicPipe);
+	VK_SET_DEBUG(vk.context.basicPipe);
 }
 
 void vkCreateLineGraphics()
@@ -1895,7 +1926,7 @@ __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES] = {};
 
 void vkBeginAllocationRequests()
 {
-	printf("Begin Memory Allocation Requests.\n");
+	LOG("Begin Memory Allocation Requests.\n");
 	// what do I do here? should I enable a mechanic to do this twice? or on pass in memory?
 	for (u32 memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
 		requestedMemoryAllocSize[memTypeIndex] = 0;
@@ -2495,7 +2526,7 @@ void vkDestroyExternalPlatformTexture(VkExternalPlatformTexture* pTexture)
 	pTexture->handle = NULL;
 }
 
-void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer)
+void vkCreateDepthNormalFramebuffer(const VkDepthNormalFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer)
 {
 	VkFramebufferCreateInfo framebufferCreateInfo = {
 		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -2506,44 +2537,43 @@ void vkCreateBasicFramebuffer(const VkBasicFramebufferCreateInfo* pCreateInfo, V
 				{
 					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
 					.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
-					.width = DEFAULT_WIDTH,
-					.height = DEFAULT_HEIGHT,
-					.layerCount = 1,
+					.width = pCreateInfo->width,
+					.height = pCreateInfo->height,
+					.layerCount = pCreateInfo->layerCount,
 					.viewFormatCount = 1,
 					.pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
 				},
 				{
 					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
 					.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
-					.width = DEFAULT_WIDTH,
-					.height = DEFAULT_HEIGHT,
-					.layerCount = 1,
+					.width = pCreateInfo->width,
+					.height = pCreateInfo->height,
+					.layerCount = pCreateInfo->layerCount,
 					.viewFormatCount = 1,
 					.pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_NORMAL],
 				},
 				{
 					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
 					.usage = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
-					.width = DEFAULT_WIDTH,
-					.height = DEFAULT_HEIGHT,
-					.layerCount = 1,
+					.width = pCreateInfo->width,
+					.height = pCreateInfo->height,
+					.layerCount = pCreateInfo->layerCount,
 					.viewFormatCount = 1,
 					.pViewFormats = &VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_DEPTH],
 				},
 			},
 		},
 		.flags = VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT,
-		.renderPass = pCreateInfo->renderPass,
+		.renderPass = vk.context.basicPass,
 		.attachmentCount = VK_PASS_ATTACHMENT_INDEX_BASIC_COUNT,
-		.width = DEFAULT_WIDTH,
-		.height = DEFAULT_HEIGHT,
-		.layers = 1,
+		.width = pCreateInfo->width,
+		.height = pCreateInfo->height,
+		.layers = pCreateInfo->layerCount,
 	};
 	VK_CHECK(vkCreateFramebuffer(vk.context.device, &framebufferCreateInfo, VK_ALLOC, pFramebuffer));
-	vkSetDebugName(VK_OBJECT_TYPE_FRAMEBUFFER, (uint64_t)*pFramebuffer, pCreateInfo->debugName);
 }
 
-void vkCreateBasicFramebufferTextures(const VkBasicFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer)
+void vkCreateDepthNormalFramebufferTextures(const VkDepthNormalFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer)
 {
 	VkDedicatedTextureCreateInfo colorCreateInfo = {
 		.debugName = "ColorFramebuffer",
