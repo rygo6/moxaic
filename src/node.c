@@ -483,6 +483,9 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 	pNodeShr->compositorCycleSkip = 8;
 	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
+	pNodeShr->swapMaxWidth = DEFAULT_WIDTH;
+	pNodeShr->swapMaxHeight = DEFAULT_HEIGHT;
+
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
 		.locality = VK_LOCALITY_CONTEXT,
@@ -511,6 +514,8 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 	VkSharedDescriptor nodeDesc = pCstNodeData->nodeDesc;
 	memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
 	pCstNodeData->nodeDesc = nodeDesc;
+
+	CreateNodeGBuffer(hNode);
 
 	*pNodeHandle = hNode;
 

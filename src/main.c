@@ -116,7 +116,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
 		mxcServerInitializeInterprocess();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
