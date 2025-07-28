@@ -81,12 +81,12 @@ static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 			.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 		},
 		.imageType   = VK_IMAGE_TYPE_2D,
-		.format      = VK_BASIC_PASS_FORMATS[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+		.format      = VK_RENDER_PASS_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR],
 		.extent      = {pInfo->windowWidth, pInfo->windowHeight, 1},
 		.mipLevels   = 1,
 		.arrayLayers = 1,
 		.samples     = VK_SAMPLE_COUNT_1_BIT,
-		.usage       = VK_BASIC_PASS_USAGES[VK_PASS_ATTACHMENT_INDEX_BASIC_COLOR],
+		.usage       = VK_RENDER_PASS_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR],
 	};
 	vkCreateExternalPlatformTexture(&info, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
@@ -118,7 +118,7 @@ static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 
 static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTexture* pSwapTexture)
 {
-	VkImageCreateInfo info = {
+	VkImageCreateInfo imageCreateInfo = {
 		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		&(VkExternalMemoryImageCreateInfo){
 			VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -130,12 +130,13 @@ static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 		.mipLevels   = 1,
 		.arrayLayers = 1,
 		.samples     = VK_SAMPLE_COUNT_1_BIT,
-		.usage       = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		// You cannot export a depth texture to all platforms.
+		.usage       = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 	};
-	vkCreateExternalPlatformTexture(&info, &pSwapTexture->platform);
+	vkCreateExternalPlatformTexture(&imageCreateInfo, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
 		.debugName        = "ExportedDepthFramebuffer",
-		.pImageCreateInfo = &info,
+		.pImageCreateInfo = &imageCreateInfo,
 		.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
 		.importHandle     = pSwapTexture->platform.handle,
 		.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
@@ -339,6 +340,9 @@ void ReleaseNodeActive(NodeHandle hNode)
 
 	ATOMIC_FENCE_BLOCK {
 		int i = 0;
+		// compact handles down... this should use memmove
+		// this needs to be done in MXC_CYCLE_UPDATE_WINDOW_STATE or MXC_CYCLE_PROCESS_INPUT when active node lists aren't use
+		// probably want an ipc call to do this
 		for (; i < pActiveNode->count; ++i) {
 			if (pActiveNode->handles[i] == hNode)
 				break;
@@ -477,6 +481,7 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 
 	pNodeShr->compositorRadius = 0.5;
 	pNodeShr->compositorCycleSkip = 8;
+	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
@@ -510,6 +515,8 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 	*pNodeHandle = hNode;
 
 	CHECK(pthread_create(&node.context[hNode].thread.id, NULL, (void* (*)(void*))runFunc, pNodeCtx), "Node thread creation failed!");
+
+	SetNodeActive(hNode, MXC_COMPOSITOR_MODE_NONE);
 
 	LOG("Request Node Thread Success. Handle: %d\n", hNode);
 	// todo this needs error handling
@@ -987,13 +994,13 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 #if defined(MOXAIC_COMPOSITOR)
 	LOG("Claiming Swap for Node %d\n", hNode);
 
-	auto pNodeShrd = node.pShared[hNode];
+	auto pNodeShr = node.pShared[hNode];
 	auto pNodeCstData = &node.cst.data[hNode];
 	auto pNodeCtxt = &node.context[hNode];
 	bool needsExport = pNodeCtxt->interprocessMode != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
 	for (int iNodeSwap = 0; iNodeSwap < XR_SWAPCHAIN_CAPACITY; ++iNodeSwap) {
-		if (pNodeShrd->swapStates[iNodeSwap] != XR_SWAP_STATE_REQUESTED)
+		if (pNodeShr->swapStates[iNodeSwap] != XR_SWAP_STATE_REQUESTED)
 			continue;
 
 		block_h hSwap = BLOCK_CLAIM(node.cst.block.swap, 0); // key should be hash of swap info to find recycled swaps
@@ -1006,7 +1013,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		auto pSwap = BLOCK_PTR(node.cst.block.swap, hSwap);
 		assert(pSwap->state == XR_SWAP_STATE_UNITIALIZED && "Trying to create already created SwapImage!");
 		pSwap->state = XR_SWAP_STATE_REQUESTED;
-		pSwap->info = pNodeShrd->swapInfos[iNodeSwap];
+		pSwap->info = pNodeShr->swapInfos[iNodeSwap];
 		bool isColor = pSwap->info.usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 		bool isDepth = pSwap->info.usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
@@ -1031,7 +1038,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		}
 
 		pNodeCtxt->hSwaps[iNodeSwap] = hSwap;
-		pNodeShrd->swapStates[iNodeSwap] = XR_SWAP_STATE_CREATED;
+		pNodeShr->swapStates[iNodeSwap] = XR_SWAP_STATE_CREATED;
 		pSwap->state = XR_SWAP_STATE_CREATED;
 	}
 

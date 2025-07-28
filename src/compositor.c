@@ -637,8 +637,8 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 {
 	//// Local Extract
 	EXTRACT_FIELD(&vk.context, device);
-	EXTRACT_FIELD(&vk.context, basicPass);
-	EXTRACT_FIELD(&vk.context, depthNormalFramebuffer);
+	EXTRACT_FIELD(&vk.context, depthRenderPass);
+	EXTRACT_FIELD(&vk.context, depthFramebuffer);
 
 	EXTRACT_FIELD(pCstCtx, gfxCmd);
 	auto compTimeline = pCstCtx->timeline;
@@ -675,12 +675,12 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 
 	auto pLineBuf = &pCst->lineBuf;
 
-	auto gfxFrameColorView = pCst->gfxFrameTex.color.view;
-	auto gfxFrameNormalView = pCst->gfxFrameTex.normal.view;
-	auto gfxFrameDepthView = pCst->gfxFrameTex.depth.view;
+	auto gfxFrameColorView = pCst->framebufferTexture.color.view;
+//	auto gfxFrameNormalView = pCst->framebufferTexture.normal.view;
+	auto gfxFrameDepthView = pCst->framebufferTexture.depth.view;
 	auto compFrameColorView = pCst->compFrameColorTex.view;
 
-	auto gfxFrameColorImg = pCst->gfxFrameTex.color.image;
+	auto gfxFrameColorImg = pCst->framebufferTexture.color.image;
 
 	auto compFrameAtomicImg = pCst->compFrameAtomicTex.image;
 	auto compFrameColorImg = pCst->compFrameColorTex.image;
@@ -969,7 +969,7 @@ CompositeLoop:
 
 	vk.CmdSetViewport(gfxCmd, 0, 1, &(VkViewport){.width = windowExtent.x, .height = windowExtent.y, .maxDepth = 1.0f});
 	vk.CmdSetScissor(gfxCmd, 0, 1, &(VkRect2D){.extent = {.width = windowExtent.x, .height = windowExtent.y}});
-	CmdBeginDepthNormalRenderPass(gfxCmd, basicPass, depthNormalFramebuffer, VK_PASS_CLEAR_COLOR, gfxFrameColorView, gfxFrameNormalView, gfxFrameDepthView);
+	CmdBeginDepthRenderPass(gfxCmd, depthRenderPass, depthFramebuffer, VK_RENDER_PASS_CLEAR_COLOR, gfxFrameColorView, gfxFrameDepthView);
 
 	vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodePipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet, 0, NULL);
 
@@ -1218,7 +1218,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		vkCreateTrianglePipe(
 			"./shaders/basic_comp.vert.spv",
 			"./shaders/basic_comp.frag.spv",
-			vk.context.basicPass,
+			vk.context.depthRenderPass,
 			pCst->nodePipeLayout,
 			&pCst->nodeQuadPipe);
 	}
@@ -1230,7 +1230,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 			"./shaders/tess_comp.tesc.spv",
 			"./shaders/tess_comp.tese.spv",
 			"./shaders/tess_comp.frag.spv",
-			vk.context.basicPass,
+			vk.context.depthRenderPass,
 			pCst->nodePipeLayout,
 			&pCst->nodeTessPipe);
 	}
@@ -1353,20 +1353,17 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 
 	/// Graphics Framebuffers
 	{
-		VkDepthNormalFramebufferTextureCreateInfo framebufferTextureInfo = {
+		VkDepthFramebufferTextureCreateInfo framebufferTextureInfo = {
 			.locality = VK_LOCALITY_CONTEXT,
 			.extent = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
 		};
-		vkCreateDepthNormalFramebufferTextures(&framebufferTextureInfo, &pCst->gfxFrameTex);
-		VK_SET_DEBUG(pCst->gfxFrameTex.color.view);
-		VK_SET_DEBUG(pCst->gfxFrameTex.color.image);
-		VK_SET_DEBUG(pCst->gfxFrameTex.color.memory);
-		VK_SET_DEBUG(pCst->gfxFrameTex.normal.view);
-		VK_SET_DEBUG(pCst->gfxFrameTex.normal.image);
-		VK_SET_DEBUG(pCst->gfxFrameTex.normal.memory);
-		VK_SET_DEBUG(pCst->gfxFrameTex.depth.view);
-		VK_SET_DEBUG(pCst->gfxFrameTex.depth.image);
-		VK_SET_DEBUG(pCst->gfxFrameTex.depth.memory);
+		vkCreateDepthFramebufferTextures(&framebufferTextureInfo, &pCst->framebufferTexture);
+		VK_SET_DEBUG(pCst->framebufferTexture.color.view);
+		VK_SET_DEBUG(pCst->framebufferTexture.color.image);
+		VK_SET_DEBUG(pCst->framebufferTexture.color.memory);
+		VK_SET_DEBUG(pCst->framebufferTexture.depth.view);
+		VK_SET_DEBUG(pCst->framebufferTexture.depth.image);
+		VK_SET_DEBUG(pCst->framebufferTexture.depth.memory);
 	}
 
 	/// Compute Output

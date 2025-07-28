@@ -487,6 +487,7 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
+void       SetNodeActive(NodeHandle hNode, MxcCompositorMode mode);
 void       ReleaseNodeActive(NodeHandle hNode);
 
 

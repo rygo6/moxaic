@@ -46,7 +46,7 @@ typedef struct MxcCompositor {
   VkMesh quadMesh;
   VkSharedMesh quadPatchMesh;
 
-  VkBasicFramebufferTexture gfxFrameTex;
+  VkDepthFramebufferTexture framebufferTexture;
 
   VkDedicatedTexture compFrameAtomicTex;
   VkDedicatedTexture compFrameColorTex;

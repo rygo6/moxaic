@@ -25,6 +25,8 @@ typedef struct MxcTestNode {
 	VkDeviceMemory    sphereObjectSetMemory;
 	VkBuffer          sphereObjectSetBuffer;
 
+	VkDepthFramebufferTexture framebufferTexture;
+
 } MxcTestNode;
 
 void* mxcTestNodeThread(MxcNodeContext* pNode);
