@@ -59,6 +59,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 	struct {
 		VkImageView colorView;
 		VkImageView depthView;
+		VkImage     depthImage;
 	} swaps[XR_SWAPCHAIN_IMAGE_COUNT] ;
 
 	{
@@ -76,6 +77,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 		};
 		// I think I want this to be a thread_node and not go through openxr constructs at all
 		xrCreateSwapchainImages(hNode, &colorInfo, colorSwapId);
+		pNodeShr->viewSwaps[XR_VIEW_ID_CENTER_MONO].colorId = colorSwapId;
 
 		const int depthSwapId = 1;
 		XrSwapchainInfo depthInfo = {
@@ -90,6 +92,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 			.mipCount = 1,
 		};
 		xrCreateSwapchainImages(hNode, &depthInfo, depthSwapId);
+		pNodeShr->viewSwaps[XR_VIEW_ID_CENTER_MONO].depthId = depthSwapId;
 
 		assert(pNodeShr->swapStates[colorSwapId] == XR_SWAP_STATE_CREATED && "Color swap not created!");
 		assert(pNodeShr->swapStates[depthSwapId] == XR_SWAP_STATE_CREATED && "Depth swap not created!");
@@ -101,6 +104,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 			swaps[iImg].colorView = pColorSwap->externalTexture[iImg].texture.view;
 			swaps[iImg].depthView = pDepthSwap->externalTexture[iImg].texture.view;
+			swaps[iImg].depthImage = pDepthSwap->externalTexture[iImg].texture.image;
 		}
 	}
 
@@ -142,33 +146,20 @@ run_loop:
 	memcpy(pGlobalSetMapped, (void*)&pNodeShr->globalSetState, sizeof(VkGlobalSetState));
 
 	ResetCommandBuffer(gfxCmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-	BeginCommandBuffer(gfxCmd, &(VkCommandBufferBeginInfo){.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+	BeginCommandBuffer(gfxCmd, &(VkCommandBufferBeginInfo){VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
 	int framebufferIndex = nodeTimelineValue % VK_SWAP_COUNT;
 
-	VkViewport viewport = {
-		.x = -pNodeShr->clip.ulUV.x * DEFAULT_WIDTH,
-		.y = -pNodeShr->clip.ulUV.y * DEFAULT_HEIGHT,
-		.width = DEFAULT_WIDTH,
-		.height = DEFAULT_HEIGHT,
-		.maxDepth = 1.0f,
-	};
-	VkRect2D scissor = {
-		.offset = {
-			.x = 0,
-			.y = 0,
-		},
-		.extent = {
-			.width = pNodeShr->globalSetState.framebufferSize.x,
-			.height = pNodeShr->globalSetState.framebufferSize.y,
-		},
-	};
+	// Clipped Viewport
+//	VkViewport viewport = {.x = -pNodeShr->clip.ulUV.x * DEFAULT_WIDTH,	.y = -pNodeShr->clip.ulUV.y * DEFAULT_HEIGHT, .width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f};
+//	VkRect2D scissor = {.offset = {.x = 0, .y = 0}, .extent = {.width = pNodeShr->globalSetState.framebufferSize.x, .height = pNodeShr->globalSetState.framebufferSize.y}};
+	VkViewport viewport = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f};
+	VkRect2D   scissor = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}};
 	CmdSetViewport(gfxCmd, 0, 1, &viewport);
 	CmdSetScissor(gfxCmd, 0, 1, &scissor);
 //	CmdPipelineImageBarriers2(gfxCmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
 
 	VkClearColorValue clearColor = (VkClearColorValue){{0, 0, 0.1f, 0}};
-//	CmdBeginDepthRenderPass(gfxCmd, depthRenderPass, depthFramebuffer, clearColor, swaps[framebufferIndex].colorView, swaps[framebufferIndex].depthView);
 	CmdBeginDepthRenderPass(gfxCmd, depthRenderPass, depthFramebuffer, clearColor, swaps[framebufferIndex].colorView, framebufferTexture.depth.view);
 
 	/// Draw
@@ -184,6 +175,8 @@ run_loop:
 	}
 
 	CmdEndRenderPass(gfxCmd);
+
+	CmdBlitImageFullScreen(gfxCmd, framebufferTexture.depth.image,  swaps[framebufferIndex].depthImage);
 
 //	CmdPipelineImageBarriers2(gfxCmd, releaseBarrierCount, releaseBarriers[framebufferIndex]);
 	EndCommandBuffer(gfxCmd);
@@ -220,7 +213,7 @@ static void Create(MxcNodeContext* pNodeContext, MxcNodeShared* pNodeShr, MxcTes
 
 	// This is way too many descriptors... optimize this
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
 		.maxSets = 30,
 		.poolSizeCount = 3,

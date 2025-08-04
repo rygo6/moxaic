@@ -67,7 +67,6 @@ int main(void)
 		midCreateWindow();
 
 		vkInitializeInstance();
-
 		VkContextCreateInfo contextCreateInfo = {
 			.queueFamilyCreateInfos = {
 				[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = {
@@ -96,9 +95,7 @@ int main(void)
 			},
 		};
 		vkCreateContext(&contextCreateInfo);
-
 		vkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
-
 		vkCreateGraphics();
 		vkCreateLineGraphics();
 
@@ -110,13 +107,15 @@ int main(void)
 //						  vk.context.basicPipeLayout,
 //						  &vkNode.basicPipe);
 
+		mxcInitializeNode();
+
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");
 		isCompositor = true;
 		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
 		mxcServerInitializeInterprocess();
 
-#define TEST_NODE
+//#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
@@ -136,6 +135,7 @@ int main(void)
 		while (isRunning) {
 
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
+			/// MXC_CYCLE_UPDATE_WINDOW_STATE
 
 			mxcNodeInterprocessPoll(); // I am not too sure where I should put this
 
@@ -145,16 +145,17 @@ int main(void)
 			atomic_thread_fence(memory_order_release);
 
 			vkTimelineSignal(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
+			/// MXC_CYCLE_PROCESS_INPUT
 
-			// MXC_CYCLE_UPDATE_NODE_STATES
+			/// MXC_CYCLE_UPDATE_NODE_STATES
 
-			// MXC_CYCLE_COMPOSITOR_RECORD
+			/// MXC_CYCLE_COMPOSITOR_RECORD
 
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
-
-			compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
+			/// MXC_CYCLE_RENDER_COMPOSITE
 
 			atomic_thread_fence(memory_order_acquire);
+			compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
 			CmdSubmitPresent(
 				compositorContext.gfxCmd,
 				VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,

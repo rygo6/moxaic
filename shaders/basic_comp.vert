@@ -6,8 +6,7 @@
 #include "std_vertex.glsl"
 #include "common_util.glsl"
 
-layout(location = 0) out vec3 outNormal;
-layout(location = 1) out vec2 outUV;
+layout(location = 0) out vec2 outUV;
 
 float doubleWide = 1.0f;
 bool clipped = false;
@@ -32,6 +31,4 @@ void main() {
     vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
     vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
     gl_Position = globalClipPos;
-
-    outNormal = inNormal;
 }

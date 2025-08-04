@@ -416,6 +416,10 @@ extern struct Node {
 	MxcNodeContext context[MXC_NODE_CAPACITY];
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
 
+	VkDescriptorSetLayout gbufferProcessSetLayout;
+	VkPipelineLayout      gbufferProcessPipeLayout;
+	VkPipeline            gbufferProcessBlitUpPipe;
+
 #if defined(MOXAIC_COMPOSITOR)
 
 	// this should be in a cst anon struct?!?
@@ -446,6 +450,8 @@ extern struct Node {
 
 } node;
 
+void mxcInitializeNode();
+
 ///////////////
 //// Node Queue
 ////
@@ -461,7 +467,8 @@ extern MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY];
 
 static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer handle)
 {
-	ATOMIC_FENCE_BLOCK {
+	ATOMIC_FENCE_SCOPE
+	{
 		submitNodeQueue[submitNodeQueueEnd] = handle;
 		submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
 		assert(submitNodeQueueEnd != submitNodeQueueStart);
@@ -469,7 +476,8 @@ static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer handle)
 }
 static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
 {
-	ATOMIC_FENCE_BLOCK {
+	ATOMIC_FENCE_SCOPE
+	{
 		bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
 		while (pendingBuffer) {
 			CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);

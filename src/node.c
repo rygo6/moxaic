@@ -7,6 +7,7 @@
 #include <assert.h>
 
 #include "mid_vulkan.h"
+#include "pipe_gbuffer_process.h"
 
 #include "node.h"
 #include "test_node.h"
@@ -131,7 +132,8 @@ static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 		.arrayLayers = 1,
 		.samples     = VK_SAMPLE_COUNT_1_BIT,
 		// You cannot export a depth texture to all platforms.
-		.usage       = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		.usage       = VK_IMAGE_USAGE_STORAGE_BIT |
+		               VK_IMAGE_USAGE_SAMPLED_BIT,
 	};
 	vkCreateExternalPlatformTexture(&imageCreateInfo, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
@@ -338,7 +340,8 @@ void ReleaseNodeActive(NodeHandle hNode)
 	auto pNodeCstData = &node.cst.data[hNode];
 	auto pActiveNode = &node.active[pNodeCstData->activeCompositorMode];
 
-	ATOMIC_FENCE_BLOCK {
+	ATOMIC_FENCE_SCOPE
+	{
 		int i = 0;
 		// compact handles down... this should use memmove
 		// this needs to be done in MXC_CYCLE_UPDATE_WINDOW_STATE or MXC_CYCLE_PROCESS_INPUT when active node lists aren't use
@@ -935,7 +938,8 @@ void mxcShutdownInterprocessNode()
 ////
 int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target)
 {
-	ATOMIC_FENCE_BLOCK {
+	ATOMIC_FENCE_SCOPE
+	{
 		MxcRingBufferHandle head = pBuffer->head;
 		MxcRingBufferHandle tail = pBuffer->tail;
 		if (head + 1 == tail) {
@@ -950,7 +954,8 @@ int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target)
 
 int midRingDequeue(MxcRingBuffer* pBuffer, MxcRingBufferHandle *pTarget)
 {
-	ATOMIC_FENCE_BLOCK {
+	ATOMIC_FENCE_SCOPE
+	{
 		MxcRingBufferHandle head = pBuffer->head;
 		MxcRingBufferHandle tail = pBuffer->tail;
 		if (head == tail) return 1;
@@ -1059,3 +1064,8 @@ const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
 	[MXC_INTERPROCESS_TARGET_SYNC_SWAPS] = (MxcIpcFuncPtr const)ipcFuncClaimSwap,
 };
 
+void mxcInitializeNode() {
+	CreateGBufferProcessSetLayout(&node.gbufferProcessSetLayout);
+	CreateGBufferProcessPipeLayout(node.gbufferProcessSetLayout, &node.gbufferProcessPipeLayout);
+	vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", node.gbufferProcessPipeLayout, &node.gbufferProcessBlitUpPipe);
+}

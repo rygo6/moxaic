@@ -67,12 +67,25 @@
 
 #define SUBGROUP_SQUARE_SIZE 4
 #define SUBGROUP_COUNT 16 // 4 * 4
+const vec2 SUBGGROUP_SQUARE_DIMENSIONS = vec2(SUBGROUP_SQUARE_SIZE, SUBGROUP_SQUARE_SIZE);
 
 #define WORKGROUP_SQUARE_SIZE 8
 #define WORKGROUP_SUBGROUP_COUNT 64 // 8 * 8
+const vec2 WORKGROUP_SQUARE_DIMENSIONS = vec2(WORKGROUP_SQUARE_SIZE, WORKGROUP_SQUARE_SIZE);
 
-const int quadSelf = 3;
-const ivec2 quadGatherOffsets[4] = { { 0, 1 }, { 1, 1 }, { 1, 0 }, { 0, 0 }, };
+/*
+    0 1
+    3 2
+*/
+#define QUAD_UL 0
+#define QUAD_UR 1
+#define QUAD_LR 2
+#define QUAD_LL 3
+#define QUAD_SELF QUAD_LL
+const ivec2 QUAD_OFFSETS[4] = {
+    { 0, 1 }, { 1, 1 },
+    { 1, 0 }, { 0, 0 },
+};
 
 // Dimension of entire grid
 ivec2 grid_Dimensions;
@@ -157,17 +170,20 @@ uint SubgroupIndexFromCoord(ivec2 coord) {
     return coord.x + (coord.y * SUBGROUP_SQUARE_SIZE) + (subgroupHalf * SUBGROUP_COUNT);
 }
 
-float AverageQuad(vec4 quad){
-    int count = 0;
-    float sum = 0.0f;
-    for (int i = 0; i < 4; ++i) {
-        count += int(quad[i] > HALF_EPSILON);
-        sum += quad[i];
-    }
+float AverageQuadOmitZero(vec4 quad){
+    vec4 mask = vec4(greaterThan(quad, vec4(HALF_EPSILON)));
+    float sum = dot(mask * quad, vec4(1.0));
+    int count = int(dot(mask, vec4(1.0)));
     return count > 0 ? sum / float(count) : 0;
 }
 
-float MinQuad(vec4 quad) {
+float LerpQuadOmitZero(vec2 t, vec4 quad){
+    float u = mix(quad[QUAD_UL] > HALF_EPSILON ? quad[QUAD_UL] : quad[QUAD_UR], quad[QUAD_UR] > HALF_EPSILON ? quad[QUAD_UR] : quad[QUAD_UL], t.x);
+    float l = mix(quad[QUAD_LL] > HALF_EPSILON ? quad[QUAD_LL] : quad[QUAD_LR], quad[QUAD_LR] > HALF_EPSILON ? quad[QUAD_LR] : quad[QUAD_LL], t.x);
+    return mix(l > HALF_EPSILON ? l : u, u > HALF_EPSILON ? u : l, t.x);
+}
+
+float MinQuadOmitZero(vec4 quad) {
     float minValue = 1.0f;
     for (int i = 0; i < 4; ++i)
     minValue = quad[i] > HALF_EPSILON ? min(minValue, quad[i]) : minValue;

@@ -29,9 +29,7 @@ typedef struct MxcCompositor {
   VkPipeline            nodeCompPipe;
   VkPipeline            nodePostCompPipe;
 
-  VkDescriptorSetLayout gbufProcessSetLayout;
-  VkPipelineLayout      gbufProcessPipeLayout;
-  VkPipeline            gbufProcessBlitUpPipe;
+  VkPipeline            gbufferProcessBlitUpPipe;
 
   VkDescriptorSetLayout finalBlitSetLayout;
   VkPipelineLayout      finalBlitPipeLayout;
