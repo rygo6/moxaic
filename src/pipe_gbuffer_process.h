@@ -5,7 +5,6 @@
 enum {
 	SET_BIND_INDEX_GBUFFER_PROCESS_STATE,
 	SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
-	SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
 	SET_BIND_INDEX_GBUFFER_PROCESS_DST,
 	SET_BIND_INDEX_GBUFFER_PROCESS_COUNT
 };
@@ -25,13 +24,6 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 			},
 			{
 				SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,
-				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.descriptorCount = 1,
-				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.pImmutableSamplers = &vk.context.nearestSampler,
-			},
-			{
-				SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = 1,
 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -63,17 +55,6 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 	(VkWriteDescriptorSet) {                                         \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
 		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH,      \
-		.descriptorCount = 1,                                        \
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
-		.pImageInfo = &(VkDescriptorImageInfo){                      \
-			.imageView = _view,                                      \
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,                  \
-		},                                                           \
-	}
-#define BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(_view)                    \
-	(VkWriteDescriptorSet) {                                         \
-		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                      \
-		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_MIP,        \
 		.descriptorCount = 1,                                        \
 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, \
 		.pImageInfo = &(VkDescriptorImageInfo){                      \

@@ -38,7 +38,7 @@
     0
   0 3
 
-  // Workgroup. 8x8. 32x32 samples. 64x64 quad samples
+  // Workgroup. 8x8. 32x32 samples.
     0 1 2 3 4 5 6 7
   0  g g g g g g g
   1 g g g g g g g g
@@ -429,6 +429,13 @@ float AverageQuadOmitZero(vec4 quad) {
     float sum = dot(quad, mask);
     float count = dot(vec4(1.0), mask);
     return count > 0.0 ? sum / count : 0.0;
+}
+
+void AverageQuadCountOmitZero(vec4 quad, out float average, out float count) {
+    vec4 mask = step(HALF_EPSILON, quad);
+    float sum = dot(quad, mask);
+    count = dot(vec4(1.0), mask);
+    average = count > 0.0 ? sum / count : 0.0;
 }
 
 vec4 ReplaceZero(vec4 quad, float average) {

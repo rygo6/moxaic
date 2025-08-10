@@ -715,9 +715,9 @@ CompositeLoop:
 				u32   nodeSwapPixelCt = nodeSwapExtent.x * nodeSwapExtent.y;
 				u32   nodeSwapGroupCt = nodeSwapPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
-				ivec2 mipExtent = {nodeSwapExtent.vec >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT};
-				u32   mipPixelCt = mipExtent.x * mipExtent.y;
-				u32   mipGroupCt = MAX(mipPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT, 1);
+//				ivec2 mipExtent = {nodeSwapExtent.vec >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT};
+//				u32   mipPixelCt = mipExtent.x * mipExtent.y;
+//				u32   mipGroupCt = MAX(mipPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT, 1);
 
 				auto pProcState = &pNodeShr->processState;
 				pProcState->cameraNearZ = globCam.zNear;
@@ -729,22 +729,21 @@ CompositeLoop:
 				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
 					BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf),
 					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftDepthSwap->view),
-					BIND_WRITE_GBUFFER_PROCESS_DST(pLeftGBuffer->mipView));
-				vk.CmdDispatch(gfxCmd, 1, mipGroupCt, 1);
-
-				CMD_IMAGE_BARRIERS(gfxCmd, {
-					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.image = pLeftGBuffer->mipImage,
-					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-				});
-
-				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-					BIND_WRITE_GBUFFER_PROCESS_SRC_MIP(pLeftGBuffer->mipView),
 					BIND_WRITE_GBUFFER_PROCESS_DST(pLeftGBuffer->view));
 				vk.CmdDispatch(gfxCmd, 1, nodeSwapGroupCt, 1);
+
+//				CMD_IMAGE_BARRIERS(gfxCmd, {
+//					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+//					.image = pLeftGBuffer->mipImage,
+//					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+//					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+//					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+//				});
+
+//				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+//					BIND_WRITE_GBUFFER_PROCESS_DST(pLeftGBuffer->view));
+//				vk.CmdDispatch(gfxCmd, 1, nodeSwapGroupCt, 1);
 
 				pEndBarriers[0].image = pLeftGBuffer->image;
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
