@@ -107,8 +107,8 @@ bool WriteDebugCoord(ivec2 debugCoord, ivec2 screenCoord){
     vec2 diff = screenCoord - debugCoord;
 
     if (dot(diff, diff) < 30){
-        imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
-        imageStore(outputColor, grid_GlobalCoord, vec4(1,1,0,1));
+        imageAtomicMax(outputAtomic, grid_GlobalInvocationQuadCoord, 1);
+        imageStore(outputColor, grid_GlobalInvocationQuadCoord, vec4(1,1,0,1));
         return true;
     }
 
@@ -145,8 +145,8 @@ bool WriteDebugLine(ivec2 P1, ivec2 P2, ivec2 screenCoord) {
         return true;
 
     if (abs(crossProductZ) < 100 && isWithinSegment){
-        imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
-        imageStore(outputColor, grid_GlobalCoord, vec4(0,1,1,1));
+        imageAtomicMax(outputAtomic, grid_GlobalInvocationQuadCoord, 1);
+        imageStore(outputColor, grid_GlobalInvocationQuadCoord, vec4(0,1,1,1));
         return true;
     }
 
@@ -172,8 +172,8 @@ bool WriteDebugLine(ivec2 P1, ivec2 P2, ivec2 screenCoord) {
 //}
 
 void StoreDebug(){
-    imageAtomicMax(outputAtomic, grid_GlobalCoord, 1);
-    imageStore(outputColor, grid_GlobalCoord, vec4(0,1,0,1));
+    imageAtomicMax(outputAtomic, grid_GlobalInvocationQuadCoord, 1);
+    imageStore(outputColor, grid_GlobalInvocationQuadCoord, vec4(0,1,0,1));
 }
 
 void main()
@@ -187,7 +187,7 @@ void main()
     // move intersection plane to back of volume
     nodeOriginWorldPos -= nodeOriginWorldDir * 0.5;
 
-    vec2 globalUV = vec2(grid_GlobalCoord) / vec2(outputSize);
+    vec2 globalUV = vec2(grid_GlobalInvocationQuadCoord) / vec2(outputSize);
     vec2 globalNDC = NDCFromUV(globalUV);
     vec4 globalClipPos = ClipPosFromNDC(globalNDC, DEPTH_NEAR);
     vec3 globalWorldPos = WorldPosFromGlobalClipPos(globalClipPos);
@@ -222,7 +222,7 @@ void main()
     // We don't want to linear sample because then you get float pixels between objects a great depth variation
     float nodeDepthSample = texelFetch(nodeGBuffer, intersectNodeCoord, 0).r;
 
-    vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
+    vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, 0.5);
     vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
     vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
     vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
@@ -240,7 +240,7 @@ void main()
     if (nodePackedDepth >= prevNodePackedDepth) {
         // We don't want to linear sample because then pixels at the edge of an object get blended with black background
         vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
-        imageStore(outputColor, globProjCoord, nodeColorSample);
-//        imageStore(outputColor, globProjCoord, vec4(nodeDepthSample));
+//        imageStore(outputColor, globProjCoord, nodeColorSample);
+        imageStore(outputColor, globProjCoord, vec4(nodeDepthSample));
     }
 }

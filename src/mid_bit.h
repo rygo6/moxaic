@@ -2,15 +2,15 @@
 
 #include <limits.h>
 
-#define BITMASK(b) (1 << ((b) % CHAR_BIT))
-#define BITSLOT(b) ((b) / CHAR_BIT)
-#define BITSET(a, b) ((a)[BITSLOT(b)] |= BITMASK(b))
-#define BITCLEAR(a, b) ((a)[BITSLOT(b)] &= ~BITMASK(b))
-#define BITTEST(a, b) ((a)[BITSLOT(b)] & BITMASK(b))
-#define BITNSLOTS(nb) ((nb + CHAR_BIT - 1) / CHAR_BIT)
-#define BITNSIZE(a) (sizeof(a) * CHAR_BIT)
-
 typedef unsigned char bitset_t;
+
+#define BITMASK(_bit)           (1 << ((_bit) % CHAR_BIT))
+#define BITSLOT(_bit)           ((_bit) / CHAR_BIT)
+#define BITSET(_bitset, _bit)   ((_bitset)[BITSLOT(_bit)] |= BITMASK(_bit))
+#define BITCLEAR(_bitset, _bit) (_bitset[BITSLOT(_bit)] &= ~BITMASK(_bit))
+#define BITTEST(_bitset, _bit)  ((_bitset)[BITSLOT(_bit)] & BITMASK(_bit))
+#define BITNSIZE(_bitset)       (sizeof(_bitset) * CHAR_BIT)
+#define BITNSLOTS(_bitsize)     ((_bitsize + CHAR_BIT - 1) / CHAR_BIT)
 
 // so I can make this SIMD by doing four comparisons at once
 #define DEFINE_BITSET_N(_size) typedef unsigned char bitset##_size##_t __attribute__((vector_size(sizeof(bitset_t) * BITNSLOTS(_size))));

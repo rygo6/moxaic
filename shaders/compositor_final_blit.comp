@@ -103,16 +103,16 @@ void main()
     ivec2 outputSize = imageSize(dst);
     InitializeSubgroupGridInfo(outputSize);
 
-    vec2 ndc = NDCFromUV(grid_GlobalUV);
+    vec2 ndc = NDCFromUV(grid_GlobalInvocationUV);
     vec3 camDir = WorldRayDirFromNDC(ndc,  globalUBO.invProj,  globalUBO.invView);
     vec3 camPos = (globalUBO.invView * vec4(0,0,0,1)).xyz;
 
     float result = DDATrace(camPos, camDir);
     vec4 traceColor = vec4(result,result,result,1.0);
 
-    vec4 graphicsSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER], grid_GlobalCoord);
-    vec4 computeSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER], grid_GlobalCoord);
+    vec4 graphicsSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER], grid_GlobalInvocationQuadCoord);
+    vec4 computeSample = imageLoad(src[BIND_ARRAY_INDEX_FINAL_BLIT_SRC_COMPUTE_FRAMEBUFFER], grid_GlobalInvocationQuadCoord);
     vec4 finalColor = computeSample.a > 0 ? computeSample : graphicsSample.a > 0 ? graphicsSample : traceColor;
-    imageStore(dst, grid_GlobalCoord, finalColor);
+    imageStore(dst, grid_GlobalInvocationQuadCoord, finalColor);
 }
 

@@ -1,7 +1,9 @@
 #version 450
+
 #extension GL_KHR_shader_subgroup_basic  : require
 #extension GL_KHR_shader_subgroup_shuffle : require
 #extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_quad : require
 
 #include "math.glsl"
 #include "subgroup_grid.glsl"
@@ -25,77 +27,96 @@ layout (set = 0, binding = 1) uniform sampler2D srcDepth;
 layout (set = 0, binding = 2) uniform sampler2D srcMip;
 layout (set = 0, binding = 3, rgba16f) uniform image2D dstGbuffer;
 
-shared float sharedDepth2[WORKGROUP_SUBGROUP_COUNT]; // 8 * 8 = 64
-shared float sharedDepth3[WORKGROUP_SUBGROUP_COUNT / 4]; // 4 * 4 = 16
-shared float sharedDepth4[WORKGROUP_SUBGROUP_COUNT / 16]; // 2 * 2 = 4
-shared float sharedDepth5; // 1
+float sharedDepth1; // share via subgroup
+shared float sharedDepth2[64]; // 8 * 8 = 64  WORKGROUP_SUBGROUP_COUNT / 1
+shared float sharedDepth3[16]; // 4 * 4 = 16  WORKGROUP_SUBGROUP_COUNT / 4
+shared float sharedDepth4[4];  // 2 * 2 = 4   WORKGROUP_SUBGROUP_COUNT / 16
+shared float sharedDepth5;     // 1
+
+//vec4 testDepths = vec4(0.2, 0.0, .8, 1.0);
 
 void main()
 {
     ivec2 outputSize = imageSize(dstGbuffer);
     InitializeSubgroupGridInfo(outputSize);
 
-    if (any(greaterThanEqual(grid_GlobalCoord, outputSize)))
+    if (any(greaterThanEqual(grid_GlobalInvocationQuadCoord, outputSize)))
         return;
 
-    float depthSample = texture(srcDepth, grid_GlobalUV).r;
+    float depthSample = texture(srcDepth, grid_GlobalInvocationMortonUV).r;
     float linearDepth = LinearizeDepth(processState.depth.nearZ, processState.depth.farZ, depthSample);
     float projectedDepth = ProjectDepth(processState.cameraFarZ, processState.cameraNearZ, linearDepth); // reverse near/far because we use reverseZ
 
     float depth[6];
     depth[0] = projectedDepth;
 
+/*
+    Four groups of four depth0 samples in 4x4 subgroup.
+
+      0 1    2 2
+    0 0 0    0 0
+    1 0 0    0 0
+
+    2 0 0    0 0
+    2 0 0    0 0
+*/
     {
-        const int coordDivisor = 2;
-        const int offset = coordDivisor / 2;
-        vec4 shuffle = vec4(
-            subgroupShuffle(depth[0], SubgroupIndexFromOffset(ivec2(0,      offset))),
-            subgroupShuffle(depth[0], SubgroupIndexFromOffset(ivec2(offset, offset))),
-            subgroupShuffle(depth[0], SubgroupIndexFromOffset(ivec2(offset, 0))),
-            depth[0]);
+        uint sampleMortonID = grid_InvocationSubgroupQuadID % 4;
+        uint rootSampleMortonID = MortonQuadRoot(gl_SubgroupInvocationID);
+        uvec2 invocatioNMortonCoord = MortonDecode4bit(sampleMortonID);
 
-        ivec2 rootSubgroupCoord = ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
-        uint rootSubgroupIndex = SubgroupIndexFromCoord(rootSubgroupCoord);
-        if (rootSubgroupCoord == grid_SubgroupCoord)
-            depth[1] = MinQuad(shuffle);
+        uvec4 shuffleIndices = MortonQuad(rootSampleMortonID);
+        vec4 shuffleDepths;
+        for(int i = 0; i < 4; ++i)
+            shuffleDepths[i] = subgroupShuffle(depth[0], shuffleIndices[i]);
 
-        subgroupBarrier();
-        depth[1] = subgroupShuffle(depth[1], rootSubgroupIndex);
+        vec2 quadT = vec2(invocatioNMortonCoord);
+        float average = AverageQuadOmitZero(shuffleDepths);
+        shuffleDepths = ReplazeZero(shuffleDepths, average);
+        depth[1] = LerpQuad(quadT, shuffleDepths);
+
+        // We shuffle by subgroups so set on every thread
+        sharedDepth1 = average;
     }
 
-    {
-        const int coordDivisor = 4;
-        const int offset = coordDivisor / 2;
-        vec4 shuffle = vec4(
-            subgroupShuffle(depth[1], SubgroupIndexFromOffset(ivec2(0,      offset))),
-            subgroupShuffle(depth[1], SubgroupIndexFromOffset(ivec2(offset, offset))),
-            subgroupShuffle(depth[1], SubgroupIndexFromOffset(ivec2(offset, 0))),
-            depth[1]);
+/*
+    One group of four depth1 samples in 4x4 subgroup.
+      0    1
+    0 1    1
 
-        ivec2 rootSubgroupCoord = ivec2(0, 0); // ivec2(grid_SubgroupCoord / coordDivisor) * coordDivisor;
-        if (rootSubgroupCoord == grid_SubgroupCoord)
-            sharedDepth2[grid_LocalSubgroupIndex] = MinQuad(shuffle);
+    1 1    1
+
+    Max subgroup size across NV and AMD is 32.
+    So there are are two 4x4 subgroup squares which this operation can occur on.
+    After this it must use shared memory.
+*/
+    {
+        uint sampleMortonID = grid_InvocationSubgroupQuadID + grid_InvocationSubgroupQuadBaseID;
+        uint rootSampleMortonID = MortonQuadRootAtLevel(sampleMortonID, 2);
+        uint invocationQuadSize = SUBGROUP_SQUARE_SIZE;
+        uvec2 invocationMortonCoord = grid_InvocationSubgroupQuadMortonCoord;
+
+        uvec4 shuffleIndices = MortonQuadAtLevel(rootSampleMortonID, 1);
+        vec4 shuffleDepths;
+        for(int i = 0; i < 4; ++i)
+            shuffleDepths[i] = subgroupShuffle(sharedDepth1, shuffleIndices[i]);
+
+        vec2 quatT = vec2(invocationMortonCoord) / vec2(invocationQuadSize - 1);
+        float average = AverageQuadOmitZero(shuffleDepths);
+        shuffleDepths = ReplazeZero(shuffleDepths, average);
+        depth[2] = LerpQuad(quatT, shuffleDepths);
+
+        if (grid_InvocationSubgroupQuadID == 0)
+            sharedDepth2[grid_SubgroupQuadID] = average;
 
         barrier();
-        depth[2] = sharedDepth2[grid_LocalSubgroupIndex];
     }
 
-    const int depth2IDDivisor = 1;
-    const int depth3IDDivisor = 2;
-    const int depth4IDDivisor = 4;
+/*
+    Each workgroup is a subgroup square of 4x4.
+    depth2 has 8 x 8 workgroups.
+    depth2 is 32x32 samples in total.
 
-    const int depth2SharedSquareSize = 8; // WORKGROUP_SQUARE_SIZE;
-    const int depth3SharedSquareSize = 4; // depth2SharedSquareSize / 2;
-    const int depth4SharedSquareSize = 2; // depth3SharedSquareSize / 2;
-
-    const ivec2 depth2SharedID = grid_LocalSubgroupID / depth2IDDivisor;
-    const ivec2 depth3SharedID = grid_LocalSubgroupID / depth3IDDivisor;
-    const ivec2 depth4SharedID = grid_LocalSubgroupID / depth4IDDivisor;
-
-    const uint depth3SharedIndex = IndexFromID(depth3SharedID, depth3SharedSquareSize);
-    const uint depth4SharedIndex = IndexFromID(depth4SharedID, depth4SharedSquareSize);
-
-    /* prior. sharedDepth2
       0  1  2  3  4  5  6  7
     0 00 01 02 03 04 05 06 07
     1 08 09 10 11 12 13 14 15
@@ -105,80 +126,119 @@ void main()
     5 40 41 42 43 44 45 46 47
     6 48 49 50 51 52 53 54 55
     7 56 57 58 59 60 61 62 63
-    */;
+*/
+
     {
-        ivec2 depth2RootLocalID = depth3SharedID * depth3IDDivisor;
-        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth2RootLocalID) {
-            uint shuffle0 = IndexFromID(depth2SharedID + ivec2(0, 1), depth2SharedSquareSize);
-            uint shuffle1 = IndexFromID(depth2SharedID + ivec2(1, 1), depth2SharedSquareSize);
-            uint shuffle2 = IndexFromID(depth2SharedID + ivec2(1, 0), depth2SharedSquareSize);
-            vec4 shuffle = vec4(
-                sharedDepth2[shuffle0],
-                sharedDepth2[shuffle1],
-                sharedDepth2[shuffle2],
-                depth[2]);
-            sharedDepth3[depth3SharedIndex] = MinQuad(shuffle);
-        }
+        const uint level = 1;
+        const uint levelSquare = 2;
+        uint sampleMortonID = grid_SubgroupQuadID;
+        uint rootSampleMortonID = MortonQuadRootAtLevel(sampleMortonID, 1);
+        uint invocationQuadSize = SUBGROUP_SQUARE_SIZE * 2;
+        uvec2 invocationMortonCoord = grid_InvocationQuadMortonCoord % invocationQuadSize;
+
+        uvec4 shuffleIndices = MortonQuadAtLevel(rootSampleMortonID, 0);
+        vec4 shuffleDepths = vec4(
+            sharedDepth2[shuffleIndices.x],
+            sharedDepth2[shuffleIndices.y],
+            sharedDepth2[shuffleIndices.z],
+            sharedDepth2[shuffleIndices.w]
+        );
+
+        vec2 quatT = vec2(invocationMortonCoord) / vec2(invocationQuadSize - 1);
+        float average = AverageQuadOmitZero(shuffleDepths);
+        shuffleDepths = ReplazeZero(shuffleDepths, average);
+        depth[3] = LerpQuad(quatT, shuffleDepths);
+
+        if (grid_InvocationSubgroupQuadID == 0 && sampleMortonID == rootSampleMortonID)
+            sharedDepth3[sampleMortonID / 1] = average;
 
         barrier();
-        depth[3] = sharedDepth3[depth3SharedIndex];
+
     }
 
-    /* prior. sharedDepth3
+/*
       0  1  2  3
     0 00 01 02 03
     1 04 05 06 07
     2 08 09 10 11
     3 12 13 14 15
-    */
+*/
     {
-        ivec2 depth3RootLocalID = depth4SharedID * depth4IDDivisor;
-        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth3RootLocalID) {
-            uint shuffle0 = IndexFromID(depth3SharedID + ivec2(0, 1), depth3SharedSquareSize);
-            uint shuffle1 = IndexFromID(depth3SharedID + ivec2(1, 1), depth3SharedSquareSize);
-            uint shuffle2 = IndexFromID(depth3SharedID + ivec2(1, 0), depth3SharedSquareSize);
-            vec4 shuffle = vec4(
-                sharedDepth3[shuffle0],
-                sharedDepth3[shuffle1],
-                sharedDepth3[shuffle2],
-                depth[3]);
-            sharedDepth4[depth4SharedIndex] = MinQuad(shuffle);
+        const uint level = 2;
+        const uint levelSquare = 4;
+        uint sampleMortonID = grid_SubgroupQuadID;
+        uint rootSampleMortonID = MortonQuadRootAtLevel(sampleMortonID, 2);
+        uint invocationQuadSize = SUBGROUP_SQUARE_SIZE * 4;
+        uvec2 invocationMortonCoord = grid_InvocationQuadMortonCoord % invocationQuadSize;
+
+        uvec4 shuffleIndices = MortonQuadAtLevel(rootSampleMortonID, 1) / 4;
+        vec4 shuffleDepths = vec4(
+            sharedDepth3[shuffleIndices.x],
+            sharedDepth3[shuffleIndices.y],
+            sharedDepth3[shuffleIndices.z],
+            sharedDepth3[shuffleIndices.w]
+        );
+
+        vec2 quatT = vec2(invocationMortonCoord) / vec2(invocationQuadSize - 1);
+        float average = AverageQuadOmitZero(shuffleDepths);
+        shuffleDepths = ReplazeZero(shuffleDepths, average);
+        depth[4] = LerpQuad(quatT, shuffleDepths);
+
+        uint sharedID = sampleMortonID / 16;
+        if (grid_InvocationSubgroupQuadID == 0 && sampleMortonID == rootSampleMortonID) {
+            sharedDepth4[sharedID] = average;
         }
 
         barrier();
-        depth[4] = sharedDepth4[depth4SharedIndex];
+
+        if (grid_GlobalSubgroupQuadID == 63)
+            LOG("%d %d %d %d %d\n", sharedID, shuffleIndices.x, shuffleIndices.y, shuffleIndices.z, shuffleIndices.w);
     }
 
+/*
+      0  1
+    0 00 01
+    1 02 03
+*/
     {
-        /* prior. sharedDepth4
-          0  1
-        0 00 01
-        1 02 03
-        */
-        ivec2 depth4RootLocalID = ivec2(0, 0); // sharedID * coordDivisor;
-        if (grid_SubgroupIndex == 0 && grid_LocalSubgroupID == depth4RootLocalID) {
-            uint shuffle0 = 2; // IndexFromID(depth4SharedID + ivec2(0, 1), depth4SharedSquareSize);
-            uint shuffle1 = 3; // IndexFromID(depth4SharedID + ivec2(1, 1), depth4SharedSquareSize);
-            uint shuffle2 = 1; // IndexFromID(depth4SharedID + ivec2(1, 0), depth4SharedSquareSize);
-            vec4 shuffle = vec4(
-                sharedDepth4[shuffle0],
-                sharedDepth4[shuffle1],
-                sharedDepth4[shuffle2],
-                depth[4]);
-            sharedDepth5 = MinQuad(shuffle);
-        }
+        const uint level = 3;
+        const uint levelSquare = 8;
+        uint sampleMortonID = grid_SubgroupQuadID;
+        uint rootSampleMortonID = MortonQuadRootAtLevel(sampleMortonID, 3);
+        uint invocationQuadSize = SUBGROUP_SQUARE_SIZE * 8;
+        uvec2 invocationMortonCoord = grid_InvocationQuadMortonCoord % invocationQuadSize;
 
-        barrier();
-        depth[5] = sharedDepth5;
+        uvec4 shuffleIndices = MortonQuadAtLevel(rootSampleMortonID, 2) / 16;
+        vec4 shuffleDepths = vec4(
+            sharedDepth4[shuffleIndices.x],
+            sharedDepth4[shuffleIndices.y],
+            sharedDepth4[shuffleIndices.z],
+            sharedDepth4[shuffleIndices.w]
+        );
+
+        vec2 quatT = vec2(invocationMortonCoord) / vec2(invocationQuadSize - 1);
+        float average = AverageQuadOmitZero(shuffleDepths);
+        shuffleDepths = ReplazeZero(shuffleDepths, average);
+        depth[5] = LerpQuad(quatT, shuffleDepths);
+
+        if (grid_GlobalSubgroupQuadID == 63){
+            LOG("%d %d %d %d\n", shuffleIndices.x, shuffleIndices.y, shuffleIndices.z, shuffleIndices.w);
+            LOG("%.4f %.4f\n", quatT.x, quatT.y);
+        }
     }
 
     float finalDepth =
             depth[0] > HALF_EPSILON ? depth[0] :
-            depth[1] > HALF_EPSILON ? depth[1] :
-            depth[2] > HALF_EPSILON ? depth[2] :
+//            depth[1] > HALF_EPSILON ? depth[1] :
+//            depth[2] > HALF_EPSILON ? depth[2] :
             depth[3] > HALF_EPSILON ? depth[3] :
             depth[4] > HALF_EPSILON ? depth[4] :
-            depth[5] > HALF_EPSILON ? depth[5] :
-            texture(srcMip, grid_GlobalUV).r;
-    imageStore(dstGbuffer, grid_GlobalCoord, vec4(finalDepth));
+            depth[5];
+
+//            depth[2] > HALF_EPSILON ? depth[2] :
+//            depth[3] > HALF_EPSILON ? depth[3] :
+//            depth[4] > HALF_EPSILON ? depth[4] :
+//            depth[5] > HALF_EPSILON ? depth[5] :
+//            texture(srcMip, grid_GlobalUV).r;
+    imageStore(dstGbuffer, ivec2(grid_GlobalInvocationQuadMortonCoord), vec4(finalDepth));
 }

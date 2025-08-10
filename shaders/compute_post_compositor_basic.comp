@@ -26,23 +26,26 @@ void main()
     vec4 colorSampleShuffle[4];
     bool currentFlagShuffle[4];
 
-    colorSampleShuffle[quadSelf] = imageLoad(outputColor, grid_GlobalCoord);
+    colorSampleShuffle[QUAD_SELF] = imageLoad(outputColor, grid_GlobalInvocationQuadCoord);
 
-    uint nodePackedDepth = imageAtomicExchange(outputAtomic, grid_GlobalCoord, 0);
-    currentFlagShuffle[quadSelf] = nodePackedDepth > 0;
+    uint nodePackedDepth = imageAtomicExchange(outputAtomic, grid_GlobalInvocationQuadCoord, 0);
+    currentFlagShuffle[QUAD_SELF] = nodePackedDepth > 0;
 
-    int xEven = grid_GlobalCoord.x % 2 == 0 ? 1 : -1;
-    int yEven = grid_GlobalCoord.y % 2 == 0 ? 1 : -1;
-    ivec2 quadShuffleOffsets[4] = { { 0, yEven }, { xEven, yEven }, { xEven, 0 }, { 0, 0 }, };
+    int xEven = grid_GlobalInvocationQuadCoord.x % 2 == 0 ? 1 : -1;
+    int yEven = grid_GlobalInvocationQuadCoord.y % 2 == 0 ? 1 : -1;
+    ivec2 quadShuffleOffsets[4] = {
+        { 0    , yEven }, { xEven, yEven },
+        { xEven, 0     }, { 0    , 0     },
+    };
 
     // We must do shuffling for all threads if it is current so that the shuffle works.
     // This is why you read and shuffle first before the if return branch
     for (int i = 0; i < 3; ++i) {
-        colorSampleShuffle[i] = subgroupShuffle(colorSampleShuffle[quadSelf], SubgroupIndexFromOffset(quadShuffleOffsets[i]));
-        currentFlagShuffle[i] = subgroupShuffle(currentFlagShuffle[quadSelf], SubgroupIndexFromOffset(quadShuffleOffsets[i]));
+        colorSampleShuffle[i] = subgroupShuffle(colorSampleShuffle[QUAD_SELF], SubgroupIndexFromOffset(quadShuffleOffsets[i]));
+        currentFlagShuffle[i] = subgroupShuffle(currentFlagShuffle[QUAD_SELF], SubgroupIndexFromOffset(quadShuffleOffsets[i]));
     }
 
-    if (currentFlagShuffle[quadSelf])
+    if (currentFlagShuffle[QUAD_SELF])
         return;
 
     int currentCount = 0;
@@ -53,5 +56,5 @@ void main()
     }
     colorAverage /= currentCount;
 
-    imageStore(outputColor, grid_GlobalCoord, colorAverage);
+    imageStore(outputColor, grid_GlobalInvocationQuadCoord, colorAverage);
 }

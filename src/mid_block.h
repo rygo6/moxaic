@@ -68,9 +68,9 @@ typedef block_handle block_h; // lets go to this
 		u8        generations[n]; \
 	}
 
+// these should go in implementation
 static block_handle BlockClaim(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
 {
-
 	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
 	if (i == -1) return HANDLE_DEFAULT;
 	BITSET(pOccupiedSet, i);
@@ -78,6 +78,7 @@ static block_handle BlockClaim(int occupiedCount, bitset_t* pOccupiedSet, block_
 	pGenerations[i] = pGenerations[i] == HANDLE_GENERATION_MAX ? 1 : (pGenerations[i] + 1) & 0xF;
 	return HANDLE_GENERATION_SET(i, pGenerations[i]);
 }
+
 static block_handle BlockFindByHash(int hashCount, block_key* pHashes, uint8_t* pGenerations, block_key hash)
 {
 	for (int i = 0; i < hashCount; ++i) {
