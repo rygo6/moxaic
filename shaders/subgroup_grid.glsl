@@ -111,7 +111,7 @@ uvec2 grid_SubgroupQuadMortonCoord;
 // Linear coord of subgroup quad
 ivec2 grid_SubgroupQuadCoord;
 
-// ID in quad subgroup. Happens to be the same for linear and morton.
+// ID in quad subgroup.
 uint grid_InvocationSubgroupQuadID;
 
 // Starting index of subgroup quad in subgroup
@@ -171,6 +171,28 @@ vec2 grid_GlobalInvocationMortonUV;
  6 │ 40 → 41 │ 44 → 45 │ 56 → 57 │ 60 → 61 │
    │    ↙    │    ↙    │    ↙    │    ↙    │
  7 │ 42 → 43 │ 46 → 47 │ 58 → 59 │ 62 → 63 │
+   └─────────┴─────────┴─────────┴─────────┘
+
+
+   Linear Encoding
+
+      0    1    2    3    4    5    6    7
+   ┌─────────┬─────────┬─────────┬─────────┐
+ 0 │ 00 → 01 │ 02 → 03 │ 04 → 05 │ 06 → 07 │
+   │    ↙    │    ↙    │    ↙    │    ↙    │
+ 1 │ 08 → 09 │ 10 → 11 │ 12 → 13 │ 14 → 15 │
+   ├──────── ↙ ────────┼──────── ↙ ────────┤
+ 2 │ 16 → 17 │ 18 → 19 │ 20 → 21 │ 22 → 23 │
+   │    ↙    │    ↙    │    ↙    │    ↙    │
+ 3 │ 24 → 25 │ 26 → 27 │ 28 → 29 │ 30 → 31 │
+   ├─────────┼──────── ↙ ────────┼─────────┤
+ 4 │ 32 → 33 │ 34 → 35 │ 36 → 37 │ 38 → 39 │
+   │    ↙    │    ↙    │    ↙    │    ↙    │
+ 5 │ 40 → 41 │ 42 → 43 │ 44 → 45 │ 46 → 47 │
+   ├──────── ↙ ────────┼──────── ↙ ────────┤
+ 6 │ 48 → 49 │ 50 → 51 │ 52 → 53 │ 54 → 55 │
+   │    ↙    │    ↙    │    ↙    │    ↙    │
+ 7 │ 56 → 57 │ 58 → 59 │ 60 → 61 │ 62 → 63 │
    └─────────┴─────────┴─────────┴─────────┘
 
 */
@@ -409,7 +431,7 @@ float AverageQuadOmitZero(vec4 quad) {
     return count > 0.0 ? sum / count : 0.0;
 }
 
-vec4 ReplazeZero(vec4 quad, float average) {
+vec4 ReplaceZero(vec4 quad, float average) {
     vec4 mask = step(HALF_EPSILON, quad);
     return quad * mask + average * (1.0 - mask);
 }
@@ -418,15 +440,15 @@ float LerpQuad(vec2 uv, vec4 quad) {
     vec2 invUV = vec2(1.0) - uv;
     return
         quad[QUAD_UL] * (invUV.x * invUV.y) +
-        quad[QUAD_UR] * (uv.x * invUV.y) +
-        quad[QUAD_LL] * (invUV.x * uv.y) +
+        quad[QUAD_UR] * (uv.x * invUV.y)    +
+        quad[QUAD_LL] * (invUV.x * uv.y)    +
         quad[QUAD_LR] * (uv.x * uv.y);
 }
 
 float MinQuadOmitZero(vec4 quad) {
     float minValue = 1.0f;
     for (int i = 0; i < 4; ++i)
-    minValue = quad[i] > HALF_EPSILON ? min(minValue, quad[i]) : minValue;
+        minValue = quad[i] > HALF_EPSILON ? min(minValue, quad[i]) : minValue;
     return minValue == 1.0f ? 0.0f : minValue;
 }
 
@@ -451,8 +473,6 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
     grid_InvocationSubgroupQuadBaseID = (gl_SubgroupInvocationID >> 4) << 4; // ( / 16 * 16 )
     grid_InvocationSubgroupQuadMortonCoord = MortonDecode4bit(grid_InvocationSubgroupQuadID);
     grid_InvocationSubgroupQuadCoord = SubgroupCoordFromIndex(grid_InvocationSubgroupQuadID);
-
-
 
     grid_GlobalFirstInvocation = grid_InvocationSubgroupQuadID == 0 && grid_GlobalWorkgroupID == 0;
     grid_LocalFirstInvocation = grid_InvocationSubgroupQuadID == 0 && grid_SubgroupQuadID == 0;
