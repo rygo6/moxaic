@@ -173,7 +173,10 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 
 	CHECK(pNodeShrd->swapMaxWidth < 1024 || pNodeShrd->swapMaxHeight < 1024, "Swap too small!")
 
-	for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
+	int mipLevelCount = VK_MIP_LEVEL_COUNT(pNodeShrd->swapMaxWidth, pNodeShrd->swapMaxHeight);
+	ASSERT(mipLevelCount < MXC_NODE_GBUFFER_MAX_MIP_COUNT, "Max gbuffer mip count exceeded.");
+
+	for (int iView = 0; iView < XR_MAX_VIEW_COUNT; ++iView) {
 		vkCreateDedicatedTexture(
 			&(VkDedicatedTextureCreateInfo){
 				.debugName = "GBufferFramebuffer",
@@ -186,56 +189,45 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 						pNodeShrd->swapMaxHeight,
 						1,
 					},
-					.mipLevels = 1,
+					.mipLevels = mipLevelCount,
 					.arrayLayers = 1,
 					.samples = VK_SAMPLE_COUNT_1_BIT,
 					.usage = MXC_NODE_GBUFFER_USAGE,
 				},
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT},
-			&pNodeCtxt->gbuffer[i].texture);
-
-		vkCreateDedicatedTexture(
-			&(VkDedicatedTextureCreateInfo){
-				.debugName = "GBufferFramebufferMip",
-				.pImageCreateInfo = &(VkImageCreateInfo){
-					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-					.imageType = VK_IMAGE_TYPE_2D,
-					.format = MXC_NODE_GBUFFER_FORMAT,
-					.extent = {
-						pNodeShrd->swapMaxWidth  >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
-						pNodeShrd->swapMaxHeight >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT,
-						1,
-					},
-					.mipLevels = 1,
-					.arrayLayers = 1,
-					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.usage = MXC_NODE_GBUFFER_USAGE,
-				},
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.locality = VK_LOCALITY_CONTEXT},
-			&pNodeCtxt->gbuffer[i].mipTexture);
+			&pNodeCtxt->gbuffer[iView]);
 
 		// Pack data for compositor hot access
-		pNodeCompData->gbuffer[i].image = pNodeCtxt->gbuffer[i].texture.image;
-		pNodeCompData->gbuffer[i].view = pNodeCtxt->gbuffer[i].texture.view;
-		pNodeCompData->gbuffer[i].mipImage = pNodeCtxt->gbuffer[i].mipTexture.image;
-		pNodeCompData->gbuffer[i].mipView = pNodeCtxt->gbuffer[i].mipTexture.view;
+		pNodeCompData->gbuffer[iView].image = pNodeCtxt->gbuffer[iView].image;
+		pNodeCompData->gbuffer[iView].mipViewCount = mipLevelCount;
+
+		// Generate views for mip access
+		for (int iMip = 0; iMip < mipLevelCount; ++iMip) {
+			VkImageViewCreateInfo imageViewCreateInfo = {
+				VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.image = pNodeCtxt->gbuffer[iView].image,
+				.viewType = VK_IMAGE_VIEW_TYPE_2D,
+				.format = MXC_NODE_GBUFFER_FORMAT,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = iMip,
+					.levelCount = 1,
+					.layerCount = 1,
+				},
+			};
+			VkImageView view;
+			VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, VK_ALLOC, &view));
+			pNodeCompData->gbuffer[iView].mipViews[iMip] = view;
+			VK_SET_DEBUG(pNodeCompData->gbuffer[iView].mipViews[iMip]);
+		}
 
 		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS) {
 			CMD_IMAGE_BARRIERS(cmd,	{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pNodeCtxt->gbuffer[i].texture.image,
+				.image = pNodeCtxt->gbuffer[iView].image,
 				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-				VK_IMAGE_BARRIER_DST_COMPUTE_NONE,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			},
-			{
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pNodeCtxt->gbuffer[i].mipTexture.image,
-				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-				VK_IMAGE_BARRIER_SRC_UNDEFINED,  // only ever used in compute blit
 				VK_IMAGE_BARRIER_DST_COMPUTE_NONE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			});
@@ -428,8 +420,7 @@ static int CleanupNode(NodeHandle hNode)
 			}
 			for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
 				// We are fully clearing but at some point we want a mechanic to recycle and share node swaps
-				vkDestroyDedicatedTexture(&pNodeCtxt->gbuffer[i].texture);
-				vkDestroyDedicatedTexture(&pNodeCtxt->gbuffer[i].mipTexture);
+				vkDestroyDedicatedTexture(&pNodeCtxt->gbuffer[i]);
 			}
 
 			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
@@ -1061,11 +1052,14 @@ ExitError:
 const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
 	[MXC_INTERPROCESS_TARGET_NODE_OPENED] = (MxcIpcFuncPtr const)ipcFuncNodeOpened,
 	[MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcIpcFuncPtr const)ipcFuncNodeClosed,
-	[MXC_INTERPROCESS_TARGET_SYNC_SWAPS] = (MxcIpcFuncPtr const)ipcFuncClaimSwap,
+	[MXC_INTERPROCESS_TARGET_SYNC_SWAPS] =  (MxcIpcFuncPtr const)ipcFuncClaimSwap,
 };
 
 void mxcInitializeNode() {
 	CreateGBufferProcessSetLayout(&node.gbufferProcessSetLayout);
 	CreateGBufferProcessPipeLayout(node.gbufferProcessSetLayout, &node.gbufferProcessPipeLayout);
-	vkCreateComputePipe("./shaders/compositor_gbuffer_blit_mip_step.comp.spv", node.gbufferProcessPipeLayout, &node.gbufferProcessBlitUpPipe);
+	vkCreateComputePipe("./shaders/compositor_gbuffer_process_down.comp.spv",    node.gbufferProcessPipeLayout, &node.gbufferProcessDownPipe);
+	vkCreateComputePipe("./shaders/compositor_gbuffer_process_up.comp.spv",      node.gbufferProcessPipeLayout, &node.gbufferProcessUpPipe);
+	VK_SET_DEBUG(node.gbufferProcessDownPipe);
+	VK_SET_DEBUG(node.gbufferProcessUpPipe);
 }

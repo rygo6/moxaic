@@ -107,6 +107,8 @@
 #define VK_SWAP_COUNT  2
 #define VK_SWAP_FORMAT VK_FORMAT_R8G8B8A8_UNORM
 
+#define VK_MIP_LEVEL_COUNT(_width, _height) (u32)(log2(MAX(_width, _height)) + 1)
+
 #define VK_CHECK(command)                       \
 	({                                          \
 		VkResult result = command;              \
@@ -3033,8 +3035,14 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 	/// Device
 	{
 		// Features
+		VkFilterCubicImageViewImageFormatPropertiesEXT filterCubicImageViewImageFormatProperties = {
+			VK_STRUCTURE_TYPE_FILTER_CUBIC_IMAGE_VIEW_IMAGE_FORMAT_PROPERTIES_EXT,
+			.filterCubic = VK_TRUE,
+//			.filterCubicMinmax = VK_TRUE,
+		};
 		VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT physicalDeviceSwapchainMaintenance1Features = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
+//			&filterCubicImageViewImageFormatProperties,
 			.swapchainMaintenance1 = VK_FALSE,
 		};
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {

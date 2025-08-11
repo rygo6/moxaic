@@ -17,7 +17,7 @@
 ////
 
 // The number of mip levels flattened to one image by compositor_gbuffer_blit_mip_step.comp
-#define MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT 6
+#define MXC_NODE_GBUFFER_MAX_MIP_COUNT 12
 #define MXC_NODE_GBUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
@@ -317,12 +317,11 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 	} swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
 	struct CACHE_ALIGN PACK {
-		VkImage               image;
-		VkImage               mipImage;
-		VkImageView           view;
-		VkImageView           mipView;
+		VkImage     image;
+		int         mipViewCount;
+		VkImageView mipViews[MXC_NODE_GBUFFER_MAX_MIP_COUNT];
 	} gbuffer[XR_MAX_VIEW_COUNT];
-//	} gbuffer[XR_MAX_VIEW_COUNT][XR_SWAPCHAIN_IMAGE_COUNT];
+	//	} gbuffer[XR_MAX_VIEW_COUNT][XR_SWAPCHAIN_IMAGE_COUNT];
 	// If I ever need to retain gbuffers, I will need more gbuffers.
 	// However, as long as gbuffer process is on the compositor thread
 	// it can sync a single gbuffer with composite render loop
@@ -349,10 +348,7 @@ typedef struct MxcNodeContext {
 	HANDLE       swapsSyncedHandle;
 	block_handle hSwaps[XR_SWAPCHAIN_CAPACITY];
 
-	struct {
-		VkDedicatedTexture texture;
-		VkDedicatedTexture mipTexture;
-	} gbuffer[XR_MAX_VIEW_COUNT];
+	VkDedicatedTexture gbuffer[XR_MAX_VIEW_COUNT];
 
 	union {
 		// MXC_NODE_INTERPROCESS_MODE_THREAD
@@ -418,7 +414,8 @@ extern struct Node {
 
 	VkDescriptorSetLayout gbufferProcessSetLayout;
 	VkPipelineLayout      gbufferProcessPipeLayout;
-	VkPipeline            gbufferProcessBlitUpPipe;
+	VkPipeline            gbufferProcessDownPipe;
+	VkPipeline            gbufferProcessUpPipe;
 
 #if defined(MOXAIC_COMPOSITOR)
 

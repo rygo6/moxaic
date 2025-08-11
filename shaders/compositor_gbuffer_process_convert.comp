@@ -1,0 +1,33 @@
+#version 450
+
+#extension GL_KHR_shader_subgroup_basic  : require
+#extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_quad : require
+
+layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+
+struct DepthState {
+    float minDepth;
+    float maxDepth;
+    float nearZ;
+    float farZ;
+};
+
+layout (set = 0, binding = 0) uniform ProcessState {
+    DepthState depth;
+    float cameraNearZ;
+    float cameraFarZ;
+} processState;
+
+layout (set = 0, binding = 1) uniform sampler2D srcDepth;
+layout (set = 0, binding = 2, rgba16f) uniform image2D dstGbuffer;
+
+void main()
+{
+    ivec2 coord = ivec2(gl_GlobalInvocationID);
+    ivec2 srcSize = textureSize(srcDepth, 0);
+    ivec2 dstSize = imageSize(dstGbuffer);
+    vec4 depthSample = texelFetch(srcDepth, coord, 0);
+    imageStore(dstGbuffer, coord, vec4(depthSample));
+}

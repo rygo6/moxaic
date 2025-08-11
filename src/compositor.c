@@ -363,17 +363,6 @@ VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
-	{
-		// Gbuffer Mip
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-		.image = VK_NULL_HANDLE,
-		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		.srcAccessMask = VK_ACCESS_2_NONE,
-		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-	},
 };
 
 // GraphicsBarriers
@@ -409,17 +398,6 @@ VkImageMemoryBarrier2 gfxProcessAcquireBarriers[] = {
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-	},
-	{
-		// Gbuffer Mip
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-		.image = VK_NULL_HANDLE,
-		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		.srcAccessMask = VK_ACCESS_2_NONE,
-		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
@@ -465,17 +443,6 @@ VkImageMemoryBarrier2 compProcessAcquireBarriers[] = {
 	},
 	{
 		// Gbuffer
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-		.image = VK_NULL_HANDLE,
-		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		.srcAccessMask = VK_ACCESS_2_NONE,
-		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-	},
-	{
-		// Gbuffer Mip
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -550,7 +517,8 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(pCst, finalBlitPipe);
 	EXTRACT_FIELD(pCst, finalBlitPipeLayout);
 
-	EXTRACT_FIELD(&node, gbufferProcessBlitUpPipe);
+	EXTRACT_FIELD(&node, gbufferProcessDownPipe);
+	EXTRACT_FIELD(&node, gbufferProcessUpPipe);
 	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
 	EXTRACT_FIELD(pCst, pProcessStateMapped);
 	auto processSetBuf = pCst->processSetBuffer.buffer;
@@ -707,30 +675,141 @@ CompositeLoop:
 				pAcquireBarriers[1].image = pLeftDepthSwap->image;
 				pAcquireBarriers[1].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[2].image = pLeftGBuffer->image;
-				pAcquireBarriers[3].image = pLeftGBuffer->mipImage;
 				CmdPipelineImageBarriers2(gfxCmd, processAcquireBarrierCount, pAcquireBarriers);
 
 				// TODO this needs to be specifically only the rect which was rendered into
 				ivec2 nodeSwapExtent = IVEC2(pNodeShr->swapMaxWidth, pNodeShr->swapMaxHeight);
-				u32   nodeSwapPixelCt = nodeSwapExtent.x * nodeSwapExtent.y;
-				u32   nodeSwapGroupCt = nodeSwapPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
-
-//				ivec2 mipExtent = {nodeSwapExtent.vec >> MXC_NODE_GBUFFER_FLATTENED_MIP_COUNT};
-//				u32   mipPixelCt = mipExtent.x * mipExtent.y;
-//				u32   mipGroupCt = MAX(mipPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT, 1);
+//				ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent, 32), 1);
 
 				auto pProcState = &pNodeShr->processState;
 				pProcState->cameraNearZ = globCam.zNear;
 				pProcState->cameraFarZ = globCam.zFar;
 				memcpy(pProcessStateMapped, pProcState, sizeof(MxcProcessState));
 
-				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessBlitUpPipe);
+				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessDownPipe);
 
-				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-					BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf),
-					BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftDepthSwap->view),
-					BIND_WRITE_GBUFFER_PROCESS_DST(pLeftGBuffer->view));
-				vk.CmdDispatch(gfxCmd, 1, nodeSwapGroupCt, 1);
+				{
+					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout,	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+						BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf),
+						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftDepthSwap->view),
+						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[1]));
+
+					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> 1, 32), 1);
+					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+				}
+
+				for (int iMip = 2; iMip < pLeftGBuffer->mipViewCount; ++iMip) {
+					CMD_IMAGE_BARRIERS(gfxCmd, {
+					   VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					   .image = pLeftGBuffer->image,
+					   .subresourceRange = {
+						   .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						   .baseMipLevel = iMip - 1,
+						   .levelCount = 1,
+						   .layerCount = VK_REMAINING_ARRAY_LAYERS
+					   },
+					   VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+					   VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+					   VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					},
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pLeftGBuffer->image,
+						.subresourceRange = {
+							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+							.baseMipLevel = iMip,
+							.levelCount = 1,
+							.layerCount = VK_REMAINING_ARRAY_LAYERS
+						},
+						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					});
+
+					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftGBuffer->mipViews[iMip - 1]),
+						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[iMip]));
+
+					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
+					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+				}
+
+				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessUpPipe);
+
+				for (int iMip = pLeftGBuffer->mipViewCount - 2; iMip >= 1; --iMip) {
+					CMD_IMAGE_BARRIERS(gfxCmd, {
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pLeftGBuffer->image,
+						.subresourceRange = {
+							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+							.baseMipLevel = iMip + 1,
+							.levelCount = 1,
+							.layerCount = VK_REMAINING_ARRAY_LAYERS
+						},
+						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					},
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pLeftGBuffer->image,
+						.subresourceRange = {
+							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+							.baseMipLevel = iMip,
+							.levelCount = 1,
+							.layerCount = VK_REMAINING_ARRAY_LAYERS
+						},
+						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					});
+
+					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftGBuffer->mipViews[iMip + 1]),
+						BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pLeftGBuffer->mipViews[iMip]),
+						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[iMip]));
+
+					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
+					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+				}
+
+				{
+					CMD_IMAGE_BARRIERS(gfxCmd, {
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pLeftGBuffer->image,
+						.subresourceRange = {
+							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+							.baseMipLevel = 1,
+							.levelCount = 1,
+							.layerCount = VK_REMAINING_ARRAY_LAYERS
+						},
+						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					},
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pLeftGBuffer->image,
+						.subresourceRange = {
+							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+							.baseMipLevel = 0,
+							.levelCount = 1,
+							.layerCount = VK_REMAINING_ARRAY_LAYERS
+						},
+						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+					});
+
+					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftGBuffer->mipViews[1]),
+						BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pLeftDepthSwap->view),
+						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[0]));
+
+					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent, 32), 1);
+					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+				}
+
 
 //				CMD_IMAGE_BARRIERS(gfxCmd, {
 //					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -750,7 +829,7 @@ CompositeLoop:
 
 				CMD_WRITE_SINGLE_SETS(device,
 					BIND_WRITE_NODE_COLOR(pNodeCst->nodeDesc.set, vk.context.nearestSampler, pLeftColorSwap->view, finalLayout),
-					BIND_WRITE_NODE_GBUFFER(pNodeCst->nodeDesc.set, vk.context.nearestSampler, pLeftGBuffer->view, finalLayout));
+					BIND_WRITE_NODE_GBUFFER(pNodeCst->nodeDesc.set, vk.context.nearestSampler, pLeftGBuffer->mipViews[0], finalLayout));
 			}
 
 			/// Calc new node uniform and shared data
@@ -790,7 +869,7 @@ CompositeLoop:
 				}
 				vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
 				vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
-				vec2 uvDiff = {uvMaxClamp.vec - uvMinClamp.vec};
+				vec2 uvDiff = (vec2){.vec = uvMaxClamp.vec - uvMinClamp.vec}; // TODO fill in macros for this
 
 				// This line and interaction logic should probably go into a threaded node.
 				// Maybe? With lines potentially staggered and changed at every compositor step, you do want to redraw them every frame.

@@ -33,11 +33,11 @@ SIMD_TYPE(float, mat4, 16);
 
 
 #define VEC_UNION(name, type, simd_type, align, count, vec_name, ...) \
-	typedef union __attribute((aligned(align))) name {                \
-		simd_type vec_name;                                           \
-		struct {                                                      \
+	typedef union __attribute__((transparent_union)) name {           \
+		struct __attribute((aligned(align))) {                        \
 			type __VA_ARGS__;                                         \
 		};                                                            \
+		simd_type vec_name;                                           \
 	} name;
 
 VEC_UNION(vec2, float, float2_vec, 8, 2, vec, x, y)
@@ -570,7 +570,7 @@ MATH_INLINE quat QuatInverse(quat q)
 	}
 
 	quat conjugate = {{q.w, -q.x, -q.y, -q.z}};
-	return (quat){conjugate.vec / magnitudeSquared};
+	return (quat){.vec = conjugate.vec / magnitudeSquared};
 }
 
 MATH_INLINE vec4 vec4MulMat4(mat4 m, vec4 v)
@@ -602,16 +602,17 @@ MATH_INLINE vec2 UVFromNDC(vec3 ndc)
 
 MATH_INLINE ivec2 iVec2CeiDivide(ivec2 v, int d)
 {
-	vec2 fv = {.vec = {v.vec[X], v.vec[Y]}};
-	fv.vec = fv.vec / (float)d;
-	return (ivec2){{ceilf(fv.vec[X]), ceilf(fv.vec[Y])}};
+	float2_vec fv = __builtin_convertvector(v.vec, float2_vec);
+	fv /= (float)d;
+	return (ivec2){.x = ceilf(fv[X]), .y = ceilf(fv[Y])};
 }
 
 MATH_INLINE ivec2 iVec2ShiftRightCeil(ivec2 v, int shift)
 {
 	if (shift <= 0) return v;
-	return (ivec2){(v.vec >> shift) + (v.vec % 2)};
+	return (ivec2){.vec = (v.vec >> shift) + (v.vec % 2)};
 }
+
 
 MATH_INLINE ivec2 iVec2Min(ivec2 v, u32 min)
 {
@@ -627,7 +628,7 @@ typedef struct Plane {
 
 MATH_INLINE ray rayFromScreenUV(vec2 uv, mat4 invProj, mat4 invView, mat4 invViewProj)
 {
-	vec2 ndc = { uv.vec * 2.0f - 1.0f };
+	vec2 ndc = (vec2){.vec = uv.vec * 2.0f - 1.0f};
 	vec4 clipRayPos = VEC4(ndc.x, ndc.y, 0.0f, 1.0f);
 	vec4 clipWorldPos = vec4MulMat4(invViewProj, clipRayPos);
 

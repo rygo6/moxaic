@@ -1,0 +1,28 @@
+#version 450
+
+#include "math.glsl"
+#include "logging.glsl"
+#include "gbuffer_process_binding.glsl"
+
+layout (local_size_x = LOCAL_SIZE, local_size_y = LOCAL_SIZE, local_size_z = 1) in;
+
+void main()
+{
+    ivec2 srcSize = textureSize(srcMip, 0);
+    ivec2 dstSize = imageSize(dstGbuffer);
+
+    ivec2 coord = ivec2(gl_GlobalInvocationID);
+    vec2 uv = vec2(gl_GlobalInvocationID) / dstSize;
+
+    float depthSample = texelFetch(srcGbuffer, coord, 0).r;
+    if (!(depthSample > HALF_EPSILON))
+        depthSample = texture(srcMip, uv).r;
+
+    if (dstSize.x == 1024) {
+        depthSample = LinearizeDepth(processState.depth.nearZ, processState.depth.farZ, depthSample);
+        depthSample = ProjectDepth(processState.cameraFarZ, processState.cameraNearZ, depthSample);// reverse near/far because we use reverseZ
+//        LOG("%d %d\n", srcSize.x, srcSize.y);
+    }
+
+    imageStore(dstGbuffer, coord, vec4(depthSample));
+}

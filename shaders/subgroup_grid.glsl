@@ -1,3 +1,5 @@
+#include "math.glsl"
+
 #extension GL_KHR_shader_subgroup_basic : require
 #extension GL_KHR_shader_subgroup_ballot : require
 #extension GL_KHR_shader_subgroup_shuffle : require
@@ -131,7 +133,7 @@ uvec2 grid_InvocationQuadMortonCoord;
 ivec2 grid_GlobalInvocationQuadCoord;
 
 // Invocation Quad Coord globally. Within the workgroup it us morton. Outside the workgroup it is linear.
-uvec2 grid_GlobalInvocationQuadMortonCoord;
+ivec2 grid_GlobalInvocationQuadMortonCoord;
 
 // Grid UV globally
 vec2 grid_GlobalInvocationUV;
@@ -489,7 +491,7 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
 //    grid_InvocationQuadMortonCoord = MortonDecode8bit((grid_GlobalSubgroupQuadID * SUBGROUP_COUNT) + grid_InvocationSubgroundQuadID);
 
     grid_GlobalInvocationQuadCoord = grid_InvocationQuadCoord + grid_GlobalWorkgroupCoord;
-    grid_GlobalInvocationQuadMortonCoord =  grid_InvocationQuadMortonCoord + grid_GlobalWorkgroupCoord;
+    grid_GlobalInvocationQuadMortonCoord = ivec2(grid_InvocationQuadMortonCoord + grid_GlobalWorkgroupCoord);
 
     grid_GlobalInvocationUV = vec2(grid_GlobalInvocationQuadCoord) / vec2(dimensions);
     grid_GlobalInvocationMortonUV = vec2(grid_GlobalInvocationQuadMortonCoord) / vec2(dimensions);
