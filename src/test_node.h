@@ -10,6 +10,7 @@ typedef struct MxcTestNode {
 
 	VkDevice device;
 
+	VkGlobalSetState* pGlobalSetMapped;
 	VkSharedBuffer  globalBuffer;
 	VkDescriptorSet globalSet;
 
@@ -26,6 +27,9 @@ typedef struct MxcTestNode {
 	VkBuffer          sphereObjectSetBuffer;
 
 	VkDepthFramebufferTexture framebufferTexture;
+
+	MxcProcessState* pProcessStateMapped;
+	VkSharedBuffer   processStateBuffer;
 
 } MxcTestNode;
 

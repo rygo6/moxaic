@@ -1,14 +1,8 @@
 #define LOCAL_SIZE 32
 
-struct DepthState {
-    float minDepth;
-    float maxDepth;
-    float nearZ;
-    float farZ;
-};
-
 layout (set = 0, binding = 0) uniform ProcessState {
-    DepthState depth;
+    float depthNearZ;
+    float depthFarZ;
     float cameraNearZ;
     float cameraFarZ;
 } processState;

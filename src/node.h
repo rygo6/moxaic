@@ -56,13 +56,6 @@ typedef enum MxcSwapScale : u8{
 	MXC_SWAP_SCALE_COUNT,
 } MxcSwapScale;
 
-typedef struct MxcDepthState {
-	float minDepth;
-	float maxDepth;
-	float nearZ;
-	float farZ;
-} MxcDepthState;
-
 typedef enum MxcCompositorMode : u8 {
 	MXC_COMPOSITOR_MODE_NONE, // Used to process messages with no compositing.
 	MXC_COMPOSITOR_MODE_QUAD,
@@ -93,7 +86,8 @@ typedef struct MxcController {
 } MxcController;
 
 typedef struct MxcProcessState {
-	MxcDepthState depth;
+	float depthNearZ;
+	float depthFarZ;
 	float cameraNearZ;
 	float cameraFarZ;
 } MxcProcessState;
@@ -114,11 +108,8 @@ typedef struct MxcNodeShared {
 	MxcProcessState processState;
 
 	pose rootPose;
-
-	// I don't think I need this?
-	// should maybe in context?
-	pose              cameraPose;
-	cam               camera;
+	pose cameraPose;
+	cam  camera;
 
 	struct {
 		u8 colorId;
@@ -138,7 +129,6 @@ typedef struct MxcNodeShared {
 	MxcRingBuffer nodeInterprocessFuncQueue;
 
 	// Swap
-//	XrSwapType      swapType;
 	u16             swapMaxWidth;
 	u16             swapMaxHeight;
 	XrSwapState     swapStates[XR_SWAPCHAIN_CAPACITY];
@@ -166,46 +156,6 @@ typedef struct MxcExternalNodeMemory {
 /////////
 //// Swap
 ////
-//constexpr int MXC_SWAP_TYPE_BLOCK_INDEX_BY_TYPE[] = {
-//	[XR_SWAP_TYPE_UNKNOWN]              = 0,
-//	[XR_SWAP_TYPE_MONO_SINGLE]          = 0,
-//	[XR_SWAP_TYPE_STEREO_SINGLE]        = 0,
-//	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-//	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE]   = 2,
-//};
-//constexpr int MXC_SWAP_TYPE_BLOCK_COUNT = 3;
-
-//constexpr int MXC_SWAP_SHARED_RESOLUTIONS[] = {
-//	[XR_SWAP_TYPE_UNKNOWN]              = 0,
-//	[1024]          = 0
-//};
-
-//typedef struct MxcSwapInfo {
-//	XrSwapType        type;
-//	MxcCompositorMode compositorMode;
-//	XrSwapOutput      usage;
-//
-//	// not sure if I will use these
-//	MxcSwapScale xScale;
-//	MxcSwapScale yScale;
-//
-//	VkExtent3D extent;
-//
-//	VkLocality locality;
-//} MxcSwapInfo;
-
-//typedef struct MxcSwap {
-//	XrSwapType         type;
-//	VkDedicatedTexture color;
-//	VkDedicatedTexture depth;
-//	VkDedicatedTexture gbuffer;
-//	VkDedicatedTexture gbufferMip;
-//#if _WIN32
-//	VkExternalPlatformTexture colorExternal;
-//	VkExternalPlatformTexture depthExternal;
-//#endif
-//} MxcSwap;
-
 typedef struct MxcSwapTexture {
 	VkExternalTexture externalTexture[XR_SWAPCHAIN_IMAGE_COUNT];
 	XrSwapState       state;
@@ -296,6 +246,17 @@ typedef enum MxcNodeInteractionState{
 	NODE_INTERACTION_STATE_COUNT,
 } MxcNodeInteractionState;
 
+typedef struct MxcNodeGBuffer {
+	VkImage     image;
+	int         mipViewCount;
+	VkImageView mipViews[MXC_NODE_GBUFFER_MAX_MIP_COUNT];
+} MxcNodeGBuffer;
+
+typedef struct MxcNodeSwap {
+	VkImage               image;
+	VkImageView           view;
+} MxcNodeSwap;
+
 // Hot data used by the compositor for each node
 // should I call it Hot or Data?
 // Context = Cold. Data = Hot?
@@ -311,21 +272,13 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 	MxcCompositorNodeSetState nodeSetState;
 	VkSharedDescriptor        nodeDesc;
 
-	struct CACHE_ALIGN PACK {
-		VkImage               image;
-		VkImageView           view;
-	} swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
+	MxcNodeSwap CACHE_ALIGN PACK swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
-	struct CACHE_ALIGN PACK {
-		VkImage     image;
-		int         mipViewCount;
-		VkImageView mipViews[MXC_NODE_GBUFFER_MAX_MIP_COUNT];
-	} gbuffer[XR_MAX_VIEW_COUNT];
+	MxcNodeGBuffer CACHE_ALIGN PACK gbuffer[XR_MAX_VIEW_COUNT];
 	//	} gbuffer[XR_MAX_VIEW_COUNT][XR_SWAPCHAIN_IMAGE_COUNT];
 	// If I ever need to retain gbuffers, I will need more gbuffers.
 	// However, as long as gbuffer process is on the compositor thread
 	// it can sync a single gbuffer with composite render loop
-
 
   	// this should go a UI thread node
 	vec3 worldSegments[MXC_CUBE_SEGMENT_COUNT];
@@ -446,6 +399,12 @@ extern struct Node {
 #endif
 
 } node;
+
+//--------------------------------------------------------------------------------------------------
+// Functions
+//--------------------------------------------------------------------------------------------------
+
+void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent);
 
 void mxcInitializeNode();
 

@@ -29,14 +29,12 @@ typedef struct MxcCompositor {
   VkPipeline            nodeCompPipe;
   VkPipeline            nodePostCompPipe;
 
-  VkPipeline            gbufferProcessBlitUpPipe;
-
   VkDescriptorSetLayout finalBlitSetLayout;
   VkPipelineLayout      finalBlitPipeLayout;
   VkPipeline            finalBlitPipe;
 
   MxcProcessState*      pProcessStateMapped;
-  VkSharedBuffer        processSetBuffer;
+  VkSharedBuffer        processStateBuffer;
 
   VkSharedBuffer  globalBuffer;
   VkDescriptorSet globalSet;

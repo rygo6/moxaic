@@ -77,7 +77,8 @@
 	PFN_FUNC(QueueSubmit2)             \
 	PFN_FUNC(QueuePresentKHR)          \
 	PFN_FUNC(UpdateDescriptorSets)     \
-	PFN_FUNC(GetSemaphoreCounterValue)
+	PFN_FUNC(GetSemaphoreCounterValue) \
+	PFN_FUNC(SetDebugUtilsObjectNameEXT)
 
 #endif
 
@@ -280,11 +281,11 @@ static const char* string_QueueFamilyType[] = {
 	[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = "VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER",
 };
 
-typedef struct VkmQueueFamily {
+typedef struct VkQueueFamily {
 	VkQueue       queue;
 	VkCommandPool pool;
 	uint32_t      index;
-} VkmQueueFamily;
+} VkQueueFamily;
 
 typedef struct VkSharedDescriptor {
 	VkDescriptorSet set;
@@ -298,7 +299,7 @@ typedef struct VkSharedDescriptor {
 typedef struct VkContext {
 	VkPhysicalDevice physicalDevice;
 	VkDevice         device;
-	VkmQueueFamily   queueFamilies[VK_QUEUE_FAMILY_TYPE_COUNT];
+	VkQueueFamily    queueFamilies[VK_QUEUE_FAMILY_TYPE_COUNT];
 
 	VkDescriptorSetLayout globalSetLayout;
 	VkDescriptorSetLayout materialSetLayout;
@@ -504,10 +505,37 @@ enum {
 	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
 	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
 	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+#define VK_IMAGE_BARRIER_SRC_TRANSFER_READ              \
+	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,   \
+	.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
+	.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+
+#define VK_IMAGE_BARRIER_SRC_GENERAL_TRANSFER_WRITE      \
+	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
+	.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
+	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
+#define VK_IMAGE_BARRIER_SRC_GENERAL_TRANSFER_READ       \
+	.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,   \
+	.srcAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
+	.oldLayout = VK_IMAGE_LAYOUT_GENERAL
+
 #define VK_IMAGE_BARRIER_DST_TRANSFER_WRITE              \
 	.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
 	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+#define VK_IMAGE_BARRIER_DST_TRANSFER_READ              \
+	.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,   \
+	.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
+	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+
+#define VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_WRITE      \
+	.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,    \
+	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT_KHR, \
+	.newLayout = VK_IMAGE_LAYOUT_GENERAL
+#define VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_READ      \
+	.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,   \
+	.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
+	.newLayout = VK_IMAGE_LAYOUT_GENERAL
 
 #define VK_IMAGE_BARRIER_SRC_COMPUTE_READ                   \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, \
@@ -540,10 +568,20 @@ enum {
 	.dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT, \
 	.newLayout = VK_IMAGE_LAYOUT_GENERAL
 
+#define VK_IMAGE_BARRIER_SRC_DEPTH_ATTACHMENT_WRITE                  \
+	.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |   \
+	                VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,     \
+	.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, \
+	.oldLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL
+
 #define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE                  \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
 	.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,         \
 	.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+#define VK_IMAGE_BARRIER_DST_COLOR_ATTACHMENT_WRITE                  \
+	.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
+	.dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,         \
+	.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 
 #define VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_UNDEFINED              \
 	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, \
@@ -573,11 +611,17 @@ enum {
 	.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT_KHR, \
 	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 
+#define VK_IMAGE_BARRIER_DST_COMPUTE_RELEASE  \
+	.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, \
+	.dstAccessMask = VK_ACCESS_2_NONE,          \
+	.newLayout = VK_IMAGE_LAYOUT_GENERAL
+
 #define VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED       \
 	.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, \
 	.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED
 
 #define VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE .subresourceRange = VK_COLOR_SUBRESOURCE_RANGE
+#define VK_IMAGE_BARRIER_DEPTH_SUBRESOURCE_RANGE .subresourceRange = VK_DEPTH_SUBRESOURCE_RANGE
 
 //////////////////////////////////
 //// Mid Vulkan Inline Cmd Methods
@@ -594,6 +638,11 @@ enum {
 
 #define CMD_IMAGE_BARRIERS(_cmd, ...) ({                          \
 	VkImageMemoryBarrier2 barriers[] = {__VA_ARGS__};             \
+	CmdPipelineImageBarriers2((_cmd), COUNT(barriers), barriers); \
+})
+
+#define CMD_IMAGE_BARRIERS2(_cmd, ...) ({                          \
+	VkImageMemoryBarrier2 barriers[] = __VA_ARGS__;             \
 	CmdPipelineImageBarriers2((_cmd), COUNT(barriers), barriers); \
 })
 
@@ -1285,26 +1334,25 @@ static void CreateDepthRenderPass()
 			},
 		},
 		.dependencyCount = 2,
-		.pDependencies   = (VkSubpassDependency2[]){
-			// from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
-			{
-				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+		.pDependencies = (VkSubpassDependency2[]){ // https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
+		    {
+	    		VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
 				.srcSubpass      = VK_SUBPASS_EXTERNAL,
 				.dstSubpass      = 0,
-				.srcStageMask    = VK_PIPELINE_STAGE_TRANSFER_BIT,
-				.dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-				.srcAccessMask   = VK_ACCESS_TRANSFER_READ_BIT,
-				.dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				.srcStageMask    = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+				.dstStageMask    = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+				.srcAccessMask   = VK_ACCESS_2_TRANSFER_READ_BIT,
+				.dstAccessMask   = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 				.dependencyFlags = 0,
 			},
 			{
 				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
 				.srcSubpass      = 0,
 				.dstSubpass      = VK_SUBPASS_EXTERNAL,
-				.srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-				.dstStageMask    = VK_PIPELINE_STAGE_TRANSFER_BIT,
-				.srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-				.dstAccessMask   = VK_ACCESS_TRANSFER_READ_BIT,
+				.srcStageMask    = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+				.dstStageMask    = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+				.srcAccessMask   = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				.dstAccessMask   = VK_ACCESS_2_TRANSFER_READ_BIT,
 				.dependencyFlags = 0,
 			},
 		},
@@ -2639,6 +2687,7 @@ void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExt
 
 	// I think I only need to keep the device alive?
 	// I should have explicit ExternalPlatform Init and Destroy methods
+	// Really letting it cleanup on close is probably fine
 	//	IDXGIFactory4_Release(d3d12.factory);
 	//	IDXGIAdapter1_Release(d3d12.adapter);
 	//	ID3D12Device_Release(d3d12.device);
@@ -2947,14 +2996,15 @@ void vkInitializeInstance()
 
 void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 {
-	/// PhysicalDevice
+	// Create Physical Device
+	//----------------------------------------------------------------------------------------------
 	{
 		u32 deviceCount = 0;
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, NULL));
 		VkPhysicalDevice devices[deviceCount];
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, devices));
 
-		vk.context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this seems to be true.
+		vk.context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this is true.
 		VkPhysicalDeviceProperties2 physicalDeviceProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = NULL};
 		vkGetPhysicalDeviceProperties2(vk.context.physicalDevice, &physicalDeviceProperties);
 		printf("PhysicalDevice: %s\n", physicalDeviceProperties.properties.deviceName);
@@ -2968,9 +3018,13 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
 		CHECK(physicalDeviceProperties.properties.apiVersion < VK_VERSION, "Insufficient Vulkan API Version");
 
+		VkPhysicalDeviceMaintenance8FeaturesKHR physicalDeviceMaintenance8FeaturesKHR = {
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR,
+			.pNext = NULL,
+		};
 		VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT physicalDeviceSwapchainMaintenance1Features = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
-			.pNext = NULL,
+			.pNext = &physicalDeviceMaintenance8FeaturesKHR,
 		};
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LINE_RASTERIZATION_FEATURES_EXT,
@@ -3016,8 +3070,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 
 #define CHECK_AVAILABLE(feature) CHECK(feature == VK_FALSE, #feature " unavailable!");
 
-		//		CHECK_AVAILABLE(physicalDeviceSwapchainMaintenance1Features.swapchainMaintenance1);
-
+		CHECK_AVAILABLE(physicalDeviceMaintenance8FeaturesKHR.maintenance8);
 		CHECK_AVAILABLE(physicalDeviceLineRasterizationFeatures.rectangularLines);
 		CHECK_AVAILABLE(physicalDeviceLineRasterizationFeatures.bresenhamLines);
 		CHECK_AVAILABLE(physicalDeviceLineRasterizationFeatures.smoothLines);
@@ -3031,18 +3084,20 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 
 #undef CHECK_AVAILABLE
 	}
+	//----------------------------------------------------------------------------------------------
 
-	/// Device
+	// Create Device
+	//----------------------------------------------------------------------------------------------
 	{
-		// Features
-		VkFilterCubicImageViewImageFormatPropertiesEXT filterCubicImageViewImageFormatProperties = {
-			VK_STRUCTURE_TYPE_FILTER_CUBIC_IMAGE_VIEW_IMAGE_FORMAT_PROPERTIES_EXT,
-			.filterCubic = VK_TRUE,
-//			.filterCubicMinmax = VK_TRUE,
+		// Request Device Features
+		VkPhysicalDeviceMaintenance8FeaturesKHR physicalDeviceMaintenance8FeaturesKHR = {
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR,
+			.pNext = NULL,
+			.maintenance8 = VK_TRUE,
 		};
 		VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT physicalDeviceSwapchainMaintenance1Features = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
-//			&filterCubicImageViewImageFormatProperties,
+			&physicalDeviceMaintenance8FeaturesKHR,
 			.swapchainMaintenance1 = VK_FALSE,
 		};
 		VkPhysicalDeviceLineRasterizationFeaturesEXT physicalDeviceLineRasterizationFeatures = {
@@ -3114,7 +3169,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			},
 		};
 
-		// Queues
+		// Request Device Queues
 		uint32_t activeQueueIndex = 0;
 		uint32_t activeQueueCount = 0;
 		for (int i = 0; i < VK_QUEUE_FAMILY_TYPE_COUNT; ++i)
@@ -3143,7 +3198,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			activeQueueIndex++;
 		}
 
-		// Extensions
+		// Request Device Extensions
 		const char* ppEnabledDeviceExtensionNames[] = {
 			VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 			VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME,
@@ -3164,6 +3219,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME,
 			VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
 		};
+
 		VkDeviceCreateInfo deviceCreateInfo = {
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 			&physicalDeviceFeatures,
@@ -3174,13 +3230,28 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		};
 		VK_CHECK(vkCreateDevice(vk.context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &vk.context.device));
 	}
+	//----------------------------------------------------------------------------------------------
 
+	// Load PFN Funcs
+	//----------------------------------------------------------------------------------------------
+	{
+#define PFN_FUNC(_func)                                                              \
+	vk._func = (PFN_##vk##_func)vkGetDeviceProcAddr(vk.context.device, "vk" #_func); \
+	CHECK(vk._func == NULL, "Couldn't load " #_func)
+		PFN_FUNCS
+#undef PFN_FUNC
+	}
+	//----------------------------------------------------------------------------------------------
+
+	// Create Queue Familys
+	//----------------------------------------------------------------------------------------------
 	for (int i = 0; i < VK_QUEUE_FAMILY_TYPE_COUNT; ++i) {
 		if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
 			continue;
 
 		vkGetDeviceQueue(vk.context.device, vk.context.queueFamilies[i].index, 0, &vk.context.queueFamilies[i].queue);
-		vkSetDebugName(VK_OBJECT_TYPE_QUEUE, (uint64_t)vk.context.queueFamilies[i].queue, string_QueueFamilyType[i]);
+		VK_SET_DEBUG_NAME(vk.context.queueFamilies[i].queue, string_QueueFamilyType[i]);
+
 		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -3188,15 +3259,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		};
 		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &vk.context.queueFamilies[i].pool));
 	}
-
-	{
-		// do I want to switch to this? probably
-#define PFN_FUNC(_func)                                                              \
-	vk._func = (PFN_##vk##_func)vkGetDeviceProcAddr(vk.context.device, "vk" #_func); \
-	CHECK(vk._func == NULL, "Couldn't load " #_func)
-		PFN_FUNCS
-#undef PFN_FUNC
-	}
+	//----------------------------------------------------------------------------------------------
 }
 
 void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFamily, VkSwapContext* pSwap)
@@ -3334,13 +3397,6 @@ void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemapho
 	}
 }
 
-//void vkCreateGlobalSet(VkGlobalSet* pSet)
-//{
-//	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.basicPipeLayout.globalSetLayout, &pSet->set);
-//	vkCreateAllocateBindMapBuffer(VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT, sizeof(VkGlobalSetState), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_LOCALITY_CONTEXT, &pSet->memory, &pSet->buffer, (void**)&pSet->pMapped);
-//	vkUpdateDescriptorSets(vk.context.device, 1, &VK_SET_WRITE_GLOBAL_BUFFER(pSet->set, pSet->buffer), 0, NULL);
-//}
-
 void vkSetDebugName(VkObjectType objectType, u64 objectHandle, const char* pDebugName)
 {
 	VkDebugUtilsObjectNameInfoEXT debugInfo = {
@@ -3349,8 +3405,7 @@ void vkSetDebugName(VkObjectType objectType, u64 objectHandle, const char* pDebu
 		.objectHandle = objectHandle,
 		.pObjectName = pDebugName,
 	};
-	VK_INSTANCE_FUNC(SetDebugUtilsObjectNameEXT);
-	VK_CHECK(SetDebugUtilsObjectNameEXT(vk.context.device, &debugInfo));
+	VK_CHECK(vk.SetDebugUtilsObjectNameEXT(vk.context.device, &debugInfo));
 }
 
 VK_EXTERNAL_HANDLE_PLATFORM vkGetMemoryExternalHandle(VkDeviceMemory memory)

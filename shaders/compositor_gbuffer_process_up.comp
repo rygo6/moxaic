@@ -19,7 +19,7 @@ void main()
         depthSample = texture(srcMip, uv).r;
 
     if (dstSize.x == 1024) {
-        depthSample = LinearizeDepth(processState.depth.nearZ, processState.depth.farZ, depthSample);
+        depthSample = LinearizeDepth(processState.depthNearZ, processState.depthFarZ, depthSample);
         depthSample = ProjectDepth(processState.cameraFarZ, processState.cameraNearZ, depthSample);// reverse near/far because we use reverseZ
 //        LOG("%d %d\n", srcSize.x, srcSize.y);
     }

@@ -28,49 +28,149 @@ MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
 struct Node node;
 
-//////////////
-//// Swap Pool
-////
-#define SWAP_ACQUIRE_BARRIER                                                 \
-	.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,                    \
-	.srcAccessMask = VK_ACCESS_2_NONE,                                       \
-	.dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT |                   \
-					VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT |    \
-					VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT | \
-					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,                 \
-	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                            \
-	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   \
-	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,                   \
-	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
+//--------------------------------------------------------------------------------------------------
+// Swap Pool
+//--------------------------------------------------------------------------------------------------
+void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent)
+{
+	EXTRACT_FIELD(&node, gbufferProcessDownPipe);
+	EXTRACT_FIELD(&node, gbufferProcessUpPipe);
+	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
 
-#define SWAP_RELEASE_BARRIER                                 \
-	.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, \
-	.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,            \
-	.dstStageMask = VK_PIPELINE_STAGE_2_NONE,                \
-	.dstAccessMask = VK_ACCESS_2_NONE,                       \
-	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
-	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,   \
-	VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED
+	vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessDownPipe);
 
-// move here? need to think about combining openxr concepts and moxaic concepts
-//void mxcRequestSwapImage(NodeHandle hNode, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId)
-//{
-//	auto pNodeCtxt = &node.context[hNode];
-//	auto pNodeShrd = node.pShared[hNode];
-//
-//	assert(pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_UNITIALIZED && "Trying to create swapchain images with used swap index!");
-//
-//	pNodeShrd->swapStates[swapId] = XR_SWAP_STATE_REQUESTED;
-//	pNodeShrd->swapInfos[swapId] = *pSwapInfo;
-//
-//	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
-//	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
-//
-//	if (pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_ERROR) {
-//		LOG_ERROR("OpenXR failed to acquire swap!");
-//		pNodeShrd->swapStates[swapId] = XR_SWAP_STATE_UNITIALIZED;
-//	}
-//}
+	{
+		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout,	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+			BIND_WRITE_GBUFFER_PROCESS_STATE(stateBuffer),
+			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pDepthSwap->view),
+			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[1]));
+
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> 1, 32), 1);
+		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+	}
+
+	// Blit Down Depth Mips
+	//----------------------------------------------------------------------------------
+	for (int iMip = 2; iMip < pGBuffer->mipViewCount; ++iMip) {
+		CMD_IMAGE_BARRIERS(gfxCmd,
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pGBuffer->image,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = iMip - 1,
+					.levelCount = 1,
+					.layerCount = VK_REMAINING_ARRAY_LAYERS
+				},
+				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			},
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pGBuffer->image,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = iMip,
+					.levelCount = 1,
+					.layerCount = VK_REMAINING_ARRAY_LAYERS
+				},
+				VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			});
+
+		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[iMip - 1]),
+			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[iMip]));
+
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
+		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+	}
+
+	// Blit Up Depth Mips
+	//--------------------------------------------------------------------------------------------------
+	vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessUpPipe);
+
+	for (int iMip = pGBuffer->mipViewCount - 2; iMip >= 1; --iMip) {
+		CMD_IMAGE_BARRIERS(gfxCmd,
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pGBuffer->image,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = iMip + 1,
+					.levelCount = 1,
+					.layerCount = VK_REMAINING_ARRAY_LAYERS
+				},
+				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			},
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pGBuffer->image,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = iMip,
+					.levelCount = 1,
+					.layerCount = VK_REMAINING_ARRAY_LAYERS
+				},
+				VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			});
+
+		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[iMip + 1]),
+			BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pGBuffer->mipViews[iMip]),
+			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[iMip]));
+
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
+		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+	}
+
+	// Final Depth Up Blit
+	//--------------------------------------------------------------------------------------------------
+	{
+		CMD_IMAGE_BARRIERS(gfxCmd,
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pGBuffer->image,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 1,
+					.levelCount = 1,
+					.layerCount = VK_REMAINING_ARRAY_LAYERS
+				},
+				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			},
+			{
+				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				.image = pGBuffer->image,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.layerCount = VK_REMAINING_ARRAY_LAYERS
+				},
+				VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			});
+
+		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[1]),
+			BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pDepthSwap->view),
+			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[0]));
+
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent, 32), 1);
+		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
+	}
+}
+
 
 // this couild go in mid vk
 static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTexture* pSwapTexture)
@@ -133,7 +233,8 @@ static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 		.samples     = VK_SAMPLE_COUNT_1_BIT,
 		// You cannot export a depth texture to all platforms.
 		.usage       = VK_IMAGE_USAGE_STORAGE_BIT |
-		               VK_IMAGE_USAGE_SAMPLED_BIT,
+		               VK_IMAGE_USAGE_SAMPLED_BIT |
+		               VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 	};
 	vkCreateExternalPlatformTexture(&imageCreateInfo, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {

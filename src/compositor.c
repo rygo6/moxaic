@@ -336,21 +336,21 @@ VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
-		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		COMPOSITOR_DST_GRAPHICS_READ,
+		.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 	{
 		// Depth
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
 		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_READ,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-		.image = VK_NULL_HANDLE,
-		.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
+		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE
 	},
 	{
 		// Gbuffer
@@ -358,7 +358,7 @@ VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 		.image = VK_NULL_HANDLE,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_NONE,
-		.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
 		VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
@@ -474,7 +474,7 @@ VkImageMemoryBarrier2* processAcquireBarriers[] = {
 	[MXC_COMPOSITOR_MODE_QUAD] = gfxProcessAcquireBarriers,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = gfxProcessAcquireBarriers,
 	[MXC_COMPOSITOR_MODE_TASK_MESH] = gfxProcessAcquireBarriers,
-	[MXC_COMPOSITOR_MODE_COMPUTE] = compProcessAcquireBarriers,
+	[MXC_COMPOSITOR_MODE_COMPUTE] = localProcessAcquireBarriers,
 };
 VkImageMemoryBarrier2* processEndBarriers[] = {
 	[MXC_COMPOSITOR_MODE_QUAD] = gfxProcessEndBarriers,
@@ -521,7 +521,7 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(&node, gbufferProcessUpPipe);
 	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
 	EXTRACT_FIELD(pCst, pProcessStateMapped);
-	auto processSetBuf = pCst->processSetBuffer.buffer;
+	auto processStateBuf = pCst->processStateBuffer.buffer;
 
 	EXTRACT_FIELD(pCst, timeQryPool);
 
@@ -536,7 +536,6 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	auto pLineBuf = &pCst->lineBuf;
 
 	auto gfxFrameColorView = pCst->framebufferTexture.color.view;
-//	auto gfxFrameNormalView = pCst->framebufferTexture.normal.view;
 	auto gfxFrameDepthView = pCst->framebufferTexture.depth.view;
 	auto compFrameColorView = pCst->compFrameColorTex.view;
 
@@ -574,10 +573,10 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 CompositeLoop:
 
 	// MXC_CYCLE_UPDATE_WINDOW_STATE
-	//--------------------------------------------------------------------------------------------------
+	//----------------------------------------------------------------------------------------------
 
 	// MXC_CYCLE_PROCESS_INPUT
-	//--------------------------------------------------------------------------------------------------
+	//----------------------------------------------------------------------------------------------
 	atomic_thread_fence(memory_order_acquire);
 	vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
 	u64 baseCycleValue = compositorContext.baseCycleValue ;
@@ -586,13 +585,15 @@ CompositeLoop:
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
 	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
 
-	/// MXC_CYCLE_UPDATE_NODE_STATES
+	// MXC_CYCLE_UPDATE_NODE_STATES
+	//----------------------------------------------------------------------------------------------
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 
 	CmdResetBegin(gfxCmd);
 	vk.ResetQueryPool(device, timeQryPool, 0, TIME_QUERY_COUNT);
 
-	/// Iterate Node State Updates
+	// Iterate Node State Updates
+	//----------------------------------------------------------------------------------------------
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
 
 	ivec2 windowExtent  = mxcWindowInput.iDimensions;
@@ -651,8 +652,7 @@ CompositeLoop:
 			atomic_thread_fence(memory_order_release);
 
 			/// Acquire new frame from node
-			ATOMIC_FENCE_SCOPE
-			{
+			ATOMIC_FENCE_SCOPE {
 				int iSwapImg = !(nodeTimelineVal % VK_SWAP_COUNT);
 
 				int iLeftColorImgId = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].colorId;
@@ -661,13 +661,18 @@ CompositeLoop:
 				int iRightDepthImgId = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].depthId;
 
 				auto pNodeCtxt = &node.context[hNode];
-				auto pLeftColorSwap  = &pNodeCst->swaps[iLeftColorImgId][iSwapImg];
-				auto pLeftDepthSwap  = &pNodeCst->swaps[iLeftDepthImgId][iSwapImg];
-				auto pRightColorSwap = &pNodeCst->swaps[iRightColorImgId][iSwapImg];
-				auto pRightDepthSwap = &pNodeCst->swaps[iRightDepthImgId][iSwapImg];
+				MxcNodeSwap* pLeftColorSwap  = &pNodeCst->swaps[iLeftColorImgId][iSwapImg];
+				MxcNodeSwap* pLeftDepthSwap  = &pNodeCst->swaps[iLeftDepthImgId][iSwapImg];
+				MxcNodeSwap* pRightColorSwap = &pNodeCst->swaps[iRightColorImgId][iSwapImg];
+				MxcNodeSwap* pRightDepthSwap = &pNodeCst->swaps[iRightDepthImgId][iSwapImg];
 
-				auto pLeftGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_LEFT_STEREO];
-				auto pRightGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_RIGHT_STEREO];
+				MxcNodeGBuffer* pLeftGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_LEFT_STEREO];
+				MxcNodeGBuffer* pRightGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_RIGHT_STEREO];
+
+				auto pProcState = &pNodeShr->processState;
+				pProcState->cameraNearZ = globCam.zNear;
+				pProcState->cameraFarZ = globCam.zFar;
+				memcpy(pProcessStateMapped, pProcState, sizeof(MxcProcessState));
 
 				// I hate this we need a better way
 				pAcquireBarriers[0].image = pLeftColorSwap->image;
@@ -675,166 +680,25 @@ CompositeLoop:
 				pAcquireBarriers[1].image = pLeftDepthSwap->image;
 				pAcquireBarriers[1].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[2].image = pLeftGBuffer->image;
+
+//				LOG("Acuiring %d\n|\n", iSwapImg);
 				CmdPipelineImageBarriers2(gfxCmd, processAcquireBarrierCount, pAcquireBarriers);
 
 				// TODO this needs to be specifically only the rect which was rendered into
 				ivec2 nodeSwapExtent = IVEC2(pNodeShr->swapMaxWidth, pNodeShr->swapMaxHeight);
-//				ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent, 32), 1);
-
-				auto pProcState = &pNodeShr->processState;
-				pProcState->cameraNearZ = globCam.zNear;
-				pProcState->cameraFarZ = globCam.zFar;
-				memcpy(pProcessStateMapped, pProcState, sizeof(MxcProcessState));
-
-				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessDownPipe);
-
-				{
-					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout,	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-						BIND_WRITE_GBUFFER_PROCESS_STATE(processSetBuf),
-						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftDepthSwap->view),
-						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[1]));
-
-					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> 1, 32), 1);
-					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
-				}
-
-				for (int iMip = 2; iMip < pLeftGBuffer->mipViewCount; ++iMip) {
-					CMD_IMAGE_BARRIERS(gfxCmd, {
-					   VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					   .image = pLeftGBuffer->image,
-					   .subresourceRange = {
-						   .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-						   .baseMipLevel = iMip - 1,
-						   .levelCount = 1,
-						   .layerCount = VK_REMAINING_ARRAY_LAYERS
-					   },
-					   VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-					   VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-					   VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					},
-					{
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftGBuffer->image,
-						.subresourceRange = {
-							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-							.baseMipLevel = iMip,
-							.levelCount = 1,
-							.layerCount = VK_REMAINING_ARRAY_LAYERS
-						},
-						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					});
-
-					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftGBuffer->mipViews[iMip - 1]),
-						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[iMip]));
-
-					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
-					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
-				}
-
-				vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessUpPipe);
-
-				for (int iMip = pLeftGBuffer->mipViewCount - 2; iMip >= 1; --iMip) {
-					CMD_IMAGE_BARRIERS(gfxCmd, {
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftGBuffer->image,
-						.subresourceRange = {
-							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-							.baseMipLevel = iMip + 1,
-							.levelCount = 1,
-							.layerCount = VK_REMAINING_ARRAY_LAYERS
-						},
-						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					},
-					{
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftGBuffer->image,
-						.subresourceRange = {
-							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-							.baseMipLevel = iMip,
-							.levelCount = 1,
-							.layerCount = VK_REMAINING_ARRAY_LAYERS
-						},
-						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					});
-
-					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftGBuffer->mipViews[iMip + 1]),
-						BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pLeftGBuffer->mipViews[iMip]),
-						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[iMip]));
-
-					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
-					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
-				}
-
-				{
-					CMD_IMAGE_BARRIERS(gfxCmd, {
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftGBuffer->image,
-						.subresourceRange = {
-							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-							.baseMipLevel = 1,
-							.levelCount = 1,
-							.layerCount = VK_REMAINING_ARRAY_LAYERS
-						},
-						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					},
-					{
-						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftGBuffer->image,
-						.subresourceRange = {
-							.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-							.baseMipLevel = 0,
-							.levelCount = 1,
-							.layerCount = VK_REMAINING_ARRAY_LAYERS
-						},
-						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-					});
-
-					CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-						BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pLeftGBuffer->mipViews[1]),
-						BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pLeftDepthSwap->view),
-						BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pLeftGBuffer->mipViews[0]));
-
-					ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent, 32), 1);
-					vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
-				}
-
-
-//				CMD_IMAGE_BARRIERS(gfxCmd, {
-//					VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-//					.image = pLeftGBuffer->mipImage,
-//					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-//					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-//					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-//				});
-
-//				CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-//					BIND_WRITE_GBUFFER_PROCESS_DST(pLeftGBuffer->view));
-//				vk.CmdDispatch(gfxCmd, 1, nodeSwapGroupCt, 1);
+				mxcNodeGBufferProcessDepth(gfxCmd, processStateBuf, pLeftDepthSwap, pLeftGBuffer, nodeSwapExtent);
 
 				pEndBarriers[0].image = pLeftGBuffer->image;
 				CmdPipelineImageBarriers2(gfxCmd, processEndBarrierCount, pEndBarriers);
 
+				// Update Node Descriptor Sets
 				CMD_WRITE_SINGLE_SETS(device,
 					BIND_WRITE_NODE_COLOR(pNodeCst->nodeDesc.set, vk.context.nearestSampler, pLeftColorSwap->view, finalLayout),
 					BIND_WRITE_NODE_GBUFFER(pNodeCst->nodeDesc.set, vk.context.nearestSampler, pLeftGBuffer->mipViews[0], finalLayout));
 			}
 
 			/// Calc new node uniform and shared data
-			ATOMIC_FENCE_SCOPE
-			{
+			ATOMIC_FENCE_SCOPE {
 				// Copy previously used global state from node to compositor data for the compositor to use in subsequent reprojections
 				memcpy(&pNodeCst->nodeSetState.view, &pNodeShr->globalSetState, sizeof(VkGlobalSetState));
 				memcpy(&pNodeCst->nodeSetState.ulUV, &pNodeShr->clip, sizeof(MxcClip));
@@ -1276,7 +1140,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 				.size                = sizeof(MxcProcessState),
 				.usage               = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			},
-			&pCst->processSetBuffer);
+			&pCst->processStateBuffer);
 	}
 
 	/// Final Blit
@@ -1420,9 +1284,9 @@ static void Bind(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
 	vkBindSharedBuffer(&pCst->globalBuffer);
 	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuffer.buffer));
 
-	vkBindSharedBuffer(&pCst->processSetBuffer);
-	pCst->pProcessStateMapped = vkSharedBufferPtr(pCst->processSetBuffer);
-	*pCst->pProcessStateMapped = (MxcProcessState){};
+	vkBindSharedBuffer(&pCst->processStateBuffer);
+	pCst->pProcessStateMapped = vkSharedBufferPtr(pCst->processStateBuffer);
+	memset(pCst->pProcessStateMapped, 0, sizeof(MxcProcessState));
 
 	for (int i = 0; i < MXC_NODE_CAPACITY; ++i) {
 		// should I make them all share the same buffer? probably

@@ -25,17 +25,19 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 	NodeHandle hNode = pNodeCtx->hNode;
 
 	auto nodeType = pNodeCtx->interprocessMode;
+	auto gfxCmd = pNodeCtx->thread.gfxCmd;
 
 	EXTRACT_FIELD(&vk.context, device);
 	EXTRACT_FIELD(&vk.context, depthRenderPass);
 	EXTRACT_FIELD(&vk.context, depthFramebuffer);
 
+	EXTRACT_FIELD(pNode, pProcessStateMapped);
+	auto processStateBuf = pNode->processStateBuffer.buffer;
+
 	EXTRACT_FIELD(pNode, framebufferTexture);
 
-	VkCommandBuffer gfxCmd = pNodeCtx->thread.gfxCmd;
-
-	auto              pGlobalSetMapped = vkSharedMemoryPtr(pNode->globalBuffer.memory);
-	VkDescriptorSet   globalSet = pNode->globalSet;
+	EXTRACT_FIELD(pNode, pGlobalSetMapped);
+	EXTRACT_FIELD(pNode, globalSet);
 
 	VkDescriptorSet  checkerMaterialSet = pNode->checkerMaterialSet;
 	VkDescriptorSet  sphereObjectSet = pNode->sphereObjectSet;
@@ -58,6 +60,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 
 	struct {
 		VkImageView colorView;
+		VkImage     colorImage;
 		VkImageView depthView;
 		VkImage     depthImage;
 	} swaps[XR_SWAPCHAIN_IMAGE_COUNT] ;
@@ -103,6 +106,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 		auto pDepthSwap = BLOCK_PTR(node.cst.block.swap, hDepthSwap);
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 			swaps[iImg].colorView = pColorSwap->externalTexture[iImg].texture.view;
+			swaps[iImg].colorImage = pColorSwap->externalTexture[iImg].texture.image;
 			swaps[iImg].depthView = pDepthSwap->externalTexture[iImg].texture.view;
 			swaps[iImg].depthImage = pDepthSwap->externalTexture[iImg].texture.image;
 		}
@@ -116,70 +120,124 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 		pNodeShr->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 	}
 
-	// I probably want to be able to define this into a struct
-	// and optionally have it be a static struct
-	VK_DEVICE_FUNC(ResetCommandBuffer);
-	VK_DEVICE_FUNC(BeginCommandBuffer);
-	VK_DEVICE_FUNC(CmdSetViewport);
-	VK_DEVICE_FUNC(CmdSetScissor);
-	VK_DEVICE_FUNC(CmdBindPipeline);
-	VK_DEVICE_FUNC(CmdDispatch);
-	VK_DEVICE_FUNC(CmdBindDescriptorSets);
-	VK_DEVICE_FUNC(CmdBindVertexBuffers);
-	VK_DEVICE_FUNC(CmdBindIndexBuffer);
-	VK_DEVICE_FUNC(CmdDrawIndexed);
-	VK_DEVICE_FUNC(CmdEndRenderPass);
-	VK_DEVICE_FUNC(EndCommandBuffer);
-	VK_DEVICE_FUNC(CmdPipelineBarrier2);
-	VK_DEVICE_FUNC(CmdPushDescriptorSetKHR);
-	VK_DEVICE_FUNC(CmdClearColorImage);
-
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
 	ReleaseNodeActive(hNode);
 	SetNodeActive(hNode, pNodeShr->compositorMode);
 
 run_loop:
+	// MXC_CYCLE_UPDATE_WINDOW_STATE
+	//----------------------------------------------------------------------------------------------
 
+	// MXC_CYCLE_PROCESS_INPUT
+	//----------------------------------------------------------------------------------------------
+
+	// MXC_CYCLE_UPDATE_NODE_STATES
+	//----------------------------------------------------------------------------------------------
+
+	// MXC_CYCLE_COMPOSITOR_RECORD
+	//----------------------------------------------------------------------------------------------
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
 
 	atomic_thread_fence(memory_order_acquire);
-	memcpy(pGlobalSetMapped, (void*)&pNodeShr->globalSetState, sizeof(VkGlobalSetState));
+	memcpy(pGlobalSetMapped, &pNodeShr->globalSetState, sizeof(VkGlobalSetState));
 
-	ResetCommandBuffer(gfxCmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
-	BeginCommandBuffer(gfxCmd, &(VkCommandBufferBeginInfo){VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
+	vk.ResetCommandBuffer(gfxCmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+	vk.BeginCommandBuffer(gfxCmd, &(VkCommandBufferBeginInfo){VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
-	int framebufferIndex = nodeTimelineValue % VK_SWAP_COUNT;
+	int iSwapImg = nodeTimelineValue % VK_SWAP_COUNT;
+
+	// Acquire Swap Barrier
+	CMD_IMAGE_BARRIERS2(gfxCmd, {
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = swaps[iSwapImg].colorImage,
+			VK_IMAGE_BARRIER_SRC_UNDEFINED,
+			VK_IMAGE_BARRIER_DST_COLOR_ATTACHMENT_WRITE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		},
+	});
 
 	// Clipped Viewport
 //	VkViewport viewport = {.x = -pNodeShr->clip.ulUV.x * DEFAULT_WIDTH,	.y = -pNodeShr->clip.ulUV.y * DEFAULT_HEIGHT, .width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f};
 //	VkRect2D scissor = {.offset = {.x = 0, .y = 0}, .extent = {.width = pNodeShr->globalSetState.framebufferSize.x, .height = pNodeShr->globalSetState.framebufferSize.y}};
 	VkViewport viewport = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f};
 	VkRect2D   scissor = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}};
-	CmdSetViewport(gfxCmd, 0, 1, &viewport);
-	CmdSetScissor(gfxCmd, 0, 1, &scissor);
-//	CmdPipelineImageBarriers2(gfxCmd, acquireBarrierCount, acquireBarriers[framebufferIndex]);
+	vk.CmdSetViewport(gfxCmd, 0, 1, &viewport);
+	vk.CmdSetScissor(gfxCmd, 0, 1, &scissor);
 
 	VkClearColorValue clearColor = (VkClearColorValue){{0, 0, 0.1f, 0}};
-	CmdBeginDepthRenderPass(gfxCmd, depthRenderPass, depthFramebuffer, clearColor, swaps[framebufferIndex].colorView, framebufferTexture.depth.view);
+	CmdBeginDepthRenderPass(gfxCmd, depthRenderPass, depthFramebuffer, clearColor, swaps[iSwapImg].colorView, framebufferTexture.depth.view);
 
 	/// Draw
 	{
-		CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_GLOBAL, 1, &globalSet, 0, NULL);
-		CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
-		CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_OBJECT, 1, &sphereObjectSet, 0, NULL);
+		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_GLOBAL, 1, &globalSet, 0, NULL);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_OBJECT, 1, &sphereObjectSet, 0, NULL);
 
-		CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){sphereBuffer}, (VkDeviceSize[]){sphereVertexOffset});
-		CmdBindIndexBuffer(gfxCmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
-		CmdDrawIndexed(gfxCmd, sphereIndexCount, 1, 0, 0, 0);
+		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){sphereBuffer}, (VkDeviceSize[]){sphereVertexOffset});
+		vk.CmdBindIndexBuffer(gfxCmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
+		vk.CmdDrawIndexed(gfxCmd, sphereIndexCount, 1, 0, 0, 0);
 	}
 
-	CmdEndRenderPass(gfxCmd);
+	vk.CmdEndRenderPass(gfxCmd);
 
-	CmdBlitImageFullScreen(gfxCmd, framebufferTexture.depth.image,  swaps[framebufferIndex].depthImage);
+	CMD_IMAGE_BARRIERS2(gfxCmd, {
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = framebufferTexture.depth.image,
+			VK_IMAGE_BARRIER_SRC_DEPTH_ATTACHMENT_WRITE,
+			VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_READ,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_DEPTH_SUBRESOURCE_RANGE,
+		},
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = swaps[iSwapImg].depthImage,
+			VK_IMAGE_BARRIER_SRC_UNDEFINED,
+			VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_WRITE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		},
+	});
 
-//	CmdPipelineImageBarriers2(gfxCmd, releaseBarrierCount, releaseBarriers[framebufferIndex]);
-	EndCommandBuffer(gfxCmd);
+	vkCmdCopyImage2(gfxCmd, &(VkCopyImageInfo2){
+		VK_STRUCTURE_TYPE_COPY_IMAGE_INFO_2,
+		.srcImage = framebufferTexture.depth.image,
+		.srcImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		.dstImage = swaps[iSwapImg].depthImage,
+		.dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		.regionCount = 1,
+		.pRegions = &(VkImageCopy2){
+			VK_STRUCTURE_TYPE_IMAGE_COPY_2,
+			.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .layerCount = 1},
+			.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .layerCount = 1},
+			.extent = {viewport.width, viewport.height, 1}
+		}
+	});
+
+	// Release Swap Barrier
+	CMD_IMAGE_BARRIERS2(gfxCmd, {
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = swaps[iSwapImg].colorImage,
+			VK_IMAGE_BARRIER_SRC_COLOR_ATTACHMENT_WRITE,
+			VK_IMAGE_BARRIER_DST_COMPUTE_RELEASE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		},
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = swaps[iSwapImg].depthImage,
+			VK_IMAGE_BARRIER_SRC_GENERAL_TRANSFER_WRITE,
+			VK_IMAGE_BARRIER_DST_COMPUTE_RELEASE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		},
+	});
+
+	vk.EndCommandBuffer(gfxCmd);
 
 	// Submit Node to Render
 	nodeTimelineValue++;
@@ -190,11 +248,19 @@ run_loop:
 	});
 	vkTimelineWait(device, nodeTimelineValue, nodeTimeline);
 
+	// Update Camera Z
+	pNodeShr->processState.depthNearZ = pNodeShr->camera.zFar; // reverse Z
+	pNodeShr->processState.depthFarZ = pNodeShr->camera.zNear;
+
+//	LOG("|\nReleasing %d\n", iSwapImg);
+
 	// Signal Updated to Compositor
 	pNodeShr->timelineValue = nodeTimelineValue;
+	pNodeShr->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShr->compositorCycleSkip;
 	atomic_thread_fence(memory_order_release);
 
-	pNodeShr->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShr->compositorCycleSkip;
+	// MXC_CYCLE_RENDER_COMPOSITE
+	//----------------------------------------------------------------------------------------------
 
 	//    _Thread_local static int count;
 	//    if (count++ > 10)
@@ -212,7 +278,7 @@ static void Create(MxcNodeContext* pNodeContext, MxcNodeShared* pNodeShr, MxcTes
 	LOG("Creating Thread Node\n");
 
 	// This is way too many descriptors... optimize this
-	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {
+	VK_CHECK(vkCreateDescriptorPool(vk.context.device, &(VkDescriptorPoolCreateInfo){
 		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
 		.maxSets = 30,
@@ -222,16 +288,14 @@ static void Create(MxcNodeContext* pNodeContext, MxcNodeShared* pNodeShr, MxcTes
 			{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 10},
 			{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
 		},
-	};
-	VK_CHECK(vkCreateDescriptorPool(vk.context.device, &descriptorPoolCreateInfo, VK_ALLOC, &threadContext.descriptorPool));
+	}, VK_ALLOC, &threadContext.descriptorPool));
 
-	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pNode->globalSet);
-	VkRequestAllocationInfo requestInfo = {
+	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pNode->globalSet);\
+	vkCreateSharedBuffer(&(VkRequestAllocationInfo){
 		.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 		.size = sizeof(VkGlobalSetState),
 		.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-	};
-	vkCreateSharedBuffer(&requestInfo, &pNode->globalBuffer);
+	}, &pNode->globalBuffer);
 
 	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.materialSetLayout, &pNode->checkerMaterialSet);
 	vkCreateDedicatedTextureFromFile("textures/uvgrid.jpg", &pNode->checkerTexture);
@@ -250,18 +314,23 @@ static void Create(MxcNodeContext* pNodeContext, MxcNodeShared* pNodeShr, MxcTes
 		VK_BIND_WRITE_MATERIAL_IMAGE(pNode->checkerMaterialSet, pNode->checkerTexture.view),
 		VK_BIND_WRITE_OBJECT_BUFFER(pNode->sphereObjectSet, pNode->sphereObjectSetBuffer),
 	};
-	vkUpdateDescriptorSets(vk.context.device, _countof(writeSets), writeSets, 0, NULL);
+	vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
-	pNode->sphereTransform = (pose){.pos = VEC3(0, 0, -4)};
+	pNode->sphereTransform = (pose){.pos = VEC3(0, 0, 0)};
 	vkUpdateObjectSet(&pNode->sphereTransform, &pNode->sphereObjectState, pNode->pSphereObjectSetMapped);
 
 	vkCreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);
 
-	VkDepthFramebufferTextureCreateInfo framebufferInfo = {
+	vkCreateDepthFramebufferTextures(&(VkDepthFramebufferTextureCreateInfo){
 		.locality = VK_LOCALITY_CONTEXT,
 		.extent   = {DEFAULT_WIDTH, DEFAULT_HEIGHT, 1},
-	};
-	vkCreateDepthFramebufferTextures(&framebufferInfo, &pNode->framebufferTexture);
+	}, &pNode->framebufferTexture);
+
+	vkCreateSharedBuffer(&(VkRequestAllocationInfo){
+		.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
+		.size                = sizeof(MxcProcessState),
+		.usage               = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+	}, &pNode->processStateBuffer);
 }
 
 static void Bind(MxcNodeContext* pNodeCtx, MxcNodeShared* pNodeShr, MxcTestNode* pNode)
@@ -270,6 +339,11 @@ static void Bind(MxcNodeContext* pNodeCtx, MxcNodeShared* pNodeShr, MxcTestNode*
 
 	vkBindSharedBuffer(&pNode->globalBuffer);
 	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pNode->globalSet, pNode->globalBuffer.buffer));
+	pNode->pGlobalSetMapped = vkSharedMemoryPtr(pNode->globalBuffer.memory);
+
+	vkBindSharedBuffer(&pNode->processStateBuffer);
+	pNode->pProcessStateMapped = vkSharedBufferPtr(pNode->processStateBuffer);
+	memset(pNode->pProcessStateMapped, 0, sizeof(MxcProcessState));
 }
 
 void* mxcTestNodeThread(MxcNodeContext* pNodeCtx) // we should pass in hNode
@@ -292,110 +366,5 @@ void* mxcTestNodeThread(MxcNodeContext* pNodeCtx) // we should pass in hNode
 
 	return NULL;
 }
-
-
-
-
-   // Blit GBuffer. It may still be smarter to do this in the other other command buffer / process
-	//		ivec2 extent = {pNodeShared->globalSetState.framebufferSize.x, pNodeShared->globalSetState.framebufferSize.y};
-	//		ivec2 groupCount = iVec2Min(iVec2CeiDivide(extent, 32), 1);
-	//		{
-	//			VkImageMemoryBarrier2 clearBarrier = {
-	//				.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-	//				VK_IMAGE_BARRIER_SRC_UNDEFINED,
-	//				VK_IMAGE_BARRIER_DST_TRANSFER_WRITE,
-	//				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	//				.image = framebufferImages[framebufferIndex].gBuffer,
-	//				.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-	//			};
-	//			CmdPipelineImageBarrier2(cmd, &clearBarrier);
-	//			CmdClearColorImage(cmd, framebufferImages[framebufferIndex].gBuffer, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &MXC_NODE_CLEAR_COLOR, 1, &VK_COLOR_SUBRESOURCE_RANGE);
-	//			VkImageMemoryBarrier2 beginComputeBarriers[] = {
-	//				// could technically alter shader to take VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL and not need this, can different mips be in different layouts?
-	//				{
-	//					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-	//					.image = framebufferImages[framebufferIndex].depth,
-	//					IMAGE_BARRIER_SRC_NODE_FINISH_RENDERPASS,
-	//					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-	//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	//					.subresourceRange = VK_DEPTH_SUBRESOURCE_RANGE,
-	//				},
-	//				{
-	//					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-	//					VK_IMAGE_BARRIER_SRC_TRANSFER_WRITE,
-	//					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-	//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	//					.image = framebufferImages[framebufferIndex].gBuffer,
-	//					.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
-	//				},
-	//			};
-	//			CmdPipelineImageBarriers2(cmd, COUNT(beginComputeBarriers), beginComputeBarriers);
-	//			VkWriteDescriptorSet initialPushSet[] = {
-	//				SET_WRITE_NODE_PROCESS_SRC(framebufferImages[framebufferIndex].depthView),
-	//				SET_WRITE_NODE_PROCESS_DST(framebufferImages[framebufferIndex].gBufferView),
-	//			};
-	//			CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitMipAveragePipe);
-	//			CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(initialPushSet), initialPushSet);
-	//			CmdDispatch(cmd, groupCount.x, groupCount.y, 1);
-	//		}
-	//
-	//		for (uint32_t i = 1; i < MXC_NODE_GBUFFER_LEVELS; ++i) {
-	//			VkImageMemoryBarrier2 barriers[] = {
-	//				{
-	//					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-	//					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-	//					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-	//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	//					.image = framebufferImages[framebufferIndex].gBuffer,
-	//					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i - 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
-	//				},
-	//				{
-	//					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-	//					VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-	//					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-	//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	//					.image = framebufferImages[framebufferIndex].gBuffer,
-	//					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
-	//				},
-	//			};
-	//			CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
-	//			VkWriteDescriptorSet pushSet[] = {
-	//				SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i - 1]),
-	//				SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i]),
-	//			};
-	//			CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(pushSet), pushSet);
-	//			ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> 1}, 32), 1);
-	//			CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
-	//		}
-
-	//		CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessBlitDownPipe);
-	//		for (uint32_t i = MXC_NODE_GBUFFER_LEVELS - 1; i > 0; --i) {
-	//			VkImageMemoryBarrier2 barriers[] = {
-	//				{
-	//					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-	//					VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-	//					VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-	//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	//					.image = framebufferImages[framebufferIndex].gBuffer,
-	//					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
-	//				},
-	//				{
-	//					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-	//					VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-	//					VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-	//					VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-	//					.image = framebufferImages[framebufferIndex].gBuffer,
-	//					.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = i - 1, .levelCount = 1, .layerCount = VK_REMAINING_ARRAY_LAYERS},
-	//				},
-	//			};
-	//			CmdPipelineImageBarriers2(cmd, COUNT(barriers), barriers);
-	//			VkWriteDescriptorSet pushSet[] = {
-	//				SET_WRITE_NODE_PROCESS_SRC(gBufferMipViews[framebufferIndex][i]),
-	//				SET_WRITE_NODE_PROCESS_DST(gBufferMipViews[framebufferIndex][i - 1]),
-	//			};
-	//			CmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodeProcessPipeLayout, PIPE_SET_NODE_PROCESS_INDEX, COUNT(pushSet), pushSet);
-	//			ivec2 mipGroupCount = iVec2Min(iVec2CeiDivide((ivec2){extent.vec >> (1 - 1)}, 32), 1);
-	//			CmdDispatch(cmd, mipGroupCount.x, mipGroupCount.y, 1);
-	//		}
 
 #endif

@@ -1,8 +1,3 @@
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdatomic.h>
@@ -138,13 +133,10 @@ void xrSetDepthSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swap
 void xrSetDepthInfo(XrSessionId sessionId, float minDepth, float maxDepth, float nearZ, float farZ)
 {
 	MxcNodeShared* pNodeShrd = node.pShared[sessionId];
-	pNodeShrd->processState.depth.minDepth = minDepth;
-	pNodeShrd->processState.depth.maxDepth = maxDepth;
-	// These might come reverse due to reverse Z
-//	pNodeShrd->depthState.nearZ = min(nearZ, farZ);
-//	pNodeShrd->depthState.farZ = max(nearZ, farZ);
-	pNodeShrd->processState.depth.nearZ = nearZ;
-	pNodeShrd->processState.depth.farZ = farZ;
+	// pNodeShrd->processState.minDepth = minDepth;
+	// pNodeShrd->processState.maxDepth = maxDepth;
+	pNodeShrd->processState.depthNearZ = nearZ;
+	pNodeShrd->processState.depthFarZ = farZ;
 }
 
 void xrClaimSwapIndex(XrSessionId sessionId, uint8_t* pIndex)

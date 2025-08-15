@@ -2779,7 +2779,7 @@ XR_PROC xrEndFrame(
 		auto context4 = pSess->binding.d3d11.context4;
 
 		switch (frameEndInfo->layers[layer]->type) {
-			///Projection Layer
+			// Projection Layer
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
 				auto pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
 				assert(pProjectionLayer->viewCount == XR_MAX_VIEW_COUNT); // need to deal with all layers at some point
@@ -2787,7 +2787,7 @@ XR_PROC xrEndFrame(
 				for (u32 iView = 0; iView < pProjectionLayer->viewCount; ++iView) {
 					auto pView = &pProjectionLayer->views[iView];
 
-					/// Projection Layer View Color
+					// Projection Layer View Color
 					{
 						auto   pColorSwap = (Swapchain*)pView->subImage.swapchain;
 						swap_h hColorSwap = BLOCK_HANDLE(B.swap, pColorSwap);
@@ -2803,7 +2803,7 @@ XR_PROC xrEndFrame(
 					}
 
 					switch (pView->next != NULL ? *(XrStructureType*)pView->next : 0) {
-						/// Projection Layer View Depth
+						// Projection Layer View Depth
 						case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
 							auto   pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
 							auto   pDepthSwap = (Swapchain*)pDepthInfo->subImage.swapchain;
@@ -2972,7 +2972,7 @@ XR_PROC xrLocateViews(
 	if (views == NULL)
 		return XR_SUCCESS;
 
-	Session*  pSession = (Session*)session;
+	Session* pSession = (Session*)session;
 
 	for (u32 i = 0; i < viewCapacityInput; ++i) {
 		XrEyeView eyeView;
