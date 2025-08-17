@@ -32,10 +32,8 @@ extern MxcView compositorView;
 extern bool isCompositor;
 
 extern bool isRunning;
-#define CHECK_RUNNING                      \
-  if (__builtin_expect(!(isRunning), 0)) { \
-    return;                                \
-  }
+#define CHECK_RUNNING                 \
+	if (UNLIKELY(!isRunning)) return;
 
 typedef enum MxcCycle {
   MXC_CYCLE_UPDATE_WINDOW_STATE, // update window input, submit queues

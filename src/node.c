@@ -28,9 +28,9 @@ MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
 struct Node node;
 
-//--------------------------------------------------------------------------------------------------
-// Swap Pool
-//--------------------------------------------------------------------------------------------------
+////
+//// Swap Pool
+////
 void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent)
 {
 	EXTRACT_FIELD(&node, gbufferProcessDownPipe);
@@ -49,8 +49,7 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
 	}
 
-	// Blit Down Depth Mips
-	//----------------------------------------------------------------------------------
+	/// Blit Down Depth Mips
 	for (int iMip = 2; iMip < pGBuffer->mipViewCount; ++iMip) {
 		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
@@ -88,8 +87,7 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
 	}
 
-	// Blit Up Depth Mips
-	//--------------------------------------------------------------------------------------------------
+	/// Blit Up Depth Mips
 	vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessUpPipe);
 
 	for (int iMip = pGBuffer->mipViewCount - 2; iMip >= 1; --iMip) {
@@ -130,8 +128,7 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
 	}
 
-	// Final Depth Up Blit
-	//--------------------------------------------------------------------------------------------------
+	/// Final Depth Up Blit
 	{
 		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
@@ -191,7 +188,6 @@ static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 	};
 	vkCreateExternalPlatformTexture(&info, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
-		.debugName        = "ExportedColorFramebuffer",
 		.pImageCreateInfo = &info,
 		.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
 		.importHandle     = pSwapTexture->platform.handle,
@@ -238,7 +234,6 @@ static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 	};
 	vkCreateExternalPlatformTexture(&imageCreateInfo, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
-		.debugName        = "ExportedDepthFramebuffer",
 		.pImageCreateInfo = &imageCreateInfo,
 		.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
 		.importHandle     = pSwapTexture->platform.handle,
@@ -280,7 +275,6 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 	for (int iView = 0; iView < XR_MAX_VIEW_COUNT; ++iView) {
 		vkCreateDedicatedTexture(
 			&(VkDedicatedTextureCreateInfo){
-				.debugName = "GBufferFramebuffer",
 				.pImageCreateInfo = &(VkImageCreateInfo){
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
@@ -298,6 +292,9 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 				.locality = VK_LOCALITY_CONTEXT},
 			&pNodeCtxt->gbuffer[iView]);
+		VK_SET_DEBUG_NAME(pNodeCtxt->gbuffer[iView].image, "NodeGBufferImage%d", iView);
+		VK_SET_DEBUG_NAME(pNodeCtxt->gbuffer[iView].view, "NodeGBufferView%d", iView);
+		VK_SET_DEBUG_NAME(pNodeCtxt->gbuffer[iView].image, "NodeGBufferMemory%d", iView);
 
 		// Pack data for compositor hot access
 		pNodeCompData->gbuffer[iView].image = pNodeCtxt->gbuffer[iView].image;
@@ -320,7 +317,7 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 			VkImageView view;
 			VK_CHECK(vkCreateImageView(vk.context.device, &imageViewCreateInfo, VK_ALLOC, &view));
 			pNodeCompData->gbuffer[iView].mipViews[iMip] = view;
-			VK_SET_DEBUG(pNodeCompData->gbuffer[iView].mipViews[iMip]);
+			VK_SET_DEBUG_NAME(pNodeCompData->gbuffer[iView].mipViews[iMip], "NodeGBufferView%d Mip%d", iView, iMip);
 		}
 
 		VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS) {
@@ -347,7 +344,7 @@ static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
 	}
 }
 
-/////////////////////////
+////
 //// Compositor Lifecycle
 ////
 void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*))
@@ -381,7 +378,7 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 	LOG("Request and Run Compositor Node Thread Success.\n");
 }
 
-///////////////////
+////
 //// Node Lifecycle
 ////
 NodeHandle RequestLocalNodeHandle()
@@ -575,7 +572,7 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 	pNodeShr->camera.zFar = 100.0f;
 
 	pNodeShr->compositorRadius = 0.5;
-	pNodeShr->compositorCycleSkip = 8;
+	pNodeShr->compositorCycleSkip = 16;
 	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 	pNodeShr->swapMaxWidth = DEFAULT_WIDTH;
@@ -623,7 +620,7 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 #endif
 }
 
-//////////////////
+////
 //// IPC LifeCycle
 ////
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
@@ -655,7 +652,7 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 		}                                                             \
 	}
 
-// Called when compositor accepts connection
+/// Called when compositor accepts connection
 static void ServerInterprocessAcceptNodeConnection()
 {
 #if defined(MOXAIC_COMPOSITOR) // we need to break this out in a Compositor Node file
@@ -1025,7 +1022,7 @@ void mxcShutdownInterprocessNode()
 //	}
 }
 
-///////////////////
+////
 //// IPC Func Queue
 ////
 int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target)
@@ -1121,9 +1118,19 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 			// We could determine color in CreateColorSwapTexture. Really should just make a VkExternalTexture.
-			if      (isColor) CreateColorSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
-			else if (isDepth) CreateDepthSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
-			else    assert(false && "SwapImage is neither color nor depth!");
+			if (isColor) {
+				CreateColorSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
+				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.image, "ExportedColorSwapImage%d", iImg);
+				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.view, "ExportedColorSwapView%d", iImg);
+				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.memory, "ExportedColorSwapMemory%d", iImg);
+			} else if (isDepth) {
+				CreateDepthSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
+				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.image, "ExportedDepthSwapImage%d", iImg);
+				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.view, "ExportedDepthSwapView%d", iImg);
+				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.memory, "ExportedDepthSwapMemory%d", iImg);
+			} else {
+				ASSERT(false, "SwapImage is neither color nor depth!");
+			}
 
 			if (needsExport) {
 				auto pImports = &pNodeCtxt->exported.pExportedMemory->imports;

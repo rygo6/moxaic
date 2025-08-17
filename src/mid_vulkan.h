@@ -208,11 +208,11 @@ typedef struct VkSharedBuffer {
 	VkSharedMemory memory;
 } VkSharedBuffer;
 
-//typedef struct VkTexture {
-//	VkImage        image;
-//	VkImageView    view;
-//	VkSharedMemory sharedMemory;
-//} VkTexture;
+typedef struct VkSharedTexture {
+	VkImage        image;
+	VkImageView    view;
+	VkSharedMemory sharedMemory;
+} VkSharedTexture;
 
 typedef struct VkDedicatedTexture {
 	VkImage        image;
@@ -242,13 +242,6 @@ typedef struct VkDepthFramebufferTexture {
 	VkDedicatedTexture color;
 	VkDedicatedTexture depth;
 } VkDepthFramebufferTexture;
-
-//typedef struct VkDepthNormalFramebufferTexture {
-//	VkDedicatedTexture color;
-//	// do I need normal?
-//	VkDedicatedTexture normal;
-//	VkDedicatedTexture depth;
-//} VkDepthNormalFramebufferTexture;
 
 typedef struct VkGlobalSetState {
 	mat4  view;
@@ -293,9 +286,9 @@ typedef struct VkSharedDescriptor {
 	VkSharedBuffer  buffer;
 } VkSharedDescriptor;
 
-//////////////////////////
-//// Vulkan Global Context
-////
+//--------------------------------------------------------------------------------------------------
+// Vulkan Context
+//--------------------------------------------------------------------------------------------------
 typedef struct VkContext {
 	VkPhysicalDevice physicalDevice;
 	VkDevice         device;
@@ -321,7 +314,7 @@ typedef struct VkContext {
 
 } VkContext;
 
-//#define VK_CONTEXT_CAPACITY    2 // should be 1 always?
+//#define VK_CONTEXT_CAPACITY 2 // should be 1 always?
 #define VK_SURFACE_CAPACITY 2
 
 typedef struct CACHE_ALIGN Vk {
@@ -347,11 +340,9 @@ extern __thread MidVkThreadContext threadContext;
 extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
 extern __thread void*          pMappedMemory[VK_MAX_MEMORY_TYPES];
 
-
-//////////////////////////
-//// Basic Render Pipeline
-////
-
+//--------------------------------------------------------------------------------------------------
+// Vulkan Depth Render Pipeline
+//--------------------------------------------------------------------------------------------------
 enum {
 	VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR,
 	VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH,
@@ -374,30 +365,6 @@ constexpr VkImageUsageFlags VK_RENDER_PASS_USAGES[] = {
 		VK_IMAGE_USAGE_STORAGE_BIT                  |
 		VK_IMAGE_USAGE_SAMPLED_BIT,
 };
-
-////// DepthNormal Render Pass
-//enum {
-//	VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR,
-//	VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL,
-//	VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH,
-//	VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COUNT,
-//};
-//constexpr VkFormat VK_RENDER_PASS_DEPTHNORMAL_FORMATS[] = {
-//	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR]  = VK_FORMAT_R8G8B8A8_UNORM,
-//	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL] = VK_FORMAT_R16G16B16A16_SFLOAT,
-////	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH]        = VK_FORMAT_D32_SFLOAT,
-//	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH]  = VK_FORMAT_D16_UNORM,
-//};
-//constexpr VkImageUsageFlags VK_RENDER_PASS_DEPTHNORMAL_USAGES[] = {
-//	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR]  = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-//                                                    VK_IMAGE_USAGE_STORAGE_BIT          |
-//                                                    VK_IMAGE_USAGE_SAMPLED_BIT          |
-//                                                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-//	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL] = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-//                                                    VK_IMAGE_USAGE_SAMPLED_BIT,
-//	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH]  = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-//                                                    VK_IMAGE_USAGE_SAMPLED_BIT,
-//};
 
 #define VK_RENDER_PASS_CLEAR_COLOR (VkClearColorValue) {{0.1f, 0.2f, 0.3f, 0.0f}}
 
@@ -666,8 +633,7 @@ enum {
 		cmd != VK_NULL_HANDLE;                                              \
 		vkEndImmediateCommandBuffer(familyType, cmd), cmd = VK_NULL_HANDLE)
 
-INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers)
-{
+INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryBarrierCount, const VkImageMemoryBarrier2* pImageMemoryBarriers) {
 	vk.CmdPipelineBarrier2(cmd, &(VkDependencyInfo){VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = imageMemoryBarrierCount, .pImageMemoryBarriers = pImageMemoryBarriers});
 }
 
@@ -1056,7 +1022,6 @@ void vkCreateComputePipe(
 void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFamily, VkSwapContext* pSwap);
 
 typedef struct VkDedicatedTextureCreateInfo {
-	const char*                        debugName;
 	VkImageAspectFlags                 aspectMask;
 	VkLocality                         locality;
 	VkExternalMemoryHandleTypeFlagBits handleType;
@@ -1122,7 +1087,12 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 	default: VK_OBJECT_TYPE_UNKNOWN)
 
 #define VK_SET_DEBUG(_)             vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), #_)
-#define VK_SET_DEBUG_NAME(_, _name) vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), _name)
+#define VK_SET_DEBUG_NAME(_, ...)                             \
+	({                                                        \
+		char _buffer[32];                                     \
+		snprintf(_buffer, sizeof(_buffer), __VA_ARGS__);      \
+		vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), _buffer); \
+	})
 
 void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* pDebugName);
 
@@ -2433,7 +2403,6 @@ static void CreateAllocateBindImageView(const VkDedicatedTextureCreateInfo* pCre
 void vkCreateDedicatedTexture(const VkDedicatedTextureCreateInfo* pCreateInfo, VkDedicatedTexture* pTexture)
 {
 	CreateAllocateBindImageView(pCreateInfo, pTexture);
-	vkSetDebugName(VK_OBJECT_TYPE_IMAGE, (uint64_t)pTexture->image, pCreateInfo->debugName);
 }
 
 void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTexture)
@@ -2443,7 +2412,6 @@ void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTe
 	CHECK(width == 0 || height == 0, "Image windowHeight or windowWidth is equal to zero.")
 
 	VkDedicatedTextureCreateInfo createInfo = {
-		.debugName = pPath,
 		.pImageCreateInfo = &(VkImageCreateInfo){
 			VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			.imageType = VK_IMAGE_TYPE_2D,
@@ -2742,57 +2710,9 @@ void vkCreateDepthFramebuffer(const VkDepthFramebufferCreateInfo* pCreateInfo, V
 	VK_CHECK(vkCreateFramebuffer(vk.context.device, &framebufferCreateInfo, VK_ALLOC, pFramebuffer));
 }
 
-//void vkCreateDepthNormalFramebuffer(const VkDepthNormalFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer)
-//{
-//	VkFramebufferCreateInfo framebufferCreateInfo = {
-//		VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-//		&(VkFramebufferAttachmentsCreateInfo){
-//			VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENTS_CREATE_INFO,
-//			.attachmentImageInfoCount = VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COUNT,
-//			.pAttachmentImageInfos    = (VkFramebufferAttachmentImageInfo[]){
-//				[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR] = {
-//					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-//					.usage           = VK_RENDER_PASS_DEPTHNORMAL_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR],
-//					.width           = pCreateInfo->width,
-//					.height          = pCreateInfo->height,
-//					.layerCount      = pCreateInfo->layerCount,
-//					.viewFormatCount = 1,
-//					.pViewFormats    = &VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR],
-//				},
-//				[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL] = {
-//					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-//					.usage           = VK_RENDER_PASS_DEPTHNORMAL_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL],
-//					.width           = pCreateInfo->width,
-//					.height          = pCreateInfo->height,
-//					.layerCount      = pCreateInfo->layerCount,
-//					.viewFormatCount = 1,
-//					.pViewFormats    = &VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL],
-//				},
-//				[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH] = {
-//					VK_STRUCTURE_TYPE_FRAMEBUFFER_ATTACHMENT_IMAGE_INFO,
-//					.usage           = VK_RENDER_PASS_DEPTHNORMAL_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH],
-//					.width           = pCreateInfo->width,
-//					.height          = pCreateInfo->height,
-//					.layerCount      = pCreateInfo->layerCount,
-//					.viewFormatCount = 1,
-//					.pViewFormats    = &VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH],
-//				},
-//			},
-//		},
-//		.flags           = VK_FRAMEBUFFER_CREATE_IMAGELESS_BIT,
-//		.renderPass      = vk.context.basicPass,
-//		.attachmentCount = VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COUNT,
-//		.width           = pCreateInfo->width,
-//		.height          = pCreateInfo->height,
-//		.layers          = pCreateInfo->layerCount,
-//	};
-//	VK_CHECK(vkCreateFramebuffer(vk.context.device, &framebufferCreateInfo, VK_ALLOC, pFramebuffer));
-//}
-
 void vkCreateDepthFramebufferTextures(const VkDepthFramebufferTextureCreateInfo* pCreateInfo, VkDepthFramebufferTexture* pFrameBuffer)
 {
 	VkDedicatedTextureCreateInfo colorCreateInfo = {
-		.debugName = "ColorFramebuffer",
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 		.locality = pCreateInfo->locality,
 		.pImageCreateInfo = &(VkImageCreateInfo){
@@ -2808,8 +2728,10 @@ void vkCreateDepthFramebufferTextures(const VkDepthFramebufferTextureCreateInfo*
 		},
 	};
 	vkCreateDedicatedTexture(&colorCreateInfo, &pFrameBuffer->color);
+	VK_SET_DEBUG(pFrameBuffer->color.image);
+	VK_SET_DEBUG(pFrameBuffer->color.view);
+	VK_SET_DEBUG(pFrameBuffer->color.memory);
 	VkDedicatedTextureCreateInfo depthCreateInfo = {
-		.debugName = "DepthFramebuffer",
 		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 		.locality = pCreateInfo->locality,
 		.pImageCreateInfo = &(VkImageCreateInfo){
@@ -2825,67 +2747,14 @@ void vkCreateDepthFramebufferTextures(const VkDepthFramebufferTextureCreateInfo*
 		},
 	};
 	vkCreateDedicatedTexture(&depthCreateInfo, &pFrameBuffer->depth);
+	VK_SET_DEBUG(pFrameBuffer->depth.image);
+	VK_SET_DEBUG(pFrameBuffer->depth.view);
+	VK_SET_DEBUG(pFrameBuffer->depth.memory);
 }
-
-//void vkCreateDepthNormalFramebufferTextures(const VkDepthNormalFramebufferTextureCreateInfo* pCreateInfo, VkBasicFramebufferTexture* pFrameBuffer)
-//{
-//	VkDedicatedTextureCreateInfo colorCreateInfo = {
-//		.debugName = "ColorFramebuffer",
-//		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//		.locality = pCreateInfo->locality,
-//		.pImageCreateInfo = &(VkImageCreateInfo){
-//			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-//			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
-//			.imageType = VK_IMAGE_TYPE_2D,
-//			.format = VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR],
-//			.extent = pCreateInfo->extent,
-//			.mipLevels = 1,
-//			.arrayLayers = 1,
-//			.samples = VK_SAMPLE_COUNT_1_BIT,
-//			.usage = VK_RENDER_PASS_DEPTHNORMAL_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR],
-//		},
-//	};
-//	vkCreateDedicatedTexture(&colorCreateInfo, &pFrameBuffer->color);
-//	VkDedicatedTextureCreateInfo normalCreateInfo = {
-//		.debugName = "NormalFramebuffer",
-//		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//		.locality = pCreateInfo->locality,
-//		.pImageCreateInfo = &(VkImageCreateInfo){
-//			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-//			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
-//			.imageType = VK_IMAGE_TYPE_2D,
-//			.format = VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL],
-//			.extent = pCreateInfo->extent,
-//			.mipLevels = 1,
-//			.arrayLayers = 1,
-//			.samples = VK_SAMPLE_COUNT_1_BIT,
-//			.usage = VK_RENDER_PASS_DEPTHNORMAL_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL],
-//		},
-//	};
-//	vkCreateDedicatedTexture(&normalCreateInfo, &pFrameBuffer->normal);
-//	VkDedicatedTextureCreateInfo depthCreateInfo = {
-//		.debugName = "DepthFramebuffer",
-//		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-//		.locality = pCreateInfo->locality,
-//		.pImageCreateInfo = &(VkImageCreateInfo){
-//			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-//			.pNext = VK_LOCALITY_INTERPROCESS(pCreateInfo->locality) ? VK_EXTERNAL_IMAGE_CREATE_INFO_PLATFORM : NULL,
-//			.imageType = VK_IMAGE_TYPE_2D,
-//			.format = VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH],
-//			.extent = pCreateInfo->extent,
-//			.mipLevels = 1,
-//			.arrayLayers = 1,
-//			.samples = VK_SAMPLE_COUNT_1_BIT,
-//			.usage = VK_RENDER_PASS_DEPTHNORMAL_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH],
-//		},
-//	};
-//	vkCreateDedicatedTexture(&depthCreateInfo, &pFrameBuffer->depth);
-//}
 
 //----------------------------------------------------------------------------------
 // Context
 //----------------------------------------------------------------------------------
-
 static uint32_t FindQueueIndex(VkPhysicalDevice physicalDevice, const VkmQueueFamilyCreateInfo* pQueueDesc)
 {
 	uint32_t queueFamilyCount;
@@ -3243,14 +3112,14 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 	}
 	//----------------------------------------------------------------------------------------------
 
-	// Create Queue Familys
+	// Create Queue Families
 	//----------------------------------------------------------------------------------------------
 	for (int i = 0; i < VK_QUEUE_FAMILY_TYPE_COUNT; ++i) {
 		if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
 			continue;
 
 		vkGetDeviceQueue(vk.context.device, vk.context.queueFamilies[i].index, 0, &vk.context.queueFamilies[i].queue);
-		VK_SET_DEBUG_NAME(vk.context.queueFamilies[i].queue, string_QueueFamilyType[i]);
+		VK_SET_DEBUG_NAME(vk.context.queueFamilies[i].queue, "Queue %s", string_QueueFamilyType[i]);
 
 		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,

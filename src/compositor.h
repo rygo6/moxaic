@@ -5,6 +5,8 @@
 
 #define LINE_BUFFER_CAPACITY 128
 
+static int testvar =10;
+
 typedef struct VkSharedLineBuffer {
 	VkSharedBuffer buffer;
 	int            count;

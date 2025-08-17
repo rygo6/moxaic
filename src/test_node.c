@@ -17,9 +17,9 @@
 	.dstAccessMask = VK_ACCESS_2_NONE,                    \
 	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 
-//----------------------------------------------------------------------------------
-// Loop
-//----------------------------------------------------------------------------------
+////
+//// Loop
+////
 void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNode* pNode)
 {
 	NodeHandle hNode = pNodeCtx->hNode;
@@ -120,22 +120,26 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 		pNodeShr->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 	}
 
-	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
-	ReleaseNodeActive(hNode);
-	SetNodeActive(hNode, pNodeShr->compositorMode);
-
 run_loop:
-	// MXC_CYCLE_UPDATE_WINDOW_STATE
-	//----------------------------------------------------------------------------------------------
+	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
 
-	// MXC_CYCLE_PROCESS_INPUT
-	//----------------------------------------------------------------------------------------------
+	////
+	//// MXC_CYCLE_UPDATE_WINDOW_STATE
+	if (UNLIKELY(nodeTimelineValue == 2)) {
+		// TODO this cannot be here it must be a RPC
+		ReleaseNodeActive(hNode);
+		SetNodeActive(hNode, pNodeShr->compositorMode);
+	}
 
-	// MXC_CYCLE_UPDATE_NODE_STATES
-	//----------------------------------------------------------------------------------------------
+	////
+	//// MXC_CYCLE_PROCESS_INPUT
 
-	// MXC_CYCLE_COMPOSITOR_RECORD
-	//----------------------------------------------------------------------------------------------
+	////
+	//// MXC_CYCLE_UPDATE_NODE_STATES
+	// Must wait until after node states are updated to render
+
+	////
+	//// MXC_CYCLE_COMPOSITOR_RECORD
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
 
 	atomic_thread_fence(memory_order_acquire);
@@ -146,13 +150,21 @@ run_loop:
 
 	int iSwapImg = nodeTimelineValue % VK_SWAP_COUNT;
 
-	// Acquire Swap Barrier
+	/// Acquire Swap Barrier
 	CMD_IMAGE_BARRIERS2(gfxCmd, {
 		{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = swaps[iSwapImg].colorImage,
 			VK_IMAGE_BARRIER_SRC_UNDEFINED,
 			VK_IMAGE_BARRIER_DST_COLOR_ATTACHMENT_WRITE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+		},
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = swaps[iSwapImg].depthImage,
+			VK_IMAGE_BARRIER_SRC_UNDEFINED,
+			VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_WRITE,
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 		},
@@ -191,15 +203,7 @@ run_loop:
 			VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_READ,
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			VK_IMAGE_BARRIER_DEPTH_SUBRESOURCE_RANGE,
-		},
-		{
-			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.image = swaps[iSwapImg].depthImage,
-			VK_IMAGE_BARRIER_SRC_UNDEFINED,
-			VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_WRITE,
-			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-		},
+		}
 	});
 
 	vkCmdCopyImage2(gfxCmd, &(VkCopyImageInfo2){
@@ -252,15 +256,10 @@ run_loop:
 	pNodeShr->processState.depthNearZ = pNodeShr->camera.zFar; // reverse Z
 	pNodeShr->processState.depthFarZ = pNodeShr->camera.zNear;
 
-//	LOG("|\nReleasing %d\n", iSwapImg);
-
 	// Signal Updated to Compositor
 	pNodeShr->timelineValue = nodeTimelineValue;
 	pNodeShr->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShr->compositorCycleSkip;
 	atomic_thread_fence(memory_order_release);
-
-	// MXC_CYCLE_RENDER_COMPOSITE
-	//----------------------------------------------------------------------------------------------
 
 	//    _Thread_local static int count;
 	//    if (count++ > 10)
@@ -270,9 +269,9 @@ run_loop:
 	goto run_loop;
 }
 
-//----------------------------------------------------------------------------------
-// Create
-//----------------------------------------------------------------------------------
+////
+//// Create
+////
 static void Create(MxcNodeContext* pNodeContext, MxcNodeShared* pNodeShr, MxcTestNode* pNode)
 {
 	LOG("Creating Thread Node\n");

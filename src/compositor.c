@@ -329,7 +329,7 @@ enum {
 	.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,                             \
 	.newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 
-VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
+static VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 	{
 		// Color
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -366,7 +366,7 @@ VkImageMemoryBarrier2 localProcessAcquireBarriers[] = {
 };
 
 // GraphicsBarriers
-VkImageMemoryBarrier2 gfxProcessAcquireBarriers[] = {
+static VkImageMemoryBarrier2 gfxProcessAcquireBarriers[] = {
 	{
 		// Color
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -403,7 +403,7 @@ VkImageMemoryBarrier2 gfxProcessAcquireBarriers[] = {
 		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 };
-VkImageMemoryBarrier2 gfxProcessEndBarriers[] = {
+static VkImageMemoryBarrier2 gfxProcessEndBarriers[] = {
 	{
 		// Gbuffer
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -416,7 +416,7 @@ VkImageMemoryBarrier2 gfxProcessEndBarriers[] = {
 };
 
 // ComputeBarriers
-VkImageMemoryBarrier2 compProcessAcquireBarriers[] = {
+static VkImageMemoryBarrier2 compProcessAcquireBarriers[] = {
 	{
 		// Color
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -453,7 +453,7 @@ VkImageMemoryBarrier2 compProcessAcquireBarriers[] = {
 		VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 	},
 };
-VkImageMemoryBarrier2 compProcessEndBarriers[] = {
+static VkImageMemoryBarrier2 compProcessEndBarriers[] = {
 	{
 		// Gbuffer
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -470,19 +470,19 @@ VkImageMemoryBarrier2 compProcessEndBarriers[] = {
 constexpr u32 processAcquireBarrierCount = COUNT(gfxProcessAcquireBarriers);
 constexpr u32 processEndBarrierCount = COUNT(gfxProcessEndBarriers);
 
-VkImageMemoryBarrier2* processAcquireBarriers[] = {
+static VkImageMemoryBarrier2* processAcquireBarriers[] = {
 	[MXC_COMPOSITOR_MODE_QUAD] = gfxProcessAcquireBarriers,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = gfxProcessAcquireBarriers,
 	[MXC_COMPOSITOR_MODE_TASK_MESH] = gfxProcessAcquireBarriers,
 	[MXC_COMPOSITOR_MODE_COMPUTE] = localProcessAcquireBarriers,
 };
-VkImageMemoryBarrier2* processEndBarriers[] = {
+static VkImageMemoryBarrier2* processEndBarriers[] = {
 	[MXC_COMPOSITOR_MODE_QUAD] = gfxProcessEndBarriers,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = gfxProcessEndBarriers,
 	[MXC_COMPOSITOR_MODE_TASK_MESH] = gfxProcessEndBarriers,
 	[MXC_COMPOSITOR_MODE_COMPUTE] = compProcessEndBarriers,
 };
-VkImageLayout processFinalLayout[] = {
+static VkImageLayout processFinalLayout[] = {
 	[MXC_COMPOSITOR_MODE_QUAD] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	[MXC_COMPOSITOR_MODE_TESSELATION] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	[MXC_COMPOSITOR_MODE_TASK_MESH] = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -572,9 +572,11 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 
 CompositeLoop:
 
+	//----------------------------------------------------------------------------------------------
 	// MXC_CYCLE_UPDATE_WINDOW_STATE
 	//----------------------------------------------------------------------------------------------
 
+	//----------------------------------------------------------------------------------------------
 	// MXC_CYCLE_PROCESS_INPUT
 	//----------------------------------------------------------------------------------------------
 	atomic_thread_fence(memory_order_acquire);
@@ -585,6 +587,7 @@ CompositeLoop:
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
 	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
 
+	//----------------------------------------------------------------------------------------------
 	// MXC_CYCLE_UPDATE_NODE_STATES
 	//----------------------------------------------------------------------------------------------
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
@@ -643,7 +646,7 @@ CompositeLoop:
 				pNodeCst->nodeSetState.model = mat4FromPosRot(pNodeShr->rootPose.pos, pNodeShr->rootPose.rot);
 			}
 
-			/// Poll Nodes for new frame
+			/// Poll New Node Swap
 			u64 nodeTimelineVal = pNodeShr->timelineValue;
 			if (nodeTimelineVal <= pNodeCst->lastTimelineValue)
 				continue;
@@ -651,8 +654,9 @@ CompositeLoop:
 			pNodeCst->lastTimelineValue = nodeTimelineVal;
 			atomic_thread_fence(memory_order_release);
 
-			/// Acquire new frame from node
+			/// Acquire New Node Swap
 			ATOMIC_FENCE_SCOPE {
+				int iPriorSwapImg = (nodeTimelineVal % VK_SWAP_COUNT);
 				int iSwapImg = !(nodeTimelineVal % VK_SWAP_COUNT);
 
 				int iLeftColorImgId = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].colorId;
@@ -676,12 +680,32 @@ CompositeLoop:
 
 				// I hate this we need a better way
 				pAcquireBarriers[0].image = pLeftColorSwap->image;
-				pAcquireBarriers[0].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[1].image = pLeftDepthSwap->image;
-				pAcquireBarriers[1].dstQueueFamilyIndex = mainGraphicsIndex,
 				pAcquireBarriers[2].image = pLeftGBuffer->image;
 
-//				LOG("Acuiring %d\n|\n", iSwapImg);
+				assert(pAcquireBarriers[0].srcQueueFamilyIndex == VK_QUEUE_FAMILY_IGNORED);
+				assert(pAcquireBarriers[0].dstQueueFamilyIndex == VK_QUEUE_FAMILY_IGNORED);
+
+				// need for each composite type
+				CMD_IMAGE_BARRIERS2(gfxCmd, {
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pNodeCst->swaps[iLeftColorImgId][iPriorSwapImg].image,
+						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+						VK_IMAGE_BARRIER_DST_COMPUTE_RELEASE,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+						VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+					},
+					{
+						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						.image = pNodeCst->swaps[iLeftDepthImgId][iPriorSwapImg].image,
+						VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+						VK_IMAGE_BARRIER_DST_COMPUTE_RELEASE,
+						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+						VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
+					},
+				});
+
 				CmdPipelineImageBarriers2(gfxCmd, processAcquireBarrierCount, pAcquireBarriers);
 
 				// TODO this needs to be specifically only the rect which was rendered into
@@ -797,9 +821,10 @@ CompositeLoop:
 	}
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_END);
 
-	/// MXC_CYCLE_COMPOSITOR_RECORD
+	// MXC_CYCLE_COMPOSITOR_RECORD
+	//----------------------------------------------------------------------------------------------
 
-	/// Graphics Pipe
+	// Graphics Pipe
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	vk.CmdSetViewport(gfxCmd, 0, 1, &(VkViewport){.width = windowExtent.x, .height = windowExtent.y, .maxDepth = 1.0f});
@@ -811,7 +836,7 @@ CompositeLoop:
 	bool hasGfx = false;
 	bool hasComp = false;
 
-	/// Graphics Quad Node Commands
+	// Graphics Quad Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_QUAD].count > 0) {
@@ -833,7 +858,7 @@ CompositeLoop:
 	}
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_END);
 
-	/// Graphics Tesselation Node Commands
+	// Graphics Tesselation Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_TESSELATION].count > 0) {
@@ -853,7 +878,7 @@ CompositeLoop:
 	}
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_END);
 
-	/// Graphics Task Mesh Node Commands
+	// Graphics Task Mesh Node Commands
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_TASK_MESH].count > 0) {
@@ -871,7 +896,7 @@ CompositeLoop:
 	}
 	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_END);
 
-	/// Graphic Line Commands
+	// Graphic Line Commands
 	{
 		// TODO this could be another thread and run at a lower rate
 		hasGfx = true;
@@ -933,7 +958,7 @@ CompositeLoop:
 			vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 		}
 
-		CMD_IMAGE_BARRIERS(gfxCmd,
+		CMD_IMAGE_BARRIERS2(gfxCmd, {
 			{
 				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 				.image = compFrameAtomicImg,
@@ -949,7 +974,8 @@ CompositeLoop:
 				VK_IMAGE_BARRIER_DST_COMPUTE_READ_WRITE,
 				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 				VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
-			});
+			},
+		});
 
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, nodePostCompPipe);
 		vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
@@ -1198,7 +1224,6 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 	/// Compute Output
 	{
 		VkDedicatedTextureCreateInfo atomicCreateInfo = {
-			.debugName        = "ComputeAtomicFramebuffer",
 			.pImageCreateInfo =
 				&(VkImageCreateInfo){
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1214,9 +1239,11 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 			.locality   = VK_LOCALITY_CONTEXT,
 		};
 		vkCreateDedicatedTexture(&atomicCreateInfo, &pCst->compFrameAtomicTex);
+		VK_SET_DEBUG(pCst->compFrameAtomicTex.image);
+		VK_SET_DEBUG(pCst->compFrameAtomicTex.view);
+		VK_SET_DEBUG(pCst->compFrameAtomicTex.memory);
 
 		VkDedicatedTextureCreateInfo colorCreateInfo = {
-			.debugName = "ComputeColorFramebuffer",
 			.pImageCreateInfo =
 				&(VkImageCreateInfo){
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1232,6 +1259,9 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 			.locality = VK_LOCALITY_CONTEXT,
 		};
 		vkCreateDedicatedTexture(&colorCreateInfo, &pCst->compFrameColorTex);
+		VK_SET_DEBUG(pCst->compFrameColorTex.image);
+		VK_SET_DEBUG(pCst->compFrameColorTex.view);
+		VK_SET_DEBUG(pCst->compFrameColorTex.memory);
 
 		VkDescriptorSetAllocateInfo setInfo = {
 			VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
