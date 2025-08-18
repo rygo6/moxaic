@@ -100,16 +100,12 @@ typedef struct MxcClip {
 typedef struct MxcNodeShared {
 
 	// Read/Write every cycle
-	u64 timelineValue;
-
-	VkGlobalSetState globalSetState;
-	MxcClip          clip;
-
+	u64             timelineValue;
+	MxcClip         clip;
 	MxcProcessState processState;
-
-	pose rootPose;
-	pose cameraPose;
-	cam  camera;
+	pose            rootPose;
+	pose            cameraPose;
+	cam             camera;
 
 	struct {
 		u8 colorId;

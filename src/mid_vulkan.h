@@ -840,7 +840,7 @@ INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 }
 
 // probably move to math lib and take copy to pointer out
-INLINE void vkUpdateGlobalSetViewProj(cam camera, pose cameraPose, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
+INLINE void vkUpdateGlobalSetViewProj(cam camera, pose cameraPose, VkGlobalSetState* pState)
 {
 	pState->framebufferSize = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
 	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar);
@@ -849,15 +849,13 @@ INLINE void vkUpdateGlobalSetViewProj(cam camera, pose cameraPose, VkGlobalSetSt
 	pState->view = mat4Inv(pState->invView);
 	pState->viewProj = mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = mat4Inv(pState->viewProj);
-	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
-INLINE void vkUpdateGlobalSetView(pose* pCameraTransform, VkGlobalSetState* pState, VkGlobalSetState* pMapped)
+INLINE void vkUpdateGlobalSetView(pose cameraPose, VkGlobalSetState* pState)
 {
-	pState->invView = mat4FromPosRot(pCameraTransform->pos, pCameraTransform->rot);
+	pState->invView = mat4FromPosRot(cameraPose.pos, cameraPose.rot);
 	pState->view = mat4Inv(pState->invView);
 	pState->viewProj = mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = mat4Inv(pState->viewProj);
-	memcpy(pMapped, pState, sizeof(VkGlobalSetState));
 }
 INLINE void vkUpdateObjectSet(pose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
 {

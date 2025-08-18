@@ -50,6 +50,7 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 
 #undef VEC_UNION
 
+// todo need to do decide what to do here
 // I think we want a basic VEC2 then a more advanced TO_VEC2 for conversions
 #define VEC2(_x, _y) (vec2){{(_x), (_y)}}
 #define TO_VEC2_1(_arg0) _Generic((_arg0),   \

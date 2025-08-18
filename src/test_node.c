@@ -55,6 +55,10 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 	VkSemaphore nodeTimeline = pNodeCtx->thread.nodeTimeline;
 	u64 nodeTimelineValue = 0;
 
+	VkGlobalSetState globSetState = (VkGlobalSetState){};
+	vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, &globSetState);
+	memcpy(pGlobalSetMapped, &globSetState, sizeof(VkGlobalSetState));
+
 	ASSERT(cstTimeline != NULL, "Compositor Timeline Handle is nulL!");
 	ASSERT(nodeTimeline != NULL, "Node Timeline Handle is nulL!");
 
@@ -120,7 +124,7 @@ void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNo
 		pNodeShr->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 	}
 
-run_loop:
+NodeLoop:
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
 
 	////
@@ -136,6 +140,7 @@ run_loop:
 
 	////
 	//// MXC_CYCLE_UPDATE_NODE_STATES
+
 	// Must wait until after node states are updated to render
 
 	////
@@ -143,7 +148,12 @@ run_loop:
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
 
 	atomic_thread_fence(memory_order_acquire);
-	memcpy(pGlobalSetMapped, &pNodeShr->globalSetState, sizeof(VkGlobalSetState));
+	vkUpdateGlobalSetView((pose){
+		.pos = (vec3)(pNodeShr->cameraPose.pos.vec - pNodeShr->rootPose.pos.vec),
+		.euler = pNodeShr->cameraPose.euler,
+		.rot = pNodeShr->cameraPose.rot,
+	}, &globSetState);
+	memcpy(pGlobalSetMapped, &globSetState, sizeof(VkGlobalSetState));
 
 	vk.ResetCommandBuffer(gfxCmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	vk.BeginCommandBuffer(gfxCmd, &(VkCommandBufferBeginInfo){VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
@@ -266,7 +276,7 @@ run_loop:
 	//      return;
 
 	CHECK_RUNNING
-	goto run_loop;
+	goto NodeLoop;
 }
 
 ////

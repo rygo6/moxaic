@@ -568,7 +568,8 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	globCamPose.rot = QuatFromEuler(globCamPose.euler);
 
 	VkGlobalSetState globSetState = (VkGlobalSetState){};
-	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState, pGlobSetMapped);
+	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState);
+	memcpy(pGlobSetMapped, &globSetState, sizeof(VkGlobalSetState));
 
 CompositeLoop:
 
@@ -585,7 +586,8 @@ CompositeLoop:
 
 	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
-	vkUpdateGlobalSetView(&globCamPose, &globSetState, pGlobSetMapped);
+	vkUpdateGlobalSetView(globCamPose, &globSetState);
+	memcpy(pGlobSetMapped, &globSetState, sizeof(VkGlobalSetState));
 
 	//----------------------------------------------------------------------------------------------
 	// MXC_CYCLE_UPDATE_NODE_STATES
@@ -723,8 +725,8 @@ CompositeLoop:
 
 			/// Calc new node uniform and shared data
 			ATOMIC_FENCE_SCOPE {
-				// Copy previously used global state from node to compositor data for the compositor to use in subsequent reprojections
-				memcpy(&pNodeCst->nodeSetState.view, &pNodeShr->globalSetState, sizeof(VkGlobalSetState));
+				// Update compositor to use node state which rendered the frame
+				vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, (VkGlobalSetState*)&pNodeCst->nodeSetState.view); // don't have to call SetViewProj every frame
 				memcpy(&pNodeCst->nodeSetState.ulUV, &pNodeShr->clip, sizeof(MxcClip));
 				memcpy(pNodeCst->nodeDesc.pMapped, &pNodeCst->nodeSetState, sizeof(MxcCompositorNodeSetState));
 
@@ -795,9 +797,8 @@ CompositeLoop:
 					default: break;
 				}
 
-				// maybe I should only copy camera pose info and generate matrix on other thread? oxr only wants the pose
+				// Update node state to use in next node frame
 				pNodeShr->cameraPose = globCamPose;
-				pNodeShr->cameraPose.pos.vec -= pNodeShr->rootPose.pos.vec;
 				pNodeShr->camera = globCam;
 
 				pNodeShr->left.active = false;
@@ -810,10 +811,6 @@ CompositeLoop:
 				pNodeShr->right.aimPose = globCamPose;
 				pNodeShr->right.selectClick = mxcWindowInput.leftMouseButton;
 
-				// Write current GlobalSetState to NodeShared for node to use in next frame
-				// - sizeof(ivec2) so we can fill in framebufferSize constrained to node swap
-				memcpy(&pNodeShr->globalSetState, &globSetState, sizeof(VkGlobalSetState) - sizeof(ivec2));
-				pNodeShr->globalSetState.framebufferSize = IVEC2(uvDiff.x * windowExtent.x, uvDiff.y * windowExtent.y);
 				pNodeShr->clip.ulUV = uvMinClamp;
 				pNodeShr->clip.lrUV = uvMaxClamp;
 			}
