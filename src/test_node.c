@@ -7,16 +7,6 @@
 #include "mid_openxr_runtime.h"
 #include "test_node.h"
 
-
-#define IMAGE_BARRIER_SRC_NODE_FINISH_RENDERPASS                         \
-	.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, \
-	.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT_KHR,         \
-	.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-#define IMAGE_BARRIER_DST_NODE_RELEASE                    \
-	.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, \
-	.dstAccessMask = VK_ACCESS_2_NONE,                    \
-	.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-
 ////
 //// Loop
 ////

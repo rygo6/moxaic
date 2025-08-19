@@ -119,6 +119,9 @@ int main(void)
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
+
+		NodeHandle testNodeHandle2;
+		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle2);
 #endif
 
 #elif defined(MOXAIC_NODE)

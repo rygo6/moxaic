@@ -233,14 +233,15 @@ void main()
     if (!(globProjDepth > DEPTH_FAR))
         return;
 
+    vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
+    float finalDepth = nodeColorSample.a > 0 ? globProjDepth : 0;
+
     // I am going to want to pack depth with an ID of the node eventually then use that id to sample the color
-    uint nodePackedDepth = PackDepth32(globProjDepth);
+    uint nodePackedDepth = PackDepth32(finalDepth);
     uint prevNodePackedDepth = imageAtomicMax(outputAtomic, globProjCoord, nodePackedDepth);
 
     if (nodePackedDepth >= prevNodePackedDepth) {
         // We don't want to linear sample because then pixels at the edge of an object get blended with black background
-        vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
         imageStore(outputColor, globProjCoord, nodeColorSample);
-//        imageStore(outputColor, globProjCoord, vec4(nodeDepthSample));
     }
 }

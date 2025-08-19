@@ -559,12 +559,11 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 	NodeHandle hNode = RequestLocalNodeHandle();
 
 	auto pNodeCtx = &node.context[hNode];
-	memset(pNodeCtx, 0, sizeof(MxcNodeContext));
 	pNodeCtx->interprocessMode = MXC_NODE_INTERPROCESS_MODE_THREAD;
 	pNodeCtx->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 
 	auto pNodeShr = node.pShared[hNode];
-	memset(pNodeShr, 0, sizeof(MxcNodeShared));
+	pNodeShr->rootPose.pos = VEC3(hNode, 0, 0);
 	pNodeShr->rootPose.rot = QuatFromEuler(pNodeShr->rootPose.euler);
 
 	pNodeShr->camera.yFovRad = RAD_FROM_DEG(45.0f);
