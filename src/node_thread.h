@@ -6,7 +6,7 @@
 
 #include "node.h"
 
-typedef struct MxcTestNode {
+typedef struct MxcNodeThread {
 
 	VkDevice device;
 
@@ -31,8 +31,8 @@ typedef struct MxcTestNode {
 	MxcProcessState* pProcessStateMapped;
 	VkSharedBuffer   processStateBuffer;
 
-} MxcTestNode;
+} MxcNodeThread;
 
-void* mxcTestNodeThread(MxcNodeContext* pNode);
+void* mxcRunNodeThread(void* nodeHandle);
 
 #endif

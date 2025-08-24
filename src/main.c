@@ -7,7 +7,7 @@
 
 #include "compositor.h"
 #include "node.h"
-#include "test_node.h"
+#include "node_thread.h"
 #include "window.h"
 
 MxcView compositorView = MXC_VIEW_STEREO;
@@ -118,10 +118,10 @@ int main(void)
 #define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
-		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle);
+		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
 
 		NodeHandle testNodeHandle2;
-		mxcRequestNodeThread(mxcTestNodeThread, &testNodeHandle2);
+		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
 #endif
 
 #elif defined(MOXAIC_NODE)

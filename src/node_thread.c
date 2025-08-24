@@ -5,14 +5,17 @@
 
 #include "mid_shape.h"
 #include "mid_openxr_runtime.h"
-#include "test_node.h"
+#include "node_thread.h"
 
 ////
 //// Loop
 ////
-void mxcTestNodeRun(MxcNodeContext* pNodeCtx ,MxcNodeShared* pNodeShr, MxcTestNode* pNode)
+void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 {
-	NodeHandle hNode = pNodeCtx->hNode;
+	LOG("Running Thread Node %d\n", hNode);
+
+	auto pNodeCtx = &node.context[hNode];
+	auto pNodeShr = node.pShared[hNode];
 
 	auto nodeType = pNodeCtx->interprocessMode;
 	auto gfxCmd = pNodeCtx->thread.gfxCmd;
@@ -272,9 +275,12 @@ NodeLoop:
 ////
 //// Create
 ////
-static void Create(MxcNodeContext* pNodeContext, MxcNodeShared* pNodeShr, MxcTestNode* pNode)
+static void Create(NodeHandle hNode, MxcNodeThread* pNode)
 {
-	LOG("Creating Thread Node\n");
+	LOG("Creating Thread Node %d\n", hNode);
+
+	auto pNodeCtx = &node.context[hNode];
+	auto pNodeShr = node.pShared[hNode];
 
 	// This is way too many descriptors... optimize this
 	VK_CHECK(vkCreateDescriptorPool(vk.context.device, &(VkDescriptorPoolCreateInfo){
@@ -332,9 +338,12 @@ static void Create(MxcNodeContext* pNodeContext, MxcNodeShared* pNodeShr, MxcTes
 	}, &pNode->processStateBuffer);
 }
 
-static void Bind(MxcNodeContext* pNodeCtx, MxcNodeShared* pNodeShr, MxcTestNode* pNode)
+static void Bind(NodeHandle hNode, MxcNodeThread* pNode)
 {
-	LOG("Binding Thread Node\n");
+	LOG("Binding Thread Node %d\n", hNode);
+
+	auto pNodeCtx = &node.context[hNode];
+	auto pNodeShr = node.pShared[hNode];
 
 	vkBindSharedBuffer(&pNode->globalBuffer);
 	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pNode->globalSet, pNode->globalBuffer.buffer));
@@ -345,23 +354,24 @@ static void Bind(MxcNodeContext* pNodeCtx, MxcNodeShared* pNodeShr, MxcTestNode*
 	memset(pNode->pProcessStateMapped, 0, sizeof(MxcProcessState));
 }
 
-void* mxcTestNodeThread(MxcNodeContext* pNodeCtx) // we should pass in hNode
+void* mxcRunNodeThread(void* nodeHandle)
 {
-	LOG("Initializing Thread Node\n");
+	NodeHandle hNode = (NodeHandle)(u64)nodeHandle;
+	LOG("Initializing Thread Node: %d\n", hNode);
 
-	NodeHandle hNode = pNodeCtx->hNode;
-//	auto pNodeCtx = &node.context[hNode];
+	auto pNodeCtx = &node.context[hNode];
 	auto pNodeShr = node.pShared[hNode];
-	MxcTestNode testNode;
-	memset(&testNode, 0, sizeof(MxcTestNode));
+
+	MxcNodeThread testNode;
+	memset(&testNode, 0, sizeof(MxcNodeThread));
 
 	vkBeginAllocationRequests();
-	Create(pNodeCtx, pNodeShr, &testNode);
+	Create(hNode, &testNode);
 	vkEndAllocationRequests();
 
-	Bind(pNodeCtx, pNodeShr, &testNode);
+	Bind(hNode, &testNode);
 
-	mxcTestNodeRun(pNodeCtx, pNodeShr, &testNode);
+	mxcTestNodeRun(hNode, &testNode);
 
 	return NULL;
 }

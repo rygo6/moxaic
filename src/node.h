@@ -290,7 +290,6 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 constexpr int MXC_NODE_SWAP_CAPACITY = VK_SWAP_COUNT * 2;
 
 typedef struct MxcNodeContext {
-	NodeHandle hNode; // I can get rid of this once I use mid block with BLOCK_HANDLE
 
 	MxcNodeInterprocessMode interprocessMode;
 
@@ -443,7 +442,7 @@ static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue
 }
 
 void mxcRequestAndRunCompositorNodeThread(VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*));
-void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHandle);
+void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
 
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);

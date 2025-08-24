@@ -10,7 +10,7 @@
 #include "pipe_gbuffer_process.h"
 
 #include "node.h"
-#include "test_node.h"
+#include "node_thread.h"
 
 // Compositor state in Compositor Process
 // There is one compositor context in the Compositor Process and it can be accessed directly
@@ -389,7 +389,6 @@ NodeHandle RequestLocalNodeHandle()
 	node.pShared[hNode] = malloc(sizeof(MxcNodeShared));
 	memset(node.pShared[hNode], 0, sizeof(MxcNodeShared));
 	memset(&node.context[hNode], 0, sizeof(MxcNodeContext));
-	node.context[hNode].hNode = hNode;
 	return hNode;
 }
 
@@ -398,7 +397,6 @@ NodeHandle RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 	NodeHandle hNode = atomic_fetch_add(&node.count, 1);
 	node.pShared[hNode] = pNodeShared;
 	memset(&node.context[hNode], 0, sizeof(MxcNodeContext));
-	node.context[hNode].hNode = hNode;
 	return hNode;
 }
 
@@ -552,7 +550,7 @@ static int CleanupNode(NodeHandle hNode)
 	return 0;
 }
 
-void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHandle)
+void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 {
 #if defined(MOXAIC_COMPOSITOR)
 	LOG("Requesting Node Thread.\n");
@@ -610,7 +608,7 @@ void mxcRequestNodeThread(void* (*runFunc)(MxcNodeContext*), NodeHandle* pNodeHa
 
 	*pNodeHandle = hNode;
 
-	CHECK(pthread_create(&node.context[hNode].thread.id, NULL, (void* (*)(void*))runFunc, pNodeCtx), "Node thread creation failed!");
+	CHECK(pthread_create(&node.context[hNode].thread.id, NULL, (void* (*)(void*))runFunc, (void*)(u64)hNode), "Node thread creation failed!");
 
 	SetNodeActive(hNode, MXC_COMPOSITOR_MODE_NONE);
 
@@ -994,12 +992,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 
 	// Start node thread
 	{
-#if defined(MOXAIC_COMPOSITOR)
-		PANIC("We need a new test scene...");
-		atomic_thread_fence(memory_order_release);
-		CHECK(pthread_create(&pNodeContext->thread.id, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
-		printf("Node Request Process Import Success.\n");
-#endif
+//#if defined(MOXAIC_COMPOSITOR)
+//		PANIC("We need a new test scene...");
+//		atomic_thread_fence(memory_order_release);
+//		CHECK(pthread_create(&pNodeContext->thread.id, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
+//		printf("Node Request Process Import Success.\n");
+//#endif
 		goto ExitSuccess;
 	}
 
