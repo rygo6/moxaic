@@ -29,14 +29,17 @@ void xrClaimSessionId(XrSessionId* pSessionId)
 {
 	LOG("Creating Moxaic OpenXR Session.\n");
 
-	auto pNodeShrd = &pImportedExternalMemory->shared;
-
 	// I believe both a session and a composition layer will end up constituting different Nodes
 	// and requesting a SessionId will simply mean the base compositionlayer index
-	NodeHandle      hNode = RequestExternalNodeHandle(pNodeShrd);
-	MxcNodeContext* pNodeContext = &node.context[hNode];
-	pNodeContext->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
-	pNodeContext->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
+	NodeHandle      hNode = RequestExternalNodeHandle(&pImportedExternalMemory->shared);
+	MxcNodeContext* pNodeCtx = &node.context[hNode];
+
+	pNodeCtx->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
+	pNodeCtx->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
+
+	MxcNodeShared* pNodeShrd = node.pShared[hNode];
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+
 	LOG("Importing node handle %d as OpenXR session\n", hNode);
 
 	*pSessionId = hNode; // openxr sessionId == moxaic node handle
@@ -50,7 +53,7 @@ void xrReleaseSessionId(XrSessionId sessionId)
 	auto pNodeShrd = &pImportedExternalMemory->shared;
 
 	NodeHandle nodeHandle = sessionId;
-	ReleaseNodeActive(nodeHandle);
+	ReleaseCompositorNodeActive(nodeHandle);
 
 	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 }

@@ -260,8 +260,9 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 
 	MxcNodeInteractionState interactionState;
 	MxcCompositorMode       activeCompositorMode;
+	MxcNodeInterprocessMode activeInterprocessMode;
 
-//	pose rootPose;
+	//	pose rootPose;
 	u64  lastTimelineValue;
 
 	// This should go in one big shared buffer for all nodes
@@ -446,8 +447,8 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
 
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
-void       SetNodeActive(NodeHandle hNode, MxcCompositorMode mode);
-void       ReleaseNodeActive(NodeHandle hNode);
+void       SetCompositorNodeActive(NodeHandle hNode);
+void ReleaseCompositorNodeActive(NodeHandle hNode);
 
 
 ///////////////////////

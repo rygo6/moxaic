@@ -124,8 +124,9 @@ NodeLoop:
 	//// MXC_CYCLE_UPDATE_WINDOW_STATE
 	if (UNLIKELY(nodeTimelineValue == 2)) {
 		// TODO this cannot be here it must be a RPC
-		ReleaseNodeActive(hNode);
-		SetNodeActive(hNode, pNodeShr->compositorMode);
+		ReleaseCompositorNodeActive(hNode);
+		pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+		SetCompositorNodeActive(hNode);
 	}
 
 	////
@@ -358,9 +359,6 @@ void* mxcRunNodeThread(void* nodeHandle)
 {
 	NodeHandle hNode = (NodeHandle)(u64)nodeHandle;
 	LOG("Initializing Thread Node: %d\n", hNode);
-
-	auto pNodeCtx = &node.context[hNode];
-	auto pNodeShr = node.pShared[hNode];
 
 	MxcNodeThread testNode;
 	memset(&testNode, 0, sizeof(MxcNodeThread));

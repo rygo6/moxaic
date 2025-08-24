@@ -407,23 +407,29 @@ void ReleaseNodeHandle(NodeHandle hNode)
 	LOG("Releasing Node Handle %d. Prior Count %d.\n", hNode, priorCount);
 }
 
-void SetNodeActive(NodeHandle hNode, MxcCompositorMode mode)
+void SetCompositorNodeActive(NodeHandle hNode)
 {
 #if defined(MOXAIC_COMPOSITOR)
-	auto pNodeCstData = &node.cst.data[hNode];
-	auto pActiveNode = &node.active[mode];
+	auto pNodeCtxt = &node.context[hNode];
+	auto pNodeShrd = node.pShared[hNode];
+	auto pNodeCst = &node.cst.data[hNode];
+
+	pNodeCst->activeCompositorMode = pNodeShrd->compositorMode;
+	pNodeCst->activeInterprocessMode = pNodeCtxt->interprocessMode;
+
+	auto pActiveNode = &node.active[pNodeShrd->compositorMode];
 	pActiveNode->handles[pActiveNode->count] = hNode;
-	pNodeCstData->activeCompositorMode = mode;
+
 	atomic_fetch_add(&pActiveNode->count, 1);
-	LOG("Added node %d to %s\n", hNode, string_MxcCompositorMode(mode));
+	LOG("Added node %d to %s\n", hNode, string_MxcCompositorMode(pNodeShrd->compositorMode));
 #endif
 }
 
 // Release Node from active lists while still retaining node handle.
-void ReleaseNodeActive(NodeHandle hNode)
+void ReleaseCompositorNodeActive(NodeHandle hNode)
 {
 #if defined(MOXAIC_COMPOSITOR)
-	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
+	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseCompositorNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 	assert(node.context[hNode].interprocessMode != MXC_NODE_INTERPROCESS_MODE_NONE);
 	auto pNodeCstData = &node.cst.data[hNode];
 	auto pActiveNode = &node.active[pNodeCstData->activeCompositorMode];
@@ -453,7 +459,7 @@ void ReleaseNodeActive(NodeHandle hNode)
 	}
 static int CleanupNode(NodeHandle hNode)
 {
-	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
+	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseCompositorNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 	auto pNodeCtxt = &node.context[hNode];
 	auto pNodeShared = node.pShared[hNode];
 
@@ -570,7 +576,6 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 
 	pNodeShr->compositorRadius = 0.5;
 	pNodeShr->compositorCycleSkip = 16;
-	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 	pNodeShr->swapMaxWidth = DEFAULT_WIDTH;
 	pNodeShr->swapMaxHeight = DEFAULT_HEIGHT;
@@ -610,7 +615,8 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 
 	CHECK(pthread_create(&node.context[hNode].thread.id, NULL, (void* (*)(void*))runFunc, (void*)(u64)hNode), "Node thread creation failed!");
 
-	SetNodeActive(hNode, MXC_COMPOSITOR_MODE_NONE);
+	// Initially sets to MXC_COMPOSITOR_MODE_NONE
+	SetCompositorNodeActive(hNode);
 
 	LOG("Request Node Thread Success. Handle: %d\n", hNode);
 	// todo this needs error handling
@@ -792,7 +798,7 @@ static void ServerInterprocessAcceptNodeConnection()
 	/// Add Active node
 	{
 		// Add to COMPOSITOR_MODE_NONE initially to start processing
-		SetNodeActive(hNode, MXC_COMPOSITOR_MODE_NONE);
+		SetCompositorNodeActive(hNode);
 		goto ExitSuccess;
 	}
 
@@ -1067,19 +1073,20 @@ int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle)
 static void ipcFuncNodeOpened(NodeHandle hNode)
 {
 	LOG("Opened %d\n", hNode);
+	auto pNodeCtxt = &node.context[hNode];
 	auto pNodeShrd = node.pShared[hNode];
 
 	CreateNodeGBuffer(hNode);
 
 	// Move out of COMPOSITOR_MODE_NONE and set to real COMPOSITOR_MODE to begin compositing
-	ReleaseNodeActive(hNode);
-	SetNodeActive(hNode, pNodeShrd->compositorMode);
+	ReleaseCompositorNodeActive(hNode);
+	SetCompositorNodeActive(hNode);
 }
 
 static void ipcFuncNodeClosed(NodeHandle hNode)
 {
 	LOG("Closing %d\n", hNode);
-	ReleaseNodeActive(hNode);
+	ReleaseCompositorNodeActive(hNode);
 	CleanupNode(hNode);
 	ReleaseNodeHandle(hNode);
 }
@@ -1129,6 +1136,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 				ASSERT(false, "SwapImage is neither color nor depth!");
 			}
 
+			// TODO I should always export if these are to start getting shared
 			if (needsExport) {
 				auto pImports = &pNodeCtxt->exported.pExportedMemory->imports;
 				WIN32_CHECK(DuplicateHandle(GetCurrentProcess(),
