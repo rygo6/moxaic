@@ -153,24 +153,6 @@ bool WriteDebugLine(ivec2 P1, ivec2 P2, ivec2 screenCoord) {
     return false;
 }
 
-//void WriteDebugLine(vec3 P1, vec3 P2, ivec2 screenCoord) {
-//    vec4 p1ClipPos = GlobalClipPosFromWorldPos(P1);
-//    vec3 p1NDC = NDCFromClipPos(p1ClipPos);
-//    vec2 p1UV = UVFromNDC(p1NDC);
-//    vec2 p1Coord = vec2(CoordFromUV(p1UV, globalUBO.screenSize));
-//
-//    vec4 p2ClipPos = GlobalClipPosFromWorldPos(P2);
-//    vec3 p2NDC = NDCFromClipPos(p2ClipPos);
-//    vec2 p2UV = UVFromNDC(p2NDC);
-//    vec2 p2Coord = vec2(CoordFromUV(p2UV, globalUBO.screenSize));
-//
-//    if (p1NDC.z > p2NDC.z){
-//        WriteDebugLine(p2Coord, p1Coord, screenCoord);
-//    } else {
-//        WriteDebugLine(p1Coord, p2Coord, screenCoord);
-//    }
-//}
-
 void StoreDebug(){
     imageAtomicMax(outputAtomic, grid_GlobalInvocationQuadCoord, 1);
     imageStore(outputColor, grid_GlobalInvocationQuadCoord, vec4(0,1,0,1));
@@ -194,26 +176,11 @@ void main()
     vec3 globalWorldDir = WorldRayDirFromGlobalNDC(globalNDC);
 
     // We can assume this will hit because the if check above will retun if the node framebuffer is not in the global framebuffer
-    vec3 intersectWorldPos = IntersectPlane(globalWorldPos, globalWorldDir, nodeOriginWorldPos, nodeOriginWorldDir);
-    vec4 intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
-    vec3 intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
-    vec2 intersectNodeUV = UVFromNDC(intersectNodeNDC);
+    vec3  intersectWorldPos = IntersectPlane(globalWorldPos, globalWorldDir, nodeOriginWorldPos, nodeOriginWorldDir);
+    vec4  intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
+    vec3  intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
+    vec2  intersectNodeUV = UVFromNDC(intersectNodeNDC);
     ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
-
-//    { // Debug lines
-//        ivec2 ulCoord = CoordFromUVRound(nodeState.ulUV, outputSize);
-//        ivec2 lrCoord = CoordFromUVRound(nodeState.lrUV, outputSize);
-//        ivec2 urCoord = ivec2(ulCoord.x, lrCoord.y);
-//        ivec2 llCoord = ivec2(lrCoord.x, ulCoord.y);
-//        if (WriteDebugLine(ulCoord, urCoord, grid_GlobalCoord))
-//        return;
-//        if (WriteDebugLine(urCoord, lrCoord, grid_GlobalCoord))
-//        return;
-//        if (WriteDebugLine(lrCoord, llCoord, grid_GlobalCoord))
-//        return;
-//        if (WriteDebugLine(llCoord, ulCoord, grid_GlobalCoord))
-//        return;
-//    }
 
     if (any(lessThan(intersectNodeUV, nodeState.ulUV)) || any(greaterThan(intersectNodeUV, nodeState.lrUV))) {
         return;
@@ -222,18 +189,18 @@ void main()
     // We don't want to linear sample because then you get float pixels between objects a great depth variation
     float nodeDepthSample = texelFetch(nodeGBuffer, intersectNodeCoord, 0).r;
 
-    vec4 nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
-    vec3 projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
-    vec4 globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
-    vec3 globProjNDC = NDCFromClipPos(globProjClipPos);
+    vec4  nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
+    vec3  projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
+    vec4  globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
+    vec3  globProjNDC = NDCFromClipPos(globProjClipPos);
     float globProjDepth = globProjNDC.z;
-    vec2 globProjUV = UVFromNDC(globProjNDC);
+    vec2  globProjUV = UVFromNDC(globProjNDC);
     ivec2 globProjCoord = CoordFromUVRound(globProjUV, outputSize);
 
     if (!(globProjDepth > DEPTH_FAR))
         return;
 
-    vec4 nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
+    vec4  nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
     float finalDepth = nodeColorSample.a > 0 ? globProjDepth : 0;
 
     // I am going to want to pack depth with an ID of the node eventually then use that id to sample the color

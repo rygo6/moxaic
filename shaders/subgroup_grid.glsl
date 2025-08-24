@@ -488,7 +488,6 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
 
     grid_InvocationQuadCoord = grid_InvocationSubgroupQuadCoord + (grid_SubgroupQuadCoord * SUBGROUP_SQUARE_SIZE);
     grid_InvocationQuadMortonCoord = grid_InvocationSubgroupQuadMortonCoord + (grid_SubgroupQuadMortonCoord * SUBGROUP_SQUARE_SIZE);
-//    grid_InvocationQuadMortonCoord = MortonDecode8bit((grid_GlobalSubgroupQuadID * SUBGROUP_COUNT) + grid_InvocationSubgroundQuadID);
 
     grid_GlobalInvocationQuadCoord = grid_InvocationQuadCoord + grid_GlobalWorkgroupCoord;
     grid_GlobalInvocationQuadMortonCoord = ivec2(grid_InvocationQuadMortonCoord + grid_GlobalWorkgroupCoord);
@@ -496,30 +495,3 @@ void InitializeSubgroupGridInfo(ivec2 dimensions) {
     grid_GlobalInvocationUV = vec2(grid_GlobalInvocationQuadCoord) / vec2(dimensions);
     grid_GlobalInvocationMortonUV = vec2(grid_GlobalInvocationQuadMortonCoord) / vec2(dimensions);
 }
-
-//void InitializeSubgroupGridQuadInfo(ivec2 dimensions) {
-//    grid_Dimensions = dimensions / 2;
-//
-//    grid_GlobalWorkgroupID = gl_WorkGroupID.y;
-//    grid_GlobalWorkgroupCoord = GlobalWorkgroupCoordFromIndex(grid_GlobalWorkgroupID, grid_Dimensions);
-//
-//    grid_GlobalSubgroupQuadID = gl_GlobalInvocationID.y;
-//    grid_SubgroupQuadID = gl_GlobalInvocationID.y % WORKGROUP_SUBGROUP_COUNT;
-//
-//    grid_SubgroupQuadCoord = LocalSubgroupCoordFromIndex(grid_SubgroupQuadID);
-//    grid_SubgroupQuadCoord = SubgroupQuadCoordFromID(grid_SubgroupQuadID);
-//
-//    grid_InvocationSubgroundQuadID = gl_SubgroupInvocationID % SUBGROUP_COUNT;
-//    grid_InvocationSubgroupQuadBaseID = (gl_SubgroupInvocationID >> 4) << 4; // / 16 * 16
-//
-//    grid_InvocationSubgroundQuadID = gl_SubgroupInvocationID % SUBGROUP_COUNT;
-//    grid_InvocationSubgroupQuadCoord = SubgroupCoordFromIndex(grid_InvocationSubgroundQuadID);
-//
-//    grid_GlobalFirstInvocation = grid_InvocationSubgroundQuadID == 0 && grid_GlobalWorkgroupID == 0;
-//    grid_LocalFirstInvocation = grid_InvocationSubgroundQuadID == 0 && grid_SubgroupQuadID == 0;
-//
-//    grid_InvocationWorkgroupQuadCoord = (grid_InvocationSubgroupQuadCoord + grid_SubgroupQuadCoord) * 2;
-//    grid_GlobalCoord = (grid_InvocationSubgroupQuadCoord + grid_SubgroupQuadCoord + grid_GlobalWorkgroupCoord) * 2;
-//
-//    grid_GlobalUV = vec2(grid_GlobalCoord) / vec2(dimensions * 2);
-//}
