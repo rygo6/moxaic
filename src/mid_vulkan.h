@@ -1031,7 +1031,7 @@ void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTe
 void vkDestroyDedicatedTexture(VkDedicatedTexture* pTexture);
 
 typedef struct vkSemaphoreCreateInfoExt {
-	const char*                 debugName;
+	const char*                 debugName; // TODO get rid of
 	VkSemaphoreType             semaphoreType;
 	VkLocality                  locality;
 	VK_EXTERNAL_HANDLE_PLATFORM importHandle;
@@ -1039,7 +1039,7 @@ typedef struct vkSemaphoreCreateInfoExt {
 void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemaphore* pSemaphore);
 
 typedef struct VkExternalFenceCreateInfo {
-	const char*                 debugName;
+	const char*                 debugName; // TODO get rid of
 	VkLocality                  locality;
 	VK_EXTERNAL_HANDLE_PLATFORM importHandle;
 } VkExternalFenceCreateInfo;
@@ -1087,7 +1087,7 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 #define VK_SET_DEBUG(_)             vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), #_)
 #define VK_SET_DEBUG_NAME(_, ...)                             \
 	({                                                        \
-		char _buffer[32];                                     \
+		char _buffer[128];                                    \
 		snprintf(_buffer, sizeof(_buffer), __VA_ARGS__);      \
 		vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), _buffer); \
 	})
@@ -3125,6 +3125,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			.queueFamilyIndex = vk.context.queueFamilies[i].index,
 		};
 		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &vk.context.queueFamilies[i].pool));
+		VK_SET_DEBUG_NAME(vk.context.queueFamilies[i].pool, "CommandPool %s", string_QueueFamilyType[i]);
 	}
 	//----------------------------------------------------------------------------------------------
 }

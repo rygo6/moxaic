@@ -50,11 +50,8 @@ void xrClaimSessionId(XrSessionId* pSessionId)
 void xrReleaseSessionId(XrSessionId sessionId)
 {
 	LOG("Releasing Moxaic OpenXR Session.\n");
-	auto pNodeShrd = &pImportedExternalMemory->shared;
-
-	NodeHandle nodeHandle = sessionId;
-	ReleaseCompositorNodeActive(nodeHandle);
-
+	NodeHandle hNode = sessionId;
+	MxcNodeShared* pNodeShrd = node.pShared[hNode];
 	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 }
 

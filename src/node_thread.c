@@ -117,17 +117,14 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 		pNodeShr->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 	}
 
+	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+	mxcIpcFuncEnqueue(&pNodeShr->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_OPENED);
+
 NodeLoop:
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
 
 	////
 	//// MXC_CYCLE_UPDATE_WINDOW_STATE
-	if (UNLIKELY(nodeTimelineValue == 2)) {
-		// TODO this cannot be here it must be a RPC
-		ReleaseCompositorNodeActive(hNode);
-		pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
-		SetCompositorNodeActive(hNode);
-	}
 
 	////
 	//// MXC_CYCLE_PROCESS_INPUT
@@ -295,6 +292,7 @@ static void Create(NodeHandle hNode, MxcNodeThread* pNode)
 			{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 10},
 		},
 	}, VK_ALLOC, &threadContext.descriptorPool));
+	VK_SET_DEBUG(threadContext.descriptorPool);
 
 	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pNode->globalSet);\
 	vkCreateSharedBuffer(&(VkRequestAllocationInfo){

@@ -365,13 +365,13 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.gfxPool));
+	VK_SET_DEBUG(compositorContext.gfxPool);
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = compositorContext.gfxPool,
 		.commandBufferCount = 1,
 	};
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.gfxCmd));
-	VK_SET_DEBUG(compositorContext.gfxPool);
 	VK_SET_DEBUG(compositorContext.gfxCmd);
 
 	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorContext), "Compositor Node thread creation failed!");
@@ -431,11 +431,10 @@ void ReleaseCompositorNodeActive(NodeHandle hNode)
 #if defined(MOXAIC_COMPOSITOR)
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseCompositorNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 	assert(node.context[hNode].interprocessMode != MXC_NODE_INTERPROCESS_MODE_NONE);
-	auto pNodeCstData = &node.cst.data[hNode];
-	auto pActiveNode = &node.active[pNodeCstData->activeCompositorMode];
+	auto pNodeCst = &node.cst.data[hNode];
+	auto pActiveNode = &node.active[pNodeCst->activeCompositorMode];
 
-	ATOMIC_FENCE_SCOPE
-	{
+	ATOMIC_FENCE_SCOPE	{
 		int i = 0;
 		// compact handles down... this should use memmove
 		// this needs to be done in MXC_CYCLE_UPDATE_WINDOW_STATE or MXC_CYCLE_PROCESS_INPUT when active node lists aren't use
@@ -567,6 +566,8 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	pNodeCtx->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 
 	auto pNodeShr = node.pShared[hNode];
+	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_NONE;
+
 	pNodeShr->rootPose.pos = VEC3(hNode, 0, 0);
 	pNodeShr->rootPose.rot = QuatFromEuler(pNodeShr->rootPose.euler);
 
@@ -593,13 +594,14 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
 	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtx->thread.pool));
+	VK_SET_DEBUG(pNodeCtx->thread.pool);
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.commandPool = pNodeCtx->thread.pool,
 		.commandBufferCount = 1,
 	};
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtx->thread.gfxCmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtx->thread.gfxCmd, "TestNode");
+	VK_SET_DEBUG(pNodeCtx->thread.gfxCmd);
 
 	auto pCstNodeData = &node.cst.data[hNode];
 	pCstNodeData = &node.cst.data[hNode];
@@ -609,13 +611,13 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
 	pCstNodeData->nodeDesc = nodeDesc;
 
-	CreateNodeGBuffer(hNode);
+//	CreateNodeGBuffer(hNode);
 
 	*pNodeHandle = hNode;
 
 	CHECK(pthread_create(&node.context[hNode].thread.id, NULL, (void* (*)(void*))runFunc, (void*)(u64)hNode), "Node thread creation failed!");
 
-	// Initially sets to MXC_COMPOSITOR_MODE_NONE
+	// Initially set to MXC_COMPOSITOR_MODE_NONE to begin processing IPC without rendering. Node sets actual compositor mode.
 	SetCompositorNodeActive(hNode);
 
 	LOG("Request Node Thread Success. Handle: %d\n", hNode);
@@ -724,9 +726,6 @@ static void ServerInterprocessAcceptNodeConnection()
 		pNodeShrd->compositorCycleSkip = 8;
 		pNodeShrd->swapMaxWidth = DEFAULT_WIDTH;
 		pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
-//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_QUAD;
-//		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
-		pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 			.debugName = "NodeTimelineSemaphoreExport",

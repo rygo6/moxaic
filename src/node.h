@@ -447,9 +447,6 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
 
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
-void       SetCompositorNodeActive(NodeHandle hNode);
-void ReleaseCompositorNodeActive(NodeHandle hNode);
-
 
 ///////////////////////
 //// Process Connection
