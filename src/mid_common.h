@@ -101,7 +101,7 @@ extern void Panic(const char* file, int line, const char* message);
 	})
 
 // This does appear to work...
-#define ATOMIC_FENCE_SCOPE                                                        \
+#define ATOMIC_FENCE_SCOPE                                                \
 	for (bool _done = (atomic_thread_fence(memory_order_acquire), false); \
 		 !_done;                                                          \
 		 _done = true, atomic_thread_fence(memory_order_release))

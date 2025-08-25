@@ -623,10 +623,6 @@ CompositeLoop:
 
 			/// Calc new node uniform and shared data
 			ATOMIC_FENCE_SCOPE {
-				// Update compositor to use node state which rendered the frame
-				vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, (VkGlobalSetState*)&pNodeCst->nodeSetState.view); // don't have to call SetViewProj every frame
-				memcpy(&pNodeCst->nodeSetState.ulUV, &pNodeShr->clip, sizeof(MxcClip));
-				memcpy(pNodeCst->nodeDesc.pMapped, &pNodeCst->nodeSetState, sizeof(MxcCompositorNodeSetState));
 
 				float radius = pNodeShr->compositorRadius;
 				vec3 corners[CORNER_COUNT] = {
@@ -706,9 +702,12 @@ CompositeLoop:
 						default: break;
 					}
 
-
-
 				}
+
+				// Update compositor to use node state which rendered the frame
+				vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, (VkGlobalSetState*)&pNodeCst->nodeSetState.view); // don't have to call SetViewProj every frame
+				memcpy(&pNodeCst->nodeSetState.ulUV, &pNodeShr->clip, sizeof(MxcClip));
+				memcpy(pNodeCst->nodeDesc.pMapped, &pNodeCst->nodeSetState, sizeof(MxcCompositorNodeSetState));
 
 				// Update node state to use in next node frame
 				pNodeShr->cameraPose = globCamPose;

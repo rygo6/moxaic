@@ -307,6 +307,11 @@ typedef struct MxcNodeContext {
 			VkCommandPool   pool;
 			VkCommandBuffer gfxCmd;
 
+			// TODO use these pNode should be entirely for custom node rendering
+//			VkGlobalSetState* pGlobalSetMapped;
+//			VkSharedBuffer  globalBuffer;
+//			VkDescriptorSet globalSet;
+
 			VkSemaphore nodeTimeline;
 		} thread;
 
