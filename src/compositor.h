@@ -3,15 +3,10 @@
 #include "node.h"
 #include "mid_vulkan.h"
 
-#define LINE_BUFFER_CAPACITY 128
-
-static int testvar =10;
-
 typedef struct VkSharedLineBuffer {
 	VkSharedBuffer buffer;
-	int            count;
-	vec3*          pMapped;
-	vec3           state[LINE_BUFFER_CAPACITY];
+	int            capacity;
+	VkLineVert*    pMapped;
 } VkSharedLineBuffer;
 
 typedef struct MxcCompositorCreateInfo {
@@ -52,7 +47,9 @@ typedef struct MxcCompositor {
 
   VkQueryPool timeQryPool;
 
-  VkSharedLineBuffer lineBuf;
+  VkSharedBuffer lineBuffer;
+  int            lineCapacity;
+  VkLineVert*    pLineMapped;
 
 } MxcCompositor;
 

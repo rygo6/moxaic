@@ -371,7 +371,7 @@ constexpr VkImageUsageFlags VK_RENDER_PASS_USAGES[] = {
 //// Pipeline Layouts
 // PIPE_SET_INDEX is index of a descriptor set in pipe layout
 
-// Basic
+/// Basic
 enum {
 	VK_PIPE_SET_INDEX_GLOBAL,
 	VK_PIPE_SET_INDEX_MATERIAL,
@@ -379,20 +379,17 @@ enum {
 	VK_PIPE_SET_INDEX_COUNT,
 };
 
-// Line
-#define VK_SHADER_STAGE_LINE VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
+/// Line
+//#define VK_SHADER_STAGE_LINE VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
 enum {
 	VK_PIPE_SET_INDEX_LINE_GLOBAL,
 	VK_PIPE_SET_INDEX_LINE_COUNT,
 };
-typedef struct VkLineMaterialState {
-	vec4 primaryColor;
-	vec4 secondaryColor;
-} VkLineMaterialState;
-INLINE void vkCmdPushLineMaterial(VkCommandBuffer cmd, VkLineMaterialState state)
-{
-	vkCmdPushConstants(cmd, vk.context.linePipeLayout, VK_SHADER_STAGE_LINE, 0, sizeof(VkLineMaterialState), &state);
-}
+typedef struct VkLineVert {
+	vec3 pos;
+	color color;
+} VkLineVert;
+
 
 //// Descriptor Set Bindings
 // SET_BIND_INDEX is index of descriptor binding in a descriptor set
@@ -1838,6 +1835,7 @@ enum {
 };
 enum {
 	VK_PIPE_VERTEX_ATTRIBUTE_LINE_POSITION_INDEX,
+	VK_PIPE_VERTEX_ATTRIBUTE_LINE_COLOR_INDEX,
 	VK_PIPE_VERTEX_ATTRIBUTE_LINE_COUNT,
 };
 
@@ -1850,12 +1848,14 @@ static void CreateLinePipeLayout()
 		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = VK_PIPE_SET_INDEX_LINE_COUNT,
 		.pSetLayouts = pSetLayouts,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = (VkPushConstantRange[]){
-			{.stageFlags = VK_SHADER_STAGE_LINE,
-				.offset = 0,
-				.size = sizeof(VkLineMaterialState)},
-		},
+//		.pushConstantRangeCount = 1,
+//		.pPushConstantRanges = (VkPushConstantRange[]){
+//			{
+//				.stageFlags = VK_SHADER_STAGE_LINE,
+//				.offset = 0,
+//				.size = sizeof(VkLineMaterialState)
+//			},
+//		},
 	};
 	VK_CHECK(vkCreatePipelineLayout(vk.context.device, &createInfo, VK_ALLOC, &vk.context.linePipeLayout));
 }
@@ -1891,13 +1891,24 @@ void vkCreateLinePipe(const char* vertShaderPath, const char* fragShaderPath, Vk
 			.pVertexBindingDescriptions = (VkVertexInputBindingDescription[]){
 				{
 					.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX,
-					.stride = sizeof(vec3),
+					.stride = sizeof(VkLineVert),
 					.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 				},
 			},
 			.vertexAttributeDescriptionCount = VK_PIPE_VERTEX_ATTRIBUTE_LINE_COUNT,
 			.pVertexAttributeDescriptions = (VkVertexInputAttributeDescription[]){
-				{.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX, .location = VK_PIPE_VERTEX_ATTRIBUTE_LINE_POSITION_INDEX, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = 0},
+				{
+					.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX,
+					.location = VK_PIPE_VERTEX_ATTRIBUTE_LINE_POSITION_INDEX,
+					.format = VK_FORMAT_R32G32B32_SFLOAT,
+					.offset = offsetof(VkLineVert, pos),
+				},
+				{
+					.binding = VK_PIPE_VERTEX_BINDING_LINE_INDEX,
+					.location = VK_PIPE_VERTEX_ATTRIBUTE_LINE_COLOR_INDEX,
+					.format = VK_FORMAT_R8G8B8A8_UNORM,
+					.offset = offsetof(VkLineVert, color),
+				},
 			},
 		},
 		.pInputAssemblyState = &(VkPipelineInputAssemblyStateCreateInfo){
@@ -3154,7 +3165,7 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 
 	uint32_t swapCount;
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
-	CHECK(swapCount != VK_SWAP_COUNT, "Resulting viewSwaps image count does not match requested viewSwaps count!");
+	CHECK(swapCount != VK_SWAP_COUNT, "Resulting viewSwaps image capacity does not match requested viewSwaps capacity!");
 	VkImage images[VK_SWAP_COUNT];
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, images));
 

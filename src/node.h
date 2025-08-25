@@ -278,7 +278,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 	// it can sync a single gbuffer with composite render loop
 
   	// this should go a UI thread node
-	vec3 worldSegments[MXC_CUBE_SEGMENT_COUNT];
+	VkLineVert worldLineSegments[MXC_CUBE_SEGMENT_COUNT];
 	vec3 worldCorners[CORNER_COUNT];
 	vec2 uvCorners[CORNER_COUNT];
 

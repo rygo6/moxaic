@@ -1,9 +1,11 @@
 #version 450
 
-#include "binding_line_material.glsl"
+#include "global_binding.glsl"
+
+layout(location = 0) in vec4 inColor;
 
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = lineMaterial.primaryColor;
+    outColor = inColor;
 }

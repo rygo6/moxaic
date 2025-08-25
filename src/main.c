@@ -16,41 +16,6 @@ bool isRunning = true;
 
 int main(void)
 {
-	//	// we should make this to some kind of tests class
-//	MxcSwapInfo info = {
-//		.yScale = MXC_SWAP_SCALE_FULL,
-//		.xScale = MXC_SWAP_SCALE_FULL,
-//		.type = MXC_SWAP_TYPE_SINGLE,
-//	};
-//
-//	swap_index_t swapsIndices[256];
-//	int index = 0;
-//	for (int i = 0; i < 260; ++i){
-//		printf("Trying claim %d\n", i);
-//		int newSwap = mxcClaimSwap(&info);
-//		if (newSwap != -1) {
-//			swapsIndices[index] = newSwap;
-//			index++;
-//		}
-//	}
-//
-//	for (int i = 10; i < 256; i += 8){
-//		printf("Trying release %d\n", i);
-//		mxcReleaseSwap(&info, swapsIndices[i]);
-//	}
-//
-//	index = 0;
-//	for (int i = 0; i < 260; ++i){
-//		printf("Trying claim %d\n", i);
-//		int newSwap = mxcClaimSwap(&info);
-//		if (newSwap != -1) {
-//			swapsIndices[index] = newSwap;
-//			index++;
-//		}
-//	}
-//
-//	return 0;
-
 	//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 	//    HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 	//    if (vulkanLibrary == NULL) {
@@ -99,14 +64,6 @@ int main(void)
 		vkCreateGraphics();
 		vkCreateLineGraphics();
 
-		// I should do away with this, use basic renderpass and pipe in test node
-//		mxcCreateNodeRenderPass();
-//		vkCreateBasicPipe("./shaders/basic_material.vert.spv",
-//						  "./shaders/basic_material.frag.spv",
-//						  vkNode.basicPass,
-//						  vk.context.basicPipeLayout,
-//						  &vkNode.basicPipe);
-
 		mxcInitializeNode();
 
 #if defined(MOXAIC_COMPOSITOR)
@@ -115,7 +72,7 @@ int main(void)
 		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
 		mxcServerInitializeInterprocess();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
@@ -138,7 +95,8 @@ int main(void)
 		while (isRunning) {
 
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
-			/// MXC_CYCLE_UPDATE_WINDOW_STATE
+			////
+			//// MXC_CYCLE_UPDATE_WINDOW_STATE
 
 			mxcNodeInterprocessPoll(); // I am not too sure where I should put this
 
@@ -148,14 +106,18 @@ int main(void)
 			atomic_thread_fence(memory_order_release);
 
 			vkTimelineSignal(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
-			/// MXC_CYCLE_PROCESS_INPUT
+			////
+			//// MXC_CYCLE_PROCESS_INPUT
 
-			/// MXC_CYCLE_UPDATE_NODE_STATES
+			////
+			//// MXC_CYCLE_UPDATE_NODE_STATES
 
-			/// MXC_CYCLE_COMPOSITOR_RECORD
+			////
+			//// MXC_CYCLE_COMPOSITOR_RECORD
 
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
-			/// MXC_CYCLE_RENDER_COMPOSITE
+			////
+			//// MXC_CYCLE_RENDER_COMPOSITE
 
 			atomic_thread_fence(memory_order_acquire);
 			compositorContext.baseCycleValue += MXC_CYCLE_COUNT;

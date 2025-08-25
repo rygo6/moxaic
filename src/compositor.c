@@ -382,9 +382,13 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(&node, gbufferProcessUpPipe);
 	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
 	EXTRACT_FIELD(pCst, pProcessStateMapped);
-	auto processStateBuf = pCst->processStateBuffer.buffer;
 
 	EXTRACT_FIELD(pCst, timeQryPool);
+
+	EXTRACT_FIELD(pCst, pLineMapped);
+	auto lineBuffer = pCst->lineBuffer.buffer;
+
+	auto processStateBuf = pCst->processStateBuffer.buffer;
 
 	auto pSwapCtx = &pCstCtx->swapCtx;
 
@@ -393,8 +397,6 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 
 	auto quadPatchOffsets = pCst->quadPatchMesh.offsets;
 	auto quadPatchBuf = pCst->quadPatchMesh.sharedBuffer.buffer;
-
-	auto pLineBuf = &pCst->lineBuf;
 
 	auto gfxFrameColorView = pCst->framebufferTexture.color.view;
 	auto gfxFrameDepthView = pCst->framebufferTexture.depth.view;
@@ -462,7 +464,8 @@ CompositeLoop:
 
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 		atomic_thread_fence(memory_order_acquire);
-		if (node.active[iCstMode].count == 0) continue;
+		if (node.active[iCstMode].count == 0)
+			continue;
 
 		ImageMemoryBarrierDst dstBarrier = ProcessDstBarrier[iCstMode];
 
@@ -626,16 +629,16 @@ CompositeLoop:
 				memcpy(pNodeCst->nodeDesc.pMapped, &pNodeCst->nodeSetState, sizeof(MxcCompositorNodeSetState));
 
 				float radius = pNodeShr->compositorRadius;
-				vec3  corners[CORNER_COUNT] = {
-                    [CORNER_LUB] = VEC3(-radius, -radius, -radius),
-                    [CORNER_LUF] = VEC3(-radius, -radius, radius),
-                    [CORNER_LDB] = VEC3(-radius, radius, -radius),
-                    [CORNER_LDF] = VEC3(-radius, radius, radius),
-                    [CORNER_RUB] = VEC3(radius, -radius, -radius),
-                    [CORNER_RUF] = VEC3(radius, -radius, radius),
-                    [CORNER_RDB] = VEC3(radius, radius, -radius),
-                    [CORNER_RDF] = VEC3(radius, radius, radius),
-                };
+				vec3 corners[CORNER_COUNT] = {
+					[CORNER_LUB] = VEC3(-radius, -radius, -radius),
+					[CORNER_LUF] = VEC3(-radius, -radius, radius),
+					[CORNER_LDB] = VEC3(-radius, radius, -radius),
+					[CORNER_LDF] = VEC3(-radius, radius, radius),
+					[CORNER_RUB] = VEC3(radius, -radius, -radius),
+					[CORNER_RUF] = VEC3(radius, -radius, radius),
+					[CORNER_RDB] = VEC3(radius, radius, -radius),
+					[CORNER_RDF] = VEC3(radius, radius, radius),
+				};
 
 				vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
 				vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
@@ -654,42 +657,57 @@ CompositeLoop:
 				}
 				vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
 				vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
-				vec2 uvDiff = (vec2){.vec = uvMaxClamp.vec - uvMinClamp.vec}; // TODO fill in macros for this
+				vec2 uvDiff = (vec2){.vec = uvMaxClamp.vec - uvMinClamp.vec};  // TODO fill in macros for this
 
-				// This line and interaction logic should probably go into a threaded node.
-				// Maybe? With lines potentially staggered and changed at every compositor step, you do want to redraw them every frame.
-				// But also you probably couldn't really tell if the lines only updated at 60 fps and was a frame or two off for some node
-				bool isHovering = false;
-				for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
-					vec3 start = pNodeCst->worldCorners[MXC_CUBE_SEGMENTS[i]];
-					vec3 end = pNodeCst->worldCorners[MXC_CUBE_SEGMENTS[i + 1]];
-					pNodeCst->worldSegments[i] = start;
-					pNodeCst->worldSegments[i + 1] = end;
+				// Update Interaction Line Segments
+				{
+					constexpr color stateColors[] = {
+						[NODE_INTERACTION_STATE_NONE] = {{128, 128, 128, 255}},
+						[NODE_INTERACTION_STATE_HOVER] = {{128, 128, 255, 255}},
+						[NODE_INTERACTION_STATE_SELECT] = {{255, 255, 255, 255}},
+					};
 
-					vec2 uvStart = pNodeCst->uvCorners[MXC_CUBE_SEGMENTS[i]];
-					vec2 uvEnd = pNodeCst->uvCorners[MXC_CUBE_SEGMENTS[i + 1]];
-					isHovering |= Vec2PointOnLineSegment(mxcWindowInput.mouseUV, uvStart, uvEnd, 0.0005f);
-				}
+					bool moveButtonDown = mxcWindowInput.leftMouseButton;
+					bool isHovering = false;
+					for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
+						vec2 uvStart = pNodeCst->uvCorners[MXC_CUBE_SEGMENTS[i]];
+						vec2 uvEnd = pNodeCst->uvCorners[MXC_CUBE_SEGMENTS[i + 1]];
+						bool segmentHovering = Vec2PointOnLineSegment(mxcWindowInput.mouseUV, uvStart, uvEnd, 0.0005f);
+						isHovering |= segmentHovering;
 
-				switch (pNodeCst->interactionState) {
-					case NODE_INTERACTION_STATE_NONE:
-						pNodeCst->interactionState = isHovering
-						                                     ? NODE_INTERACTION_STATE_HOVER
-						                                     : NODE_INTERACTION_STATE_NONE;
-						break;
-					case NODE_INTERACTION_STATE_HOVER:
-						pNodeCst->interactionState = isHovering
-						                                     ? mxcWindowInput.leftMouseButton
-						                                           ? NODE_INTERACTION_STATE_SELECT
-						                                           : NODE_INTERACTION_STATE_HOVER
-						                                     : NODE_INTERACTION_STATE_NONE;
-						break;
-					case NODE_INTERACTION_STATE_SELECT:
-						pNodeCst->interactionState = mxcWindowInput.leftMouseButton
-						                                     ? NODE_INTERACTION_STATE_SELECT
-						                                     : NODE_INTERACTION_STATE_NONE;
-						break;
-					default: break;
+						vec3 start = pNodeCst->worldCorners[MXC_CUBE_SEGMENTS[i]];
+						vec3 end = pNodeCst->worldCorners[MXC_CUBE_SEGMENTS[i + 1]];
+						pNodeCst->worldLineSegments[i].pos = start;
+						pNodeCst->worldLineSegments[i + 1].pos = end;
+						pNodeCst->worldLineSegments[i].color = stateColors[segmentHovering ? NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE];
+						pNodeCst->worldLineSegments[i + 1].color = stateColors[segmentHovering ? NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE];
+					}
+
+					switch (pNodeCst->interactionState) {
+						case NODE_INTERACTION_STATE_NONE:
+							pNodeCst->interactionState = isHovering ? NODE_INTERACTION_STATE_HOVER
+							                              : NODE_INTERACTION_STATE_NONE;
+							break;
+						case NODE_INTERACTION_STATE_HOVER:
+							pNodeCst->interactionState = isHovering ? moveButtonDown
+							                                    ? NODE_INTERACTION_STATE_SELECT
+							                                    : NODE_INTERACTION_STATE_HOVER
+							                              : NODE_INTERACTION_STATE_NONE;
+							break;
+						case NODE_INTERACTION_STATE_SELECT:
+							pNodeCst->interactionState = moveButtonDown ? NODE_INTERACTION_STATE_SELECT
+							                                  : NODE_INTERACTION_STATE_NONE;
+
+							for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
+								pNodeCst->worldLineSegments[i].color = stateColors[NODE_INTERACTION_STATE_SELECT];
+								pNodeCst->worldLineSegments[i + 1].color = stateColors[NODE_INTERACTION_STATE_SELECT];
+							}
+							break;
+						default: break;
+					}
+
+
+
 				}
 
 				// Update node state to use in next node frame
@@ -798,6 +816,7 @@ CompositeLoop:
 
 		vkCmdSetLineWidth(gfxCmd, 1.0f);
 
+		int cubeCount = 0;
 		for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 			atomic_thread_fence(memory_order_acquire);
 			int activeNodeCt = node.active[iCstMode].count;
@@ -806,29 +825,14 @@ CompositeLoop:
 
 			auto pActiveNodes = &node.active[iCstMode];
 			for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
-				auto hNode = pActiveNodes->handles[iNode];
-				auto pNodeShrd = node.pShared[hNode];
-				auto pNodeCstData = &node.cst.data[iNode];
-
-				VkLineMaterialState lineState = {.primaryColor = VEC4(0.5f, 0.5f, 0.5f, 0.5f)};
-				switch (pNodeCstData->interactionState) {
-					case NODE_INTERACTION_STATE_HOVER:
-						lineState = (VkLineMaterialState){.primaryColor = VEC4(0.5f, 0.5f, 1.0f, 0.5f)};
-						break;
-					case NODE_INTERACTION_STATE_SELECT:
-						lineState = (VkLineMaterialState){.primaryColor = VEC4(1.0f, 1.0f, 1.0f, 0.5f)};
-						break;
-					default: break;
-				}
-
-				vkCmdPushLineMaterial(gfxCmd, lineState);
-
-				memcpy(pLineBuf->pMapped, &pNodeCstData->worldSegments, sizeof(vec3) * MXC_CUBE_SEGMENT_COUNT);
-
-				vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){pLineBuf->buffer.buffer}, (VkDeviceSize[]){0});
-				vkCmdDraw(gfxCmd, MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
+				auto pNodeCst = &node.cst.data[iNode];
+				memcpy(pLineMapped + (cubeCount * MXC_CUBE_SEGMENT_COUNT), pNodeCst->worldLineSegments, sizeof(VkLineVert) * MXC_CUBE_SEGMENT_COUNT);
+				cubeCount++;
 			}
 		}
+
+		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){lineBuffer}, (VkDeviceSize[]){0});
+		vkCmdDraw(gfxCmd, cubeCount * MXC_CUBE_SEGMENT_COUNT, 1, 0, 0);
 	}
 
 	vk.CmdEndRenderPass(gfxCmd);
@@ -1006,14 +1010,15 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 
 	/// Line Pipe
 	{
+		pCst->lineCapacity = MXC_CUBE_SEGMENT_COUNT * MXC_NODE_CAPACITY;
 		VkRequestAllocationInfo lineRequest = {
 			.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
-			.size      = sizeof(vec3) * 64,
+			.size      = sizeof(VkLineVert) * pCst->lineCapacity,
 			.usage     = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			.locality  = VK_LOCALITY_CONTEXT,
 			.dedicated = VK_DEDICATED_MEMORY_FALSE,
 		};
-		vkCreateSharedBuffer(&lineRequest, &pCst->lineBuf.buffer);
+		vkCreateSharedBuffer(&lineRequest, &pCst->lineBuffer);
 	}
 
 	/// Pools
@@ -1200,8 +1205,8 @@ static void Bind(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
 	if (pInfo->pEnabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {}
 	if (pInfo->pEnabledCompositorModes[MXC_COMPOSITOR_MODE_COMPUTE]) {}
 
-	vkBindSharedBuffer(&pCst->lineBuf.buffer);
-	pCst->lineBuf.pMapped = vkSharedBufferPtr(pCst->lineBuf.buffer);
+	vkBindSharedBuffer(&pCst->lineBuffer);
+	pCst->pLineMapped = vkSharedBufferPtr(pCst->lineBuffer);
 
 	vkBindSharedBuffer(&pCst->globalBuffer);
 	VK_UPDATE_DESCRIPTOR_SETS(VK_BIND_WRITE_GLOBAL_BUFFER(pCst->globalSet, pCst->globalBuffer.buffer));

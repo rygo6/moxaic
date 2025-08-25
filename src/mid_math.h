@@ -18,12 +18,18 @@
 
 #define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
 
-SIMD_TYPE(float, float2, 2);
-SIMD_TYPE(uint32_t, int2, 2);
-SIMD_TYPE(float, float3, 4);
-SIMD_TYPE(uint32_t, int3, 4);
-SIMD_TYPE(float, float4, 4);
-SIMD_TYPE(uint32_t, int4, 4);
+SIMD_TYPE(u8, u8_2, 2);
+SIMD_TYPE(u8, u8_3, 4);
+SIMD_TYPE(u8, u8_4, 4);
+
+SIMD_TYPE(f32, float2, 2);
+SIMD_TYPE(f32, float3, 4);
+SIMD_TYPE(f32, float4, 4);
+
+SIMD_TYPE(i32, i32_2, 2);
+SIMD_TYPE(i32, i32_3, 4);
+SIMD_TYPE(i32, i32_4, 4);
+
 // basing it off a 64 byte simd type can offer small perf gain
 // with no negative when accessing 16 byte rows
 // https://godbolt.org/z/Gbssve8rf
@@ -40,12 +46,19 @@ SIMD_TYPE(float, mat4, 16);
 		simd_type vec_name;                                           \
 	} name;
 
-VEC_UNION(vec2, float, float2_vec, 8, 2, vec, x, y)
-VEC_UNION(ivec2, uint32_t, int2_vec, 8, 2, vec, x, y)
-VEC_UNION(vec3, float, float3_vec, 16, 3, vec, x, y, z)
-VEC_UNION(ivec3, uint32_t, int3_vec, 16, 3, vec, x, y, z)
-VEC_UNION(vec4, float, float4_vec, 16, 4, vec, x, y, z, w)
-VEC_UNION(ivec4, uint32_t, int4_vec, 16, 4, vec, x, y, z, w)
+VEC_UNION(u8_2, u8, u8_2_vec, 2, 2, vec, x, y)
+VEC_UNION(u8_3, u8, u8_3_vec, 4, 3, vec, x, y, z)
+VEC_UNION(u8_4, u8, u8_4_vec, 4, 4, vec, x, y, z, w)
+VEC_UNION(color, u8, u8_4_vec, 4, 4, vec, r, g, b, a)
+
+VEC_UNION(vec2, f32, float2_vec, 8, 2, vec, x, y)
+VEC_UNION(vec3, f32, float3_vec, 16, 3, vec, x, y, z)
+VEC_UNION(vec4, f32, float4_vec, 16, 4, vec, x, y, z, w)
+
+VEC_UNION(ivec2, i32, i32_2_vec, 8, 2, vec, x, y)
+VEC_UNION(ivec3, i32, i32_3_vec, 16, 3, vec, x, y, z)
+VEC_UNION(ivec4, i32, i32_4_vec, 16, 4, vec, x, y, z, w)
+
 VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 
 #undef VEC_UNION
@@ -615,7 +628,7 @@ MATH_INLINE ivec2 iVec2ShiftRightCeil(ivec2 v, int shift)
 }
 
 
-MATH_INLINE ivec2 iVec2Min(ivec2 v, u32 min)
+MATH_INLINE ivec2 iVec2Min(ivec2 v, i32 min)
 {
 	ivec2 out;
 	for (int i = 0; i < 2; ++i) out.vec[i] = v.vec[i] < min ? min : v.vec[i];
