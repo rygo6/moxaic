@@ -85,19 +85,19 @@ typedef struct MxcController {
 	float   triggerValue;
 } MxcController;
 
-typedef struct MxcProcessState {
+typedef struct MxcProcessState_T {
 	float depthNearZ;
 	float depthFarZ;
 	float cameraNearZ;
 	float cameraFarZ;
 } MxcProcessState;
 
-typedef struct MxcClip {
+typedef struct MxcClip_T {
 	vec2 ulUV;
 	vec2 lrUV;
 } MxcClip;
 
-typedef struct MxcNodeShared {
+typedef struct MxcNodeShared_T {
 
 	// Read/Write every cycle
 	u64             timelineValue;
@@ -105,7 +105,7 @@ typedef struct MxcNodeShared {
 	MxcProcessState processState;
 	pose            rootPose;
 	pose            cameraPose;
-	cam             camera;
+	camera          camera;
 
 	struct {
 		u8 colorId;
@@ -265,9 +265,12 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 	//	pose rootPose;
 	u64  lastTimelineValue;
 
+	// NodeSet which node is actively using to render
+	MxcCompositorNodeSetState renderingNodeSetState;
+	MxcCompositorNodeSetState compositingNodeSetState;
 	// This should go in one big shared buffer for all nodes
-	MxcCompositorNodeSetState nodeSetState;
-	VkSharedDescriptor        nodeDesc;
+	VkSharedDescriptor         compositingNodeSet;
+	MxcCompositorNodeSetState* pCompositingNodeSetMapped;
 
 	MxcNodeSwap CACHE_ALIGN PACK swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 

@@ -53,7 +53,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	/// Setup Initial State
 
 	// Global Set Initial State
-	VkGlobalSetState globSetState = (VkGlobalSetState){};
+	VkGlobalSetState globSetState = {};
 	vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, &globSetState);
 	memcpy(pGlobalSetMapped, &globSetState, sizeof(VkGlobalSetState));
 
@@ -127,7 +127,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	}
 
 	// Send Open Node IPC call
-	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
 	mxcIpcFuncEnqueue(&pNodeShr->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
 	///
@@ -169,7 +169,9 @@ NodeLoop:
 		{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = swaps[iSwapImg].colorImage,
-			VK_IMAGE_BARRIER_SRC_UNDEFINED,
+			.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_BARRIER_DST_COLOR_ATTACHMENT_WRITE,
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
@@ -177,7 +179,9 @@ NodeLoop:
 		{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = swaps[iSwapImg].depthImage,
-			VK_IMAGE_BARRIER_SRC_UNDEFINED,
+			.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_BARRIER_DST_GENERAL_TRANSFER_WRITE,
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
@@ -286,6 +290,7 @@ static void Create(NodeHandle hNode, MxcNodeThread* pNode)
 {
 	LOG("Creating Thread Node %d\n", hNode);
 
+	// Pools
 	// This is way too many descriptors... optimize this
 	VK_CHECK(vkCreateDescriptorPool(vk.context.device, &(VkDescriptorPoolCreateInfo){
 		VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -300,13 +305,15 @@ static void Create(NodeHandle hNode, MxcNodeThread* pNode)
 	}, VK_ALLOC, &threadContext.descriptorPool));
 	VK_SET_DEBUG(threadContext.descriptorPool);
 
-	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pNode->globalSet);\
+	// Global Set
+	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pNode->globalSet);
 	vkCreateSharedBuffer(&(VkRequestAllocationInfo){
 		.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
 		.size = sizeof(VkGlobalSetState),
 		.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 	}, &pNode->globalBuffer);
 
+	// Test Sphere
 	vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.materialSetLayout, &pNode->checkerMaterialSet);
 	vkCreateDedicatedTextureFromFile("textures/uvgrid.jpg", &pNode->checkerTexture);
 
@@ -328,9 +335,9 @@ static void Create(NodeHandle hNode, MxcNodeThread* pNode)
 
 	pNode->sphereTransform = (pose){.pos = VEC3(0, 0, 0)};
 	vkUpdateObjectSet(&pNode->sphereTransform, &pNode->sphereObjectState, pNode->pSphereObjectSetMapped);
-
 	vkCreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);
 
+	// Depth
 	VkDedicatedTextureCreateInfo depthCreateInfo = {
 		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 		.locality = VK_LOCALITY_CONTEXT,

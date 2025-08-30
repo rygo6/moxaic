@@ -22,6 +22,8 @@ SIMD_TYPE(u8, u8_2, 2);
 SIMD_TYPE(u8, u8_3, 4);
 SIMD_TYPE(u8, u8_4, 4);
 
+SIMD_TYPE(u16, u16_2, 2);
+
 SIMD_TYPE(f32, float2, 2);
 SIMD_TYPE(f32, float3, 4);
 SIMD_TYPE(f32, float4, 4);
@@ -50,6 +52,8 @@ VEC_UNION(u8_2, u8, u8_2_vec, 2, 2, vec, x, y)
 VEC_UNION(u8_3, u8, u8_3_vec, 4, 3, vec, x, y, z)
 VEC_UNION(u8_4, u8, u8_4_vec, 4, 4, vec, x, y, z, w)
 VEC_UNION(color, u8, u8_4_vec, 4, 4, vec, r, g, b, a)
+
+VEC_UNION(u16_2, u16, u16_2_vec, 4, 2, vec, x, y)
 
 VEC_UNION(vec2, f32, float2_vec, 8, 2, vec, x, y)
 VEC_UNION(vec3, f32, float3_vec, 16, 3, vec, x, y, z)
@@ -151,11 +155,12 @@ typedef struct pose {
 	quat rot;
 } pose;
 
-typedef struct cam {
+typedef struct camera {
 	f32 zNear;
 	f32 zFar;
 	f32 yFovRad;
-} cam;
+	u16_2 dimension;
+} camera;
 
 typedef struct vert {
 	vec3 pos;

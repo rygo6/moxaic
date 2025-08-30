@@ -152,3 +152,4 @@ foreach (SHADER IN LISTS SHADER_SOURCE_FILES)
 endforeach ()
 add_custom_target(CompileShaders ALL DEPENDS ${SHADER_OUTPUT_FILES})
 add_dependencies(${TARGET_NAME} CompileShaders)
+

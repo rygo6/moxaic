@@ -40,10 +40,10 @@
 ////
 // these values shouldn't be macros
 #ifndef DEFAULT_WIDTH
-#define DEFAULT_WIDTH 1024
+#define DEFAULT_WIDTH 1920
 #endif
 #ifndef DEFAULT_HEIGHT
-#define DEFAULT_HEIGHT 1024
+#define DEFAULT_HEIGHT 1080
 #endif
 
 // move everything to this
@@ -282,7 +282,6 @@ typedef struct VkQueueFamily {
 
 typedef struct VkSharedDescriptor {
 	VkDescriptorSet set;
-	void*           pMapped;
 	VkSharedBuffer  buffer;
 } VkSharedDescriptor;
 
@@ -460,6 +459,7 @@ enum {
 //////////////////////////////
 //// Mid Vulkan Image Barriers
 ////
+
 #define VK_IMAGE_BARRIER_SRC_UNDEFINED        \
 	.srcStageMask = VK_PIPELINE_STAGE_2_NONE, \
 	.srcAccessMask = VK_ACCESS_2_NONE,        \
@@ -576,8 +576,8 @@ enum {
 	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
 
 #define VK_IMAGE_BARRIER_DST_COMPUTE_RELEASE  \
-	.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, \
-	.dstAccessMask = VK_ACCESS_2_NONE,          \
+	.dstStageMask = VK_PIPELINE_STAGE_2_NONE, \
+	.dstAccessMask = VK_ACCESS_2_NONE,        \
 	.newLayout = VK_IMAGE_LAYOUT_GENERAL
 
 #define VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED       \
@@ -776,7 +776,7 @@ INLINE void CmdSubmit(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, 
 		.commandBufferInfoCount = 1,
 		.pCommandBufferInfos = (VkCommandBufferSubmitInfo[]){
 			{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+				VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
 				.commandBuffer = cmd,
 			},
 		},
@@ -796,7 +796,7 @@ INLINE void CmdSubmit(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, 
 INLINE void vkTimelineWait(VkDevice device, uint64_t waitValue, VkSemaphore timeline)
 {
 	VkSemaphoreWaitInfo semaphoreWaitInfo = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+		VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
 		.pSemaphores = &timeline,
 		.pValues = &waitValue,
@@ -815,10 +815,10 @@ INLINE void vkTimelineSignal(VkDevice device, uint64_t signalValue, VkSemaphore 
 	VK_CHECK(vk.SignalSemaphore(device, &signalInfo));
 }
 
-INLINE void* vkSharedMemoryPtr(VkSharedMemory shareMemory)
+INLINE void* vkSharedMemoryPtr(VkSharedMemory sharedMemory)
 {
-	assert(shareMemory.state == VK_SHARED_MEMORY_STATE_BOUND && "Shared buffer not bound!");
-	return ((char*)pMappedMemory[shareMemory.type]) + shareMemory.offset;
+	assert(sharedMemory.state == VK_SHARED_MEMORY_STATE_BOUND && "Shared buffer not bound!");
+	return ((char*)pMappedMemory[sharedMemory.type]) + sharedMemory.offset;
 }
 INLINE void* vkSharedBufferPtr(VkSharedBuffer shareBuffer)
 {
@@ -837,10 +837,12 @@ INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 }
 
 // probably move to math lib and take copy to pointer out
-INLINE void vkUpdateGlobalSetViewProj(cam camera, pose cameraPose, VkGlobalSetState* pState)
+INLINE void vkUpdateGlobalSetViewProj(camera camera, pose cameraPose, VkGlobalSetState* pState)
 {
-	pState->framebufferSize = IVEC2(DEFAULT_WIDTH, DEFAULT_HEIGHT);
-	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, DEFAULT_WIDTH / DEFAULT_HEIGHT, camera.zNear, camera.zFar);
+	float aspect = (float)camera.dimension.x / (float)camera.dimension.y;
+	pState->framebufferSize.x = camera.dimension.x;
+	pState->framebufferSize.y = camera.dimension.y;
+	pState->proj = Mat4PerspectiveVulkanReverseZ(camera.yFovRad, aspect, camera.zNear, camera.zFar);
 	pState->invProj = mat4Inv(pState->proj);
 	pState->invView = mat4FromPosRot(cameraPose.pos, cameraPose.rot);
 	pState->view = mat4Inv(pState->invView);

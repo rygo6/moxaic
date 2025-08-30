@@ -130,33 +130,32 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 
 	/// Final Depth Up Blit
 	{
-		CMD_IMAGE_BARRIERS(gfxCmd,
-			{
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pGBuffer->image,
-				.subresourceRange = {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = 1,
-					.levelCount = 1,
-					.layerCount = VK_REMAINING_ARRAY_LAYERS
-				},
-				VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-				VK_IMAGE_BARRIER_DST_COMPUTE_READ,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+		CMD_IMAGE_BARRIERS(gfxCmd, {
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = pGBuffer->image,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 1,
+				.levelCount = 1,
+				.layerCount = VK_REMAINING_ARRAY_LAYERS
 			},
-			{
-				VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				.image = pGBuffer->image,
-				.subresourceRange = {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = 0,
-					.levelCount = 1,
-					.layerCount = VK_REMAINING_ARRAY_LAYERS
-				},
-				VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
-				VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
-				VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
-			});
+			VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
+			VK_IMAGE_BARRIER_DST_COMPUTE_READ,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+		},
+		{
+			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.image = pGBuffer->image,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.layerCount = VK_REMAINING_ARRAY_LAYERS
+			},
+			VK_IMAGE_BARRIER_SRC_COMPUTE_READ,
+			VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
+			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
+		});
 
 		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
 			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[1]),
@@ -273,8 +272,7 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 	ASSERT(mipLevelCount < MXC_NODE_GBUFFER_MAX_MIP_COUNT, "Max gbuffer mip count exceeded.");
 
 	for (int iView = 0; iView < XR_MAX_VIEW_COUNT; ++iView) {
-		vkCreateDedicatedTexture(
-			&(VkDedicatedTextureCreateInfo){
+		vkCreateDedicatedTexture(&(VkDedicatedTextureCreateInfo){
 				.pImageCreateInfo = &(VkImageCreateInfo){
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType = VK_IMAGE_TYPE_2D,
@@ -486,7 +484,7 @@ static int CleanupNode(NodeHandle hNode)
 			VkWriteDescriptorSet writeSets[] = {
 				{
 					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = node.cst.data[hNode].nodeDesc.set,
+					.dstSet = node.cst.data[hNode].compositingNodeSet.set,
 					.dstBinding = 1,
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -498,7 +496,7 @@ static int CleanupNode(NodeHandle hNode)
 				},
 				{
 					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = node.cst.data[hNode].nodeDesc.set,
+					.dstSet = node.cst.data[hNode].compositingNodeSet.set,
 					.dstBinding = 2,
 					.descriptorCount = 1,
 					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -561,55 +559,62 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	LOG("Requesting Node Thread.\n");
 	NodeHandle hNode = RequestLocalNodeHandle();
 
-	auto pNodeCtx = &node.context[hNode];
-	pNodeCtx->interprocessMode = MXC_NODE_INTERPROCESS_MODE_THREAD;
-	pNodeCtx->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+	auto pNodeCtxt = &node.context[hNode];
+	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_THREAD;
+	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
 
-	auto pNodeShr = node.pShared[hNode];
-	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_NONE;
+	auto pNodeShrd = node.pShared[hNode];
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_NONE;
 
-	pNodeShr->rootPose.pos = VEC3(hNode, 0, 0);
-	pNodeShr->rootPose.rot = QuatFromEuler(pNodeShr->rootPose.euler);
+	pNodeShrd->rootPose.pos = VEC3(hNode + 1, 0, 0);
+	pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
 
-	pNodeShr->camera.yFovRad = RAD_FROM_DEG(45.0f);
-	pNodeShr->camera.zNear = 0.1f;
-	pNodeShr->camera.zFar = 100.0f;
+	pNodeShrd->cameraPose.pos = VEC3(0, 0, 0);
+	pNodeShrd->cameraPose.rot = QuatFromEuler(pNodeShrd->cameraPose.euler);
 
-	pNodeShr->compositorRadius = 0.5;
-	pNodeShr->compositorCycleSkip = 16;
+	pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
+	pNodeShrd->camera.zNear = 0.1f;
+	pNodeShrd->camera.zFar = 100.0f;
+	pNodeShrd->camera.dimension.x = DEFAULT_WIDTH;
+	pNodeShrd->camera.dimension.y = DEFAULT_HEIGHT;
 
-	pNodeShr->swapMaxWidth = DEFAULT_WIDTH;
-	pNodeShr->swapMaxHeight = DEFAULT_HEIGHT;
+	pNodeShrd->compositorRadius = 0.5;
+	pNodeShrd->compositorCycleSkip = 16;
+
+	pNodeShrd->swapMaxWidth = DEFAULT_WIDTH;
+	pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
 
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 		.debugName = "NodeTimelineSemaphore",
 		.locality = VK_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
-	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtx->thread.nodeTimeline);
+	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->thread.nodeTimeline);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
 	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtx->thread.pool));
-	VK_SET_DEBUG(pNodeCtx->thread.pool);
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtxt->thread.pool));
+	VK_SET_DEBUG(pNodeCtxt->thread.pool);
 	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = pNodeCtx->thread.pool,
+		.commandPool = pNodeCtxt->thread.pool,
 		.commandBufferCount = 1,
 	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtx->thread.gfxCmd));
-	VK_SET_DEBUG(pNodeCtx->thread.gfxCmd);
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->thread.gfxCmd));
+	VK_SET_DEBUG(pNodeCtxt->thread.gfxCmd);
 
 	auto pCstNodeData = &node.cst.data[hNode];
 	pCstNodeData = &node.cst.data[hNode];
 
 	// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retian any state in CstNodeData
-	VkSharedDescriptor nodeDesc = pCstNodeData->nodeDesc;
+	auto compositingNodeSet = pCstNodeData->compositingNodeSet;
+	auto pCompositingNodeSetMapped = pCstNodeData->pCompositingNodeSetMapped;
 	memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
-	pCstNodeData->nodeDesc = nodeDesc;
+	pCstNodeData->compositingNodeSet = compositingNodeSet;
+	pCstNodeData->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
 
 //	CreateNodeGBuffer(hNode);
 
@@ -718,10 +723,18 @@ static void ServerInterprocessAcceptNodeConnection()
 	/// Initialize Context
 	{
 		// Init Node Shared
+		pNodeShrd->rootPose.pos = VEC3(0, 0, 0);
 		pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
+
+		pNodeShrd->cameraPose.pos = VEC3(0, 0, 0);
+		pNodeShrd->cameraPose.rot = QuatFromEuler(pNodeShrd->cameraPose.euler);
+
 		pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
 		pNodeShrd->camera.zNear = 0.1f;
 		pNodeShrd->camera.zFar = 100.0f;
+		pNodeShrd->camera.dimension.x = DEFAULT_WIDTH;
+		pNodeShrd->camera.dimension.y = DEFAULT_HEIGHT;
+
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
 		pNodeShrd->swapMaxWidth = DEFAULT_WIDTH;
@@ -754,11 +767,12 @@ static void ServerInterprocessAcceptNodeConnection()
 		pNodeCtx->exported.compositorTimelineHandle = compositorContext.timelineHandle;
 
 		pCstNodeData = &node.cst.data[hNode];
-		VkSharedDescriptor nodeDesc = pCstNodeData->nodeDesc;
+		// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retain any state in CstNodeData
+		auto compositingNodeSet = pCstNodeData->compositingNodeSet;
+		auto pCompositingNodeSetMapped = pCstNodeData->pCompositingNodeSetMapped;
 		memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
-		// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retian any state in CstNodeData
-		pCstNodeData->nodeDesc = nodeDesc;
-
+		pCstNodeData->compositingNodeSet = compositingNodeSet;
+		pCstNodeData->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
 
 		// Duplicate Handles
 		HANDLE currentHandle = GetCurrentProcess();
@@ -830,6 +844,7 @@ ExitSuccess:
 #endif
 }
 
+///
 /// Server thread loop running on compositor
 static void* RunInterProcessServer(void* arg)
 {
@@ -859,6 +874,7 @@ ExitError:
 	return NULL;
 }
 
+///
 /// Start Server Compositor
 void mxcServerInitializeInterprocess()
 {
@@ -870,6 +886,7 @@ void mxcServerInitializeInterprocess()
 	CHECK(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
 }
 
+///
 /// Shutdown Server Compositor
 void mxcServerShutdownInterprocess()
 {
@@ -880,7 +897,8 @@ void mxcServerShutdownInterprocess()
 	WSACleanup();
 }
 
-//// Connect Node to Server Compositor over IPC
+///
+/// Connect Node to Server Compositor over IPC
 void mxcConnectInterprocessNode(bool createTestNode)
 {
 	if (pImportedExternalMemory != NULL && importedExternalMemoryHandle != NULL) {
@@ -1014,7 +1032,8 @@ ExitSuccess:
 		closesocket(clientSocket);
 	WSACleanup();
 }
-//// Shutdown Node from Server
+///
+/// Shutdown Node from Server
 // I don't know if I'd ever want to do this?
 void mxcShutdownInterprocessNode()
 {
@@ -1090,7 +1109,6 @@ static void ipcFuncNodeClosed(NodeHandle hNode)
 	ReleaseNodeHandle(hNode);
 }
 
-/// Scan Node Swapchains for requests and create them if needed.
 static void ipcFuncClaimSwap(NodeHandle hNode)
 {
 #if defined(MOXAIC_COMPOSITOR)
@@ -1101,6 +1119,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 	auto pNodeCtxt = &node.context[hNode];
 	bool needsExport = pNodeCtxt->interprocessMode != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
+	// Scan Node Swapchains for requests and create them if needed.
 	for (int iNodeSwap = 0; iNodeSwap < XR_SWAPCHAIN_CAPACITY; ++iNodeSwap) {
 		if (pNodeShr->swapStates[iNodeSwap] != XR_SWAP_STATE_REQUESTED)
 			continue;
