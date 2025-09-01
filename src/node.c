@@ -10,7 +10,6 @@
 #include "pipe_gbuffer_process.h"
 
 #include "node.h"
-#include "node_thread.h"
 
 // Compositor state in Compositor Process
 // There is one compositor context in the Compositor Process and it can be accessed directly
@@ -1039,55 +1038,13 @@ void mxcShutdownInterprocessNode()
 {
 //	for (int i = 0; i < nodeCount; ++i) {
 //		// make another queue to evade ptr?
-//		mxcIpcFuncEnqueue(&pDuplicatedNodeShared[i]->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
+//		mxcIpcFuncEnqueue(&pDuplicatedNodeShared[i]->ipcFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 //	}
 }
 
 ////
 //// IPC Func Queue
-////
-int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target)
-{
-	ATOMIC_FENCE_SCOPE
-	{
-		MxcRingBufferHandle head = pBuffer->head;
-		MxcRingBufferHandle tail = pBuffer->tail;
-		if (head + 1 == tail) {
-			LOG_ERROR("Ring Buffer Wrapped!\n");
-			return 1;
-		}
-		pBuffer->targets[head] = target;
-		pBuffer->head = (head + 1) % MXC_RING_BUFFER_CAPACITY;
-	}
-	return 0;
-}
-
-int midRingDequeue(MxcRingBuffer* pBuffer, MxcRingBufferHandle *pTarget)
-{
-	ATOMIC_FENCE_SCOPE
-	{
-		MxcRingBufferHandle head = pBuffer->head;
-		MxcRingBufferHandle tail = pBuffer->tail;
-		if (head == tail) return 1;
-		*pTarget = (MxcIpcFunc)(pBuffer->targets[tail]);
-		pBuffer->tail = (tail + 1) % MXC_RING_BUFFER_CAPACITY;
-	}
-	return 0;
-}
-
-int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target) {
-	return midRingEnqueue(pBuffer, target);
-}
-
-int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle)
-{
-	MxcRingBufferHandle target;
-	if (midRingDequeue(pBuffer, &target)) return 1;
-	LOG("Calling IPC Target %d...\n", target);
-	MXC_IPC_FUNCS[target](nodeHandle);
-	return 0;
-}
-
+//// }
 static void ipcFuncNodeOpened(NodeHandle hNode)
 {
 	LOG("Opened %d\n", hNode);
@@ -1185,6 +1142,21 @@ const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
 	[MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcIpcFuncPtr const)ipcFuncNodeClosed,
 	[MXC_INTERPROCESS_TARGET_SYNC_SWAPS] =  (MxcIpcFuncPtr const)ipcFuncClaimSwap,
 };
+
+int mxcIpcFuncEnqueue(NodeHandle hNode, MxcIpcFunc target) {
+	auto pNodeShrd = node.pShared[hNode];
+	return midQRingEnqueue(&pNodeShrd->ipcFuncQueue, sizeof(*&target), pNodeShrd->queuedIpcFuncs, &target);
+	// return MID_QRING_ENQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, &pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target);
+}
+
+int mxcIpcFuncDequeue(MidQRing* pQueue, MxcIpcFunc targets[], NodeHandle hNode)
+{
+	MxcIpcFunc target;
+	if (MID_QRING_DEQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, pQueue, targets, &target)) return 1;
+	LOG("Calling IPC Target %d...\n", target);
+	MXC_IPC_FUNCS[target](hNode);
+	return 0;
+}
 
 void mxcInitializeNode() {
 	CreateGBufferProcessSetLayout(&node.gbufferProcessSetLayout);

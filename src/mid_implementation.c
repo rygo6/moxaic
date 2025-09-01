@@ -65,6 +65,10 @@
 #include "mid_window.h"
 #undef MID_WINDOW_IMPLEMENTATION
 
+#define MID_QRING_IMPLEMENTATION
+#include "mid_qring.h"
+#undef MID_QRING_IMPLEMENTATION
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #undef STB_IMAGE_IMPLEMENTATION

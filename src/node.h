@@ -11,6 +11,7 @@
 #include "mid_vulkan.h"
 #include "mid_bit.h"
 #include "mid_openxr_runtime.h"
+#include "mid_qring.h"
 
 //////////////
 //// Constants
@@ -22,19 +23,6 @@
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 #define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
-
-//////////////
-//// IPC Types
-////
-typedef uint8_t MxcRingBufferHandle;
-#define MXC_RING_BUFFER_CAPACITY 256
-#define MXC_RING_BUFFER_HANDLE_CAPACITY (1 << (sizeof(MxcRingBufferHandle) * CHAR_BIT))
-static_assert(MXC_RING_BUFFER_CAPACITY <= MXC_RING_BUFFER_HANDLE_CAPACITY, "RingBufferHandle interprocessMode can't store capacity.");
-typedef struct MxcRingBuffer {
-	MxcRingBufferHandle head;
-	MxcRingBufferHandle tail;
-	MxcRingBufferHandle targets[MXC_RING_BUFFER_CAPACITY];
-} MxcRingBuffer;
 
 /////////////////
 //// Shared Types
@@ -75,6 +63,14 @@ static const char* string_MxcCompositorMode(MxcCompositorMode mode) {
 		default:                              return "N/A";
 	}
 }
+
+typedef enum MxcIpcFunc {
+	MXC_INTERPROCESS_TARGET_NODE_OPENED,
+	MXC_INTERPROCESS_TARGET_NODE_CLOSED,
+	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
+	MXC_INTERPROCESS_TARGET_COUNT,
+} MxcIpcFunc;
+#define MXC_IPC_FUNC_QUEUE_CAPACITY MID_QRING_CAPACITY
 
 typedef struct MxcController {
 	bool    active;
@@ -122,7 +118,8 @@ typedef struct MxcNodeShared_T {
 	MxcCompositorMode compositorMode;
 
 	// Interprocess
-	MxcRingBuffer nodeInterprocessFuncQueue;
+	MidQRing   ipcFuncQueue;
+	MxcIpcFunc queuedIpcFuncs[MID_QRING_CAPACITY];
 
 	// Swap
 	u16             swapMaxWidth;
@@ -425,19 +422,17 @@ extern size_t                     submitNodeQueueStart;
 extern size_t                     submitNodeQueueEnd;
 extern MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY];
 
-static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer handle)
+static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer queuedCmd)
 {
-	ATOMIC_FENCE_SCOPE
-	{
-		submitNodeQueue[submitNodeQueueEnd] = handle;
+	ATOMIC_FENCE_SCOPE {
+		submitNodeQueue[submitNodeQueueEnd] = queuedCmd;
 		submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
 		assert(submitNodeQueueEnd != submitNodeQueueStart);
 	}
 }
 static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
 {
-	ATOMIC_FENCE_SCOPE
-	{
+	ATOMIC_FENCE_SCOPE {
 		bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
 		while (pendingBuffer) {
 			CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
@@ -468,21 +463,11 @@ void mxcShutdownInterprocessNode();
 //// Process IPC Funcs
 ////
 typedef void (*MxcIpcFuncPtr)(const NodeHandle);
-typedef enum MxcIpcFunc {
-	MXC_INTERPROCESS_TARGET_NODE_OPENED,
-	MXC_INTERPROCESS_TARGET_NODE_CLOSED,
-	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
-	MXC_INTERPROCESS_TARGET_COUNT,
-} MxcIpcFunc;
-static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MXC_RING_BUFFER_HANDLE_CAPACITY, "IPC targets larger than ring buffer size.");
+static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MID_QRING_TYPE_CAPACITY, "IPC targets larger than ring buffer size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
-// move to midQueue
-int midRingEnqueue(MxcRingBuffer* pBuffer, MxcRingBufferHandle target);
-int midRingDequeue(MxcRingBuffer* pBuffer, MxcRingBufferHandle *pTarget);
-
-int mxcIpcFuncEnqueue(MxcRingBuffer* pBuffer, MxcIpcFunc target);
-int mxcIpcFuncDequeue(MxcRingBuffer* pBuffer, NodeHandle nodeHandle);
+int mxcIpcFuncEnqueue(NodeHandle hNode, MxcIpcFunc target);
+int mxcIpcFuncDequeue(MidQRing* pQueue, MxcIpcFunc targets[], NodeHandle hNode);
 
 static inline void mxcNodeInterprocessPoll()
 {
@@ -496,7 +481,8 @@ static inline void mxcNodeInterprocessPoll()
 		auto pActiveNodes = &node.active[iCstMode];
 		for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
-			mxcIpcFuncDequeue(&node.pShared[hNode]->nodeInterprocessFuncQueue, hNode);
+			auto pNode = node.pShared[hNode];
+			mxcIpcFuncDequeue(&pNode->ipcFuncQueue, pNode->queuedIpcFuncs, hNode);
 		}
 	}
 }

@@ -5,6 +5,7 @@
 
 #include "mid_common.h"
 #include "mid_math.h"
+// #include "mid_qring.h"
 
 #include <stdatomic.h>
 #include <stdatomic.h>
@@ -274,10 +275,20 @@ static const char* string_QueueFamilyType[] = {
 	[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = "VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER",
 };
 
+typedef struct VkQueuedCommandBuffer {
+	VkCommandBuffer cmd;
+	VkSemaphore     timeline;
+	u64             timelineSignalValue;
+} VkQueuedCommandBuffer;
+
 typedef struct VkQueueFamily {
-	VkQueue       queue;
+	VkQueue queue;
+
+	// MidQRing              cmdQueue;
+	// VkQueuedCommandBuffer queuedCmds[MID_QRING_CAPACITY];
+
 	VkCommandPool pool;
-	uint32_t      index;
+	u32           index;
 } VkQueueFamily;
 
 typedef struct VkSharedDescriptor {
@@ -312,6 +323,31 @@ typedef struct VkContext {
 	VkSampler linearSampler;
 
 } VkContext;
+
+// static inline void vkEnqueuCommandBuffer(VkQueueFamily handle, VkQueuedCommandBuffer queuedCmd)
+// {
+// 	midRingEnqueue()
+//
+// 	ATOMIC_FENCE_SCOPE {
+// 		submitNodeQueue[submitNodeQueueEnd] = handle;
+// 		submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
+// 		assert(submitNodeQueueEnd != submitNodeQueueStart);
+// 	}
+// }
+// static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
+// {
+// 	ATOMIC_FENCE_SCOPE {
+// 		bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
+// 		while (pendingBuffer) {
+// 			CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
+// 			submitNodeQueueStart = (submitNodeQueueStart + 1) % MXC_NODE_CAPACITY;
+// 			atomic_thread_fence(memory_order_release);
+//
+// 			atomic_thread_fence(memory_order_acquire);
+// 			pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
+// 		}
+// 	}
+// }
 
 //#define VK_CONTEXT_CAPACITY 2 // should be 1 always?
 #define VK_SURFACE_CAPACITY 2

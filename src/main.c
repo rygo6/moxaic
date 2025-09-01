@@ -28,7 +28,10 @@ int main(void)
 	//      return EXIT_FAILURE;
 	//    }
 
-	{  // Initialize
+	////
+	//// Initialize
+	////
+	{
 		midCreateWindow();
 
 		vkInitializeInstance();
@@ -77,8 +80,8 @@ int main(void)
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
 
-		NodeHandle testNodeHandle2;
-		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
+		// NodeHandle testNodeHandle2;
+		// mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
 #endif
 
 #elif defined(MOXAIC_NODE)
@@ -86,17 +89,20 @@ int main(void)
 		isCompositor = false;
 		mxcConnectInterprocessNode(true);
 #endif
-
 	}
 
-	if (isCompositor) {  // Compositor Loop
+	////
+	//// Main Compositor Loop
+	////
+	if (isCompositor) {
+
 		VkDevice device = vk.context.device;
 		VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		while (isRunning) {
 
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
-			////
-			//// MXC_CYCLE_UPDATE_WINDOW_STATE
+			///
+			/// MXC_CYCLE_UPDATE_WINDOW_STATE
 
 			mxcNodeInterprocessPoll(); // I am not too sure where I should put this
 
@@ -106,18 +112,18 @@ int main(void)
 			atomic_thread_fence(memory_order_release);
 
 			vkTimelineSignal(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
-			////
-			//// MXC_CYCLE_PROCESS_INPUT
+			///
+			/// MXC_CYCLE_PROCESS_INPUT
 
-			////
-			//// MXC_CYCLE_UPDATE_NODE_STATES
+			///
+			/// MXC_CYCLE_UPDATE_NODE_STATES
 
-			////
-			//// MXC_CYCLE_COMPOSITOR_RECORD
+			///
+			/// MXC_CYCLE_COMPOSITOR_RECORD
 
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
-			////
-			//// MXC_CYCLE_RENDER_COMPOSITE
+			///
+			/// MXC_CYCLE_RENDER_COMPOSITE
 
 			atomic_thread_fence(memory_order_acquire);
 			compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
@@ -131,9 +137,13 @@ int main(void)
 			mxcSubmitQueuedNodeCommandBuffers(graphicsQueue); // I am not too sure where I should put this
 
 		}
+
+	////
+	//// Main Node Loop
+	////
 	} else {
 
-		const VkQueue graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
+		VkQueue graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		while (isRunning) {
 			midUpdateWindowInput();
 			isRunning = midWindow.running;
@@ -142,6 +152,7 @@ int main(void)
 			// we probably want to signal and wait on semaphore here
 			mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
 		}
+
 	}
 
 	// todo rejoin running threads

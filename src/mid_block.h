@@ -3,7 +3,7 @@
 #include "mid_common.h"
 #include "mid_bit.h"
 
-///////////
+////
 //// Handle
 ////
 typedef u16 map_handle;
@@ -16,15 +16,6 @@ typedef block_handle bHnd;
 typedef block_key    bKey;
 
 typedef block_handle block_h; // lets go to this
-
-// it seems you cannot pack 4 and 12 bits
-//typedef unsigned _BitInt(4) u4;
-//typedef unsigned _BitInt(12) u12;
-//typedef struct PACKED block_handle2 {
-//	u4 generation : 4;
-//	u12 handle : 12;
-//} block_handle2;
-
 
 #define HANDLE_INDEX_BIT_COUNT 12
 #define HANDLE_INDEX_MASK      0x0FFF

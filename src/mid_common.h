@@ -4,9 +4,11 @@
 #pragma once
 
 #include <stdio.h>
+#include <stdatomic.h>
 
-//////////
+////
 //// Types
+////
 typedef uint8_t     u8;
 typedef uint16_t    u16;
 typedef uint32_t    u32;
@@ -20,7 +22,7 @@ typedef float       f32;
 typedef double      f64;
 typedef const char* str;
 
-//////////////////
+////
 //// Debug Logging
 ////
 extern void Panic(const char* file, int line, const char* message);
@@ -51,14 +53,17 @@ extern void Panic(const char* file, int line, const char* message);
 		LOG_ERROR("Error Code: %d\n", _err); \
 		PANIC(_message);                     \
 	}
+
 #define CHECK_EQUAL(_a, _b, ...)                              \
 	if (UNLIKELY(((_a) != (_b)))) {                           \
 		PANIC("Error: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
 	}
+
 #define CHECK_NOT_EQUAL(_a, _b, ...)                          \
 	if (UNLIKELY(((_a) == (_b)))) {                           \
 		PANIC("Error: " #_a " == " #_b " " __VA_ARGS__ "\n"); \
 	}
+
 #define LOG(...) printf(__VA_ARGS__)
 #define LOG_ERROR(...) fprintf(stderr, "Error!!! " __VA_ARGS__)
 
@@ -72,12 +77,13 @@ extern void Panic(const char* file, int line, const char* message);
 	})
 
 
-////////////
+////
 //// Utility
 ////
+#define TYPES_EQUAL(a, b) __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
 #define UNUSED __attribute__((unused))
 #define PACK __attribute__((packed))
-#define HOT    __attribute__((hot))
+#define HOT __attribute__((hot))
 #define CONCAT(_a, _b) #_a #_b
 #define CACHE_ALIGN __attribute((aligned(64)))
 #define INLINE __attribute__((always_inline)) static inline
@@ -114,7 +120,7 @@ extern void Panic(const char* file, int line, const char* message);
 
 #include <windows.h>
 
-UNUSED static void LogWin32Error(HRESULT err)
+static void LogWin32Error(HRESULT err)
 {
 	LOG_ERROR("Win32 Error Code: 0x%08lX\n", err);
 	char* errStr;
@@ -145,12 +151,12 @@ UNUSED static void LogWin32Error(HRESULT err)
 
 #endif
 
-//////////////////////////////
+////
 //// Mid Common Implementation
-//////////////////////////////
+////
 #if defined(MID_COMMON_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
-//// Override for your own panic behaviour
+/// Override for your own panic behavior
 #ifndef MID_PANIC_METHOD
 #define MID_PANIC_METHOD
 [[noreturn]] void Panic(const char* file, int line, const char* message)

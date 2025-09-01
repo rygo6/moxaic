@@ -521,7 +521,7 @@ CompositeLoop:
 
 			// Acquire New Node Swap
 			ATOMIC_FENCE_SCOPE {
-				int iPriorSwapImg = (nodeTimelineVal % VK_SWAP_COUNT);
+				// int iPriorSwapImg = (nodeTimelineVal % VK_SWAP_COUNT);
 				int iSwapImg = !(nodeTimelineVal % VK_SWAP_COUNT);
 
 				int iLeftColorImgId = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].colorId;
@@ -543,7 +543,7 @@ CompositeLoop:
 				pProcState->cameraFarZ = globCam.zFar;
 				memcpy(pProcessStateMapped, pProcState, sizeof(MxcProcessState));
 
-				// Release Prior Swaps
+				// Release Prior Swaps. Release barrier not needed since we don't retain the image
 				// CMD_IMAGE_BARRIERS2(gfxCmd, {
 				// 	{
 				// 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1009,6 +1009,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 	//								  &pCst->nodeTaskMeshPipe);
 	//	}
 
+	///
 	/// Compute Pipe
 	if (pInfo->pEnabledCompositorModes[MXC_COMPOSITOR_MODE_TASK_MESH]) {
 		CreateComputeOutputSetLayout(&pCst->compOutputSetLayout);
@@ -1017,6 +1018,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		vkCreateComputePipe("./shaders/compute_post_compositor_basic.comp.spv", pCst->nodeCompPipeLayout, &pCst->nodePostCompPipe);
 	}
 
+	///
 	/// Line Pipe
 	{
 		pCst->lineCapacity = MXC_CUBE_SEGMENT_COUNT * MXC_NODE_CAPACITY;
@@ -1030,6 +1032,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		vkCreateSharedBuffer(&lineRequest, &pCst->lineBuffer);
 	}
 
+	///
 	/// Pools
 	{
 		VkQueryPoolCreateInfo queryInfo = {
@@ -1053,6 +1056,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		VK_CHECK(vkCreateDescriptorPool(vk.context.device, &poolInfo, VK_ALLOC, &threadContext.descriptorPool));
 	}
 
+	///
 	/// Global
 	{
 		vkAllocateDescriptorSet(threadContext.descriptorPool, &vk.context.globalSetLayout, &pCst->globalSet);
@@ -1064,6 +1068,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		vkCreateSharedBuffer(&requestInfo, &pCst->globalBuffer);
 	}
 
+	///
 	/// GBuffer Process
 	{
 		vkCreateSharedBuffer(
@@ -1075,6 +1080,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 			&pCst->processStateBuffer);
 	}
 
+	///
 	/// Final Blit
 	{
 		CreateFinalBlitSetLayout(&pCst->finalBlitSetLayout);
@@ -1084,6 +1090,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		VK_SET_DEBUG(pCst->finalBlitPipe);
 	}
 
+	///
 	/// Node Sets
 //	VkRequestAllocationInfo requestInfo = {
 //		.memoryPropertyFlags = VK_MEMORY_LOCAL_HOST_VISIBLE_COHERENT,
@@ -1112,6 +1119,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		vkSetDebugName(VK_OBJECT_TYPE_DESCRIPTOR_SET, (uint64_t)node.cst.data[i].compositingNodeSet.set, "NodeSet");
 	}
 
+	///
 	/// Graphics Framebuffers
 	{
 		VkDepthFramebufferTextureCreateInfo framebufferTextureInfo = {
@@ -1127,11 +1135,11 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		VK_SET_DEBUG(pCst->framebufferTexture.depth.memory);
 	}
 
+	///
 	/// Compute Output
 	{
 		VkDedicatedTextureCreateInfo atomicCreateInfo = {
-			.pImageCreateInfo =
-				&(VkImageCreateInfo){
+			.pImageCreateInfo =	&(VkImageCreateInfo){
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType   = VK_IMAGE_TYPE_2D,
 					.format      = VK_FORMAT_R32_UINT,
@@ -1150,8 +1158,7 @@ static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 		VK_SET_DEBUG(pCst->compFrameAtomicTex.memory);
 
 		VkDedicatedTextureCreateInfo colorCreateInfo = {
-			.pImageCreateInfo =
-				&(VkImageCreateInfo){
+			.pImageCreateInfo =	&(VkImageCreateInfo){
 					VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 					.imageType   = VK_IMAGE_TYPE_2D,
 					.format      = VK_FORMAT_R8G8B8A8_UNORM,

@@ -128,7 +128,8 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 
 	// Send Open Node IPC call
 	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
-	mxcIpcFuncEnqueue(&pNodeShr->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_OPENED);
+	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
+	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
 	///
 	/// Main Loop

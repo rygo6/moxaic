@@ -44,7 +44,7 @@ void xrClaimSessionId(XrSessionId* pSessionId)
 
 	*pSessionId = hNode; // openxr sessionId == moxaic node handle
 
-	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_OPENED);
+	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 }
 
 void xrReleaseSessionId(XrSessionId sessionId)
@@ -52,7 +52,8 @@ void xrReleaseSessionId(XrSessionId sessionId)
 	LOG("Releasing Moxaic OpenXR Session.\n");
 	NodeHandle hNode = sessionId;
 	MxcNodeShared* pNodeShrd = node.pShared[hNode];
-	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
+
+	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 }
 
 void xrClaimCompositionLayerIndex(XrSessionId* sessionId)
@@ -93,6 +94,7 @@ void xrGetCompositorTimeline(XrSessionId sessionId, HANDLE* pHandle)
 
 void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId)
 {
+	NodeHandle hNode = sessionId;
 	auto pNodeCtxt = &node.context[sessionId];
 	auto pNodeShrd = node.pShared[sessionId];
 
@@ -101,7 +103,7 @@ void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwap
 	pNodeShrd->swapStates[swapId] = XR_SWAP_STATE_REQUESTED;
 	pNodeShrd->swapInfos[swapId] = *pSwapInfo;
 
-	mxcIpcFuncEnqueue(&pNodeShrd->nodeInterprocessFuncQueue, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
+	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 
 	if (pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_ERROR) {
@@ -305,5 +307,3 @@ int xrOutputHaptic_Right(XrSessionId sessionId, SubactionState* pState)
 {
 	return 0;
 }
-
-#pragma GCC diagnostic pop

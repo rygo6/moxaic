@@ -3,6 +3,9 @@
 //////////////////////
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 /*
 	Style
 
@@ -566,12 +569,12 @@ typedef struct Instance {
 
 } Instance;
 
-//////////////////////////////
+////
 //// Mid OpenXR Implementation
-//////////////////////////////
+////
 #if defined(MID_OPENXR_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
-///////////////////
+////
 //// Global Context
 ////
 static struct {
@@ -597,7 +600,7 @@ static Space*  SpacePtr(space_h handle) { return BLOCK_PTR(xr.block.space, handl
 
 #define B xr.block
 
-////////////
+////
 //// Utility
 ////
 #define XR_PROC XRAPI_ATTR XrResult XRAPI_CALL
@@ -4352,3 +4355,5 @@ XR_PROC EXPORT xrNegotiateLoaderRuntimeInterface(
 #undef B
 
 #endif  //MID_OPENXR_IMPLEMENTATION
+
+#pragma GCC diagnostic pop
