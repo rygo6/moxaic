@@ -1,8 +1,10 @@
-#pragma once
+////
+//// Mid Queue Ring Header
+////
+#ifndef MID_QRING_H
+#define MID_QRING_H
 
 #include <string.h>
-
-#include "mid_common.h"
 
 #ifndef MID_QRING_TYPE
 #define MID_QRING_TYPE
@@ -36,6 +38,8 @@ int midQRingDequeue(MidQRing* pQ, int valueSize, void* pValues, void* pValue);
 	midQRingDequeue(_pQ, sizeof(*_pValue), _pValues, _pValue);                                                                                  \
 })
 
+#endif // MID_QRING_H
+
 ////
 //// Mid Queue Ring Implementation
 ////
@@ -68,4 +72,5 @@ int midQRingDequeue(MidQRing* pQ, int valueSize, void* pValues, void* pValue)
 	return 0;
 }
 
-#endif
+#undef MID_QRING_IMPLEMENTATION
+#endif // MID_QRING_IMPLEMENTATION

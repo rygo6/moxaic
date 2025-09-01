@@ -1145,14 +1145,15 @@ const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
 
 int mxcIpcFuncEnqueue(NodeHandle hNode, MxcIpcFunc target) {
 	auto pNodeShrd = node.pShared[hNode];
-	return midQRingEnqueue(&pNodeShrd->ipcFuncQueue, sizeof(*&target), pNodeShrd->queuedIpcFuncs, &target);
-	// return MID_QRING_ENQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, &pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target);
+	return MID_QRING_ENQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, &pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target);
 }
 
-int mxcIpcFuncDequeue(MidQRing* pQueue, MxcIpcFunc targets[], NodeHandle hNode)
+int mxcIpcFuncDequeue(NodeHandle hNode)
 {
 	MxcIpcFunc target;
-	if (MID_QRING_DEQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, pQueue, targets, &target)) return 1;
+	auto pNodeShrd = node.pShared[hNode];
+	if (MID_QRING_DEQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, &pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target))
+		return 1;
 	LOG("Calling IPC Target %d...\n", target);
 	MXC_IPC_FUNCS[target](hNode);
 	return 0;
@@ -1161,8 +1162,8 @@ int mxcIpcFuncDequeue(MidQRing* pQueue, MxcIpcFunc targets[], NodeHandle hNode)
 void mxcInitializeNode() {
 	CreateGBufferProcessSetLayout(&node.gbufferProcessSetLayout);
 	CreateGBufferProcessPipeLayout(node.gbufferProcessSetLayout, &node.gbufferProcessPipeLayout);
-	vkCreateComputePipe("./shaders/compositor_gbuffer_process_down.comp.spv",    node.gbufferProcessPipeLayout, &node.gbufferProcessDownPipe);
-	vkCreateComputePipe("./shaders/compositor_gbuffer_process_up.comp.spv",      node.gbufferProcessPipeLayout, &node.gbufferProcessUpPipe);
+	vkCreateComputePipe("./shaders/compositor_gbuffer_process_down.comp.spv", node.gbufferProcessPipeLayout, &node.gbufferProcessDownPipe);
+	vkCreateComputePipe("./shaders/compositor_gbuffer_process_up.comp.spv",   node.gbufferProcessPipeLayout, &node.gbufferProcessUpPipe);
 	VK_SET_DEBUG(node.gbufferProcessDownPipe);
 	VK_SET_DEBUG(node.gbufferProcessUpPipe);
 }

@@ -1,10 +1,12 @@
-//////////////////////
-//// Mid OpenXR Header
-//////////////////////
-#pragma once
+////
+//// Mid OpenXR Runtime Header
+////
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+
+#ifndef MID_OPENXR_RUNTIME_H
+#define MID_OPENXR_RUNTIME_H
 
 /*
 	Style
@@ -569,8 +571,10 @@ typedef struct Instance {
 
 } Instance;
 
+#endif // MID_OPENXR_RUNTIME_H
+
 ////
-//// Mid OpenXR Implementation
+//// Mid OpenXR Runtime Implementation
 ////
 #if defined(MID_OPENXR_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
@@ -4354,6 +4358,7 @@ XR_PROC EXPORT xrNegotiateLoaderRuntimeInterface(
 
 #undef B
 
-#endif  //MID_OPENXR_IMPLEMENTATION
+#undef MID_OPENXR_IMPLEMENTATION
+#endif //MID_OPENXR_IMPLEMENTATION
 
 #pragma GCC diagnostic pop

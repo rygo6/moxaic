@@ -1,17 +1,17 @@
-#pragma once
+////
+//// Mid Window Header
+////
+#ifndef MID_WINDOW_H
+#define MID_WINDOW_H
 
-#include "mid_common.h"
-
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdatomic.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-//////////////////////
-//// Mid Window Header
-////
+#include "mid_common.h"
+
 #ifndef DEFAULT_WIDTH
 #define DEFAULT_WIDTH 1920
 #endif
@@ -103,7 +103,9 @@ static inline uint64_t midQueryPerformanceCounter()
 
 extern double timeQueryMs;
 
-//////////////////////////////
+#endif // MID_WINDOW_H
+
+////
 //// Mid Window Implementation
 ////
 #if defined(MID_WINDOW_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
@@ -111,7 +113,6 @@ extern double timeQueryMs;
 #define WIN32_LEAN_AND_MEAN
 #define NOCOMM
 #include <windowsx.h>
-
 #include <stdio.h>
 
 #define WINDOW_NAME "moxaic"
@@ -316,4 +317,5 @@ void midWindowReleaseCursor()
 	midWindowInput.cursorLocked = MID_INPUT_LOCK_CURSOR_DISABLED;
 }
 
-#endif
+#undef MID_WINDOW_IMPLEMENTATION
+#endif // MID_WINDOW_H

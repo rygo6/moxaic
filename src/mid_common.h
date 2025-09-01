@@ -1,7 +1,8 @@
-//////////////////////
-//// Mid Common Header
-//////////////////////
-#pragma once
+////
+//// Mid Common
+///
+#ifndef MID_COMMON_H
+#define MID_COMMON_H
 
 #include <stdio.h>
 #include <stdatomic.h>
@@ -151,6 +152,8 @@ static void LogWin32Error(HRESULT err)
 
 #endif
 
+#endif // MID_COMMON_H
+
 ////
 //// Mid Common Implementation
 ////
@@ -164,6 +167,7 @@ static void LogWin32Error(HRESULT err)
 	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
 	__builtin_trap();
 }
-#endif
+#endif // MID_PANIC_METHOD
 
-#endif
+#undef MID_COMMON_IMPLEMENTATION
+#endif // MID_COMMON_IMPLEMENTATION

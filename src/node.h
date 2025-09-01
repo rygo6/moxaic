@@ -451,7 +451,7 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
 
-///////////////////////
+////
 //// Process Connection
 ////
 void mxcServerInitializeInterprocess();
@@ -459,7 +459,7 @@ void mxcServerShutdownInterprocess();
 void mxcConnectInterprocessNode(bool createTestNode);
 void mxcShutdownInterprocessNode();
 
-//////////////////////
+////
 //// Process IPC Funcs
 ////
 typedef void (*MxcIpcFuncPtr)(const NodeHandle);
@@ -467,7 +467,7 @@ static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MID_QRING_TYPE_CAPACITY, "IPC tar
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
 int mxcIpcFuncEnqueue(NodeHandle hNode, MxcIpcFunc target);
-int mxcIpcFuncDequeue(MidQRing* pQueue, MxcIpcFunc targets[], NodeHandle hNode);
+int mxcIpcFuncDequeue(NodeHandle hNode);
 
 static inline void mxcNodeInterprocessPoll()
 {
@@ -481,8 +481,7 @@ static inline void mxcNodeInterprocessPoll()
 		auto pActiveNodes = &node.active[iCstMode];
 		for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
 			auto hNode = pActiveNodes->handles[iNode];
-			auto pNode = node.pShared[hNode];
-			mxcIpcFuncDequeue(&pNode->ipcFuncQueue, pNode->queuedIpcFuncs, hNode);
+			mxcIpcFuncDequeue(hNode);
 		}
 	}
 }

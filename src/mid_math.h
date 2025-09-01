@@ -1,14 +1,14 @@
-////////////////////
+////
 //// Mid Math Header
-////////////////////
+////
 #pragma once
-
-#include "mid_common.h"
 
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
+
+#include "mid_common.h"
 
 #define PI                 3.14159265358979323846f
 #define RAD_FROM_DEG(_deg) (_deg * (PI / 180.0f))

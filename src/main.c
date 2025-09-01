@@ -1,14 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "mid_math.h"
-#include "mid_vulkan.h"
-#include "mid_window.h"
-
 #include "compositor.h"
 #include "node.h"
 #include "node_thread.h"
 #include "window.h"
+
+#include "mid_vulkan.h"
+#include "mid_window.h"
 
 MxcView compositorView = MXC_VIEW_STEREO;
 bool isCompositor = true;

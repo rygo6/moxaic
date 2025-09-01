@@ -1,21 +1,15 @@
-//////////////////////
+////
 //// Mid Vulkan Header
-//////////////////////
-#pragma once
-
-#include "mid_common.h"
-#include "mid_math.h"
-// #include "mid_qring.h"
+////
+#ifndef MID_VULKAN_H
+#define MID_VULKAN_H
 
 #include <stdatomic.h>
-#include <stdatomic.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
-#include <assert.h>
 
-#include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
+#include <vulkan/vulkan.h>
 
 #ifdef _WIN32
 
@@ -26,17 +20,19 @@
 #define CINTERFACE
 #define COBJMACROS
 #define WIDL_C_INLINE_WRAPPERS
-#include <initguid.h>
+#include <d3d12.h>
 #include <dxgi.h>
 #include <dxgi1_4.h>
-#include <dxgi1_6.h>
-#include <d3d12.h>
 
 #include <vulkan/vulkan_win32.h>
 
 #endif
 
-///////////////////
+#include "mid_common.h"
+#include "mid_qring.h"
+#include "mid_math.h"
+
+////
 //// Vulkan Globals
 ////
 // these values shouldn't be macros
@@ -284,8 +280,8 @@ typedef struct VkQueuedCommandBuffer {
 typedef struct VkQueueFamily {
 	VkQueue queue;
 
-	// MidQRing              cmdQueue;
-	// VkQueuedCommandBuffer queuedCmds[MID_QRING_CAPACITY];
+	MidQRing              cmdQueue;
+	VkQueuedCommandBuffer queuedCmds[MID_QRING_CAPACITY];
 
 	VkCommandPool pool;
 	u32           index;
@@ -1152,22 +1148,23 @@ typedef struct VkExternalTexture {
 #endif
 } VkExternalTexture;
 
+#endif // MID_VULKAN_H
 
-//////////////////////////////
+////
 //// Mid Vulkan Implementation
-//////////////////////////////
+////
 #if defined(MID_VULKAN_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
 #include "stb_image.h"  // abstract this out?
 
-////////////////////
+////
 //// Global Context
 ////
 CACHE_ALIGN Vk                               vk = {};
 _Thread_local CACHE_ALIGN MidVkThreadContext threadContext = {};
 VkDebugUtilsMessengerEXT                     debugUtilsMessenger = VK_NULL_HANDLE;
 
-/////////////
+////
 //// Utility
 ////
 // move to common?
@@ -3391,6 +3388,7 @@ void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCal
 	LOG("  supportedTransforms:\n");
 	LogFlags("    ", "\n", capabilities.supportedUsageFlags, string_VkImageUsageFlagBits);
 }
-#endif
+#endif // _WIN32
 
-#endif
+#undef MID_VULKAN_IMPLEMENTATION
+#endif // MID_VULKAN_IMPLEMENTATION

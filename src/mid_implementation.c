@@ -43,31 +43,24 @@
 
 #define MID_COMMON_IMPLEMENTATION
 #include "mid_common.h"
-#undef MID_COMMON_IMPLEMENTATION
 
 #define MID_VULKAN_IMPLEMENTATION
 #include "mid_vulkan.h"
-#undef MID_VULKAN_IMPLEMENTATION
 
 #define MID_OPENXR_IMPLEMENTATION
 #include "mid_openxr_runtime.h"
-#undef MID_OPENXR_IMPLEMENTATION
 
 #define MID_MATH_IMPLEMENTATION
 #include "mid_math.h"
-#undef MID_MATH_IMPLEMENTATION
 
 #define MID_SHAPE_IMPLEMENTATION
 #include "mid_shape.h"
-#undef MID_SHAPE_IMPLEMENTATION
 
 #define MID_WINDOW_IMPLEMENTATION
 #include "mid_window.h"
-#undef MID_WINDOW_IMPLEMENTATION
 
 #define MID_QRING_IMPLEMENTATION
 #include "mid_qring.h"
-#undef MID_QRING_IMPLEMENTATION
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

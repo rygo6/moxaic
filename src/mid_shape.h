@@ -1,4 +1,8 @@
-#pragma once
+///
+/// Mid Shape Header
+///
+#ifndef MID_SHAPE_H
+#define MID_SHAPE_H
 
 #include "mid_math.h"
 #include "mid_vulkan.h"
@@ -9,6 +13,11 @@ void vkCreateQuadPatchMeshSharedMemory(VkSharedMesh* pMesh);
 void vkBindUpdateQuadPatchMesh(float size, VkSharedMesh* pMesh);
 void vkCreateQuadPatchMesh(float size, VkMesh* pMesh);
 
+#endif // MID_SHAPE_H
+
+///
+/// Mid Shape Implementation
+///
 #if defined(MID_SHAPE_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
 void vkCreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* pMesh) {
@@ -107,4 +116,5 @@ void vkCreateQuadPatchMesh(float size, VkMesh* pMesh) {
   vkCreateMesh(&info, pMesh);
 }
 
-#endif
+#undef MID_SHAPE_IMPLEMENTATION
+#endif // MID_SHAPE_IMPLEMENTATION
