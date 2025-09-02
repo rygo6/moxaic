@@ -71,7 +71,7 @@ int main(void)
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");
 		isCompositor = true;
-		mxcRequestAndRunCompositorNodeThread(vk.surfaces[0], mxcCompNodeThread);
+		mxcCreateAndRunCompositorThread(vk.surfaces[0]);
 		mxcServerInitializeInterprocess();
 
 #define TEST_NODE
@@ -79,8 +79,8 @@ int main(void)
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
 
-		// NodeHandle testNodeHandle2;
-		// mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
+		NodeHandle testNodeHandle2;
+		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
 #endif
 
 #elif defined(MOXAIC_NODE)
@@ -133,8 +133,7 @@ int main(void)
 				compositorContext.timeline,
 				compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
 
-			mxcSubmitQueuedNodeCommandBuffers(graphicsQueue); // I am not too sure where I should put this
-
+			vkSubmitQueuedCommandBuffers(); // I am not too sure where I should put this
 		}
 
 	////
@@ -149,7 +148,8 @@ int main(void)
 
 			// I guess technically we just want to go as fast as possible in a node, but we would probably need to process and send input here first at some point?
 			// we probably want to signal and wait on semaphore here
-			mxcSubmitQueuedNodeCommandBuffers(graphicsQueue);
+			// but we don't want this running if we aren't even using vulkan!
+			vkSubmitQueuedCommandBuffers();
 		}
 
 	}

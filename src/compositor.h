@@ -53,4 +53,7 @@ typedef struct MxcCompositor {
 
 } MxcCompositor;
 
-void* mxcCompNodeThread(MxcCompositorContext* pCtx);
+extern MxcCompositor cst;
+
+void  mxcCompositorCreate(const MxcCompositorCreateInfo* pInfo);
+void* mxcCompositorThread(void*);

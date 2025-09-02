@@ -13,7 +13,7 @@
 #include "mid_openxr_runtime.h"
 #include "mid_qring.h"
 
-//////////////
+////
 //// Constants
 ////
 
@@ -24,7 +24,7 @@
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 #define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
 
-/////////////////
+////
 //// Shared Types
 ////
 typedef u8 NodeHandle;
@@ -146,7 +146,7 @@ typedef struct MxcExternalNodeMemory {
 	MxcNodeImports imports;
 } MxcExternalNodeMemory;
 
-/////////
+////
 //// Swap
 ////
 typedef struct MxcSwapTexture {
@@ -155,9 +155,10 @@ typedef struct MxcSwapTexture {
 	XrSwapchainInfo   info;
 } MxcSwapTexture;
 
-//////////////////////////////
+////
 //// Compositor Types and Data
 ////
+// this should merge int MxcCompositor
 typedef struct MxcCompositorContext {
 	// read by multiple threads
 	VkCommandBuffer gfxCmd;
@@ -171,13 +172,15 @@ typedef struct MxcCompositorContext {
 
 	HANDLE timelineHandle;
 
+	bool isReady;
+
 } MxcCompositorContext;
 
 // I should do this. remove compositor code from nodes entirely
 //#if defined(MOXAIC_COMPOSITOR)
 extern MxcCompositorContext compositorContext;
 
-///////////////////////////////////
+////
 //// Compositor Node Types and Data
 ////
 
@@ -284,7 +287,7 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 
 } MxcNodeCompositeData;
 
-/////////////////
+////
 //// Node Context
 ////
 
@@ -412,40 +415,7 @@ void mxcInitializeNode();
 ///////////////
 //// Node Queue
 ////
-// This could be a MidVK construct
-typedef struct MxcQueuedNodeCommandBuffer {
-	VkCommandBuffer cmd;
-	VkSemaphore     nodeTimeline;
-	uint64_t        nodeTimelineSignalValue;
-} MxcQueuedNodeCommandBuffer;
-extern size_t                     submitNodeQueueStart;
-extern size_t                     submitNodeQueueEnd;
-extern MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY];
-
-static inline void mxcQueueNodeCommandBuffer(MxcQueuedNodeCommandBuffer queuedCmd)
-{
-	ATOMIC_FENCE_SCOPE {
-		submitNodeQueue[submitNodeQueueEnd] = queuedCmd;
-		submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
-		assert(submitNodeQueueEnd != submitNodeQueueStart);
-	}
-}
-static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
-{
-	ATOMIC_FENCE_SCOPE {
-		bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
-		while (pendingBuffer) {
-			CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
-			submitNodeQueueStart = (submitNodeQueueStart + 1) % MXC_NODE_CAPACITY;
-			atomic_thread_fence(memory_order_release);
-
-			atomic_thread_fence(memory_order_acquire);
-			pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
-		}
-	}
-}
-
-void mxcRequestAndRunCompositorNodeThread(VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*));
+void mxcCreateAndRunCompositorThread(VkSurfaceKHR surface);
 void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
 
 NodeHandle RequestLocalNodeHandle();
@@ -463,7 +433,7 @@ void mxcShutdownInterprocessNode();
 //// Process IPC Funcs
 ////
 typedef void (*MxcIpcFuncPtr)(const NodeHandle);
-static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MID_QRING_TYPE_CAPACITY, "IPC targets larger than ring buffer size.");
+static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MID_QRING_CAPACITY, "IPC targets larger than ring buffer size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
 int mxcIpcFuncEnqueue(NodeHandle hNode, MxcIpcFunc target);

@@ -10,6 +10,8 @@
 #include <float.h>
 #include <vulkan/vk_enum_string_helper.h>
 
+MxcCompositor cst = {};
+
 //////////////
 //// Constants
 ////
@@ -353,7 +355,7 @@ const u32 CompositorQueueFamilyIndex[] = {
 //--------------------------------------------------------------------------------------------------
 // Run
 //--------------------------------------------------------------------------------------------------
-void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
+static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 {
 	///
 	/// Local Extract
@@ -411,6 +413,8 @@ void mxcCompositorNodeRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuffer.memory);
 
 	u32 mainGraphicsIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+
+	atomic_store(&pCstCtx->isReady, true);
 
 	// We copy everything locally. Set null to ensure not used!
 	pCstCtx = NULL;
@@ -969,9 +973,9 @@ CompositeLoop:
 }
 
 ////
-//// Create
+//// Allocate
 ////
-static void Create(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
+static void Allocate(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst)
 {
 	CreateNodeSetLayout((MxcCompositorMode*)pInfo->pEnabledCompositorModes, &pCst->nodeSetLayout);
 	CreateGraphicsNodePipeLayout(pCst->nodeSetLayout, &pCst->nodePipeLayout);
@@ -1246,10 +1250,8 @@ static void Bind(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
 	}
 }
 
-void* mxcCompNodeThread(MxcCompositorContext* pCtx)
+void* mxcCompositorThread(void*)
 {
-	MxcCompositor compositor = {};
-
 	MxcCompositorCreateInfo info = {
 		.pEnabledCompositorModes = {
 			[MXC_COMPOSITOR_MODE_QUAD] = true,
@@ -1260,13 +1262,11 @@ void* mxcCompNodeThread(MxcCompositorContext* pCtx)
 	};
 
 	vkBeginAllocationRequests();
-	Create(&info, &compositor);
+	Allocate(&info, &cst);
 	vkEndAllocationRequests();
+	Bind(&info, &cst);
 
-	Bind(&info, &compositor);
-
-	mxcCompositorNodeRun(pCtx, &compositor);
-
+	CompositorRun(&compositorContext, &cst);
 	return NULL;
 }
 

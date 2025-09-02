@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 
 #include <vulkan/vk_enum_string_helper.h>
 #include <vulkan/vulkan.h>
@@ -265,7 +266,7 @@ typedef enum VkQueueFamilyType : u8 {
 	VK_QUEUE_FAMILY_TYPE_COUNT
 } VkQueueFamilyType;
 
-static const char* string_QueueFamilyType[] = {
+static const char* string_VkQueueFamilyType[] = {
 	[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS] = "VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS",
 	[VK_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE] = "VK_QUEUE_FAMILY_TYPE_DEDICATED_COMPUTE",
 	[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER] = "VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER",
@@ -277,14 +278,17 @@ typedef struct VkQueuedCommandBuffer {
 	u64             timelineSignalValue;
 } VkQueuedCommandBuffer;
 
+#define	VK_CMD_QUEUE_CAPACITY MID_QRING_CAPACITY
 typedef struct VkQueueFamily {
+	u32     index;
 	VkQueue queue;
 
 	MidQRing              cmdQueue;
-	VkQueuedCommandBuffer queuedCmds[MID_QRING_CAPACITY];
+	VkQueuedCommandBuffer queuedCmds[VK_CMD_QUEUE_CAPACITY];
 
-	VkCommandPool pool;
-	u32           index;
+	VkSemaphore   immediateTimeline;
+	u64           immediateTimelineValue;
+
 } VkQueueFamily;
 
 typedef struct VkSharedDescriptor {
@@ -292,12 +296,13 @@ typedef struct VkSharedDescriptor {
 	VkSharedBuffer  buffer;
 } VkSharedDescriptor;
 
-//--------------------------------------------------------------------------------------------------
-// Vulkan Context
-//--------------------------------------------------------------------------------------------------
+///
+/// Vulkan Context
+///
 typedef struct VkContext {
 	VkPhysicalDevice physicalDevice;
 	VkDevice         device;
+	pthread_t		 threadId;
 	VkQueueFamily    queueFamilies[VK_QUEUE_FAMILY_TYPE_COUNT];
 
 	VkDescriptorSetLayout globalSetLayout;
@@ -320,30 +325,7 @@ typedef struct VkContext {
 
 } VkContext;
 
-// static inline void vkEnqueuCommandBuffer(VkQueueFamily handle, VkQueuedCommandBuffer queuedCmd)
-// {
-// 	midRingEnqueue()
-//
-// 	ATOMIC_FENCE_SCOPE {
-// 		submitNodeQueue[submitNodeQueueEnd] = handle;
-// 		submitNodeQueueEnd = (submitNodeQueueEnd + 1) % MXC_NODE_CAPACITY;
-// 		assert(submitNodeQueueEnd != submitNodeQueueStart);
-// 	}
-// }
-// static inline void mxcSubmitQueuedNodeCommandBuffers(const VkQueue graphicsQueue)
-// {
-// 	ATOMIC_FENCE_SCOPE {
-// 		bool pendingBuffer = submitNodeQueueStart != submitNodeQueueEnd;
-// 		while (pendingBuffer) {
-// 			CmdSubmit(submitNodeQueue[submitNodeQueueStart].cmd, graphicsQueue, submitNodeQueue[submitNodeQueueStart].nodeTimeline, submitNodeQueue[submitNodeQueueStart].nodeTimelineSignalValue);
-// 			submitNodeQueueStart = (submitNodeQueueStart + 1) % MXC_NODE_CAPACITY;
-// 			atomic_thread_fence(memory_order_release);
-//
-// 			atomic_thread_fence(memory_order_acquire);
-// 			pendingBuffer = submitNodeQueueStart < submitNodeQueueEnd;
-// 		}
-// 	}
-// }
+#define VK_CONTEXT_THREAD (vk.context.threadId == pthread_self())
 
 //#define VK_CONTEXT_CAPACITY 2 // should be 1 always?
 #define VK_SURFACE_CAPACITY 2
@@ -360,12 +342,12 @@ typedef struct CACHE_ALIGN Vk {
 } Vk;
 extern Vk vk;
 
-// do this ?? I think so yes... enforce thread on vulkan mechanics which need same thread
-// should be context and shared context? maybe
-typedef struct MidVkThreadContext {
+
+typedef struct VkThreadContext {
 	VkDescriptorPool descriptorPool;
-} MidVkThreadContext;
-extern __thread MidVkThreadContext threadContext;
+	VkCommandPool    immediatePools[VK_QUEUE_FAMILY_TYPE_COUNT];
+} VkThreadContext;
+extern __thread VkThreadContext threadContext;
 
 // move these into thread context
 extern __thread VkDeviceMemory deviceMemory[VK_MAX_MEMORY_TYPES];
@@ -818,7 +800,7 @@ INLINE void CmdSubmit(VkCommandBuffer cmd, VkQueue queue, VkSemaphore timeline, 
 				VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 				.value = signal,
 				.semaphore = timeline,
-				.stageMask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+				.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 			},
 		},
 	};
@@ -1062,7 +1044,7 @@ void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTe
 void vkDestroyDedicatedTexture(VkDedicatedTexture* pTexture);
 
 typedef struct vkSemaphoreCreateInfoExt {
-	const char*                 debugName; // TODO get rid of
+	// const char*                 debugName; // TODO get rid of
 	VkSemaphoreType             semaphoreType;
 	VkLocality                  locality;
 	VK_EXTERNAL_HANDLE_PLATFORM importHandle;
@@ -1127,8 +1109,9 @@ void vkSetDebugName(VkObjectType objectType, uint64_t objectHandle, const char* 
 
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType);
 void            vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuffer cmd);
-VkCommandBuffer vkBeginImmediateTransferCommandBuffer();
-void            vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd);
+
+void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer queuedCmd);
+void vkSubmitQueuedCommandBuffers();
 
 #ifdef _WIN32
 typedef struct VkExternalPlatformTexture {
@@ -1161,7 +1144,7 @@ typedef struct VkExternalTexture {
 //// Global Context
 ////
 CACHE_ALIGN Vk                               vk = {};
-_Thread_local CACHE_ALIGN MidVkThreadContext threadContext = {};
+_Thread_local CACHE_ALIGN VkThreadContext threadContext = {};
 VkDebugUtilsMessengerEXT                     debugUtilsMessenger = VK_NULL_HANDLE;
 
 ////
@@ -1192,74 +1175,76 @@ static VkBool32 VkmDebugUtilsCallback(
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
 		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: printf("%s\n", pCallbackData->pMessage); return VK_FALSE;
-		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:   PANIC(pCallbackData->pMessage); return VK_FALSE;
+		case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:   PANIC(pCallbackData->pMessage);          return VK_FALSE;
 	}
 }
 
-//////////////////////////////
+void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer queuedCmd)
+{
+	auto pFamily = &vk.context.queueFamilies[iFamilyType];
+	if (MID_QRING_ENQUEUE(VK_CMD_QUEUE_CAPACITY, &pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_LIMIT_REACHED)
+		LOG_ERROR("%s CommandBuffer Queue reached limit!\n", string_VkQueueFamilyType[iFamilyType]);
+}
+
+void vkSubmitQueuedCommandBuffers()
+{
+	for (int iFamilyType = 0; iFamilyType < VK_QUEUE_FAMILY_TYPE_COUNT; ++iFamilyType) {
+		auto pFamily = &vk.context.queueFamilies[iFamilyType];
+		VkQueuedCommandBuffer queuedCmd;
+		if (MID_QRING_DEQUEUE(VK_CMD_QUEUE_CAPACITY, &pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
+			CmdSubmit(queuedCmd.cmd, pFamily->queue, queuedCmd.timeline, queuedCmd.timelineSignalValue);
+	}
+}
+
+////
 //// Immediate Command Buffers
 ////
-// One shot command buffers for convenience in non-performance-critical commands. Like initial buffer priming.
-VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType queueFamilyType)
+
+
+
+VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType iFamilyType)
 {
-	VkCommandBufferAllocateInfo allocateInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = vk.context.queueFamilies[queueFamilyType].pool,
-		.commandBufferCount = 1,
-	};
+	auto pFamily = &vk.context.queueFamilies[iFamilyType];
+
+	// TODO we need to clean this up on thread end
+	if (threadContext.immediatePools[iFamilyType] == VK_NULL_HANDLE) {
+		VK_CHECK(vkCreateCommandPool(vk.context.device, &(VkCommandPoolCreateInfo){
+			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			.queueFamilyIndex = pFamily->index,
+		}, VK_ALLOC, &threadContext.immediatePools[iFamilyType]));
+		VK_SET_DEBUG_NAME(threadContext.immediatePools[iFamilyType], "Immediate CommandPool %s", string_VkQueueFamilyType[iFamilyType]);
+	}
+
 	VkCommandBuffer cmd;
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &allocateInfo, &cmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd, "ImmediateCommandBuffer");
-	VkCommandBufferBeginInfo beginInfo = {
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &(VkCommandBufferAllocateInfo){
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = threadContext.immediatePools[iFamilyType],
+		.commandBufferCount = 1,
+	}, &cmd));
+	VK_SET_DEBUG_NAME(cmd, "Immediate Command Buffer %s", string_VkQueueFamilyType[iFamilyType]);
+
+	VK_CHECK(vkBeginCommandBuffer(cmd, &(VkCommandBufferBeginInfo){
 		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-	};
-	VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+	}));
+
 	return cmd;
 }
 
-void vkEndImmediateCommandBuffer(VkQueueFamilyType queueFamilyType, VkCommandBuffer cmd)
+void vkEndImmediateCommandBuffer(VkQueueFamilyType iFamilyType, VkCommandBuffer cmd)
 {
 	VK_CHECK(vkEndCommandBuffer(cmd));
-	VkSubmitInfo info = {
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.commandBufferCount = 1,
-		.pCommandBuffers = &cmd,
-	};
-	VK_CHECK(vkQueueSubmit(vk.context.queueFamilies[queueFamilyType].queue, 1, &info, VK_NULL_HANDLE));
-	VK_CHECK(vkQueueWaitIdle(vk.context.queueFamilies[queueFamilyType].queue));
-	vkFreeCommandBuffers(vk.context.device, vk.context.queueFamilies[queueFamilyType].pool, 1, &cmd);
-}
-
-VkCommandBuffer vkBeginImmediateTransferCommandBuffer()
-{
-	VkCommandBufferAllocateInfo allocateInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool,
-		.commandBufferCount = 1,
-	};
-	VkCommandBuffer cmd;
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &allocateInfo, &cmd));
-	vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)cmd, "ImmediateTransferCommandBuffer");
-	VkCommandBufferBeginInfo beginInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-	};
-	VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
-	return cmd;
-}
-
-void vkEndImmediateTransferCommandBuffer(VkCommandBuffer cmd)
-{
-	VK_CHECK(vkEndCommandBuffer(cmd));
-	VkSubmitInfo info = {
-		VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.commandBufferCount = 1,
-		.pCommandBuffers = &cmd,
-	};
-	VK_CHECK(vkQueueSubmit(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue, 1, &info, VK_NULL_HANDLE));
-	VK_CHECK(vkQueueWaitIdle(vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].queue));
-	vkFreeCommandBuffers(vk.context.device, vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER].pool, 1, &cmd);
+	auto pFamily = &vk.context.queueFamilies[iFamilyType];
+	u64 signalValue = atomic_fetch_add(&pFamily->immediateTimelineValue, 1) + 1;
+	if (VK_CONTEXT_THREAD) CmdSubmit(cmd, pFamily->queue, pFamily->immediateTimeline, signalValue);
+	else vkEnqueueCommandBuffer(iFamilyType, (VkQueuedCommandBuffer){
+			.cmd = cmd,
+			.timeline = pFamily->immediateTimeline,
+			.timelineSignalValue = signalValue,
+		});
+	vkTimelineWait(vk.context.device, signalValue, pFamily->immediateTimeline);
+	vkFreeCommandBuffers(vk.context.device, threadContext.immediatePools[iFamilyType], 1, &cmd);
 }
 
 //////////////
@@ -1360,103 +1345,6 @@ static void CreateDepthRenderPass()
 	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, VK_ALLOC, &vk.context.depthRenderPass));
 	VK_SET_DEBUG(vk.context.depthRenderPass);
 }
-
-//static void CreateDepthNormalRenderPass()
-//{
-//	VkRenderPassCreateInfo2 renderPassCreateInfo2 = {
-//		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2,
-//		.attachmentCount = VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COUNT,
-//		.pAttachments    = (VkAttachmentDescription2[]){
-//			[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR] = {
-//				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-//				.format         = VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR],
-//				.samples        = VK_SAMPLE_COUNT_1_BIT,
-//				.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-//				.storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
-//				.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-//				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-//				.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-//				.finalLayout    = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-//			},
-//			[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL] = {
-//				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-//				.format         = VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL],
-//				.samples        = VK_SAMPLE_COUNT_1_BIT,
-//				.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-//				.storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
-//				.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-//				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-//				.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-//				.finalLayout    = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-//			},
-//			[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH] = {
-//				VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2,
-//				.format         = VK_RENDER_PASS_DEPTHNORMAL_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH],
-//				.samples        = VK_SAMPLE_COUNT_1_BIT,
-//				.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
-//				.storeOp        = VK_ATTACHMENT_STORE_OP_STORE,
-//				.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-//				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-//				.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
-//				.finalLayout    = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-//			},
-//		},
-//		.subpassCount = 1,
-//		.pSubpasses   = (VkSubpassDescription2[]){
-//			{
-//				VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2,
-//				.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS,
-//				.colorAttachmentCount = 2,
-//				.pColorAttachments    = (VkAttachmentReference2[]){
-//					[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR] = {
-//						VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-//						.attachment = VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_COLOR,
-//						.layout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//					},
-//					[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL] = {
-//						VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-//						.attachment = VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_NORMAL,
-//						.layout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-//						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-//					},
-//				},
-//				.pDepthStencilAttachment = &(VkAttachmentReference2){
-//					VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2,
-//					.attachment = VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTHNORMAL_DEPTH,
-//					.layout     = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
-//					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-//				},
-//			},
-//		},
-//		.dependencyCount = 2,
-//		.pDependencies   = (VkSubpassDependency2[]){
-//			// from here https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples#combined-graphicspresent-queue
-//			{
-//				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
-//				.srcSubpass      = VK_SUBPASS_EXTERNAL,
-//				.dstSubpass      = 0,
-//				.srcStageMask    = VK_PIPELINE_STAGE_TRANSFER_BIT,
-//				.dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//				.srcAccessMask   = VK_ACCESS_TRANSFER_READ_BIT,
-//				.dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-//				.dependencyFlags = 0,
-//			},
-//			{
-//				VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
-//				.srcSubpass      = 0,
-//				.dstSubpass      = VK_SUBPASS_EXTERNAL,
-//				.srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
-//				.dstStageMask    = VK_PIPELINE_STAGE_TRANSFER_BIT,
-//				.srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-//				.dstAccessMask   = VK_ACCESS_TRANSFER_READ_BIT,
-//				.dependencyFlags = 0,
-//			},
-//		},
-//	};
-//	VK_CHECK(vkCreateRenderPass2(vk.context.device, &renderPassCreateInfo2, VK_ALLOC, &vk.context.basicPass));
-//	VK_SET_DEBUG(vk.context.basicPass);
-//}
 
 static void CreateSamplers()
 {
@@ -2120,13 +2008,14 @@ void vkBeginAllocationRequests()
 {
 	LOG("Begin Memory Allocation Requests.\n");
 	// what do I do here? should I enable a mechanic to do this twice? or on pass in memory?
-	for (u32 memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
-		requestedMemoryAllocSize[memTypeIndex] = 0;
+	for (u32 iMemType = 0; iMemType < VK_MAX_MEMORY_TYPES; ++iMemType) {
+		ASSERT(deviceMemory[iMemType] == VK_NULL_HANDLE, "Vulkan Memory already allocated for thread!");
+		requestedMemoryAllocSize[iMemType] = 0;
 	}
 }
 void vkEndAllocationRequests()
 {
-	printf("End Memory Allocation Requests.\n");
+	LOG("End Memory Allocation Requests.\n");
 	VkPhysicalDeviceMemoryProperties2 memProps2 = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2};
 	vkGetPhysicalDeviceMemoryProperties2(vk.context.physicalDevice, &memProps2);
 	for (u32 memTypeIndex = 0; memTypeIndex < VK_MAX_MEMORY_TYPES; ++memTypeIndex) {
@@ -2178,8 +2067,10 @@ static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropert
 	};
 	VkMemoryAllocateInfo memAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = VK_LOCALITY_INTERPROCESS_EXPORTED(locality) ? &exportMemAllocInfo : VK_LOCALITY_INTERPROCESS_IMPORTED(locality) ? &importMemAllocInfo
-	                                                                                                                             : (void*)pDedicatedAllocInfo,
+		.pNext = VK_LOCALITY_INTERPROCESS_EXPORTED(locality) ?
+			&exportMemAllocInfo : VK_LOCALITY_INTERPROCESS_IMPORTED(locality) ?
+				&importMemAllocInfo
+				: (void*)pDedicatedAllocInfo,
 		.allocationSize = pMemReqs->size,
 		.memoryTypeIndex = memTypeIndex,
 	};
@@ -2285,9 +2176,9 @@ void vkUpdateBufferViaStaging(const void* srcData, VkDeviceSize dstOffset, VkDev
 	VkBuffer       stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
 	CreateStagingBuffer(srcData, bufferSize, &stagingBufferMemory, &stagingBuffer);
-	VkCommandBuffer commandBuffer = vkBeginImmediateTransferCommandBuffer();
+	VkCommandBuffer commandBuffer = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER);
 	vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer, 1, &(VkBufferCopy){.dstOffset = dstOffset, .size = bufferSize});
-	vkEndImmediateTransferCommandBuffer(commandBuffer);
+	vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER, commandBuffer);
 	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
 	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);
 }
@@ -2476,7 +2367,7 @@ void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTe
 	CreateStagingBuffer(pImagePixels, imageBufferSize, &stagingBufferMemory, &stagingBuffer);
 	stbi_image_free(pImagePixels);
 
-	VkCommandBuffer commandBuffer = vkBeginImmediateTransferCommandBuffer();
+	VkCommandBuffer commandBuffer = vkBeginImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER);
 
 	VkImageMemoryBarrier2 beginCopyBarrier = {
 		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -2506,7 +2397,7 @@ void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTe
 	};
 	vkCmdImageBarriers(commandBuffer, 1, &endCopyBarrier);
 
-	vkEndImmediateTransferCommandBuffer(commandBuffer);
+	vkEndImmediateCommandBuffer(VK_QUEUE_FAMILY_TYPE_DEDICATED_TRANSFER, commandBuffer);
 
 	vkFreeMemory(vk.context.device, stagingBufferMemory, VK_ALLOC);
 	vkDestroyBuffer(vk.context.device, stagingBuffer, VK_ALLOC);
@@ -2841,7 +2732,7 @@ static uint32_t FindQueueIndex(VkPhysicalDevice physicalDevice, const VkmQueueFa
 		return queueFamilyIndex;
 	}
 
-	fprintf(stderr, "Can't find queue family: graphics=%s compute=%s transfer=%s globalPriority=%s... ",
+	LOG_ERROR("Can't find queue family: graphics=%s compute=%s transfer=%s globalPriority=%s... ",
 		string_Support[pQueueDesc->supportsGraphics],
 		string_Support[pQueueDesc->supportsCompute],
 		string_Support[pQueueDesc->supportsTransfer],
@@ -2909,8 +2800,8 @@ void vkInitializeInstance()
 
 void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 {
-	// Create Physical Device
-	//----------------------------------------------------------------------------------------------
+	///
+	/// Create Physical Device
 	{
 		u32 deviceCount = 0;
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, NULL));
@@ -2997,10 +2888,9 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 
 #undef CHECK_AVAILABLE
 	}
-	//----------------------------------------------------------------------------------------------
 
-	// Create Device
-	//----------------------------------------------------------------------------------------------
+	///
+	/// Create Device
 	{
 		// Request Device Features
 		VkPhysicalDeviceMaintenance8FeaturesKHR physicalDeviceMaintenance8FeaturesKHR = {
@@ -3133,20 +3023,18 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
 		};
 
-		VkDeviceCreateInfo deviceCreateInfo = {
+		VK_CHECK(vkCreateDevice(vk.context.physicalDevice, &(VkDeviceCreateInfo){
 			VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 			&physicalDeviceFeatures,
 			.queueCreateInfoCount = activeQueueCount,
 			.pQueueCreateInfos = activeQueueCreateInfos,
 			.enabledExtensionCount = COUNT(ppEnabledDeviceExtensionNames),
 			.ppEnabledExtensionNames = ppEnabledDeviceExtensionNames,
-		};
-		VK_CHECK(vkCreateDevice(vk.context.physicalDevice, &deviceCreateInfo, VK_ALLOC, &vk.context.device));
+		}, VK_ALLOC, &vk.context.device));
 	}
-	//----------------------------------------------------------------------------------------------
 
-	// Load PFN Funcs
-	//----------------------------------------------------------------------------------------------
+	///
+	/// Load PFN Funcs
 	{
 #define PFN_FUNC(_func)                                                              \
 	vk._func = (PFN_##vk##_func)vkGetDeviceProcAddr(vk.context.device, "vk" #_func); \
@@ -3154,26 +3042,28 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		PFN_FUNCS
 #undef PFN_FUNC
 	}
-	//----------------------------------------------------------------------------------------------
 
-	// Create Queue Families
-	//----------------------------------------------------------------------------------------------
-	for (int i = 0; i < VK_QUEUE_FAMILY_TYPE_COUNT; ++i) {
-		if (pContextCreateInfo->queueFamilyCreateInfos[i].queueCount == 0)
+	///
+	/// Create Queue Families
+	for (int iFamilyType = 0; iFamilyType < VK_QUEUE_FAMILY_TYPE_COUNT; ++iFamilyType) {
+		if (pContextCreateInfo->queueFamilyCreateInfos[iFamilyType].queueCount == 0)
 			continue;
 
-		vkGetDeviceQueue(vk.context.device, vk.context.queueFamilies[i].index, 0, &vk.context.queueFamilies[i].queue);
-		VK_SET_DEBUG_NAME(vk.context.queueFamilies[i].queue, "Queue %s", string_QueueFamilyType[i]);
+		auto pFamily = &vk.context.queueFamilies[iFamilyType];
+		vkGetDeviceQueue(vk.context.device, pFamily->index, 0, &pFamily->queue);
+		VK_SET_DEBUG_NAME(pFamily->queue, "Queue %s", string_VkQueueFamilyType[iFamilyType]);
 
-		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-			.queueFamilyIndex = vk.context.queueFamilies[i].index,
-		};
-		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &vk.context.queueFamilies[i].pool));
-		VK_SET_DEBUG_NAME(vk.context.queueFamilies[i].pool, "CommandPool %s", string_QueueFamilyType[i]);
+		VK_CHECK(vkCreateSemaphore(vk.context.device, &(VkSemaphoreCreateInfo){
+			VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+			.pNext = &(VkSemaphoreTypeCreateInfo){
+				VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+				.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+			},
+		}, VK_ALLOC, &pFamily->immediateTimeline));
+		VK_SET_DEBUG_NAME(pFamily->immediateTimeline, "Queue Immediate Timeline %s", string_VkQueueFamilyType[iFamilyType]);
 	}
-	//----------------------------------------------------------------------------------------------
+
+	vk.context.threadId = pthread_self();
 }
 
 void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFamily, VkSwapContext* pSwap)
@@ -3291,7 +3181,6 @@ void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemapho
 		.pNext = &typeInfo,
 	};
 	VK_CHECK(vkCreateSemaphore(vk.context.device, &info, VK_ALLOC, pSemaphore));
-	vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)*pSemaphore, pCreateInfo->debugName);
 	switch (pCreateInfo->locality) {
 		default:                                          break;
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:

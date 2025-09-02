@@ -11,6 +11,8 @@
 
 #include "node.h"
 
+#include "compositor.h"
+
 // Compositor state in Compositor Process
 // There is one compositor context in the Compositor Process and it can be accessed directly
 MxcCompositorContext compositorContext = {};
@@ -21,9 +23,9 @@ HANDLE                 importedExternalMemoryHandle = NULL;
 MxcExternalNodeMemory* pImportedExternalMemory = NULL;
 
 // this should become a midvk construct
-size_t                     submitNodeQueueStart = 0;
-size_t                     submitNodeQueueEnd = 0;
-MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
+// size_t                     submitNodeQueueStart = 0;
+// size_t                     submitNodeQueueEnd = 0;
+// MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
 
 struct Node node;
 
@@ -344,7 +346,7 @@ static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
 ////
 //// Compositor Lifecycle
 ////
-void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*runFunc)(struct MxcCompositorContext*))
+void mxcCreateAndRunCompositorThread(const VkSurfaceKHR surface)
 {
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
@@ -371,8 +373,15 @@ void mxcRequestAndRunCompositorNodeThread(const VkSurfaceKHR surface, void* (*ru
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.gfxCmd));
 	VK_SET_DEBUG(compositorContext.gfxCmd);
 
-	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))runFunc, &compositorContext), "Compositor Node thread creation failed!");
-	LOG("Request and Run Compositor Node Thread Success.\n");
+	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))mxcCompositorThread, NULL), "Compositor Node thread creation failed!");
+
+	LOG("Waiting for Compositor init.\n");
+	// TODO need to come up with some better way for other threads to the CmdQueue when the main thread isn't running vkSubmitQueuedCommandBuffers yet
+	while (!atomic_load(&compositorContext.isReady)) {
+		vkSubmitQueuedCommandBuffers();
+	}
+
+	LOG("Compositor Create and Run Thread Success.\n");
 }
 
 ////
@@ -584,11 +593,11 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
 
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
-		.debugName = "NodeTimelineSemaphore",
 		.locality = VK_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
 	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->thread.nodeTimeline);
+	VK_SET_DEBUG_NAME(pNodeCtxt->thread.nodeTimeline, "Thread Node Timeline");
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -740,11 +749,11 @@ static void ServerInterprocessAcceptNodeConnection()
 		pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
 
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
-			.debugName = "NodeTimelineSemaphoreExport",
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
 		VkSemaphore nodeTimeline; vkCreateSemaphoreExt(&semaphoreCreateInfo, &nodeTimeline);
+		VK_SET_DEBUG_NAME(nodeTimeline, "Export Node Timeline");
 
 		// Init Node Context
 		// TODO should more of this setup go in RequestExternalNodeHandle ?
@@ -983,19 +992,19 @@ void mxcConnectInterprocessNode(bool createTestNode)
 	// Create node data
 	{
 		vkSemaphoreCreateInfoExt compTimelineCreateInfo = {
-			.debugName = "CompositorTimelineSemaphoreImport",
 			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pNodeImports->compositorTimelineHandle,
 		};
 		vkCreateSemaphoreExt(&compTimelineCreateInfo, &pNodeContext->exported.compositorTimeline);
+		VK_SET_DEBUG_NAME(pNodeContext->exported.compositorTimeline, "Imported Compositor Timeline");
 		vkSemaphoreCreateInfoExt nodeTimelineCreateInfo = {
-			.debugName = "NodeTimelineSemaphoreImport",
 			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 			.importHandle = pNodeImports->nodeTimelineHandle,
 		};
 		vkCreateSemaphoreExt(&nodeTimelineCreateInfo, &pNodeContext->exported.nodeTimeline);
+		VK_SET_DEBUG_NAME(pNodeContext->exported.nodeTimeline, "Imported Node Timeline");
 
 		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,

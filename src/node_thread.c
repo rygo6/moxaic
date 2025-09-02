@@ -129,7 +129,6 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	// Send Open Node IPC call
 	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
-	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
 	///
 	/// Main Loop
@@ -264,10 +263,11 @@ NodeLoop:
 
 	// Submit
 	nodeTimelineValue++;
-	mxcQueueNodeCommandBuffer((MxcQueuedNodeCommandBuffer){
+
+	vkEnqueueCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, (VkQueuedCommandBuffer){
 		.cmd = gfxCmd,
-		.nodeTimeline = nodeTimeline,
-		.nodeTimelineSignalValue = nodeTimelineValue,
+		.timeline = nodeTimeline,
+		.timelineSignalValue = nodeTimelineValue,
 	});
 	vkTimelineWait(device, nodeTimelineValue, nodeTimeline);
 

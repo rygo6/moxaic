@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdatomic.h>
+#include <assert.h>
 
 ////
 //// Types
@@ -24,8 +25,19 @@ typedef double      f64;
 typedef const char* str;
 
 ////
-//// Debug Logging
+//// Debug Log
 ////
+typedef enum MidResult {
+	// These align with VkResult
+	MID_SUCCESS         = 0,
+	MID_EMPTY           = 20001,
+	MID_LIMIT_REACHED   = 20002,
+	MID_ERROR_UNKNOW    = -13,
+	MID_RESULT_MAX_ENUM = 0x7FFFFFFF
+} MidResult;
+
+#define ASSERT(_assert, _message) assert(_assert && _message)
+
 extern void Panic(const char* file, int line, const char* message);
 #define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
 
@@ -34,7 +46,6 @@ extern void Panic(const char* file, int line, const char* message);
 // ASSERT = release compile out
 // CHECK = error log return 0
 // TRY = error log goto ExitError
-
 
 #define REQUIRE(_err, _message)              \
 	if (UNLIKELY(!(_err))) {                 \
@@ -76,7 +87,6 @@ extern void Panic(const char* file, int line, const char* message);
 			LOG(__VA_ARGS__);       \
 		}                           \
 	})
-
 
 ////
 //// Utility
