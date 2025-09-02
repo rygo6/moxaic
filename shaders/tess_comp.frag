@@ -14,5 +14,7 @@ void main()
     if (color.a == 0)
         discard;
 
+    float depthValue = texture(nodeGBuffer, inUV).r;
+//    outColor = vec4(depthValue);
     outColor = color;
 }

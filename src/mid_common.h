@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdatomic.h>
 #include <assert.h>
+#include <string.h>
 
 ////
 //// Types

@@ -38,7 +38,7 @@ void xrClaimSessionId(XrSessionId* pSessionId)
 	pNodeCtx->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
 
 	MxcNodeShared* pNodeShrd = node.pShared[hNode];
-	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
 
 	LOG("Importing node handle %d as OpenXR session\n", hNode);
 

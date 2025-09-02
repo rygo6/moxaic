@@ -42,7 +42,7 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 
 	{
 		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout,	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-			BIND_WRITE_GBUFFER_PROCESS_STATE(stateBuffer),
+			BIND_WRITE_GBUFFER_PROCESS_STATE_NULL,
 			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pDepthSwap->view),
 			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[1]));
 
@@ -121,6 +121,7 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 			});
 
 		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
+			BIND_WRITE_GBUFFER_PROCESS_STATE(stateBuffer),
 			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[iMip + 1]),
 			BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pGBuffer->mipViews[iMip]),
 			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[iMip]));
@@ -344,47 +345,6 @@ static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
 }
 
 ////
-//// Compositor Lifecycle
-////
-void mxcCreateAndRunCompositorThread(const VkSurfaceKHR surface)
-{
-	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
-		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
-		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-	};
-	vkCreateSemaphoreExt(&semaphoreCreateInfo, &compositorContext.timeline);
-	compositorContext.timelineHandle = vkGetSemaphoreExternalHandle(compositorContext.timeline);
-	VK_SET_DEBUG(compositorContext.timeline);
-
-	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorContext.swapCtx);
-
-	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-	};
-	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.gfxPool));
-	VK_SET_DEBUG(compositorContext.gfxPool);
-	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = compositorContext.gfxPool,
-		.commandBufferCount = 1,
-	};
-	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.gfxCmd));
-	VK_SET_DEBUG(compositorContext.gfxCmd);
-
-	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))mxcCompositorThread, NULL), "Compositor Node thread creation failed!");
-
-	LOG("Waiting for Compositor init.\n");
-	// TODO need to come up with some better way for other threads to the CmdQueue when the main thread isn't running vkSubmitQueuedCommandBuffers yet
-	while (!atomic_load(&compositorContext.isReady)) {
-		vkSubmitQueuedCommandBuffers();
-	}
-
-	LOG("Compositor Create and Run Thread Success.\n");
-}
-
-////
 //// Node Lifecycle
 ////
 NodeHandle RequestLocalNodeHandle()
@@ -592,6 +552,13 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	pNodeShrd->swapMaxWidth = DEFAULT_WIDTH;
 	pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
 
+	for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
+		// need better way to determine these invalid
+		// and maybe better way to signify frame has been set
+		pNodeShrd->viewSwaps[i].colorId = CHAR_MAX;
+		pNodeShrd->viewSwaps[i].depthId = CHAR_MAX;
+	}
+
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 		.locality = VK_LOCALITY_CONTEXT,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -614,15 +581,15 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->thread.gfxCmd));
 	VK_SET_DEBUG(pNodeCtxt->thread.gfxCmd);
 
-	auto pCstNodeData = &node.cst.data[hNode];
-	pCstNodeData = &node.cst.data[hNode];
+	auto pNodeCst = &node.cst.data[hNode];
+	pNodeCst = &node.cst.data[hNode];
 
 	// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retian any state in CstNodeData
-	auto compositingNodeSet = pCstNodeData->compositingNodeSet;
-	auto pCompositingNodeSetMapped = pCstNodeData->pCompositingNodeSetMapped;
-	memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
-	pCstNodeData->compositingNodeSet = compositingNodeSet;
-	pCstNodeData->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
+	auto compositingNodeSet = pNodeCst->compositingNodeSet;
+	auto pCompositingNodeSetMapped = pNodeCst->pCompositingNodeSetMapped;
+	memset(pNodeCst, 0, sizeof(MxcNodeCompositeData));
+	pNodeCst->compositingNodeSet = compositingNodeSet;
+	pNodeCst->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
 
 //	CreateNodeGBuffer(hNode);
 
@@ -747,6 +714,13 @@ static void ServerInterprocessAcceptNodeConnection()
 		pNodeShrd->compositorCycleSkip = 8;
 		pNodeShrd->swapMaxWidth = DEFAULT_WIDTH;
 		pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
+
+		for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
+			// need better way to determine these invalid
+			// and maybe better way to signify frame has been set
+			pNodeShrd->viewSwaps[i].colorId = CHAR_MAX;
+			pNodeShrd->viewSwaps[i].depthId = CHAR_MAX;
+		}
 
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,

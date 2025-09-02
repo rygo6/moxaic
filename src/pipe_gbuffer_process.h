@@ -47,6 +47,17 @@ static void CreateGBufferProcessSetLayout(VkDescriptorSetLayout* pLayout)
 	};
 	VK_CHECK(vkCreateDescriptorSetLayout(vk.context.device, &createInfo, VK_ALLOC, pLayout));
 }
+#define BIND_WRITE_GBUFFER_PROCESS_STATE_NULL                \
+	(VkWriteDescriptorSet) {                                 \
+		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,              \
+		.dstBinding = SET_BIND_INDEX_GBUFFER_PROCESS_STATE,  \
+		.descriptorCount = 1,                                \
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, \
+		.pBufferInfo = &(VkDescriptorBufferInfo){            \
+			.buffer = VK_NULL_HANDLE,                        \
+			.range = VK_WHOLE_SIZE,                          \
+		},                                                   \
+	}
 
 #define BIND_WRITE_GBUFFER_PROCESS_STATE(_view)              \
 	(VkWriteDescriptorSet) {                                 \

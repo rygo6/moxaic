@@ -78,7 +78,6 @@ int main(void)
 #ifdef TEST_NODE
 		NodeHandle testNodeHandle;
 		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
-
 		NodeHandle testNodeHandle2;
 		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
 #endif

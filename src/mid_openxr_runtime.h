@@ -2733,11 +2733,6 @@ XR_PROC xrBeginFrame(
 	return discardFrame ? XR_FRAME_DISCARDED : XR_SUCCESS;
 }
 
-//#define SWAP_P(_name, _value) Swapchain* _name = (Swapchain*)(_value) // should I do this?
-//					SWAP_P(pSwap, pView->subImage.swapchain);
-//#define var __auto_type // do this and go back to C17?
-//					var pSwap = (Swapchain*)pView->subImage.swapchain;
-
 XR_PROC xrEndFrame(
 	XrSession             session,
 	const XrFrameEndInfo* frameEndInfo)

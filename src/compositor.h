@@ -55,5 +55,4 @@ typedef struct MxcCompositor {
 
 extern MxcCompositor cst;
 
-void  mxcCompositorCreate(const MxcCompositorCreateInfo* pInfo);
-void* mxcCompositorThread(void*);
+void mxcCreateAndRunCompositorThread(VkSurfaceKHR surface);

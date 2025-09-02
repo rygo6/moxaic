@@ -81,19 +81,19 @@ typedef struct MxcController {
 	float   triggerValue;
 } MxcController;
 
-typedef struct MxcProcessState_T {
+typedef struct MxcProcessState {
 	float depthNearZ;
 	float depthFarZ;
 	float cameraNearZ;
 	float cameraFarZ;
 } MxcProcessState;
 
-typedef struct MxcClip_T {
+typedef struct MxcClip {
 	vec2 ulUV;
 	vec2 lrUV;
 } MxcClip;
 
-typedef struct MxcNodeShared_T {
+typedef struct MxcNodeShared {
 
 	// Read/Write every cycle
 	u64             timelineValue;
@@ -256,7 +256,7 @@ typedef struct MxcNodeSwap {
 // Hot data used by the compositor for each node
 // should I call it Hot or Data?
 // Context = Cold. Data = Hot?
-typedef struct CACHE_ALIGN MxcNodeCompositeData {
+typedef struct MxcNodeCompositeData {
 
 	MxcNodeInteractionState interactionState;
 	MxcCompositorMode       activeCompositorMode;
@@ -272,9 +272,9 @@ typedef struct CACHE_ALIGN MxcNodeCompositeData {
 	VkSharedDescriptor         compositingNodeSet;
 	MxcCompositorNodeSetState* pCompositingNodeSetMapped;
 
-	MxcNodeSwap CACHE_ALIGN PACK swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
+	MxcNodeSwap swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
-	MxcNodeGBuffer CACHE_ALIGN PACK gbuffer[XR_MAX_VIEW_COUNT];
+	MxcNodeGBuffer gbuffer[XR_MAX_VIEW_COUNT];
 	//	} gbuffer[XR_MAX_VIEW_COUNT][XR_SWAPCHAIN_IMAGE_COUNT];
 	// If I ever need to retain gbuffers, I will need more gbuffers.
 	// However, as long as gbuffer process is on the compositor thread
@@ -415,7 +415,6 @@ void mxcInitializeNode();
 ///////////////
 //// Node Queue
 ////
-void mxcCreateAndRunCompositorThread(VkSurfaceKHR surface);
 void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
 
 NodeHandle RequestLocalNodeHandle();

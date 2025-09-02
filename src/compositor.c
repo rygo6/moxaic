@@ -335,21 +335,21 @@ typedef struct ImageMemoryBarrierDst {
 	VkImageLayout         newLayout;
 } ImageMemoryBarrierDst;
 
-const ImageMemoryBarrierDst ProcessDstBarrier[] = {
+static const ImageMemoryBarrierDst ProcessDstBarrier[] = {
 	[MXC_COMPOSITOR_MODE_QUAD] = (ImageMemoryBarrierDst){COMPOSITOR_DST_GRAPHICS_READ},
 	[MXC_COMPOSITOR_MODE_TESSELATION] = (ImageMemoryBarrierDst){COMPOSITOR_DST_GRAPHICS_READ},
 	[MXC_COMPOSITOR_MODE_TASK_MESH] = (ImageMemoryBarrierDst){COMPOSITOR_DST_GRAPHICS_READ},
 	[MXC_COMPOSITOR_MODE_COMPUTE] = (ImageMemoryBarrierDst){VK_IMAGE_BARRIER_DST_COMPUTE_READ},
 };
 
-const u32 ExternalQueueFamilyIndex[] = {
+static const u32 ExternalQueueFamilyIndex[] = {
 	[MXC_NODE_INTERPROCESS_MODE_THREAD] = VK_QUEUE_FAMILY_IGNORED,
 	[MXC_NODE_INTERPROCESS_MODE_EXPORTED] = VK_QUEUE_FAMILY_EXTERNAL,
 };
 
-const u32 CompositorQueueFamilyIndex[] = {
+static u32 CompositorQueueFamilyIndex[] = {
 	[MXC_NODE_INTERPROCESS_MODE_THREAD] = VK_QUEUE_FAMILY_IGNORED,
-	[MXC_NODE_INTERPROCESS_MODE_EXPORTED] = 0, //vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+	[MXC_NODE_INTERPROCESS_MODE_EXPORTED] = 0,
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -363,8 +363,13 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(&vk.context, depthRenderPass);
 	EXTRACT_FIELD(&vk.context, depthFramebuffer);
 
+	EXTRACT_FIELD(&node, gbufferProcessDownPipe);
+	EXTRACT_FIELD(&node, gbufferProcessUpPipe);
+	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
+
 	EXTRACT_FIELD(pCstCtx, gfxCmd);
 	auto compTimeline = pCstCtx->timeline;
+	auto pSwapCtx = &pCstCtx->swapCtx;
 
 	EXTRACT_FIELD(pCst, globalSet);
 	EXTRACT_FIELD(pCst, compOutSet);
@@ -381,19 +386,13 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(pCst, finalBlitPipe);
 	EXTRACT_FIELD(pCst, finalBlitPipeLayout);
 
-	EXTRACT_FIELD(&node, gbufferProcessDownPipe);
-	EXTRACT_FIELD(&node, gbufferProcessUpPipe);
-	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
-	EXTRACT_FIELD(pCst, pProcessStateMapped);
-
 	EXTRACT_FIELD(pCst, timeQryPool);
 
 	EXTRACT_FIELD(pCst, pLineMapped);
 	auto lineBuffer = pCst->lineBuffer.buffer;
 
-	auto processStateBuf = pCst->processStateBuffer.buffer;
-
-	auto pSwapCtx = &pCstCtx->swapCtx;
+	EXTRACT_FIELD(pCst, pProcessStateMapped);
+	auto processStateBuffer = pCst->processStateBuffer.buffer;
 
 	auto quadMeshOffsets = pCst->quadMesh.offsets;
 	auto quadMeshBuf = pCst->quadMesh.buf;
@@ -412,7 +411,7 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 
 	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuffer.memory);
 
-	u32 mainGraphicsIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
+	CompositorQueueFamilyIndex[MXC_NODE_INTERPROCESS_MODE_EXPORTED] = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 
 	atomic_store(&pCstCtx->isReady, true);
 
@@ -533,6 +532,13 @@ CompositeLoop:
 				int iRightColorImgId = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].colorId;
 				int iRightDepthImgId = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].depthId;
 
+				// need better way to determine these invalid
+				// and maybe better way to signify frame has been set
+				if (iLeftColorImgId == CHAR_MAX) continue;
+				if (iLeftDepthImgId == CHAR_MAX) continue;
+				// if (iRightColorImgId == CHAR_MAX) continue;
+				// if (iRightColorImgId == CHAR_MAX) continue;
+
 				auto pNodeCtxt = &node.context[hNode];
 				MxcNodeSwap* pLeftColorSwap  = &pNodeCst->swaps[iLeftColorImgId][iSwapImg];
 				MxcNodeSwap* pLeftDepthSwap  = &pNodeCst->swaps[iLeftDepthImgId][iSwapImg];
@@ -545,6 +551,7 @@ CompositeLoop:
 				auto pProcState = &pNodeShr->processState;
 				pProcState->cameraNearZ = globCam.zNear;
 				pProcState->cameraFarZ = globCam.zFar;
+				// TODO each node needs its own process state
 				memcpy(pProcessStateMapped, pProcState, sizeof(MxcProcessState));
 
 				// Release Prior Swaps. Release barrier not needed since we don't retain the image
@@ -574,23 +581,23 @@ CompositeLoop:
 				CMD_IMAGE_BARRIERS2(gfxCmd, {
 					{	// Color
 						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftColorSwap->image,
-						.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-						.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-						.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+						.image               = pLeftColorSwap->image,
+						.srcStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+						.srcAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+						.oldLayout           = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 						.srcQueueFamilyIndex = srcQueueFamilyIndex,
 						.dstQueueFamilyIndex = dstQueueFamilyIndex,
-						.newLayout = dstBarrier.newLayout,
-						.dstStageMask = dstBarrier.dstStageMask,
-						.dstAccessMask = dstBarrier.dstAccessMask,
+						.newLayout           = dstBarrier.newLayout,
+						.dstStageMask        = dstBarrier.dstStageMask,
+						.dstAccessMask       = dstBarrier.dstAccessMask,
 						VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
 					},
 					{	// Depth
 						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftDepthSwap->image,
-						.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-						.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-						.oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+						.image               = pLeftDepthSwap->image,
+						.srcStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+						.srcAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+						.oldLayout           = VK_IMAGE_LAYOUT_GENERAL,
 						.srcQueueFamilyIndex = srcQueueFamilyIndex,
 						.dstQueueFamilyIndex = dstQueueFamilyIndex,
 						VK_IMAGE_BARRIER_DST_COMPUTE_READ,
@@ -598,11 +605,10 @@ CompositeLoop:
 					},
 					{	// Gbuffer
 						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftGBuffer->image,
-						// Acquire discard
-						.srcStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-						.srcAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-						.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+						.image               = pLeftGBuffer->image,
+						.srcStageMask        = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+						.srcAccessMask       = VK_ACCESS_2_SHADER_READ_BIT,
+						.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED, // Acquire discard
 						.srcQueueFamilyIndex = srcQueueFamilyIndex,
 						.dstQueueFamilyIndex = dstQueueFamilyIndex,
 						VK_IMAGE_BARRIER_DST_COMPUTE_WRITE,
@@ -612,15 +618,15 @@ CompositeLoop:
 
 				// TODO this needs to be specifically only the rect which was rendered into
 				ivec2 nodeSwapExtent = IVEC2(pNodeShr->swapMaxWidth, pNodeShr->swapMaxHeight);
-				mxcNodeGBufferProcessDepth(gfxCmd, processStateBuf, pLeftDepthSwap, pLeftGBuffer, nodeSwapExtent);
+				mxcNodeGBufferProcessDepth(gfxCmd, processStateBuffer, pLeftDepthSwap, pLeftGBuffer, nodeSwapExtent);
 
 				CMD_IMAGE_BARRIERS2(gfxCmd, {
 					{	// Gbuffer
 						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						.image = pLeftGBuffer->image,
+						.image         = pLeftGBuffer->image,
 						VK_IMAGE_BARRIER_SRC_COMPUTE_WRITE,
-						.newLayout = dstBarrier.newLayout,
-						.dstStageMask = dstBarrier.dstStageMask,
+						.newLayout     = dstBarrier.newLayout,
+						.dstStageMask  = dstBarrier.dstStageMask,
 						.dstAccessMask = dstBarrier.dstAccessMask,
 						VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 						VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
@@ -633,7 +639,7 @@ CompositeLoop:
 					BIND_WRITE_NODE_GBUFFER(pNodeCst->compositingNodeSet.set, vk.context.nearestSampler, pLeftGBuffer->mipViews[0], dstBarrier.newLayout));
 			}
 
-			/// Calc new node uniform and shared data
+			// Calc new node uniform and shared data
 			ATOMIC_FENCE_SCOPE {
 
 				float radius = pNodeShr->compositorRadius;
@@ -1250,7 +1256,7 @@ static void Bind(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
 	}
 }
 
-void* mxcCompositorThread(void*)
+static void* CompositorThread(void*)
 {
 	MxcCompositorCreateInfo info = {
 		.pEnabledCompositorModes = {
@@ -1268,6 +1274,44 @@ void* mxcCompositorThread(void*)
 
 	CompositorRun(&compositorContext, &cst);
 	return NULL;
+}
+
+void mxcCreateAndRunCompositorThread(VkSurfaceKHR surface)
+{
+	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
+		.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY,
+		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+	};
+	vkCreateSemaphoreExt(&semaphoreCreateInfo, &compositorContext.timeline);
+	compositorContext.timelineHandle = vkGetSemaphoreExternalHandle(compositorContext.timeline);
+	VK_SET_DEBUG(compositorContext.timeline);
+
+	vkCreateSwapContext(surface, VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, &compositorContext.swapCtx);
+
+	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
+		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+		.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
+	};
+	VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &compositorContext.gfxPool));
+	VK_SET_DEBUG(compositorContext.gfxPool);
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
+		VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = compositorContext.gfxPool,
+		.commandBufferCount = 1,
+	};
+	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &compositorContext.gfxCmd));
+	VK_SET_DEBUG(compositorContext.gfxCmd);
+
+	CHECK(pthread_create(&compositorContext.threadId, NULL, (void* (*)(void*))CompositorThread, NULL), "Compositor Node thread creation failed!");
+
+	LOG("Waiting for Compositor init.\n");
+	// TODO need to come up with some better way for other threads to the CmdQueue when the main thread isn't running vkSubmitQueuedCommandBuffers yet
+	while (!atomic_load(&compositorContext.isReady)) {
+		vkSubmitQueuedCommandBuffers();
+	}
+
+	LOG("Compositor Create and Run Thread Success.\n");
 }
 
 #endif

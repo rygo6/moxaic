@@ -4,10 +4,9 @@
 #ifndef MID_QRING_H
 #define MID_QRING_H
 
-#include <string.h>
 #include "mid_common.h"
 
-// We rely on natural type wrapping in atomic_fetch_add so CAPACITY must equal that inherit to the type itself
+// We rely on natural type wrapping in atomic_fetch_add so CAPACITY must equal that inherit to the type itself. Could use bitint to control size
 typedef u8 qring_h;
 #define MID_QRING_CAPACITY (1 << (sizeof(qring_h) * CHAR_BIT))
 
