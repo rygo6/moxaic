@@ -1,3 +1,11 @@
+// should be able to get rid of this if we bind arrays of nodeHandles
+#extension GL_EXT_nonuniform_qualifier : require
+
+
+layout(push_constant) uniform Push {
+    uint nodeHandle;
+} push;
+
 layout (std140, set = 1, binding = 0) uniform NodeState {
 
     mat4 model;
@@ -15,7 +23,8 @@ layout (std140, set = 1, binding = 0) uniform NodeState {
     // Clip
     vec2 ulUV;
     vec2 lrUV;
-} nodeState;
 
-layout (set = 1, binding = 1) uniform sampler2D nodeColor;
-layout (set = 1, binding = 2) uniform sampler2D nodeGBuffer;
+} nodeState[];
+
+layout (set = 1, binding = 1) uniform sampler2D nodeColor[];
+layout (set = 1, binding = 2) uniform sampler2D nodeGBuffer[];

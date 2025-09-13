@@ -30,15 +30,15 @@ vec4 GlobalClipPosFromWorldPos(vec3 worldPos)
     return globalUBO.viewProj * vec4(worldPos, 1.0f);
 }
 
-vec3 WorldPosFromNodeClipPos(vec4 clipPos)
+vec3 WorldPosFromClipPos(mat4 invViewProj, vec4 clipPos)
 {
-    vec4 worldPos = nodeState.invViewProj * clipPos;
+    vec4 worldPos = invViewProj * clipPos;
     return worldPos.xyz / worldPos.w;
 }
 
-vec4 NodeClipPosFromWorldPos(vec3 worldPos)
+vec4 ClipPosFromWorldPos(mat4 viewProj, vec3 worldPos)
 {
-    return nodeState.viewProj * vec4(worldPos, 1.0f);
+    return viewProj * vec4(worldPos, 1.0f);
 }
 
 vec4 ClipPosFromNDC(vec2 ndc)
@@ -111,18 +111,18 @@ vec2 UVFromCoordCenter(ivec2 coord, vec2 screenSize)
     return (vec2(coord) + 0.5f) / screenSize;
 }
 
-vec3 GlobalNDCFromNodeNDC(vec3 nodeNDC){
+vec3 GlobalNDCFromNodeNDC(mat4 nodeInvViewProj, vec3 nodeNDC){
     const vec4 nodeClipPos = ClipPosFromNDC(nodeNDC);
-    const vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
+    const vec3 worldPos = WorldPosFromClipPos(nodeInvViewProj, nodeClipPos);
     const vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
     const vec3 globalNDC = NDCFromClipPos(globalClipPos);
     return globalNDC;
 }
 
-vec3 NodeNDCFromGlobalNDC(vec3 globalNDC){
+vec3 NodeNDCFromGlobalNDC(mat4 nodeViewProj, vec3 globalNDC){
     const vec4 globalClipPos = ClipPosFromNDC(globalNDC);
     const vec3 worldPos = WorldPosFromGlobalClipPos(globalClipPos);
-    const vec4 nodeClipPos = NodeClipPosFromWorldPos(worldPos);
+    const vec4 nodeClipPos = ClipPosFromWorldPos(nodeViewProj,worldPos);
     const vec3 nodeNDC = NDCFromClipPos(nodeClipPos);
     return nodeNDC;
 }
@@ -146,14 +146,8 @@ vec3 WorldRayDirFromGlobalNDC2(vec2 ndc)
     return normalize(nearToFarRay);
 }
 
-vec3 WorldRayDirFromGlobalNDC(vec2 ndc)
-{
+vec3 WorldRayDirFromGlobalNDC(vec2 ndc) {
     return WorldRayDirFromNDC(ndc, globalUBO.invProj, globalUBO.invView);
-}
-
-vec3 WorldRayDirFromNodeNDC(vec2 ndc)
-{
-    return WorldRayDirFromNDC(ndc, nodeState.invProj, nodeState.invView);
 }
 
 float SqrMag(vec2 values[2]) {

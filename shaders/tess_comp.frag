@@ -10,11 +10,11 @@ layout(location = 0) out vec4 outColor;
 
 void main()
 {
-    vec4 color = textureLod(nodeColor, inUV, 0);
+    vec4 color = textureLod(nodeColor[push.nodeHandle], inUV, 0);
     if (color.a == 0)
         discard;
 
-    float depthValue = texture(nodeGBuffer, inUV).r;
+//    float depthValue = texture(nodeGBuffer[push.nodeHandle], inUV).r;
 //    outColor = vec4(depthValue);
     outColor = color;
 }

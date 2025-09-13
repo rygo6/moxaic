@@ -12,13 +12,21 @@ float doubleWide = 1.0f;
 bool clipped = false;
 bool cropped = false;
 
-void main() {
-    vec4 originClipPos = nodeState.viewProj * nodeState.model * vec4(0,0,0,1);
-    float originDepth = originClipPos.z / originClipPos.w;
+void main()
+{
+    mat4 nodeViewProj    = nodeState[push.nodeHandle].viewProj;
+    mat4 nodeInvViewProj = nodeState[push.nodeHandle].invViewProj;
+    mat4 nodeModel       = nodeState[push.nodeHandle].model;
+    vec2 nodeSwapSize    = nodeState[push.nodeHandle].framebufferSize;
+    vec2 nodeULUV        = nodeState[push.nodeHandle].ulUV;
+    vec2 nodeLRUV        = nodeState[push.nodeHandle].lrUV;
 
-    vec2 scale = vec2(nodeState.framebufferSize) / vec2(globalUBO.screenSize);
+    vec4 originClipPos = nodeViewProj * nodeModel * vec4(0,0,0,1);
+    float originDepth  = originClipPos.z / originClipPos.w;
+
+    vec2 scale    = vec2(nodeSwapSize) / vec2(globalUBO.screenSize);
     vec2 scaledUV = inUV * scale;
-    vec2 nodeUv = mix(nodeState.ulUV, nodeState.lrUV, inUV);
+    vec2 nodeUv   = mix(nodeULUV, nodeLRUV, inUV);
 
 //    vec2 finalUv = clipped ?
 //        vec2(scaledUV.x / doubleWide, scaledUV.y) :
@@ -26,9 +34,9 @@ void main() {
     vec2 finalUv = nodeUv;
     outUV = finalUv;
 
-    vec2 nodeNdc = NDCFromUV(nodeUv);
-    vec4 nodeClipPos = ClipPosFromNDC(nodeNdc, originDepth);
-    vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
+    vec2 nodeNdc       = NDCFromUV(nodeUv);
+    vec4 nodeClipPos   = ClipPosFromNDC(nodeNdc, originDepth);
+    vec3 worldPos      = WorldPosFromClipPos(nodeInvViewProj, nodeClipPos);
     vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
     gl_Position = globalClipPos;
 }

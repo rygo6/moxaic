@@ -18,13 +18,22 @@ bool clipped = false;
 
 void main()
 {
+    mat4 nodeViewProj    = nodeState[push.nodeHandle].viewProj;
+    mat4 nodeInvView     = nodeState[push.nodeHandle].invView;
+    mat4 nodeInvProj     = nodeState[push.nodeHandle].invProj;
+    mat4 nodeInvViewProj = nodeState[push.nodeHandle].invViewProj;
+    mat4 nodeModel       = nodeState[push.nodeHandle].model;
+    vec2 nodeSwapSize    = nodeState[push.nodeHandle].framebufferSize;
+    vec2 nodeULUV        = nodeState[push.nodeHandle].ulUV;
+    vec2 nodeLRUV        = nodeState[push.nodeHandle].lrUV;
+
     vec2 inUV = mix(
         mix(inUVs[0], inUVs[1], gl_TessCoord.x),
         mix(inUVs[3], inUVs[2], gl_TessCoord.x),
         gl_TessCoord.y);
-    vec2 scale = clamp(vec2(nodeState.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
+    vec2 scale = clamp(vec2(nodeSwapSize) / vec2(globalUBO.screenSize), 0, 1);
     vec2 scaledUV = inUV * scale;
-    vec2 nodeUv = mix(nodeState.ulUV, nodeState.lrUV, inUV);
+    vec2 nodeUv = mix(nodeULUV, nodeLRUV, inUV);
 
 //    vec2 finalUv = clipped ?
 //        vec2(scaledUV.x / doubleWide, scaledUV.y) :
@@ -32,15 +41,14 @@ void main()
     vec2 finalUv = nodeUv;
     outUV = finalUv;
 
-    float alphaValue = texture(nodeColor, finalUv).a;
-    float depthValue = texture(nodeGBuffer, finalUv).r;
+    float alphaValue = texture(nodeColor[push.nodeHandle], finalUv).a;
+    float depthValue = texture(nodeGBuffer[push.nodeHandle], finalUv).r;
 
     vec2 nodeNdc = NDCFromUV(nodeUv);
     vec4 nodeClipPos = ClipPosFromNDC(nodeNdc, depthValue);
-    vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
+    vec3 worldPos = WorldPosFromClipPos(nodeInvViewProj, nodeClipPos);
     vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
     gl_Position = globalClipPos;
-
 
     outNormal = mix(
         mix(inNormals[0], inNormals[1], gl_TessCoord.x),

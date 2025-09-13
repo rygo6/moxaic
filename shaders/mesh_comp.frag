@@ -13,7 +13,7 @@ layout(location = 1) out vec4 outNormal;
 
 void main()
 {
-    const vec4 colorValue = texture(nodeColor, vertexInput.uv);
+    const vec4 colorValue = texture(nodeColor[push.nodeHandle], vertexInput.uv);
 //    if (vertexInput.color.a < .99)
 //        discard;
     outColor = vec4(colorValue.rgb, 1);

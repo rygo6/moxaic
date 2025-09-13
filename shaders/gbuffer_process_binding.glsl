@@ -1,12 +1,23 @@
-#define LOCAL_SIZE 32
+#define GBUFFER_PROCESS_LOCAL_SIZE 32
 
-layout (set = 0, binding = 0) uniform ProcessState {
+struct ProcessState {
     float depthNearZ;
     float depthFarZ;
     float cameraNearZ;
     float cameraFarZ;
-} processState;
+};
 
-layout (set = 0, binding = 1) uniform sampler2D srcMip;
-layout (set = 0, binding = 2) uniform sampler2D srcGbuffer;
-layout (set = 0, binding = 3, rgba16f) writeonly uniform image2D dstGbuffer;
+layout(push_constant) uniform Push {
+    ProcessState state;
+} push;
+
+const int PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT = 0;
+
+const int SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH = 0;
+const int SET_BIND_INDEX_GBUFFER_PROCESS_SRC_GBUFFER = 1;
+const int SET_BIND_INDEX_GBUFFER_PROCESS_DST_GBUFFER = 2;
+
+layout (set = PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, binding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_DEPTH) uniform sampler2D srcDepth;
+layout (set = PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, binding = SET_BIND_INDEX_GBUFFER_PROCESS_SRC_GBUFFER) uniform sampler2D srcGbuffer;
+layout (set = PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT, binding = SET_BIND_INDEX_GBUFFER_PROCESS_DST_GBUFFER, rgba16f) writeonly uniform image2D dstGbuffer;
+

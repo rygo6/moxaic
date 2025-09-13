@@ -7,10 +7,8 @@
 #include <assert.h>
 
 #include "mid_vulkan.h"
-#include "pipe_gbuffer_process.h"
 
 #include "node.h"
-
 #include "compositor.h"
 
 // Compositor state in Compositor Process
@@ -32,25 +30,31 @@ struct Node node;
 ////
 //// Swap Pool
 ////
-void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent)
+void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessState, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 swapExtent)
 {
 	EXTRACT_FIELD(&node, gbufferProcessDownPipe);
 	EXTRACT_FIELD(&node, gbufferProcessUpPipe);
 	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
 
 	vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessDownPipe);
+	ProcessState emptyProcessState = {
+		.depthFarZ = 1,
+		.depthNearZ = 0,
+		.cameraFarZ = 1,
+		.cameraNearZ = 0,
+	};
+	vk.CmdPushConstants(gfxCmd, gbufferProcessPipeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ProcessState), &emptyProcessState);
 
 	{
 		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout,	PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-			BIND_WRITE_GBUFFER_PROCESS_STATE_NULL,
 			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pDepthSwap->view),
 			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[1]));
 
-		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> 1, 32), 1);
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(swapExtent.vec >> 1, 32), 1);
 		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
 	}
 
-	/// Blit Down Depth Mips
+	/* Blit Down Depth Mips */
 	for (int iMip = 2; iMip < pGBuffer->mipViewCount; ++iMip) {
 		CMD_IMAGE_BARRIERS(gfxCmd,
 			{
@@ -84,11 +88,11 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[iMip - 1]),
 			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[iMip]));
 
-		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(swapExtent.vec >> iMip, 32), 1);
 		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
 	}
 
-	/// Blit Up Depth Mips
+	/* Blit Up Depth Mips */
 	vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessUpPipe);
 
 	for (int iMip = pGBuffer->mipViewCount - 2; iMip >= 1; --iMip) {
@@ -121,16 +125,15 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 			});
 
 		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
-			BIND_WRITE_GBUFFER_PROCESS_STATE(stateBuffer),
 			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[iMip + 1]),
 			BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pGBuffer->mipViews[iMip]),
 			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[iMip]));
 
-		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent.vec >> iMip, 32), 1);
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(swapExtent.vec >> iMip, 32), 1);
 		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
 	}
 
-	/// Final Depth Up Blit
+	/* Final Depth Up Blit */
 	{
 		CMD_IMAGE_BARRIERS(gfxCmd, {
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -159,12 +162,13 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, Mx
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 		});
 
+		vk.CmdPushConstants(gfxCmd, gbufferProcessPipeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ProcessState), pProcessState);
 		CMD_PUSH_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, gbufferProcessPipeLayout, PIPE_SET_INDEX_GBUFFER_PROCESS_INOUT,
 			BIND_WRITE_GBUFFER_PROCESS_SRC_DEPTH(pGBuffer->mipViews[1]),
 			BIND_WRITE_GBUFFER_PROCESS_SRC_GBUFFER(pDepthSwap->view),
 			BIND_WRITE_GBUFFER_PROCESS_DST_GBUFFER(pGBuffer->mipViews[0]));
 
-		ivec2 groupCount = iVec2Min(iVec2CeiDivide(nodeSwapExtent, 32), 1);
+		ivec2 groupCount = iVec2Min(iVec2CeiDivide(swapExtent, 32), 1);
 		vk.CmdDispatch(gfxCmd, groupCount.x, groupCount.y, 1);
 	}
 }
@@ -449,33 +453,33 @@ static int CleanupNode(NodeHandle hNode)
 //			CMD_WRITE_SINGLE_SETS(vk.context.device,
 //				BIND_WRITE_NODE_COLOR(nodeCompositorData[hNode].nodeSet, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
 //				BIND_WRITE_NODE_GBUFFER(nodeCompositorData[hNode].nodeSet, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL));
-			VkWriteDescriptorSet writeSets[] = {
-				{
-					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = node.cst.data[hNode].compositingNodeSet.set,
-					.dstBinding = 1,
-					.descriptorCount = 1,
-					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.pImageInfo = &(VkDescriptorImageInfo){
-						.sampler = vk.context.nearestSampler,
-						.imageView = VK_NULL_HANDLE,
-						.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-					},
-				},
-				{
-					VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = node.cst.data[hNode].compositingNodeSet.set,
-					.dstBinding = 2,
-					.descriptorCount = 1,
-					.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-					.pImageInfo = &(VkDescriptorImageInfo){
-						.sampler = vk.context.nearestSampler,
-						.imageView = VK_NULL_HANDLE,
-						.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-					},
-				},
-			};
-			vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
+			// VkWriteDescriptorSet writeSets[] = {
+			// 	{
+			// 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			// 		.dstSet = node.cst.data[hNode].compositingNodeSet.set,
+			// 		.dstBinding = 1,
+			// 		.descriptorCount = 1,
+			// 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			// 		.pImageInfo = &(VkDescriptorImageInfo){
+			// 			.sampler = vk.context.nearestSampler,
+			// 			.imageView = VK_NULL_HANDLE,
+			// 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			// 		},
+			// 	},
+			// 	{
+			// 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			// 		.dstSet = node.cst.data[hNode].compositingNodeSet.set,
+			// 		.dstBinding = 2,
+			// 		.descriptorCount = 1,
+			// 		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			// 		.pImageInfo = &(VkDescriptorImageInfo){
+			// 			.sampler = vk.context.nearestSampler,
+			// 			.imageView = VK_NULL_HANDLE,
+			// 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			// 		},
+			// 	},
+			// };
+			// vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
 			// We are fully destroying swaps and gbuffer but may want to retain them someday
 			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
@@ -581,15 +585,14 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->thread.gfxCmd));
 	VK_SET_DEBUG(pNodeCtxt->thread.gfxCmd);
 
-	auto pNodeCst = &node.cst.data[hNode];
-	pNodeCst = &node.cst.data[hNode];
-
-	// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retian any state in CstNodeData
-	auto compositingNodeSet = pNodeCst->compositingNodeSet;
-	auto pCompositingNodeSetMapped = pNodeCst->pCompositingNodeSetMapped;
-	memset(pNodeCst, 0, sizeof(MxcNodeCompositeData));
-	pNodeCst->compositingNodeSet = compositingNodeSet;
-	pNodeCst->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
+	// auto pNodeCst = &node.cst.data[hNode];
+	//
+	// // we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retian any state in CstNodeData
+	// auto compositingNodeSet = pNodeCst->compositingNodeSet;
+	// auto pCompositingNodeSetMapped = pNodeCst->pCompositingNodeSetMapped;
+	// memset(pNodeCst, 0, sizeof(MxcNodeCompositeData));
+	// pNodeCst->compositingNodeSet = compositingNodeSet;
+	// pNodeCst->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
 
 //	CreateNodeGBuffer(hNode);
 
@@ -748,13 +751,13 @@ static void ServerInterprocessAcceptNodeConnection()
 		pNodeCtx->exported.compositorTimeline = compositorContext.timeline;
 		pNodeCtx->exported.compositorTimelineHandle = compositorContext.timelineHandle;
 
-		pCstNodeData = &node.cst.data[hNode];
-		// we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retain any state in CstNodeData
-		auto compositingNodeSet = pCstNodeData->compositingNodeSet;
-		auto pCompositingNodeSetMapped = pCstNodeData->pCompositingNodeSetMapped;
-		memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
-		pCstNodeData->compositingNodeSet = compositingNodeSet;
-		pCstNodeData->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
+		// pCstNodeData = &node.cst.data[hNode];
+		// // we want to get nodedesc out of this and into a descriptor set array that goes only by index so we don't need to retain any state in CstNodeData
+		// auto compositingNodeSet = pCstNodeData->compositingNodeSet;
+		// auto pCompositingNodeSetMapped = pCstNodeData->pCompositingNodeSetMapped;
+		// memset(pCstNodeData, 0, sizeof(MxcNodeCompositeData));
+		// pCstNodeData->compositingNodeSet = compositingNodeSet;
+		// pCstNodeData->pCompositingNodeSetMapped = pCompositingNodeSetMapped;
 
 		// Duplicate Handles
 		HANDLE currentHandle = GetCurrentProcess();

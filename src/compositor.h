@@ -30,8 +30,8 @@ typedef struct MxcCompositor {
   VkPipelineLayout      finalBlitPipeLayout;
   VkPipeline            finalBlitPipe;
 
-  MxcProcessState*      pProcessStateMapped;
-  VkSharedBuffer        processStateBuffer;
+//  MxcProcessState*      pProcessStateMapped;
+//  VkSharedBuffer        processStateBuffer;
 
   VkSharedBuffer  globalBuffer;
   VkDescriptorSet globalSet;
@@ -56,3 +56,5 @@ typedef struct MxcCompositor {
 extern MxcCompositor cst;
 
 void mxcCreateAndRunCompositorThread(VkSurfaceKHR surface);
+
+

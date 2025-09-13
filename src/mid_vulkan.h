@@ -64,6 +64,7 @@
 	PFN_FUNC(EndCommandBuffer)         \
 	PFN_FUNC(CmdPipelineBarrier2)      \
 	PFN_FUNC(CmdPushDescriptorSetKHR)  \
+	PFN_FUNC(CmdPushConstants)         \
 	PFN_FUNC(CmdClearColorImage)       \
 	PFN_FUNC(ResetQueryPool)           \
 	PFN_FUNC(GetQueryPoolResults)      \
@@ -325,9 +326,8 @@ typedef struct VkContext {
 
 } VkContext;
 
-#define VK_CONTEXT_THREAD (vk.context.threadId == pthread_self())
+#define VK_IS_CONTEXT_THREAD (vk.context.threadId == pthread_self())
 
-//#define VK_CONTEXT_CAPACITY 2 // should be 1 always?
 #define VK_SURFACE_CAPACITY 2
 
 typedef struct CACHE_ALIGN Vk {
@@ -361,12 +361,11 @@ enum {
 	VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH,
 	VK_RENDER_PASS_ATTACHMENT_INDEX_COUNT,
 };
-constexpr VkFormat VK_RENDER_PASS_FORMATS[] = {
+static const VkFormat VK_RENDER_PASS_FORMATS[] = {
 	[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR]  = VK_FORMAT_R8G8B8A8_UNORM,
-//	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH]  = VK_FORMAT_D32_SFLOAT,
 	[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH]  = VK_FORMAT_D16_UNORM,
 };
-constexpr VkImageUsageFlags VK_RENDER_PASS_USAGES[] = {
+static const VkImageUsageFlags VK_RENDER_PASS_USAGES[] = {
 	[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR] =
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT     |
@@ -609,19 +608,19 @@ enum {
 	vk.CmdPushDescriptorSetKHR(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(descriptorWrites), descriptorWrites); \
 })
 
-#define CMD_WRITE_SINGLE_SETS(_device, ...) ({                                           \
-	VkWriteDescriptorSet descriptorWrites[] = {__VA_ARGS__};                             \
+#define CMD_WRITE_SETS(_device, ...) ({                                                  \
+	VkWriteDescriptorSet descriptorWrites[] = __VA_ARGS__;                               \
 	vkUpdateDescriptorSets(_device, COUNT(descriptorWrites), descriptorWrites, 0, NULL); \
 })
 
-#define CMD_IMAGE_BARRIERS(_cmd, ...) ({                          \
-	VkImageMemoryBarrier2 barriers[] = {__VA_ARGS__};             \
-	CmdPipelineImageBarriers2((_cmd), COUNT(barriers), barriers); \
+#define CMD_IMAGE_BARRIERS(_commandBuffer, ...) ({                          \
+	VkImageMemoryBarrier2 barriers[] = {__VA_ARGS__};                       \
+	CmdPipelineImageBarriers2((_commandBuffer), COUNT(barriers), barriers); \
 })
 
-#define CMD_IMAGE_BARRIERS2(_cmd, ...) ({                          \
-	VkImageMemoryBarrier2 barriers[] = __VA_ARGS__;             \
-	CmdPipelineImageBarriers2((_cmd), COUNT(barriers), barriers); \
+#define CMD_IMAGE_BARRIERS2(_commandBuffer, ...) ({                         \
+	VkImageMemoryBarrier2 barriers[] = __VA_ARGS__;                         \
+	CmdPipelineImageBarriers2((_commandBuffer), COUNT(barriers), barriers); \
 })
 
 #define CMD_BIND_DESCRIPTOR_SETS(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                          \
@@ -639,6 +638,11 @@ enum {
 	vk.UpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL); \
 })
 
+#define VK_UPDATE_DESCRIPTOR_SETS2(...) ({                                             \
+	VkWriteDescriptorSet writeSets[] = __VA_ARGS__;                                 \
+	vk.UpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL); \
+})
+
 #define VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(familyType)                     \
 	for (VkCommandBuffer cmd = vkBeginImmediateCommandBuffer(familyType);   \
 		cmd != VK_NULL_HANDLE;                                              \
@@ -650,13 +654,16 @@ INLINE void CmdPipelineImageBarriers2(VkCommandBuffer cmd, uint32_t imageMemoryB
 
 INLINE void CmdBlitImageFullScreen(VkCommandBuffer cmd, VkImage srcImage, VkImage dstImage)
 {
-	VkImageBlit imageBlit = {
-		.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
-		.srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
-		.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
-		.dstOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
-	};
-	vk.CmdBlitImage(cmd, srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &imageBlit, VK_FILTER_NEAREST);
+	vk.CmdBlitImage(cmd,
+		srcImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1,
+		&(VkImageBlit){
+			.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
+			.srcOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
+			.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .layerCount = 1},
+			.dstOffsets = {{.x = 0, .y = 0, .z = 0}, {.x = DEFAULT_WIDTH, .y = DEFAULT_HEIGHT, .z = 1}},
+		}, VK_FILTER_NEAREST);
 }
 
 INLINE void CmdBeginDepthRenderPass(
@@ -667,26 +674,25 @@ INLINE void CmdBeginDepthRenderPass(
 	VkImageView       colorView,
 	VkImageView       depthView)
 {
-	VkRenderPassBeginInfo renderPassBeginInfo = {
-		VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-		&(VkRenderPassAttachmentBeginInfo){
-			VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
-			.attachmentCount = VK_RENDER_PASS_ATTACHMENT_INDEX_COUNT,
-			.pAttachments = (VkImageView[]){
-				[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR] = colorView,
-				[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH] = depthView,
+	vk.CmdBeginRenderPass(cmd, &(VkRenderPassBeginInfo){
+			VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			&(VkRenderPassAttachmentBeginInfo){
+				VK_STRUCTURE_TYPE_RENDER_PASS_ATTACHMENT_BEGIN_INFO,
+				.attachmentCount = VK_RENDER_PASS_ATTACHMENT_INDEX_COUNT,
+				.pAttachments = (VkImageView[]){
+					[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR] = colorView,
+					[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH] = depthView,
+				},
 			},
-		},
-		.renderPass = renderPass,
-		.framebuffer = framebuffer,
-		.renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
-		.clearValueCount = VK_RENDER_PASS_ATTACHMENT_INDEX_COUNT,
-		.pClearValues = (VkClearValue[]){
-			[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR] = {.color        = clearColor},
-			[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH] = {.depthStencil = {0.0f, 0}},
-		},
-	};
-	vk.CmdBeginRenderPass(cmd, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+			.renderPass = renderPass,
+			.framebuffer = framebuffer,
+			.renderArea = {.extent = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT}},
+			.clearValueCount = VK_RENDER_PASS_ATTACHMENT_INDEX_COUNT,
+			.pClearValues = (VkClearValue[]){
+				[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR] = {.color        = clearColor},
+				[VK_RENDER_PASS_ATTACHMENT_INDEX_DEPTH] = {.depthStencil = {0.0f, 0}},
+			},
+		}, VK_SUBPASS_CONTENTS_INLINE);
 }
 
 //INLINE void CmdBeginDepthNormalRenderPass(
@@ -1237,7 +1243,7 @@ void vkEndImmediateCommandBuffer(VkQueueFamilyType iFamilyType, VkCommandBuffer 
 	VK_CHECK(vkEndCommandBuffer(cmd));
 	auto pFamily = &vk.context.queueFamilies[iFamilyType];
 	u64 signalValue = atomic_fetch_add(&pFamily->immediateTimelineValue, 1) + 1;
-	if (VK_CONTEXT_THREAD) CmdSubmit(cmd, pFamily->queue, pFamily->immediateTimeline, signalValue);
+	if (VK_IS_CONTEXT_THREAD) CmdSubmit(cmd, pFamily->queue, pFamily->immediateTimeline, signalValue);
 	else vkEnqueueCommandBuffer(iFamilyType, (VkQueuedCommandBuffer){
 			.cmd = cmd,
 			.timeline = pFamily->immediateTimeline,
@@ -2953,6 +2959,8 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			.hostQueryReset = VK_TRUE,
 			.imagelessFramebuffer = VK_TRUE,
 			.timelineSemaphore = VK_TRUE,
+			.descriptorBindingPartiallyBound = VK_TRUE,
+			.runtimeDescriptorArray = VK_TRUE,
 		};
 		VkPhysicalDeviceVulkan11Features physicalDeviceVulkan11Features = {
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,

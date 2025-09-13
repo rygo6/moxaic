@@ -163,9 +163,18 @@ void main()
     ivec2 outputSize = imageSize(outputColor);
     InitializeSubgroupGridInfo(outputSize);
 
+    mat4 nodeViewProj    = nodeState[push.nodeHandle].viewProj;
+    mat4 nodeInvView     = nodeState[push.nodeHandle].invView;
+    mat4 nodeInvProj     = nodeState[push.nodeHandle].invProj;
+    mat4 nodeInvViewProj = nodeState[push.nodeHandle].invViewProj;
+    mat4 nodeModel       = nodeState[push.nodeHandle].model;
+    vec2 nodeSwapSize    = nodeState[push.nodeHandle].framebufferSize;
+    vec2 nodeULUV        = nodeState[push.nodeHandle].ulUV;
+    vec2 nodeLRUV        = nodeState[push.nodeHandle].lrUV;
+
     vec2 nodeOriginNDC = vec2(0,0);
     vec3 nodeOriginWorldPos = vec3(0,0,0);
-    vec3 nodeOriginWorldDir = -WorldRayDirFromNodeNDC(nodeOriginNDC);
+    vec3 nodeOriginWorldDir = -WorldRayDirFromNDC(nodeOriginNDC, nodeInvProj, nodeInvView);
     // move intersection plane to back of volume
     nodeOriginWorldPos -= nodeOriginWorldDir * 0.5;
 
@@ -177,20 +186,20 @@ void main()
 
     // We can assume this will hit because the if check above will retun if the node framebuffer is not in the global framebuffer
     vec3  intersectWorldPos = IntersectPlane(globalWorldPos, globalWorldDir, nodeOriginWorldPos, nodeOriginWorldDir);
-    vec4  intersectNodeClipPos = NodeClipPosFromWorldPos(intersectWorldPos);
+    vec4  intersectNodeClipPos = ClipPosFromWorldPos(nodeViewProj, intersectWorldPos);
     vec3  intersectNodeNDC = NDCFromClipPos(intersectNodeClipPos);
     vec2  intersectNodeUV = UVFromNDC(intersectNodeNDC);
     ivec2 intersectNodeCoord = CoordFromUVRound(intersectNodeUV, outputSize);
 
-    if (any(lessThan(intersectNodeUV, nodeState.ulUV)) || any(greaterThan(intersectNodeUV, nodeState.lrUV))) {
+    if (any(lessThan(intersectNodeUV, nodeULUV)) || any(greaterThan(intersectNodeUV, nodeLRUV))) {
         return;
     }
 
     // We don't want to linear sample because then you get float pixels between objects a great depth variation
-    float nodeDepthSample = texelFetch(nodeGBuffer, intersectNodeCoord, 0).r;
+    float nodeDepthSample = texelFetch(nodeGBuffer[push.nodeHandle], intersectNodeCoord, 0).r;
 
     vec4  nodeProjClipPos = ClipPosFromNDC(intersectNodeNDC.xy, nodeDepthSample);
-    vec3  projWorldPos = WorldPosFromNodeClipPos(nodeProjClipPos);
+    vec3  projWorldPos = WorldPosFromClipPos(nodeInvViewProj, nodeProjClipPos);
     vec4  globProjClipPos = GlobalClipPosFromWorldPos(projWorldPos);
     vec3  globProjNDC = NDCFromClipPos(globProjClipPos);
     float globProjDepth = globProjNDC.z;
@@ -200,7 +209,7 @@ void main()
     if (!(globProjDepth > DEPTH_FAR))
         return;
 
-    vec4  nodeColorSample = texelFetch(nodeColor, intersectNodeCoord, 0);
+    vec4  nodeColorSample = texelFetch(nodeColor[push.nodeHandle], intersectNodeCoord, 0);
     float finalDepth = nodeColorSample.a > 0 ? globProjDepth : 0;
 
     // I am going to want to pack depth with an ID of the node eventually then use that id to sample the color

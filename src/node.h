@@ -13,6 +13,8 @@
 #include "mid_openxr_runtime.h"
 #include "mid_qring.h"
 
+#include "pipe_gbuffer_process.h"
+
 ////
 //// Constants
 ////
@@ -81,13 +83,6 @@ typedef struct MxcController {
 	float   triggerValue;
 } MxcController;
 
-typedef struct MxcProcessState {
-	float depthNearZ;
-	float depthFarZ;
-	float cameraNearZ;
-	float cameraFarZ;
-} MxcProcessState;
-
 typedef struct MxcClip {
 	vec2 ulUV;
 	vec2 lrUV;
@@ -96,12 +91,12 @@ typedef struct MxcClip {
 typedef struct MxcNodeShared {
 
 	// Read/Write every cycle
-	u64             timelineValue;
-	MxcClip         clip;
-	MxcProcessState processState;
-	pose            rootPose;
-	pose            cameraPose;
-	camera          camera;
+	u64          timelineValue;
+	MxcClip      clip;
+	ProcessState processState;
+	pose         rootPose;
+	pose         cameraPose;
+	camera       camera;
 
 	struct {
 		u8 colorId;
@@ -184,7 +179,6 @@ extern MxcCompositorContext compositorContext;
 //// Compositor Node Types and Data
 ////
 
-// State uploaded to node descriptor set
 typedef struct MxcCompositorNodeSetState {
 
 	mat4 model;
@@ -269,8 +263,8 @@ typedef struct MxcNodeCompositeData {
 	MxcCompositorNodeSetState renderingNodeSetState;
 	MxcCompositorNodeSetState compositingNodeSetState;
 	// This should go in one big shared buffer for all nodes
-	VkSharedDescriptor         compositingNodeSet;
-	MxcCompositorNodeSetState* pCompositingNodeSetMapped;
+	// VkSharedDescriptor         compositingNodeSet;
+	// MxcCompositorNodeSetState* pCompositingNodeSetMapped;
 
 	MxcNodeSwap swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
@@ -358,7 +352,7 @@ typedef struct MxcActiveNodes {
 	NodeHandle handles[MXC_NODE_CAPACITY];
 } MxcActiveNodes;
 
-// Only one import into a node from a compositor?
+// Only one import into a node from a compositor? No move into MxcNodeContext. Duplicat is probably fine
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
@@ -376,16 +370,16 @@ extern struct Node {
 
 #if defined(MOXAIC_COMPOSITOR)
 
-	// this should be in a cst anon struct?!?
+	// this should be in a cst anon struct?!? no move this to compositor.c
 	// node. equal node data then cst.node equal node data for cst?
 	struct {
 		MxcNodeCompositeData data[MXC_NODE_CAPACITY];
 
 		// TODO use this as one big array desc set
-//		MxcCompositorNodeSetState  setState[MXC_NODE_CAPACITY];
-//		MxcCompositorNodeSetState* pSetMapped;
-//		VkSharedBuffer             setBuffer;
-//		VkDescriptorSet            set;
+		// MxcCompositorNodeSetState  nodeSetState[MXC_NODE_CAPACITY];
+		MxcCompositorNodeSetState* pNodeSetMapped;
+		VkSharedBuffer             nodeSetBuffer;
+		VkDescriptorSet            nodeSet;
 
 		struct {
 			BLOCK_DECL(MxcSwapTexture, MXC_NODE_CAPACITY) swap;
@@ -404,21 +398,18 @@ extern struct Node {
 
 } node;
 
-//--------------------------------------------------------------------------------------------------
-// Functions
-//--------------------------------------------------------------------------------------------------
-
-void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, VkBuffer stateBuffer, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent);
+/*
+ * Node Functions
+ */
 
 void mxcInitializeNode();
 
-///////////////
-//// Node Queue
-////
-void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
-
 NodeHandle RequestLocalNodeHandle();
 NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
+
+void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
+
+void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessState, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent);
 
 ////
 //// Process Connection

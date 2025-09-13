@@ -15,32 +15,32 @@ layout(location = 0) out VertexOutput {
 
 void main()
 {
-    SetMeshOutputsEXT(VERTEX_COUNT, PRIMITIVE_COUNT);
-
-    const vec2 screenSize = globalUBO.screenSize;
-    const vec2 inUV = ((gl_GlobalInvocationID.xy - gl_WorkGroupID.xy) * SCALE) / screenSize;
-
-    const vec2 scale = clamp(vec2(nodeState.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
-    const vec2 scaledUV = inUV * scale;
-    // im reversing the lr and ul from what i'd expect... why!?
-    const vec2 nodeUV = mix(nodeState.lrUV, nodeState.ulUV, inUV);
-
-    float alphaValue = texture(nodeColor, scaledUV).a;
-    float depthValue = texture(nodeGBuffer, scaledUV).r;
-
-    vec2 nodeNDC = NDCFromUV(nodeUV);
-    vec4 nodeClipPos = ClipPosFromNDC(nodeNDC, depthValue);
-    vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
-    vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
-
-    vertexOutput[gl_LocalInvocationIndex].uv = inUV;
-    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = globalClipPos;
-
-    if (gl_LocalInvocationID.x < VERTEX_DIMENSION_COUNT - 1 && gl_LocalInvocationID.y < VERTEX_DIMENSION_COUNT - 1) {
-        const uint yOffset = gl_LocalInvocationID.y * VERTEX_DIMENSION_COUNT;
-        const uint offsetX = gl_LocalInvocationID.x + yOffset;
-        const uint pi = (gl_LocalInvocationID.y * (VERTEX_DIMENSION_COUNT - 1)) + gl_LocalInvocationID.x;
-        gl_PrimitiveTriangleIndicesEXT[pi] = uvec3(offsetX, offsetX + 1, offsetX + VERTEX_DIMENSION_COUNT);
-        gl_PrimitiveTriangleIndicesEXT[pi + HALF_PRIMITIVE_COUNT] = uvec3(offsetX + 1, offsetX + VERTEX_DIMENSION_COUNT + 1, offsetX + VERTEX_DIMENSION_COUNT);
-    }
+//    SetMeshOutputsEXT(VERTEX_COUNT, PRIMITIVE_COUNT);
+//
+//    const vec2 screenSize = globalUBO.screenSize;
+//    const vec2 inUV = ((gl_GlobalInvocationID.xy - gl_WorkGroupID.xy) * SCALE) / screenSize;
+//
+//    const vec2 scale = clamp(vec2(nodeState.framebufferSize) / vec2(globalUBO.screenSize), 0, 1);
+//    const vec2 scaledUV = inUV * scale;
+//    // im reversing the lr and ul from what i'd expect... why!?
+//    const vec2 nodeUV = mix(nodeState.lrUV, nodeState.ulUV, inUV);
+//
+//    float alphaValue = texture(nodeColor, scaledUV).a;
+//    float depthValue = texture(nodeGBuffer, scaledUV).r;
+//
+//    vec2 nodeNDC = NDCFromUV(nodeUV);
+//    vec4 nodeClipPos = ClipPosFromNDC(nodeNDC, depthValue);
+//    vec3 worldPos = WorldPosFromNodeClipPos(nodeClipPos);
+//    vec4 globalClipPos = GlobalClipPosFromWorldPos(worldPos);
+//
+//    vertexOutput[gl_LocalInvocationIndex].uv = inUV;
+//    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = globalClipPos;
+//
+//    if (gl_LocalInvocationID.x < VERTEX_DIMENSION_COUNT - 1 && gl_LocalInvocationID.y < VERTEX_DIMENSION_COUNT - 1) {
+//        const uint yOffset = gl_LocalInvocationID.y * VERTEX_DIMENSION_COUNT;
+//        const uint offsetX = gl_LocalInvocationID.x + yOffset;
+//        const uint pi = (gl_LocalInvocationID.y * (VERTEX_DIMENSION_COUNT - 1)) + gl_LocalInvocationID.x;
+//        gl_PrimitiveTriangleIndicesEXT[pi] = uvec3(offsetX, offsetX + 1, offsetX + VERTEX_DIMENSION_COUNT);
+//        gl_PrimitiveTriangleIndicesEXT[pi + HALF_PRIMITIVE_COUNT] = uvec3(offsetX + 1, offsetX + VERTEX_DIMENSION_COUNT + 1, offsetX + VERTEX_DIMENSION_COUNT);
+//    }
 }

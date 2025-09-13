@@ -13,9 +13,12 @@ layout (location = 1) out vec2 outUVs[4];
 
 void main()
 {
+    vec2 nodeULUV = nodeState[push.nodeHandle].ulUV;
+    vec2 nodeLRUV = nodeState[push.nodeHandle].lrUV;
+
     if (gl_InvocationID == 0)
     {
-        vec2 uvDiff =  abs(nodeState.lrUV - nodeState.ulUV);
+        vec2 uvDiff =  abs(nodeLRUV - nodeULUV);
 
         vec2 tessellationFactor = uvDiff * 64;
         gl_TessLevelOuter[0] = tessellationFactor.y;
