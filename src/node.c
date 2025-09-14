@@ -20,11 +20,6 @@ MxcCompositorContext compositorContext = {};
 HANDLE                 importedExternalMemoryHandle = NULL;
 MxcExternalNodeMemory* pImportedExternalMemory = NULL;
 
-// this should become a midvk construct
-// size_t                     submitNodeQueueStart = 0;
-// size_t                     submitNodeQueueEnd = 0;
-// MxcQueuedNodeCommandBuffer submitNodeQueue[MXC_NODE_CAPACITY] = {};
-
 struct Node node;
 
 ////
@@ -269,7 +264,7 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 // I need to get compositor specific and node specific code into different files
 #if defined(MOXAIC_COMPOSITOR)
 	auto pNodeCtxt = &node.context[hNode];
-	auto pNodeCompData = &node.cst.data[hNode];
+	auto pNodeCompData = &cst.nodeData[hNode];
 	auto pNodeShrd = node.pShared[hNode];
 
 	CHECK(pNodeShrd->swapMaxWidth < 1024 || pNodeShrd->swapMaxHeight < 1024, "Swap too small!")
@@ -382,7 +377,7 @@ void SetCompositorNodeActive(NodeHandle hNode)
 #if defined(MOXAIC_COMPOSITOR)
 	auto pNodeCtxt = &node.context[hNode];
 	auto pNodeShrd = node.pShared[hNode];
-	auto pNodeCst = &node.cst.data[hNode];
+	auto pNodeCst = &cst.nodeData[hNode];
 
 	pNodeCst->activeCompositorMode = pNodeShrd->compositorMode;
 	pNodeCst->activeInterprocessMode = pNodeCtxt->interprocessMode;
@@ -401,7 +396,7 @@ void ReleaseCompositorNodeActive(NodeHandle hNode)
 #if defined(MOXAIC_COMPOSITOR)
 	assert((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE && "Trying to ReleaseCompositorNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 	assert(node.context[hNode].interprocessMode != MXC_NODE_INTERPROCESS_MODE_NONE);
-	auto pNodeCst = &node.cst.data[hNode];
+	auto pNodeCst = &cst.nodeData[hNode];
 	auto pActiveNode = &node.active[pNodeCst->activeCompositorMode];
 
 	ATOMIC_FENCE_SCOPE	{
@@ -486,7 +481,7 @@ static int CleanupNode(NodeHandle hNode)
 				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
 					continue;
 
-				auto pSwap = BLOCK_RELEASE(node.cst.block.swap, pNodeCtxt->hSwaps[i]);
+				auto pSwap = BLOCK_RELEASE(cst.block.swap, pNodeCtxt->hSwaps[i]);
 				mxcDestroySwapTexture(pSwap);
 			}
 			for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
@@ -648,7 +643,7 @@ static void ServerInterprocessAcceptNodeConnection()
 	MxcNodeContext*         pNodeCtx = NULL;
 	MxcNodeShared*          pNodeShrd = NULL;
 	MxcNodeImports*         pImports = NULL;
-	MxcNodeCompositeData*  pCstNodeData = NULL;
+	MxcCompositorNodeData*  pCstNodeData = NULL;
 	HANDLE                  hNodeProc = INVALID_HANDLE_VALUE;
 	HANDLE                  hExtNodeMem = INVALID_HANDLE_VALUE;
 	MxcExternalNodeMemory*  pExtNodeMem = NULL;
@@ -1058,7 +1053,7 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 	LOG("Claiming Swap for Node %d\n", hNode);
 
 	auto pNodeShr = node.pShared[hNode];
-	auto pNodeCstData = &node.cst.data[hNode];
+	auto pNodeCstData = &cst.nodeData[hNode];
 	auto pNodeCtxt = &node.context[hNode];
 	bool needsExport = pNodeCtxt->interprocessMode != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
@@ -1067,14 +1062,14 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		if (pNodeShr->swapStates[iNodeSwap] != XR_SWAP_STATE_REQUESTED)
 			continue;
 
-		block_h hSwap = BLOCK_CLAIM(node.cst.block.swap, 0); // key should be hash of swap info to find recycled swaps
+		block_h hSwap = BLOCK_CLAIM(cst.block.swap, 0); // key should be hash of swap info to find recycled swaps
 		if (!HANDLE_VALID(hSwap)) {
 			LOG_ERROR("Fail to claim SwapImage!\n");
 			goto ExitError;
 		}
 		LOG("Claimed Swap %d for Node %d\n", HANDLE_INDEX(hSwap), hNode);
 
-		auto pSwap = BLOCK_PTR(node.cst.block.swap, hSwap);
+		auto pSwap = BLOCK_PTR(cst.block.swap, hSwap);
 		assert(pSwap->state == XR_SWAP_STATE_UNITIALIZED && "Trying to create already created SwapImage!");
 		pSwap->state = XR_SWAP_STATE_REQUESTED;
 		pSwap->info = pNodeShr->swapInfos[iNodeSwap];

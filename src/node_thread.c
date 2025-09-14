@@ -6,6 +6,7 @@
 #include "mid_shape.h"
 #include "mid_openxr_runtime.h"
 #include "node_thread.h"
+#include "compositor.h"
 
 ////
 //// Loop
@@ -104,9 +105,9 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 		assert(pNodeShr->swapStates[depthSwapId] == XR_SWAP_STATE_CREATED && "Depth swap not created!");
 
 		swap_h hColorSwap = pNodeCtx->hSwaps[colorSwapId];
-		auto pColorSwap = BLOCK_PTR(node.cst.block.swap, hColorSwap);\
+		auto pColorSwap = BLOCK_PTR(cst.block.swap, hColorSwap);\
 		swap_h hDepthSwap = pNodeCtx->hSwaps[depthSwapId];
-		auto pDepthSwap = BLOCK_PTR(node.cst.block.swap, hDepthSwap);
+		auto pDepthSwap = BLOCK_PTR(cst.block.swap, hDepthSwap);
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 			swaps[iImg].colorView = pColorSwap->externalTexture[iImg].texture.view;
 			swaps[iImg].colorImage = pColorSwap->externalTexture[iImg].texture.image;
@@ -127,7 +128,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	}
 
 	// Send Open Node IPC call
-	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
+	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
 	///
@@ -373,16 +374,16 @@ void* mxcRunNodeThread(void* nodeHandle)
 	NodeHandle hNode = (NodeHandle)(u64)nodeHandle;
 	LOG("Initializing Thread Node: %d\n", hNode);
 
-	MxcNodeThread testNode;
-	memset(&testNode, 0, sizeof(MxcNodeThread));
+	MxcNodeThread* pTestNode;
+	MALLOC_SCOPE_ZEROED(pTestNode) {;
+		vkBeginAllocationRequests();
+		Create(hNode, pTestNode);
+		vkEndAllocationRequests();
 
-	vkBeginAllocationRequests();
-	Create(hNode, &testNode);
-	vkEndAllocationRequests();
+		Bind(hNode, pTestNode);
 
-	Bind(hNode, &testNode);
-
-	mxcTestNodeRun(hNode, &testNode);
+		mxcTestNodeRun(hNode, pTestNode);
+	}
 
 	return NULL;
 }

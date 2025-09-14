@@ -142,40 +142,6 @@ typedef struct MxcExternalNodeMemory {
 } MxcExternalNodeMemory;
 
 ////
-//// Swap
-////
-typedef struct MxcSwapTexture {
-	VkExternalTexture externalTexture[XR_SWAPCHAIN_IMAGE_COUNT];
-	XrSwapState       state;
-	XrSwapchainInfo   info;
-} MxcSwapTexture;
-
-////
-//// Compositor Types and Data
-////
-// this should merge int MxcCompositor
-typedef struct MxcCompositorContext {
-	// read by multiple threads
-	VkCommandBuffer gfxCmd;
-	u64             baseCycleValue;
-	VkSemaphore     timeline;
-	VkSwapContext   swapCtx;
-
-	// cold data
-	VkCommandPool gfxPool;
-	pthread_t     threadId;
-
-	HANDLE timelineHandle;
-
-	bool isReady;
-
-} MxcCompositorContext;
-
-// I should do this. remove compositor code from nodes entirely
-//#if defined(MOXAIC_COMPOSITOR)
-extern MxcCompositorContext compositorContext;
-
-////
 //// Compositor Node Types and Data
 ////
 
@@ -247,44 +213,9 @@ typedef struct MxcNodeSwap {
 	VkImageView           view;
 } MxcNodeSwap;
 
-// Hot data used by the compositor for each node
-// should I call it Hot or Data?
-// Context = Cold. Data = Hot?
-typedef struct MxcNodeCompositeData {
-
-	MxcNodeInteractionState interactionState;
-	MxcCompositorMode       activeCompositorMode;
-	MxcNodeInterprocessMode activeInterprocessMode;
-
-	//	pose rootPose;
-	u64  lastTimelineValue;
-
-	// NodeSet which node is actively using to render
-	MxcCompositorNodeSetState renderingNodeSetState;
-	MxcCompositorNodeSetState compositingNodeSetState;
-	// This should go in one big shared buffer for all nodes
-	// VkSharedDescriptor         compositingNodeSet;
-	// MxcCompositorNodeSetState* pCompositingNodeSetMapped;
-
-	MxcNodeSwap swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
-
-	MxcNodeGBuffer gbuffer[XR_MAX_VIEW_COUNT];
-	//	} gbuffer[XR_MAX_VIEW_COUNT][XR_SWAPCHAIN_IMAGE_COUNT];
-	// If I ever need to retain gbuffers, I will need more gbuffers.
-	// However, as long as gbuffer process is on the compositor thread
-	// it can sync a single gbuffer with composite render loop
-
-  	// this should go a UI thread node
-	VkLineVert worldLineSegments[MXC_CUBE_SEGMENT_COUNT];
-	vec3 worldCorners[CORNER_COUNT];
-	vec2 uvCorners[CORNER_COUNT];
-
-} MxcNodeCompositeData;
-
 ////
 //// Node Context
 ////
-
 constexpr int MXC_NODE_SWAP_CAPACITY = VK_SWAP_COUNT * 2;
 
 typedef struct MxcNodeContext {
@@ -370,22 +301,6 @@ extern struct Node {
 
 #if defined(MOXAIC_COMPOSITOR)
 
-	// this should be in a cst anon struct?!? no move this to compositor.c
-	// node. equal node data then cst.node equal node data for cst?
-	struct {
-		MxcNodeCompositeData data[MXC_NODE_CAPACITY];
-
-		// TODO use this as one big array desc set
-		// MxcCompositorNodeSetState  nodeSetState[MXC_NODE_CAPACITY];
-		MxcCompositorNodeSetState* pNodeSetMapped;
-		VkSharedBuffer             nodeSetBuffer;
-		VkDescriptorSet            nodeSet;
-
-		struct {
-			BLOCK_DECL(MxcSwapTexture, MXC_NODE_CAPACITY) swap;
-		} block;
-
-	} cst;
 
 #endif
 
