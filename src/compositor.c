@@ -321,6 +321,7 @@ static void CreateFinalBlitSetLayout(FinalBlitSetLayout* pLayout)
 			},                                                                      \
 		},                                                                          \
 	}
+
 #define BIND_WRITE_FINAL_BLIT_DST(_view)                                                              \
 	(VkWriteDescriptorSet) {                                                                          \
 		VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,                                                       \
@@ -548,7 +549,7 @@ CompositeLoop:
 						ray screenRay = rayFromScreenUV(mxcWindowInput.mouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
 
 						vec4  nodeOrigin = vec4MulMat4(pNodeCst->compositingNodeSetState.model, VEC4_IDENT);
-						Plane plane = {.origin = TO_VEC3(nodeOrigin), .normal = VEC3(0, 0, 1)};
+						Plane plane = {.origin = VEC3(nodeOrigin.x, nodeOrigin.y, nodeOrigin.z), .normal = VEC3(0, 0, 1)};
 
 						vec3 hitPoints[2];
 						if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) && rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
@@ -708,16 +709,16 @@ CompositeLoop:
 				vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
 				vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
 				for (int i = 0; i < CORNER_COUNT; ++i) {
-					vec4 model = VEC4(corners[i], 1.0f);
+					vec4 model = VEC4(corners[i].x, corners[i].y, corners[i].z, 1.0f);
 					vec4 world = vec4MulMat4(pNodeCst->compositingNodeSetState.model, model);
-					vec4 clip = vec4MulMat4(globSetState.view, world);
-					vec3 ndc = Vec4WDivide(vec4MulMat4(globSetState.proj, clip));
-					vec2 uv = UVFromNDC(ndc);
+					vec4 clip  = vec4MulMat4(globSetState.view, world);
+					vec3 ndc   = Vec4WDivide(vec4MulMat4(globSetState.proj, clip));
+					vec2 uv    = UVFromNDC(ndc);
 					uvMin.x = MIN(uvMin.x, uv.x);
 					uvMin.y = MIN(uvMin.y, uv.y);
 					uvMax.x = MAX(uvMax.x, uv.x);
 					uvMax.y = MAX(uvMax.y, uv.y);
-					pNodeCst->worldCorners[i] = TO_VEC3(world);
+					pNodeCst->worldCorners[i] = VEC3(world.x, world.y, world.z);
 					pNodeCst->uvCorners[i] = uv;
 				}
 				vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
@@ -726,7 +727,7 @@ CompositeLoop:
 
 				/* Update Interaction Line Segments */
 				{
-					constexpr color stateColors[] = {
+					static const color stateColors[] = {
 						[NODE_INTERACTION_STATE_NONE] = {{128, 128, 128, 255}},
 						[NODE_INTERACTION_STATE_HOVER] = {{128, 128, 255, 255}},
 						[NODE_INTERACTION_STATE_SELECT] = {{255, 255, 255, 255}},
@@ -808,7 +809,7 @@ CompositeLoop:
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, compTimeline);
 
 	vk.CmdSetViewport(gfxCmd, 0, 1, &(VkViewport){.width = windowExtent.x, .height = windowExtent.y, .maxDepth = 1.0f});
-	vk.CmdSetScissor(gfxCmd, 0, 1, &(VkRect2D){.extent = {.width = windowExtent.x, .height = windowExtent.y}});
+	vk.CmdSetScissor(gfxCmd,  0, 1, &(VkRect2D){.extent = {.width = windowExtent.x, .height = windowExtent.y}});
 	CmdBeginDepthRenderPass(gfxCmd, depthRenderPass, depthFramebuffer, VK_RENDER_PASS_CLEAR_COLOR, gfxFrameColorView, gfxFrameDepthView);
 
 	vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gfxPipeLayout, PIPE_SET_INDEX_NODE_GRAPHICS_GLOBAL, 1, &globalSet,        0, NULL);
@@ -981,9 +982,10 @@ CompositeLoop:
 
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipe);
 		CMD_BIND_DESCRIPTOR_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_GLOBAL, globalSet);
-		CMD_PUSH_DESCRIPTOR_SETS(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT,
+		CMD_PUSH_DESCRIPTOR_SETS2(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, finalBlitPipeLayout, PIPE_SET_INDEX_FINAL_BLIT_INOUT, {
 			BIND_WRITE_FINAL_BLIT_SRC_GRAPHICS_FRAMEBUFFER(hasGfx ? gfxFrameColorView : VK_NULL_HANDLE, hasComp ? compFrameColorView : VK_NULL_HANDLE),
-			BIND_WRITE_FINAL_BLIT_DST(pSwap->view));
+			BIND_WRITE_FINAL_BLIT_DST(pSwap->view),
+		});
 		vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 
 		CMD_IMAGE_BARRIERS2(gfxCmd,{

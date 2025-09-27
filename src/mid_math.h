@@ -67,60 +67,12 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 
 #undef VEC_UNION
 
-// todo need to do decide what to do here
-// I think we want a basic VEC2 then a more advanced TO_VEC2 for conversions
-#define VEC2(_x, _y) (vec2){{(_x), (_y)}}
-#define TO_VEC2_1(_arg0) _Generic((_arg0),   \
-	float: (vec2){{(_arg0), (_arg0)}},    \
-	int: (vec2){{(_arg0), (_arg0)}},      \
-	u32: (vec2){{(_arg0), (_arg0)}},      \
-	vec2: (vec2){{(_arg0).x, (_arg0).y}})
-#define TO_VEC2_2(_arg0, _1) _Generic((_arg0), \
-	float: (vec2){{(_arg0), (_1)}},      \
-	int: (vec2){{(_arg0), (_1)}},        \
-	u32: (vec2){{(_arg0), (_1)}})
-#define TO_VEC2_MACRO(_1, _2, NAME, ...) NAME
-#define TO_VEC2(...) VEC2_MACRO(__VA_ARGS__, TO_VEC2_2, TO_VEC2_1)(__VA_ARGS__)
-
-#define IVEC2(x, y) (ivec2) {{x, y}}
-
-#define VEC3(x, y, z) (vec3) {{x, y, z}}
-#define TO_VEC3_1(_arg0) ({                                   \
-	auto _val0 = (_arg0);                                     \
-	_Generic((_val0),                                         \
-		vec2: VEC3(_val0.x, _val0.y, 0.0f),                   \
-		vec3: VEC3(_val0.x, _val0.y, _val0.z),                \
-		vec4: VEC3(_val0.x, _val0.y, _val0.z),                \
-		default: assert(!"TO_VEC3 Unsupported Conversion!")); \
-})
-#define TO_VEC3_2(_arg0, _arg1) ({            \
-	auto _val0 = (_arg0);                     \
-	auto _val1 = (_arg1);                     \
-	_Generic((_val0),                         \
-		vec2: VEC3(_val0.x, _val0.y, _val1)); \
-})
-#define TO_VEC3_MACRO(_1, _2, NAME, ...) NAME
-#define TO_VEC3(...) TO_VEC3_MACRO(__VA_ARGS__, TO_VEC3_2, TO_VEC3_1)(__VA_ARGS__)
-
-
-#define IVEC3(x, y, z) (ivec3) {{x, y, z}}
+#define VEC2(x, y)        (vec2)  {{x, y}}
+#define VEC3(x, y, z)     (vec3)  {{x, y, z}}
+#define VEC4(x, y, z,  w) (vec4)  {{x, y, z, w}}
+#define IVEC2(x, y)       (ivec2) {{x, y}}
+#define IVEC3(x, y, z)    (ivec3) {{x, y, z}}
 #define IVEC4(x, y, z, w) (ivec4) {{x, y, z, w}}
-
-#define VEC4_MACRO(_1, _2, _3, _4, NAME, ...) NAME
-
-#define VEC4_1(_v) _Generic((_v),               \
-	f32: (vec4){{(_v).x, 0.0f, 0.0f, 0.0f}},    \
-	vec2: (vec4){{(_v).x, (_v).y, 0.0f, 0.0f}}, \
-	vec3: (vec4){{(_v).x, (_v).y, (_v).z, 0.0f}})
-#define VEC4_2(_v, _arg0) _Generic((_v),              \
-	f32: (vec4){{(_v).x, (_arg0), (_arg0), (_arg0)}}, \
-	vec2: (vec4){{(_v).x, (_v).y, (_arg0), (_arg0)}}, \
-	vec3: (vec4){{(_v).x, (_v).y, (_v).z, (_arg0)}})
-#define VEC4_3(_v, _arg0, _1) _Generic((_v), \
-	f32: (vec4){{(_v).x, _arg0, _1, _1}},    \
-	vec2: (vec4){{(_v).x, (_v).y, (_arg0), (_1)}})
-#define VEC4_4(_arg0, _1, _2, _3) (vec4){{(_arg0), (_1), (_2), (_3)}}
-#define VEC4(...) VEC4_MACRO(__VA_ARGS__, VEC4_4 ,VEC4_3, VEC4_2, VEC4_1)(__VA_ARGS__)
 
 #define MAT_UNION(name, type, simd_type, align, count, vec_name, ...) \
 	typedef union __attribute((aligned(align))) name {                \
@@ -263,12 +215,12 @@ MATH_INLINE float vec4Mag(vec4 v) {
 
 MATH_INLINE vec2 vec2Sub(vec2 a, vec2 b) {
 	float2_vec diff = a.vec - b.vec;
-	return VEC2(diff[0], diff[1]);
+	return (vec2)diff;
 }
 
 MATH_INLINE vec3 vec3Sub(vec3 a, vec3 b) {
 	float3_vec diff = a.vec - b.vec;
-	return VEC3(diff[0], diff[1], diff[2]);
+	return (vec3)diff;
 }
 
 MATH_INLINE vec4 vec4Sub(vec4 a, vec4 b) {
@@ -647,16 +599,19 @@ typedef struct Plane {
 
 MATH_INLINE ray rayFromScreenUV(vec2 uv, mat4 invProj, mat4 invView, mat4 invViewProj)
 {
-	vec2 ndc = (vec2){.vec = uv.vec * 2.0f - 1.0f};
-	vec4 clipRayPos = VEC4(ndc.x, ndc.y, 0.0f, 1.0f);
+	vec2 ndc          = (vec2)(uv.vec * 2.0f - 1.0f);
+	vec4 clipRayPos   = VEC4(ndc.x, ndc.y, 0.0f, 1.0f);
 	vec4 clipWorldPos = vec4MulMat4(invViewProj, clipRayPos);
 
-	vec4 clipRayDir = VEC4(ndc.x, ndc.y, 1.0f, 1.0f);
-	vec4 viewSpace = vec4MulMat4(invProj, clipRayDir);
-	vec4 viewDir = VEC4(viewSpace.x, viewSpace.y, 1, 0);
+	vec4 clipRayDir  = VEC4(ndc.x, ndc.y, 1.0f, 1.0f);
+	vec4 viewSpace   = vec4MulMat4(invProj, clipRayDir);
+	vec4 viewDir     = VEC4(viewSpace.x, viewSpace.y, 1, 0);
 	vec4 worldRayDir = vec4MulMat4(invView, viewDir);
 
-	return (ray) {.origin = TO_VEC3(clipWorldPos), .dir = TO_VEC3(worldRayDir)};
+	return (ray){
+		.origin = VEC3(clipWorldPos.x, clipWorldPos.y, clipWorldPos.z),
+		.dir    = VEC3(worldRayDir.x, worldRayDir.y, worldRayDir.z),
+	};
 }
 
 MATH_INLINE bool rayIntersetPlane(ray ray, Plane plane, vec3* outPoint)

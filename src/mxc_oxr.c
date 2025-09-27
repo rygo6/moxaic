@@ -177,7 +177,7 @@ void xrGetCompositorTimelineValue(XrSessionId sessionId, bool synchronized, uint
 
 void xrProgressCompositorTimelineValue(XrSessionId sessionId, uint64_t timelineValue, bool synchronized)
 {
-	MxcNodeShared*  pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[sessionId];
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
 
@@ -193,18 +193,23 @@ XrTime xrGetFrameInterval(XrSessionId sessionId, bool synchronized)
 void xrGetHeadPose(XrSessionId sessionId, XrEulerPosef* pPose)
 {
 	MxcNodeShared*  pNodeShared = node.pShared[sessionId];
-	pPose->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
+
+	pPose->euler    = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
 }
 
 void xrGetEyeView(XrSessionId sessionId, uint8_t viewIndex, XrEyeView *pEyeView)
 {
 	MxcNodeShared* pNodeShared = node.pShared[sessionId];
-	pEyeView->euler = *(XrVector3f*)&pNodeShared->cameraPose.euler;
+
+	pEyeView->euler    = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
-	pEyeView->fovRad = (XrVector2f){pNodeShared->camera.yFovRad, pNodeShared->camera.yFovRad};
-	pEyeView->upperLeftClip = *(XrVector2f*)&pNodeShared->clip.ulUV;
+	pEyeView->fovRad   = (XrVector2f){pNodeShared->camera.yFovRad, pNodeShared->camera.yFovRad};
+
+	pEyeView->upperLeftClip  = *(XrVector2f*)&pNodeShared->clip.ulUV;
 	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->clip.lrUV;
+
+	// TODO this is to debug
 	if (viewIndex == 1)
 		pEyeView->position.x += 0.1f;
 }

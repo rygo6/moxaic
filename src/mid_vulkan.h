@@ -633,6 +633,11 @@ enum {
 	vk.CmdPushDescriptorSetKHR(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(pushSets), pushSets); \
 })
 
+#define CMD_PUSH_DESCRIPTOR_SETS2(_commandBuffer, _pipelineBindPoint, _layout, _set, ...) ({                  \
+	VkWriteDescriptorSet pushSets[] = __VA_ARGS__;                                                            \
+	vk.CmdPushDescriptorSetKHR(_commandBuffer, _pipelineBindPoint, _layout, _set, COUNT(pushSets), pushSets); \
+})
+
 #define VK_UPDATE_DESCRIPTOR_SETS(...) ({                                             \
 	VkWriteDescriptorSet writeSets[] = {__VA_ARGS__};                                 \
 	vk.UpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL); \

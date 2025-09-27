@@ -8,22 +8,27 @@
 #include "node_thread.h"
 #include "compositor.h"
 
-////
-//// Loop
-////
+/*
+ * Loop
+ */
 void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 {
 	LOG("Running Thread Node %d\n", hNode);
 
-	auto pNodeCtx = &node.context[hNode];
-	auto pNodeShr = node.pShared[hNode];
+	MxcNodeContext* pNodeCtx = &node.context[hNode];
+	MxcNodeShared*  pNodeShr = node.pShared[hNode];
 
-	///
-	/// Extract Local State
+	REQUIRE(pNodeCtx != NULL, "MxcNodeContext is null!");
+	REQUIRE(pNode    != NULL, "MxcNodeThread is null!");
+	REQUIRE(pNodeShr != NULL, "MxcNodeShared is null!");
+
+	/*
+	 * Extract Local State
+	 */
 
 	// Node Context Extract
-	VkCommandBuffer gfxCmd = pNodeCtx->thread.gfxCmd;
-	VkSemaphore nodeTimeline = pNodeCtx->thread.nodeTimeline;
+	VkCommandBuffer gfxCmd       = pNodeCtx->thread.gfxCmd;
+	VkSemaphore     nodeTimeline = pNodeCtx->thread.nodeTimeline;
 
 	// Compositor Context Extract
 	VkSemaphore cstTimeline = compositorContext.timeline;
@@ -33,7 +38,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	EXTRACT_FIELD(&vk.context, depthRenderPass);
 	EXTRACT_FIELD(&vk.context, depthFramebuffer);
 	VkPipelineLayout pipeLayout = vk.context.trianglePipeLayout;
-	VkPipeline       pipe = vk.context.trianglePipe;
+	VkPipeline       pipe       = vk.context.trianglePipe;
 
 	// Node Extract
 	EXTRACT_FIELD(pNode, globalSet);
@@ -42,18 +47,19 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	EXTRACT_FIELD(pNode, checkerMaterialSet);
 	EXTRACT_FIELD(pNode, sphereObjectSet);
 
-	u32          sphereIndexCount = pNode->sphereMesh.offsets.indexCount;
-	VkBuffer     sphereBuffer = pNode->sphereMesh.buf;
-	VkDeviceSize sphereIndexOffset = pNode->sphereMesh.offsets.indexOffset;
+	u32          sphereIndexCount   = pNode->sphereMesh.offsets.indexCount;
+	VkBuffer     sphereBuffer       = pNode->sphereMesh.buf;
+	VkDeviceSize sphereIndexOffset  = pNode->sphereMesh.offsets.indexOffset;
 	VkDeviceSize sphereVertexOffset = pNode->sphereMesh.offsets.vertexOffset;
 
-	VkImage depthFramebufferImage = pNode->depthFramebufferTexture.image;
-	VkImageView depthFramebufferView = pNode->depthFramebufferTexture.view;
+	VkImage     depthFramebufferImage = pNode->depthFramebufferTexture.image;
+	VkImageView depthFramebufferView  = pNode->depthFramebufferTexture.view;
 
-	///
-	/// Setup Initial State
+	/*
+	 * Setup Initial State
+	 */
 
-	// Global Set Initial State
+	/* Global Set Initial State */
 	VkGlobalSetState globSetState = {};
 	vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, &globSetState);
 	memcpy(pGlobalSetMapped, &globSetState, sizeof(VkGlobalSetState));
@@ -61,7 +67,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	ASSERT(cstTimeline != NULL, "Compositor Timeline Handle is nulL!");
 	ASSERT(nodeTimeline != NULL, "Node Timeline Handle is nulL!");
 
-	// Swap Initial State
+	/* Swap Initial State */
 	struct {
 		VkImageView colorView;
 		VkImage     colorImage;
@@ -116,9 +122,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 		}
 	}
 
-	// Timeline Initial State
-	u64 nodeTimelineValue = 0;
-
+	/* Timeline Initial State */
 	{
 		uint64_t compositorTimelineValue;
 		VK_CHECK(vk.GetSemaphoreCounterValue(device, cstTimeline, &compositorTimelineValue));
@@ -127,31 +131,38 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 		pNodeShr->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 	}
 
+	u64 nodeTimelineValue = 0;
+
 	// Send Open Node IPC call
 	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
-	///
-	/// Main Loop
+	/*
+	 * Main Loop
+	 */
 NodeLoop:
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
 
-	////
-	//// MXC_CYCLE_UPDATE_WINDOW_STATE
+	/*
+	 * MXC_CYCLE_UPDATE_WINDOW_STATE
+	 */
 
-	////
-	//// MXC_CYCLE_PROCESS_INPUT
+	/*
+	 * MXC_CYCLE_PROCESS_INPUT
+	 */
 
-	////
-	//// MXC_CYCLE_UPDATE_NODE_STATES
+	/*
+	 * MXC_CYCLE_UPDATE_NODE_STATES
+	 */
 
 	// Must wait until after node states are updated to render
 
-	////
-	//// MXC_CYCLE_COMPOSITOR_RECORD
+	/*
+	 * MXC_CYCLE_COMPOSITOR_RECORD
+	 */
 	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
 
-	// Update Global State
+	/* Update Global State */
 	atomic_thread_fence(memory_order_acquire);
 	vkUpdateGlobalSetView((pose){
 		.pos = (vec3)(pNodeShr->cameraPose.pos.vec - pNodeShr->rootPose.pos.vec),
@@ -165,7 +176,7 @@ NodeLoop:
 
 	int iSwapImg = nodeTimelineValue % VK_SWAP_COUNT;
 
-	// Acquire Swap Barrier
+	/* Acquire Swap Barrier */
 	CMD_IMAGE_BARRIERS2(gfxCmd, {
 		{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -189,7 +200,7 @@ NodeLoop:
 		},
 	});
 
-	// Begin Render Pass
+	/* Begin Render Pass */
 //	VkViewport viewport = {.x = -pNodeShr->clip.ulUV.x * DEFAULT_WIDTH,	.y = -pNodeShr->clip.ulUV.y * DEFAULT_HEIGHT, .width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f};
 //	VkRect2D scissor = {.offset = {.x = 0, .y = 0}, .extent = {.width = pNodeShr->globalSetState.framebufferSize.x, .height = pNodeShr->globalSetState.framebufferSize.y}};
 	VkViewport viewport = {.width = DEFAULT_WIDTH, .height = DEFAULT_HEIGHT, .maxDepth = 1.0f};
@@ -203,9 +214,9 @@ NodeLoop:
 	// Draw
 	{
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_GLOBAL, 1, &globalSet, 0, NULL);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_GLOBAL,   1, &globalSet,          0, NULL);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_MATERIAL, 1, &checkerMaterialSet, 0, NULL);
-		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_OBJECT, 1, &sphereObjectSet, 0, NULL);
+		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeLayout, VK_PIPE_SET_INDEX_OBJECT,   1, &sphereObjectSet,    0, NULL);
 
 		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){sphereBuffer}, (VkDeviceSize[]){sphereVertexOffset});
 		vk.CmdBindIndexBuffer(gfxCmd, sphereBuffer, sphereIndexOffset, VK_INDEX_TYPE_UINT16);
@@ -214,7 +225,7 @@ NodeLoop:
 
 	vk.CmdEndRenderPass(gfxCmd);
 
-	// Copy Depth To Swap
+	/* Copy Depth To Swap */
 	CMD_IMAGE_BARRIERS2(gfxCmd, {
 		{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -240,7 +251,7 @@ NodeLoop:
 		}
 	});
 
-	// Release Swap Barrier
+	/* Release Swap Barrier */
 	CMD_IMAGE_BARRIERS2(gfxCmd, {
 		{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -262,7 +273,7 @@ NodeLoop:
 
 	vk.EndCommandBuffer(gfxCmd);
 
-	// Submit
+	/* Submit */
 	nodeTimelineValue++;
 
 	vkEnqueueCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, (VkQueuedCommandBuffer){
@@ -272,11 +283,11 @@ NodeLoop:
 	});
 	vkTimelineWait(device, nodeTimelineValue, nodeTimeline);
 
-	// Update Camera Z
+	/* Update Camera Z */
 	pNodeShr->processState.depthNearZ = pNodeShr->camera.zFar; // reverse Z
 	pNodeShr->processState.depthFarZ = pNodeShr->camera.zNear;
 
-	// Signal Updated to Compositor
+	/* Signal Updated to Compositor */
 	pNodeShr->timelineValue = nodeTimelineValue;
 	pNodeShr->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShr->compositorCycleSkip;
 	atomic_thread_fence(memory_order_release);
@@ -285,9 +296,9 @@ NodeLoop:
 	goto NodeLoop;
 }
 
-////
-//// Create
-////
+/*
+ * Create
+ */
 static void Create(NodeHandle hNode, MxcNodeThread* pNode)
 {
 	LOG("Creating Thread Node %d\n", hNode);
