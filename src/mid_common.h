@@ -78,7 +78,7 @@ extern void Panic(const char* file, int line, const char* message);
 	}
 
 #define LOG(...) printf(__VA_ARGS__)
-#define LOG_ERROR(...) fprintf(stderr, "Error!!! " __VA_ARGS__)
+#define LOG_ERROR(...) fprintf(stdout, "Error!!! " __VA_ARGS__)
 
 #define LOG_ONCE(...)               \
 	({                              \

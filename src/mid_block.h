@@ -48,6 +48,11 @@ typedef block_handle block_h; // lets go to this
 		return error;               \
 	}
 
+typedef struct block_handle2{ // do this?
+	u16 index      : HANDLE_INDEX_BIT_COUNT;
+	u16 generation : HANDLE_GENERATION_BIT_COUNT;
+}block_handle2;
+
 //////////
 //// Block
 ////
@@ -108,27 +113,32 @@ static block_handle BlockCountOccupied(int occupiedCount, bitset_t* pOccupiedSet
 		ASSERT(_hash != 0, "Trying to search for 0 hash!");            \
 		BlockFindByHash(sizeof(_.keys), _.keys, _.generations, _hash); \
 	})
-#define BLOCK_HANDLE(_, _p)                                                                                    \
-	({                                                                                                         \
-		ASSERT(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks), #_ ": Getting block handle. Out of range."); \
-		(block_handle)(HANDLE_GENERATION_SET((_p - _.blocks), _.generations[(_p - _.blocks)]));                \
+#define BLOCK_HANDLE(_block, _p)                                                                                                   \
+	({                                                                                                                             \
+		ASSERT(_p >= _block.blocks && _p < _block.blocks + COUNT(_block.blocks), #_block ": Getting block handle. Out of range."); \
+		(block_handle)(HANDLE_GENERATION_SET((_p - _block.blocks), _block.generations[(_p - _block.blocks)]));                     \
 	})
-#define BLOCK_KEY(_, _p)                                                                                    \
-	({                                                                                                      \
-		ASSERT(_p >= _.blocks && _p < _.blocks + COUNT(_.blocks), #_ ": Getting block key. Out of range."); \
-		(block_key)(_.keys[_p - _.blocks]);                                                                 \
+#define BLOCK_HANDLE_INDEX(_block, _index)                                                        \
+	({                                                                                            \
+		ASSERT((_index) < COUNT(_block.blocks), #_block ": Getting block handle. Out of range."); \
+		(block_handle)(HANDLE_GENERATION_SET((_index), _block.generations[(_index)]));            \
 	})
-#define BLOCK_PTR(_, _handle)                                                     \
-	({                                                                            \
-		STATIC_ASSERT_TYPE(_handle, block_handle);                                \
-		ASSERT_HANDLE_RANGE(_, _handle, #_ ": Getting block ptr. Out of range."); \
-		&_.blocks[HANDLE_INDEX(_handle)];                                         \
+#define BLOCK_KEY(_block, _p)                                                                                                   \
+	({                                                                                                                          \
+		ASSERT(_p >= _block.blocks && _p < _block.blocks + COUNT(_block.blocks), #_block ": Getting block key. Out of range."); \
+		(block_key)(_block.keys[_p - _block.blocks]);                                                                           \
 	})
-#define BLOCK_OCCUPIED(_, _handle)                                                      \
-	({                                                                                  \
-		STATIC_ASSERT_TYPE(_handle, block_handle);                                      \
-		ASSERT_HANDLE_RANGE(_, _handle, #_ ": Checking block occupied. Out of range."); \
-		BITTEST(_.occupied, _handle);                                                   \
+#define BLOCK_PTR(_block, _handle)                                                          \
+	({                                                                                      \
+		STATIC_ASSERT_TYPE(_handle, block_handle);                                          \
+		ASSERT_HANDLE_RANGE(_block, _handle, #_block ": Getting block ptr. Out of range."); \
+		&_block.blocks[HANDLE_INDEX(_handle)];                                              \
+	})
+#define BLOCK_OCCUPIED(_block, _handle)                                                           \
+	({                                                                                            \
+		STATIC_ASSERT_TYPE(_handle, block_handle);                                                \
+		ASSERT_HANDLE_RANGE(_block, _handle, #_block ": Checking block occupied. Out of range."); \
+		BITTEST(_block.occupied, HANDLE_INDEX(_handle));                                          \
 	})
 #define BLOCK_COUNT(_) BitCountOnes(sizeof(_.occupied), (bitset_t*)&_.occupied)
 

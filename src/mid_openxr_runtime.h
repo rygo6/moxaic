@@ -2,6 +2,7 @@
 //// Mid OpenXR Runtime Header
 ////
 
+#include <_mingw_mac.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
@@ -306,11 +307,12 @@ typedef struct XrEyeView {
 } XrEyeView;
 void xrGetEyeView(XrSessionId sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView);
 
-XrTime xrGetFrameInterval(XrSessionId sessionIndex, bool synchronized);
+XrTime xrGetFrameInterval(XrSessionId sessionIndex);
 
 static inline XrTime xrHzToXrTime(double hz)
 {
-	return (XrTime)(hz / 1e9);
+	static const double oneSecondInNanoSeconds = 1e9;
+	return (XrTime)(oneSecondInNanoSeconds / hz);
 }
 
 /*
@@ -504,7 +506,6 @@ typedef struct Session {
 	//// Swap
 	CACHE_ALIGN
 	swap_h      hSwap;
-//	XrSwapType  swapType;
 	XrSwapClip  swapClip;
 
 	//// Timing
@@ -512,9 +513,13 @@ typedef struct Session {
 	XrTime frameWaited;
 	XrTime frameBegan;
 	XrTime frameEnded;
-	XrTime predictedDisplayTimes[3];
-	XrTime lastBeginDisplayTime;
+
+//	XrTime predictedDisplayTimes[3];
+//	XrTime lastBeginDisplayTime;
+
+//	XrTime lastPredictedDisplayTime;
 	XrTime lastDisplayTime;
+
 	u32    synchronizedFrameCount;
 	u64    sessionTimelineValue;
 
@@ -526,8 +531,8 @@ typedef struct Session {
 
 	//// State
 	CACHE_ALIGN
-	bool running: 1;
-	bool exiting: 1;
+	bool running;
+	bool exiting;
 
 	//// Events
 	CACHE_ALIGN
@@ -621,6 +626,15 @@ static Space*  SpacePtr(space_h handle) { return BLOCK_PTR(xr.block.space, handl
 
 #define B xr.block
 
+#define XR_BLOCK_PTR(_opaqueHandle)  _Generic(_opaqueHandle, \
+	XrSession: BLOCK_PTR(xr.block.session, (block_handle)(u16)(u64)_opaqueHandle));
+
+#define XR_BLOCK_H(_opaqueHandle)  (block_handle)(u64)_opaqueHandle
+
+#define XR_OPAQUE_H(_type, _handle) (XrSession)((u64)_type << 32 | (u64)hSession);
+
+#define XR_OPAQUE_H_TYPE(_handle) (XrObjectType)(_handle >> 32);
+
 ////
 //// Utility
 ////
@@ -663,12 +677,11 @@ static XrTime xrGetTime()
 	return xrTime;
 }
 
-// I don't think I need this anymore
 static inline XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
 {
 	// this should be pthreads since it doesnt happen that much and cross platform is probably fine
 	while (1) {
-		XrTime currentTime = __atomic_load_n(pSharedTime, __ATOMIC_ACQUIRE);
+		XrTime currentTime = atomic_load_explicit(pSharedTime, memory_order_acquire);
 		if (currentTime >= waitTime) {
 			return XR_SUCCESS;
 		}
@@ -682,7 +695,7 @@ static inline XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
 
 static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 {
-	__atomic_store_n(pSharedTime, signalTime, __ATOMIC_RELEASE);
+	atomic_store_explicit(pSharedTime, signalTime, memory_order_release);
 	WakeByAddressAll(pSharedTime);
 }
 
@@ -704,7 +717,6 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 	{                              \
 		static int logged = false; \
 		if (!logged) {             \
-			logged = true;         \
 			LOG_METHOD(_method);   \
 		}                          \
 	}
@@ -1232,9 +1244,11 @@ XR_PROC xrPollEvent(XrInstance         instance,
 	CHECK_INSTANCE(instance);
 
 	// technically could be worth iterating map in instance?
-	for (session_h hSession = 0; hSession < XR_SESSIONS_CAPACITY; ++hSession) {
+	for (u16 iSession = 0; iSession < XR_SESSIONS_CAPACITY; ++iSession) {
 
-		if (!BLOCK_OCCUPIED(B.session, hSession))
+		session_h hSession = BLOCK_HANDLE_INDEX(xr.block.session, iSession);
+
+		if (!BLOCK_OCCUPIED(xr.block.session, hSession))
 			continue;
 
 		Session* pSession = BLOCK_PTR(B.session, hSession);
@@ -1245,7 +1259,8 @@ XR_PROC xrPollEvent(XrInstance         instance,
 			eventData->type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED;
 
 			XrEventDataSessionStateChanged* pEventData = (XrEventDataSessionStateChanged*)eventData;
-			pEventData->session = (XrSession)pSession;
+			pEventData->session = XR_OPAQUE_H(XR_OBJECT_TYPE_SESSION, hSession);
+			LOG("pEventData->session %llu\n", (u64)pEventData->session);
 			pEventData->time = xrGetTime();
 
 			// Must cycle through Focus, Visible, Synchronized if exiting.
@@ -1384,7 +1399,7 @@ XR_PROC xrPollEvent(XrInstance         instance,
 			auto pPendingSpace = BLOCK_PTR(B.space, pSession->hPendingReferenceSpace);
 
 			auto pEventData = (XrEventDataReferenceSpaceChangePending*)eventData;
-			pEventData->session = (XrSession)pSession;
+			pEventData->session = XR_OPAQUE_H(XR_OBJECT_TYPE_SESSION, hSession);
 			pEventData->referenceSpaceType = pPendingSpace->reference.spaceType;
 			pEventData->changeTime = xrGetTime();
 			pEventData->poseValid = XR_TRUE;
@@ -1402,7 +1417,7 @@ XR_PROC xrPollEvent(XrInstance         instance,
 
 			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
 			auto pEventData = (XrEventDataInteractionProfileChanged*)eventData;
-			pEventData->session = (XrSession)pSession;
+			pEventData->session = XR_OPAQUE_H(XR_OBJECT_TYPE_SESSION, hSession);
 
 			pSession->hActiveInteractionProfile = pSession->hPendingInteractionProfile;
 
@@ -1419,7 +1434,7 @@ XR_PROC xrPollEvent(XrInstance         instance,
 			eventData->type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT;
 
 			auto pEventData = (XrEventDataUserPresenceChangedEXT*)eventData;
-			pEventData->session = (XrSession)pSession;
+			pEventData->session = XR_OPAQUE_H(XR_OBJECT_TYPE_SESSION, hSession);
 			pEventData->isUserPresent = pSession->pendingIsUserPresent;
 
 			pSession->activeIsUserPresent = pSession->pendingIsUserPresent;
@@ -1617,8 +1632,8 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 	XrSessionId sessionIndex; xrClaimSessionId(&sessionIndex);
 	LOG("Claimed SessionIndex %d\n", sessionIndex);
 
-	session_h hSession = BLOCK_CLAIM(B.session, sessionIndex);
-	Session*  pSession = BLOCK_PTR(B.session, hSession);
+	session_h hSession = BLOCK_CLAIM(xr.block.session, sessionIndex);
+	Session*  pSession = BLOCK_PTR(xr.block.session, hSession);
 	memset(pSession, 0, sizeof(Session));
 	pSession->index = sessionIndex;
 
@@ -1638,7 +1653,6 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 			pSession->binding.gl.hDC = binding->hDC;
 			pSession->binding.gl.hGLRC = binding->hGLRC;
 
-			*session = (XrSession)pSession;
 			break;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR: {
@@ -1694,8 +1708,6 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 			pSession->binding.d3d11.compositorFence = compositorFence;
 			pSession->binding.d3d11.sessionFence = sessionFence;
 
-			*session = (XrSession)pSession;
-
 			break;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: {
@@ -1707,8 +1719,6 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 			pSession->binding.vk.device = binding->device;
 			pSession->binding.vk.queueFamilyIndex = binding->queueFamilyIndex;
 			pSession->binding.vk.queueIndex = binding->queueIndex;
-
-			*session = (XrSession)pSession;
 
 			break;
 		}
@@ -1729,7 +1739,9 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 	pSession->activeIsUserPresent = XR_FALSE;
 	pSession->pendingIsUserPresent = XR_TRUE;
 
-	LOG("%d sessions in use\n", BLOCK_COUNT(B.session));
+	*session = XR_OPAQUE_H(XR_OBJECT_TYPE_SESSION, hSession);
+
+	LOG("Created session %llu. %d sessions in use\n", (u64)*session, BLOCK_COUNT(B.session));
 	return XR_SUCCESS;
 }
 
@@ -1737,8 +1749,8 @@ XR_PROC xrDestroySession(XrSession session)
 {
 	LOG_METHOD(xrDestroySession);
 
-	Session*  pSession = (Session*)session;
-	session_h hSession = BLOCK_HANDLE(B.session, pSession);
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 	BLOCK_RELEASE(B.session, hSession);
 
 	xrReleaseSessionId(pSession->index);
@@ -1755,7 +1767,8 @@ XR_PROC xrEnumerateReferenceSpaces(
 {
 	LOG_METHOD(xrEnumerateReferenceSpaces);
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 	static const XrReferenceSpaceType supportedSpaces[] = {
 		XR_REFERENCE_SPACE_TYPE_VIEW,
@@ -1789,7 +1802,8 @@ XR_PROC xrCreateReferenceSpace(XrSession                         session,
 		EXPAND_STRUCT(XrQuaternionf, createInfo->poseInReferenceSpace.orientation));
 	assert(createInfo->next == NULL);
 
-	auto pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 	space_h hSpace = SpaceClaim(0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
@@ -1829,7 +1843,8 @@ XR_PROC xrGetReferenceSpaceBoundsRect(XrSession            session,
 			break;
 	}
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 	xrGetReferenceSpaceBounds(pSession->index, bounds);
 
 	LOG("xrGetReferenceSpaceBoundsRect %s\n	windowWidth: %f\n	windowHeight: %f\n",
@@ -1857,7 +1872,8 @@ XR_PROC xrCreateActionSpace(
 	pSpace->action.hAction = BLOCK_HANDLE(B.action, (Action*)createInfo->action);
 	pSpace->action.hSubactionPath = BLOCK_HANDLE(B.path, (Path*)createInfo->subactionPath);
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 	MAP_ADD(pSession->actionSpaces, hSpace, 0);
 
 	*space = (XrSpace)pSpace;
@@ -2199,9 +2215,9 @@ XR_PROC xrEnumerateSwapchainFormats(
 {
 	LOG_METHOD(xrEnumerateSwapchainFormats);
 
-	auto pSess = (Session*)session;
-	bHnd hSess = BLOCK_HANDLE(B.session, pSess);
-	HANDLE_CHECK(hSess, XR_ERROR_HANDLE_INVALID);
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
+	HANDLE_CHECK(hSession, XR_ERROR_HANDLE_INVALID);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:
@@ -2292,8 +2308,8 @@ XR_PROC xrCreateSwapchain(
 		return XR_ERROR_VALIDATION_FAILURE;
 	}
 
-	auto pSess = (Session*)session;
-	bHnd hSess = BLOCK_HANDLE(B.session, pSess);
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 //	XrSwapConfig swapConfig; xrSwapConfig(pSess->systemId, &swapConfig);
 //
@@ -2323,7 +2339,7 @@ XR_PROC xrCreateSwapchain(
 	Swapchain* pSwap = BLOCK_PTR(B.swap, hSwap);
 	XrSwapchainId iNodeSwap = HANDLE_INDEX(hSwap);
 
-	pSwap->hSession = hSess;
+	pSwap->hSession = hSession;
 	pSwap->output = output;
 	pSwap->info = (XrSwapchainInfo){
 		.createFlags = createInfo->createFlags,
@@ -2336,7 +2352,7 @@ XR_PROC xrCreateSwapchain(
 		.arraySize = createInfo->arraySize,
 		.mipCount = createInfo->mipCount,
 	};
-	xrCreateSwapchainImages(pSess->index, &pSwap->info, iNodeSwap);
+	xrCreateSwapchainImages(pSession->index, &pSwap->info, iNodeSwap);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -2357,13 +2373,13 @@ XR_PROC xrCreateSwapchain(
 		}
 		case XR_GRAPHICS_API_D3D11_4: {
 			LOG("Creating D3D11 Swap\n");
-			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
-			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
+			ID3D11Device5* device5 = pSession->binding.d3d11.device5;
+			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
 			for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 				switch (output) {
 					case XR_SWAP_OUTPUT_COLOR:
 						HANDLE colorHandle;
-						xrGetSwapchainImportedImage(pSess->index, iNodeSwap, iImg, &colorHandle);
+						xrGetSwapchainImportedImage(pSession->index, iNodeSwap, iImg, &colorHandle);
 						ASSERT(colorHandle != NULL, "colorHandle == NULL");
 						LOG("Importing d3d11 color viewSwaps. Device: %p Handle: %p\n", (void*)device5, colorHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
@@ -2374,7 +2390,7 @@ XR_PROC xrCreateSwapchain(
 						break;
 					case XR_SWAP_OUTPUT_DEPTH:
 						HANDLE depthHandle;
-						xrGetSwapchainImportedImage(pSess->index, iNodeSwap, iImg, &depthHandle);
+						xrGetSwapchainImportedImage(pSession->index, iNodeSwap, iImg, &depthHandle);
 						ASSERT(depthHandle != NULL, "depthHandle == NULL");
 						LOG("Importing d3d11 transferTexture viewSwaps. Device: %p Handle: %p\n", (void*)device5, depthHandle);
 						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, depthHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
@@ -2567,22 +2583,23 @@ XR_PROC xrBeginSession(
 	LOG_METHOD_ONCE(xrBeginSession);
 	LogNextChain(beginInfo->next);
 
-	auto pSess = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
-	if (pSess->running) {
+	if (pSession->running) {
 		LOG_ERROR("XR_ERROR_SESSION_RUNNING\n");
 		return XR_ERROR_SESSION_RUNNING;
 	}
 
-	if (pSess->activeSessionState != XR_SESSION_STATE_READY) {
+	if (pSession->activeSessionState != XR_SESSION_STATE_READY) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_READY\n");
 		return XR_ERROR_SESSION_NOT_READY;
 	}
 
-	pSess->running = true;
-	pSess->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
+	pSession->running = true;
+	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 
-	switch (pSess->primaryViewConfigurationType) {
+	switch (pSession->primaryViewConfigurationType) {
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
 //			xrSetSwapTypeAndUsage(pSess->index, XR_SWAP_TYPE_MONO_SINGLE, XR_SWAP_USAGE_COLOR_AND_DEPTH);
 			break;
@@ -2594,9 +2611,15 @@ XR_PROC xrBeginSession(
 	}
 
 	switch (xr.instance.graphicsApi) {
-		case XR_GRAPHICS_API_OPENGL:    break;
-		case XR_GRAPHICS_API_VULKAN:    break;
-		case XR_GRAPHICS_API_D3D11_4:   break;
+		case XR_GRAPHICS_API_OPENGL:
+		case XR_GRAPHICS_API_VULKAN:
+			PANIC("Graphics API not implemented.\n");
+			break;
+		case XR_GRAPHICS_API_D3D11_4:   {
+			u64 initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
+			xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
+			break;
+		}
 		default:
 			LOG_ERROR("Graphics API not supported.\n");
 			return XR_ERROR_RUNTIME_FAILURE;
@@ -2619,7 +2642,8 @@ XR_PROC xrEndSession(
 {
 	LOG_METHOD(xrEndSession);
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 	if (!pSession->running) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
@@ -2642,7 +2666,8 @@ XR_PROC xrRequestExitSession(
 {
 	LOG_METHOD(xrRequestExitSession);
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 	if (!pSession->running) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
@@ -2655,6 +2680,7 @@ XR_PROC xrRequestExitSession(
 	return XR_SUCCESS;
 }
 
+
 XR_PROC xrWaitFrame(
 	XrSession              session,
 	const XrFrameWaitInfo* frameWaitInfo,
@@ -2665,41 +2691,23 @@ XR_PROC xrWaitFrame(
 	if (frameWaitInfo != NULL)
 		assert(frameWaitInfo->next == NULL);
 
-	auto pSess = (Session*)session;
-	if (!pSess->running) {
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
+	if (!pSession->running) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
 
-	if (pSess->frameBegan != pSess->frameWaited) {
-		LOG_ERROR("XR_ERROR_VALIDATION_FAILURE frameBegan: %llu != frameWaited: %llu! Difference: %llu\n",
-			pSess->frameBegan, pSess->frameWaited, pSess->frameWaited - pSess->frameBegan);
-		return XR_ERROR_VALIDATION_FAILURE;
-	}
-
-	if (pSess->lastDisplayTime == 0) {
-		uint64_t initialTimelineValue;
-		switch (xr.instance.graphicsApi) {
-			case XR_GRAPHICS_API_D3D11_4:
-				initialTimelineValue = ID3D11Fence_GetCompletedValue(pSess->binding.d3d11.compositorFence);
-				break;
-			default:
-				LOG_ERROR("Graphics API not supported.\n");
-				return XR_ERROR_RUNTIME_FAILURE;
-		}
-		xrSetInitialCompositorTimelineValue(pSess->index, initialTimelineValue);
-	}
-
-	bool synchronized = pSess->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 	uint64_t compositorTimelineValue;
-	xrGetCompositorTimelineValue(pSess->index, synchronized, &compositorTimelineValue);
+	xrGetCompositorTimelineValue(pSession->index, synchronized, &compositorTimelineValue);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL:    break;
 		case XR_GRAPHICS_API_VULKAN:    break;
 		case XR_GRAPHICS_API_D3D11_4:   {
-			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
-			ID3D11Fence*          compositorFence = pSess->binding.d3d11.compositorFence;
+			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
+			ID3D11Fence*          compositorFence = pSession->binding.d3d11.compositorFence;
 
 			ID3D11DeviceContext4_Flush(context4);
 			ID3D11DeviceContext4_Wait(context4, compositorFence, compositorTimelineValue);
@@ -2721,23 +2729,15 @@ XR_PROC xrWaitFrame(
 	}
 
 	XrTime currentTime = xrGetTime();
-	XrTime lastFrameTime = pSess->lastDisplayTime == 0 ? currentTime : pSess->lastDisplayTime;
-	XrTime frameInterval = xrGetFrameInterval(pSess->index, synchronized);
+	XrTime frameInterval = xrGetFrameInterval(pSession->index);
 
 	frameState->predictedDisplayPeriod = frameInterval;
-	frameState->predictedDisplayTime = lastFrameTime + frameInterval;
-	frameState->shouldRender = pSess->activeSessionState == XR_SESSION_STATE_VISIBLE ||
-							   pSess->activeSessionState == XR_SESSION_STATE_FOCUSED;
+	frameState->predictedDisplayTime = currentTime + frameInterval;
+	frameState->shouldRender = pSession->activeSessionState == XR_SESSION_STATE_VISIBLE ||
+	                           pSession->activeSessionState == XR_SESSION_STATE_FOCUSED;
 
-	memmove(&pSess->predictedDisplayTimes[1], &pSess->predictedDisplayTimes[0], sizeof(pSess->predictedDisplayTimes[0]) * (COUNT(pSess->predictedDisplayTimes) - 1));
-	pSess->predictedDisplayTimes[0] = frameState->predictedDisplayTime;
-	pSess->lastBeginDisplayTime = currentTime;
-
-//	double frameIntervalMs = xrTimeToMilliseconds(frameInterval);
-//	double fps = 1.0 / MillisecondsToSeconds(frameIntervalMs);
-//	printf("xrWaitFrame frameIntervalMs: %f fps: %f\n", frameIntervalMs, fps);
-
-	__atomic_add_fetch(&pSess->frameWaited, 1, __ATOMIC_RELEASE);
+	XrTime frameWaited = atomic_fetch_add_explicit(&pSession->frameWaited, 1, memory_order_acq_rel);
+	XrTimeWaitWin32(&pSession->frameBegan, frameWaited);
 
 	return XR_SUCCESS;
 }
@@ -2751,33 +2751,29 @@ XR_PROC xrBeginFrame(
 	if (frameBeginInfo != NULL)
 		assert(frameBeginInfo->next == NULL);
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 	if (!pSession->running) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
-	if (pSession->frameWaited == pSession->frameEnded || pSession->frameWaited == pSession->frameBegan) {
-		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID \n");
+
+	bool frameWaitCalled = pSession->frameBegan == pSession->frameWaited - 1;
+	if (!frameWaitCalled) {
+		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID XrWaitFrame not called!\n");
 		return XR_ERROR_CALL_ORDER_INVALID;
 	}
 
-	bool discardFrame = false;
-	bool frameWaitCalled = pSession->frameBegan < pSession->frameWaited;
+	// consume the xrWaitFrame call even if frame discarded
+	atomic_store_explicit(&pSession->frameBegan, pSession->frameWaited, memory_order_release);
+
 	bool frameEndCalled = pSession->frameEnded == pSession->frameWaited - 1;
-	if (frameWaitCalled && frameEndCalled) {
-
-		XrTimeWaitWin32(&pSession->frameEnded, pSession->frameBegan);
-
-	} else {
-
-		LOG_ERROR("XR_FRAME_DISCARDED\n");
-		discardFrame = true;
-
+	if (!frameEndCalled) {
+		LOG_ERROR("XR_FRAME_DISCARDED XrEndFrame not called!\n");
+		return XR_FRAME_DISCARDED;
 	}
 
-	XrTimeSignalWin32(&pSession->frameBegan, pSession->frameWaited);
-
-	return discardFrame ? XR_FRAME_DISCARDED : XR_SUCCESS;
+	return XR_SUCCESS;
 }
 
 XR_PROC xrEndFrame(
@@ -2787,36 +2783,40 @@ XR_PROC xrEndFrame(
 	LOG_METHOD_ONCE(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
 
-	auto pSess = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
-	if (!pSess->running || pSess->activeSessionState == XR_SESSION_STATE_IDLE || pSess->activeSessionState == XR_SESSION_STATE_EXITING) {
+	if (!pSession->running ||
+		pSession->activeSessionState == XR_SESSION_STATE_IDLE ||
+		pSession->activeSessionState == XR_SESSION_STATE_EXITING) {
 		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
 		return XR_ERROR_SESSION_NOT_RUNNING;
 	}
+
 	if (frameEndInfo->displayTime <= 0 ) {
 		LOG_ERROR("XR_ERROR_TIME_INVALID \n");
 		return XR_ERROR_TIME_INVALID ;
 	}
-	if (pSess->frameBegan == pSess->frameEnded) {
+
+	if (pSession->frameBegan == pSession->frameEnded) {
 		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID \n");
 		return XR_ERROR_CALL_ORDER_INVALID;
 	}
 
-	bool displayTimeFound = false;
-	for (u32 i = 0; i < COUNT(pSess->predictedDisplayTimes); ++i) {
-		if (i > 0)
-			printf("MISSED FRAME END TIME\n");
-		if (pSess->predictedDisplayTimes[i] == frameEndInfo->displayTime) {
-			displayTimeFound = true;
-			break;
-		}
-	}
-	if (!displayTimeFound) {
-		LOG_ERROR("XR_ERROR_TIME_INVALID\n");
-		return XR_ERROR_TIME_INVALID;
-	}
+//	bool displayTimeFound = false;
+//	for (u32 i = 0; i < COUNT(pSession->predictedDisplayTimes); ++i) {
+//		if (i > 0) LOG ("MISSED FRAME END TIME\n");
+//		if (pSession->predictedDisplayTimes[i] == frameEndInfo->displayTime) {
+//			displayTimeFound = true;
+//			break;
+//		}
+//	}
+//	if (!displayTimeFound) {
+//		LOG_ERROR("XR_ERROR_TIME_INVALID Display time not found!\n");
+//		return XR_ERROR_TIME_INVALID;
+//	}
 
-	/// Process Layers
+	/* Process Layers */
 	for (u32 layer = 0; layer < frameEndInfo->layerCount; ++layer) {
 
 		if (frameEndInfo->layers[layer] == NULL) {
@@ -2824,8 +2824,8 @@ XR_PROC xrEndFrame(
 			return XR_ERROR_LAYER_INVALID;
 		}
 
-		auto device5 = pSess->binding.d3d11.device5;
-		auto context4 = pSess->binding.d3d11.context4;
+		auto device5 = pSession->binding.d3d11.device5;
+		auto context4 = pSession->binding.d3d11.context4;
 
 		switch (frameEndInfo->layers[layer]->type) {
 			// Projection Layer
@@ -2843,7 +2843,7 @@ XR_PROC xrEndFrame(
 						swap_i iColorSwap = HANDLE_INDEX(hColorSwap);
 						u8     iColorSwapImg = pColorSwap->acquiredSwapIndex;
 
-						xrSetColorSwapId(pSess->index, iView, iColorSwap);
+						xrSetColorSwapId(pSession->index, iView, iColorSwap);
 
 						LOG_ONCE("Color subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) "\n",
 							pView->subImage.swapchain,
@@ -2864,8 +2864,8 @@ XR_PROC xrEndFrame(
 								pDepthSwap->texture[iDepthSwapImg].d3d11.transferResource,
 								pDepthSwap->texture[iDepthSwapImg].d3d11.localResource);
 
-							xrSetDepthInfo(pSess->index, pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
-							xrSetDepthSwapId(pSess->index, iView, iDepthSwap);
+							xrSetDepthInfo(pSession->index, pDepthInfo->minDepth, pDepthInfo->maxDepth, pDepthInfo->nearZ, pDepthInfo->farZ);
+							xrSetDepthSwapId(pSession->index, iView, iDepthSwap);
 
 							LOG_ONCE("Depth subImage %p " FORMAT_STRUCT_I(XrOffset2Di) " " FORMAT_STRUCT_I(XrExtent2Di) " %f %f %f %f\n",
 								pDepthInfo->subImage.swapchain,
@@ -2876,9 +2876,7 @@ XR_PROC xrEndFrame(
 							break;
 						}
 
-						default:
-							LOG_ERROR("Unknown XrCompositionLayerProjection.next %p\n", pView->next);
-							break;
+						default: break;
 					}
 				}
 
@@ -2900,16 +2898,16 @@ XR_PROC xrEndFrame(
 		}
 	}
 
-	bool synchronized = pSess->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
 
 	{
 		XrTime timeBeforeWait = xrGetTime();
 
-		pSess->sessionTimelineValue++;
-		uint64_t sessionTimelineValue = pSess->sessionTimelineValue;
+		pSession->sessionTimelineValue++;
+		uint64_t sessionTimelineValue = pSession->sessionTimelineValue;
 
-		ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
-		ID3D11Fence*          sessionFence = pSess->binding.d3d11.sessionFence;
+		ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
+		ID3D11Fence*          sessionFence = pSession->binding.d3d11.sessionFence;
 
 		ID3D11DeviceContext4_Flush(context4);
 		ID3D11DeviceContext4_Signal(context4, sessionFence, sessionTimelineValue);
@@ -2925,7 +2923,7 @@ XR_PROC xrEndFrame(
 		WaitForSingleObject(eventHandle, INFINITE);
 		CloseHandle(eventHandle);
 
-		xrSetSessionTimelineValue(pSess->index, sessionTimelineValue);
+		xrSetSessionTimelineValue(pSession->index, sessionTimelineValue);
 
 //		XrTime timeAfterWait = xrGetTime();
 //		XrTime waitTime = timeAfterWait - timeBeforeWait;
@@ -2935,51 +2933,51 @@ XR_PROC xrEndFrame(
 
 	{
 		XrTime currenTime = xrGetTime();
+//
+//		XrTime delta = currenTime - pSession->lastBeginDisplayTime;
+//		double deltaMs = xrTimeToMilliseconds(delta);
+//		double fps = 1.0 / MillisecondsToSeconds(deltaMs);
+//
+//		XrTime discrepancy = currenTime - frameEndInfo->displayTime;
+//		double discrepancyMs = xrTimeToMilliseconds(discrepancy);
+//		XrTime frameInterval = xrGetFrameInterval(pSession->index, synchronized);
+//
+//		if (discrepancy > 0) {
+////			printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
+//			pSession->synchronizedFrameCount = 0;
+//
+//			uint64_t initialTimelineValue;
+//			switch (xr.instance.graphicsApi) {
+//				case XR_GRAPHICS_API_D3D11_4:
+//					initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
+//					break;
+//				default:
+//					LOG_ERROR("Graphics API not supported.\n");
+//					return XR_ERROR_RUNTIME_FAILURE;
+//			}
+//			xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
+//
+//		} else {
+//			pSession->synchronizedFrameCount++;
+//		}
 
-		XrTime delta = currenTime - pSess->lastBeginDisplayTime;
-		double deltaMs = xrTimeToMilliseconds(delta);
-		double fps = 1.0 / MillisecondsToSeconds(deltaMs);
-
-		XrTime discrepancy = currenTime - frameEndInfo->displayTime;
-		double discrepancyMs = xrTimeToMilliseconds(discrepancy);
-		XrTime frameInterval = xrGetFrameInterval(pSess->index, synchronized);
-
-		if (discrepancy > 0) {
-//			printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
-			pSess->synchronizedFrameCount = 0;
-
-			uint64_t initialTimelineValue;
-			switch (xr.instance.graphicsApi) {
-				case XR_GRAPHICS_API_D3D11_4:
-					initialTimelineValue = ID3D11Fence_GetCompletedValue(pSess->binding.d3d11.compositorFence);
-					break;
-				default:
-					LOG_ERROR("Graphics API not supported.\n");
-					return XR_ERROR_RUNTIME_FAILURE;
-			}
-			xrSetInitialCompositorTimelineValue(pSess->index, initialTimelineValue);
-
-		} else {
-			pSess->synchronizedFrameCount++;
-		}
-
-		pSess->lastDisplayTime = currenTime;
+		pSession->lastDisplayTime = currenTime;
 
 //		printf("xrEndFrame discrepancy: %f deltaMs: %f fps: %f sync: %d\n", discrepancyMs, deltaMs, fps, pSession->synchronizedFrameCount);
 
-		// You wait till first end frame to say synchronized. I don't know if this is really needed... maybe just a chrome quirk
-//		if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->synchronizedFrameCount > 4)
-		if (pSess->activeSessionState == XR_SESSION_STATE_READY && pSess->sessionTimelineValue > 2)
-			pSess->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
+		if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->sessionTimelineValue > 2)
+			pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
 
-		if (pSess->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
-			pSess->pendingSessionState = XR_SESSION_STATE_VISIBLE;
+		if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+			pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
 
 		//	if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
 		//		pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
 
-		xrProgressCompositorTimelineValue(pSess->index, 0, synchronized);
-		XrTimeSignalWin32(&pSess->frameEnded, pSess->frameBegan);
+		xrProgressCompositorTimelineValue(pSession->index, 0, synchronized);
+
+		XrTime frameBegan = atomic_load_explicit(&pSession->frameBegan, memory_order_acquire);
+		XrTimeSignalWin32(&pSession->frameEnded, frameBegan);
 	}
 
 	return XR_SUCCESS;
@@ -3021,7 +3019,8 @@ XR_PROC xrLocateViews(
 	if (views == NULL)
 		return XR_SUCCESS;
 
-	Session* pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 	for (u32 i = 0; i < viewCapacityInput; ++i) {
 		XrEyeView eyeView;
@@ -3418,8 +3417,8 @@ XR_PROC xrAttachSessionActionSets(
 	LogNextChain(attachInfo->next);
 	assert(attachInfo->next == NULL);
 
-	auto pSess = (Session*)session;
-	auto hSess = BLOCK_HANDLE(B.session, pSess);
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 	for (u32 i = 0; i < attachInfo->countActionSets; ++i) {
 		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
@@ -3435,15 +3434,15 @@ XR_PROC xrAttachSessionActionSets(
 		HANDLE_CHECK(hActSet, XR_ERROR_HANDLE_INVALID);
 
 		auto actSetHash = BLOCK_KEY(B.actionSet, pActSet);
-		MAP_ADD(pSess->actionSets, hActSet, actSetHash);
+		MAP_ADD(pSession->actionSets, hActSet, actSetHash);
 
 		memset(&pActSet->states, 0, sizeof(pActSet->states));
 
-		pActSet->hAttachedToSession = hSess;
+		pActSet->hAttachedToSession = hSession;
 		printf("Attached ActionSet %s\n", pActSet->actionSetName);
 	}
 
-	if (!HANDLE_VALID(pSess->hPendingInteractionProfile)) {
+	if (!HANDLE_VALID(pSession->hPendingInteractionProfile)) {
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 
 		XrPath profilePath;
@@ -3452,7 +3451,7 @@ XR_PROC xrAttachSessionActionSets(
 		auto hProfile = BLOCK_FIND(B.profile, profileHash);
 		HANDLE_CHECK(hProfile, XR_ERROR_HANDLE_INVALID);
 
-		pSess->hPendingInteractionProfile = hProfile;
+		pSession->hPendingInteractionProfile = hProfile;
 	}
 
 	return XR_SUCCESS;
@@ -3468,12 +3467,14 @@ XR_PROC xrGetCurrentInteractionProfile(
 	assert(interactionProfile->next == NULL);
 
 	// application might set interaction profile then immediately call things without letting xrPollEvent update activeInteractionProfile
-	auto pSess = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
+
 	InteractionProfile* pProfile = XR_NULL_HANDLE;
-	if (HANDLE_VALID(pSess->hActiveInteractionProfile))
-		pProfile = BLOCK_PTR(B.profile, pSess->hActiveInteractionProfile);
-	else if (HANDLE_VALID(pSess->hPendingInteractionProfile))
-		pProfile = BLOCK_PTR(B.profile, pSess->hPendingInteractionProfile);
+	if (HANDLE_VALID(pSession->hActiveInteractionProfile))
+		pProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
+	else if (HANDLE_VALID(pSession->hPendingInteractionProfile))
+		pProfile = BLOCK_PTR(B.profile, pSession->hPendingInteractionProfile);
 
 	Path* pProfilePath = XR_NULL_HANDLE;
 	if (pProfile != XR_NULL_HANDLE) {
@@ -3492,8 +3493,8 @@ static inline XrResult xrGetActionState(
 	const XrActionStateGetInfo* getInfo,
 	SubactionState**            ppState)
 {
-	auto pSession = (Session*)session;
-	auto hSession = BLOCK_HANDLE(B.session, pSession);
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 
 	auto pAction = (Action*)getInfo->action;
 	auto pActionSet = BLOCK_PTR(B.actionSet, pAction->hActionSet);
@@ -3598,7 +3599,8 @@ XR_PROC xrSyncActions(
 	LOG_METHOD_ONCE(xrSyncActions);
 	LogNextChain(syncInfo->next);
 
-	auto pSession = (Session*)session;
+	Session*  pSession = XR_BLOCK_PTR(session)
+	session_h hSession = XR_BLOCK_H(session);
 	if (pSession->activeSessionState != XR_SESSION_STATE_FOCUSED) {
 		LOG("XR_SESSION_NOT_FOCUSED\n");
 		return XR_SESSION_NOT_FOCUSED;
@@ -3705,13 +3707,15 @@ XR_PROC xrGetVisibilityMaskKHR(
 	XrVisibilityMaskKHR*    visibilityMask)
 {
 	LOG_METHOD(xrGetVisibilityMaskKHR);
-	printf("%s %d %s\n",
-		   string_XrViewConfigurationType(viewConfigurationType),
-		   viewIndex,
-		   string_XrVisibilityMaskTypeKHR(visibilityMaskType));
+	LOG("%s %d %s\n",
+		string_XrViewConfigurationType(viewConfigurationType),
+		viewIndex,
+		string_XrVisibilityMaskTypeKHR(visibilityMaskType));
 
 	// this is such an easy way to look stuff up, should I really change it to handles?
-	Session* pSession = (Session*)session;
+//	Session* pSession = (Session*)session;
+//	Session* pSession = BLOCK_PTR(B.session, (session_h)(u16)(u64)session)
+	Session* pSession = XR_BLOCK_PTR(session)
 
 	switch (viewConfigurationType) {
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:

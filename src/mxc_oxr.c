@@ -165,7 +165,8 @@ void xrSetInitialCompositorTimelineValue(XrSessionId sessionId, uint64_t timelin
 {
 	MxcNodeShared* pNodeShared = node.pShared[sessionId];
 	u64 timelineCycleStartValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
-	pNodeShared->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
+	// Wait two cycles out for good measure.
+	pNodeShared->compositorBaseCycleValue = timelineCycleStartValue + (MXC_CYCLE_COUNT * 2);
 //	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
 }
 
@@ -181,12 +182,12 @@ void xrProgressCompositorTimelineValue(XrSessionId sessionId, uint64_t timelineV
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
 
-XrTime xrGetFrameInterval(XrSessionId sessionId, bool synchronized)
+XrTime xrGetFrameInterval(XrSessionId sessionId)
 {
 	MxcNodeShared* pNodeShared = node.pShared[sessionId];
-	double hz = 240.0 / (double)(pNodeShared->compositorCycleSkip);
+	double hz = 140.0 / (double)(pNodeShared->compositorCycleSkip);
 	XrTime hzTime = xrHzToXrTime(hz);
-//	printf("xrGetFrameInterval compositorCycleSkip: %d hz: %f hzTime: %llu\n", pNodeShared->compositorCycleSkip, hz, hzTime);
+	LOG("xrGetFrameInterval compositorCycleSkip: %d hz: %f hzTime: %llu\n", pNodeShared->compositorCycleSkip, hz, hzTime);
 	return hzTime;
 }
 
