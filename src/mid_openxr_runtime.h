@@ -294,7 +294,7 @@ void xrReleaseSwapIndex(XrSessionId sessionIndex, uint8_t index);
 void xrGetCompositorTimeline(XrSessionId sessionIndex, HANDLE* pHandle);
 void xrSetInitialCompositorTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue);
 void xrGetCompositorTimelineValue(XrSessionId sessionIndex, bool synchronized, uint64_t* pTimelineValue);
-void xrProgressCompositorTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue, bool synchronized);
+void xrProgressCompositorTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue);
 
 void xrGetHeadPose(XrSessionId sessionIndex, XrEulerPosef* pPose);
 
@@ -514,13 +514,6 @@ typedef struct Session {
 	XrTime frameBegan;
 	XrTime frameEnded;
 
-//	XrTime predictedDisplayTimes[3];
-//	XrTime lastBeginDisplayTime;
-
-//	XrTime lastPredictedDisplayTime;
-	XrTime lastDisplayTime;
-
-	u32    synchronizedFrameCount;
 	u64    sessionTimelineValue;
 
 	//// Maps
@@ -717,6 +710,7 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 	{                              \
 		static int logged = false; \
 		if (!logged) {             \
+			logged = true;         \
 			LOG_METHOD(_method);   \
 		}                          \
 	}
@@ -2776,9 +2770,8 @@ XR_PROC xrBeginFrame(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrEndFrame(
-	XrSession             session,
-	const XrFrameEndInfo* frameEndInfo)
+XR_PROC xrEndFrame(XrSession session,
+                   const XrFrameEndInfo* frameEndInfo)
 {
 	LOG_METHOD_ONCE(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
@@ -2803,19 +2796,6 @@ XR_PROC xrEndFrame(
 		return XR_ERROR_CALL_ORDER_INVALID;
 	}
 
-//	bool displayTimeFound = false;
-//	for (u32 i = 0; i < COUNT(pSession->predictedDisplayTimes); ++i) {
-//		if (i > 0) LOG ("MISSED FRAME END TIME\n");
-//		if (pSession->predictedDisplayTimes[i] == frameEndInfo->displayTime) {
-//			displayTimeFound = true;
-//			break;
-//		}
-//	}
-//	if (!displayTimeFound) {
-//		LOG_ERROR("XR_ERROR_TIME_INVALID Display time not found!\n");
-//		return XR_ERROR_TIME_INVALID;
-//	}
-
 	/* Process Layers */
 	for (u32 layer = 0; layer < frameEndInfo->layerCount; ++layer) {
 
@@ -2828,7 +2808,7 @@ XR_PROC xrEndFrame(
 		auto context4 = pSession->binding.d3d11.context4;
 
 		switch (frameEndInfo->layers[layer]->type) {
-			// Projection Layer
+			/* Projection Layer */
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
 				auto pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
 				assert(pProjectionLayer->viewCount == XR_MAX_VIEW_COUNT); // need to deal with all layers at some point
@@ -2836,7 +2816,7 @@ XR_PROC xrEndFrame(
 				for (u32 iView = 0; iView < pProjectionLayer->viewCount; ++iView) {
 					auto pView = &pProjectionLayer->views[iView];
 
-					// Projection Layer View Color
+					/* Projection Layer View Color */
 					{
 						auto   pColorSwap = (Swapchain*)pView->subImage.swapchain;
 						swap_h hColorSwap = BLOCK_HANDLE(B.swap, pColorSwap);
@@ -2852,7 +2832,7 @@ XR_PROC xrEndFrame(
 					}
 
 					switch (pView->next != NULL ? *(XrStructureType*)pView->next : 0) {
-						// Projection Layer View Depth
+						/* Projection Layer View Depth */
 						case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
 							auto   pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
 							auto   pDepthSwap = (Swapchain*)pDepthInfo->subImage.swapchain;
@@ -2898,87 +2878,55 @@ XR_PROC xrEndFrame(
 		}
 	}
 
-	bool synchronized = pSession->activeSessionState >= XR_SESSION_STATE_SYNCHRONIZED;
+	/* Wait for Graphics Queue To Finish */
+	u64 sessionTimelineValue = ++pSession->sessionTimelineValue;
+	switch (xr.instance.graphicsApi) {
+		case XR_GRAPHICS_API_D3D11_4:   {
+			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
+			ID3D11Fence*          sessionFence = pSession->binding.d3d11.sessionFence;
 
-	{
-		XrTime timeBeforeWait = xrGetTime();
+			ID3D11DeviceContext4_Flush(context4);
+			ID3D11DeviceContext4_Signal(context4, sessionFence, sessionTimelineValue);
+			ID3D11DeviceContext4_Wait(context4, sessionFence, sessionTimelineValue);
 
-		pSession->sessionTimelineValue++;
-		uint64_t sessionTimelineValue = pSession->sessionTimelineValue;
+			// CPU Wait
+			HANDLE eventHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+			if (!eventHandle) {
+				LOG_ERROR("Failed to create event handle.\n");
+				return XR_ERROR_RUNTIME_FAILURE;
+			}
+			DX_CHECK(ID3D11Fence_SetEventOnCompletion(sessionFence, sessionTimelineValue, eventHandle));
+			WaitForSingleObject(eventHandle, INFINITE);
+			CloseHandle(eventHandle);
 
-		ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
-		ID3D11Fence*          sessionFence = pSession->binding.d3d11.sessionFence;
-
-		ID3D11DeviceContext4_Flush(context4);
-		ID3D11DeviceContext4_Signal(context4, sessionFence, sessionTimelineValue);
-		ID3D11DeviceContext4_Wait(context4, sessionFence, sessionTimelineValue);
-
-		// causes CPU to wait
-		HANDLE eventHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-		if (!eventHandle) {
-			LOG_ERROR("Failed to create event handle.\n");
-			return XR_ERROR_RUNTIME_FAILURE;
+			break;
 		}
-		DX_CHECK(ID3D11Fence_SetEventOnCompletion(sessionFence, sessionTimelineValue, eventHandle));
-		WaitForSingleObject(eventHandle, INFINITE);
-		CloseHandle(eventHandle);
-
-		xrSetSessionTimelineValue(pSession->index, sessionTimelineValue);
-
-//		XrTime timeAfterWait = xrGetTime();
-//		XrTime waitTime = timeAfterWait - timeBeforeWait;
-//		double waitTimeMs = xrTimeToMilliseconds(waitTime);
-//		printf("sessionTimelineValue: %llu waitTimeMs: %f\n", sessionTimelineValue, waitTimeMs);
+		default:
+			LOG_ERROR("Graphics API not supported.\n");
+			return XR_ERROR_RUNTIME_FAILURE;
 	}
 
-	{
-		XrTime currenTime = xrGetTime();
-//
-//		XrTime delta = currenTime - pSession->lastBeginDisplayTime;
-//		double deltaMs = xrTimeToMilliseconds(delta);
-//		double fps = 1.0 / MillisecondsToSeconds(deltaMs);
-//
-//		XrTime discrepancy = currenTime - frameEndInfo->displayTime;
-//		double discrepancyMs = xrTimeToMilliseconds(discrepancy);
-//		XrTime frameInterval = xrGetFrameInterval(pSession->index, synchronized);
-//
-//		if (discrepancy > 0) {
-////			printf("Frame took %f ms longer than predicted.\n", discrepancyMs);
-//			pSession->synchronizedFrameCount = 0;
-//
-//			uint64_t initialTimelineValue;
-//			switch (xr.instance.graphicsApi) {
-//				case XR_GRAPHICS_API_D3D11_4:
-//					initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
-//					break;
-//				default:
-//					LOG_ERROR("Graphics API not supported.\n");
-//					return XR_ERROR_RUNTIME_FAILURE;
-//			}
-//			xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
-//
-//		} else {
-//			pSession->synchronizedFrameCount++;
-//		}
+	/* Finish Frame */
+	xrSetSessionTimelineValue(pSession->index, sessionTimelineValue);
+	xrProgressCompositorTimelineValue(pSession->index, 0);
 
-		pSession->lastDisplayTime = currenTime;
-
-//		printf("xrEndFrame discrepancy: %f deltaMs: %f fps: %f sync: %d\n", discrepancyMs, deltaMs, fps, pSession->synchronizedFrameCount);
-
-		if (pSession->activeSessionState == XR_SESSION_STATE_READY && pSession->sessionTimelineValue > 2)
+	/* Progress state if needed */
+	switch (pSession->activeSessionState) {
+		case XR_SESSION_STATE_READY:
 			pSession->pendingSessionState = XR_SESSION_STATE_SYNCHRONIZED;
-
-		if (pSession->activeSessionState == XR_SESSION_STATE_SYNCHRONIZED)
+			break;
+		case XR_SESSION_STATE_SYNCHRONIZED:
 			pSession->pendingSessionState = XR_SESSION_STATE_VISIBLE;
-
-		//	if (pSession->activeSessionState == XR_SESSION_STATE_VISIBLE)
-		//		pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
-
-		xrProgressCompositorTimelineValue(pSession->index, 0, synchronized);
-
-		XrTime frameBegan = atomic_load_explicit(&pSession->frameBegan, memory_order_acquire);
-		XrTimeSignalWin32(&pSession->frameEnded, frameBegan);
+			break;
+//		case XR_SESSION_STATE_VISIBLE:
+//			pSession->pendingSessionState = XR_SESSION_STATE_FOCUSED;
+//			break;
+		default: break;
 	}
+
+	/* Signal XrWaitFrame */
+	XrTime frameBegan = atomic_load_explicit(&pSession->frameBegan, memory_order_acquire);
+	XrTimeSignalWin32(&pSession->frameEnded, frameBegan);
 
 	return XR_SUCCESS;
 }

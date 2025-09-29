@@ -176,7 +176,7 @@ void xrGetCompositorTimelineValue(XrSessionId sessionId, bool synchronized, uint
 	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
 }
 
-void xrProgressCompositorTimelineValue(XrSessionId sessionId, uint64_t timelineValue, bool synchronized)
+void xrProgressCompositorTimelineValue(XrSessionId sessionId, uint64_t timelineValue)
 {
 	MxcNodeShared* pNodeShared = node.pShared[sessionId];
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
