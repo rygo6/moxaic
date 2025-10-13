@@ -69,6 +69,7 @@ static const char* string_MxcCompositorMode(MxcCompositorMode mode) {
 typedef enum MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_NODE_OPENED,
 	MXC_INTERPROCESS_TARGET_NODE_CLOSED,
+	MXC_INTERPROCESS_TARGET_NODE_BOUNDS,
 	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
 	MXC_INTERPROCESS_TARGET_COUNT,
 } MxcIpcFunc;
@@ -87,6 +88,10 @@ typedef struct MxcClip {
 	vec2 ulUV;
 	vec2 lrUV;
 } MxcClip;
+
+//typedef struct MxcIpcFundDataBase {
+//
+//}
 
 typedef struct MxcNodeShared {
 
@@ -115,6 +120,10 @@ typedef struct MxcNodeShared {
 	// Interprocess
 	MidQRing   ipcFuncQueue;
 	MxcIpcFunc queuedIpcFuncs[MID_QRING_CAPACITY];
+
+	MidQRing   ipcFuncSendQueue;
+	MxcIpcFunc queuedIpcSendFuncs[MID_QRING_CAPACITY];
+	XrEventDataBuffer queuedIpcSendBuffers[MID_QRING_CAPACITY];
 
 	// Swap
 	u16             swapMaxWidth;

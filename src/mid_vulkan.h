@@ -279,13 +279,12 @@ typedef struct VkQueuedCommandBuffer {
 	u64             timelineSignalValue;
 } VkQueuedCommandBuffer;
 
-#define	VK_CMD_QUEUE_CAPACITY MID_QRING_CAPACITY
 typedef struct VkQueueFamily {
 	u32     index;
 	VkQueue queue;
 
 	MidQRing              cmdQueue;
-	VkQueuedCommandBuffer queuedCmds[VK_CMD_QUEUE_CAPACITY];
+	VkQueuedCommandBuffer queuedCmds[MID_QRING_CAPACITY];
 
 	VkSemaphore   immediateTimeline;
 	u64           immediateTimelineValue;
@@ -1193,7 +1192,7 @@ static VkBool32 VkmDebugUtilsCallback(
 void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer queuedCmd)
 {
 	auto pFamily = &vk.context.queueFamilies[iFamilyType];
-	if (MID_QRING_ENQUEUE(VK_CMD_QUEUE_CAPACITY, &pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_LIMIT_REACHED)
+	if (MID_QRING_ENQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_LIMIT_REACHED)
 		LOG_ERROR("%s CommandBuffer Queue reached limit!\n", string_VkQueueFamilyType[iFamilyType]);
 }
 
@@ -1202,7 +1201,7 @@ void vkSubmitQueuedCommandBuffers()
 	for (int iFamilyType = 0; iFamilyType < VK_QUEUE_FAMILY_TYPE_COUNT; ++iFamilyType) {
 		auto pFamily = &vk.context.queueFamilies[iFamilyType];
 		VkQueuedCommandBuffer queuedCmd;
-		if (MID_QRING_DEQUEUE(VK_CMD_QUEUE_CAPACITY, &pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
+		if (MID_QRING_DEQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
 			CmdSubmit(queuedCmd.cmd, pFamily->queue, queuedCmd.timeline, queuedCmd.timelineSignalValue);
 	}
 }

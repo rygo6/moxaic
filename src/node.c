@@ -1028,7 +1028,7 @@ void mxcShutdownInterprocessNode()
 //// }
 static void ipcFuncNodeOpened(NodeHandle hNode)
 {
-	LOG("Opened %d\n", hNode);
+	LOG("Node Opened %d\n", hNode);
 	auto pNodeCtxt = &node.context[hNode];
 	auto pNodeShrd = node.pShared[hNode];
 
@@ -1041,10 +1041,15 @@ static void ipcFuncNodeOpened(NodeHandle hNode)
 
 static void ipcFuncNodeClosed(NodeHandle hNode)
 {
-	LOG("Closing %d\n", hNode);
+	LOG("Node Closing %d\n", hNode);
 	ReleaseCompositorNodeActive(hNode);
 	CleanupNode(hNode);
 	ReleaseNodeHandle(hNode);
+}
+
+static void ipcFuncNodeBounds(NodeHandle hNode)
+{
+	LOG("Node Bounds %d\n", hNode);
 }
 
 static void ipcFuncClaimSwap(NodeHandle hNode)
@@ -1121,19 +1126,20 @@ ExitError:
 const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
 	[MXC_INTERPROCESS_TARGET_NODE_OPENED] = (MxcIpcFuncPtr const)ipcFuncNodeOpened,
 	[MXC_INTERPROCESS_TARGET_NODE_CLOSED] = (MxcIpcFuncPtr const)ipcFuncNodeClosed,
+	[MXC_INTERPROCESS_TARGET_NODE_BOUNDS] = (MxcIpcFuncPtr const)ipcFuncNodeBounds,
 	[MXC_INTERPROCESS_TARGET_SYNC_SWAPS] =  (MxcIpcFuncPtr const)ipcFuncClaimSwap,
 };
 
 int mxcIpcFuncEnqueue(NodeHandle hNode, MxcIpcFunc target) {
 	auto pNodeShrd = node.pShared[hNode];
-	return MID_QRING_ENQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, &pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target);
+	return MID_QRING_ENQUEUE(&pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target);
 }
 
 int mxcIpcFuncDequeue(NodeHandle hNode)
 {
 	MxcIpcFunc target;
 	auto pNodeShrd = node.pShared[hNode];
-	if (MID_QRING_DEQUEUE(MXC_IPC_FUNC_QUEUE_CAPACITY, &pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target))
+	if (MID_QRING_DEQUEUE(&pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target))
 		return 1;
 	LOG("Calling IPC Target %d...\n", target);
 	MXC_IPC_FUNCS[target](hNode);

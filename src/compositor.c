@@ -708,6 +708,8 @@ CompositeLoop:
 
 				vec2 uvMin = VEC2(FLT_MAX, FLT_MAX);
 				vec2 uvMax = VEC2(FLT_MIN, FLT_MIN);
+//				vec3 worldCorners[CORNER_COUNT];
+//				vec2 uvCorners[CORNER_COUNT];
 				for (int i = 0; i < CORNER_COUNT; ++i) {
 					vec4 model = VEC4(corners[i].x, corners[i].y, corners[i].z, 1.0f);
 					vec4 world = vec4MulMat4(pNodeCst->compositingNodeSetState.model, model);
@@ -718,6 +720,8 @@ CompositeLoop:
 					uvMin.y = MIN(uvMin.y, uv.y);
 					uvMax.x = MAX(uvMax.x, uv.x);
 					uvMax.y = MAX(uvMax.y, uv.y);
+//					worldCorners[i] = VEC3(world.x, world.y, world.z);
+//					uvCorners[i] = uv;
 					pNodeCst->worldCorners[i] = VEC3(world.x, world.y, world.z);
 					pNodeCst->uvCorners[i] = uv;
 				}

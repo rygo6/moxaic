@@ -33,6 +33,7 @@ typedef enum MidResult {
 	MID_SUCCESS         = 0,
 	MID_EMPTY           = 20001,
 	MID_LIMIT_REACHED   = 20002,
+	MID_RESULT_FINALIZED = 20003,
 	MID_ERROR_UNKNOW    = -13,
 	MID_RESULT_MAX_ENUM = 0x7FFFFFFF
 } MidResult;
@@ -94,12 +95,14 @@ extern void Panic(const char* file, int line, const char* message);
 ////
 #define TYPES_EQUAL(a, b) __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
 #define UNUSED __attribute__((unused))
+#define FALLTHROUGH __attribute__((fallthrough))
 #define PACK __attribute__((packed))
 #define HOT __attribute__((hot))
 #define CONCAT(_a, _b) #_a #_b
 #define CACHE_ALIGN __attribute((aligned(64)))
 #define INLINE __attribute__((always_inline)) static inline
 #define EXTRACT_FIELD(_p, _field) __typeof__((_p)->_field) _field = (_p)->_field
+#define TRANSPARENT_UNION __attribute__((transparent_union))
 #define PACKED __attribute__((packed))
 #define ALIGN(size) __attribute((aligned(size)))
 #define LIKELY(x) __builtin_expect(!!(x), 1)
@@ -124,15 +127,15 @@ extern void Panic(const char* file, int line, const char* message);
 		 !_done;                                                          \
 		 _done = true, atomic_thread_fence(memory_order_release))
 
-#define MALLOC_SCOPE(_ptr)                                   \
-	for (bool _done = (_ptr = malloc(sizeof(*_ptr)), false); \
-		!_done;                                              \
-		_done = true, free(_ptr), _ptr = NULL)
+#define MALLOC_SCOPE(_ptr)             \
+	for (_ptr = malloc(sizeof(*_ptr)); \
+		_ptr != NULL;                  \
+		free(_ptr), _ptr = NULL)
 
-#define MALLOC_SCOPE_ZEROED(_ptr)                                                            \
-	for (bool _done = (_ptr = malloc(sizeof(*_ptr)), memset(_ptr, 0, sizeof(*_ptr)), false); \
-		!_done;                                                                              \
-		_done = true, free(_ptr), _ptr = NULL)
+#define MALLOC_SCOPE_ZEROED(_ptr)                                      \
+	for (_ptr = malloc(sizeof(*_ptr)), memset(_ptr, 0, sizeof(*_ptr)); \
+		_ptr != NULL;                                                  \
+		free(_ptr), _ptr = NULL)
 
 
 //////////
