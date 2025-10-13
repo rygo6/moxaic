@@ -9,9 +9,11 @@
 	Style
 
 	variable names can signify the type with a character prefix
-	iValue = index
-	pValue = pointer
-	hValue = handle
+	iValue = Data structure index. Handle but without data structure metadata.
+	hValue = Data structure handle. Index but with data structure metadata.
+	pValue = Data structure pointer.
+ 	valueId = Categorical identifier.
+ 	XrType = Opaque Handle. Data structure handle in u64 with additional metadata.
 
  	primitive types are snake_case
 
@@ -93,6 +95,12 @@
  * Mid OpenXR Types
  */
 
+typedef enum SystemId {
+	SYSTEM_ID_HANDHELD_AR = 1,
+	SYSTEM_ID_HMD_VR_STEREO = 2,
+	SYSTEM_ID_COUNT,
+} SystemId;
+
 typedef enum XrViewId {
 	// XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT
 	XR_VIEW_ID_CENTER_FIRST_PERSON = 0,
@@ -124,14 +132,14 @@ typedef enum XrViewId {
 
 #define XR_MAX_VIEW_COUNT XR_VIEW_ID_STEREO_COUNT // we don't support QUAD currently
 
-typedef enum XrGraphicsApi : u8 {
+typedef enum XrGraphicsApi {
 	XR_GRAPHICS_API_OPENGL,
 	XR_GRAPHICS_API_VULKAN,
 	XR_GRAPHICS_API_D3D11_4,
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
-typedef enum XrSwapOutput : u8 {
+typedef enum XrSwapOutput {
 	XR_SWAP_OUTPUT_UNKNOWN,
 	XR_SWAP_OUTPUT_COLOR,
 	XR_SWAP_OUTPUT_DEPTH,
@@ -157,14 +165,14 @@ static inline const char* string_XrSwapOutput(XrSwapOutput output) {
 //	XR_SWAP_TYPE_COUNT,
 //} XrSwapType;
 
-typedef enum XrSwapClip : u8 {
+typedef enum XrSwapClip {
 	XR_SWAP_CLIP_NONE,
 	XR_SWAP_CLIP_STRETCH,
 	XR_SWAP_CLIP_OCCLUSION_CROP,
 	XR_SWAP_CLIP_COUNT,
 } XrSwapClip;
 
-typedef enum XrSwapState : u8 {
+typedef enum XrSwapState {
 	XR_SWAP_STATE_UNITIALIZED,
 	XR_SWAP_STATE_REQUESTED,
 	XR_SWAP_STATE_CREATED,
@@ -238,23 +246,15 @@ typedef struct XrShellSpaces {
 
 } XrShellAppBounds;
 
-//constexpr int XR_SWAP_TYPE_COUNTS[] = {
-//	[XR_SWAP_TYPE_UNKNOWN] = 0,
-//	[XR_SWAP_TYPE_MONO_SINGLE] = 1,
-//	[XR_SWAP_TYPE_STEREO_SINGLE] = 2,
-//	[XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY] = 1,
-//	[XR_SWAP_TYPE_STEREO_DOUBLE_WIDE] = 1,
-//};
-
 #define XR_SPACE_LOCATION_ALL_TRACKED           \
 	XR_SPACE_LOCATION_ORIENTATION_VALID_BIT   | \
 	XR_SPACE_LOCATION_POSITION_VALID_BIT      | \
 	XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | \
 	XR_SPACE_LOCATION_POSITION_TRACKED_BIT
 
-typedef u16 XrSessionId;
-typedef u16 XrSwapchainId;
-typedef XrSwapchainId swap_i;
+typedef u16 session_i;
+typedef u16 swap_i;
+typedef u8 view_i;
 
 /*
  * External Method Declarations
@@ -263,30 +263,28 @@ void xrInitialize();
 void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pView);
 
 // this should be sessionId and swapId. Id should be the external identifier
-void xrClaimSessionId(XrSessionId* pSessionId);
+void xrClaimSessionId(session_i* pSessionIndex);
 
-void xrReleaseSessionId(XrSessionId sessionIndex);
-void xrGetReferenceSpaceBounds(XrSessionId sessionIndex, XrExtent2Df* pBounds);
-void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId);
-void xrGetSwapchainImportedImage(XrSessionId sessionId, XrSwapchainId swapIndex, int imageId, HANDLE* pHandle);
-//void xrCreateSwapImages(XrSessionIndex sessionIndex, const XrSwapchainCreateInfo* createInfo, XrSwapType swapType);
-//void xrClaimSwapImage(XrSessionIndex sessionIndex, XrSwapOutputFlags usage, HANDLE* pHandle);
-void xrSetColorSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId);
-void xrSetDepthSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId);
-void xrSetDepthInfo(XrSessionId sessionIndex, float minDepth, float maxDepth, float nearZ, float farZ);
+void xrReleaseSessionId(session_i iSession);
+void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds);
+void xrCreateSwapchainImages(session_i sessionId, const XrSwapchainInfo* pSwapInfo, swap_i iSwap);
+void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, int imageId, HANDLE* pHandle);
+void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap);
+void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap);
+void xrSetDepthInfo(session_i iSession, float minDepth, float maxDepth, float nearZ, float farZ);
 
-void xrGetSessionTimeline(XrSessionId sessionIndex, HANDLE* pHandle);
-void xrSetSessionTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue);
+void xrGetSessionTimeline(session_i iSession, HANDLE* pHandle);
+void xrSetSessionTimelineValue(session_i iSession, u64 timelineValue);
 
-void xrClaimSwapIndex(XrSessionId sessionIndex, uint8_t* pIndex);
-void xrReleaseSwapIndex(XrSessionId sessionIndex, uint8_t index);
+void xrClaimSwapIndex(session_i iSession, uint8_t* pIndex);
+void xrReleaseSwapIndex(session_i iSession, uint8_t index);
 
-void xrGetCompositorTimeline(XrSessionId sessionIndex, HANDLE* pHandle);
-void xrSetInitialCompositorTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue);
-void xrGetCompositorTimelineValue(XrSessionId sessionIndex, uint64_t* pTimelineValue);
-void xrProgressCompositorTimelineValue(XrSessionId sessionIndex, uint64_t timelineValue);
+void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle);
+void xrSetInitialCompositorTimelineValue(session_i iSession, u64 timelineValue);
+void xrGetCompositorTimelineValue(session_i iSession, u64* pTimelineValue);
+void xrProgressCompositorTimelineValue(session_i iSession, u64 timelineValue);
 
-void xrGetHeadPose(XrSessionId sessionIndex, XrEulerPosef* pPose);
+void xrGetHeadPose(session_i iSession, XrEulerPosef* pPose);
 
 typedef struct XrEyeView {
 	XrVector3f euler;
@@ -295,9 +293,9 @@ typedef struct XrEyeView {
 	XrVector2f upperLeftClip;
 	XrVector2f lowerRightClip;
 } XrEyeView;
-void xrGetEyeView(XrSessionId sessionIndex, uint8_t viewIndex, XrEyeView *pEyeView);
+void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView);
 
-XrTime xrGetFrameInterval(XrSessionId sessionIndex);
+XrTime xrGetFrameInterval(session_i sessionIndex);
 
 static inline XrTime xrHzToXrTime(double hz)
 {
@@ -310,24 +308,24 @@ static inline XrTime xrHzToXrTime(double hz)
  */
 typedef struct SubactionState SubactionState;
 
-int xrInputSelectClick_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputSelectClick_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputSqueezeValue_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputSqueezeValue_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputSqueezeClick_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputSqueezeClick_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputTriggerValue_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputTriggerValue_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputTriggerClick_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputTriggerClick_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputMenuClick_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputMenuClick_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputGripPose_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputGripPose_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputAimPose_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrInputAimPose_Right(XrSessionId sessionIndex, SubactionState* pState);
-int xrOutputHaptic_Left(XrSessionId sessionIndex, SubactionState* pState);
-int xrOutputHaptic_Right(XrSessionId sessionIndex, SubactionState* pState);
+int xrInputSelectClick_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputSelectClick_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputSqueezeValue_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputSqueezeValue_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputSqueezeClick_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputSqueezeClick_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputTriggerValue_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputTriggerValue_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputTriggerClick_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputTriggerClick_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputMenuClick_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputMenuClick_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputGripPose_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputGripPose_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputAimPose_Left(session_i sessionIndex, SubactionState* pState);
+int xrInputAimPose_Right(session_i sessionIndex, SubactionState* pState);
+int xrOutputHaptic_Left(session_i sessionIndex, SubactionState* pState);
+int xrOutputHaptic_Right(session_i sessionIndex, SubactionState* pState);
 
 /*
  * OpenXR Constants
@@ -409,7 +407,7 @@ typedef struct SubactionState {
 #define XR_BINDINGS_CAPACITY 256
 typedef struct Binding {
 	bHnd hPath;
-	int (*func)(XrSessionId, SubactionState*);
+	int (*func)(session_i, SubactionState*);
 } Binding;
 
 #define XR_MAX_SUBACTION_PATHS 2
@@ -488,7 +486,7 @@ typedef struct Swapchain {
 #define XR_MAX_SPACES 8
 typedef struct Session {
 	/* Info */
-	XrSessionId             index;
+	session_i               index;
 	XrSystemId              systemId;
 	XrViewConfigurationType primaryViewConfigurationType;
 
@@ -858,7 +856,7 @@ static XrResult RegisterBinding(
 	XrInstance          instance,
 	InteractionProfile* pInteractionProfile,
 	Path*               pBindingPath,
-	int (*func)(XrSessionId, SubactionState*))
+	int (*func)(session_i, SubactionState*))
 {
 	auto bindPathHash = BLOCK_KEY(B.path, pBindingPath);
 	for (u32 i = 0; i < pInteractionProfile->bindings.count; ++i) {
@@ -879,7 +877,7 @@ static XrResult RegisterBinding(
 }
 
 typedef struct BindingDefinition {
-	int (*func)(XrSessionId, SubactionState*);
+	int (*func)(session_i, SubactionState*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
 static XrResult InitBinding(const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
@@ -929,7 +927,7 @@ static XrResult InitBinding(const char* interactionProfile, int bindingDefinitio
 
 static XrResult InitStandardBindings()
 {
-#define BINDING_DEFINITION(_func, _path) {(int (*)(XrSessionId, SubactionState*)) _func, _path}
+#define BINDING_DEFINITION(_func, _path) {(int (*)(session_i, SubactionState*)) _func, _path}
 
 	{
 		BindingDefinition bindingDefinitions[] = {
@@ -1398,11 +1396,8 @@ XR_PROC xrStructureTypeToString(
 	return XR_SUCCESS;
 }
 
-typedef enum SystemId {
-	SYSTEM_ID_HANDHELD_AR = 1,
-	SYSTEM_ID_HMD_VR_STEREO = 2,
-	SYSTEM_ID_COUNT,
-} SystemId;
+#undef TRANSFER_ENUM_NAME
+
 XR_PROC xrGetSystem(
 	XrInstance             instance,
 	const XrSystemGetInfo* getInfo,
@@ -1537,7 +1532,7 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 		return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
 	}
 
-	XrSessionId sessionIndex; xrClaimSessionId(&sessionIndex);
+	session_i sessionIndex; xrClaimSessionId(&sessionIndex);
 	LOG("Claimed SessionIndex %d\n", sessionIndex);
 
 	session_h hSession = BLOCK_CLAIM(xr.block.session, sessionIndex);
@@ -2251,7 +2246,7 @@ XR_PROC xrCreateSwapchain(
 	swap_h hSwap = BLOCK_CLAIM(B.swap, 0);
 	HANDLE_CHECK(hSwap, XR_ERROR_LIMIT_REACHED);
 	Swapchain* pSwap = BLOCK_PTR(B.swap, hSwap);
-	XrSwapchainId iNodeSwap = HANDLE_INDEX(hSwap);
+	swap_i     iNodeSwap = HANDLE_INDEX(hSwap);
 
 	pSwap->hSession = hSession;
 	pSwap->output = output;

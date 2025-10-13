@@ -25,7 +25,7 @@ void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pV
 }
 
 // maybe should be external handle?
-void xrClaimSessionId(XrSessionId* pSessionId)
+void xrClaimSessionId(session_i* pSessionIndex)
 {
 	LOG("Creating Moxaic OpenXR Session.\n");
 
@@ -42,37 +42,37 @@ void xrClaimSessionId(XrSessionId* pSessionId)
 
 	LOG("Importing node handle %d as OpenXR session\n", hNode);
 
-	*pSessionId = hNode; // openxr sessionId == moxaic node handle
+	*pSessionIndex = hNode; // openxr sessionId == moxaic node handle
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 }
 
-void xrReleaseSessionId(XrSessionId sessionId)
+void xrReleaseSessionId(session_i iSession)
 {
 	LOG("Releasing Moxaic OpenXR Session.\n");
-	NodeHandle hNode = sessionId;
+	NodeHandle hNode = iSession;
 	MxcNodeShared* pNodeShrd = node.pShared[hNode];
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 }
 
-void xrClaimCompositionLayerIndex(XrSessionId* sessionId)
+void xrClaimCompositionLayerIndex(session_i* sessionId)
 {
 	// I believe both a session and a composition layer will end up constituting different Nodes
 	// and requesting a SessionId will simply mean the base compositionlayer index
 	// where Compositionlayers will also request an index of different nodes
 }
 
-void xrGetReferenceSpaceBounds(XrSessionId sessionId, XrExtent2Df* pBounds)
+void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
 	float radius = pNodeShared->compositorRadius * 2.0f;
 
 	// we just assume depth is the same, and treat this like a cube
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
 }
 
-void xrGetSessionTimeline(XrSessionId sessionId, HANDLE* pHandle)
+void xrGetSessionTimeline(session_i iSession, HANDLE* pHandle)
 {
 	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	*pHandle = pImportParam->nodeTimelineHandle;
@@ -80,70 +80,70 @@ void xrGetSessionTimeline(XrSessionId sessionId, HANDLE* pHandle)
 
 /// Set the new session timeline value to signal to the compositor there is a new frame.
 // should this be finish frame? and merged with SetColorSwapId and SetDepthSwapid? Probably
-void xrSetSessionTimelineValue(XrSessionId sessionId, uint64_t timelineValue)
+void xrSetSessionTimelineValue(session_i iSession, uint64_t timelineValue)
 {
-	MxcNodeShared*  pNodeShared = node.pShared[sessionId];
+	MxcNodeShared*  pNodeShared = node.pShared[iSession];
 	atomic_store_explicit(&pNodeShared->timelineValue, timelineValue, memory_order_release);
 }
 
-void xrGetCompositorTimeline(XrSessionId sessionId, HANDLE* pHandle)
+void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle)
 {
 	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
-void xrCreateSwapchainImages(XrSessionId sessionId, const XrSwapchainInfo* pSwapInfo, XrSwapchainId swapId)
+void xrCreateSwapchainImages(session_i sessionId, const XrSwapchainInfo* pSwapInfo, swap_i iSwap)
 {
 	NodeHandle hNode = sessionId;
 	auto pNodeCtxt = &node.context[sessionId];
 	auto pNodeShrd = node.pShared[sessionId];
 
-	assert(pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_UNITIALIZED && "Trying to create swapchain images with used swap index!");
+	assert(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_UNITIALIZED && "Trying to create swapchain images with used swap index!");
 
-	pNodeShrd->swapStates[swapId] = XR_SWAP_STATE_REQUESTED;
-	pNodeShrd->swapInfos[swapId] = *pSwapInfo;
+	pNodeShrd->swapStates[iSwap] = XR_SWAP_STATE_REQUESTED;
+	pNodeShrd->swapInfos[iSwap] = *pSwapInfo;
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 
-	if (pNodeShrd->swapStates[swapId] == XR_SWAP_STATE_ERROR) {
+	if (pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_ERROR) {
 		LOG_ERROR("OpenXR failed to acquire swap!");
-		pNodeShrd->swapStates[swapId] = XR_SWAP_STATE_UNITIALIZED;
+		pNodeShrd->swapStates[iSwap] = XR_SWAP_STATE_UNITIALIZED;
 	}
 }
 
-void xrGetSwapchainImportedImage(XrSessionId sessionId, XrSwapchainId swapIndex, int imageId, HANDLE* pHandle)
+void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, int imageId, HANDLE* pHandle)
 {
-	auto pNodeShrd = node.pShared[sessionId];
+	auto pNodeShrd = node.pShared[iSession];
 	auto pImports = &pImportedExternalMemory->imports;
-	assert(pNodeShrd->swapStates[swapIndex] == XR_SWAP_STATE_CREATED && "Trying to get swap image that has not been created!!");
-	*pHandle = pImports->swapImageHandles[swapIndex][imageId];
+	assert(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_CREATED && "Trying to get swap image that has not been created!!");
+	*pHandle = pImports->swapImageHandles[iSwap][imageId];
 }
 
-void xrSetColorSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId)
+void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap)
 {
-	MxcNodeShared* pNodeShrd = node.pShared[sessionId];
-	pNodeShrd->viewSwaps[viewId].colorId = swapId;
+	MxcNodeShared* pNodeShrd = node.pShared[iSession];
+	pNodeShrd->viewSwaps[viewId].colorId = iSwap;
 }
 
-void xrSetDepthSwapId(XrSessionId sessionId, XrViewId viewId, XrSwapchainId swapId)
+void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap)
 {
-	MxcNodeShared* pNodeShrd = node.pShared[sessionId];
-	pNodeShrd->viewSwaps[viewId].depthId = swapId;
+	MxcNodeShared* pNodeShrd = node.pShared[iSession];
+	pNodeShrd->viewSwaps[viewId].depthId = iSwap;
 }
 
-void xrSetDepthInfo(XrSessionId sessionId, float minDepth, float maxDepth, float nearZ, float farZ)
+void xrSetDepthInfo(session_i iSession, float minDepth, float maxDepth, float nearZ, float farZ)
 {
-	MxcNodeShared* pNodeShrd = node.pShared[sessionId];
+	MxcNodeShared* pNodeShrd = node.pShared[iSession];
 	// pNodeShrd->processState.minDepth = minDepth;
 	// pNodeShrd->processState.maxDepth = maxDepth;
 	pNodeShrd->processState.depthNearZ = nearZ;
 	pNodeShrd->processState.depthFarZ = farZ;
 }
 
-void xrClaimSwapIndex(XrSessionId sessionId, uint8_t* pIndex)
+void xrClaimSwapIndex(session_i iSession, uint8_t* pIndex)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
 	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 	uint8_t index = (timelineValue % VK_SWAP_COUNT);
 	*pIndex = index;
@@ -152,37 +152,37 @@ void xrClaimSwapIndex(XrSessionId sessionId, uint8_t* pIndex)
 //	assert(priorIndex == false);
 }
 
-void xrReleaseSwapIndex(XrSessionId sessionId, uint8_t index)
+void xrReleaseSwapIndex(session_i iSession, uint8_t index)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
 	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 //	printf("Releasing swap index %d timeline %llu\n", index, timelineValue);
 //	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_SEQ_CST);
 //	assert(priorIndex == true);
 }
 
-void xrSetInitialCompositorTimelineValue(XrSessionId sessionId, uint64_t timelineValue)
+void xrSetInitialCompositorTimelineValue(session_i iSession, uint64_t timelineValue)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
 	u64 timelineCycleStartValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
 	// Wait two cycles out for good measure.
 	pNodeShared->compositorBaseCycleValue = timelineCycleStartValue + (MXC_CYCLE_COUNT * 2);
 //	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
 }
 
-void xrGetCompositorTimelineValue(XrSessionId sessionId, uint64_t* pTimelineValue)
+void xrGetCompositorTimelineValue(session_i iSession, uint64_t* pTimelineValue)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
 	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
 }
 
-void xrProgressCompositorTimelineValue(XrSessionId sessionId, uint64_t timelineValue)
+void xrProgressCompositorTimelineValue(session_i iSession, uint64_t timelineValue)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
 	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
 }
 
-XrTime xrGetFrameInterval(XrSessionId sessionId)
+XrTime xrGetFrameInterval(session_i sessionId)
 {
 	MxcNodeShared* pNodeShared = node.pShared[sessionId];
 	double hz = 144.0 / (double)(pNodeShared->compositorCycleSkip);
@@ -191,17 +191,17 @@ XrTime xrGetFrameInterval(XrSessionId sessionId)
 	return hzTime;
 }
 
-void xrGetHeadPose(XrSessionId sessionId, XrEulerPosef* pPose)
+void xrGetHeadPose(session_i iSession, XrEulerPosef* pPose)
 {
-	MxcNodeShared*  pNodeShared = node.pShared[sessionId];
+	MxcNodeShared*  pNodeShared = node.pShared[iSession];
 
 	pPose->euler    = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
 }
 
-void xrGetEyeView(XrSessionId sessionId, uint8_t viewIndex, XrEyeView *pEyeView)
+void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
 
 	pEyeView->euler    = *(XrVector3f*)&pNodeShared->cameraPose.euler;
 	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
@@ -211,7 +211,7 @@ void xrGetEyeView(XrSessionId sessionId, uint8_t viewIndex, XrEyeView *pEyeView)
 	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->clip.lrUV;
 
 	// TODO this is to debug
-	if (viewIndex == 1)
+	if (iView == 1)
 		pEyeView->position.x += 0.1f;
 }
 
@@ -226,51 +226,51 @@ void xrGetEyeView(XrSessionId sessionId, uint8_t viewIndex, XrEyeView *pEyeView)
 		pState->boolValue = pController->button;                  \
 		changed;                                                  \
 	})
-int xrInputSelectClick_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputSelectClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, left);
 }
-int xrInputSelectClick_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputSelectClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, right);
 }
-int xrInputSqueezeValue_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputSqueezeValue_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
-int xrInputSqueezeValue_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputSqueezeValue_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
-int xrInputSqueezeClick_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputSqueezeClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
-int xrInputSqueezeClick_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputSqueezeClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
-int xrInputTriggerValue_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputTriggerValue_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, left);
 }
-int xrInputTriggerValue_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputTriggerValue_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, right);
 }
-int xrInputTriggerClick_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputTriggerClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, left);
 }
-int xrInputTriggerClick_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputTriggerClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, right);
 }
-int xrInputMenuClick_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputMenuClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
-int xrInputMenuClick_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputMenuClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
@@ -288,28 +288,28 @@ int xrInputMenuClick_Right(XrSessionId sessionId, SubactionState* pState)
 		pState->eulerPoseValue.position = *(XrVector3f*)&pController->pose.pos;                               \
 		changed;                                                                                              \
 	})
-int xrInputGripPose_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputGripPose_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(gripPose, left);
 }
-int xrInputGripPose_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputGripPose_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(gripPose, right);
 }
-int xrInputAimPose_Left(XrSessionId sessionId, SubactionState* pState)
+int xrInputAimPose_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(aimPose, left);
 }
-int xrInputAimPose_Right(XrSessionId sessionId, SubactionState* pState)
+int xrInputAimPose_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(aimPose, right);
 }
 
-int xrOutputHaptic_Left(XrSessionId sessionId, SubactionState* pState)
+int xrOutputHaptic_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
-int xrOutputHaptic_Right(XrSessionId sessionId, SubactionState* pState)
+int xrOutputHaptic_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
