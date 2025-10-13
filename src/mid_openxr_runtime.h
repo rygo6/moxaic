@@ -295,7 +295,7 @@ typedef struct XrEyeView {
 } XrEyeView;
 void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView);
 
-XrTime xrGetFrameInterval(session_i sessionIndex);
+XrTime xrGetFrameInterval(session_i iSession);
 
 static inline XrTime xrHzToXrTime(double hz)
 {
@@ -308,24 +308,24 @@ static inline XrTime xrHzToXrTime(double hz)
  */
 typedef struct SubactionState SubactionState;
 
-int xrInputSelectClick_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputSelectClick_Right(session_i sessionIndex, SubactionState* pState);
-int xrInputSqueezeValue_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputSqueezeValue_Right(session_i sessionIndex, SubactionState* pState);
-int xrInputSqueezeClick_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputSqueezeClick_Right(session_i sessionIndex, SubactionState* pState);
-int xrInputTriggerValue_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputTriggerValue_Right(session_i sessionIndex, SubactionState* pState);
-int xrInputTriggerClick_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputTriggerClick_Right(session_i sessionIndex, SubactionState* pState);
-int xrInputMenuClick_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputMenuClick_Right(session_i sessionIndex, SubactionState* pState);
-int xrInputGripPose_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputGripPose_Right(session_i sessionIndex, SubactionState* pState);
-int xrInputAimPose_Left(session_i sessionIndex, SubactionState* pState);
-int xrInputAimPose_Right(session_i sessionIndex, SubactionState* pState);
-int xrOutputHaptic_Left(session_i sessionIndex, SubactionState* pState);
-int xrOutputHaptic_Right(session_i sessionIndex, SubactionState* pState);
+int xrInputSelectClick_Left  (session_i iSession, SubactionState* pState);
+int xrInputSelectClick_Right (session_i iSession, SubactionState* pState);
+int xrInputSqueezeValue_Left (session_i iSession, SubactionState* pState);
+int xrInputSqueezeValue_Right(session_i iSession, SubactionState* pState);
+int xrInputSqueezeClick_Left (session_i iSession, SubactionState* pState);
+int xrInputSqueezeClick_Right(session_i iSession, SubactionState* pState);
+int xrInputTriggerValue_Left (session_i iSession, SubactionState* pState);
+int xrInputTriggerValue_Right(session_i iSession, SubactionState* pState);
+int xrInputTriggerClick_Left (session_i iSession, SubactionState* pState);
+int xrInputTriggerClick_Right(session_i iSession, SubactionState* pState);
+int xrInputMenuClick_Left    (session_i iSession, SubactionState* pState);
+int xrInputMenuClick_Right   (session_i iSession, SubactionState* pState);
+int xrInputGripPose_Left     (session_i iSession, SubactionState* pState);
+int xrInputGripPose_Right    (session_i iSession, SubactionState* pState);
+int xrInputAimPose_Left      (session_i iSession, SubactionState* pState);
+int xrInputAimPose_Right     (session_i iSession, SubactionState* pState);
+int xrOutputHaptic_Left      (session_i iSession, SubactionState* pState);
+int xrOutputHaptic_Right     (session_i iSession, SubactionState* pState);
 
 /*
  * OpenXR Constants
@@ -368,6 +368,7 @@ typedef struct SetBase {
 typedef block_handle swap_h;
 typedef block_handle space_h;
 typedef block_handle session_h;
+typedef block_handle profile_h;
 
 #define XR_PATH_CAPACITY 256
 typedef struct Path {
@@ -505,10 +506,10 @@ typedef struct Session {
 	XrSessionState activeSessionState;
 	block_handle hActiveReferenceSpace;
 	block_handle hActiveInteractionProfile;
-	block_handle hPendingInteractionProfile;
+//	block_handle hPendingInteractionProfile;
 
 	XrBool32 activeIsUserPresent;
-	XrBool32 pendingIsUserPresent;
+//	XrBool32 pendingIsUserPresent;
 
 	/* State */
 	bool running;
@@ -521,16 +522,19 @@ typedef struct Session {
 
 	/* Graphics */
 	union {
+
 		struct {
 			HDC   hDC;
 			HGLRC hGLRC;
 		} gl;
+
 		struct {
 			ID3D11Device5*        device5;
 			ID3D11DeviceContext4* context4;
 			ID3D11Fence*          compositorFence;
 			ID3D11Fence*          sessionFence;
 		} d3d11;
+
 		struct {
 			VkInstance       instance;
 			VkPhysicalDevice physicalDevice;
@@ -538,6 +542,7 @@ typedef struct Session {
 			uint32_t         queueFamilyIndex;
 			uint32_t         queueIndex;
 		} vk;
+
 	} binding;
 
 } Session;
@@ -546,6 +551,8 @@ typedef union XrEventDataUnion {
 	XrEventDataBuffer                      dataBuffer;
 	XrEventDataSessionStateChanged         sessionStateChanged;
 	XrEventDataReferenceSpaceChangePending referenceSpaceChangePending;
+	XrEventDataInteractionProfileChanged   interactionProfileChanged;
+	XrEventDataUserPresenceChangedEXT      userPresenceChanged;
 } XrEventDataUnion;
 
 typedef struct Instance {
@@ -605,6 +612,7 @@ static struct {
 #define XR_OPAQUE_BLOCK_P(_opaqueHandle) _Generic(_opaqueHandle,                       \
 	    XrSession: BLOCK_PTR(xr.block.session, (block_handle)(u16)(u64)_opaqueHandle), \
 	    XrSpace:   BLOCK_PTR(xr.block.space,   (block_handle)(u16)(u64)_opaqueHandle), \
+	    XrPath:    BLOCK_PTR(xr.block.path,    (block_handle)(u16)(u64)_opaqueHandle), \
 	    default: NULL)
 
 // Opaque Handle to Handle
@@ -694,17 +702,17 @@ static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 #define ENABLE_DEBUG_LOG_METHOD
 #ifdef ENABLE_DEBUG_LOG_METHOD
 
-#define LOG_METHOD(_method) printf("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
+#define LOG_METHOD(_method) LOG("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
 
 static const char* pLastLogMethod = NULL;
 #define LOG_METHOD_ONCE(_method)                 \
-	{                                            \
+	({                                           \
 		static const char* methodPtr = #_method; \
 		if (pLastLogMethod != methodPtr) {       \
 			pLastLogMethod = methodPtr;          \
 			LOG_METHOD(_method);                 \
 		}                                        \
-	}
+	})
 
 
 #else
@@ -712,9 +720,7 @@ static const char* pLastLogMethod = NULL;
 #define LOG_METHOD_ONCE(_name)
 #endif
 
-#define ENUM_NAME_CASE(_enum, _value) \
-	case _value:                      \
-		return #_enum;
+#define ENUM_NAME_CASE(_enum, _value) case _value: return #_enum;
 #define STRING_ENUM_TYPE(_type)                    \
 	static const char* string_##_type(_type value) \
 	{                                              \
@@ -733,18 +739,15 @@ STRING_ENUM_TYPE(XrSessionState)
 #undef ENUM_NAME_CASE
 #undef STRING_ENUM_TYPE
 
-#define STRUCTURE_TYPE_NAME_CASE(_name, _type) \
-	case _type:                                \
-		return #_name;
+#define STRUCTURE_TYPE_NAME_CASE(_name, _type) case _type: return #_name;
 static const char* string_XrStructureType(XrStructureType type)
 {
 	switch (type) {
 		XR_LIST_STRUCTURE_TYPES(STRUCTURE_TYPE_NAME_CASE);
-		default:
-			return "N/A";
+		default: return "N/A";
 	}
 }
-#undef PRINT_STRUCT_TYPE_NAME
+#undef STRUCTURE_TYPE_NAME_CASE
 
 #define STR(s)       #s
 #define XSTR(s)      STR(s)
@@ -765,6 +768,14 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 		nextProperties = (XrBaseInStructure*)nextProperties->next;
 	}
 }
+
+#define CHECK_NEXT_CHAIN(_pInfo)                                                         \
+	({                                                                                   \
+		if (_pInfo->next != NULL) {                                                      \
+			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE " #_pInfo " does not support next!"); \
+			return XR_ERROR_VALIDATION_FAILURE;                                          \
+		}                                                                                \
+	})
 
 /*
  * Events
@@ -789,13 +800,13 @@ static void EnqueueEventDataSessionStateChanged(session_h hSession, XrSessionSta
 
 	LOG("Enqueue XrEventDataSessionStateChanged: %s\n",
 	    string_XrSessionState(sessionState));
+
 }
 
-static void
-EnqueueEventDataReferenceSpaceChangePending(session_h            hSession,
-                                            space_h              hSpace,
-                                            XrReferenceSpaceType referenceSpaceType,
-                                            XrPosef              poseInPreviousSpace)
+static void EnqueueEventDataReferenceSpaceChangePending(session_h            hSession,
+                                                        space_h              hSpace,
+                                                        XrReferenceSpaceType referenceSpaceType,
+                                                        XrPosef              poseInPreviousSpace)
 {
 	Session* pSession = BLOCK_PTR(xr.block.session, hSession);
 	pSession->hActiveReferenceSpace = hSpace;
@@ -814,6 +825,40 @@ EnqueueEventDataReferenceSpaceChangePending(session_h            hSession,
 
 	LOG("Enqueue XrEventDataReferenceSpaceChangePending: %s\n",
 	    string_XrReferenceSpaceType(referenceSpaceType));
+}
+
+static void EnqueueEventDataInteractionProfileChanged(session_h hSession, profile_h hProfile)
+{
+	Session* pSession = BLOCK_PTR(xr.block.session, hSession);
+	pSession->hActiveInteractionProfile = hProfile;
+
+	XrEventDataUnion* pEventData;
+	XR_EVENT_ENQUEUE_SCOPE(pEventData) {
+		pEventData->interactionProfileChanged = (XrEventDataInteractionProfileChanged){
+			.type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED,
+			.session = XR_TO_OPAQUE_H(XrSession, hSession),
+		};
+	}
+
+	LOG("Enqueue XrEventDataInteractionProfileChanged\n");
+}
+
+static void EnqueueEventDataUserPresenceChanged(session_h hSession, XrBool32 isUserPresent)
+{
+	if (!xr.instance.userPresenceEnabled) return;
+	Session* pSession = BLOCK_PTR(xr.block.session, hSession);
+	pSession->activeIsUserPresent = isUserPresent;
+
+	XrEventDataUnion* pEventData;
+	XR_EVENT_ENQUEUE_SCOPE(pEventData) {
+		pEventData->userPresenceChanged = (XrEventDataUserPresenceChangedEXT){
+			.type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT,
+			.session = XR_TO_OPAQUE_H(XrSession, hSession),
+			.isUserPresent = isUserPresent,
+		};
+	}
+
+	LOG("Enqueue XrEventDataUserPresenceChangedEXT %b\n", isUserPresent);
 }
 
 /*
@@ -880,7 +925,10 @@ typedef struct BindingDefinition {
 	int (*func)(session_i, SubactionState*);
 	const char path[XR_MAX_PATH_LENGTH];
 } BindingDefinition;
-static XrResult InitBinding(const char* interactionProfile, int bindingDefinitionCount, BindingDefinition* pBindingDefinitions)
+
+static XrResult InitBinding(const char*        interactionProfile,
+                            int                bindingDefinitionCount,
+                            BindingDefinition* pBindingDefinitions)
 {
 	XrPath interactionProfilePath;
 	xrStringToPath((XrInstance)&xr.instance, interactionProfile, &interactionProfilePath);
@@ -1014,20 +1062,18 @@ static inline XrResult GetActionState(
 /*
  * OpenXR Method Implementations
  */
-XR_PROC
-xrEnumerateApiLayerProperties(uint32_t              propertyCapacityInput,
-                              uint32_t*             propertyCountOutput,
-                              XrApiLayerProperties* properties)
+XR_PROC xrEnumerateApiLayerProperties(uint32_t              propertyCapacityInput,
+                                      uint32_t*             propertyCountOutput,
+                                      XrApiLayerProperties* properties)
 {
 	LOG_METHOD(xrEnumerateApiLayerProperties);
 	return XR_SUCCESS;
 }
 
-XR_PROC
-xrEnumerateInstanceExtensionProperties(const char*            layerName,
-                                       uint32_t               propertyCapacityInput,
-                                       uint32_t*              propertyCountOutput,
-                                       XrExtensionProperties* properties)
+XR_PROC xrEnumerateInstanceExtensionProperties(const char*            layerName,
+                                               uint32_t               propertyCapacityInput,
+                                               uint32_t*              propertyCountOutput,
+                                               XrExtensionProperties* properties)
 {
 	LOG_METHOD(xrEnumerateInstanceExtensionProperties);
 
@@ -1152,8 +1198,7 @@ static struct {
 	PFNGLTEXTURESTORAGEMEM2DEXTPROC     TextureStorageMem2DEXT;
 } gl;
 
-XR_PROC xrCreateInstance(const XrInstanceCreateInfo* createInfo,
-                         XrInstance*                 instance)
+XR_PROC xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* instance)
 {
 	LOG_METHOD(xrCreateInstance);
 
@@ -1290,69 +1335,57 @@ typedef struct XrEventDataSpaceBoundsChanged {
 	vec2                        uvCorners[XR_CUBE_CORNER_COUNT];
 } XrEventDataSpaceBoundsChanged;
 
-XR_PROC xrPollEvent(XrInstance         instance,
-                    XrEventDataBuffer* eventData)
+XR_PROC
+xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 {
 	LOG_METHOD_ONCE(xrPollEvent);
 	CHECK_INSTANCE(instance);
 
 	XrEventDataUnion* pEventData = (XrEventDataUnion*)eventData;
 	if (MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData) == MID_SUCCESS) {
-//		switch (pEventData->dataBuffer.type) {
-//
-//			case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
-//				LOG("SessionStateChanged: %s\n", string_XrSessionState(pEventData->sessionStateChanged.state));
-//				Session* pSession = XR_OPAQUE_BLOCK_P(pEventData->sessionStateChanged.session);
-//				pSession->activeSessionState = pEventData->sessionStateChanged.state;
-//				break;
-//			}
-//
-//			default: break;
-//		}
-
 		return XR_SUCCESS;
 	}
 
 	// technically could be worth iterating map in instance?
-	for (u16 iSession = 0; iSession < XR_SESSIONS_CAPACITY; ++iSession) {
-
-		session_h hSession = BLOCK_HANDLE_INDEX(xr.block.session, iSession);
-
-		if (!BLOCK_OCCUPIED(xr.block.session, hSession))
-			continue;
-
-		Session* pSession = BLOCK_PTR(B.session, hSession);
-
-		if (pSession->hActiveInteractionProfile != pSession->hPendingInteractionProfile) {
-
-			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
-			auto pEventData = (XrEventDataInteractionProfileChanged*)eventData;
-			pEventData->session = XR_TO_OPAQUE_H(XrSession, hSession);
-
-			pSession->hActiveInteractionProfile = pSession->hPendingInteractionProfile;
-
-			auto pActionInteractionProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
-			auto pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
-			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
-
-			return XR_SUCCESS;
-		}
-
-		if (xr.instance.userPresenceEnabled && pSession->activeIsUserPresent != pSession->pendingIsUserPresent) {
-
-			eventData->type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT;
-
-			auto pEventData = (XrEventDataUserPresenceChangedEXT*)eventData;
-			pEventData->session = XR_TO_OPAQUE_H(XrSession, hSession);
-			pEventData->isUserPresent = pSession->pendingIsUserPresent;
-
-			pSession->activeIsUserPresent = pSession->pendingIsUserPresent;
-
-			printf("XrEventDataUserPresenceChangedEXT %d\n", pSession->activeIsUserPresent);
-
-			return XR_SUCCESS;
-		}
-	}
+//	for (u16 iSession = 0; iSession < XR_SESSIONS_CAPACITY; ++iSession) {
+//
+//		session_h hSession = BLOCK_HANDLE_INDEX(xr.block.session, iSession);
+//
+//		if (!BLOCK_OCCUPIED(xr.block.session, hSession))
+//			continue;
+//
+//		Session* pSession = BLOCK_PTR(B.session, hSession);
+//
+//		if (pSession->hActiveInteractionProfile != pSession->hPendingInteractionProfile) {
+//
+//			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
+//			auto pEventData = (XrEventDataInteractionProfileChanged*)eventData;
+//			pEventData->session = XR_TO_OPAQUE_H(XrSession, hSession);
+//
+//			pSession->hActiveInteractionProfile = pSession->hPendingInteractionProfile;
+//
+//			auto pActionInteractionProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
+//			auto pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
+//			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
+//
+//			return XR_SUCCESS;
+//		}
+//
+//		if (xr.instance.userPresenceEnabled && pSession->activeIsUserPresent != pSession->pendingIsUserPresent) {
+//
+//			eventData->type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT;
+//
+//			auto pEventData = (XrEventDataUserPresenceChangedEXT*)eventData;
+//			pEventData->session = XR_TO_OPAQUE_H(XrSession, hSession);
+//			pEventData->isUserPresent = pSession->pendingIsUserPresent;
+//
+//			pSession->activeIsUserPresent = pSession->pendingIsUserPresent;
+//
+//			printf("XrEventDataUserPresenceChangedEXT %d\n", pSession->activeIsUserPresent);
+//
+//			return XR_SUCCESS;
+//		}
+//	}
 
 	return XR_EVENT_UNAVAILABLE;
 }
@@ -1360,10 +1393,8 @@ XR_PROC xrPollEvent(XrInstance         instance,
 #define TRANSFER_ENUM_NAME(_type, _) \
 	case _type: strncpy(buffer, #_type, XR_MAX_RESULT_STRING_SIZE); break;
 
-XR_PROC xrResultToString(
-	XrInstance instance,
-	XrResult   value,
-	char       buffer[XR_MAX_RESULT_STRING_SIZE])
+XR_PROC
+xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_STRING_SIZE])
 {
 	CHECK_INSTANCE(instance);
 
@@ -1378,10 +1409,10 @@ XR_PROC xrResultToString(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrStructureTypeToString(
-	XrInstance      instance,
-	XrStructureType value,
-	char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
+XR_PROC
+xrStructureTypeToString(XrInstance      instance,
+                        XrStructureType value,
+                        char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
 {
 	CHECK_INSTANCE(instance);
 
@@ -1398,10 +1429,8 @@ XR_PROC xrStructureTypeToString(
 
 #undef TRANSFER_ENUM_NAME
 
-XR_PROC xrGetSystem(
-	XrInstance             instance,
-	const XrSystemGetInfo* getInfo,
-	XrSystemId*            systemId)
+XR_PROC
+xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId)
 {
 	LOG_METHOD_ONCE(xrGetSystem);
 	LogNextChain((XrBaseInStructure*)getInfo->next);
@@ -1425,10 +1454,8 @@ XR_PROC xrGetSystem(
 	}
 }
 
-XR_PROC xrGetSystemProperties(
-	XrInstance          instance,
-	XrSystemId          systemId,
-	XrSystemProperties* properties)
+XR_PROC
+xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties)
 {
 	LOG_METHOD(xrGetSystemProperties);
 	CHECK_INSTANCE(instance);
@@ -1470,13 +1497,13 @@ XR_PROC xrGetSystemProperties(
 	}
 }
 
-XR_PROC xrEnumerateEnvironmentBlendModes(
-	XrInstance              instance,
-	XrSystemId              systemId,
-	XrViewConfigurationType viewConfigurationType,
-	uint32_t                environmentBlendModeCapacityInput,
-	uint32_t*               environmentBlendModeCountOutput,
-	XrEnvironmentBlendMode* environmentBlendModes)
+XR_PROC
+xrEnumerateEnvironmentBlendModes(XrInstance              instance,
+                                 XrSystemId              systemId,
+                                 XrViewConfigurationType viewConfigurationType,
+                                 uint32_t                environmentBlendModeCapacityInput,
+                                 uint32_t*               environmentBlendModeCountOutput,
+                                 XrEnvironmentBlendMode* environmentBlendModes)
 {
 	LOG_METHOD(xrEnumerateEnvironmentBlendModes);
 	CHECK_INSTANCE(instance);
@@ -1509,9 +1536,8 @@ XR_PROC xrEnumerateEnvironmentBlendModes(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrCreateSession(XrInstance                 instance,
-                        const XrSessionCreateInfo* createInfo,
-                        XrSession*                 session)
+XR_PROC
+xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSession* session)
 {
 	LOG_METHOD(xrCreateSession);
 	CHECK_INSTANCE(instance);
@@ -1532,16 +1558,16 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 		return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
 	}
 
-	session_i sessionIndex; xrClaimSessionId(&sessionIndex);
-	LOG("Claimed SessionIndex %d\n", sessionIndex);
+	session_i iSession; xrClaimSessionId(&iSession);
+	LOG("Claimed iSession %d\n", iSession);
 
-	session_h hSession = BLOCK_CLAIM(xr.block.session, sessionIndex);
+	session_h hSession = BLOCK_CLAIM(xr.block.session, iSession);
 	Session*  pSession = BLOCK_PTR(xr.block.session, hSession);
 	memset(pSession, 0, sizeof(Session));
-	pSession->index = sessionIndex;
+	pSession->index = iSession;
 
-	HANDLE compositorFenceHandle; xrGetCompositorTimeline(sessionIndex, &compositorFenceHandle);
-	HANDLE sessionFenceHandle; xrGetSessionTimeline(sessionIndex, &sessionFenceHandle);
+	HANDLE compositorFenceHandle; xrGetCompositorTimeline(iSession, &compositorFenceHandle);
+	HANDLE sessionFenceHandle; xrGetSessionTimeline(iSession, &sessionFenceHandle);
 
 	if (createInfo->next == NULL) {
 		LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
@@ -1631,18 +1657,15 @@ XR_PROC xrCreateSession(XrInstance                 instance,
 		}
 	}
 
-
 	pSession->systemId = createInfo->systemId;
 	pSession->hActiveReferenceSpace = HANDLE_DEFAULT;
 	pSession->hActiveInteractionProfile = HANDLE_DEFAULT;
-	pSession->hPendingInteractionProfile = HANDLE_DEFAULT;
 	pSession->activeIsUserPresent = XR_FALSE;
-	pSession->pendingIsUserPresent = XR_TRUE;
-
 	*session = XR_TO_OPAQUE_H(XrSession, hSession);
 
 	EnqueueEventDataSessionStateChanged(hSession, XR_SESSION_STATE_IDLE);
 	EnqueueEventDataSessionStateChanged(hSession, XR_SESSION_STATE_READY);
+	EnqueueEventDataUserPresenceChanged(hSession, XR_TRUE);
 
 	LOG("Created session %llu. %d sessions in use\n", (u64)*session, BLOCK_COUNT(B.session));
 	return XR_SUCCESS;
@@ -1773,13 +1796,13 @@ XR_PROC xrCreateActionSpace(
 		((Action*)createInfo->action)->actionName, ((Path*)createInfo->subactionPath)->string, EXPAND_STRUCT(XrVector3f, position), EXPAND_STRUCT(XrQuaternionf, orientation));
 	assert(createInfo->next == NULL);
 
-	space_h hSpace = BLOCK_CLAIM(B.space, 0);
+	space_h hSpace = BLOCK_CLAIM(xr.block.space, 0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
-	Space* pSpace = BLOCK_PTR(B.space, hSpace);
+	Space* pSpace = BLOCK_PTR(xr.block.space, hSpace);
 	pSpace->type = createInfo->type;
 	pSpace->poseInSpace = createInfo->poseInActionSpace;
-	pSpace->action.hAction = BLOCK_HANDLE(B.action, (Action*)createInfo->action);
-	pSpace->action.hSubactionPath = BLOCK_HANDLE(B.path, (Path*)createInfo->subactionPath);
+	pSpace->action.hAction = BLOCK_HANDLE(xr.block.action, (Action*)createInfo->action);
+	pSpace->action.hSubactionPath = BLOCK_HANDLE(xr.block.path, (Path*)createInfo->subactionPath);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
@@ -2101,7 +2124,7 @@ static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_COUNT] =
 	},
 };
 
-constexpr int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_COUNT] = {
+static const int swapFormatCounts[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_COUNT] = {
 	[XR_GRAPHICS_API_OPENGL] = {
 		[XR_SWAP_OUTPUT_COLOR] = COUNT(colorGlSwapFormats),
 		[XR_SWAP_OUTPUT_DEPTH] = COUNT(depthGlSwapFormats),
@@ -2172,10 +2195,9 @@ XR_PROC xrEnumerateSwapchainFormats(
 		XR_LIST_BITS_XrSwapchainCreateFlags(LOG_FLAGS); \
 	})
 
-XR_PROC xrCreateSwapchain(
-	XrSession                    session,
-	const XrSwapchainCreateInfo* createInfo,
-	XrSwapchain*                 swapchain)
+XR_PROC xrCreateSwapchain(XrSession                    session,
+                          const XrSwapchainCreateInfo* createInfo,
+                          XrSwapchain*                 swapchain)
 {
 	LOG_METHOD(xrCreateSwapchain);
 
@@ -3320,7 +3342,7 @@ XR_PROC xrAttachSessionActionSets(
 		printf("Attached ActionSet %s\n", pActSet->actionSetName);
 	}
 
-	if (!HANDLE_VALID(pSession->hPendingInteractionProfile)) {
+	if (!HANDLE_VALID(pSession->hActiveInteractionProfile)) {
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 
 		XrPath profilePath;
@@ -3329,7 +3351,7 @@ XR_PROC xrAttachSessionActionSets(
 		auto hProfile = BLOCK_FIND(B.profile, profileHash);
 		HANDLE_CHECK(hProfile, XR_ERROR_HANDLE_INVALID);
 
-		pSession->hPendingInteractionProfile = hProfile;
+		EnqueueEventDataInteractionProfileChanged(hSession, hProfile);
 	}
 
 	return XR_SUCCESS;
@@ -3340,25 +3362,23 @@ XR_PROC xrGetCurrentInteractionProfile(
 	XrPath                     topLevelUserPath,
 	XrInteractionProfileState* interactionProfile)
 {
+//	Path* pPath = XR_OPAQUE_BLOCK_P(topLevelUserPath);
 	auto pPath = (Path*)topLevelUserPath;
 	LOG("xrGetCurrentInteractionProfile %s\n", pPath->string);
+	CHECK_NEXT_CHAIN(interactionProfile);
+
 	assert(interactionProfile->next == NULL);
 
-	// application might set interaction profile then immediately call things without letting xrPollEvent update activeInteractionProfile
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
 
 	InteractionProfile* pProfile = XR_NULL_HANDLE;
 	if (HANDLE_VALID(pSession->hActiveInteractionProfile))
 		pProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
-	else if (HANDLE_VALID(pSession->hPendingInteractionProfile))
-		pProfile = BLOCK_PTR(B.profile, pSession->hPendingInteractionProfile);
 
 	Path* pProfilePath = XR_NULL_HANDLE;
-	if (pProfile != XR_NULL_HANDLE) {
+	if (pProfile != XR_NULL_HANDLE)
 		pProfilePath = (Path*)pProfile->path;
-		LOG("Found InteractionProfile: %s %p\n", pProfilePath->string, (void*)pProfilePath);
-	}
 
 	// TODO need to check and see if the path has anything bound to it!!
 	interactionProfile->interactionProfile = (XrPath)pProfilePath;

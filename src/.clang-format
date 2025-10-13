@@ -24,8 +24,8 @@ AlignConsecutiveShortCaseStatements:
   AlignCaseColons: false
 
 #BreakAfterReturnType: All
-#BinPackParameters: OnePerLine
-AllowAllParametersOfDeclarationOnNextLine: false
+BinPackParameters: OnePerLine
+#AllowAllParametersOfDeclarationOnNextLine: false
 
 #AlignAfterOpenBracket: Align
 Cpp11BracedListStyle: true
