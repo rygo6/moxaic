@@ -369,6 +369,10 @@ typedef block_handle swap_h;
 typedef block_handle space_h;
 typedef block_handle session_h;
 typedef block_handle profile_h;
+typedef block_handle path_h;
+typedef block_handle bind_h;
+typedef block_handle substate_h;
+typedef block_handle action_h;
 
 #define XR_PATH_CAPACITY 256
 typedef struct Path {
@@ -378,7 +382,7 @@ typedef struct Path {
 #define XR_MAX_BINDINGS      16
 #define XR_INTERACTION_PROFILE_CAPACITY 16
 typedef struct InteractionProfile {
-	XrPath path;
+	path_h hPath;
 	MAP_DECL(XR_MAX_BINDINGS) bindings;
 } InteractionProfile;
 typedef InteractionProfile* XrInteractionProfile;
@@ -417,9 +421,9 @@ typedef struct Action {
 	bHnd hActionSet;
 
 	u8   countSubactions;
-	bHnd hSubactionStates[XR_MAX_SUBACTION_PATHS];
-	bHnd hSubactionBindings[XR_MAX_SUBACTION_PATHS];
-	bHnd hSubactionPaths[XR_MAX_SUBACTION_PATHS];
+	substate_h  hSubactionStates[XR_MAX_SUBACTION_PATHS];
+	bind_h      hSubactionBindings[XR_MAX_SUBACTION_PATHS];
+	path_h      hSubactionPaths[XR_MAX_SUBACTION_PATHS];
 
 	XrActionType actionType;
 	char         actionName[XR_MAX_ACTION_NAME_SIZE];
@@ -504,12 +508,9 @@ typedef struct Session {
 
 	/* Events */
 	XrSessionState activeSessionState;
-	block_handle hActiveReferenceSpace;
-	block_handle hActiveInteractionProfile;
-//	block_handle hPendingInteractionProfile;
-
-	XrBool32 activeIsUserPresent;
-//	XrBool32 pendingIsUserPresent;
+	space_h        hActiveReferenceSpace;
+	profile_h      hActiveInteractionProfile;
+	XrBool32       activeIsUserPresent;
 
 	/* State */
 	bool running;
@@ -608,21 +609,36 @@ static struct {
 
 #define B xr.block // get rid of this
 
-// Opaque Handle to Ptr
-#define XR_OPAQUE_BLOCK_P(_opaqueHandle) _Generic(_opaqueHandle,                       \
-	    XrSession: BLOCK_PTR(xr.block.session, (block_handle)(u16)(u64)_opaqueHandle), \
-	    XrSpace:   BLOCK_PTR(xr.block.space,   (block_handle)(u16)(u64)_opaqueHandle), \
-	    XrPath:    BLOCK_PTR(xr.block.path,    (block_handle)(u16)(u64)_opaqueHandle), \
-	    default: NULL)
+typedef enum XrAtomType {
+	XR_ATOM_TYPE_UNKNOWN = 0,
+	XR_ATOM_TYPE_PATH = 0,
+	XR_ATOM_TYPE_MAX_ENUM = 0x7FFFFFFF
+} XrAtomType;
 
 // Opaque Handle to Handle
-#define XR_OPAQUE_BLOCK_H(_opaqueHandle) (block_handle)(u64) _opaqueHandle
+#define XR_OPAQUE_BLOCK_H(_opaqueHandle) ((block_handle)(u64)_opaqueHandle)
+
+// Atom to Handle
+#define XR_ATOM_BLOCK_H(_atom) ((block_handle)_atom)
+
+// Opaque Handle to Ptr
+#define XR_OPAQUE_BLOCK_P(_opaqueHandle) _Generic(_opaqueHandle,                  \
+	    XrSession: BLOCK_PTR(xr.block.session, XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
+	    XrSpace:   BLOCK_PTR(xr.block.space,   XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
+	    default:   NULL)
+
+// Atom to Ptr
+#define XR_ATOM_BLOCK_P(_block, _atom) BLOCK_PTR(_block, XR_ATOM_BLOCK_H(_atom))
 
 // Handle to Opaque Handle
 #define XR_TO_OPAQUE_H(_type, _handle) _Generic((_type*)0,                 \
     XrSession*: (_type)((u64)XR_OBJECT_TYPE_SESSION << 32 | (u64)_handle), \
+    XrSpace*:   (_type)((u64)XR_OBJECT_TYPE_SPACE  << 32  | (u64)_handle), \
     default: (_type)0                                                      \
 )
+
+// Handle to Atom
+#define XR_TO_ATOM(_type, _handle) ((u64)_type << 32 | (u64)_handle)
 
 #define XR_OPAQUE_H_TYPE(_handle) (XrObjectType)(_handle >> 32);
 
@@ -898,25 +914,29 @@ static inline float xrFloatLerp(float a, float b, float t)
  * Binding
  */
 static XrResult RegisterBinding(
-	XrInstance          instance,
-	InteractionProfile* pInteractionProfile,
-	Path*               pBindingPath,
+	XrInstance instance,
+	profile_h  hProfile,
+	path_h     hBindPath,
 	int (*func)(session_i, SubactionState*))
 {
-	auto bindPathHash = BLOCK_KEY(B.path, pBindingPath);
-	for (u32 i = 0; i < pInteractionProfile->bindings.count; ++i) {
-		if (pInteractionProfile->bindings.keys[i] == bindPathHash) {
-			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindingPath->string, bindPathHash);
+	InteractionProfile* pProfile     = BLOCK_PTR(xr.block.profile, hProfile);
+	Path*               pBindPath    = BLOCK_PTR(xr.block.path,    hBindPath);
+	block_key           bindPathHash = BLOCK_KEY(xr.block.path,    pBindPath);
+
+	for (u32 i = 0; i < pProfile->bindings.count; ++i) {
+		if (pProfile->bindings.keys[i] == bindPathHash) {
+			LOG_ERROR("Trying to register path hash twice! %s %d\n", pBindPath->string, bindPathHash);
 			return XR_ERROR_PATH_INVALID;
 		}
 	}
 
-	auto hBind = BLOCK_CLAIM(B.binding, bindPathHash);
-	auto pBind = BLOCK_PTR(B.binding, hBind);
-	pBind->hPath = BLOCK_HANDLE(B.path, pBindingPath);
+	bind_h   hBind = BLOCK_CLAIM(xr.block.binding, bindPathHash);
+	Binding* pBind = BLOCK_PTR(xr.block.binding, hBind);
+
+	pBind->hPath = BLOCK_HANDLE(xr.block.path,   pBindPath);
 	pBind->func = func;
 
-	MAP_ADD(pInteractionProfile->bindings, hBind, bindPathHash);
+	MAP_ADD(pProfile->bindings, hBind, bindPathHash);
 
 	return XR_SUCCESS;
 }
@@ -930,19 +950,19 @@ static XrResult InitBinding(const char*        interactionProfile,
                             int                bindingDefinitionCount,
                             BindingDefinition* pBindingDefinitions)
 {
-	XrPath interactionProfilePath;
-	xrStringToPath((XrInstance)&xr.instance, interactionProfile, &interactionProfilePath);
-	bKey interactionProfilePathHash = BLOCK_KEY(B.path, (Path*)interactionProfilePath);
+	XrPath profilePath;
+	xrStringToPath((XrInstance)&xr.instance, interactionProfile, &profilePath);
+	path_h hProfilePath = XR_ATOM_BLOCK_H(profilePath);
+	block_key profilePathHash = BLOCK_KEY_H(xr.block.path, hProfilePath);
 
-	bHnd interactionProfileHandle = BLOCK_CLAIM(B.profile, interactionProfilePathHash);
-	auto pInteractionProfile = BLOCK_PTR(B.profile, interactionProfileHandle);
-
-	pInteractionProfile->path = interactionProfilePath;
+	profile_h           hProfile = BLOCK_CLAIM(B.profile, profilePathHash);
+	InteractionProfile* pProfile = BLOCK_PTR(B.profile, hProfile);
+	pProfile->hPath = XR_ATOM_BLOCK_H(profilePath);
 
 	for (int i = 0; i < bindingDefinitionCount; ++i) {
-		XrPath bindingPath;
-		xrStringToPath((XrInstance)&xr.instance, pBindingDefinitions[i].path, &bindingPath);
-		XR_CHECK(RegisterBinding((XrInstance)&xr.instance, pInteractionProfile, (Path*)bindingPath, pBindingDefinitions[i].func));
+		XrPath bindPath; xrStringToPath((XrInstance)&xr.instance, pBindingDefinitions[i].path, &bindPath);
+		path_h hBindPath = XR_ATOM_BLOCK_H(bindPath);
+		XR_CHECK(RegisterBinding((XrInstance)&xr.instance, hProfile, hBindPath, pBindingDefinitions[i].func));
 	}
 
 	return XR_SUCCESS;
@@ -1040,7 +1060,7 @@ static inline XrResult GetActionState(
 	Path*            pSubPath,
 	SubactionState** ppState)
 {
-	auto hSubPath = BLOCK_HANDLE(B.path, pSubPath);
+	auto hSubPath = BLOCK_HANDLE(xr.block.path, pSubPath);
 	if (pSubPath == NULL) {
 		auto hState = pAction->hSubactionPaths[0];
 		*ppState = BLOCK_PTR(B.state, hState);
@@ -1335,66 +1355,22 @@ typedef struct XrEventDataSpaceBoundsChanged {
 	vec2                        uvCorners[XR_CUBE_CORNER_COUNT];
 } XrEventDataSpaceBoundsChanged;
 
-XR_PROC
-xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
+XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 {
 	LOG_METHOD_ONCE(xrPollEvent);
 	CHECK_INSTANCE(instance);
 
 	XrEventDataUnion* pEventData = (XrEventDataUnion*)eventData;
-	if (MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData) == MID_SUCCESS) {
-		return XR_SUCCESS;
-	}
-
-	// technically could be worth iterating map in instance?
-//	for (u16 iSession = 0; iSession < XR_SESSIONS_CAPACITY; ++iSession) {
-//
-//		session_h hSession = BLOCK_HANDLE_INDEX(xr.block.session, iSession);
-//
-//		if (!BLOCK_OCCUPIED(xr.block.session, hSession))
-//			continue;
-//
-//		Session* pSession = BLOCK_PTR(B.session, hSession);
-//
-//		if (pSession->hActiveInteractionProfile != pSession->hPendingInteractionProfile) {
-//
-//			eventData->type = XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED;
-//			auto pEventData = (XrEventDataInteractionProfileChanged*)eventData;
-//			pEventData->session = XR_TO_OPAQUE_H(XrSession, hSession);
-//
-//			pSession->hActiveInteractionProfile = pSession->hPendingInteractionProfile;
-//
-//			auto pActionInteractionProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
-//			auto pActionInteractionProfilePath = (Path*)pActionInteractionProfile->path;
-//			printf("XrEventDataInteractionProfileChanged %s\n", pActionInteractionProfilePath->string);
-//
-//			return XR_SUCCESS;
-//		}
-//
-//		if (xr.instance.userPresenceEnabled && pSession->activeIsUserPresent != pSession->pendingIsUserPresent) {
-//
-//			eventData->type = XR_TYPE_EVENT_DATA_USER_PRESENCE_CHANGED_EXT;
-//
-//			auto pEventData = (XrEventDataUserPresenceChangedEXT*)eventData;
-//			pEventData->session = XR_TO_OPAQUE_H(XrSession, hSession);
-//			pEventData->isUserPresent = pSession->pendingIsUserPresent;
-//
-//			pSession->activeIsUserPresent = pSession->pendingIsUserPresent;
-//
-//			printf("XrEventDataUserPresenceChangedEXT %d\n", pSession->activeIsUserPresent);
-//
-//			return XR_SUCCESS;
-//		}
-//	}
-
-	return XR_EVENT_UNAVAILABLE;
+	return MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData)
+	               == MID_SUCCESS ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
 }
 
 #define TRANSFER_ENUM_NAME(_type, _) \
 	case _type: strncpy(buffer, #_type, XR_MAX_RESULT_STRING_SIZE); break;
 
-XR_PROC
-xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_STRING_SIZE])
+XR_PROC xrResultToString(XrInstance instance,
+                         XrResult value,
+                         char buffer[XR_MAX_RESULT_STRING_SIZE])
 {
 	CHECK_INSTANCE(instance);
 
@@ -1409,10 +1385,9 @@ xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_
 	return XR_SUCCESS;
 }
 
-XR_PROC
-xrStructureTypeToString(XrInstance      instance,
-                        XrStructureType value,
-                        char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
+XR_PROC xrStructureTypeToString(XrInstance      instance,
+                                XrStructureType value,
+                                char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
 {
 	CHECK_INSTANCE(instance);
 
@@ -1792,9 +1767,13 @@ XR_PROC xrCreateActionSpace(
 {
 	XrVector3f    position    = createInfo->poseInActionSpace.position;
 	XrQuaternionf orientation = createInfo->poseInActionSpace.orientation;
+	Action* pCreateAction = (Action*)createInfo->action;
+	Path*   pCreatePath   = XR_ATOM_BLOCK_P(xr.block.path, createInfo->subactionPath);
+
 	LOG("xrCreateActionSpace\n	%s\n	%s " FORMAT_STRUCT_F(XrVector3f) "\n	" FORMAT_STRUCT_F(XrQuaternionf) "\n",
-		((Action*)createInfo->action)->actionName, ((Path*)createInfo->subactionPath)->string, EXPAND_STRUCT(XrVector3f, position), EXPAND_STRUCT(XrQuaternionf, orientation));
-	assert(createInfo->next == NULL);
+	    pCreateAction->actionName, pCreatePath->string, EXPAND_STRUCT(XrVector3f, position), EXPAND_STRUCT(XrQuaternionf, orientation));
+
+	CHECK_NEXT_CHAIN(createInfo);
 
 	space_h hSpace = BLOCK_CLAIM(xr.block.space, 0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
@@ -1802,7 +1781,7 @@ XR_PROC xrCreateActionSpace(
 	pSpace->type = createInfo->type;
 	pSpace->poseInSpace = createInfo->poseInActionSpace;
 	pSpace->action.hAction = BLOCK_HANDLE(xr.block.action, (Action*)createInfo->action);
-	pSpace->action.hSubactionPath = BLOCK_HANDLE(xr.block.path, (Path*)createInfo->subactionPath);
+	pSpace->action.hSubactionPath = XR_ATOM_BLOCK_H(createInfo->subactionPath);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
@@ -1822,17 +1801,17 @@ XR_PROC xrLocateSpace(XrSpace          space,
 	LOG_METHOD_ONCE(xrLocateSpace);
 
 	Space*   pSpace = (Space*)space;
-	Session* pSession = BLOCK_PTR(B.session, pSpace->hSession);
+	Session* pSession = BLOCK_PTR(xr.block.session, pSpace->hSession);
 
 	XrBool32 isActive = false;
 	XrEulerPosef eulerPose = {};
 	switch (pSpace->type) {
 		case XR_TYPE_ACTION_SPACE_CREATE_INFO:
-			auto pSubPath = BLOCK_PTR(B.path, pSpace->action.hSubactionPath);
-			auto pAction  = BLOCK_PTR(B.action, pSpace->action.hAction);
+			auto pSubPath = BLOCK_PTR(xr.block.path, pSpace->action.hSubactionPath);
+			auto pAction  = BLOCK_PTR(xr.block.action, pSpace->action.hAction);
 
-			auto hSession   = BLOCK_HANDLE(B.session, pSession);
-			auto pActionSet = BLOCK_PTR(B.actionSet, pAction->hActionSet);
+			auto hSession   = BLOCK_HANDLE(xr.block.session, pSession);
+			auto pActionSet = BLOCK_PTR(xr.block.actionSet, pAction->hActionSet);
 
 			if (hSession != pActionSet->hAttachedToSession) {
 				LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
@@ -2482,9 +2461,8 @@ XR_PROC xrWaitSwapchainImage(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrReleaseSwapchainImage(
-	XrSwapchain                        swapchain,
-	const XrSwapchainImageReleaseInfo* releaseInfo)
+XR_PROC xrReleaseSwapchainImage(XrSwapchain                        swapchain,
+                                const XrSwapchainImageReleaseInfo* releaseInfo)
 {
 	LOG_METHOD_ONCE(xrReleaseSwapchainImage);
 	assert(releaseInfo->next == NULL);
@@ -2507,9 +2485,7 @@ XR_PROC xrReleaseSwapchainImage(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrBeginSession(
-	XrSession                 session,
-	const XrSessionBeginInfo* beginInfo)
+XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 {
 	LOG_METHOD_ONCE(xrBeginSession);
 	LogNextChain(beginInfo->next);
@@ -3031,50 +3007,46 @@ XR_PROC xrLocateViews(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrStringToPath(
-	XrInstance  instance,
-	const char* pathString,
-	XrPath*     path)
+XR_PROC xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 {
 	LOG_METHOD_ONCE(xrStringToPath);
 	CHECK_INSTANCE(instance);
 
 	u32 pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (u32 i = 0; i < XR_PATH_CAPACITY; ++i) {
-		if (B.path.keys[i] != pathHash)
-			continue;
-		if (strncmp(B.path.blocks[i].string, pathString, XR_MAX_PATH_LENGTH)) {
-			LOG_ERROR("Path Hash Collision! %s | %s\n", B.path.blocks[i].string, pathString);
+		if (xr.block.path.keys[i] != pathHash) continue;
+		if (strncmp(xr.block.path.blocks[i].string, pathString, XR_MAX_PATH_LENGTH)) {
+			LOG_ERROR("Path Hash Collision! %s | %s\n", xr.block.path.blocks[i].string, pathString);
 			return XR_ERROR_PATH_INVALID;
 		}
-		printf("Path Handle Found: %d\n    %s\n", i, B.path.blocks[i].string);
-		*path = (XrPath)&B.path.blocks[i];
+		LOG("Path Handle Found: %d\n    %s\n", i, xr.block.path.blocks[i].string);
+		path_h hFoundPath = BLOCK_HANDLE(xr.block.path, xr.block.path.blocks + i);
+		*path = XR_TO_ATOM(XR_ATOM_TYPE_PATH, hFoundPath);
 		return XR_SUCCESS;
 	}
 
-	auto hPath = BLOCK_CLAIM(B.path, pathHash);
+	path_h hPath = BLOCK_CLAIM(xr.block.path, pathHash);
 	HANDLE_CHECK(hPath, XR_ERROR_PATH_COUNT_EXCEEDED);
 
-	auto pPath = BLOCK_PTR(B.path, hPath);
+	Path* pPath = BLOCK_PTR(xr.block.path, hPath);
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
 
-	*path = (XrPath)pPath;
+	*path = XR_TO_ATOM(XR_ATOM_TYPE_PATH, hPath);
 
 	return XR_SUCCESS;
 }
 
-XR_PROC xrPathToString(
-	XrInstance instance,
-	XrPath     path,
-	uint32_t   bufferCapacityInput,
-	uint32_t*  bufferCountOutput,
-	char*      buffer)
+XR_PROC xrPathToString(XrInstance instance,
+                       XrPath     path,
+                       uint32_t   bufferCapacityInput,
+                       uint32_t*  bufferCountOutput,
+                       char*      buffer)
 {
 	LOG_METHOD_ONCE(xrPathToString);
 	CHECK_INSTANCE(instance);
 
-	auto pPath = (Path*)path;
+	Path* pPath = XR_ATOM_BLOCK_P(xr.block.path, path);
 
 	*bufferCountOutput = strlen(pPath->string) + 1;
 
@@ -3096,10 +3068,9 @@ XR_PROC xrPathToString(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrCreateActionSet(
-	XrInstance                   instance,
-	const XrActionSetCreateInfo* createInfo,
-	XrActionSet*                 actionSet)
+XR_PROC xrCreateActionSet(XrInstance                   instance,
+                          const XrActionSetCreateInfo* createInfo,
+                          XrActionSet*                 actionSet)
 {
 #ifdef ENABLE_DEBUG_LOG_METHOD
 	LOG_METHOD(xrCreateActionSet);
@@ -3167,22 +3138,23 @@ XR_PROC xrCreateAction(
 		return XR_ERROR_NAME_DUPLICATED;
 	}
 
-	auto hAction = BLOCK_CLAIM(B.action, actionHash);
+	action_h hAction = BLOCK_CLAIM(B.action, actionHash);
 	HANDLE_CHECK(hAction, XR_ERROR_LIMIT_REACHED);
-	auto pAction = BLOCK_PTR(B.action, hAction);
+	Action* pAction = BLOCK_PTR(B.action, hAction);
 	*pAction = (Action){};
 
 	pAction->hActionSet = hActionSet;
 	pAction->actionType = createInfo->actionType;
 	pAction->countSubactions = createInfo->countSubactionPaths;
 	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i) {
-		auto pSubPath = (Path*)createInfo->subactionPaths[i];
-		bKey subPathHash = BLOCK_KEY(B.path, pSubPath);
-		pAction->hSubactionPaths[i] = BLOCK_HANDLE(B.path, pSubPath);
+		path_h hSubPath = XR_ATOM_BLOCK_H(createInfo->subactionPaths[i]);
+		pAction->hSubactionPaths[i] = hSubPath;
 
-		bHnd hState = BLOCK_CLAIM(B.state, subPathHash);
-		auto pState = BLOCK_PTR(B.state, hState);
+		block_key subPathHash  = BLOCK_KEY_H(xr.block.path, hSubPath);
+		substate_h hState      = BLOCK_CLAIM(B.state, subPathHash);
+		SubactionState* pState = BLOCK_PTR(B.state, hState);
 		pState->hAction = hAction;
+
 		pAction->hSubactionStates[i] = hState;
 	}
 	strncpy((char*)&pAction->actionName, (const char*)&createInfo->actionName, XR_MAX_ACTION_SET_NAME_SIZE);
@@ -3201,7 +3173,7 @@ XR_PROC xrCreateAction(
 	printf("	actionType: %d\n", pAction->actionType);
 	printf("	countSubactionPaths: %d\n", pAction->countSubactions);
 	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i) {
-		Path* pPath = BLOCK_PTR(B.path, pAction->hSubactionPaths[i]);
+		Path* pPath = BLOCK_PTR(xr.block.path, pAction->hSubactionPaths[i]);
 		printf("		subactionPath: %s\n", pPath->string);
 	}
 
@@ -3229,17 +3201,17 @@ static int CompareSubPath(const char* pSubPath, const char* pPath)
 	return 1;
 }
 
-XR_PROC xrSuggestInteractionProfileBindings(
-	XrInstance                                  instance,
-	const XrInteractionProfileSuggestedBinding* suggestedBindings)
+XR_PROC
+xrSuggestInteractionProfileBindings(XrInstance                                  instance,
+                                    const XrInteractionProfileSuggestedBinding* suggestedBindings)
 {
 	LOG_METHOD(xrSuggestInteractionProfileBindings);
 	LogNextChain(suggestedBindings->next);
 	assert(suggestedBindings->next == NULL);
 	CHECK_INSTANCE(instance);
 
-	auto pSuggestProfilePath = (Path*)suggestedBindings->interactionProfile;
-	auto suggestProfilePathHash = BLOCK_KEY(B.path, pSuggestProfilePath);
+	Path* pSuggestProfilePath = XR_ATOM_BLOCK_P(xr.block.path, suggestedBindings->interactionProfile);
+	block_key suggestProfilePathHash = BLOCK_KEY(xr.block.path, pSuggestProfilePath);
 
 	auto hSuggestProfile = BLOCK_FIND(B.profile, suggestProfilePathHash);
 	HANDLE_CHECK(hSuggestProfile, XR_ERROR_PATH_UNSUPPORTED);
@@ -3264,9 +3236,9 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	int actsBound = 0;
 	for (u32 i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
 		auto pSuggestAction = (Action*)pSuggest[i].action;
-		auto pSuggestBindPath = (Path*)pSuggest[i].binding;
+		Path* pSuggestBindPath = XR_ATOM_BLOCK_P(xr.block.path, pSuggest[i].binding);
 
-		bKey bindPathHash = BLOCK_KEY(B.path, pSuggestBindPath);
+		bKey bindPathHash = BLOCK_KEY(xr.block.path, pSuggestBindPath);
 
 		// MAP_FIND could be nested in BLOCK_HANDLE....
 		bHnd hSuggestBind = MAP_FIND(pSuggestProfile->bindings, bindPathHash);
@@ -3309,9 +3281,8 @@ XR_PROC xrSuggestInteractionProfileBindings(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrAttachSessionActionSets(
-	XrSession                            session,
-	const XrSessionActionSetsAttachInfo* attachInfo)
+XR_PROC xrAttachSessionActionSets(XrSession                            session,
+                                  const XrSessionActionSetsAttachInfo* attachInfo)
 {
 	LOG_METHOD(xrAttachSessionActionSets);
 	LogNextChain(attachInfo->next);
@@ -3345,10 +3316,10 @@ XR_PROC xrAttachSessionActionSets(
 	if (!HANDLE_VALID(pSession->hActiveInteractionProfile)) {
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 
-		XrPath profilePath;
-		xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &profilePath);
-		auto profileHash = BLOCK_KEY(B.path, (Path*)profilePath);
-		auto hProfile = BLOCK_FIND(B.profile, profileHash);
+		XrPath profilePath;	xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &profilePath);
+		auto hProfilePath    = XR_ATOM_BLOCK_H(profilePath);
+		auto profilePathHash = BLOCK_KEY_H(xr.block.path, hProfilePath);
+		auto hProfile = BLOCK_FIND(B.profile, profilePathHash);
 		HANDLE_CHECK(hProfile, XR_ERROR_HANDLE_INVALID);
 
 		EnqueueEventDataInteractionProfileChanged(hSession, hProfile);
@@ -3362,9 +3333,7 @@ XR_PROC xrGetCurrentInteractionProfile(
 	XrPath                     topLevelUserPath,
 	XrInteractionProfileState* interactionProfile)
 {
-//	Path* pPath = XR_OPAQUE_BLOCK_P(topLevelUserPath);
-	auto pPath = (Path*)topLevelUserPath;
-	LOG("xrGetCurrentInteractionProfile %s\n", pPath->string);
+	Path* pPath = XR_ATOM_BLOCK_P(xr.block.path, topLevelUserPath);
 	CHECK_NEXT_CHAIN(interactionProfile);
 
 	assert(interactionProfile->next == NULL);
@@ -3372,16 +3341,10 @@ XR_PROC xrGetCurrentInteractionProfile(
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
 
-	InteractionProfile* pProfile = XR_NULL_HANDLE;
-	if (HANDLE_VALID(pSession->hActiveInteractionProfile))
-		pProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
-
-	Path* pProfilePath = XR_NULL_HANDLE;
-	if (pProfile != XR_NULL_HANDLE)
-		pProfilePath = (Path*)pProfile->path;
-
-	// TODO need to check and see if the path has anything bound to it!!
-	interactionProfile->interactionProfile = (XrPath)pProfilePath;
+	if (HANDLE_VALID(pSession->hActiveInteractionProfile)) {
+		InteractionProfile* pProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
+		interactionProfile->interactionProfile = XR_TO_ATOM(XR_ATOM_TYPE_PATH, pProfile->hPath);
+	}
 
 	return XR_SUCCESS;
 }
@@ -3396,7 +3359,7 @@ static inline XrResult xrGetActionState(
 
 	auto pAction = (Action*)getInfo->action;
 	auto pActionSet = BLOCK_PTR(B.actionSet, pAction->hActionSet);
-	auto pSubPath = (Path*)getInfo->subactionPath;
+	auto pSubPath = XR_ATOM_BLOCK_P(xr.block.path, getInfo->subactionPath);
 
 	if (hSession != pActionSet->hAttachedToSession) {
 		LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
@@ -3508,7 +3471,7 @@ XR_PROC xrSyncActions(
 	for (u32 si = 0; si < syncInfo->countActiveActionSets; ++si) {
 
 		auto pActionSet = (ActionSet*)syncInfo->activeActionSets[si].actionSet;
-		auto actionSetPath = (Path*)syncInfo->activeActionSets[si].subactionPath;
+		Path* pActionSetPath = XR_ATOM_BLOCK_P(xr.block.path, syncInfo->activeActionSets[si].subactionPath);
 		bKey actionSetHash = BLOCK_KEY(B.actionSet, pActionSet);
 
 		for (u32 ai = 0; ai < pActionSet->actions.count; ++ai) {

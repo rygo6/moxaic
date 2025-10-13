@@ -48,7 +48,7 @@ typedef block_handle block_h; // lets go to this
 		return error;               \
 	}
 
-typedef struct block_handle2{ // do this?
+typedef struct block_handle2{ // do this? yes probably
 	u16 index      : HANDLE_INDEX_BIT_COUNT;
 	u16 generation : HANDLE_GENERATION_BIT_COUNT;
 }block_handle2;
@@ -127,6 +127,12 @@ static block_handle BlockCountOccupied(int occupiedCount, bitset_t* pOccupiedSet
 	({                                                                                                                          \
 		ASSERT(_p >= _block.blocks && _p < _block.blocks + COUNT(_block.blocks), #_block ": Getting block key. Out of range."); \
 		(block_key)(_block.keys[_p - _block.blocks]);                                                                           \
+	})
+#define BLOCK_KEY_H(_block, _handle)                                                        \
+	({                                                                                      \
+		STATIC_ASSERT_TYPE(_handle, block_handle);                                          \
+		ASSERT_HANDLE_RANGE(_block, _handle, #_block ": Getting block ptr. Out of range."); \
+		(block_key)(_block.keys[HANDLE_INDEX(_handle)]);                                    \
 	})
 #define BLOCK_PTR(_block, _handle)                                                          \
 	({                                                                                      \
