@@ -23,7 +23,11 @@ AlignConsecutiveShortCaseStatements:
   AcrossComments: false
   AlignCaseColons: false
 
-AlignAfterOpenBracket: DontAlign
+BreakAfterReturnType: All
+BinPackParameters: OnePerLine
+AllowAllParametersOfDeclarationOnNextLine: false
+
+AlignAfterOpenBracket: Align
 Cpp11BracedListStyle: true
 
 PointerAlignment: Left
