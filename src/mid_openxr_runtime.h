@@ -146,7 +146,7 @@ typedef enum XrSwapOutput {
 	XR_SWAP_OUTPUT_COUNT,
 } XrSwapOutput;
 
-static inline const char* string_XrSwapOutput(XrSwapOutput output) {
+static const char* string_XrSwapOutput(XrSwapOutput output) {
 	switch (output) {
 		case XR_SWAP_OUTPUT_UNKNOWN: return "XR_SWAP_OUTPUT_UNKNOWN";
 		case XR_SWAP_OUTPUT_COLOR:   return "XR_SWAP_OUTPUT_COLOR";
@@ -154,16 +154,6 @@ static inline const char* string_XrSwapOutput(XrSwapOutput output) {
 		default:                     return "N/A";
 	}
 }
-
-//typedef enum XrSwapType : u8 {
-//	XR_SWAP_TYPE_UNKNOWN,
-//	XR_SWAP_TYPE_MONO_SINGLE,
-//	XR_SWAP_TYPE_STEREO_SINGLE,
-//	XR_SWAP_TYPE_STEREO_TEXTURE_ARRAY,
-//	XR_SWAP_TYPE_STEREO_DOUBLE_WIDE,
-//	XR_SWAP_TYPE_ERROR,
-//	XR_SWAP_TYPE_COUNT,
-//} XrSwapType;
 
 typedef enum XrSwapClip {
 	XR_SWAP_CLIP_NONE,
@@ -246,6 +236,26 @@ typedef struct XrShellSpaces {
 
 } XrShellAppBounds;
 
+typedef enum XrCubeCorners: u8 {
+	XR_CUBE_CORNER_LUB,
+	XR_CUBE_CORNER_LUF,
+	XR_CUBE_CORNER_LDB,
+	XR_CUBE_CORNER_LDF,
+	XR_CUBE_CORNER_RUB,
+	XR_CUBE_CORNER_RUF,
+	XR_CUBE_CORNER_RDB,
+	XR_CUBE_CORNER_RDF,
+	XR_CUBE_CORNER_COUNT,
+} XrCubeCorners;
+
+typedef struct XrEventDataSpaceBoundsChanged {
+	XrStructureType             type;
+	const void* XR_MAY_ALIAS    next;
+	XrSpace                     space;
+	XrVector3f                  worldCorners[XR_CUBE_CORNER_COUNT];
+	XrVector2f                  uvCorners[XR_CUBE_CORNER_COUNT];
+} XrEventDataSpaceBoundsChanged;
+
 #define XR_SPACE_LOCATION_ALL_TRACKED           \
 	XR_SPACE_LOCATION_ORIENTATION_VALID_BIT   | \
 	XR_SPACE_LOCATION_POSITION_VALID_BIT      | \
@@ -254,7 +264,7 @@ typedef struct XrShellSpaces {
 
 typedef u16 session_i;
 typedef u16 swap_i;
-typedef u8 view_i;
+typedef u8  view_i;
 
 /*
  * External Method Declarations
@@ -684,7 +694,7 @@ static XrTime xrGetTime()
 	return xrTime;
 }
 
-static inline XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
+static XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
 {
 	// this should be pthreads since it doesnt happen that much and cross platform is probably fine
 	while (1) {
@@ -700,7 +710,7 @@ static inline XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
 	}
 }
 
-static inline void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
+static void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 {
 	atomic_store_explicit(pSharedTime, signalTime, memory_order_release);
 	WakeByAddressAll(pSharedTime);
@@ -765,12 +775,12 @@ static const char* string_XrStructureType(XrStructureType type)
 }
 #undef STRUCTURE_TYPE_NAME_CASE
 
+// TODO analyize if I really want this
 #define STR(s)       #s
 #define XSTR(s)      STR(s)
 #define DOT(_)       ._
 #define COMMA        ,
 #define BRACES(f, _) {f(_)}
-
 #define FORMAT_F(_)          _: %.3f
 #define FORMAT_I(_)          _: %d
 #define FORMAT_STRUCT_F(_)  "%s: " XSTR(BRACES(XR_LIST_STRUCT_##_, FORMAT_F))
@@ -792,6 +802,45 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 			return XR_ERROR_VALIDATION_FAILURE;                                          \
 		}                                                                                \
 	})
+
+#define TRANSFER_ENUM_NAME(_type, _) \
+	case _type: strncpy(buffer, #_type, XR_MAX_RESULT_STRING_SIZE); break;
+
+XR_PROC xrResultToString(XrInstance instance,
+                         XrResult value,
+                         char buffer[XR_MAX_RESULT_STRING_SIZE])
+{
+	CHECK_INSTANCE(instance);
+
+	switch (value) {
+		XR_LIST_ENUM_XrResult(TRANSFER_ENUM_NAME);
+		default:
+			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
+			break;
+	}
+	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
+
+	return XR_SUCCESS;
+}
+
+XR_PROC xrStructureTypeToString(XrInstance      instance,
+                                XrStructureType value,
+                                char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
+{
+	CHECK_INSTANCE(instance);
+
+	switch (value) {
+		XR_LIST_ENUM_XrStructureType(TRANSFER_ENUM_NAME);
+		default:
+			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
+			break;
+	}
+	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
+
+	return XR_SUCCESS;
+}
+
+#undef TRANSFER_ENUM_NAME
 
 /*
  * Events
@@ -1320,41 +1369,6 @@ XR_PROC xrGetInstanceProperties(XrInstance            instance,
 	return XR_SUCCESS;
 }
 
-#define STRING_ENUM_CASE(_method, _value) case _value: { return #_method; }
-#define STRING_ENUM_METHOD(_method)                             \
-	const char* string_##_method(_method val)                     \
-	{                                                         \
-		switch (val) {                                        \
-			XR_LIST_ENUM_##_method(STRING_ENUM_CASE) default:   \
-			{                                                 \
-				assert(false && #_method " string not found."); \
-				return "N/A";                                 \
-			}                                                 \
-		}                                                     \
-	}
-
-//STRING_ENUM_METHOD(XrSessionState)
-
-typedef enum XrCubeCorners: u8 {
-	XR_CUBE_CORNER_LUB,
-	XR_CUBE_CORNER_LUF,
-	XR_CUBE_CORNER_LDB,
-	XR_CUBE_CORNER_LDF,
-	XR_CUBE_CORNER_RUB,
-	XR_CUBE_CORNER_RUF,
-	XR_CUBE_CORNER_RDB,
-	XR_CUBE_CORNER_RDF,
-	XR_CUBE_CORNER_COUNT,
-} XrCubeCorners;
-
-typedef struct XrEventDataSpaceBoundsChanged {
-	XrStructureType             type;
-	const void* XR_MAY_ALIAS    next;
-	XrSpace                     space;
-	vec3                        worldCorners[XR_CUBE_CORNER_COUNT];
-	vec2                        uvCorners[XR_CUBE_CORNER_COUNT];
-} XrEventDataSpaceBoundsChanged;
-
 XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 {
 	LOG_METHOD_ONCE(xrPollEvent);
@@ -1365,47 +1379,7 @@ XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 	               == MID_SUCCESS ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
 }
 
-#define TRANSFER_ENUM_NAME(_type, _) \
-	case _type: strncpy(buffer, #_type, XR_MAX_RESULT_STRING_SIZE); break;
-
-XR_PROC xrResultToString(XrInstance instance,
-                         XrResult value,
-                         char buffer[XR_MAX_RESULT_STRING_SIZE])
-{
-	CHECK_INSTANCE(instance);
-
-	switch (value) {
-		XR_LIST_ENUM_XrResult(TRANSFER_ENUM_NAME);
-		default:
-			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
-			break;
-	}
-	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
-
-	return XR_SUCCESS;
-}
-
-XR_PROC xrStructureTypeToString(XrInstance      instance,
-                                XrStructureType value,
-                                char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
-{
-	CHECK_INSTANCE(instance);
-
-	switch (value) {
-		XR_LIST_ENUM_XrStructureType(TRANSFER_ENUM_NAME);
-		default:
-			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
-			break;
-	}
-	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
-
-	return XR_SUCCESS;
-}
-
-#undef TRANSFER_ENUM_NAME
-
-XR_PROC
-xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId)
+XR_PROC xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId)
 {
 	LOG_METHOD_ONCE(xrGetSystem);
 	LogNextChain((XrBaseInStructure*)getInfo->next);
@@ -1429,8 +1403,9 @@ xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* sys
 	}
 }
 
-XR_PROC
-xrGetSystemProperties(XrInstance instance, XrSystemId systemId, XrSystemProperties* properties)
+XR_PROC xrGetSystemProperties(XrInstance instance,
+                              XrSystemId systemId,
+                              XrSystemProperties* properties)
 {
 	LOG_METHOD(xrGetSystemProperties);
 	CHECK_INSTANCE(instance);
@@ -1701,7 +1676,8 @@ XR_PROC xrCreateReferenceSpace(XrSession                         session,
 		string_XrReferenceSpaceType(createInfo->referenceSpaceType),
 		EXPAND_STRUCT(XrVector3f,    createInfo->poseInReferenceSpace.position),
 		EXPAND_STRUCT(XrQuaternionf, createInfo->poseInReferenceSpace.orientation));
-	assert(createInfo->next == NULL);
+
+	CHECK_NEXT_CHAIN(createInfo);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);

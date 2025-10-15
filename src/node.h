@@ -121,9 +121,9 @@ typedef struct MxcNodeShared {
 	MidQRing   ipcFuncQueue;
 	MxcIpcFunc queuedIpcFuncs[MID_QRING_CAPACITY];
 
-	MidQRing   ipcFuncSendQueue;
-	MxcIpcFunc queuedIpcSendFuncs[MID_QRING_CAPACITY];
-	XrEventDataBuffer queuedIpcSendBuffers[MID_QRING_CAPACITY];
+	/* Events */
+	MidQRing         eventDataQueue;
+	XrEventDataUnion queuedEventDataBuffers[MID_QRING_CAPACITY];
 
 	// Swap
 	u16             swapMaxWidth;

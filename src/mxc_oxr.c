@@ -56,11 +56,11 @@ void xrReleaseSessionId(session_i iSession)
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 }
 
-void xrClaimCompositionLayerIndex(session_i* sessionId)
+XrResult xrSharedPollEvent(session_i iSession, XrEventDataUnion* pEventData)
 {
-	// I believe both a session and a composition layer will end up constituting different Nodes
-	// and requesting a SessionId will simply mean the base compositionlayer index
-	// where Compositionlayers will also request an index of different nodes
+	MxcNodeShared* pNodeShared = node.pShared[iSession];
+	return MID_QRING_DEQUEUE(&pNodeShared->eventDataQueue, pNodeShared->queuedEventDataBuffers, pEventData)
+	               == MID_SUCCESS ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
 }
 
 void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds)
