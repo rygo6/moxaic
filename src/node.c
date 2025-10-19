@@ -485,7 +485,7 @@ static int CleanupNode(NodeHandle hNode)
 				mxcDestroySwapTexture(pSwap);
 			}
 			for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
-				// We are fully clearing but at some point we want a mechanic to recycle and share node swaps
+				if (pNodeCtxt->gbuffer[i].view == NULL) continue;
 				vkDestroyDedicatedTexture(&pNodeCtxt->gbuffer[i]);
 			}
 

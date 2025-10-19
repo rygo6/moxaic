@@ -725,25 +725,35 @@ static void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 		return XR_ERROR_HANDLE_INVALID;         \
 	}
 
-#define ENABLE_DEBUG_LOG_METHOD
-#ifdef ENABLE_DEBUG_LOG_METHOD
+#define ENABLE_LOG_METHOD_ALL
+//#define ENABLE_LOG_METHOD_ONCE
+//#define ENABLE_LOG_METHOD_NOREPEAT
 
-#define LOG_METHOD(_method) LOG("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
+#define LOG_METHOD_INTERNAL(_method) LOG("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
 
+#ifdef ENABLE_LOG_METHOD_ALL
+#define LOG_METHOD(_method) LOG_METHOD_INTERNAL(_method)
+#elifdef ENABLE_LOG_METHOD_ONCE
+#define LOG_METHOD(_method)               \
+	({                                    \
+		static bool logged = false;       \
+		if (!logged) {                    \
+			logged = true;                \
+			LOG_METHOD_INTERNAL(_method); \
+		}                                 \
+	})
+#elifdef ENABLE_LOG_METHOD_NOREPEAT
 static const char* pLastLogMethod = NULL;
-#define LOG_METHOD_ONCE(_method)                 \
+#define LOG_METHOD(_method)                      \
 	({                                           \
 		static const char* methodPtr = #_method; \
 		if (pLastLogMethod != methodPtr) {       \
 			pLastLogMethod = methodPtr;          \
-			LOG_METHOD(_method);                 \
+			LOG_METHOD_INTERNAL(_method);        \
 		}                                        \
 	})
-
-
 #else
 #define LOG_METHOD(_name)
-#define LOG_METHOD_ONCE(_name)
 #endif
 
 #define ENUM_NAME_CASE(_enum, _value) case _value: return #_enum;
@@ -1371,7 +1381,7 @@ XR_PROC xrGetInstanceProperties(XrInstance            instance,
 
 XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 {
-	LOG_METHOD_ONCE(xrPollEvent);
+	LOG_METHOD(xrPollEvent);
 	CHECK_INSTANCE(instance);
 
 	XrEventDataUnion* pEventData = (XrEventDataUnion*)eventData;
@@ -1381,7 +1391,7 @@ XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 
 XR_PROC xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId)
 {
-	LOG_METHOD_ONCE(xrGetSystem);
+	LOG_METHOD(xrGetSystem);
 	LogNextChain((XrBaseInStructure*)getInfo->next);
 	CHECK_INSTANCE(instance);
 
@@ -1774,7 +1784,7 @@ XR_PROC xrLocateSpace(XrSpace          space,
                       XrTime           time,
                       XrSpaceLocation* location)
 {
-	LOG_METHOD_ONCE(xrLocateSpace);
+	LOG_METHOD(xrLocateSpace);
 
 	Space*   pSpace = (Space*)space;
 	Session* pSession = BLOCK_PTR(xr.block.session, pSpace->hSession);
@@ -2358,7 +2368,7 @@ XR_PROC xrEnumerateSwapchainImages(
 	uint32_t*                   imageCountOutput,
 	XrSwapchainImageBaseHeader* images)
 {
-	LOG_METHOD_ONCE(xrEnumerateSwapchainImages);
+	LOG_METHOD(xrEnumerateSwapchainImages);
 
 	*imageCountOutput = XR_SWAPCHAIN_IMAGE_COUNT;
 
@@ -2400,8 +2410,7 @@ XR_PROC xrAcquireSwapchainImage(
 	const XrSwapchainImageAcquireInfo* acquireInfo,
 	uint32_t*                          index)
 {
-	LOG_METHOD_ONCE(xrAcquireSwapchainImage);
-	assert(acquireInfo->next == NULL);
+	LOG_METHOD(xrAcquireSwapchainImage);
 
 	auto pSwap = (Swapchain*)swapchain;
 	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
@@ -2410,6 +2419,8 @@ XR_PROC xrAcquireSwapchainImage(
 
 	*index = pSwap->acquiredSwapIndex;
 
+	LOG("Acquired Swap Index: %d\n", *index);
+
 	return XR_SUCCESS;
 }
 
@@ -2417,7 +2428,7 @@ XR_PROC xrWaitSwapchainImage(
 	XrSwapchain                     swapchain,
 	const XrSwapchainImageWaitInfo* waitInfo)
 {
-	LOG_METHOD_ONCE(xrWaitSwapchainImage);
+	LOG_METHOD(xrWaitSwapchainImage);
 	assert(waitInfo->next == NULL);
 
 	auto pSwap = (Swapchain*)swapchain;
@@ -2440,8 +2451,7 @@ XR_PROC xrWaitSwapchainImage(
 XR_PROC xrReleaseSwapchainImage(XrSwapchain                        swapchain,
                                 const XrSwapchainImageReleaseInfo* releaseInfo)
 {
-	LOG_METHOD_ONCE(xrReleaseSwapchainImage);
-	assert(releaseInfo->next == NULL);
+	LOG_METHOD(xrReleaseSwapchainImage);
 
 	auto pSwap = (Swapchain*)swapchain;
 	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
@@ -2463,7 +2473,7 @@ XR_PROC xrReleaseSwapchainImage(XrSwapchain                        swapchain,
 
 XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 {
-	LOG_METHOD_ONCE(xrBeginSession);
+	LOG_METHOD(xrBeginSession);
 	LogNextChain(beginInfo->next);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
@@ -2588,7 +2598,7 @@ XR_PROC xrWaitFrame(
 	const XrFrameWaitInfo* frameWaitInfo,
 	XrFrameState*          frameState)
 {
-	LOG_METHOD_ONCE(xrWaitFrame);
+	LOG_METHOD(xrWaitFrame);
 
 	if (frameWaitInfo != NULL)
 		assert(frameWaitInfo->next == NULL);
@@ -2648,7 +2658,7 @@ XR_PROC xrBeginFrame(
 	XrSession               session,
 	const XrFrameBeginInfo* frameBeginInfo)
 {
-	LOG_METHOD_ONCE(xrBeginFrame);
+	LOG_METHOD(xrBeginFrame);
 
 	if (frameBeginInfo != NULL)
 		assert(frameBeginInfo->next == NULL);
@@ -2681,7 +2691,7 @@ XR_PROC xrBeginFrame(
 XR_PROC xrEndFrame(XrSession session,
                    const XrFrameEndInfo* frameEndInfo)
 {
-	LOG_METHOD_ONCE(xrEndFrame);
+	LOG_METHOD(xrEndFrame);
 	assert(frameEndInfo->next == NULL);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
@@ -2843,7 +2853,7 @@ XR_PROC xrLocateViews(
 	uint32_t*               viewCountOutput,
 	XrView*                 views)
 {
-	LOG_METHOD_ONCE(xrLocateViews);
+	LOG_METHOD(xrLocateViews);
 //	printf("Locating View %s\n", string_XrViewConfigurationType(viewLocateInfo->viewConfigurationType));
 	assert(views->next == NULL);
 
@@ -2985,7 +2995,7 @@ XR_PROC xrLocateViews(
 
 XR_PROC xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 {
-	LOG_METHOD_ONCE(xrStringToPath);
+	LOG_METHOD(xrStringToPath);
 	CHECK_INSTANCE(instance);
 
 	u32 pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
@@ -3019,7 +3029,7 @@ XR_PROC xrPathToString(XrInstance instance,
                        uint32_t*  bufferCountOutput,
                        char*      buffer)
 {
-	LOG_METHOD_ONCE(xrPathToString);
+	LOG_METHOD(xrPathToString);
 	CHECK_INSTANCE(instance);
 
 	Path* pPath = XR_ATOM_BLOCK_P(xr.block.path, path);
@@ -3350,7 +3360,7 @@ XR_PROC xrGetActionStateBoolean(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateBoolean*       state)
 {
-	LOG_METHOD_ONCE(xrGetActionStateBoolean);
+	LOG_METHOD(xrGetActionStateBoolean);
 	assert(getInfo->next == NULL);
 
 	SubactionState* pState;
@@ -3372,7 +3382,7 @@ XR_PROC xrGetActionStateFloat(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateFloat*         state)
 {
-	LOG_METHOD_ONCE(xrGetActionStateFloat);
+	LOG_METHOD(xrGetActionStateFloat);
 	assert(getInfo->next == NULL);
 
 	SubactionState* pState;
@@ -3394,7 +3404,7 @@ XR_PROC xrGetActionStateVector2f(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStateVector2f*      state)
 {
-	LOG_METHOD_ONCE(xrGetActionStateVector2f);
+	LOG_METHOD(xrGetActionStateVector2f);
 	assert(getInfo->next == NULL);
 
 	SubactionState* pState;
@@ -3416,7 +3426,7 @@ XR_PROC xrGetActionStatePose(
 	const XrActionStateGetInfo* getInfo,
 	XrActionStatePose*          state)
 {
-	LOG_METHOD_ONCE(xrGetActionStatePose);
+	LOG_METHOD(xrGetActionStatePose);
 
 	SubactionState* pState;
 	if (xrGetActionState(session, getInfo, &pState) == XR_ERROR_PATH_UNSUPPORTED) {
@@ -3433,7 +3443,7 @@ XR_PROC xrSyncActions(
 	XrSession                session,
 	const XrActionsSyncInfo* syncInfo)
 {
-	LOG_METHOD_ONCE(xrSyncActions);
+	LOG_METHOD(xrSyncActions);
 	LogNextChain(syncInfo->next);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);

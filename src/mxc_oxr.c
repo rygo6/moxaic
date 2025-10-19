@@ -277,7 +277,7 @@ int xrInputMenuClick_Right(session_i sessionId, SubactionState* pState)
 
 #define UPDATE_POSE(pose, chirality)                                                                          \
 	({                                                                                                        \
-		auto pNodeShared = node.pShared[sessionId];                                                        \
+		auto pNodeShared = node.pShared[sessionId];                                                           \
 		atomic_thread_fence(memory_order_acquire);                                                            \
 		auto pController = &pNodeShared->chirality;                                                           \
 		auto changed = pState->isActive != pController->active ||                                             \

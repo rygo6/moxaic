@@ -2415,10 +2415,10 @@ void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTe
 
 void vkDestroyDedicatedTexture(VkDedicatedTexture* pTexture)
 {
-	CHECK_NOT_EQUAL(pTexture, NULL);
-	CHECK_NOT_EQUAL(pTexture->view, NULL);
-	CHECK_NOT_EQUAL(pTexture->image, NULL);
-	CHECK_NOT_EQUAL(pTexture->memory, NULL);
+	REQUIRE_NOT_EQUAL(pTexture, NULL);
+	REQUIRE_NOT_EQUAL(pTexture->view, NULL);
+	REQUIRE_NOT_EQUAL(pTexture->image, NULL);
+	REQUIRE_NOT_EQUAL(pTexture->memory, NULL);
 	vkDestroyImageView(vk.context.device, pTexture->view, VK_ALLOC);
 	vkDestroyImage(vk.context.device, pTexture->image, VK_ALLOC);
 	vkFreeMemory(vk.context.device, pTexture->memory, VK_ALLOC);
@@ -2555,8 +2555,8 @@ static void CheckDXGI()
 
 void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExternalPlatformTexture* pTexture)
 {
-	CHECK_EQUAL(vkDepthFormat(pCreateInfo->format), false, "ExternalPlatformTexture cannot be depth!");
-	CHECK_EQUAL(pCreateInfo->mipLevels, 1, "ExternalPlatformTexture cannot have mips!");
+	REQUIRE_EQUAL(vkDepthFormat(pCreateInfo->format), false, "ExternalPlatformTexture cannot be depth!");
+	REQUIRE_EQUAL(pCreateInfo->mipLevels, 1, "ExternalPlatformTexture cannot have mips!");
 	CheckDXGI();
 
 	auto format = vkDXGIFormat(pCreateInfo->format);
@@ -2608,9 +2608,9 @@ void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExt
 
 void vkDestroyExternalPlatformTexture(VkExternalPlatformTexture* pTexture)
 {
-	CHECK_NOT_EQUAL(pTexture, NULL)
-	CHECK_NOT_EQUAL(pTexture->texture, NULL);
-	CHECK_NOT_EQUAL(pTexture->handle, NULL);
+	REQUIRE_NOT_EQUAL(pTexture, NULL)
+	REQUIRE_NOT_EQUAL(pTexture->texture, NULL);
+	REQUIRE_NOT_EQUAL(pTexture->handle, NULL);
 	CHECK_WIN32(CloseHandle(pTexture->handle));
 	DX_CHECK(ID3D12Resource_Release(pTexture->texture));
 	pTexture->texture = NULL;

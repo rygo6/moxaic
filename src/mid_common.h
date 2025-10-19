@@ -68,14 +68,14 @@ extern void Panic(const char* file, int line, const char* message);
 		PANIC(_message);                     \
 	}
 
-#define CHECK_EQUAL(_a, _b, ...)                              \
-	if (UNLIKELY(((_a) != (_b)))) {                           \
-		PANIC("Error: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
+#define REQUIRE_EQUAL(_a, _b, ...)                               \
+	if (UNLIKELY(((_a) != (_b)))) {                              \
+		PANIC("Expected: " #_a " == " #_b " " __VA_ARGS__ "\n"); \
 	}
 
-#define CHECK_NOT_EQUAL(_a, _b, ...)                          \
-	if (UNLIKELY(((_a) == (_b)))) {                           \
-		PANIC("Error: " #_a " == " #_b " " __VA_ARGS__ "\n"); \
+#define REQUIRE_NOT_EQUAL(_a, _b, ...)                           \
+	if (UNLIKELY(((_a) == (_b)))) {                              \
+		PANIC("Expected: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
 	}
 
 #define LOG(...) printf(__VA_ARGS__)
@@ -151,7 +151,7 @@ static void LogWin32Error(HRESULT err)
 	char* errStr;
 	if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), (LPSTR)&errStr, 0, NULL)) {
-		LOG_ERROR("%s\n", errStr);
+		LOG("%s\n", errStr);
 		LocalFree(errStr);
 	}
 }
@@ -188,7 +188,7 @@ static void LogWin32Error(HRESULT err)
 #define MID_PANIC_METHOD
 [[noreturn]] void Panic(const char* file, int line, const char* message)
 {
-	fprintf(stderr, "\n%s:%d Error! %s\n", file, line, message);
+	LOG_ERROR("\n%s:%d Error! %s\n", file, line, message);
 	__builtin_trap();
 }
 #endif // MID_PANIC_METHOD
