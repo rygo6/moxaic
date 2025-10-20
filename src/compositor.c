@@ -565,35 +565,36 @@ CompositeLoop:
 			}
 
 			/* Poll New Node Swap */
-			u64 nodeTimelineVal = pNodeShr->timelineValue;
-			if (nodeTimelineVal <= pNodeCst->lastTimelineValue)
+			u64 nodeTimelineValue = pNodeShr->timelineValue;
+			if (nodeTimelineValue <= pNodeCst->lastTimelineValue)
 				continue;
 
-			pNodeCst->lastTimelineValue = nodeTimelineVal;
+			pNodeCst->lastTimelineValue = nodeTimelineValue;
 			atomic_thread_fence(memory_order_release);
 
 			/* Acquire New Node Swap */
 			ATOMIC_FENCE_SCOPE {
-				// int iPriorSwapImg = (nodeTimelineVal % VK_SWAP_COUNT);
-				int iSwapImg = !(nodeTimelineVal % VK_SWAP_COUNT);
-
-				int iLeftColorImgId = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].colorId;
-				int iLeftDepthImgId = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].depthId;
-				int iRightColorImgId = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].colorId;
-				int iRightDepthImgId = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].depthId;
+				swap_i iLeftColorSwap  = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorSwap;
+				swap_i iLeftColorImg   = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorImg;
+				swap_i iLeftDepthSwap  = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iDepthSwap;
+				swap_i iLeftDepthImg   = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iDepthImg;
+				swap_i iRightColorSwap = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iColorSwap;
+				swap_i iRightColorImg  = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iColorImg;
+				swap_i iRightDepthSwap = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iDepthSwap;
+				swap_i iRightDepthImg  = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iDepthImg;
 
 				// need better way to determine these invalid
 				// and maybe better way to signify frame has been set
-				if (iLeftColorImgId == CHAR_MAX) continue;
-				if (iLeftDepthImgId == CHAR_MAX) continue;
+				if (iLeftColorSwap == CHAR_MAX) continue;
+				if (iLeftDepthSwap == CHAR_MAX) continue;
 				// if (iRightColorImgId == CHAR_MAX) continue;
 				// if (iRightColorImgId == CHAR_MAX) continue;
 
 				auto pNodeCtxt = &node.context[hNode];
-				MxcNodeSwap* pLeftColorSwap  = &pNodeCst->swaps[iLeftColorImgId][iSwapImg];
-				MxcNodeSwap* pLeftDepthSwap  = &pNodeCst->swaps[iLeftDepthImgId][iSwapImg];
-				MxcNodeSwap* pRightColorSwap = &pNodeCst->swaps[iRightColorImgId][iSwapImg];
-				MxcNodeSwap* pRightDepthSwap = &pNodeCst->swaps[iRightDepthImgId][iSwapImg];
+				MxcNodeSwap* pLeftColorSwap  = &pNodeCst->swaps[iLeftColorSwap][iLeftColorImg];
+				MxcNodeSwap* pLeftDepthSwap  = &pNodeCst->swaps[iLeftDepthSwap][iLeftDepthImg];
+				MxcNodeSwap* pRightColorSwap = &pNodeCst->swaps[iRightColorSwap][iRightColorImg];
+				MxcNodeSwap* pRightDepthSwap = &pNodeCst->swaps[iRightDepthSwap][iRightDepthImg];
 
 				MxcNodeGBuffer* pLeftGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_LEFT_STEREO];
 				MxcNodeGBuffer* pRightGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_RIGHT_STEREO];

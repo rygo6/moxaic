@@ -30,12 +30,12 @@ typedef const char* str;
 ////
 typedef enum MidResult {
 	// These align with VkResult
-	MID_SUCCESS         = 0,
-	MID_EMPTY           = 20001,
-	MID_LIMIT_REACHED   = 20002,
+	MID_SUCCESS          = 0,
+	MID_EMPTY            = 20001,
+	MID_LIMIT_REACHED    = 20002,
 	MID_RESULT_FINALIZED = 20003,
-	MID_ERROR_UNKNOW    = -13,
-	MID_RESULT_MAX_ENUM = 0x7FFFFFFF
+	MID_ERROR_UNKNOW     = -13,
+	MID_RESULT_MAX_ENUM  = 0x7FFFFFFF
 } MidResult;
 
 #define ASSERT(_assert, _message) assert(_assert && _message)
@@ -87,28 +87,37 @@ extern void Panic(const char* file, int line, const char* message);
 		if (!_logged) {             \
 			_logged = true;         \
 			LOG(__VA_ARGS__);       \
-		}                           \
+		}                                 \
 	})
 
-////
-//// Utility
-////
-#define TYPES_EQUAL(a, b) __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
-#define UNUSED __attribute__((unused))
-#define FALLTHROUGH __attribute__((fallthrough))
-#define PACK __attribute__((packed))
-#define HOT __attribute__((hot))
-#define CONCAT(_a, _b) #_a #_b
-#define CACHE_ALIGN __attribute((aligned(64)))
-#define INLINE __attribute__((always_inline)) static inline
-#define EXTRACT_FIELD(_p, _field) __typeof__((_p)->_field) _field = (_p)->_field
+/*
+ * Attributes
+ */
+
+
+#define auto_t __auto_type
+
+#define UNUSED            __attribute__((unused))
+#define FALLTHROUGH       __attribute__((fallthrough))
+#define HOT               __attribute__((hot))
+#define CACHE_ALIGN       __attribute__((aligned(64)))
+#define INLINE            __attribute__((always_inline)) static inline
 #define TRANSPARENT_UNION __attribute__((transparent_union))
-#define PACKED __attribute__((packed))
-#define ALIGN(size) __attribute((aligned(size)))
-#define LIKELY(x) __builtin_expect(!!(x), 1)
-#define UNLIKELY(x) __builtin_expect(!!(x), 0)
-#define COUNT(_array) (sizeof(_array) / sizeof(_array[0]))
-#define FLAG(b) (1 << (b))
+#define PACKED            __attribute__((packed))
+#define ALIGN(size)       __attribute__((aligned(size)))
+
+/*
+ * Utility
+ */
+
+#define TYPES_EQUAL(a, b)         __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
+#define CONCAT(_a, _b)            #_a #_b
+#define EXTRACT_FIELD(_p, _field) __typeof__((_p)->_field) _field = (_p)->_field
+#define LIKELY(x)                 __builtin_expect(!!(x), 1)
+#define UNLIKELY(x)               __builtin_expect(!!(x), 0)
+#define COUNT(_array)             (sizeof(_array) / sizeof(_array[0]))
+#define FLAG(b)                   (1 << (b))
+
 #define CONTAINS(_array, _count, _)        \
 	({                                     \
 		bool found = false;                \
@@ -120,7 +129,6 @@ extern void Panic(const char* file, int line, const char* message);
 		}                                  \
 		found;                             \
 	})
-
 
 #define ATOMIC_FENCE_SCOPE                                                \
 	for (bool _done = (atomic_thread_fence(memory_order_acquire), false); \

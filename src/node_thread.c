@@ -16,11 +16,11 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	LOG("Running Thread Node %d\n", hNode);
 
 	MxcNodeContext* pNodeCtx = &node.context[hNode];
-	MxcNodeShared*  pNodeShr = node.pShared[hNode];
+	MxcNodeShared*  pNodeShrd = node.pShared[hNode];
 
 	REQUIRE(pNodeCtx != NULL, "MxcNodeContext is null!");
 	REQUIRE(pNode    != NULL, "MxcNodeThread is null!");
-	REQUIRE(pNodeShr != NULL, "MxcNodeShared is null!");
+	REQUIRE(pNodeShrd != NULL, "MxcNodeShared is null!");
 
 	/*
 	 * Extract Local State
@@ -61,7 +61,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 
 	/* Global Set Initial State */
 	VkGlobalSetState globSetState = {};
-	vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, &globSetState);
+	vkUpdateGlobalSetViewProj(pNodeShrd->camera, pNodeShrd->cameraPose, &globSetState);
 	memcpy(pGlobalSetMapped, &globSetState, sizeof(VkGlobalSetState));
 
 	ASSERT(cstTimeline != NULL, "Compositor Timeline Handle is nulL!");
@@ -76,7 +76,7 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	} swaps[XR_SWAPCHAIN_IMAGE_COUNT] ;
 
 	{
-		const int colorSwapId = 0;
+		const int       iColorSwap = 0;
 		XrSwapchainInfo colorInfo = {
 			.createFlags = 0,
 			.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
@@ -89,10 +89,10 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 			.mipCount = 1,
 		};
 		// I think I want this to be a thread_node and not go through openxr constructs at all
-		xrCreateSwapchainImages(hNode, &colorInfo, colorSwapId);
-		pNodeShr->viewSwaps[XR_VIEW_ID_CENTER_MONO].colorId = colorSwapId;
+		xrCreateSwapchainImages(hNode, &colorInfo, iColorSwap);
+		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iColorSwap = iColorSwap;
 
-		const int depthSwapId = 1;
+		const int       iDepthSwap = 1;
 		XrSwapchainInfo depthInfo = {
 			.createFlags = 0,
 			.usageFlags = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
@@ -104,15 +104,15 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 			.arraySize = 1,
 			.mipCount = 1,
 		};
-		xrCreateSwapchainImages(hNode, &depthInfo, depthSwapId);
-		pNodeShr->viewSwaps[XR_VIEW_ID_CENTER_MONO].depthId = depthSwapId;
+		xrCreateSwapchainImages(hNode, &depthInfo, iDepthSwap);
+		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iDepthSwap = iDepthSwap;
 
-		assert(pNodeShr->swapStates[colorSwapId] == XR_SWAP_STATE_CREATED && "Color swap not created!");
-		assert(pNodeShr->swapStates[depthSwapId] == XR_SWAP_STATE_CREATED && "Depth swap not created!");
+		assert(pNodeShrd->swapStates[iColorSwap] == XR_SWAP_STATE_AVAILABLE && "Color swap not created!");
+		assert(pNodeShrd->swapStates[iDepthSwap] == XR_SWAP_STATE_AVAILABLE && "Depth swap not created!");
 
-		swap_h hColorSwap = pNodeCtx->hSwaps[colorSwapId];
+		swap_h hColorSwap = pNodeCtx->hSwaps[iColorSwap];
 		auto pColorSwap = BLOCK_PTR(cst.block.swap, hColorSwap);\
-		swap_h hDepthSwap = pNodeCtx->hSwaps[depthSwapId];
+		swap_h hDepthSwap = pNodeCtx->hSwaps[iDepthSwap];
 		auto pDepthSwap = BLOCK_PTR(cst.block.swap, hDepthSwap);
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 			swaps[iImg].colorView = pColorSwap->externalTexture[iImg].texture.view;
@@ -128,20 +128,20 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 		VK_CHECK(vk.GetSemaphoreCounterValue(device, cstTimeline, &compositorTimelineValue));
 		REQUIRE(compositorTimelineValue != 0xffffffffffffffff, "compositorTimelineValue imported as max value!");
 		u64 timelineCycleStartValue = compositorTimelineValue - (compositorTimelineValue % MXC_CYCLE_COUNT);
-		pNodeShr->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
+		pNodeShrd->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 	}
 
 	u64 nodeTimelineValue = 0;
 
 	// Send Open Node IPC call
-	pNodeShr->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
 	/*
 	 * Main Loop
 	 */
 NodeLoop:
-	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
+	vkTimelineWait(device, pNodeShrd->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
 
 	/*
 	 * MXC_CYCLE_UPDATE_WINDOW_STATE
@@ -160,14 +160,14 @@ NodeLoop:
 	/*
 	 * MXC_CYCLE_COMPOSITOR_RECORD
 	 */
-	vkTimelineWait(device, pNodeShr->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
+	vkTimelineWait(device, pNodeShrd->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
 
 	/* Update Global State */
 	atomic_thread_fence(memory_order_acquire);
 	vkUpdateGlobalSetView((pose){
-		.pos = (vec3)(pNodeShr->cameraPose.pos.vec - pNodeShr->rootPose.pos.vec),
-		.euler = pNodeShr->cameraPose.euler,
-		.rot = pNodeShr->cameraPose.rot,
+		.pos = (vec3)(pNodeShrd->cameraPose.pos.vec - pNodeShrd->rootPose.pos.vec),
+		.euler = pNodeShrd->cameraPose.euler,
+		.rot = pNodeShrd->cameraPose.rot,
 	}, &globSetState);
 	memcpy(pGlobalSetMapped, &globSetState, sizeof(VkGlobalSetState));
 
@@ -175,6 +175,8 @@ NodeLoop:
 	vk.BeginCommandBuffer(gfxCmd, &(VkCommandBufferBeginInfo){VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
 	int iSwapImg = nodeTimelineValue % VK_SWAP_COUNT;
+	pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iColorImg = iSwapImg;
+	pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iDepthImg = iSwapImg;
 
 	/* Acquire Swap Barrier */
 	CMD_IMAGE_BARRIERS2(gfxCmd, {
@@ -284,12 +286,12 @@ NodeLoop:
 	vkTimelineWait(device, nodeTimelineValue, nodeTimeline);
 
 	/* Update Camera Z */
-	pNodeShr->processState.depthNearZ = pNodeShr->camera.zFar; // reverse Z
-	pNodeShr->processState.depthFarZ = pNodeShr->camera.zNear;
+	pNodeShrd->processState.depthNearZ = pNodeShrd->camera.zFar; // reverse Z
+	pNodeShrd->processState.depthFarZ = pNodeShrd->camera.zNear;
 
 	/* Signal Updated to Compositor */
-	pNodeShr->timelineValue = nodeTimelineValue;
-	pNodeShr->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShr->compositorCycleSkip;
+	pNodeShrd->timelineValue = nodeTimelineValue;
+	pNodeShrd->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShrd->compositorCycleSkip;
 	atomic_thread_fence(memory_order_release);
 
 	CHECK_RUNNING

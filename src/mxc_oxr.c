@@ -60,7 +60,8 @@ XrResult xrSharedPollEvent(session_i iSession, XrEventDataUnion* pEventData)
 {
 	MxcNodeShared* pNodeShared = node.pShared[iSession];
 	return MID_QRING_DEQUEUE(&pNodeShared->eventDataQueue, pNodeShared->queuedEventDataBuffers, pEventData)
-	               == MID_SUCCESS ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
+	               == MID_SUCCESS
+	           ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
 }
 
 void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds)
@@ -98,7 +99,7 @@ void xrCreateSwapchainImages(session_i sessionId, const XrSwapchainInfo* pSwapIn
 	auto pNodeCtxt = &node.context[sessionId];
 	auto pNodeShrd = node.pShared[sessionId];
 
-	assert(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_UNITIALIZED && "Trying to create swapchain images with used swap index!");
+	ASSERT(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_UNITIALIZED, "Trying to create swapchain images with used swap index!");
 
 	pNodeShrd->swapStates[iSwap] = XR_SWAP_STATE_REQUESTED;
 	pNodeShrd->swapInfos[iSwap] = *pSwapInfo;
@@ -112,24 +113,28 @@ void xrCreateSwapchainImages(session_i sessionId, const XrSwapchainInfo* pSwapIn
 	}
 }
 
-void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, int imageId, HANDLE* pHandle)
+void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle)
 {
 	auto pNodeShrd = node.pShared[iSession];
 	auto pImports = &pImportedExternalMemory->imports;
-	assert(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_CREATED && "Trying to get swap image that has not been created!!");
-	*pHandle = pImports->swapImageHandles[iSwap][imageId];
+	assert(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_AVAILABLE && "Trying to get swap image that has not been created!!");
+	*pHandle = pImports->swapImageHandles[iSwap][iImg];
 }
 
-void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap)
+void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg)
 {
 	MxcNodeShared* pNodeShrd = node.pShared[iSession];
-	pNodeShrd->viewSwaps[viewId].colorId = iSwap;
+	pNodeShrd->viewSwaps[viewId].iColorSwap = iSwap;
+	pNodeShrd->viewSwaps[viewId].iColorImg = iImg;
+	atomic_thread_fence(memory_order_release);
 }
 
-void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap)
+void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg)
 {
 	MxcNodeShared* pNodeShrd = node.pShared[iSession];
-	pNodeShrd->viewSwaps[viewId].depthId = iSwap;
+	pNodeShrd->viewSwaps[viewId].iDepthSwap = iSwap;
+	pNodeShrd->viewSwaps[viewId].iDepthImg = iImg;
+	atomic_thread_fence(memory_order_release);
 }
 
 void xrSetDepthInfo(session_i iSession, float minDepth, float maxDepth, float nearZ, float farZ)
@@ -141,24 +146,32 @@ void xrSetDepthInfo(session_i iSession, float minDepth, float maxDepth, float ne
 	pNodeShrd->processState.depthFarZ = farZ;
 }
 
-void xrClaimSwapIndex(session_i iSession, uint8_t* pIndex)
+void xrClaimSwapImageIndex(session_i iSession, u8* pIndex)
 {
 	MxcNodeShared* pNodeShared = node.pShared[iSession];
+
+//	XrSwapState*   pStates = pNodeShared->swapStates;
+//	for (int i = 0; i < XR_SWAPCHAIN_CAPACITY; ++i) {
+//		XrSwapState expected = XR_SWAP_STATE_AVAILABLE;
+//		if (atomic_compare_exchange_weak_explicit(&pStates[i], &expected, XR_SWAP_STATE_CLAIMED,
+//		                                          memory_order_acquire, memory_order_relaxed)) {
+//			*pIndex = i;
+//			return;
+//		}
+//	}
+//	*pIndex = -1;
+//	return;
+
 	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
 	uint8_t index = (timelineValue % VK_SWAP_COUNT);
 	*pIndex = index;
-//	printf("Claiming swap index %d timeline %llu\n", index, timelineValue);
-//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], true, __ATOMIC_SEQ_CST);
-//	assert(priorIndex == false);
 }
 
-void xrReleaseSwapIndex(session_i iSession, uint8_t index)
+void xrReleaseSwapImageIndex(session_i iSession, u8 index)
 {
 	MxcNodeShared* pNodeShared = node.pShared[iSession];
-	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
-//	printf("Releasing swap index %d timeline %llu\n", index, timelineValue);
-//	uint8_t priorIndex = __atomic_exchange_n(&pNodeShared->swapClaimed[index], false, __ATOMIC_SEQ_CST);
-//	assert(priorIndex == true);
+//	XrSwapState* pStates = pNodeShared->swapStates;
+//	atomic_exchange_explicit(&pStates[index], XR_SWAP_STATE_AVAILABLE, memory_order_acq_rel);
 }
 
 void xrSetInitialCompositorTimelineValue(session_i iSession, uint64_t timelineValue)

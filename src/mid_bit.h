@@ -51,6 +51,13 @@ static inline int BitScanFirstZero(int setCount, bitset_t* pSet)
 	return i == setCount ? -1 : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
 }
 
+static inline int BitClaimFirstZero(int setCount, bitset_t* pSet)
+{
+	int i = BitScanFirstZero(setCount, pSet);
+	if (i != -1) BITSET(pSet, i);
+	return i;
+}
+
 static inline int BitCountOnes(int setCount, bitset_t* pSet)
 {
 	int count = 0;

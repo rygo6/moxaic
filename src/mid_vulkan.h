@@ -284,7 +284,7 @@ typedef struct VkQueueFamily {
 	VkQueue queue;
 
 	MidQRing              cmdQueue;
-	VkQueuedCommandBuffer queuedCmds[MID_QRING_CAPACITY];
+	VkQueuedCommandBuffer queuedCmds[128];
 
 	VkSemaphore   immediateTimeline;
 	u64           immediateTimelineValue;

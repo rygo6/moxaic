@@ -554,8 +554,8 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 	for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
 		// need better way to determine these invalid
 		// and maybe better way to signify frame has been set
-		pNodeShrd->viewSwaps[i].colorId = CHAR_MAX;
-		pNodeShrd->viewSwaps[i].depthId = CHAR_MAX;
+		pNodeShrd->viewSwaps[i].iColorSwap = CHAR_MAX;
+		pNodeShrd->viewSwaps[i].iDepthSwap = CHAR_MAX;
 	}
 
 	vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
@@ -716,8 +716,8 @@ static void ServerInterprocessAcceptNodeConnection()
 		for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
 			// need better way to determine these invalid
 			// and maybe better way to signify frame has been set
-			pNodeShrd->viewSwaps[i].colorId = CHAR_MAX;
-			pNodeShrd->viewSwaps[i].depthId = CHAR_MAX;
+			pNodeShrd->viewSwaps[i].iColorSwap = CHAR_MAX;
+			pNodeShrd->viewSwaps[i].iDepthSwap = CHAR_MAX;
 		}
 
 		vkSemaphoreCreateInfoExt semaphoreCreateInfo = {
@@ -1113,8 +1113,8 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 		}
 
 		pNodeCtxt->hSwaps[iNodeSwap] = hSwap;
-		pNodeShr->swapStates[iNodeSwap] = XR_SWAP_STATE_CREATED;
-		pSwap->state = XR_SWAP_STATE_CREATED;
+		pNodeShr->swapStates[iNodeSwap] = XR_SWAP_STATE_AVAILABLE;
+		pSwap->state = XR_SWAP_STATE_AVAILABLE;
 	}
 
 	SetEvent(pNodeCtxt->swapsSyncedHandle);

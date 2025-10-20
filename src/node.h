@@ -103,13 +103,21 @@ typedef struct MxcNodeShared {
 	pose         cameraPose;
 	camera       camera;
 
-	struct {
-		u8 colorId;
-		u8 depthId;
-	} viewSwaps[XR_MAX_VIEW_COUNT];
-
 	MxcController left;
 	MxcController right;
+
+	// Swap
+	struct {
+		swap_i iColorSwap;
+		u32    iColorImg;
+		swap_i iDepthSwap;
+		u32    iDepthImg;
+	} viewSwaps[XR_MAX_VIEW_COUNT];
+
+	XrSwapState     swapStates[XR_SWAPCHAIN_CAPACITY];
+	XrSwapchainInfo swapInfos[XR_SWAPCHAIN_CAPACITY];
+	u16             swapMaxWidth;
+	u16             swapMaxHeight;
 
 	// Read every cycle. Occasional write.
 	f32               compositorRadius;
@@ -124,12 +132,6 @@ typedef struct MxcNodeShared {
 	/* Events */
 	MidQRing         eventDataQueue;
 	XrEventDataUnion queuedEventDataBuffers[MID_QRING_CAPACITY];
-
-	// Swap
-	u16             swapMaxWidth;
-	u16             swapMaxHeight;
-	XrSwapState     swapStates[XR_SWAPCHAIN_CAPACITY];
-	XrSwapchainInfo swapInfos[XR_SWAPCHAIN_CAPACITY];
 
 } MxcNodeShared;
 

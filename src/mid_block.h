@@ -7,13 +7,11 @@
 //// Handle
 ////
 typedef u16 map_handle;
-typedef map_handle mHnd;
 
 typedef u16 block_handle;
 typedef u32 block_key;
 
 typedef block_handle bHnd;
-typedef block_key    bKey;
 
 typedef block_handle block_h; // lets go to this
 
@@ -67,9 +65,8 @@ typedef struct block_handle2{ // do this? yes probably
 // these should go in implementation
 static block_handle BlockClaim(int occupiedCount, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
 {
-	int i = BitScanFirstZero(occupiedCount, pOccupiedSet);
+	int i = BitClaimFirstZero(occupiedCount, pOccupiedSet);
 	if (i == -1) return HANDLE_DEFAULT;
-	BITSET(pOccupiedSet, i);
 	pKeys[i] = key;
 	pGenerations[i] = pGenerations[i] == HANDLE_GENERATION_MAX ? 1 : (pGenerations[i] + 1) & 0xF;
 	return HANDLE_GENERATION_SET(i, pGenerations[i]);
@@ -94,6 +91,7 @@ static block_handle BlockCountOccupied(int occupiedCount, bitset_t* pOccupiedSet
 #define ASSERT_HANDLE_RANGE(_, _handle, _message) ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks), _message);
 
 // someway these should take ptrs... or should this be static block? STATIC_BLOCK_CLAIM ?
+// I probbaly want a macro that will make each of these methods for each type of pool
 #define BLOCK_CLAIM(_, _key)                                                                               \
 	({                                                                                                     \
 		int _handle = BlockClaim(sizeof(_.occupied), (bitset_t*)&_.occupied, _.keys, _.generations, _key); \

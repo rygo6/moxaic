@@ -76,13 +76,13 @@ int main(void)
 
 #define TEST_NODE
 #ifdef TEST_NODE
-		NodeHandle testNodeHandle;
-		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
-		node.pShared[testNodeHandle]->compositorCycleSkip = 8;
-
-		NodeHandle testNodeHandle2;
-		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
-		node.pShared[testNodeHandle]->compositorCycleSkip = 24;
+//		NodeHandle testNodeHandle;
+//		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
+//		node.pShared[testNodeHandle]->compositorCycleSkip = 8;
+//
+//		NodeHandle testNodeHandle2;
+//		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
+//		node.pShared[testNodeHandle]->compositorCycleSkip = 24;
 #endif
 
 #elif defined(MOXAIC_NODE)
