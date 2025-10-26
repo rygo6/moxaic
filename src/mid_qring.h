@@ -2,6 +2,8 @@
  *
  * Mid Queue Ring Header
  *
+ * Requires -fno-strict-aliasing and -fwrapv.
+ * //TODO rename to channel to reflect p9
  */
 #ifndef MID_QRING_H
 #define MID_QRING_H
@@ -14,7 +16,7 @@
 typedef u8 qring_h;
 #define MID_QRING_CAPACITY (1 << (sizeof(qring_h) * CHAR_BIT))
 
-#define IS_POWER_OF_2(x) (((x) != 0) && (((x) & ((x) - 1)) == 0))
+
 
 typedef struct MidQRing {
 	qring_h head;
@@ -56,6 +58,7 @@ MidResult midQRingEnqueueEnd(MidQRing* pQ);
  *
  */
 #if defined(MID_QRING_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
+#undef MID_QRING_IMPLEMENTATION
 
 MidResult midQRingEnqueueBegin(MidQRing* pQ, int valueSize, int capacity, void* pValues, void** ppValue)
 {
@@ -95,5 +98,4 @@ MidResult midQRingDequeue(MidQRing* pQ, int valueSize, int capacity, void* pValu
 	return MID_SUCCESS;
 }
 
-#undef MID_QRING_IMPLEMENTATION
 #endif // MID_QRING_IMPLEMENTATION

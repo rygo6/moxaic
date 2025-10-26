@@ -166,7 +166,9 @@ typedef enum PACKED XrSwapState {
 	XR_SWAP_STATE_UNITIALIZED,
 	XR_SWAP_STATE_REQUESTED,
 	XR_SWAP_STATE_AVAILABLE,
-	XR_SWAP_STATE_CLAIMED,
+	XR_SWAP_STATE_ACQUIRED,
+	XR_SWAP_STATE_WAITED,
+	XR_SWAP_STATE_DESTROYED,
 	XR_SWAP_STATE_ERROR,
 	XR_SWAP_STATE_COUNT,
 } XrSwapState;
@@ -343,7 +345,7 @@ int xrOutputHaptic_Right     (session_i iSession, SubactionState* pState);
  */
 
 #define XR_SWAPCHAIN_IMAGE_COUNT 2
-#define XR_MAX_SWAPCHAIN_IMAGES 8
+#define XR_INVALID_SWAP_INDEX UINT32_MAX
 
 #define XR_OPENGL_MAJOR_VERSION 4
 #define XR_OPENGL_MINOR_VERSION 6
@@ -476,17 +478,14 @@ typedef struct Space {
 
 } Space;
 
-
 #define XR_SWAPCHAIN_CAPACITY 8
-#define XR_SWAPCHAIN_IMAGE_CAPA 8
 typedef struct Swapchain {
-	block_handle    hSession;
+	session_h    hSession;
 
+	u32      lastAcquiredIndex;
+	u32      lastWaitedIndex;
 	u32      lastReleasedIndex;
-	MidQRing availableIndexQueue;
-	u32      availableIndices[XR_MAX_SWAPCHAIN_IMAGES];
-	MidQRing acquiredIndexQueue;
-	u32      acquiredIndices[XR_MAX_SWAPCHAIN_IMAGES];
+	XrSwapState states[XR_SWAPCHAIN_IMAGE_COUNT];
 
 	union {
 		struct {
@@ -2222,6 +2221,7 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 	Swapchain* pSwap = BLOCK_PTR(B.swap, hSwap);
 	swap_i     iSwap = HANDLE_INDEX(hSwap);
 
+	pSwap->lastWaitedIndex = XR_INVALID_SWAP_INDEX;
 	pSwap->hSession = hSession;
 	pSwap->output = output;
 	pSwap->info = (XrSwapchainInfo){
@@ -2235,9 +2235,6 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 		.arraySize = createInfo->arraySize,
 		.mipCount = createInfo->mipCount,
 	};
-
-	for (u32 iImg = 0; iImg< XR_SWAPCHAIN_IMAGE_COUNT; ++iImg)
-		MID_QRING_ENQUEUE(&pSwap->availableIndexQueue, pSwap->availableIndices, &iImg);
 
 	xrCreateSwapchainImages(pSession->index, &pSwap->info, iSwap);
 
@@ -2301,8 +2298,8 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 						LOG_ERROR("XR_ERROR_VALIDATION_FAILURE Swap is neither color nor depth!\n");
 						return XR_ERROR_VALIDATION_FAILURE;
 				}
+				pSwap->states[iImg] = XR_SWAP_STATE_AVAILABLE;
 			}
-
 			break;
 		}
 		case XR_GRAPHICS_API_VULKAN:
@@ -2401,20 +2398,25 @@ XR_PROC xrAcquireSwapchainImage(XrSwapchain                        swapchain,
 	LOG_METHOD(xrAcquireSwapchainImage);
 
 	Swapchain* pSwap = (Swapchain*)swapchain;
+	XrSwapState* pStates = pSwap->states;
 
-	if (MID_QRING_DEQUEUE(&pSwap->availableIndexQueue, pSwap->availableIndices, index) != MID_SUCCESS) {
-		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No released swap image index available to acquire!");
-		return XR_ERROR_CALL_ORDER_INVALID;
+	static_assert(IS_POWER_OF_2(XR_SWAPCHAIN_IMAGE_COUNT), "XR_SWAPCHAIN_IMAGE_COUNT must be power of 2!");
+	static_assert(XR_SWAPCHAIN_IMAGE_COUNT >= 2, "Must be greater than or equal to 2!");
+
+	u32 lastAcquireIndex = pSwap->lastAcquiredIndex + 1;
+	for (u32 i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
+		u32 acquireIndex = (lastAcquireIndex + i) & (XR_SWAPCHAIN_IMAGE_COUNT - 1);
+		if (pStates[acquireIndex] == XR_SWAP_STATE_AVAILABLE) {
+			pStates[acquireIndex] = XR_SWAP_STATE_ACQUIRED;
+			pSwap->lastAcquiredIndex = acquireIndex;
+			*index = acquireIndex;
+			LOG("Acquired Swap Image Index: %d\n", *index);
+			return XR_SUCCESS;
+		}
 	}
 
-	if (MID_QRING_ENQUEUE(&pSwap->acquiredIndexQueue, pSwap->acquiredIndices, index) != MID_SUCCESS) {
-		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No room in acquire queue for new index!");
-		return XR_ERROR_CALL_ORDER_INVALID;
-	}
-
-	LOG("Acquired Swap Image Index: %d %p\n", *index, pSwap);
-
-	return XR_SUCCESS;
+	LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No available swaps to acquire!\n");
+	return XR_ERROR_CALL_ORDER_INVALID;
 }
 
 XR_PROC xrWaitSwapchainImage(
@@ -2422,6 +2424,25 @@ XR_PROC xrWaitSwapchainImage(
 	const XrSwapchainImageWaitInfo* waitInfo)
 {
 	LOG_METHOD(xrWaitSwapchainImage);
+
+	Swapchain* pSwap = (Swapchain*)swapchain;
+	XrSwapState* pStates = pSwap->states;
+
+	if (pSwap->lastWaitedIndex != XR_INVALID_SWAP_INDEX) {
+		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID Last waited swap has not been released!\n");
+		return XR_ERROR_CALL_ORDER_INVALID;
+	}
+
+	for (u32 i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
+		if (pStates[i] == XR_SWAP_STATE_ACQUIRED) {
+			pStates[i] = XR_SWAP_STATE_WAITED;
+			pSwap->lastWaitedIndex = i;
+			return XR_SUCCESS;
+		}
+	}
+
+	LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No acquired swaps to release!\n");
+	return XR_ERROR_CALL_ORDER_INVALID;
 
 //	auto pSwap = (Swapchain*)swapchain;
 //	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
@@ -2436,8 +2457,6 @@ XR_PROC xrWaitSwapchainImage(
 //	ID3D11RenderTargetView* rtView = pSwapchain->color[pSwapchain->swapIndex].d3d11.rtView;
 //	ID3D11DeviceContext4_OMSetRenderTargets(context4, 1, &rtView, NULL);
 //	ID3D11DeviceContext4_ClearRenderTargetView(context4, rtView, (float[]){0.0f, 0.0f, 0.0f, 0.0f});
-
-	return XR_SUCCESS;
 }
 
 XR_PROC xrReleaseSwapchainImage(XrSwapchain                        swapchain,
@@ -2446,21 +2465,20 @@ XR_PROC xrReleaseSwapchainImage(XrSwapchain                        swapchain,
 	LOG_METHOD(xrReleaseSwapchainImage);
 
 	auto_t pSwap = (Swapchain*)swapchain;
+	XrSwapState* pStates = pSwap->states;
 
-	u32 index;
-	if (MID_QRING_DEQUEUE(&pSwap->acquiredIndexQueue, pSwap->acquiredIndices, &index) != MID_SUCCESS) {
-		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No room in acquire queue for new index!");
-		return XR_ERROR_CALL_ORDER_INVALID;
+	for (u32 i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
+		if (pStates[i] == XR_SWAP_STATE_WAITED) {
+			pStates[i] = XR_SWAP_STATE_AVAILABLE;
+			pSwap->lastWaitedIndex = XR_INVALID_SWAP_INDEX;
+			pSwap->lastReleasedIndex = i;
+			LOG("Released Swap Image Index: %d %p\n", pSwap->lastReleasedIndex , pSwap);
+			return XR_SUCCESS;
+		}
 	}
 
-	if (MID_QRING_ENQUEUE(&pSwap->availableIndexQueue, pSwap->availableIndices, &index) != MID_SUCCESS) {
-		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No released swap image index available to acquire!");
-		return XR_ERROR_CALL_ORDER_INVALID;
-	}
-
-	pSwap->lastReleasedIndex = index;
-
-	LOG("Released Swap Image Index: %d %p\n", index, pSwap);
+	LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No waited swaps to release!\n");
+	return XR_ERROR_CALL_ORDER_INVALID;
 
 //	xrReleaseSwapImageIndex(pSess->index, pSwap->acquiredSwapIndex);
 
@@ -2473,8 +2491,6 @@ XR_PROC xrReleaseSwapchainImage(XrSwapchain                        swapchain,
 
 //	ID3D11RenderTargetView* nullRTView[] = {NULL};
 //	ID3D11DeviceContext4_OMSetRenderTargets(context4, 1, nullRTView, NULL);
-
-	return XR_SUCCESS;
 }
 
 XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)

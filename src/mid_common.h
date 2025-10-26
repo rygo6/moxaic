@@ -110,13 +110,15 @@ extern void Panic(const char* file, int line, const char* message);
  * Utility
  */
 
-#define TYPES_EQUAL(a, b)         __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
-#define CONCAT(_a, _b)            #_a #_b
-#define EXTRACT_FIELD(_p, _field) __typeof__((_p)->_field) _field = (_p)->_field
-#define LIKELY(x)                 __builtin_expect(!!(x), 1)
-#define UNLIKELY(x)               __builtin_expect(!!(x), 0)
-#define COUNT(_array)             (sizeof(_array) / sizeof(_array[0]))
-#define FLAG(b)                   (1 << (b))
+#define IS_POWER_OF_2(_v)          (((_v) != 0) && (((_v) & ((_v) - 1)) == 0))
+#define SHIFT_DIVIDE(_v, _divisor) ({ static_assert(IS_POWER_OF_2(_divisor)); ((_v) >> __builtin_ctz(_divisor)); })
+#define TYPES_EQUAL(a, b)          __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
+#define CONCAT(_a, _b)             #_a #_b
+#define EXTRACT_FIELD(_p, _field)  __typeof__((_p)->_field) _field = (_p)->_field
+#define LIKELY(x)                  __builtin_expect(!!(x), 1)
+#define UNLIKELY(x)                __builtin_expect(!!(x), 0)
+#define COUNT(_array)              (sizeof(_array) / sizeof(_array[0]))
+#define FLAG(b)                    (1 << (b))
 
 #define CONTAINS(_array, _count, _)        \
 	({                                     \
