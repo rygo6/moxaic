@@ -117,6 +117,8 @@ target_compile_options(${TARGET_NAME} PRIVATE
         -std=c23
         -std=gnu23
         -Wno-gnu-statement-expression
+        -fno-strict-aliasing
+        -fwrapv
 )
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
