@@ -89,10 +89,6 @@ typedef struct MxcClip {
 	vec2 lrUV;
 } MxcClip;
 
-//typedef struct MxcIpcFundDataBase {
-//
-//}
-
 typedef struct MxcNodeShared {
 
 	// Read/Write every cycle
@@ -114,8 +110,8 @@ typedef struct MxcNodeShared {
 		u32    iDepthImg;
 	} viewSwaps[XR_MAX_VIEW_COUNT];
 
-	XrSwapState     swapStates[XR_SWAPCHAIN_CAPACITY];
-	XrSwapchainInfo swapInfos[XR_SWAPCHAIN_CAPACITY];
+	XrSwapState     nodeSwapStates[XR_SWAPCHAIN_CAPACITY];
+	XrSwapInfo      nodeSwapInfos[XR_SWAPCHAIN_CAPACITY];
 	u16             swapMaxWidth;
 	u16             swapMaxHeight;
 
@@ -233,8 +229,8 @@ typedef struct MxcNodeContext {
 
 	MxcNodeInterprocessMode interprocessMode;
 
-	HANDLE       swapsSyncedHandle;
-	block_handle hSwaps[XR_SWAPCHAIN_CAPACITY];
+	HANDLE swapsSyncedHandle;
+	swap_h hNodeSwaps[XR_SWAPCHAIN_CAPACITY];
 
 	VkDedicatedTexture gbuffer[XR_MAX_VIEW_COUNT];
 

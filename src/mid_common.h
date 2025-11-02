@@ -68,6 +68,8 @@ extern void Panic(const char* file, int line, const char* message);
 		PANIC(_message);                     \
 	}
 
+#define REQUIRE_FALSE(_a, _b, ...)  REQUIRE_EQUAL(_a, false, __VA_ARGS__)
+
 #define REQUIRE_EQUAL(_a, _b, ...)                               \
 	if (UNLIKELY(((_a) != (_b)))) {                              \
 		PANIC("Expected: " #_a " == " #_b " " __VA_ARGS__ "\n"); \

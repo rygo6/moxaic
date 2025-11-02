@@ -76,48 +76,48 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	} swaps[XR_SWAPCHAIN_IMAGE_COUNT] ;
 
 	{
-		const int       iColorSwap = 0;
-		XrSwapchainInfo colorInfo = {
-			.createFlags = 0,
-			.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
-			.windowWidth = DEFAULT_WIDTH,
+		const int  iColorSwap = 0;
+		XrSwapInfo colorInfo = {
+			.createFlags  = 0,
+			.usageFlags   = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+			.windowWidth  = DEFAULT_WIDTH,
 			.windowHeight = DEFAULT_HEIGHT,
-			.format = VK_FORMAT_R8G8B8A8_UNORM,
-			.sampleCount = 1,
-			.faceCount = 1,
-			.arraySize = 1,
-			.mipCount = 1,
+			.format       = VK_FORMAT_R8G8B8A8_UNORM,
+			.sampleCount  = 1,
+			.faceCount    = 1,
+			.arraySize    = 1,
+			.mipCount     = 1,
 		};
 		// I think I want this to be a thread_node and not go through openxr constructs at all
-		xrCreateSwapchainImages(hNode, &colorInfo, iColorSwap);
+		xrCreateSwapchainImages(hNode, iColorSwap, &colorInfo);
 		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iColorSwap = iColorSwap;
 
-		const int       iDepthSwap = 1;
-		XrSwapchainInfo depthInfo = {
-			.createFlags = 0,
-			.usageFlags = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			.windowWidth = DEFAULT_WIDTH,
+		const int  iDepthSwap = 1;
+		XrSwapInfo depthInfo = {
+			.createFlags  = 0,
+			.usageFlags   = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			.windowWidth  = DEFAULT_WIDTH,
 			.windowHeight = DEFAULT_HEIGHT,
-			.format = VK_FORMAT_D16_UNORM,
-			.sampleCount = 1,
-			.faceCount = 1,
-			.arraySize = 1,
-			.mipCount = 1,
+			.format       = VK_FORMAT_D16_UNORM,
+			.sampleCount  = 1,
+			.faceCount    = 1,
+			.arraySize    = 1,
+			.mipCount     = 1,
 		};
-		xrCreateSwapchainImages(hNode, &depthInfo, iDepthSwap);
+		xrCreateSwapchainImages(hNode, iDepthSwap, &depthInfo);
 		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iDepthSwap = iDepthSwap;
 
-		assert(pNodeShrd->swapStates[iColorSwap] == XR_SWAP_STATE_AVAILABLE && "Color swap not created!");
-		assert(pNodeShrd->swapStates[iDepthSwap] == XR_SWAP_STATE_AVAILABLE && "Depth swap not created!");
+		ASSERT(pNodeShrd->nodeSwapStates[iColorSwap] == XR_SWAP_STATE_AVAILABLE, "Color swap not created!");
+		ASSERT(pNodeShrd->nodeSwapStates[iDepthSwap] == XR_SWAP_STATE_AVAILABLE, "Depth swap not created!");
 
-		swap_h hColorSwap = pNodeCtx->hSwaps[iColorSwap];
-		auto pColorSwap = BLOCK_PTR(cst.block.swap, hColorSwap);\
-		swap_h hDepthSwap = pNodeCtx->hSwaps[iDepthSwap];
-		auto pDepthSwap = BLOCK_PTR(cst.block.swap, hDepthSwap);
+		swap_h hColorSwap = pNodeCtx->hNodeSwaps[iColorSwap];
+		auto_t pColorSwap = BLOCK_PTR(cst.block.swap, hColorSwap);
+		swap_h hDepthSwap = pNodeCtx->hNodeSwaps[iDepthSwap];
+		auto_t pDepthSwap = BLOCK_PTR(cst.block.swap, hDepthSwap);
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
-			swaps[iImg].colorView = pColorSwap->externalTexture[iImg].texture.view;
+			swaps[iImg].colorView  = pColorSwap->externalTexture[iImg].texture.view;
 			swaps[iImg].colorImage = pColorSwap->externalTexture[iImg].texture.image;
-			swaps[iImg].depthView = pDepthSwap->externalTexture[iImg].texture.view;
+			swaps[iImg].depthView  = pDepthSwap->externalTexture[iImg].texture.view;
 			swaps[iImg].depthImage = pDepthSwap->externalTexture[iImg].texture.image;
 		}
 	}

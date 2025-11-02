@@ -6,7 +6,7 @@
 typedef struct MxcSwapTexture {
 	VkExternalTexture externalTexture[XR_SWAPCHAIN_IMAGE_COUNT];
 	XrSwapState       state;
-	XrSwapchainInfo   info;
+	XrSwapInfo        info;
 } MxcSwapTexture;
 
 // Hot data used by the compositor for each node

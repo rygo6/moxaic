@@ -173,9 +173,9 @@ typedef enum PACKED XrSwapState {
 	XR_SWAP_STATE_COUNT,
 } XrSwapState;
 
-typedef struct PACKED XrSwapchainInfo {
+typedef struct XrSwapInfo {
 	XrSwapchainCreateFlags createFlags;
-	XrSwapchainUsageFlags  usageFlags;
+	VkImageUsageFlags      usageFlags;
 	VkFormat               format;
 	u16                    windowWidth;
 	u16                    windowHeight;
@@ -183,7 +183,7 @@ typedef struct PACKED XrSwapchainInfo {
 	u8                     faceCount;
 	u8                     arraySize;
 	u8                     mipCount;
-} XrSwapchainInfo;
+} XrSwapInfo;
 
 typedef float XrMat4 __attribute__((vector_size(sizeof(float) * 16)));
 
@@ -280,8 +280,9 @@ void xrClaimSessionId(session_i* pSessionIndex);
 
 void xrReleaseSessionId(session_i iSession);
 void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds);
-void xrCreateSwapchainImages(session_i sessionId, const XrSwapchainInfo* pSwapInfo, swap_i iSwap);
+XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapInfo* pSwapInfo);
 void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle);
+XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap);
 void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg);
 void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg);
 void xrSetDepthInfo(session_i iSession, float minDepth, float maxDepth, float nearZ, float farZ);
@@ -478,7 +479,7 @@ typedef struct Space {
 
 } Space;
 
-#define XR_SWAPCHAIN_CAPACITY 8
+#define XR_SWAPCHAIN_CAPACITY 4
 typedef struct Swapchain {
 	session_h    hSession;
 
@@ -501,7 +502,7 @@ typedef struct Swapchain {
 	} texture[XR_SWAPCHAIN_IMAGE_COUNT];
 
 	XrSwapOutput    output;
-	XrSwapchainInfo info;
+	XrSwapInfo      info;
 
 } Swapchain;
 
@@ -2180,37 +2181,73 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 	VkFormat vkFormat = TO_VK_FORMATS[xr.instance.graphicsApi][createInfo->format];
 	XrSwapOutput output = isColor ? XR_SWAP_OUTPUT_COLOR : isDepth ? XR_SWAP_OUTPUT_DEPTH : XR_SWAP_OUTPUT_UNKNOWN;
 
-	LOG("  output: %s\n", string_XrSwapOutput(output));
-	LOG("  vkFormat: %s\n", string_VkFormat(vkFormat));
-	LOG("  sampleCount: %u\n", createInfo->sampleCount);
-	LOG("  windowWidth: %u\n", createInfo->width);
-	LOG("  windowHeight: %u\n", createInfo->height);
-	LOG("  faceCount: %u\n", createInfo->faceCount);
-	LOG("  arraySize: %u\n", createInfo->arraySize);
-	LOG("  mipCount: %u\n", createInfo->mipCount);
+	LOG("	output: %s\n", string_XrSwapOutput(output));
+	LOG("	vkFormat: %s\n", string_VkFormat(vkFormat));
+	LOG("	sampleCount: %u\n", createInfo->sampleCount);
+	LOG("	windowWidth: %u\n", createInfo->width);
+	LOG("	windowHeight: %u\n", createInfo->height);
+	LOG("	faceCount: %u\n", createInfo->faceCount);
+	LOG("	arraySize: %u\n", createInfo->arraySize);
+	LOG("	mipCount: %u\n", createInfo->mipCount);
 
 	LOG_XrSwapchainCreateFlags(createInfo->createFlags);
 
 #define PRINT_CREATE_FLAGS(_flag, _bit)  \
 	if (createInfo->createFlags & _flag) \
-		printf("flag: " #_flag "\n");
+		printf("	flags:\n		" #_flag "\n");
 	XR_LIST_BITS_XrSwapchainCreateFlags(PRINT_CREATE_FLAGS);
 #undef PRINT_CREATE_FLAGS
 
 #define PRINT_USAGE_FLAGS(_flag, _bit)  \
 	if (createInfo->usageFlags & _flag) \
-		printf("outputs: " #_flag "\n");
+		printf("	usage:\n		" #_flag "\n");
 	XR_LIST_BITS_XrSwapchainUsageFlags(PRINT_USAGE_FLAGS);
 #undef PRINT_USAGE_FLAGS
-
-//	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
-//		LOG_ERROR("XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT unsupported \n");
-//		return XR_ERROR_FEATURE_UNSUPPORTED;
-//	}
 
 	if (output == XR_SWAP_OUTPUT_UNKNOWN) {
 		LOG_ERROR("XR_ERROR_VALIDATION_FAILURE Swap is neither color nor depth!\n");
 		return XR_ERROR_VALIDATION_FAILURE;
+	}
+
+	VkImageCreateFlags vkCreateFlags = 0;
+	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT) {
+		vkCreateFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+	}
+
+	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
+		LOG_ERROR("XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT unsupported \n");
+		return XR_ERROR_FEATURE_UNSUPPORTED;
+	}
+
+	VkImageUsageFlags vkUsageFlags = 0;
+	if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT) {
+		vkUsageFlags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	}
+
+	if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+		vkUsageFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	}
+
+	if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_UNORDERED_ACCESS_BIT) {
+		vkUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+	}
+
+	if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT) {
+		vkUsageFlags |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	}
+
+	if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT) {
+		vkUsageFlags |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	}
+
+	if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_SAMPLED_BIT) {
+		vkUsageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+	}
+
+	if (createInfo->usageFlags & XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT) {
+		// This affects image view creation rather than image usage directly
+		// Handle this in image view creation or add VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT
+		// to create flags if format compatibility is needed
 	}
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
@@ -2224,9 +2261,9 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 	pSwap->lastWaitedIndex = XR_INVALID_SWAP_INDEX;
 	pSwap->hSession = hSession;
 	pSwap->output = output;
-	pSwap->info = (XrSwapchainInfo){
+	pSwap->info = (XrSwapInfo){
 		.createFlags = createInfo->createFlags,
-		.usageFlags = createInfo->usageFlags,
+		.usageFlags = vkUsageFlags,
 		.windowWidth = createInfo->width,
 		.windowHeight = createInfo->height,
 		.format = vkFormat,
@@ -2236,7 +2273,7 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 		.mipCount = createInfo->mipCount,
 	};
 
-	xrCreateSwapchainImages(pSession->index, &pSwap->info, iSwap);
+	xrCreateSwapchainImages(pSession->index, iSwap, &pSwap->info);
 
 	switch (xr.instance.graphicsApi) {
 		case XR_GRAPHICS_API_OPENGL: {
@@ -2314,18 +2351,21 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
-	auto pSwap = (Swapchain*)swapchain;
-	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
+	auto_t    pSwap    = (Swapchain*)swapchain;
+	Session*  pSession = BLOCK_PTR(B.session, pSwap->hSession);
+	session_i iSession = HANDLE_INDEX( pSwap->hSession);
 
 	switch (xr.instance.graphicsApi) {
+
 		case XR_GRAPHICS_API_OPENGL: {
-			printf("Destroying OpenGL Swap");
+			LOG("Destroying OpenGL Swap");
 			break;
 		}
+
 		case XR_GRAPHICS_API_D3D11_4: {
-			printf("Destroying D3D11 Swap\n");
-			ID3D11Device5* device5 = pSess->binding.d3d11.device5;
-			ID3D11DeviceContext4* context4 = pSess->binding.d3d11.context4;
+			LOG("Destroying D3D11 Swap\n");
+			ID3D11Device5* device5 = pSession->binding.d3d11.device5;
+			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
 
 			for (int i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
 				if (pSwap->texture[i].d3d11.localResource != NULL)
@@ -2336,14 +2376,19 @@ XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 
 			break;
 		}
+
 		case XR_GRAPHICS_API_VULKAN:
+			break;
+
 		default:
 			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	bHnd hSwap = BLOCK_HANDLE(B.swap, pSwap);
-	BLOCK_RELEASE(B.swap, hSwap);
+	swap_h hSwap = BLOCK_HANDLE(B.swap, pSwap);
+	swap_i iSwap = HANDLE_INDEX(pSwap->hSession);
+	xrDestroySwapchainImages(iSession, iSwap);
 
+	BLOCK_RELEASE(B.swap, hSwap);
 	LOG("%d viewSwaps in use\n", BLOCK_COUNT(B.swap));
 	return XR_SUCCESS;
 }

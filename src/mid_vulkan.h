@@ -2555,11 +2555,18 @@ static void CheckDXGI()
 
 void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExternalPlatformTexture* pTexture)
 {
-	REQUIRE_EQUAL(vkDepthFormat(pCreateInfo->format), false, "ExternalPlatformTexture cannot be depth!");
+	REQUIRE_FALSE(vkDepthFormat(pCreateInfo->format), "ExternalPlatformTexture cannot be depth!");
 	REQUIRE_EQUAL(pCreateInfo->mipLevels, 1, "ExternalPlatformTexture cannot have mips!");
 	CheckDXGI();
 
-	auto format = vkDXGIFormat(pCreateInfo->format);
+	// You seem to need both D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET to let DX11 import it.
+	D3D12_RESOURCE_FLAGS d3d12Flags = D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	VkImageUsageFlags vkUsageFlags = pCreateInfo->usage;
+	if (vkUsageFlags & VK_IMAGE_USAGE_STORAGE_BIT) {
+		d3d12Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+
+	DXGI_FORMAT format = vkDXGIFormat(pCreateInfo->format);
 	D3D12_RESOURCE_DESC textureDesc = {
 		.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 		.Alignment = 0,
@@ -2570,7 +2577,7 @@ void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExt
 		.Format = format,
 		.SampleDesc.Count = pCreateInfo->samples,
 		.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-		.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS,
+		.Flags = d3d12Flags,
 	};
 	D3D12_HEAP_PROPERTIES heapProperties = {
 		.Type = D3D12_HEAP_TYPE_DEFAULT,

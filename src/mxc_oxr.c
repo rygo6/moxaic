@@ -93,32 +93,78 @@ void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle)
 	*pHandle = pImportParam->compositorTimelineHandle;
 }
 
-void xrCreateSwapchainImages(session_i sessionId, const XrSwapchainInfo* pSwapInfo, swap_i iSwap)
+XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapInfo* pInfo)
 {
-	NodeHandle hNode = sessionId;
-	auto pNodeCtxt = &node.context[sessionId];
-	auto pNodeShrd = node.pShared[sessionId];
+	NodeHandle      hNode     = iSession;
+	MxcNodeContext* pNodeCtxt = &node.context[iSession];
+	MxcNodeShared*  pNodeShrd = node.pShared[iSession];
 
-	ASSERT(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_UNITIALIZED, "Trying to create swapchain images with used swap index!");
+	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_UNITIALIZED) {
+		LOG_ERROR("Trying to create swapchain images with used swap index!\n");
+		return XR_ERROR_HANDLE_INVALID;
+	}
 
-	pNodeShrd->swapStates[iSwap] = XR_SWAP_STATE_REQUESTED;
-	pNodeShrd->swapInfos[iSwap] = *pSwapInfo;
+	pNodeShrd->nodeSwapStates[iSwap] = XR_SWAP_STATE_REQUESTED;
+	pNodeShrd->nodeSwapInfos[iSwap]  = *pInfo;
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 
-	if (pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_ERROR) {
-		LOG_ERROR("OpenXR failed to acquire swap!");
-		pNodeShrd->swapStates[iSwap] = XR_SWAP_STATE_UNITIALIZED;
+	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_REQUESTED) {
+		LOG_ERROR("Compositor failed to create Swap!\n");
+		return XR_ERROR_HANDLE_INVALID;
 	}
+
+	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_ERROR) {
+		LOG_ERROR("Compositor error on swap creation!\n");
+		pNodeShrd->nodeSwapStates[iSwap] = XR_SWAP_STATE_UNITIALIZED;
+		return XR_ERROR_HANDLE_INVALID;
+	}
+
+	return XR_SUCCESS;
 }
 
 void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle)
 {
 	auto pNodeShrd = node.pShared[iSession];
 	auto pImports = &pImportedExternalMemory->imports;
-	assert(pNodeShrd->swapStates[iSwap] == XR_SWAP_STATE_AVAILABLE && "Trying to get swap image that has not been created!!");
+	ASSERT(pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_AVAILABLE, "Trying to get swap image that has not been created!!");
 	*pHandle = pImports->swapImageHandles[iSwap][iImg];
+}
+
+XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap)
+{
+	NodeHandle      hNode     = iSession;
+	MxcNodeContext* pNodeCtxt = &node.context[iSession];
+	MxcNodeShared*  pNodeShrd = node.pShared[iSession];
+
+	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_UNITIALIZED) {
+		LOG_ERROR("Trying to destroy unitialized swapchain images!");
+		return XR_ERROR_HANDLE_INVALID;
+	}
+
+	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_DESTROYED) {
+		LOG_ERROR("Trying to destroy already destroyed swapchain images!");
+		return XR_ERROR_HANDLE_INVALID;
+	}
+
+	pNodeShrd->nodeSwapStates[iSwap] = XR_SWAP_STATE_DESTROYED;
+
+	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
+	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
+
+	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_DESTROYED) {
+		LOG_ERROR("Compositor failed to destroy Swap!");
+		return XR_ERROR_HANDLE_INVALID;
+	}
+
+	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_ERROR) {
+		LOG_ERROR("Compositor error when destroying swap!");
+		pNodeShrd->nodeSwapStates[iSwap] = XR_SWAP_STATE_UNITIALIZED;
+		return XR_ERROR_HANDLE_INVALID;
+	}
+
+	return XR_SUCCESS;
 }
 
 void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg)

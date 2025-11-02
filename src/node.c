@@ -170,7 +170,7 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessSt
 
 
 // this couild go in mid vk
-static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTexture* pSwapTexture)
+static void CreateColorSwapTexture(const XrSwapInfo* pInfo, VkExternalTexture* pSwapTexture)
 {
 	VkImageCreateInfo info = {
 		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -179,12 +179,14 @@ static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 			.handleTypes = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 		},
 		.imageType   = VK_IMAGE_TYPE_2D,
-		.format      = VK_RENDER_PASS_FORMATS[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR],
+		.format      = VK_FORMAT_R8G8B8A8_UNORM,
 		.extent      = {pInfo->windowWidth, pInfo->windowHeight, 1},
 		.mipLevels   = 1,
 		.arrayLayers = 1,
 		.samples     = VK_SAMPLE_COUNT_1_BIT,
-		.usage       = VK_RENDER_PASS_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR],
+		.usage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+			           VK_IMAGE_USAGE_STORAGE_BIT |
+	                   VK_IMAGE_USAGE_SAMPLED_BIT,
 	};
 	vkCreateExternalPlatformTexture(&info, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
@@ -196,16 +198,13 @@ static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 	};
 	vkCreateDedicatedTexture(&textureInfo, &pSwapTexture->texture);
 
-	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)
-	{
+	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)	{
 		CMD_IMAGE_BARRIERS(cmd,	{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = pSwapTexture->texture.image,
 			VK_IMAGE_BARRIER_SRC_UNDEFINED,
 			.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
 			.dstAccessMask = VK_ACCESS_2_NONE,
-			// could I do this elsewhere?
-			//.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
@@ -213,7 +212,7 @@ static void CreateColorSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 	}
 }
 
-static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTexture* pSwapTexture)
+static void CreateDepthSwapTexture(const XrSwapInfo* pInfo, VkExternalTexture* pSwapTexture)
 {
 	VkImageCreateInfo imageCreateInfo = {
 		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -227,10 +226,9 @@ static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 		.mipLevels   = 1,
 		.arrayLayers = 1,
 		.samples     = VK_SAMPLE_COUNT_1_BIT,
-		// You cannot export a depth texture to all platforms.
 		.usage       = VK_IMAGE_USAGE_STORAGE_BIT |
-		               VK_IMAGE_USAGE_SAMPLED_BIT |
-		               VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+	                   VK_IMAGE_USAGE_SAMPLED_BIT |
+					   VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 	};
 	vkCreateExternalPlatformTexture(&imageCreateInfo, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
@@ -242,16 +240,13 @@ static void CreateDepthSwapTexture(const XrSwapchainInfo* pInfo, VkExternalTextu
 	};
 	vkCreateDedicatedTexture(&textureInfo, &pSwapTexture->texture);
 
-	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)
-	{
+	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)	{
 		CMD_IMAGE_BARRIERS(cmd,	{
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = pSwapTexture->texture.image,
 			VK_IMAGE_BARRIER_SRC_UNDEFINED,
 			.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
 			.dstAccessMask = VK_ACCESS_2_NONE,
-			// could I do this elsewhere?
-			//.newLayout = pInfo->compositorMode == MXC_COMPOSITOR_MODE_COMPUTE ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			.newLayout = VK_IMAGE_LAYOUT_GENERAL,
 			VK_IMAGE_BARRIER_QUEUE_FAMILY_IGNORED,
 			VK_IMAGE_BARRIER_COLOR_SUBRESOURCE_RANGE,
@@ -335,12 +330,11 @@ static void CreateNodeGBuffer(NodeHandle hNode)
 
 static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
 {
-	pSwap->state = XR_SWAP_STATE_UNITIALIZED;
-	pSwap->info = (XrSwapchainInfo){};
-	for (int i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
-		vkDestroyDedicatedTexture(&pSwap->externalTexture[i].texture);
-		vkDestroyExternalPlatformTexture(&pSwap->externalTexture[i].platform);
+	for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
+		vkDestroyDedicatedTexture(&pSwap->externalTexture[iImg].texture);
+		vkDestroyExternalPlatformTexture(&pSwap->externalTexture[iImg].platform);
 	}
+	memset(pSwap, 0, sizeof(MxcSwapTexture));
 }
 
 ////
@@ -478,10 +472,10 @@ static int CleanupNode(NodeHandle hNode)
 
 			// We are fully destroying swaps and gbuffer but may want to retain them someday
 			for (int i = 0; i < MXC_NODE_SWAP_CAPACITY; ++i) {
-				if (!HANDLE_VALID(pNodeCtxt->hSwaps[i]))
+				if (!HANDLE_VALID(pNodeCtxt->hNodeSwaps[i]))
 					continue;
 
-				auto pSwap = BLOCK_RELEASE(cst.block.swap, pNodeCtxt->hSwaps[i]);
+				MxcSwapTexture* pSwap = BLOCK_RELEASE(cst.block.swap, pNodeCtxt->hNodeSwaps[i]);
 				mxcDestroySwapTexture(pSwap);
 			}
 			for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
@@ -603,9 +597,9 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle)
 #endif
 }
 
-////
-//// IPC LifeCycle
-////
+/*
+ * IPC LifeCycle
+ */
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
 
 static struct {
@@ -622,7 +616,7 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 		int _result = (_command);                                   \
 		if (__builtin_expect(!(_result), 0)) {                      \
 			fprintf(stderr, "%s: %ld\n", _message, GetLastError()); \
-			goto ExitError;                                         \
+			goto Error;                                             \
 		}                                                           \
 	}
 // Checks WSA error code. Expects 0 for success.
@@ -631,7 +625,7 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 		int _result = (_command);                                     \
 		if (__builtin_expect(!!(_result), 0)) {                       \
 			fprintf(stderr, "%s: %d\n", _message, WSAGetLastError()); \
-			goto ExitError;                                           \
+			goto Error;                                               \
 		}                                                             \
 	}
 
@@ -795,7 +789,7 @@ static void ServerInterprocessAcceptNodeConnection()
 		goto ExitSuccess;
 	}
 
-ExitError:
+Error:
 //	if (pImports != NULL) {
 //		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
 //			if (pImportParam->framebufferHandles[i].color != INVALID_HANDLE_VALUE)
@@ -845,7 +839,7 @@ static void* RunInterProcessServer(void* arg)
 	while (atomic_load_explicit(&isRunning, memory_order_acquire))
 		ServerInterprocessAcceptNodeConnection();
 
-ExitError:
+Error:
 	if (ipcServer.listenSocket != INVALID_SOCKET)
 		closesocket(ipcServer.listenSocket);
 
@@ -1004,7 +998,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		goto ExitSuccess;
 	}
 
-ExitError:
+Error:
 	// do cleanup
 	// need a NodeContext cleanup method
 ExitSuccess:
@@ -1057,70 +1051,105 @@ static void ipcFuncClaimSwap(NodeHandle hNode)
 #if defined(MOXAIC_COMPOSITOR)
 	LOG("Claiming Swap for Node %d\n", hNode);
 
-	auto pNodeShr = node.pShared[hNode];
-	auto pNodeCstData = &cst.nodeData[hNode];
-	auto pNodeCtxt = &node.context[hNode];
+	MxcNodeShared*         pNodeShrd    = node.pShared[hNode];
+	MxcCompositorNodeData* pNodeCstData = &cst.nodeData[hNode];
+	MxcNodeContext*        pNodeCtxt    = &node.context[hNode];
 	bool needsExport = pNodeCtxt->interprocessMode != MXC_NODE_INTERPROCESS_MODE_THREAD;
 
 	// Scan Node Swapchains for requests and create them if needed.
 	for (int iNodeSwap = 0; iNodeSwap < XR_SWAPCHAIN_CAPACITY; ++iNodeSwap) {
-		if (pNodeShr->swapStates[iNodeSwap] != XR_SWAP_STATE_REQUESTED)
-			continue;
 
-		block_h hSwap = BLOCK_CLAIM(cst.block.swap, 0); // key should be hash of swap info to find recycled swaps
-		if (!HANDLE_VALID(hSwap)) {
-			LOG_ERROR("Fail to claim SwapImage!\n");
-			goto ExitError;
-		}
-		LOG("Claimed Swap %d for Node %d\n", HANDLE_INDEX(hSwap), hNode);
+		switch (pNodeShrd->nodeSwapStates[iNodeSwap]) {
 
-		auto pSwap = BLOCK_PTR(cst.block.swap, hSwap);
-		assert(pSwap->state == XR_SWAP_STATE_UNITIALIZED && "Trying to create already created SwapImage!");
-		pSwap->state = XR_SWAP_STATE_REQUESTED;
-		pSwap->info = pNodeShr->swapInfos[iNodeSwap];
-		bool isColor = pSwap->info.usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
-		bool isDepth = pSwap->info.usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			case XR_SWAP_STATE_REQUESTED: {
+				block_h hSwap = BLOCK_CLAIM(cst.block.swap, 0); // key should be hash of swap info to find recycled swaps
+				if (!HANDLE_VALID(hSwap)) {
+					LOG_ERROR("Fail to claim SwapImage!\n");
+					pNodeShrd->nodeSwapStates[iNodeSwap] = XR_SWAP_STATE_ERROR;
+					goto Out;
+				}
+				LOG("Claimed Swap %d for Node %d\n", HANDLE_INDEX(hSwap), hNode);
 
-		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
-			// We could determine color in CreateColorSwapTexture. Really should just make a VkExternalTexture.
-			if (isColor) {
-				CreateColorSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
-				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.image, "ExportedColorSwapImage%d", iImg);
-				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.view, "ExportedColorSwapView%d", iImg);
-				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.memory, "ExportedColorSwapMemory%d", iImg);
-			} else if (isDepth) {
-				CreateDepthSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
-				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.image, "ExportedDepthSwapImage%d", iImg);
-				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.view, "ExportedDepthSwapView%d", iImg);
-				VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.memory, "ExportedDepthSwapMemory%d", iImg);
-			} else {
-				ASSERT(false, "SwapImage is neither color nor depth!");
+				MxcSwapTexture* pSwap = BLOCK_PTR(cst.block.swap, hSwap);
+				if (pSwap->state != XR_SWAP_STATE_UNITIALIZED) {
+					LOG_ERROR("Claimed SwapImage already initialized!\n");
+					pNodeShrd->nodeSwapStates[iNodeSwap] = XR_SWAP_STATE_ERROR;
+					goto Out;
+				}
+
+				pSwap->state = XR_SWAP_STATE_REQUESTED;
+				pSwap->info = pNodeShrd->nodeSwapInfos[iNodeSwap];
+				bool isColor = pSwap->info.usageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+				bool isDepth = pSwap->info.usageFlags & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+				for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
+					// We could determine color in CreateColorSwapTexture. Really should just make a VkExternalTexture.
+					if (isColor) {
+						CreateColorSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
+						VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.image, "ExportedColorSwapImage%d", iImg);
+						VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.view, "ExportedColorSwapView%d", iImg);
+						VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.memory, "ExportedColorSwapMemory%d", iImg);
+					} else if (isDepth) {
+						CreateDepthSwapTexture(&pSwap->info, &pSwap->externalTexture[iImg]);
+						VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.image, "ExportedDepthSwapImage%d", iImg);
+						VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.view, "ExportedDepthSwapView%d", iImg);
+						VK_SET_DEBUG_NAME(pSwap->externalTexture[iImg].texture.memory, "ExportedDepthSwapMemory%d", iImg);
+					} else {
+						LOG_ERROR("SwapImage is neither color nor depth!\n");
+						pNodeShrd->nodeSwapStates[iNodeSwap] = XR_SWAP_STATE_ERROR;
+						goto Out;
+					}
+
+					// TODO Should always export to enable a reusable pool of swaps
+					if (needsExport) {
+						MxcNodeImports* pImports = &pNodeCtxt->exported.pExportedMemory->imports;
+						WIN32_CHECK(DuplicateHandle(GetCurrentProcess(),
+						                            pSwap->externalTexture[iImg].platform.handle,
+						                            pNodeCtxt->exported.handle,
+						                            &pImports->swapImageHandles[iNodeSwap][iImg],
+						                            0, false, DUPLICATE_SAME_ACCESS),
+						            "Duplicate localTexture buffer fail");
+					}
+
+					pNodeCstData->swaps[iNodeSwap][iImg].image = pSwap->externalTexture[iImg].texture.image;
+					pNodeCstData->swaps[iNodeSwap][iImg].view = pSwap->externalTexture[iImg].texture.view;
+				}
+
+				pSwap->state = XR_SWAP_STATE_AVAILABLE;
+
+				pNodeCtxt->hNodeSwaps[iNodeSwap] = hSwap;
+				pNodeShrd->nodeSwapStates[iNodeSwap] = XR_SWAP_STATE_AVAILABLE;
+				break;
 			}
 
-			// TODO I should always export if these are to start getting shared
-			if (needsExport) {
-				auto pImports = &pNodeCtxt->exported.pExportedMemory->imports;
-				WIN32_CHECK(DuplicateHandle(GetCurrentProcess(),
-						pSwap->externalTexture[iImg].platform.handle,
-						pNodeCtxt->exported.handle,
-						&pImports->swapImageHandles[iNodeSwap][iImg],
-						0, false, DUPLICATE_SAME_ACCESS),
-					"Duplicate localTexture buffer fail");
+			case XR_SWAP_STATE_DESTROYED: {
+				swap_h hSwap = pNodeCtxt->hNodeSwaps[iNodeSwap];
+				if (!HANDLE_VALID(hSwap)) continue;
+
+				MxcSwapTexture* pSwap = BLOCK_RELEASE(cst.block.swap, hSwap);
+				mxcDestroySwapTexture(pSwap);
+
+				pNodeCtxt->hNodeSwaps[iNodeSwap] = HANDLE_DEFAULT;
+				pNodeShrd->nodeSwapStates[iNodeSwap] = XR_SWAP_STATE_UNITIALIZED;
+				memset(pNodeShrd->nodeSwapInfos + iNodeSwap, 0, sizeof(XrSwapInfo));
+
+				break;
 			}
 
-			pNodeCstData->swaps[iNodeSwap][iImg].image = pSwap->externalTexture[iImg].texture.image;
-			pNodeCstData->swaps[iNodeSwap][iImg].view = pSwap->externalTexture[iImg].texture.view;
+			default:
+			case XR_SWAP_STATE_UNITIALIZED:
+			case XR_SWAP_STATE_AVAILABLE:
+			case XR_SWAP_STATE_ACQUIRED:
+			case XR_SWAP_STATE_WAITED:
+			case XR_SWAP_STATE_ERROR:
+				break;
 		}
-
-		pNodeCtxt->hSwaps[iNodeSwap] = hSwap;
-		pNodeShr->swapStates[iNodeSwap] = XR_SWAP_STATE_AVAILABLE;
-		pSwap->state = XR_SWAP_STATE_AVAILABLE;
 	}
 
-	SetEvent(pNodeCtxt->swapsSyncedHandle);
-
-ExitError:
+Error:
 	// TODO
+Out:
+	SetEvent(pNodeCtxt->swapsSyncedHandle);
 #endif
 }
 const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
