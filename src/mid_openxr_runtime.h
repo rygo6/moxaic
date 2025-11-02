@@ -102,13 +102,13 @@ typedef enum SystemId {
 } SystemId;
 
 typedef enum XrViewId {
-	// XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT
-	XR_VIEW_ID_CENTER_FIRST_PERSON = 0,
-	XR_VIEW_ID_FIRST_PERSON_COUNT  = 0,
-
 	// XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO
 	XR_VIEW_ID_CENTER_MONO         = 0,
 	XR_VIEW_ID_MONO_COUNT          = 1,
+
+	// XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT
+	XR_VIEW_ID_CENTER_FIRST_PERSON = 0,
+	XR_VIEW_ID_FIRST_PERSON_COUNT  = 1,
 
 	// XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO
 	XR_VIEW_ID_LEFT_STEREO         = 0,
@@ -129,6 +129,16 @@ typedef enum XrViewId {
 	XR_VIEW_ID_RIGHT_FOCUS_QUAD    = 3,
 	XR_VIEW_ID_QUAD_COUNT          = 4,
 } XrViewId;
+
+static inline u32 XrViewConfigurationTypeCount(XrViewConfigurationType viewConfigurationType) {
+	switch (viewConfigurationType) {
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:                               return XR_VIEW_ID_MONO_COUNT;
+		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:	return XR_VIEW_ID_FIRST_PERSON_COUNT;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:	                            return XR_VIEW_ID_STEREO_COUNT;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:	        return XR_VIEW_ID_FOVEATED_COUNT;
+		default: PANIC("ViewConfigureType Count Unknown!");
+	}
+}
 
 #define XR_MAX_VIEW_COUNT XR_VIEW_ID_STEREO_COUNT // we don't support QUAD currently
 
@@ -1898,35 +1908,28 @@ XR_PROC xrEnumerateViewConfigurations(XrInstance               instance,
 	LOG_METHOD(xrEnumerateViewConfigurations);
 	CHECK_INSTANCE(instance);
 
-#define TRANSFER_MODES                                     \
-	*viewConfigurationTypeCountOutput = COUNT(modes);      \
-	if (viewConfigurationTypes == NULL)                    \
-		return XR_SUCCESS;                                 \
-	if (viewConfigurationTypeCapacityInput < COUNT(modes)) \
-		return XR_ERROR_SIZE_INSUFFICIENT;                 \
-	for (u32 i = 0; i < COUNT(modes); ++i) {               \
-		viewConfigurationTypes[i] = modes[i];              \
-	}
+#define TRANSFER_MODES(_modes)                                                    \
+	*viewConfigurationTypeCountOutput = COUNT(_modes);                            \
+	if (viewConfigurationTypes == NULL) return XR_SUCCESS;                        \
+	for (u32 i = 0; i < viewConfigurationTypeCapacityInput && COUNT(_modes); ++i) \
+		viewConfigurationTypes[i] = _modes[i];
 
 	switch ((SystemId)systemId) {
-		case SYSTEM_ID_HANDHELD_AR: {
-			XrViewConfigurationType modes[] = {
+		case SYSTEM_ID_HANDHELD_AR:
+			XrViewConfigurationType arModes[] = {
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
 			};
-			TRANSFER_MODES
+			TRANSFER_MODES(arModes);
 			return XR_SUCCESS;
-		}
-		case SYSTEM_ID_HMD_VR_STEREO: {
-			XrViewConfigurationType modes[] = {
+
+		case SYSTEM_ID_HMD_VR_STEREO:
+			XrViewConfigurationType vrStereoModes[] = {
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
-//				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET,
-//				XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT,
-//				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO,
 			};
-			TRANSFER_MODES
+			TRANSFER_MODES(vrStereoModes);
 			return XR_SUCCESS;
-		}
+
 		default:
 			LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
 			return XR_ERROR_SYSTEM_INVALID;
@@ -1993,34 +1996,35 @@ XR_PROC xrEnumerateViewConfigurationViews(
 				case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
 				case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
 					return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
-				default:
-					break;
+				default: break;
 			}
+			break;
 
 		case SYSTEM_ID_HMD_VR_STEREO:
+
+			switch (viewConfigurationType) {
+				case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
+				case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
+					return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+				default: break;
+			}
 			break;
-		default:
-			return XR_ERROR_SYSTEM_INVALID;
+
+		default: return XR_ERROR_SYSTEM_INVALID;
 	};
 
-	switch (viewConfigurationType) {
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-			*viewCountOutput = 1;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			*viewCountOutput = 2;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-			*viewCountOutput = 4;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			*viewCountOutput = 1;
-			break;
-		default:
-			return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+	u32 viewTypeCount = XrViewConfigurationTypeCount(viewConfigurationType);
+	*viewCountOutput = viewTypeCount;
+
+	if (views == NULL)
+		return XR_SUCCESS;
+
+	if (viewCapacityInput != viewTypeCount) {
+		LOG_ERROR("XR_ERROR_SIZE_INSUFFICIENT");
+		return XR_ERROR_SIZE_INSUFFICIENT;
 	}
 
-	for (u32 i = 0; i < viewCapacityInput && i < *viewCountOutput; ++i)
+	for (u32 i = 0; i < viewTypeCount; ++i)
 		xrGetViewConfigurationView(systemId, &views[i]);
 
 	return XR_SUCCESS;
@@ -2556,18 +2560,16 @@ XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 		return XR_ERROR_SESSION_NOT_READY;
 	}
 
-	pSession->running = true;
-	pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
-
-	switch (pSession->primaryViewConfigurationType) {
+	switch (beginInfo->primaryViewConfigurationType) {
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-//			xrSetSwapTypeAndUsage(pSess->index, XR_SWAP_TYPE_MONO_SINGLE, XR_SWAP_USAGE_COLOR_AND_DEPTH);
-			break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
+			LOG_ERROR("	PrimaryViewConfigurationType: %s\n", string_XrViewConfigurationType(beginInfo->primaryViewConfigurationType));
+			pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 			break;
+
 		default:
-			LOG_ERROR("PrimaryViewConfigurationType not supported.\n");
-			return XR_ERROR_RUNTIME_FAILURE;
+			LOG_ERROR("XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED PrimaryViewConfigurationType not supported.\n");
+			return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
 	}
 
 	switch (xr.instance.graphicsApi) {
@@ -2575,11 +2577,12 @@ XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 		case XR_GRAPHICS_API_VULKAN:
 			PANIC("Graphics API not implemented.\n");
 			break;
-		case XR_GRAPHICS_API_D3D11_4:   {
+
+		case XR_GRAPHICS_API_D3D11_4:
 			u64 initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
 			xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
 			break;
-		}
+
 		default:
 			LOG_ERROR("Graphics API not supported.\n");
 			return XR_ERROR_RUNTIME_FAILURE;
@@ -2593,6 +2596,8 @@ XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
 		}
 	}
+
+	pSession->running = true;
 
 	return XR_SUCCESS;
 }
