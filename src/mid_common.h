@@ -1,6 +1,46 @@
-////
-//// Mid Common
-///
+/*
+ * Mid Common
+ */
+
+/*
+	Mid-Level C Style
+
+ 	C11 + GCC/Clang Extensions. Is not portable to MSVC.
+
+	variable names can signify the type with a character prefix
+	iValue = Data structure index. Handle but without data structure metadata.
+	hValue = Data structure handle. Index but with data structure metadata.
+	pValue = Data structure pointer.
+ 	valueId = Categorical identifier.
+ 	XrType = Opaque Handle. Data structure handle in u64 with additional metadata.
+
+ 	primitive types are snake_case
+
+	extern struct types are PrefixPascalCase
+ 	static struct types are PascalCase
+
+ 	macros and constants are CAPITAL_SNAKE_CASE
+
+ 	static methods are PascalCase
+ 	extern methods are prefixCamelCase with a prefix less than 3 chars
+
+ 	global fields should be in anonymous struct to namespace
+
+ 	auto_t can be used if the name of the type is obvious from somewhere else in the assignment line
+
+ 	typedef of abbreviated type names should be used if possible
+ 	abbreviations should be 8 or less chars
+
+	All APIs are assert by default with no error handling and no branching. Or should they check? No I think assert so then by default you are implementing something expected to be correct by default. Additional error handling is extra.
+ 	Any error handling should be supplemental and optional to allow implementing the branch higher up.
+
+    REQUIRE = Panic
+    ASSERT = release compile out
+    CHECK = error log return 0
+    TRY = error log goto Error
+
+*/
+
 #ifndef MID_COMMON_H
 #define MID_COMMON_H
 
@@ -9,9 +49,23 @@
 #include <assert.h>
 #include <string.h>
 
-////
-//// Types
-////
+/*
+ * Attributes
+ */
+
+#define UNUSED            __attribute__((unused))
+#define FALLTHROUGH       __attribute__((fallthrough))
+#define HOT               __attribute__((hot))
+#define CACHE_ALIGN       __attribute__((aligned(64)))
+#define INLINE            __attribute__((always_inline)) static inline
+#define TRANSPARENT_UNION __attribute__((transparent_union))
+#define PACKED            __attribute__((packed))
+#define ALIGN(size)       __attribute__((aligned(size)))
+#define NO_RETURN         __attribute__((noreturn))
+
+/*
+ * Types
+ */
 typedef uint8_t     u8;
 typedef uint16_t    u16;
 typedef uint32_t    u32;
@@ -25,10 +79,14 @@ typedef float       f32;
 typedef double      f64;
 typedef const char* str;
 
-////
-//// Debug Log
-////
-typedef enum MidResult {
+typedef _Atomic uint64_t a_u64;
+
+#define auto_t __auto_type
+
+/*
+ * Debug Log
+ */
+typedef enum PACKED MidResult {
 	// These align with VkResult
 	MID_SUCCESS          = 0,
 	MID_EMPTY            = 20001,
@@ -38,22 +96,20 @@ typedef enum MidResult {
 	MID_RESULT_MAX_ENUM  = 0x7FFFFFFF
 } MidResult;
 
-#define ASSERT(_assert, _message) assert(_assert && _message)
-
-extern void Panic(const char* file, int line, const char* message);
-#define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
-
-// I need different tiers of checks.
+// TODO
 // REQUIRE = Panic
 // ASSERT = release compile out
 // CHECK = error log return 0
 // TRY = error log goto ExitError
 
-#define REQUIRE(_err, _message)              \
-	if (UNLIKELY(!(_err))) {                 \
-		LOG_ERROR("Error Code: %d\n", _err); \
-		PANIC(_message);                     \
-	}
+extern void Panic(const char* file, int line, const char* message);
+#define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
+
+// Check if the condition is 1=True or 0=False TODO this needs to be REQUIRE_TRUE
+#define REQUIRE(_state, _message) if (UNLIKELY(!(_state))) PANIC(_message);
+
+#define ASSERT(_condition, ...) ((_condition) || (_assert((#_condition " " __VA_ARGS__), __FILE__, __LINE__), 0))
+#define STATIC_ASSERT(_condition, ...) _Static_assert(_condition, #_condition " " #__VA_ARGS__)
 
 // Check if the condition is 0=Success or 1=Fail
 #define CHECK(_err, _message)                \
@@ -61,6 +117,7 @@ extern void Panic(const char* file, int line, const char* message);
 		LOG_ERROR("Error Code: %d\n", _err); \
 		PANIC(_message);                     \
 	}
+
 // Check if the condition is 1=True or 0=False
 #define CHECK_TRUE(_err, _message)           \
 	if (UNLIKELY(!(_err))) {                 \
@@ -92,21 +149,7 @@ extern void Panic(const char* file, int line, const char* message);
 		}                                 \
 	})
 
-/*
- * Attributes
- */
-
-
-#define auto_t __auto_type
-
-#define UNUSED            __attribute__((unused))
-#define FALLTHROUGH       __attribute__((fallthrough))
-#define HOT               __attribute__((hot))
-#define CACHE_ALIGN       __attribute__((aligned(64)))
-#define INLINE            __attribute__((always_inline)) static inline
-#define TRANSPARENT_UNION __attribute__((transparent_union))
-#define PACKED            __attribute__((packed))
-#define ALIGN(size)       __attribute__((aligned(size)))
+#define STRING_CASE(_) case _: return #_
 
 /*
  * Utility
@@ -121,6 +164,17 @@ extern void Panic(const char* file, int line, const char* message);
 #define UNLIKELY(x)                __builtin_expect(!!(x), 0)
 #define COUNT(_array)              (sizeof(_array) / sizeof(_array[0]))
 #define FLAG(b)                    (1 << (b))
+#define ZERO(_p)                   memset((_p), 0, sizeof(*_p))
+#define IS_STRUCT_P_ZEROED(_p)     (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
+
+#define XMALLOC_P(_p) \
+	_p = malloc(sizeof(*_p)); \
+	REQUIRE(_p, #_p " XMALLOC Fail!");
+
+#define XMALLOC_ZERO_P(_p) \
+	_p = malloc(sizeof(*_p)); \
+	REQUIRE(_p, #_p " XMALLOC Fail!"); \
+	ZERO(_p);
 
 #define CONTAINS(_array, _count, _)        \
 	({                                     \
@@ -150,9 +204,9 @@ extern void Panic(const char* file, int line, const char* message);
 		free(_ptr), _ptr = NULL)
 
 
-//////////
-//// Win32
-////
+/*
+ * Win32
+ */
 #ifdef _WIN32
 
 #include <windows.h>
@@ -170,13 +224,13 @@ static void LogWin32Error(HRESULT err)
 
 #define CHECK_WIN32(command)               \
 	({                                     \
-		auto error = command;              \
+		bool error = command;              \
 		if (UNLIKELY(!error)) {            \
 			LogWin32Error(GetLastError()); \
 			PANIC("Win32 Error!");         \
 		}                                  \
 	})
-// this seems like it should be more generic?
+
 #define DX_CHECK(command)           \
 	({                              \
 		HRESULT hr = command;       \
@@ -190,17 +244,17 @@ static void LogWin32Error(HRESULT err)
 
 #endif // MID_COMMON_H
 
-////
-//// Mid Common Implementation
-////
+/*
+ * Mid Common Implementation
+ */
 #if defined(MID_COMMON_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
-/// Override for your own panic behavior
+/* Panic Trap */
 #ifndef MID_PANIC_METHOD
 #define MID_PANIC_METHOD
-[[noreturn]] void Panic(const char* file, int line, const char* message)
+void NO_RETURN Panic(const char* file, int line, const char* message)
 {
-	LOG_ERROR("\n%s:%d Error! %s\n", file, line, message);
+	LOG("\n%s:%d PANIC! %s\n", file, line, message);
 	__builtin_trap();
 }
 #endif // MID_PANIC_METHOD

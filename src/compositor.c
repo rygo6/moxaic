@@ -1,4 +1,4 @@
-#if defined(MOXAIC_COMPOSITOR)
+
 
 #include "compositor.h"
 #include "mid_shape.h"
@@ -10,7 +10,11 @@
 #include <float.h>
 #include <vulkan/vk_enum_string_helper.h>
 
-MxcCompositor cst = {};
+// We need to seperate compositor and node more to get these in fully ifdef'd out
+MxcCompositorContext compositorContext;
+MxcCompositor cst;
+
+#if defined(MOXAIC_COMPOSITOR)
 
 /*
  * Constants
@@ -57,8 +61,9 @@ enum {
 	SET_BIND_INDEX_NODE_COUNT,
 };
 
+// this go in glsl file
 typedef struct NodePush {
-	u32 nodeHandle;
+	u32 nodeHandle; // can be u16?
 } NodePush;
 
 static VkShaderStageFlags CompositeModeShaderFlags(const bool* pModes)
@@ -394,7 +399,7 @@ static const ImageMemoryBarrierDst ProcessDstBarrier[] = {
 	[MXC_COMPOSITOR_MODE_COMPUTE]     = (ImageMemoryBarrierDst){VK_IMAGE_BARRIER_DST_COMPUTE_READ},
 };
 
-constexpr u32 ExternalQueueFamilyIndex[] = {
+static const u32 ExternalQueueFamilyIndex[] = {
 	[MXC_NODE_INTERPROCESS_MODE_THREAD]   = VK_QUEUE_FAMILY_IGNORED,
 	[MXC_NODE_INTERPROCESS_MODE_EXPORTED] = VK_QUEUE_FAMILY_EXTERNAL,
 };
@@ -422,8 +427,8 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(&node, gbufferProcessPipeLayout);
 
 	EXTRACT_FIELD(pCstCtx, gfxCmd);
-	auto compTimeline = pCstCtx->timeline;
-	auto pSwapCtx = &pCstCtx->swapCtx;
+	auto_t compTimeline = pCstCtx->timeline;
+	auto_t pSwapCtx = &pCstCtx->swapCtx;
 
 	EXTRACT_FIELD(pCst, globalSet);
 	EXTRACT_FIELD(pCst, compOutputSet);
@@ -443,24 +448,24 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	EXTRACT_FIELD(pCst, timeQryPool);
 
 	EXTRACT_FIELD(pCst, pLineMapped);
-	auto lineBuffer = pCst->lineBuffer.buffer;
+	auto_t lineBuffer = pCst->lineBuffer.buffer;
 
-	auto quadMeshOffsets = pCst->quadMesh.offsets;
-	auto quadMeshBuf = pCst->quadMesh.buf;
+	auto_t quadMeshOffsets = pCst->quadMesh.offsets;
+	auto_t quadMeshBuf = pCst->quadMesh.buf;
 
-	auto quadPatchOffsets = pCst->quadPatchMesh.offsets;
-	auto quadPatchBuf = pCst->quadPatchMesh.sharedBuffer.buffer;
+	auto_t quadPatchOffsets = pCst->quadPatchMesh.offsets;
+	auto_t quadPatchBuf = pCst->quadPatchMesh.sharedBuffer.buffer;
 
-	auto gfxFrameColorView = pCst->framebufferTexture.color.view;
-	auto gfxFrameDepthView = pCst->framebufferTexture.depth.view;
-	auto compFrameColorView = pCst->compFrameColorTex.view;
+	auto_t gfxFrameColorView = pCst->framebufferTexture.color.view;
+	auto_t gfxFrameDepthView = pCst->framebufferTexture.depth.view;
+	auto_t compFrameColorView = pCst->compFrameColorTex.view;
 
-	auto gfxFrameColorImg = pCst->framebufferTexture.color.image;
+	auto_t gfxFrameColorImg = pCst->framebufferTexture.color.image;
 
-	auto compFrameAtomicImg = pCst->compFrameAtomicTex.image;
-	auto compFrameColorImg = pCst->compFrameColorTex.image;
+	auto_t compFrameAtomicImg = pCst->compFrameAtomicTex.image;
+	auto_t compFrameColorImg = pCst->compFrameColorTex.image;
 
-	auto pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuffer.memory);
+	auto_t pGlobSetMapped = vkSharedMemoryPtr(pCst->globalBuffer.memory);
 
 	CompositorQueueFamilyIndex[MXC_NODE_INTERPROCESS_MODE_EXPORTED] = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index;
 
@@ -496,12 +501,14 @@ CompositeLoop:
 	 * MXC_CYCLE_UPDATE_WINDOW_STATE
 	 */
 
+	// Waited in end of cycle.
+
 	/*
 	 * MXC_CYCLE_PROCESS_INPUT
 	 */
 	atomic_thread_fence(memory_order_acquire);
 	vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
-	u64 baseCycleValue = compositorContext.baseCycleValue ;
+	u64 baseCycleValue = compositorContext.baseCycleValue;
 
 	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
@@ -514,12 +521,12 @@ CompositeLoop:
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 
 	CmdResetBegin(gfxCmd);
-	vk.ResetQueryPool(device, timeQryPool, 0, TIME_QUERY_COUNT);
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
+//	vk.ResetQueryPool(device, timeQryPool, 0, TIME_QUERY_COUNT);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
 
 	ivec2 windowExtent  = mxcWindowInput.iDimensions;
-	int   windowPixelCt = windowExtent.x * windowExtent.y;
-	int   windowGroupCt = windowPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
+	i32   windowPixelCt = windowExtent.x * windowExtent.y;
+	i32   windowGroupCt = windowPixelCt / GRID_SUBGROUP_COUNT / GRID_WORKGROUP_SUBGROUP_COUNT;
 
 	/* Iterate Node State Updates */
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
@@ -529,59 +536,62 @@ CompositeLoop:
 
 		ImageMemoryBarrierDst dstBarrier = ProcessDstBarrier[iCstMode];
 
-		auto pActiveNodes = &node.active[iCstMode];
-		for (u32 iNode = 0; iNode < pActiveNodes->count; ++iNode) {
+		MxcActiveNodes* pActiveNodes = &node.active[iCstMode];
+		for (u32 iActiveNode = 0; iActiveNode < pActiveNodes->count; ++iActiveNode) {
 			atomic_thread_fence(memory_order_acquire);
-			auto hNode = pActiveNodes->handles[iNode];
-			auto pNodeShr = node.pShared[hNode];
-			auto pNodeCst = &cst.nodeData[hNode];
+			node_h hNode = pActiveNodes->handles[iActiveNode];
+			u16    iNode = HANDLE_INDEX(hNode);
+			MxcNodeShared*         pNodeShrd = ARRAY_H(node.pShared, hNode);
+			MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
 
-			EXTRACT_FIELD(pNodeCst, activeInterprocessMode);
+			EXTRACT_FIELD(pNodeCpst, activeInterprocessMode);
 
 			/* Update Root Pose */
 			ATOMIC_FENCE_SCOPE {
 				// Update InteractionState and RootPose every cycle no matter what so that app stays responsive to moving.
 				// This should probably be in a threaded node.
 				vec3 worldDiff = VEC3_ZERO;
-				switch (pNodeCst->interactionState) {
-					case NODE_INTERACTION_STATE_SELECT:
+				switch (pNodeCpst->interactionState) {
+					case NODE_INTERACTION_STATE_SELECT: {
 						ray priorScreenRay = rayFromScreenUV(mxcWindowInput.priorMouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
 						ray screenRay = rayFromScreenUV(mxcWindowInput.mouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
 
-						vec4  nodeOrigin = vec4MulMat4(pNodeCst->compositingNodeSetState.model, VEC4_IDENT);
+						vec4 nodeOrigin = vec4MulMat4(pNodeCpst->compositingNodeSetState.model, VEC4_IDENT);
 						Plane plane = {.origin = VEC3(nodeOrigin.x, nodeOrigin.y, nodeOrigin.z), .normal = VEC3(0, 0, 1)};
 
 						vec3 hitPoints[2];
-						if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) && rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
+						if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) &&
+							rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
 							worldDiff = vec3Sub(hitPoints[0], hitPoints[1]);
 						}
 
 						break;
+					}
 					default: break;
 				}
 
-				pNodeShr->rootPose.pos.vec -= worldDiff.vec;
-				pNodeCst->compositingNodeSetState.model = mat4FromPosRot(pNodeShr->rootPose.pos, pNodeShr->rootPose.rot);
+              pNodeShrd->rootPose.pos.vec -= worldDiff.vec;
+              pNodeCpst->compositingNodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.pos, pNodeShrd->rootPose.rot);
 			}
 
 			/* Poll New Node Swap */
-			u64 nodeTimelineValue = pNodeShr->timelineValue;
-			if (nodeTimelineValue <= pNodeCst->lastTimelineValue)
+			u64 nodeTimelineValue = pNodeShrd->timelineValue;
+			if (nodeTimelineValue <= pNodeCpst->lastTimelineValue)
 				continue;
 
-			pNodeCst->lastTimelineValue = nodeTimelineValue;
+			pNodeCpst->lastTimelineValue = nodeTimelineValue;
 			atomic_thread_fence(memory_order_release);
 
 			/* Acquire New Node Swap */
 			ATOMIC_FENCE_SCOPE {
-				swap_i iLeftColorSwap  = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorSwap;
-				swap_i iLeftColorImg   = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorImg;
-				swap_i iLeftDepthSwap  = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iDepthSwap;
-				swap_i iLeftDepthImg   = pNodeShr->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iDepthImg;
-				swap_i iRightColorSwap = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iColorSwap;
-				swap_i iRightColorImg  = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iColorImg;
-				swap_i iRightDepthSwap = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iDepthSwap;
-				swap_i iRightDepthImg  = pNodeShr->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iDepthImg;
+				swap_i iLeftColorSwap  = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorSwap;
+				swap_i iLeftColorImg   = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorImg;
+				swap_i iLeftDepthSwap  = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iDepthSwap;
+				swap_i iLeftDepthImg   = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iDepthImg;
+				swap_i iRightColorSwap = pNodeShrd->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iColorSwap;
+				swap_i iRightColorImg  = pNodeShrd->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iColorImg;
+				swap_i iRightDepthSwap = pNodeShrd->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iDepthSwap;
+				swap_i iRightDepthImg  = pNodeShrd->viewSwaps[XR_VIEW_ID_RIGHT_STEREO].iDepthImg;
 
 				// need better way to determine these invalid
 				// and maybe better way to signify frame has been set
@@ -590,14 +600,14 @@ CompositeLoop:
 				// if (iRightColorImgId == CHAR_MAX) continue;
 				// if (iRightColorImgId == CHAR_MAX) continue;
 
-				auto pNodeCtxt = &node.context[hNode];
-				MxcNodeSwap* pLeftColorSwap  = &pNodeCst->swaps[iLeftColorSwap][iLeftColorImg];
-				MxcNodeSwap* pLeftDepthSwap  = &pNodeCst->swaps[iLeftDepthSwap][iLeftDepthImg];
-				MxcNodeSwap* pRightColorSwap = &pNodeCst->swaps[iRightColorSwap][iRightColorImg];
-				MxcNodeSwap* pRightDepthSwap = &pNodeCst->swaps[iRightDepthSwap][iRightDepthImg];
+				MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+				MxcNodeSwap* pLeftColorSwap  = &pNodeCpst->swaps[iLeftColorSwap][iLeftColorImg];
+				MxcNodeSwap* pLeftDepthSwap  = &pNodeCpst->swaps[iLeftDepthSwap][iLeftDepthImg];
+				MxcNodeSwap* pRightColorSwap = &pNodeCpst->swaps[iRightColorSwap][iRightColorImg];
+				MxcNodeSwap* pRightDepthSwap = &pNodeCpst->swaps[iRightDepthSwap][iRightDepthImg];
 
-				MxcNodeGBuffer* pLeftGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_LEFT_STEREO];
-				MxcNodeGBuffer* pRightGBuffer = &pNodeCst->gbuffer[XR_VIEW_ID_RIGHT_STEREO];
+				MxcNodeGBuffer* pLeftGBuffer = &pNodeCpst->gbuffer[XR_VIEW_ID_LEFT_STEREO];
+				MxcNodeGBuffer* pRightGBuffer = &pNodeCpst->gbuffer[XR_VIEW_ID_RIGHT_STEREO];
 
 				// TODO each node needs its own process state
 //				memcpy(pProcessStateMapped, pProcState, sizeof(MxcProcessState));
@@ -664,13 +674,13 @@ CompositeLoop:
 					},
 				});
 
-				auto pProcessState = &pNodeShr->processState;
+				auto_t pProcessState = &pNodeShrd->processState;
 				// Should be way to only set this once
 				pProcessState->cameraNearZ = globCam.zNear;
 				pProcessState->cameraFarZ = globCam.zFar;
 
 				// TODO this needs to be specifically only the rect which was rendered into
-				ivec2 nodeSwapExtent = IVEC2(pNodeShr->swapMaxWidth, pNodeShr->swapMaxHeight);
+				ivec2 nodeSwapExtent = IVEC2(pNodeShrd->swapMaxWidth, pNodeShrd->swapMaxHeight);
 				mxcNodeGBufferProcessDepth(gfxCmd, pProcessState, pLeftDepthSwap, pLeftGBuffer, nodeSwapExtent);
 
 				CMD_IMAGE_BARRIERS2(gfxCmd, {
@@ -688,14 +698,14 @@ CompositeLoop:
 
 				// Update Node Descriptor Sets
 				CMD_WRITE_SETS(device, {
-					BIND_WRITE_NODE_COLOR(cst.nodeSet, hNode, vk.context.nearestSampler, pLeftColorSwap->view, dstBarrier.newLayout),
-					BIND_WRITE_NODE_GBUFFER(cst.nodeSet, hNode, vk.context.nearestSampler, pLeftGBuffer->mipViews[0], dstBarrier.newLayout),
+					BIND_WRITE_NODE_COLOR(cst.nodeSet, iNode, vk.context.nearestSampler, pLeftColorSwap->view, dstBarrier.newLayout),
+					BIND_WRITE_NODE_GBUFFER(cst.nodeSet, iNode, vk.context.nearestSampler, pLeftGBuffer->mipViews[0], dstBarrier.newLayout),
 				});
 			}
 
 			/* Calc new node uniform and shared data */
 			ATOMIC_FENCE_SCOPE {
-				float radius = pNodeShr->compositorRadius;
+				float radius = pNodeShrd->compositorRadius;
 				vec3 corners[CORNER_COUNT] = {
 					[CORNER_LUB] = VEC3(-radius, -radius, -radius),
 					[CORNER_LUF] = VEC3(-radius, -radius, radius),
@@ -713,7 +723,7 @@ CompositeLoop:
 //				vec2 uvCorners[CORNER_COUNT];
 				for (int i = 0; i < CORNER_COUNT; ++i) {
 					vec4 model = VEC4(corners[i].x, corners[i].y, corners[i].z, 1.0f);
-					vec4 world = vec4MulMat4(pNodeCst->compositingNodeSetState.model, model);
+					vec4 world = vec4MulMat4(pNodeCpst->compositingNodeSetState.model, model);
 					vec4 clip  = vec4MulMat4(globSetState.view, world);
 					vec3 ndc   = Vec4WDivide(vec4MulMat4(globSetState.proj, clip));
 					vec2 uv    = UVFromNDC(ndc);
@@ -723,8 +733,8 @@ CompositeLoop:
 					uvMax.y = MAX(uvMax.y, uv.y);
 //					worldCorners[i] = VEC3(world.x, world.y, world.z);
 //					uvCorners[i] = uv;
-					pNodeCst->worldCorners[i] = VEC3(world.x, world.y, world.z);
-					pNodeCst->uvCorners[i] = uv;
+					pNodeCpst->worldCorners[i] = VEC3(world.x, world.y, world.z);
+                  pNodeCpst->uvCorners[i] = uv;
 				}
 				vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
 				vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);
@@ -741,37 +751,36 @@ CompositeLoop:
 					bool moveButtonDown = mxcWindowInput.leftMouseButton;
 					bool isHovering = false;
 					for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
-						vec2 uvStart = pNodeCst->uvCorners[MXC_CUBE_SEGMENTS[i]];
-						vec2 uvEnd = pNodeCst->uvCorners[MXC_CUBE_SEGMENTS[i + 1]];
+						vec2 uvStart = pNodeCpst->uvCorners[MXC_CUBE_SEGMENTS[i]];
+						vec2 uvEnd = pNodeCpst->uvCorners[MXC_CUBE_SEGMENTS[i + 1]];
 						bool segmentHovering = Vec2PointOnLineSegment(mxcWindowInput.mouseUV, uvStart, uvEnd, 0.0005f);
 						isHovering |= segmentHovering;
 
-						vec3 start = pNodeCst->worldCorners[MXC_CUBE_SEGMENTS[i]];
-						vec3 end = pNodeCst->worldCorners[MXC_CUBE_SEGMENTS[i + 1]];
-						pNodeCst->worldLineSegments[i].pos = start;
-						pNodeCst->worldLineSegments[i + 1].pos = end;
-						pNodeCst->worldLineSegments[i].color = stateColors[segmentHovering ? NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE];
-						pNodeCst->worldLineSegments[i + 1].color = stateColors[segmentHovering ? NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE];
+						vec3 start = pNodeCpst->worldCorners[MXC_CUBE_SEGMENTS[i]];
+						vec3 end = pNodeCpst->worldCorners[MXC_CUBE_SEGMENTS[i + 1]];
+					  pNodeCpst->worldLineSegments[i].pos = start;
+					  pNodeCpst->worldLineSegments[i + 1].pos = end;
+					  pNodeCpst->worldLineSegments[i].color = stateColors[segmentHovering ? NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE];
+					  pNodeCpst->worldLineSegments[i + 1].color = stateColors[segmentHovering ? NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE];
 					}
 
-					switch (pNodeCst->interactionState) {
-						case NODE_INTERACTION_STATE_NONE:
-							pNodeCst->interactionState = isHovering ? NODE_INTERACTION_STATE_HOVER
-							                              : NODE_INTERACTION_STATE_NONE;
+					switch (pNodeCpst->interactionState)
+					{
+						case NODE_INTERACTION_STATE_NONE: {
+							pNodeCpst->interactionState = isHovering ? NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE;
 							break;
-						case NODE_INTERACTION_STATE_HOVER:
-							pNodeCst->interactionState = isHovering ? moveButtonDown
-							                                    ? NODE_INTERACTION_STATE_SELECT
-							                                    : NODE_INTERACTION_STATE_HOVER
-							                              : NODE_INTERACTION_STATE_NONE;
+						}
+						case NODE_INTERACTION_STATE_HOVER: {
+							pNodeCpst->interactionState = isHovering ? moveButtonDown
+															? NODE_INTERACTION_STATE_SELECT	: NODE_INTERACTION_STATE_HOVER
+															 : NODE_INTERACTION_STATE_NONE;
 							break;
+						}
 						case NODE_INTERACTION_STATE_SELECT:
-							pNodeCst->interactionState = moveButtonDown ? NODE_INTERACTION_STATE_SELECT
-							                                  : NODE_INTERACTION_STATE_NONE;
-
+							pNodeCpst->interactionState = moveButtonDown ? NODE_INTERACTION_STATE_SELECT : NODE_INTERACTION_STATE_NONE;
 							for (u32 i = 0; i < MXC_CUBE_SEGMENT_COUNT; i += 2) {
-								pNodeCst->worldLineSegments[i].color     = stateColors[NODE_INTERACTION_STATE_SELECT];
-								pNodeCst->worldLineSegments[i + 1].color = stateColors[NODE_INTERACTION_STATE_SELECT];
+                              pNodeCpst->worldLineSegments[i].color     = stateColors[NODE_INTERACTION_STATE_SELECT];
+                              pNodeCpst->worldLineSegments[i + 1].color = stateColors[NODE_INTERACTION_STATE_SELECT];
 							}
 							break;
 						default: break;
@@ -779,32 +788,32 @@ CompositeLoop:
 				}
 
 				// Update compositor to use node state which rendered the frame
-				memcpy(&pNodeCst->compositingNodeSetState, &pNodeCst->renderingNodeSetState, sizeof(MxcCompositorNodeSetState));
-				memcpy(cst.pNodeSetMapped + hNode, &pNodeCst->compositingNodeSetState, sizeof(MxcCompositorNodeSetState));
+				memcpy(&pNodeCpst->compositingNodeSetState, &pNodeCpst->renderingNodeSetState, sizeof(MxcCompositorNodeSetState));
+				memcpy(cst.pNodeSetMapped + iNode, &pNodeCpst->compositingNodeSetState, sizeof(MxcCompositorNodeSetState));
 
 				// Update node state to use in next node frame
-				pNodeShr->cameraPose = globCamPose;
-				pNodeShr->camera = globCam;
+				pNodeShrd->cameraPose = globCamPose;
+			  	pNodeShrd->camera = globCam;
 
-				pNodeShr->left.active = false;
-				pNodeShr->left.gripPose = globCamPose;
-				pNodeShr->left.aimPose = globCamPose;
-				pNodeShr->left.selectClick = mxcWindowInput.leftMouseButton;
+				pNodeShrd->left.active = false;
+				pNodeShrd->left.gripPose = globCamPose;
+				pNodeShrd->left.aimPose = globCamPose;
+				pNodeShrd->left.selectClick = mxcWindowInput.leftMouseButton;
 
-				pNodeShr->right.active = true;
-				pNodeShr->right.gripPose = globCamPose;
-				pNodeShr->right.aimPose = globCamPose;
-				pNodeShr->right.selectClick = mxcWindowInput.leftMouseButton;
+				pNodeShrd->right.active = true;
+				pNodeShrd->right.gripPose = globCamPose;
+				pNodeShrd->right.aimPose = globCamPose;
+				pNodeShrd->right.selectClick = mxcWindowInput.leftMouseButton;
 
-				pNodeShr->clip.ulUV = uvMinClamp;
-				pNodeShr->clip.lrUV = uvMaxClamp;
+				pNodeShrd->clip.ulUV = uvMinClamp;
+				pNodeShrd->clip.lrUV = uvMaxClamp;
 
-				vkUpdateGlobalSetViewProj(pNodeShr->camera, pNodeShr->cameraPose, (VkGlobalSetState*)&pNodeCst->renderingNodeSetState.view); // don't have to call SetViewProj every frame?
-				memcpy(&pNodeCst->renderingNodeSetState.ulUV, &pNodeShr->clip, sizeof(MxcClip));
+				vkUpdateGlobalSetViewProj(pNodeShrd->camera, pNodeShrd->cameraPose, (VkGlobalSetState*)&pNodeCpst->renderingNodeSetState.view); // don't have to call SetViewProj every frame?
+				memcpy(&pNodeCpst->renderingNodeSetState.ulUV, &pNodeShrd->clip, sizeof(MxcClip));
 			}
 		}
 	}
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_END);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_END);
 
 	/*
 	 * MXC_CYCLE_COMPOSITOR_RECORD
@@ -824,60 +833,62 @@ CompositeLoop:
 	bool hasComp = false;
 
 	/* Graphics Quad Node Commands */
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_QUAD].count > 0) {
 		hasGfx = true;
 
-		auto pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_QUAD];
+		MxcActiveNodes* pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_QUAD];
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gfxQuadPipe);
 		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadMeshBuf}, (VkDeviceSize[]){quadMeshOffsets.vertexOffset});
 		vk.CmdBindIndexBuffer(gfxCmd, quadMeshBuf, quadMeshOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
 
-		for (int iNode = 0; iNode < pActiveNodes->count; ++iNode) {
-			auto hNode = pActiveNodes->handles[iNode];
-			vk.CmdPushConstants(gfxCmd, gfxPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = hNode});
+		for (u16 iActiveNode = 0; iActiveNode < pActiveNodes->count; ++iActiveNode) {
+			node_h hNode = pActiveNodes->handles[iActiveNode];
+			u16    iNode = HANDLE_INDEX(hNode);
+			vk.CmdPushConstants(gfxCmd, gfxPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = iNode});
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}
 	}
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_END);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_END);
 
 	/* Graphics Tesselation Node Commands */
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_TESSELATION].count > 0) {
 		hasGfx = true;
 
-		auto pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_TESSELATION];
+		MxcActiveNodes* pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_TESSELATION];
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gfxTessPipe);
 		vk.CmdBindVertexBuffers(gfxCmd, 0, 1, (VkBuffer[]){quadPatchBuf}, (VkDeviceSize[]){quadPatchOffsets.vertexOffset});
 		vk.CmdBindIndexBuffer(gfxCmd, quadPatchBuf, quadPatchOffsets.indexOffset, VK_INDEX_TYPE_UINT16);
 
-		for (int iNode = 0; iNode < pActiveNodes->count; ++iNode) {
-			auto hNode = pActiveNodes->handles[iNode];
-			vk.CmdPushConstants(gfxCmd, gfxPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = hNode});
+		for (u16 iActiveNode = 0; iActiveNode < pActiveNodes->count; ++iActiveNode) {
+			node_h hNode = pActiveNodes->handles[iActiveNode];
+			u16    iNode = HANDLE_INDEX(hNode);
+			vk.CmdPushConstants(gfxCmd, gfxPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = iNode});
 			vk.CmdDrawIndexed(gfxCmd, quadPatchOffsets.indexCount, 1, 0, 0, 0); // this should use instancing instead of push on the node handle
 		}
 	}
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_END);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_END);
 
 	/* Graphics Task Mesh Node Commands */
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_TASK_MESH].count > 0) {
 		hasGfx = true;
 
-		auto pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_TASK_MESH];
+		MxcActiveNodes* pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_TASK_MESH];
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, nodeTaskMeshPipe);
 
-		for (int iNode = 0; iNode < pActiveNodes->count; ++iNode) {
-			auto hNode = pActiveNodes->handles[iNode];
-			auto pNodeCstData = &cst.nodeData[hNode];
-			vk.CmdPushConstants(gfxCmd, gfxPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = hNode});
+		for (u16 iActiveNode = 0; iActiveNode < pActiveNodes->count; ++iActiveNode) {
+			node_h hNode = pActiveNodes->handles[iActiveNode];
+			u16    iNode = HANDLE_INDEX(hNode);
+			vk.CmdPushConstants(gfxCmd, gfxPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = iNode});
 			vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 		}
 	}
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_END);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_END);
 
 	/* Graphic Line Commands */
 	{
@@ -889,17 +900,18 @@ CompositeLoop:
 
 		vkCmdSetLineWidth(gfxCmd, 1.0f);
 
-		int cubeCount = 0;
-		for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
+		u16 cubeCount = 0;
+		for (u16 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 			atomic_thread_fence(memory_order_acquire);
-			int activeNodeCt = node.active[iCstMode].count;
+			u16 activeNodeCt = node.active[iCstMode].count;
 			if (activeNodeCt == 0)
 				continue;
 
-			auto pActiveNodes = &node.active[iCstMode];
-			for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
-				auto pNodeCst = &cst.nodeData[iNode];
-				memcpy(pLineMapped + (cubeCount * MXC_CUBE_SEGMENT_COUNT), pNodeCst->worldLineSegments, sizeof(VkLineVert) * MXC_CUBE_SEGMENT_COUNT);
+			MxcActiveNodes* pActiveNodes = &node.active[iCstMode];
+			for (u16 iNode = 0; iNode < activeNodeCt; ++iNode) {
+				node_h hNode = pActiveNodes->handles[iNode];
+				MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
+				memcpy(pLineMapped + (cubeCount * MXC_CUBE_SEGMENT_COUNT), pNodeCpst->worldLineSegments, sizeof(VkLineVert) * MXC_CUBE_SEGMENT_COUNT);
 				cubeCount++;
 			}
 		}
@@ -911,7 +923,7 @@ CompositeLoop:
 	vk.CmdEndRenderPass(gfxCmd);
 
 	/* Compute Recording Cycle */
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_BEGIN);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_BEGIN);
 	if (node.active[MXC_COMPOSITOR_MODE_COMPUTE].count > 0) {
 		hasComp = true;
 
@@ -920,11 +932,11 @@ CompositeLoop:
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, compPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_NODE,   1, &cst.nodeSet,   0, NULL);
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, compPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutputSet, 0, NULL);
 
-		auto pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_COMPUTE];
-		for (int iNode = pActiveNodes->count - 1; iNode >= 0; --iNode) {
-			auto hNode = pActiveNodes->handles[iNode];
-			auto pNodeCstData = &cst.nodeData[hNode];
-			vk.CmdPushConstants(gfxCmd, compPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = hNode});
+		MxcActiveNodes* pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_COMPUTE];
+		for (int iActiveNode = pActiveNodes->count - 1; iActiveNode >= 0; --iActiveNode) {
+			node_h hNode = pActiveNodes->handles[iActiveNode];
+			u16    iNode = HANDLE_INDEX(hNode);
+			vk.CmdPushConstants(gfxCmd, compPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = iNode});
 			vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 		}
 
@@ -950,13 +962,13 @@ CompositeLoop:
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, postCompPipe);
 		vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 	}
-	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_END);
+//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_END);
 
 	/* Blit Framebuffer */
 	{
 		u32 frameIdx;
 		CmdSwapAcquire(device, pSwapCtx, &frameIdx);
-		auto pSwap = &pSwapCtx->frames[frameIdx];
+		VkSwapFrame* pSwap = &pSwapCtx->frames[frameIdx];
 
 		CMD_IMAGE_BARRIERS2(gfxCmd, {
 			{
@@ -1029,11 +1041,11 @@ CompositeLoop:
 	{
 		u64 nextUpdateWindowStateCycle = baseCycleValue + MXC_CYCLE_COUNT + MXC_CYCLE_UPDATE_WINDOW_STATE;
 		vkTimelineWait(device, nextUpdateWindowStateCycle, compTimeline);
-		u64 timestampsNS[TIME_QUERY_COUNT];
-		VK_CHECK(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
-		double timestampsMS[TIME_QUERY_COUNT];
-		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
-		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
+//		u64 timestampsNS[TIME_QUERY_COUNT];
+//		VK_CHECK(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
+//		double timestampsMS[TIME_QUERY_COUNT];
+//		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+//		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
 	}
 
 	CHECK_RUNNING;
@@ -1355,7 +1367,7 @@ static void Bind(const MxcCompositorCreateInfo* pInfo, MxcCompositor* pCst) {
 	});
 }
 
-static void* CompositorThread(void*)
+static void* CompositorThread(void* pData)
 {
 	MxcCompositorCreateInfo info = {
 		.pEnabledCompositorModes = {

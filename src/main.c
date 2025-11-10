@@ -11,10 +11,16 @@
 
 MxcView compositorView = MXC_VIEW_STEREO;
 bool isCompositor = true;
-bool isRunning = true;
+_Atomic bool isRunning = true;
 
 int main(void)
 {
+//	int test[10] = {};
+//	int a = test[11];
+
+//	block_h h = HANDLE_GENERATION_SET(1000, 1);
+//	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, (block_h) 10000);
+
 	//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 	//    HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 	//    if (vulkanLibrary == NULL) {
@@ -76,11 +82,11 @@ int main(void)
 
 #define TEST_NODE
 #ifdef TEST_NODE
-//		NodeHandle testNodeHandle;
-//		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle);
-//		node.pShared[testNodeHandle]->compositorCycleSkip = 8;
+//		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
+//		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
+//		pTestNodeShrd->compositorCycleSkip = 8;
 //
-//		NodeHandle testNodeHandle2;
+//		node_h testNodeHandle2;
 //		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
 //		node.pShared[testNodeHandle]->compositorCycleSkip = 24;
 #endif
@@ -105,7 +111,9 @@ int main(void)
 			///
 			/// MXC_CYCLE_UPDATE_WINDOW_STATE
 
-			mxcNodeInterprocessPoll(); // I am not too sure where I should put this
+			// This needs to be after a wait, and before a signal, as it will poll the IPC Message queue
+			// and those may make changes to active nodes, or other, which subsequent states will rely on
+			mxcNodeInterprocessPoll();
 
 			midUpdateWindowInput();
 			mxcProcessWindowInput();

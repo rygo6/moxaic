@@ -5,36 +5,25 @@
 
 typedef struct MxcSwapTexture {
 	VkExternalTexture externalTexture[XR_SWAPCHAIN_IMAGE_COUNT];
-	XrSwapState       state;
 	XrSwapInfo        info;
 } MxcSwapTexture;
 
-// Hot data used by the compositor for each node
-// should I call it Hot or Data?
-// Context = Cold. Data = Hot?
+// Context = Cold. Data = Hot
 typedef struct MxcCompositorNodeData {
 
 	MxcNodeInteractionState interactionState;
 	MxcCompositorMode       activeCompositorMode;
 	MxcNodeInterprocessMode activeInterprocessMode;
 
-	//	pose rootPose;
 	u64 lastTimelineValue;
 
 	// NodeSet which node is actively using to render
 	MxcCompositorNodeSetState renderingNodeSetState;
 	MxcCompositorNodeSetState compositingNodeSetState;
-	// This should go in one big shared buffer for all nodes
-	// VkSharedDescriptor         compositingNodeSet;
-	// MxcCompositorNodeSetState* pCompositingNodeSetMapped;
 
 	MxcNodeSwap swaps[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
 	MxcNodeGBuffer gbuffer[XR_MAX_VIEW_COUNT];
-	//	} gbuffer[XR_MAX_VIEW_COUNT][XR_SWAPCHAIN_IMAGE_COUNT];
-	// If I ever need to retain gbuffers, I will need more gbuffers.
-	// However, as long as gbuffer process is on the compositor thread
-	// it can sync a single gbuffer with composite render loop
 
 	// this should go a UI thread node
 	VkLineVert worldLineSegments[MXC_CUBE_SEGMENT_COUNT];
@@ -91,7 +80,7 @@ typedef struct MxcCompositor {
 
 } MxcCompositor;
 
-// Should CompositorContext and Compositor merge into one!?
+// Should CompositorContext and Compositor merge into one!? probably
 
 typedef struct MxcCompositorContext {
 	// read by multiple threads
@@ -106,12 +95,11 @@ typedef struct MxcCompositorContext {
 
 	HANDLE timelineHandle;
 
-	bool isReady;
+	_Atomic bool isReady;
 
 } MxcCompositorContext;
 
 extern MxcCompositorContext compositorContext;
-
 extern MxcCompositor cst;
 
 typedef struct MxcCompositorCreateInfo {

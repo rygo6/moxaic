@@ -287,7 +287,7 @@ typedef struct VkQueueFamily {
 	VkQueuedCommandBuffer queuedCmds[128];
 
 	VkSemaphore   immediateTimeline;
-	u64           immediateTimelineValue;
+	a_u64   immediateTimelineValue;
 
 } VkQueueFamily;
 
@@ -1107,7 +1107,7 @@ VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore);
 	VkDisplayModeKHR: VK_OBJECT_TYPE_DISPLAY_MODE_KHR,                     \
 	default: VK_OBJECT_TYPE_UNKNOWN)
 
-#define VK_SET_DEBUG(_)             vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), #_)
+#define VK_SET_DEBUG(_) vkSetDebugName(VK_OBJECT_TYPE(_), (u64)(_), #_)
 #define VK_SET_DEBUG_NAME(_, ...)                             \
 	({                                                        \
 		char _buffer[128];                                    \
@@ -1191,7 +1191,7 @@ static VkBool32 VkmDebugUtilsCallback(
 
 void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer queuedCmd)
 {
-	auto pFamily = &vk.context.queueFamilies[iFamilyType];
+	auto_t pFamily = &vk.context.queueFamilies[iFamilyType];
 	if (MID_QRING_ENQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_LIMIT_REACHED)
 		LOG_ERROR("%s CommandBuffer Queue reached limit!\n", string_VkQueueFamilyType[iFamilyType]);
 }
@@ -1199,7 +1199,7 @@ void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer
 void vkSubmitQueuedCommandBuffers()
 {
 	for (int iFamilyType = 0; iFamilyType < VK_QUEUE_FAMILY_TYPE_COUNT; ++iFamilyType) {
-		auto pFamily = &vk.context.queueFamilies[iFamilyType];
+		auto_t pFamily = &vk.context.queueFamilies[iFamilyType];
 		VkQueuedCommandBuffer queuedCmd;
 		if (MID_QRING_DEQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
 			CmdSubmit(queuedCmd.cmd, pFamily->queue, queuedCmd.timeline, queuedCmd.timelineSignalValue);
@@ -1214,7 +1214,7 @@ void vkSubmitQueuedCommandBuffers()
 
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType iFamilyType)
 {
-	auto pFamily = &vk.context.queueFamilies[iFamilyType];
+	auto_t pFamily = &vk.context.queueFamilies[iFamilyType];
 
 	// TODO we need to clean this up on thread end
 	if (threadContext.immediatePools[iFamilyType] == VK_NULL_HANDLE) {
@@ -1245,7 +1245,7 @@ VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType iFamilyType)
 void vkEndImmediateCommandBuffer(VkQueueFamilyType iFamilyType, VkCommandBuffer cmd)
 {
 	VK_CHECK(vkEndCommandBuffer(cmd));
-	auto pFamily = &vk.context.queueFamilies[iFamilyType];
+	auto_t pFamily = &vk.context.queueFamilies[iFamilyType];
 	u64 signalValue = atomic_fetch_add(&pFamily->immediateTimelineValue, 1) + 1;
 	if (VK_IS_CONTEXT_THREAD) CmdSubmit(cmd, pFamily->queue, pFamily->immediateTimeline, signalValue);
 	else vkEnqueueCommandBuffer(iFamilyType, (VkQueuedCommandBuffer){
@@ -3068,7 +3068,7 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		if (pContextCreateInfo->queueFamilyCreateInfos[iFamilyType].queueCount == 0)
 			continue;
 
-		auto pFamily = &vk.context.queueFamilies[iFamilyType];
+		auto_t pFamily = &vk.context.queueFamilies[iFamilyType];
 		vkGetDeviceQueue(vk.context.device, pFamily->index, 0, &pFamily->queue);
 		VK_SET_DEBUG_NAME(pFamily->queue, "Queue %s", string_VkQueueFamilyType[iFamilyType]);
 
@@ -3107,7 +3107,7 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 	};
 	VK_CHECK(vkCreateSwapchainKHR(vk.context.device, &info, VK_ALLOC, &pSwap->chain));
 
-	uint32_t swapCount;
+	u32 swapCount;
 	VK_CHECK(vkGetSwapchainImagesKHR(vk.context.device, pSwap->chain, &swapCount, NULL));
 	CHECK(swapCount != VK_SWAP_COUNT, "Resulting viewSwaps image capacity does not match requested viewSwaps capacity!");
 	VkImage images[VK_SWAP_COUNT];
@@ -3125,14 +3125,14 @@ void vkCreateSwapContext(VkSurfaceKHR surface, VkQueueFamilyType presentQueueFam
 			.subresourceRange = VK_COLOR_SUBRESOURCE_RANGE,
 		};
 		VK_CHECK(vkCreateImageView(vk.context.device, &viewCreateInfo, VK_ALLOC, &pSwap->frames[i].view));
-		vkSetDebugName(VK_OBJECT_TYPE_IMAGE_VIEW, (uint64_t)pSwap->frames[i].view, "SwapImageView");
+		VK_SET_DEBUG(pSwap->frames[i].view);
 
 		VkSemaphoreCreateInfo acquireSwapSemaphoreCreateInfo = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .flags = 0};
 		VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->frames[i].completeSemaphore));
-		vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->frames[i].completeSemaphore, "SwapCompleteSemaphore");
+		VK_SET_DEBUG(pSwap->frames[i].completeSemaphore);
 
 		VK_CHECK(vkCreateSemaphore(vk.context.device, &acquireSwapSemaphoreCreateInfo, VK_ALLOC, &pSwap->acquireSemaphores[i]));
-		vkSetDebugName(VK_OBJECT_TYPE_SEMAPHORE, (uint64_t)pSwap->acquireSemaphores[i], "SwapAcquireSemaphore");
+		VK_SET_DEBUG(pSwap->acquireSemaphores[i]);
 	}
 }
 

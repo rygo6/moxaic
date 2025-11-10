@@ -33,7 +33,7 @@ typedef struct MidWindow {
 	int       clientWidth, clientHeight;
 	POINT     localCenter, globalCenter;
 	uint64_t  frequency, start, current;
-	bool      running;
+	_Atomic bool running;
 } MidWindow;
 
 typedef enum MidInputPhase : u8 {
@@ -157,11 +157,11 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 			return DefWindowProc(hWnd, uMsg, wParam, lParam);
 
-		case WM_MOUSEMOVE:
+		case WM_MOUSEMOVE: {
 			int newX = GET_X_LPARAM(lParam);
 			int newY = GET_Y_LPARAM(lParam);
 
-			switch(midWindowInput.cursorLocked){
+			switch(midWindowInput.cursorLocked) {
 				case MID_INPUT_LOCK_CURSOR_ENABLED:
 					midWindowInput.iMouseDeltaX = newX - midWindow.localCenter.x;
 					midWindowInput.iMouseDeltaY = newY - midWindow.localCenter.y;
@@ -184,7 +184,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			midWindowInput.fMouseY = (float)midWindowInput.iMouseY;
 
 			return 0;
-
+        }
 		case WM_KEYDOWN:
 			if (wParam >= '0' && wParam <= 'Z')
 				midWindowInput.keyChar[wParam - '0'] = MID_PHASE_PRESS;
@@ -254,12 +254,12 @@ void midUpdateWindowInput()
 	u64 delta = ((midWindow.current - prior) * 1000000) / midWindow.frequency;
 	midWindowInput.deltaTime = (double)delta * 0.000001f;
 
+#define TITLE_BUFFER_SIZE 64
 	static int titleUpdateRate = 64;
 	if (!--titleUpdateRate) {
 		titleUpdateRate = 64;
-		constexpr int titleBufferSize = 64;
-		static char   titleBuffer[titleBufferSize];
-		snprintf(titleBuffer, titleBufferSize, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0 / midWindowInput.deltaTime, timeQueryMs);
+		static char titleBuffer[TITLE_BUFFER_SIZE];
+		snprintf(titleBuffer, TITLE_BUFFER_SIZE, "%s | FPS=%.2f | TimeQuery=%.8f", WINDOW_NAME, 1.0 / midWindowInput.deltaTime, timeQueryMs);
 		SetWindowText(midWindow.hWnd, titleBuffer);
 	}
 }

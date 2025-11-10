@@ -31,7 +31,7 @@ typedef enum MxcView {
 extern MxcView compositorView;
 extern bool isCompositor;
 
-extern bool isRunning;
+extern _Atomic bool isRunning;
 #define CHECK_RUNNING                 \
 	if (UNLIKELY(!isRunning)) return;
 

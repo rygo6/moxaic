@@ -147,11 +147,11 @@ enum MatComponents {
 	C3_R3,
 	MAT_COUNT,
 };
-constexpr vec3 VEC3_ZERO = {{0.0f, 0.0f, 0.0f}};
-constexpr vec4 VEC4_ZERO = {{0.0f, 0.0f, 0.0f, 0.0f}};
-constexpr vec4 VEC4_IDENT = {{0.0f, 0.0f, 0.0f, 1.0f}};
-constexpr quat QUAT_IDENT = {{0.0f, 0.0f, 0.0f, 1.0f}};
-constexpr mat4 MAT4_IDENT = {{
+static const vec3 VEC3_ZERO = {{0.0f, 0.0f, 0.0f}};
+static const vec4 VEC4_ZERO = {{0.0f, 0.0f, 0.0f, 0.0f}};
+static const vec4 VEC4_IDENT = {{0.0f, 0.0f, 0.0f, 1.0f}};
+static const quat QUAT_IDENT = {{0.0f, 0.0f, 0.0f, 1.0f}};
+static const mat4 MAT4_IDENT = {{
 	1.0f, 0.0f, 0.0f, 0.0f,
 	0.0f, 1.0f, 0.0f, 0.0f,
 	0.0f, 0.0f, 1.0f, 0.0f,

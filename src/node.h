@@ -15,9 +15,9 @@
 
 #include "pipe_gbuffer_process.h"
 
-////
-//// Constants
-////
+/*
+ * Constants
+ */
 
 // The number of mip levels flattened to one image by compositor_gbuffer_blit_mip_step.comp
 #define MXC_NODE_GBUFFER_MAX_MIP_COUNT 12
@@ -26,12 +26,12 @@
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
 #define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
 
-////
-//// Shared Types
-////
-typedef u8 NodeHandle;
+/*
+ * Shared Types
+ */
+typedef block_handle node_h;
 
-typedef enum MxcNodeInterprocessMode : u8 {
+typedef enum PACKED MxcNodeInterprocessMode {
 	MXC_NODE_INTERPROCESS_MODE_NONE,
 	MXC_NODE_INTERPROCESS_MODE_THREAD,
 	MXC_NODE_INTERPROCESS_MODE_EXPORTED,
@@ -39,14 +39,14 @@ typedef enum MxcNodeInterprocessMode : u8 {
 	MXC_NODE_INTERPROCESS_MODE_COUNT,
 } MxcNodeInterprocessMode;
 
-typedef enum MxcSwapScale : u8{
+typedef enum PACKED MxcSwapScale {
 	MXC_SWAP_SCALE_FULL,
 	MXC_SWAP_SCALE_HALF,
 	MXC_SWAP_SCALE_QUARTER,
 	MXC_SWAP_SCALE_COUNT,
 } MxcSwapScale;
 
-typedef enum MxcCompositorMode : u8 {
+typedef enum PACKED MxcCompositorMode {
 	MXC_COMPOSITOR_MODE_NONE, // Used to process messages with no compositing.
 	MXC_COMPOSITOR_MODE_QUAD,
 	MXC_COMPOSITOR_MODE_TESSELATION,
@@ -56,24 +56,23 @@ typedef enum MxcCompositorMode : u8 {
 } MxcCompositorMode;
 
 static const char* string_MxcCompositorMode(MxcCompositorMode mode) {
-	switch(mode){
-		case MXC_COMPOSITOR_MODE_NONE:        return "MXC_COMPOSITOR_MODE_NONE";
-		case MXC_COMPOSITOR_MODE_QUAD:        return "MXC_COMPOSITOR_MODE_QUAD";
-		case MXC_COMPOSITOR_MODE_TESSELATION: return "MXC_COMPOSITOR_MODE_TESSELATION";
-		case MXC_COMPOSITOR_MODE_TASK_MESH:   return "MXC_COMPOSITOR_MODE_TASK_MESH";
-		case MXC_COMPOSITOR_MODE_COMPUTE:     return "MXC_COMPOSITOR_MODE_COMPUTE";
-		default:                              return "N/A";
+	switch (mode) {
+		STRING_CASE(MXC_COMPOSITOR_MODE_NONE);
+		STRING_CASE(MXC_COMPOSITOR_MODE_QUAD);
+		STRING_CASE(MXC_COMPOSITOR_MODE_TESSELATION);
+		STRING_CASE(MXC_COMPOSITOR_MODE_TASK_MESH);
+		STRING_CASE(MXC_COMPOSITOR_MODE_COMPUTE);
+		default: return "N/A";
 	}
 }
 
-typedef enum MxcIpcFunc {
+typedef enum PACKED MxcIpcFunc {
 	MXC_INTERPROCESS_TARGET_NODE_OPENED,
 	MXC_INTERPROCESS_TARGET_NODE_CLOSED,
 	MXC_INTERPROCESS_TARGET_NODE_BOUNDS,
 	MXC_INTERPROCESS_TARGET_SYNC_SWAPS,
 	MXC_INTERPROCESS_TARGET_COUNT,
 } MxcIpcFunc;
-#define MXC_IPC_FUNC_QUEUE_CAPACITY MID_QRING_CAPACITY
 
 typedef struct MxcController {
 	bool    active;
@@ -92,7 +91,7 @@ typedef struct MxcClip {
 typedef struct MxcNodeShared {
 
 	// Read/Write every cycle
-	u64          timelineValue;
+	_Atomic u64  timelineValue;
 	MxcClip      clip;
 	ProcessState processState;
 	pose         rootPose;
@@ -122,14 +121,14 @@ typedef struct MxcNodeShared {
 	MxcCompositorMode compositorMode;
 
 	// Interprocess
-	MidQRing   ipcFuncQueue;
+	MidQRing ipcFuncQueue;
 	MxcIpcFunc queuedIpcFuncs[MID_QRING_CAPACITY];
 
 	/* Events */
-	MidQRing         eventDataQueue;
+	MidQRing eventDataQueue;
 	XrEventDataUnion queuedEventDataBuffers[MID_QRING_CAPACITY];
 
-} MxcNodeShared;
+} MxcNodeShared; //MxcSharedNodeData to reflect MxcCompositorNodeData?
 
 typedef struct MxcNodeImports {
 
@@ -148,9 +147,9 @@ typedef struct MxcExternalNodeMemory {
 	MxcNodeImports imports;
 } MxcExternalNodeMemory;
 
-////
-//// Compositor Node Types and Data
-////
+/*
+ * Compositor Node Types and Data
+ */
 
 typedef struct MxcCompositorNodeSetState {
 
@@ -172,7 +171,7 @@ typedef struct MxcCompositorNodeSetState {
 
 } MxcCompositorNodeSetState;
 
-typedef enum MxcCubeCorners: u8 {
+typedef enum PACKED MxcCubeCorners {
 	CORNER_LUB,
 	CORNER_LUF,
 	CORNER_LDB,
@@ -185,7 +184,7 @@ typedef enum MxcCubeCorners: u8 {
 } MxcCubeCorners;
 
 #define MXC_CUBE_SEGMENT_COUNT 24
-constexpr u8 MXC_CUBE_SEGMENTS[MXC_CUBE_SEGMENT_COUNT] = {
+static const u8 MXC_CUBE_SEGMENTS[MXC_CUBE_SEGMENT_COUNT] = {
 	CORNER_LUF, CORNER_LUB,
 	CORNER_LUB, CORNER_RUB,
 	CORNER_RUB, CORNER_RUF,
@@ -202,7 +201,7 @@ constexpr u8 MXC_CUBE_SEGMENTS[MXC_CUBE_SEGMENT_COUNT] = {
 	CORNER_RUB, CORNER_RDB,
 };
 
-typedef enum MxcNodeInteractionState{
+typedef enum PACKED MxcNodeInteractionState {
 	NODE_INTERACTION_STATE_NONE,
 	NODE_INTERACTION_STATE_HOVER,
 	NODE_INTERACTION_STATE_SELECT,
@@ -216,17 +215,16 @@ typedef struct MxcNodeGBuffer {
 } MxcNodeGBuffer;
 
 typedef struct MxcNodeSwap {
-	VkImage               image;
-	VkImageView           view;
+	VkImage     image;
+	VkImageView view;
 } MxcNodeSwap;
 
-////
-//// Node Context
-////
-constexpr int MXC_NODE_SWAP_CAPACITY = VK_SWAP_COUNT * 2;
+/*
+ * Node Context
+ */
+#define MXC_NODE_SWAP_CAPACITY (VK_SWAP_COUNT * 2)
 
 typedef struct MxcNodeContext {
-
 	MxcNodeInterprocessMode interprocessMode;
 
 	HANDLE swapsSyncedHandle;
@@ -267,7 +265,7 @@ typedef struct MxcNodeContext {
 
 		// MXC_NODE_INTERPROCESS_MODE_IMPORTED
 		struct {
-			// Use this. even if it points ot same shared memory. Although its not a tragedy if each has their own shared memory
+			// Use this. even if it points to same shared memory. Although its not a tragedy if each has their own shared memory
 //			HANDLE                 importedExternalMemoryHandle;
 //			MxcExternalNodeMemory* pImportedExternalMemory;
 
@@ -278,7 +276,6 @@ typedef struct MxcNodeContext {
 
 } MxcNodeContext;
 
-// I am presuming a node simply won't need to have as many thread nodes within it
 #if defined(MOXAIC_COMPOSITOR)
 #define MXC_NODE_CAPACITY 64
 #elif defined(MOXAIC_NODE)
@@ -286,30 +283,25 @@ typedef struct MxcNodeContext {
 #endif
 
 typedef struct MxcActiveNodes {
-	u16        count;
-	NodeHandle handles[MXC_NODE_CAPACITY];
+	_Atomic u16 count;
+	node_h  handles[MXC_NODE_CAPACITY];
 } MxcActiveNodes;
 
-// Only one import into a node from a compositor? No move into MxcNodeContext. Duplicat is probably fine
+// Only one import into a node from a compositor? No move into MxcNodeContext. Duplicate is probably fine
 extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 extern struct Node {
 	MxcActiveNodes active[MXC_COMPOSITOR_MODE_COUNT];
 
-	u16            count;
-	MxcNodeContext context[MXC_NODE_CAPACITY];
+	BLOCK_DECL(MxcNodeContext, MXC_NODE_CAPACITY) context;
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
+
 
 	VkDescriptorSetLayout gbufferProcessSetLayout;
 	VkPipelineLayout      gbufferProcessPipeLayout;
 	VkPipeline            gbufferProcessDownPipe;
 	VkPipeline            gbufferProcessUpPipe;
-
-#if defined(MOXAIC_COMPOSITOR)
-
-
-#endif
 
 #if defined(MOXAIC_NODE)
 
@@ -326,43 +318,42 @@ extern struct Node {
 
 void mxcInitializeNode();
 
-NodeHandle RequestLocalNodeHandle();
-NodeHandle RequestExternalNodeHandle(MxcNodeShared* const pNodeShared);
+node_h RequestLocalNodeHandle();
+node_h RequestExternalNodeHandle(MxcNodeShared* pNodeShared);
 
-void mxcRequestNodeThread(void* (*runFunc)(void*), NodeHandle* pNodeHandle);
+void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle);
 
 void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessState, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent);
 
-////
-//// Process Connection
-////
+/*
+ * Process Connection
+ */
 void mxcServerInitializeInterprocess();
 void mxcServerShutdownInterprocess();
 void mxcConnectInterprocessNode(bool createTestNode);
 void mxcShutdownInterprocessNode();
 
-////
-//// Process IPC Funcs
-////
-typedef void (*MxcIpcFuncPtr)(const NodeHandle);
+/*
+ * Process IPC Funcs
+ */
+typedef void (*MxcIpcFuncPtr)(const node_h);
 static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MID_QRING_CAPACITY, "IPC targets larger than ring buffer size.");
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
-int mxcIpcFuncEnqueue(NodeHandle hNode, MxcIpcFunc target);
-int mxcIpcFuncDequeue(NodeHandle hNode);
+int mxcIpcFuncEnqueue(node_h hNode, MxcIpcFunc target);
+int mxcIpcFuncDequeue(node_h hNode);
 
 static inline void mxcNodeInterprocessPoll()
 {
 	// We still want to poll MXC_COMPOSITOR_MODE_NONE so it can send events when not being composited.
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_NONE; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
-		atomic_thread_fence(memory_order_acquire);
-		int activeNodeCt = node.active[iCstMode].count;
+		u16 activeNodeCt = atomic_load_explicit(&node.active[iCstMode].count, memory_order_acquire);
 		if (activeNodeCt == 0)
 			continue;
 
-		auto pActiveNodes = &node.active[iCstMode];
+		MxcActiveNodes* pActiveNodes = &node.active[iCstMode];
 		for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
-			auto hNode = pActiveNodes->handles[iNode];
+			node_h hNode = pActiveNodes->handles[iNode];
 			mxcIpcFuncDequeue(hNode);
 		}
 	}

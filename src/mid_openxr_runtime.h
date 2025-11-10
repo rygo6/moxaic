@@ -5,36 +5,6 @@
  * Mid OpenXR Runtime Header
  */
 
-/*
-	Style
-
-	variable names can signify the type with a character prefix
-	iValue = Data structure index. Handle but without data structure metadata.
-	hValue = Data structure handle. Index but with data structure metadata.
-	pValue = Data structure pointer.
- 	valueId = Categorical identifier.
- 	XrType = Opaque Handle. Data structure handle in u64 with additional metadata.
-
- 	primitive types are snake_case
-
-	extern struct types are PrefixPascalCase
- 	static struct types are PascalCase
-
- 	macros and constants are CAPITAL_SNAKE_CASE
-
- 	static methods are PascalCase
- 	extern methods are prefixCamelCase with a prefix less than 3 chars
-
- 	global fields should be an anonymous struct to namespace
-
- 	auto can be used if the name of the type is obvious from somewhere else in the assignment line
- 	auto should be used if the exact name of the type is elsewhere in the assignment line, such as compound literals
- 	if the type name is 8 or less chars
-
- 	typedef of abbreviated type names should be used if possible
- 	abbreviations should be 8 or less chars
-*/
-
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -175,6 +145,7 @@ typedef enum PACKED XrSwapClip  {
 typedef enum PACKED XrSwapState {
 	XR_SWAP_STATE_UNITIALIZED,
 	XR_SWAP_STATE_REQUESTED,
+	XR_SWAP_STATE_READY,
 	XR_SWAP_STATE_AVAILABLE,
 	XR_SWAP_STATE_ACQUIRED,
 	XR_SWAP_STATE_WAITED,
@@ -275,7 +246,7 @@ typedef struct XrEventDataSpaceBoundsChanged {
 	XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | \
 	XR_SPACE_LOCATION_POSITION_TRACKED_BIT
 
-typedef u16 session_i;
+typedef u16 session_i; // session could probably be sessionId since it being contiguous on other side doesn't matter
 typedef u16 swap_i;
 typedef u8  view_i;
 
@@ -529,9 +500,9 @@ typedef struct Session {
 	XrSwapClip  swapClip;
 
 	/* Timing */
-	XrTime frameWaited;
-	XrTime frameBegan;
-	XrTime frameEnded;
+	_Atomic XrTime frameWaited;
+	_Atomic XrTime frameBegan;
+	_Atomic XrTime frameEnded;
 
 	u64    sessionTimelineValue;
 
@@ -652,12 +623,12 @@ typedef enum XrAtomType {
 
 // Opaque Handle to Ptr
 #define XR_OPAQUE_BLOCK_P(_opaqueHandle) _Generic(_opaqueHandle,                  \
-	    XrSession: BLOCK_PTR(xr.block.session, XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
-	    XrSpace:   BLOCK_PTR(xr.block.space,   XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
+	    XrSession: BLOCK_PTR_H(xr.block.session, XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
+	    XrSpace:   BLOCK_PTR_H(xr.block.space,   XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
 	    default:   NULL)
 
 // Atom to Ptr
-#define XR_ATOM_BLOCK_P(_block, _atom) BLOCK_PTR(_block, XR_ATOM_BLOCK_H(_atom))
+#define XR_ATOM_BLOCK_P(_block, _atom) BLOCK_PTR_H(_block, XR_ATOM_BLOCK_H(_atom))
 
 // Handle to Opaque Handle
 #define XR_TO_OPAQUE_H(_type, _handle) _Generic((_type*)0,                 \
@@ -713,7 +684,7 @@ static XrTime xrGetTime()
 	return xrTime;
 }
 
-static XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
+static XrResult XrTimeWaitWin32(_Atomic XrTime* pSharedTime, XrTime waitTime)
 {
 	// this should be pthreads since it doesnt happen that much and cross platform is probably fine
 	while (1) {
@@ -729,7 +700,7 @@ static XrResult XrTimeWaitWin32(XrTime* pSharedTime, XrTime waitTime)
 	}
 }
 
-static void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
+static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
 {
 	atomic_store_explicit(pSharedTime, signalTime, memory_order_release);
 	WakeByAddressAll(pSharedTime);
@@ -744,15 +715,22 @@ static void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 		return XR_ERROR_HANDLE_INVALID;         \
 	}
 
-#define ENABLE_LOG_METHOD_ALL
-//#define ENABLE_LOG_METHOD_ONCE
+//#define ENABLE_LOG_METHOD_ALL
+#define ENABLE_LOG_METHOD_ONCE
 //#define ENABLE_LOG_METHOD_NOREPEAT
+//#define ENABLE_LOG_VERBOSE
+
+#ifdef ENABLE_LOG_VERBOSE
+#define LOG_VERBOSE(...) LOG(__VA_ARGS__)
+#else
+#define LOG_VERBOSE(...)
+#endif
 
 #define LOG_METHOD_INTERNAL(_method) LOG("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
 
 #ifdef ENABLE_LOG_METHOD_ALL
 #define LOG_METHOD(_method) LOG_METHOD_INTERNAL(_method)
-#elifdef ENABLE_LOG_METHOD_ONCE
+#elif defined(ENABLE_LOG_METHOD_ONCE)
 #define LOG_METHOD(_method)               \
 	({                                    \
 		static bool logged = false;       \
@@ -761,7 +739,7 @@ static void XrTimeSignalWin32(XrTime* pSharedTime, XrTime signalTime)
 			LOG_METHOD_INTERNAL(_method); \
 		}                                 \
 	})
-#elifdef ENABLE_LOG_METHOD_NOREPEAT
+#elif defined(ENABLE_LOG_METHOD_NOREPEAT)
 static const char* pLastLogMethod = NULL;
 #define LOG_METHOD(_method)                      \
 	({                                           \
@@ -879,7 +857,7 @@ XR_PROC xrStructureTypeToString(XrInstance      instance,
 
 static void EnqueueEventDataSessionStateChanged(session_h hSession, XrSessionState sessionState)
 {
-	Session* pSession = BLOCK_PTR(xr.block.session, hSession);
+	Session* pSession = BLOCK_PTR_H(xr.block.session, hSession);
 	pSession->activeSessionState = sessionState;
 
 	XrEventDataUnion* pEventData;
@@ -902,7 +880,7 @@ static void EnqueueEventDataReferenceSpaceChangePending(session_h            hSe
                                                         XrReferenceSpaceType referenceSpaceType,
                                                         XrPosef              poseInPreviousSpace)
 {
-	Session* pSession = BLOCK_PTR(xr.block.session, hSession);
+	Session* pSession = BLOCK_PTR_H(xr.block.session, hSession);
 	pSession->hActiveReferenceSpace = hSpace;
 
 	XrEventDataUnion* pSpaceEventData;
@@ -923,7 +901,7 @@ static void EnqueueEventDataReferenceSpaceChangePending(session_h            hSe
 
 static void EnqueueEventDataInteractionProfileChanged(session_h hSession, profile_h hProfile)
 {
-	Session* pSession = BLOCK_PTR(xr.block.session, hSession);
+	Session* pSession = BLOCK_PTR_H(xr.block.session, hSession);
 	pSession->hActiveInteractionProfile = hProfile;
 
 	XrEventDataUnion* pEventData;
@@ -940,7 +918,7 @@ static void EnqueueEventDataInteractionProfileChanged(session_h hSession, profil
 static void EnqueueEventDataUserPresenceChanged(session_h hSession, XrBool32 isUserPresent)
 {
 	if (!xr.instance.userPresenceEnabled) return;
-	Session* pSession = BLOCK_PTR(xr.block.session, hSession);
+	Session* pSession = BLOCK_PTR_H(xr.block.session, hSession);
 	pSession->activeIsUserPresent = isUserPresent;
 
 	XrEventDataUnion* pEventData;
@@ -997,8 +975,8 @@ static XrResult RegisterBinding(
 	path_h     hBindPath,
 	int (*func)(session_i, SubactionState*))
 {
-	InteractionProfile* pProfile     = BLOCK_PTR(xr.block.profile, hProfile);
-	Path*               pBindPath    = BLOCK_PTR(xr.block.path,    hBindPath);
+	InteractionProfile* pProfile     = BLOCK_PTR_H(xr.block.profile, hProfile);
+	Path*               pBindPath    = BLOCK_PTR_H(xr.block.path, hBindPath);
 	block_key           bindPathHash = BLOCK_KEY(xr.block.path,    pBindPath);
 
 	for (u32 i = 0; i < pProfile->bindings.count; ++i) {
@@ -1009,7 +987,7 @@ static XrResult RegisterBinding(
 	}
 
 	bind_h   hBind = BLOCK_CLAIM(xr.block.binding, bindPathHash);
-	Binding* pBind = BLOCK_PTR(xr.block.binding, hBind);
+	Binding* pBind = BLOCK_PTR_H(xr.block.binding, hBind);
 
 	pBind->hPath = BLOCK_HANDLE(xr.block.path,   pBindPath);
 	pBind->func = func;
@@ -1034,7 +1012,7 @@ static XrResult InitBinding(const char*        interactionProfile,
 	block_key profilePathHash = BLOCK_KEY_H(xr.block.path, hProfilePath);
 
 	profile_h           hProfile = BLOCK_CLAIM(B.profile, profilePathHash);
-	InteractionProfile* pProfile = BLOCK_PTR(B.profile, hProfile);
+	InteractionProfile* pProfile = BLOCK_PTR_H(B.profile, hProfile);
 	pProfile->hPath = XR_ATOM_BLOCK_H(profilePath);
 
 	for (int i = 0; i < bindingDefinitionCount; ++i) {
@@ -1138,18 +1116,18 @@ static inline XrResult GetActionState(
 	Path*            pSubPath,
 	SubactionState** ppState)
 {
-	auto hSubPath = BLOCK_HANDLE(xr.block.path, pSubPath);
+	auto_t hSubPath = BLOCK_HANDLE(xr.block.path, pSubPath);
 	if (pSubPath == NULL) {
-		auto hState = pAction->hSubactionPaths[0];
-		*ppState = BLOCK_PTR(B.state, hState);
+		auto_t hState = pAction->hSubactionPaths[0];
+		*ppState = BLOCK_PTR_H(B.state, hState);
 		return XR_SUCCESS;
 	}
 
 	for (u32 i = 0; i < pAction->countSubactions; ++i) {
 		if (hSubPath == pAction->hSubactionPaths[i]) {
-			auto hState = pAction->hSubactionStates[i];
-			auto handle = HANDLE_INDEX(hState);
-			*ppState = BLOCK_PTR(B.state, hState);
+			auto_t hState = pAction->hSubactionStates[i];
+			auto_t handle = HANDLE_INDEX(hState);
+			*ppState = BLOCK_PTR_H(B.state, hState);
 			return XR_SUCCESS;
 		}
 	}
@@ -1452,7 +1430,7 @@ XR_PROC xrGetSystemProperties(XrInstance instance,
 			properties->graphicsProperties.maxSwapchainImageHeight = viewConfig.maxImageRectHeight;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
-			return XR_SUCCESS;
+			break;
 		case SYSTEM_ID_HMD_VR_STEREO:
 			properties->systemId = SYSTEM_ID_HMD_VR_STEREO;
 			properties->vendorId = 0;
@@ -1462,19 +1440,20 @@ XR_PROC xrGetSystemProperties(XrInstance instance,
 			properties->graphicsProperties.maxSwapchainImageHeight = viewConfig.maxImageRectHeight;
 			properties->trackingProperties.orientationTracking = XR_TRUE;
 			properties->trackingProperties.positionTracking = XR_TRUE;
-			return XR_SUCCESS;
-		default:
-			return XR_ERROR_HANDLE_INVALID;
+			break;
+		default: return XR_ERROR_HANDLE_INVALID;
 	}
 
 	switch (properties->next != NULL ? *(XrStructureType*)properties->next : 0) {
-		case XR_TYPE_SYSTEM_EYE_GAZE_INTERACTION_PROPERTIES_EXT:
-			auto gazeProperties = (XrSystemEyeGazeInteractionPropertiesEXT *)properties->next;
+		case XR_TYPE_SYSTEM_EYE_GAZE_INTERACTION_PROPERTIES_EXT: {
+			auto_t gazeProperties = (XrSystemEyeGazeInteractionPropertiesEXT*) properties->next;
 			gazeProperties->supportsEyeGazeInteraction = XR_TRUE;
-				break;
-		default:
 			break;
+		}
+		default: break;
 	}
+
+  return XR_SUCCESS;
 }
 
 XR_PROC
@@ -1542,7 +1521,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 	LOG("Claimed iSession %d\n", iSession);
 
 	session_h hSession = BLOCK_CLAIM(xr.block.session, iSession);
-	Session*  pSession = BLOCK_PTR(xr.block.session, hSession);
+	Session*  pSession = BLOCK_PTR_H(xr.block.session, hSession);
 	memset(pSession, 0, sizeof(Session));
 	pSession->index = iSession;
 
@@ -1707,7 +1686,24 @@ XR_PROC xrCreateReferenceSpace(XrSession                         session,
 		EXPAND_STRUCT(XrVector3f,    createInfo->poseInReferenceSpace.position),
 		EXPAND_STRUCT(XrQuaternionf, createInfo->poseInReferenceSpace.orientation));
 
-	CHECK_NEXT_CHAIN(createInfo);
+	if (createInfo->poseInReferenceSpace.orientation.w == 0) {
+		LOG_ERROR("XR_ERROR_POSE_INVALID\n");
+		return XR_ERROR_POSE_INVALID;
+	}
+
+	switch (createInfo->referenceSpaceType) {
+		case XR_REFERENCE_SPACE_TYPE_VIEW:
+		case XR_REFERENCE_SPACE_TYPE_LOCAL:
+		case XR_REFERENCE_SPACE_TYPE_STAGE:
+		case XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR:
+		case XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT:
+			break;
+		case XR_REFERENCE_SPACE_TYPE_COMBINED_EYE_VARJO:
+		case XR_REFERENCE_SPACE_TYPE_LOCALIZATION_MAP_ML:
+		default:
+			LOG_ERROR("XR_ERROR_REFERENCE_SPACE_UNSUPPORTED\n");
+		return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
+	}
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
@@ -1715,13 +1711,13 @@ XR_PROC xrCreateReferenceSpace(XrSession                         session,
 	space_h hSpace = BLOCK_CLAIM(xr.block.space, 0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
 
-	Space* pSpace = BLOCK_PTR(xr.block.space, hSpace);
+	Space* pSpace = BLOCK_PTR_H(xr.block.space, hSpace);
 	pSpace->type = createInfo->type;
 	pSpace->hSession = BLOCK_HANDLE(B.session, pSession);
 	pSpace->poseInSpace = createInfo->poseInReferenceSpace;
 	pSpace->reference.spaceType = createInfo->referenceSpaceType;
 
-	// auto switch to first created space
+	// auto_t switch to first created space
 	if (!HANDLE_VALID(pSession->hActiveReferenceSpace)) {
 		EnqueueEventDataReferenceSpaceChangePending(
 			hSession, hSpace, 
@@ -1783,7 +1779,7 @@ XR_PROC xrCreateActionSpace(
 
 	space_h hSpace = BLOCK_CLAIM(xr.block.space, 0);
 	HANDLE_CHECK(hSpace, XR_ERROR_LIMIT_REACHED);
-	Space* pSpace = BLOCK_PTR(xr.block.space, hSpace);
+	Space* pSpace = BLOCK_PTR_H(xr.block.space, hSpace);
 	pSpace->type = createInfo->type;
 	pSpace->poseInSpace = createInfo->poseInActionSpace;
 	pSpace->action.hAction = BLOCK_HANDLE(xr.block.action, (Action*)createInfo->action);
@@ -1807,17 +1803,18 @@ XR_PROC xrLocateSpace(XrSpace          space,
 	LOG_METHOD(xrLocateSpace);
 
 	Space*   pSpace = (Space*)space;
-	Session* pSession = BLOCK_PTR(xr.block.session, pSpace->hSession);
+	Session* pSession = BLOCK_PTR_H(xr.block.session, pSpace->hSession);
 
 	XrBool32 isActive = false;
 	XrEulerPosef eulerPose = {};
-	switch (pSpace->type) {
-		case XR_TYPE_ACTION_SPACE_CREATE_INFO:
-			auto pSubPath = BLOCK_PTR(xr.block.path, pSpace->action.hSubactionPath);
-			auto pAction  = BLOCK_PTR(xr.block.action, pSpace->action.hAction);
+	switch (pSpace->type)
+	{
+		case XR_TYPE_ACTION_SPACE_CREATE_INFO: {
+			auto_t pSubPath = BLOCK_PTR_H(xr.block.path, pSpace->action.hSubactionPath);
+			auto_t pAction = BLOCK_PTR_H(xr.block.action, pSpace->action.hAction);
 
-			auto hSession   = BLOCK_HANDLE(xr.block.session, pSession);
-			auto pActionSet = BLOCK_PTR(xr.block.actionSet, pAction->hActionSet);
+			auto_t hSession = BLOCK_HANDLE(xr.block.session, pSession);
+			auto_t pActionSet = BLOCK_PTR_H(xr.block.actionSet, pAction->hActionSet);
 
 			if (hSession != pActionSet->hAttachedToSession) {
 				LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
@@ -1834,27 +1831,30 @@ XR_PROC xrLocateSpace(XrSpace          space,
 			isActive = pState->isActive;
 
 			break;
-		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO:
-
-			switch (pSpace->reference.spaceType) {
+		}
+		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO: {
+			switch (pSpace->reference.spaceType)
+			{
 				case XR_REFERENCE_SPACE_TYPE_LOCAL:
 				case XR_REFERENCE_SPACE_TYPE_STAGE:
 				case XR_REFERENCE_SPACE_TYPE_VIEW:
 					xrGetHeadPose(pSession->index, &eulerPose);
-					isActive = true;
-					break;
+				isActive = true;
+				break;
 				default:
 					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space interprocessMode %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
-					return XR_ERROR_VALIDATION_FAILURE;
+				return XR_ERROR_VALIDATION_FAILURE;
 			}
 
 			break;
+		}
 		default:
 			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space interprocessMode %s\n", string_XrStructureType(pSpace->type));
 			return XR_ERROR_VALIDATION_FAILURE;
 	}
 
-	switch (xr.instance.graphicsApi) {
+	switch (xr.instance.graphicsApi)
+	{
 		case XR_GRAPHICS_API_OPENGL: break;
 		case XR_GRAPHICS_API_VULKAN: break;
 		case XR_GRAPHICS_API_D3D11_4:
@@ -1871,10 +1871,12 @@ XR_PROC xrLocateSpace(XrSpace          space,
 	location->locationFlags = isActive ? XR_SPACE_LOCATION_ALL_TRACKED : 0;
 
 	if (location->next != NULL) {
-		switch (*(XrStructureType*)location->next) {
-			case XR_TYPE_SPACE_VELOCITY:
-				XrSpaceVelocity* pVelocity = (XrSpaceVelocity*)location->next;
+		switch (*(XrStructureType*)location->next)
+		{
+			case XR_TYPE_SPACE_VELOCITY: {
+				XrSpaceVelocity* pVelocity = (XrSpaceVelocity*) location->next;
 				break;
+			}
 			default:
 				LOG_ERROR("XR_ERROR_VALIDATION_FAILURE xrLocateSpace couldn't deal with pNext: ");
 				LogNextChain(location->next);
@@ -1888,8 +1890,8 @@ XR_PROC xrLocateSpace(XrSpace          space,
 XR_PROC xrDestroySpace(XrSpace space)
 {
 	LOG_METHOD(xrDestroySpace);
-	auto pSpace = (Space*)space;
-	auto pSess = BLOCK_PTR(B.space, pSpace->hSession);
+	auto_t pSpace = (Space*)space;
+	auto_t pSess = BLOCK_PTR_H(B.space, pSpace->hSession);
 	bHnd hSpace = BLOCK_HANDLE(B.space, pSpace);
 	BLOCK_RELEASE(B.space, hSpace);
 
@@ -1914,22 +1916,23 @@ XR_PROC xrEnumerateViewConfigurations(XrInstance               instance,
 	for (u32 i = 0; i < viewConfigurationTypeCapacityInput && COUNT(_modes); ++i) \
 		viewConfigurationTypes[i] = _modes[i];
 
-	switch ((SystemId)systemId) {
-		case SYSTEM_ID_HANDHELD_AR:
+	switch ((SystemId)systemId)
+	{
+		case SYSTEM_ID_HANDHELD_AR: {
 			XrViewConfigurationType arModes[] = {
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
 			};
 			TRANSFER_MODES(arModes);
 			return XR_SUCCESS;
-
-		case SYSTEM_ID_HMD_VR_STEREO:
+		}
+		case SYSTEM_ID_HMD_VR_STEREO: {
 			XrViewConfigurationType vrStereoModes[] = {
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO,
 				XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
 			};
 			TRANSFER_MODES(vrStereoModes);
 			return XR_SUCCESS;
-
+		}
 		default:
 			LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
 			return XR_ERROR_SYSTEM_INVALID;
@@ -2088,6 +2091,16 @@ static const i64* TO_VK_FORMATS[XR_GRAPHICS_API_COUNT] = {
 	[XR_GRAPHICS_API_D3D11_4] = DXGI_TO_VK_FORMAT,
 };
 
+// TODO should start to use inline switch line this as they do compile down statically but can also enable a check
+static inline const i64* XrGraphicsApiVkFormats(XrGraphicsApi api) {
+	switch (api) {
+		case XR_GRAPHICS_API_OPENGL:  return DXGI_TO_VK_FORMAT;
+		case XR_GRAPHICS_API_VULKAN:  return DXGI_TO_VK_FORMAT;
+		case XR_GRAPHICS_API_D3D11_4: return DXGI_TO_VK_FORMAT;
+		default: PANIC("XrGraphicsApi unknown!");
+	}
+}
+
 static const int64_t* swapFormats[XR_GRAPHICS_API_COUNT][XR_SWAP_OUTPUT_COUNT] = {
 	[XR_GRAPHICS_API_OPENGL] = {
 		[XR_SWAP_OUTPUT_COLOR] = colorGlSwapFormats,
@@ -2213,10 +2226,10 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 		return XR_ERROR_VALIDATION_FAILURE;
 	}
 
-	VkImageCreateFlags vkCreateFlags = 0;
-	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT) {
-		vkCreateFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
-	}
+//	VkImageCreateFlags vkCreateFlags = 0;
+//	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT) {
+//		vkCreateFlags |= VK_IMAGE_CREATE_PROTECTED_BIT;
+//	}
 
 	if (createInfo->createFlags & XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT) {
 		LOG_ERROR("XR_SWAPCHAIN_CREATE_STATIC_IMAGE_BIT unsupported \n");
@@ -2259,7 +2272,7 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 
 	swap_h hSwap = BLOCK_CLAIM(B.swap, 0);
 	HANDLE_CHECK(hSwap, XR_ERROR_LIMIT_REACHED);
-	Swapchain* pSwap = BLOCK_PTR(B.swap, hSwap);
+	Swapchain* pSwap = BLOCK_PTR_H(B.swap, hSwap);
 	swap_i     iSwap = HANDLE_INDEX(hSwap);
 
 	pSwap->lastWaitedIndex = XR_INVALID_SWAP_INDEX;
@@ -2276,10 +2289,19 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 		.arraySize = createInfo->arraySize,
 		.mipCount = createInfo->mipCount,
 	};
+	for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
+		if (pSwap->states[iImg] != XR_SWAP_STATE_UNITIALIZED) {
+			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE Swap Image already initialized!\n");
+			return XR_ERROR_VALIDATION_FAILURE;
+		}
+		pSwap->states[iImg] = XR_SWAP_STATE_REQUESTED;
+	}
 
+	/* Create and Get Swap Images */
 	xrCreateSwapchainImages(pSession->index, iSwap, &pSwap->info);
 
-	switch (xr.instance.graphicsApi) {
+	switch (xr.instance.graphicsApi)
+	{
 		case XR_GRAPHICS_API_OPENGL: {
 			printf("Creating OpenGL Swap");
 			#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
@@ -2300,25 +2322,28 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 			ID3D11Device5* device5 = pSession->binding.d3d11.device5;
 			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
 			for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
-				switch (output) {
-					case XR_SWAP_OUTPUT_COLOR:
+				ASSERT(pSwap->states[iImg] == XR_SWAP_STATE_REQUESTED, "Retrieving swap which was not requested!");
+				switch (output)
+				{
+					case XR_SWAP_OUTPUT_COLOR: {
 						HANDLE colorHandle;
 						xrGetSwapchainImportedImage(pSession->index, iSwap, iImg, &colorHandle);
 						ASSERT(colorHandle != NULL, "colorHandle == NULL");
-						LOG("Creating D3D11 color. Device: %p Handle: %p Index: %d ImageId: %d\n", (void*)device5, colorHandle, iSwap, iImg);
-						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
-						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[iImg].d3d11.transferTexture));
+						LOG("Creating D3D11 color. Device: %p Handle: %p Index: %d ImageId: %d\n", (void*) device5, colorHandle, iSwap, iImg);
+						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, colorHandle, &IID_ID3D11Resource, (void**) &pSwap->texture[iImg].d3d11.transferResource));
+						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**) &pSwap->texture[iImg].d3d11.transferTexture));
 						// For color the local resource can directly be the transfer resource.
 						pSwap->texture[iImg].d3d11.localResource = pSwap->texture[iImg].d3d11.transferResource;
 						pSwap->texture[iImg].d3d11.localTexture = pSwap->texture[iImg].d3d11.transferTexture;
 						break;
-					case XR_SWAP_OUTPUT_DEPTH:
+					}
+					case XR_SWAP_OUTPUT_DEPTH: {
 						HANDLE depthHandle;
 						xrGetSwapchainImportedImage(pSession->index, iSwap, iImg, &depthHandle);
 						ASSERT(depthHandle != NULL, "depthHandle == NULL");
-						LOG("Creating D3D!! depth. Device: %p Handle: %p Index: %d ImageId: %d\n", (void*)device5, colorHandle, iSwap, iImg);
-						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, depthHandle, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.transferResource));
-						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**)&pSwap->texture[iImg].d3d11.transferTexture));;
+						LOG("Creating D3D11 depth. Device: %p Handle: %p Index: %d ImageId: %d\n", (void*) device5, depthHandle, iSwap, iImg);
+						DX_CHECK(ID3D11Device5_OpenSharedResource1(device5, depthHandle, &IID_ID3D11Resource, (void**) &pSwap->texture[iImg].d3d11.transferResource));
+						DX_CHECK(ID3D11Resource_QueryInterface(pSwap->texture[iImg].d3d11.transferResource, &IID_ID3D11Texture2D, (void**) &pSwap->texture[iImg].d3d11.transferTexture));;
 						D3D11_TEXTURE2D_DESC desc = {
 							.Width = createInfo->width,
 							.Height = createInfo->height,
@@ -2333,8 +2358,9 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 							.MiscFlags = 0,
 						};
 						DX_CHECK(ID3D11Device5_CreateTexture2D(device5, &desc, NULL, &pSwap->texture[iImg].d3d11.localTexture));
-						DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->texture[iImg].d3d11.localTexture, &IID_ID3D11Resource, (void**)&pSwap->texture[iImg].d3d11.localResource));
+						DX_CHECK(ID3D11Texture2D_QueryInterface(pSwap->texture[iImg].d3d11.localTexture, &IID_ID3D11Resource, (void**) &pSwap->texture[iImg].d3d11.localResource));
 						break;
+					}
 					default:
 						LOG_ERROR("XR_ERROR_VALIDATION_FAILURE Swap is neither color nor depth!\n");
 						return XR_ERROR_VALIDATION_FAILURE;
@@ -2345,6 +2371,7 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 		}
 		case XR_GRAPHICS_API_VULKAN:
 		default:
+			LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED!\n");
 			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
@@ -2356,7 +2383,7 @@ XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
 	auto_t    pSwap    = (Swapchain*)swapchain;
-	Session*  pSession = BLOCK_PTR(B.session, pSwap->hSession);
+	Session*  pSession = BLOCK_PTR_H(B.session, pSwap->hSession);
 	session_i iSession = HANDLE_INDEX( pSwap->hSession);
 
 	switch (xr.instance.graphicsApi) {
@@ -2413,12 +2440,12 @@ XR_PROC xrEnumerateSwapchainImages(
 	if (imageCapacityInput != XR_SWAPCHAIN_IMAGE_COUNT)
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	auto pSwap = (Swapchain*)swapchain;
+	auto_t pSwap = (Swapchain*)swapchain;
 
 	switch (images[0].type) {
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
 			LOG("Enumerating gl Swapchain Images\n");
-			auto pImage = (XrSwapchainImageOpenGLKHR*)images;
+			auto_t pImage = (XrSwapchainImageOpenGLKHR*)images;
 			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
 				pImage[i].image = pSwap->texture[i].gl.texture;
 			}
@@ -2426,7 +2453,7 @@ XR_PROC xrEnumerateSwapchainImages(
 		}
 		case XR_TYPE_SWAPCHAIN_IMAGE_D3D11_KHR: {
 			LOG("Enumerating d3d11 Swapchain Images\n");
-			auto pImage = (XrSwapchainImageD3D11KHR*)images;
+			auto_t pImage = (XrSwapchainImageD3D11KHR*)images;
 			for (u32 i = 0; i < imageCapacityInput && i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
 				pImage[i].texture = pSwap->texture[i].d3d11.localTexture;
 			}
@@ -2493,8 +2520,8 @@ XR_PROC xrWaitSwapchainImage(
 	LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID No acquired swaps to release!\n");
 	return XR_ERROR_CALL_ORDER_INVALID;
 
-//	auto pSwap = (Swapchain*)swapchain;
-//	auto pSess = BLOCK_PTR(B.session, pSwap->hSession);
+//	auto_t pSwap = (Swapchain*)swapchain;
+//	auto_t pSess = BLOCK_PTR(B.session, pSwap->hSession);
 
 //	ID3D11DeviceContext4*   context4 = pSess->binding.d3d11.context4;
 
@@ -2578,11 +2605,11 @@ XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 			PANIC("Graphics API not implemented.\n");
 			break;
 
-		case XR_GRAPHICS_API_D3D11_4:
+		case XR_GRAPHICS_API_D3D11_4: {
 			u64 initialTimelineValue = ID3D11Fence_GetCompletedValue(pSession->binding.d3d11.compositorFence);
 			xrSetInitialCompositorTimelineValue(pSession->index, initialTimelineValue);
 			break;
-
+		}
 		default:
 			LOG_ERROR("Graphics API not supported.\n");
 			return XR_ERROR_RUNTIME_FAILURE;
@@ -3067,7 +3094,7 @@ XR_PROC xrLocateViews(
 XR_PROC xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 {
 	LOG_METHOD(xrStringToPath);
-	LOG("	string: %s\n", pathString);
+	LOG_VERBOSE("	string: %s\n", pathString);
 	CHECK_INSTANCE(instance);
 
 	u32 pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
@@ -3077,7 +3104,7 @@ XR_PROC xrStringToPath(XrInstance instance, const char* pathString, XrPath* path
 			LOG_ERROR("Path Hash Collision! %s | %s\n", xr.block.path.blocks[i].string, pathString);
 			return XR_ERROR_PATH_INVALID;
 		}
-		LOG("Path Handle Found: %d\n    %s\n", i, xr.block.path.blocks[i].string);
+		LOG_VERBOSE("Path Handle Found: %d\n    %s\n", i, xr.block.path.blocks[i].string);
 		path_h hFoundPath = BLOCK_HANDLE(xr.block.path, xr.block.path.blocks + i);
 		*path = XR_TO_ATOM(XR_ATOM_TYPE_PATH, hFoundPath);
 		return XR_SUCCESS;
@@ -3086,7 +3113,7 @@ XR_PROC xrStringToPath(XrInstance instance, const char* pathString, XrPath* path
 	path_h hPath = BLOCK_CLAIM(xr.block.path, pathHash);
 	HANDLE_CHECK(hPath, XR_ERROR_PATH_COUNT_EXCEEDED);
 
-	Path* pPath = BLOCK_PTR(xr.block.path, hPath);
+	Path* pPath = BLOCK_PTR_H(xr.block.path, hPath);
 	strncpy(pPath->string, pathString, XR_MAX_PATH_LENGTH);
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
 
@@ -3138,16 +3165,16 @@ XR_PROC xrCreateActionSet(XrInstance                   instance,
 
 	block_key actionSetNameHash = CalcDJB2(createInfo->actionSetName, XR_MAX_ACTION_SET_NAME_SIZE);
 
-	auto hFoundActionSet = BLOCK_FIND(B.actionSet, actionSetNameHash);
+	auto_t hFoundActionSet = BLOCK_FIND(B.actionSet, actionSetNameHash);
 	if (HANDLE_VALID(hFoundActionSet)) {
 		LOG_ERROR("XR_ERROR_LOCALIZED_NAME_DUPLICATED %s\n", createInfo->actionSetName);
 		return XR_ERROR_LOCALIZED_NAME_DUPLICATED;
 	}
 
-	auto hActionSet = BLOCK_CLAIM(B.actionSet, actionSetNameHash);
+	auto_t hActionSet = BLOCK_CLAIM(B.actionSet, actionSetNameHash);
 	HANDLE_CHECK(hActionSet, XR_ERROR_LIMIT_REACHED);
 
-	auto pActionSet = BLOCK_PTR(B.actionSet, hActionSet);
+	auto_t pActionSet = BLOCK_PTR_H(B.actionSet, hActionSet);
 	*pActionSet = (ActionSet){};
 
 	pActionSet->hAttachedToSession = HANDLE_DEFAULT;
@@ -3176,8 +3203,8 @@ XR_PROC xrCreateAction(
 	LOG_METHOD(xrCreateAction);
 	assert(createInfo->next == NULL);
 
-	auto pActionSet = (ActionSet*)actionSet;
-	auto hActionSet = BLOCK_HANDLE(B.actionSet, pActionSet);
+	auto_t pActionSet = (ActionSet*)actionSet;
+	auto_t hActionSet = BLOCK_HANDLE(B.actionSet, pActionSet);
 	HANDLE_CHECK(hActionSet, XR_ERROR_VALIDATION_FAILURE);
 
 	if (HANDLE_VALID(pActionSet->hAttachedToSession)) {
@@ -3198,7 +3225,7 @@ XR_PROC xrCreateAction(
 
 	action_h hAction = BLOCK_CLAIM(B.action, actionHash);
 	HANDLE_CHECK(hAction, XR_ERROR_LIMIT_REACHED);
-	Action* pAction = BLOCK_PTR(B.action, hAction);
+	Action* pAction = BLOCK_PTR_H(B.action, hAction);
 	*pAction = (Action){};
 
 	pAction->hActionSet = hActionSet;
@@ -3210,7 +3237,7 @@ XR_PROC xrCreateAction(
 
 		block_key subPathHash  = BLOCK_KEY_H(xr.block.path, hSubPath);
 		substate_h hState      = BLOCK_CLAIM(B.state, subPathHash);
-		SubactionState* pState = BLOCK_PTR(B.state, hState);
+		SubactionState* pState = BLOCK_PTR_H(B.state, hState);
 		pState->hAction = hAction;
 
 		pAction->hSubactionStates[i] = hState;
@@ -3224,14 +3251,14 @@ XR_PROC xrCreateAction(
 		LOG_ERROR("XR_ERROR_NAME_DUPLICATED ActionSet %s Action %s\n", pActionSet->actionSetName, createInfo->localizedActionName);
 		return XR_ERROR_NAME_DUPLICATED;
 	}
-	auto hMapAction = MAP_ADD(pActionSet->actions, hAction, actionHash);
+	auto_t hMapAction = MAP_ADD(pActionSet->actions, hAction, actionHash);
 
 	printf("	actionName: %s\n", pAction->actionName);
 	printf("	localizedActionName %s\n", pAction->localizedActionName);
 	printf("	actionType: %d\n", pAction->actionType);
 	printf("	countSubactionPaths: %d\n", pAction->countSubactions);
 	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i) {
-		Path* pPath = BLOCK_PTR(xr.block.path, pAction->hSubactionPaths[i]);
+		Path* pPath = BLOCK_PTR_H(xr.block.path, pAction->hSubactionPaths[i]);
 		printf("		subactionPath: %s\n", pPath->string);
 	}
 
@@ -3271,10 +3298,10 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 	Path* pSuggestProfilePath = XR_ATOM_BLOCK_P(xr.block.path, suggestedBindings->interactionProfile);
 	block_key suggestProfilePathHash = BLOCK_KEY(xr.block.path, pSuggestProfilePath);
 
-	auto hSuggestProfile = BLOCK_FIND(B.profile, suggestProfilePathHash);
+	auto_t hSuggestProfile = BLOCK_FIND(B.profile, suggestProfilePathHash);
 	HANDLE_CHECK(hSuggestProfile, XR_ERROR_PATH_UNSUPPORTED);
 
-	auto pSuggestProfile = BLOCK_PTR(B.profile, hSuggestProfile);
+	auto_t pSuggestProfile = BLOCK_PTR_H(B.profile, hSuggestProfile);
 	printf("Binding: %s %p\n", pSuggestProfilePath->string, (void*)pSuggestProfilePath);
 
 	const XrActionSuggestedBinding* pSuggest = suggestedBindings->suggestedBindings;
@@ -3282,8 +3309,8 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 	// Pre-emptively check everything so you don't end up with a half-finished binding suggestion that breaks things.
 	// Since this method is rarely run the overhead should be fine.
 	for (u32 i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		auto pSuggestAction = (Action*)pSuggest[i].action;
-		auto pSuggestActionSet = BLOCK_PTR(B.actionSet, pSuggestAction->hActionSet);
+		auto_t pSuggestAction = (Action*)pSuggest[i].action;
+		auto_t pSuggestActionSet = BLOCK_PTR_H(B.actionSet, pSuggestAction->hActionSet);
 		if (HANDLE_VALID(pSuggestActionSet->hAttachedToSession)) {
 			LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED \n");
 			return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
@@ -3293,7 +3320,7 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 
 	int actsBound = 0;
 	for (u32 i = 0; i < suggestedBindings->countSuggestedBindings; ++i) {
-		auto pSuggestAction = (Action*)pSuggest[i].action;
+		auto_t pSuggestAction = (Action*)pSuggest[i].action;
 		Path* pSuggestBindPath = XR_ATOM_BLOCK_P(xr.block.path, pSuggest[i].binding);
 
 		block_key bindPathHash = BLOCK_KEY(xr.block.path, pSuggestBindPath);
@@ -3308,7 +3335,7 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 			continue;
 		}
 
-		auto pSuggestBind = BLOCK_PTR(B.binding, hSuggestBind);
+		auto_t pSuggestBind = BLOCK_PTR_H(B.binding, hSuggestBind);
 
 		if (pSuggestAction->countSubactions == 0) {
 			pSuggestAction->hSubactionBindings[0] = hSuggestBind;
@@ -3320,7 +3347,7 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 		}
 
 		for (u32 subIndex = 0; subIndex < pSuggestAction->countSubactions; ++subIndex) {
-			auto pSubPath = BLOCK_PTR(B.path, pSuggestAction->hSubactionPaths[subIndex]);
+			auto_t pSubPath = BLOCK_PTR_H(B.path, pSuggestAction->hSubactionPaths[subIndex]);
 			if (!CompareSubPath(pSubPath->string, pSuggestBindPath->string))
 				continue;
 
@@ -3350,7 +3377,7 @@ XR_PROC xrAttachSessionActionSets(XrSession                            session,
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
 
 	for (u32 i = 0; i < attachInfo->countActionSets; ++i) {
-		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
+		auto_t pActSet = (ActionSet*)attachInfo->actionSets[i];
 		if (HANDLE_VALID(pActSet->hAttachedToSession)) {
 			LOG_ERROR("XR_ERROR_ACTIONSETS_ALREADY_ATTACHED %s\n", pActSet->actionSetName);
 			return XR_ERROR_ACTIONSETS_ALREADY_ATTACHED;
@@ -3358,11 +3385,11 @@ XR_PROC xrAttachSessionActionSets(XrSession                            session,
 	}
 
 	for (u32 i = 0; i < attachInfo->countActionSets; ++i) {
-		auto pActSet = (ActionSet*)attachInfo->actionSets[i];
-		auto hActSet = BLOCK_HANDLE(B.actionSet, pActSet);
+		auto_t pActSet = (ActionSet*)attachInfo->actionSets[i];
+		auto_t hActSet = BLOCK_HANDLE(B.actionSet, pActSet);
 		HANDLE_CHECK(hActSet, XR_ERROR_HANDLE_INVALID);
 
-		auto actSetHash = BLOCK_KEY(B.actionSet, pActSet);
+		auto_t actSetHash = BLOCK_KEY(B.actionSet, pActSet);
 		MAP_ADD(pSession->actionSets, hActSet, actSetHash);
 
 		memset(&pActSet->states, 0, sizeof(pActSet->states));
@@ -3375,9 +3402,9 @@ XR_PROC xrAttachSessionActionSets(XrSession                            session,
 		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 
 		XrPath profilePath;	xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &profilePath);
-		auto hProfilePath    = XR_ATOM_BLOCK_H(profilePath);
-		auto profilePathHash = BLOCK_KEY_H(xr.block.path, hProfilePath);
-		auto hProfile = BLOCK_FIND(B.profile, profilePathHash);
+		auto_t hProfilePath    = XR_ATOM_BLOCK_H(profilePath);
+		auto_t profilePathHash = BLOCK_KEY_H(xr.block.path, hProfilePath);
+		auto_t hProfile = BLOCK_FIND(B.profile, profilePathHash);
 		HANDLE_CHECK(hProfile, XR_ERROR_HANDLE_INVALID);
 
 		EnqueueEventDataInteractionProfileChanged(hSession, hProfile);
@@ -3400,7 +3427,7 @@ XR_PROC xrGetCurrentInteractionProfile(
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
 
 	if (HANDLE_VALID(pSession->hActiveInteractionProfile)) {
-		InteractionProfile* pProfile = BLOCK_PTR(B.profile, pSession->hActiveInteractionProfile);
+		InteractionProfile* pProfile = BLOCK_PTR_H(B.profile, pSession->hActiveInteractionProfile);
 		interactionProfile->interactionProfile = XR_TO_ATOM(XR_ATOM_TYPE_PATH, pProfile->hPath);
 	}
 
@@ -3415,9 +3442,9 @@ static inline XrResult xrGetActionState(
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
 
-	auto pAction = (Action*)getInfo->action;
-	auto pActionSet = BLOCK_PTR(B.actionSet, pAction->hActionSet);
-	auto pSubPath = XR_ATOM_BLOCK_P(xr.block.path, getInfo->subactionPath);
+	auto_t pAction = (Action*)getInfo->action;
+	auto_t pActionSet = BLOCK_PTR_H(B.actionSet, pAction->hActionSet);
+	auto_t pSubPath = XR_ATOM_BLOCK_P(xr.block.path, getInfo->subactionPath);
 
 	if (hSession != pActionSet->hAttachedToSession) {
 		LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
@@ -3479,7 +3506,7 @@ XR_PROC xrGetActionStateVector2f(
 	LOG_METHOD(xrGetActionStateVector2f);
 	assert(getInfo->next == NULL);
 
-	SubactionState* pState;
+	SubactionState* pState = NULL;
 	if (xrGetActionState(session, getInfo, &pState) == XR_ERROR_PATH_UNSUPPORTED) {
 		LOG_ERROR("XR_ERROR_PATH_UNSUPPORTED\n");
 		return XR_ERROR_PATH_UNSUPPORTED;
@@ -3525,16 +3552,16 @@ XR_PROC xrSyncActions(
 		return XR_SESSION_NOT_FOCUSED;
 	}
 
-	auto time = xrGetTime();
+	auto_t time = xrGetTime();
 	for (u32 si = 0; si < syncInfo->countActiveActionSets; ++si) {
 
-		auto pActionSet = (ActionSet*)syncInfo->activeActionSets[si].actionSet;
+		auto_t pActionSet = (ActionSet*)syncInfo->activeActionSets[si].actionSet;
 		Path* pActionSetPath = XR_ATOM_BLOCK_P(xr.block.path, syncInfo->activeActionSets[si].subactionPath);
 		block_key actionSetHash = BLOCK_KEY(B.actionSet, pActionSet);
 
 		for (u32 ai = 0; ai < pActionSet->actions.count; ++ai) {
 			bHnd hAction = pActionSet->actions.handles[ai];
-			auto pAction = BLOCK_PTR(B.action, hAction);
+			auto_t pAction = BLOCK_PTR_H(B.action, hAction);
 
 			for (u32 sai = 0; sai < pAction->countSubactions; ++sai) {
 				bHnd hBind = pAction->hSubactionBindings[sai];
@@ -3552,16 +3579,16 @@ XR_PROC xrSyncActions(
 					continue;
 				}
 
-				auto pBind = BLOCK_PTR(B.binding, hBind);
-				auto pState = BLOCK_PTR(B.state, hState);
-				auto index = HANDLE_INDEX(hState);
+				auto_t pBind = BLOCK_PTR_H(B.binding, hBind);
+				auto_t pState = BLOCK_PTR_H(B.state, hState);
+				auto_t index = HANDLE_INDEX(hState);
 
 				// need to understand this priority again
 //				if (pState->lastSyncedPriority > pActSet->priority &&
 //					pState->lastChangeTime == currentTime)
 //					continue;
 
-				auto priorState = *pState;
+				auto_t priorState = *pState;
 				pState->changedSinceLastSync = pBind->func(pSession->index, pState);
 				pState->lastChangeTime = time;
 			}
@@ -3652,7 +3679,7 @@ XR_PROC xrGetVisibilityMaskKHR(
 		{extent, extent},    // 2
 		{-extent, extent},   // 3
 	};
-	constexpr XrVector2f outerVertices[] = {
+	static const XrVector2f outerVertices[] = {
 		{-1, -1},  // 4
 		{1, -1},   // 5
 		{1, 1},    // 6
@@ -3665,17 +3692,17 @@ XR_PROC xrGetVisibilityMaskKHR(
 	//	4			5
 
 #define CHECK_CAPACITY                                                              \
-	if (visibilityMask->vertexCapacityInput == 0 ||                                 \
-		visibilityMask->vertices == nullptr ||                                      \
-		visibilityMask->indexCapacityInput == 0 ||                                  \
-		visibilityMask->indices == nullptr) {                                       \
-		return XR_SUCCESS;                                                          \
-	}                                                                               \
-	if (visibilityMask->vertexCapacityInput != visibilityMask->vertexCountOutput || \
-		visibilityMask->indexCapacityInput != visibilityMask->indexCountOutput) {   \
-		LOG_ERROR("XR_ERROR_SIZE_INSUFFICIENT\n");                                  \
-		return XR_ERROR_SIZE_INSUFFICIENT;                                          \
-	}
+    if (visibilityMask->vertexCapacityInput == 0 ||                                 \
+        visibilityMask->vertices == NULL ||                                      \
+        visibilityMask->indexCapacityInput == 0 ||                                  \
+        visibilityMask->indices == NULL) {                                       \
+        return XR_SUCCESS;                                                          \
+    }                                                                               \
+    if (visibilityMask->vertexCapacityInput != visibilityMask->vertexCountOutput || \
+        visibilityMask->indexCapacityInput != visibilityMask->indexCountOutput) {   \
+        LOG_ERROR("XR_ERROR_SIZE_INSUFFICIENT\n");                                  \
+        return XR_ERROR_SIZE_INSUFFICIENT;                                          \
+    }
 
 	switch (visibilityMaskType) {
 		case XR_VISIBILITY_MASK_TYPE_HIDDEN_TRIANGLE_MESH_KHR:
@@ -3691,7 +3718,7 @@ XR_PROC xrGetVisibilityMaskKHR(
 				3, 6, 7,
 				3, 2, 6,
 			};
-			static_assert(COUNT(indices) == (COUNT(innerVertices) + COUNT(outerVertices))* 3);
+			STATIC_ASSERT(COUNT(indices) == (COUNT(innerVertices) + COUNT(outerVertices)) * 3);
 			visibilityMask->vertexCountOutput = COUNT(innerVertices) + COUNT(outerVertices);
 			visibilityMask->indexCountOutput = COUNT(indices);
 
@@ -3706,7 +3733,7 @@ XR_PROC xrGetVisibilityMaskKHR(
 		case XR_VISIBILITY_MASK_TYPE_LINE_LOOP_KHR: {
 
 			uint32_t indices[] = {0, 1, 2, 3};
-			static_assert(COUNT(indices) == COUNT(innerVertices));
+			STATIC_ASSERT(COUNT(indices) == COUNT(innerVertices));
 			visibilityMask->vertexCountOutput = COUNT(innerVertices);
 			visibilityMask->indexCountOutput = COUNT(indices);
 

@@ -11,12 +11,12 @@
 /*
  * Loop
  */
-void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
+void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 {
 	LOG("Running Thread Node %d\n", hNode);
 
-	MxcNodeContext* pNodeCtx = &node.context[hNode];
-	MxcNodeShared*  pNodeShrd = node.pShared[hNode];
+	MxcNodeContext* pNodeCtx  = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
 	REQUIRE(pNodeCtx != NULL, "MxcNodeContext is null!");
 	REQUIRE(pNode    != NULL, "MxcNodeThread is null!");
@@ -76,10 +76,12 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 	} swaps[XR_SWAPCHAIN_IMAGE_COUNT] ;
 
 	{
-		const int  iColorSwap = 0;
+		const int iColorSwap = 0;
 		XrSwapInfo colorInfo = {
 			.createFlags  = 0,
-			.usageFlags   = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT,
+			.usageFlags   = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+							VK_IMAGE_USAGE_STORAGE_BIT |
+							VK_IMAGE_USAGE_SAMPLED_BIT,
 			.windowWidth  = DEFAULT_WIDTH,
 			.windowHeight = DEFAULT_HEIGHT,
 			.format       = VK_FORMAT_R8G8B8A8_UNORM,
@@ -92,10 +94,13 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 		xrCreateSwapchainImages(hNode, iColorSwap, &colorInfo);
 		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iColorSwap = iColorSwap;
 
-		const int  iDepthSwap = 1;
+		const int iDepthSwap = 1;
 		XrSwapInfo depthInfo = {
 			.createFlags  = 0,
-			.usageFlags   = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			.usageFlags   = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+							VK_IMAGE_USAGE_STORAGE_BIT |
+							VK_IMAGE_USAGE_SAMPLED_BIT |
+							VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 			.windowWidth  = DEFAULT_WIDTH,
 			.windowHeight = DEFAULT_HEIGHT,
 			.format       = VK_FORMAT_D16_UNORM,
@@ -111,9 +116,9 @@ void mxcTestNodeRun(NodeHandle hNode, MxcNodeThread* pNode)
 		ASSERT(pNodeShrd->nodeSwapStates[iDepthSwap] == XR_SWAP_STATE_AVAILABLE, "Depth swap not created!");
 
 		swap_h hColorSwap = pNodeCtx->hNodeSwaps[iColorSwap];
-		auto_t pColorSwap = BLOCK_PTR(cst.block.swap, hColorSwap);
+		auto_t pColorSwap = BLOCK_PTR_H(cst.block.swap, hColorSwap);
 		swap_h hDepthSwap = pNodeCtx->hNodeSwaps[iDepthSwap];
-		auto_t pDepthSwap = BLOCK_PTR(cst.block.swap, hDepthSwap);
+		auto_t pDepthSwap = BLOCK_PTR_H(cst.block.swap, hDepthSwap);
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 			swaps[iImg].colorView  = pColorSwap->externalTexture[iImg].texture.view;
 			swaps[iImg].colorImage = pColorSwap->externalTexture[iImg].texture.image;
@@ -301,7 +306,7 @@ NodeLoop:
 /*
  * Create
  */
-static void Create(NodeHandle hNode, MxcNodeThread* pNode)
+static void Create(node_h hNode, MxcNodeThread* pNode)
 {
 	LOG("Creating Thread Node %d\n", hNode);
 
@@ -373,7 +378,7 @@ static void Create(NodeHandle hNode, MxcNodeThread* pNode)
 	VK_SET_DEBUG(pNode->depthFramebufferTexture.memory);
 }
 
-static void Bind(NodeHandle hNode, MxcNodeThread* pNode)
+static void Bind(node_h hNode, MxcNodeThread* pNode)
 {
 	LOG("Binding Thread Node %d\n", hNode);
 
@@ -384,7 +389,7 @@ static void Bind(NodeHandle hNode, MxcNodeThread* pNode)
 
 void* mxcRunNodeThread(void* nodeHandle)
 {
-	NodeHandle hNode = (NodeHandle)(u64)nodeHandle;
+	node_h hNode = (node_h)(u64)nodeHandle;
 	LOG("Initializing Thread Node: %d\n", hNode);
 
 	MxcNodeThread* pTestNode;

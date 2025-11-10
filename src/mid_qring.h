@@ -19,8 +19,8 @@ typedef u8 qring_h;
 
 
 typedef struct MidQRing {
-	qring_h head;
-	qring_h tail;
+	_Atomic qring_h head;
+	_Atomic qring_h tail;
 } MidQRing;
 
 /* Enqueue by memcpy of value. */
@@ -62,9 +62,8 @@ MidResult midQRingEnqueueEnd(MidQRing* pQ);
 
 MidResult midQRingEnqueueBegin(MidQRing* pQ, int valueSize, int capacity, void* pValues, void** ppValue)
 {
-	MidQRing ring = atomic_load_explicit(pQ, memory_order_acquire);
-	qring_h h = ring.head & (capacity - 1);
-	qring_h t = ring.tail & (capacity - 1);
+	qring_h h = atomic_load_explicit(&pQ->head, memory_order_acquire) & (capacity - 1);
+	qring_h t = atomic_load_explicit(&pQ->tail, memory_order_acquire) & (capacity - 1);
 	if (h + 1 == t) return MID_LIMIT_REACHED;
 	*ppValue = pValues + (h * valueSize);
 	return MID_SUCCESS;
@@ -78,9 +77,8 @@ MidResult midQRingEnqueueEnd(MidQRing* pQ)
 
 MidResult midQRingEnqueue(MidQRing* pQ, int valueSize, int capacity, void* pValues, void* pValue)
 {
-	MidQRing ring = atomic_load_explicit(pQ, memory_order_acquire);
-	qring_h h = ring.head & (capacity - 1);
-	qring_h t = ring.tail & (capacity - 1);
+	qring_h h = atomic_load_explicit(&pQ->head, memory_order_acquire) & (capacity - 1);
+	qring_h t = atomic_load_explicit(&pQ->tail, memory_order_acquire) & (capacity - 1);
 	if (h + 1 == t) return MID_LIMIT_REACHED;
     memcpy(pValues + (h * valueSize), pValue, valueSize);
 	atomic_fetch_add_explicit(&pQ->head, 1, memory_order_release); // Automatically wrap u8 to 0 at 256
@@ -89,9 +87,8 @@ MidResult midQRingEnqueue(MidQRing* pQ, int valueSize, int capacity, void* pValu
 
 MidResult midQRingDequeue(MidQRing* pQ, int valueSize, int capacity, void* pValues, void* pValue)
 {
-	MidQRing ring = atomic_load_explicit(pQ, memory_order_acquire);
-	qring_h h = ring.head & (capacity - 1);
-	qring_h t = ring.tail & (capacity - 1);
+	qring_h h = atomic_load_explicit(&pQ->head, memory_order_acquire) & (capacity - 1);
+	qring_h t = atomic_load_explicit(&pQ->tail, memory_order_acquire) & (capacity - 1);
 	if (h == t) return MID_EMPTY;
 	memcpy(pValue, pValues + (t * valueSize), valueSize);
 	atomic_fetch_add_explicit(&pQ->tail, 1, memory_order_release); // Automatically wrap u8 to 0 at 256

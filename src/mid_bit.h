@@ -38,30 +38,30 @@ static_assert(sizeof(bitset512_t) == 64, "");
 #ifdef MID_IDE_ANALYSIS
 #define BIT_COUNT_ONES(_) 0
 #elif __clang__
-#define BIT_COUNT_ONES(_) static_assert(false, "BIT_COUNT_ONES not implemented in clang!")
+#define BIT_COUNT_ONES(_) __builtin_popcount(_)
 #elif __GNUC__
-#define BIT_COUNT_ONES(_) __builtin_popcount(_);
+#define BIT_COUNT_ONES(_) __builtin_popcount(_)
 #endif
 
-static inline int BitScanFirstZero(int setCount, bitset_t* pSet)
+static inline int BitScanFirstZero(int capacity, bitset_t* pSet)
 {
 	int i = 0;
-	for (; i < setCount; ++i)
+	for (; i < capacity; ++i)
 		if (pSet[i] != 0xFF) break;
-	return i == setCount ? -1 : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
+	return i == capacity ? -1 : TRAILING_ONES(pSet[i]) + (i * CHAR_BIT);
 }
 
-static inline int BitClaimFirstZero(int setCount, bitset_t* pSet)
+static inline int BitClaimFirstZero(int setCapacity, bitset_t* pSet)
 {
-	int i = BitScanFirstZero(setCount, pSet);
+	int i = BitScanFirstZero(setCapacity, pSet);
 	if (i != -1) BITSET(pSet, i);
 	return i;
 }
 
-static inline int BitCountOnes(int setCount, bitset_t* pSet)
+static inline int BitCountOnes(int setCapacity, bitset_t* pSet)
 {
 	int count = 0;
-	for (int i = 0; i < setCount; ++i)
+	for (int i = 0; i < setCapacity; ++i)
 		count += BIT_COUNT_ONES(pSet[i]);
 	return count;
 }

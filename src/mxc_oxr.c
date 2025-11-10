@@ -31,13 +31,13 @@ void xrClaimSessionId(session_i* pSessionIndex)
 
 	// I believe both a session and a composition layer will end up constituting different Nodes
 	// and requesting a SessionId will simply mean the base compositionlayer index
-	NodeHandle      hNode = RequestExternalNodeHandle(&pImportedExternalMemory->shared);
-	MxcNodeContext* pNodeCtx = &node.context[hNode];
+	node_h          hNode    = RequestExternalNodeHandle(&pImportedExternalMemory->shared);
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 
-	pNodeCtx->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
-	pNodeCtx->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
+	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
+	pNodeCtxt->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
 
-	MxcNodeShared* pNodeShrd = node.pShared[hNode];
+	MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, hNode);
 	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 
 	LOG("Importing node handle %d as OpenXR session\n", hNode);
@@ -50,24 +50,30 @@ void xrClaimSessionId(session_i* pSessionIndex)
 void xrReleaseSessionId(session_i iSession)
 {
 	LOG("Releasing Moxaic OpenXR Session.\n");
-	NodeHandle hNode = iSession;
-	MxcNodeShared* pNodeShrd = node.pShared[hNode];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
 }
 
 XrResult xrSharedPollEvent(session_i iSession, XrEventDataUnion* pEventData)
 {
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
-	return MID_QRING_DEQUEUE(&pNodeShared->eventDataQueue, pNodeShared->queuedEventDataBuffers, pEventData)
-	               == MID_SUCCESS
-	           ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+
+	return MID_QRING_DEQUEUE(&pNodeShrd->eventDataQueue, pNodeShrd->queuedEventDataBuffers, pEventData) == MID_SUCCESS ?
+		XR_SUCCESS : XR_EVENT_UNAVAILABLE;
 }
 
 void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds)
 {
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
-	float radius = pNodeShared->compositorRadius * 2.0f;
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+
+	float radius = pNodeShrd->compositorRadius * 2.0f;
 
 	// we just assume depth is the same, and treat this like a cube
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
@@ -83,8 +89,10 @@ void xrGetSessionTimeline(session_i iSession, HANDLE* pHandle)
 // should this be finish frame? and merged with SetColorSwapId and SetDepthSwapid? Probably
 void xrSetSessionTimelineValue(session_i iSession, uint64_t timelineValue)
 {
-	MxcNodeShared*  pNodeShared = node.pShared[iSession];
-	atomic_store_explicit(&pNodeShared->timelineValue, timelineValue, memory_order_release);
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+	atomic_store_explicit(&pNodeShrd->timelineValue, timelineValue, memory_order_release);
 }
 
 void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle)
@@ -95,9 +103,9 @@ void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle)
 
 XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapInfo* pInfo)
 {
-	NodeHandle      hNode     = iSession;
-	MxcNodeContext* pNodeCtxt = &node.context[iSession];
-	MxcNodeShared*  pNodeShrd = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
 	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_UNITIALIZED) {
 		LOG_ERROR("Trying to create swapchain images with used swap index!\n");
@@ -121,22 +129,25 @@ XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapI
 		return XR_ERROR_HANDLE_INVALID;
 	}
 
+	ASSERT(pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_READY, "Swap is not XR_SWAP_STATE_READY after creation!");
 	return XR_SUCCESS;
 }
 
 void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle)
 {
-	auto pNodeShrd = node.pShared[iSession];
-	auto pImports = &pImportedExternalMemory->imports;
-	ASSERT(pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_AVAILABLE, "Trying to get swap image that has not been created!!");
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+	MxcNodeImports* pImports = &pImportedExternalMemory->imports;
+	ASSERT(pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_READY, "Trying to get Swap Image which is not XR_SWAP_STATE_READY!");
 	*pHandle = pImports->swapImageHandles[iSwap][iImg];
 }
 
 XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap)
 {
-	NodeHandle      hNode     = iSession;
-	MxcNodeContext* pNodeCtxt = &node.context[iSession];
-	MxcNodeShared*  pNodeShrd = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
 	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_UNITIALIZED) {
 		LOG_ERROR("Trying to destroy unitialized swapchain images!");
@@ -169,7 +180,9 @@ XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap)
 
 void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg)
 {
-	MxcNodeShared* pNodeShrd = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 	pNodeShrd->viewSwaps[viewId].iColorSwap = iSwap;
 	pNodeShrd->viewSwaps[viewId].iColorImg = iImg;
 	atomic_thread_fence(memory_order_release);
@@ -177,7 +190,9 @@ void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iIm
 
 void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg)
 {
-	MxcNodeShared* pNodeShrd = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 	pNodeShrd->viewSwaps[viewId].iDepthSwap = iSwap;
 	pNodeShrd->viewSwaps[viewId].iDepthImg = iImg;
 	atomic_thread_fence(memory_order_release);
@@ -185,66 +200,52 @@ void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iIm
 
 void xrSetDepthInfo(session_i iSession, float minDepth, float maxDepth, float nearZ, float farZ)
 {
-	MxcNodeShared* pNodeShrd = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 	// pNodeShrd->processState.minDepth = minDepth;
 	// pNodeShrd->processState.maxDepth = maxDepth;
 	pNodeShrd->processState.depthNearZ = nearZ;
 	pNodeShrd->processState.depthFarZ = farZ;
 }
 
-void xrClaimSwapImageIndex(session_i iSession, u8* pIndex)
-{
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
-
-//	XrSwapState*   pStates = pNodeShared->swapStates;
-//	for (int i = 0; i < XR_SWAPCHAIN_CAPACITY; ++i) {
-//		XrSwapState expected = XR_SWAP_STATE_AVAILABLE;
-//		if (atomic_compare_exchange_weak_explicit(&pStates[i], &expected, XR_SWAP_STATE_CLAIMED,
-//		                                          memory_order_acquire, memory_order_relaxed)) {
-//			*pIndex = i;
-//			return;
-//		}
-//	}
-//	*pIndex = -1;
-//	return;
-
-	uint64_t timelineValue = atomic_load_explicit(&pNodeShared->timelineValue, memory_order_acquire);
-	uint8_t index = (timelineValue % VK_SWAP_COUNT);
-	*pIndex = index;
-}
-
-void xrReleaseSwapImageIndex(session_i iSession, u8 index)
-{
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
-//	XrSwapState* pStates = pNodeShared->swapStates;
-//	atomic_exchange_explicit(&pStates[index], XR_SWAP_STATE_AVAILABLE, memory_order_acq_rel);
-}
-
 void xrSetInitialCompositorTimelineValue(session_i iSession, uint64_t timelineValue)
 {
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+
 	u64 timelineCycleStartValue = timelineValue - (timelineValue % MXC_CYCLE_COUNT);
 	// Wait two cycles out for good measure.
-	pNodeShared->compositorBaseCycleValue = timelineCycleStartValue + (MXC_CYCLE_COUNT * 2);
+	pNodeShrd->compositorBaseCycleValue = timelineCycleStartValue + (MXC_CYCLE_COUNT * 2);
 //	printf("Setting compositorBaseCycleValue %llu\n", pNodeShared->compositorBaseCycleValue);
 }
 
 void xrGetCompositorTimelineValue(session_i iSession, uint64_t* pTimelineValue)
 {
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
-	*pTimelineValue = pNodeShared->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+
+	*pTimelineValue = pNodeShrd->compositorBaseCycleValue + MXC_CYCLE_POST_UPDATE_NODE_STATES_COMPLETE;
 }
 
 void xrProgressCompositorTimelineValue(session_i iSession, uint64_t timelineValue)
 {
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
-	pNodeShared->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShared->compositorCycleSkip;
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+
+	pNodeShrd->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShrd->compositorCycleSkip;
 }
 
-XrTime xrGetFrameInterval(session_i sessionId)
+XrTime xrGetFrameInterval(session_i iSession)
 {
-	MxcNodeShared* pNodeShared = node.pShared[sessionId];
-	double hz = 144.0 / (double)(pNodeShared->compositorCycleSkip);
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
+
+	double hz = 144.0 / (double)(pNodeShrd->compositorCycleSkip);
 	XrTime hzTime = xrHzToXrTime(hz);
 //	LOG("xrGetFrameInterval compositorCycleSkip: %d hz: %f hzTime: %llu\n", pNodeShared->compositorCycleSkip, hz, hzTime);
 	return hzTime;
@@ -252,39 +253,43 @@ XrTime xrGetFrameInterval(session_i sessionId)
 
 void xrGetHeadPose(session_i iSession, XrEulerPosef* pPose)
 {
-	MxcNodeShared*  pNodeShared = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
-	pPose->euler    = *(XrVector3f*)&pNodeShared->cameraPose.euler;
-	pPose->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
+	pPose->euler    = *(XrVector3f*)&pNodeShrd->cameraPose.euler;
+	pPose->position = *(XrVector3f*)&pNodeShrd->cameraPose.pos;
 }
 
 void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView)
 {
-	MxcNodeShared* pNodeShared = node.pShared[iSession];
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
-	pEyeView->euler    = *(XrVector3f*)&pNodeShared->cameraPose.euler;
-	pEyeView->position = *(XrVector3f*)&pNodeShared->cameraPose.pos;
-	pEyeView->fovRad   = (XrVector2f){pNodeShared->camera.yFovRad, pNodeShared->camera.yFovRad};
+	pEyeView->euler    = *(XrVector3f*)&pNodeShrd->cameraPose.euler;
+	pEyeView->position = *(XrVector3f*)&pNodeShrd->cameraPose.pos;
+	pEyeView->fovRad   = (XrVector2f){pNodeShrd->camera.yFovRad, pNodeShrd->camera.yFovRad};
 
-	pEyeView->upperLeftClip  = *(XrVector2f*)&pNodeShared->clip.ulUV;
-	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShared->clip.lrUV;
+	pEyeView->upperLeftClip  = *(XrVector2f*)&pNodeShrd->clip.ulUV;
+	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShrd->clip.lrUV;
 
 	// TODO this is to debug
 	if (iView == 1)
 		pEyeView->position.x += 0.1f;
 }
 
-#define UPDATE_CLICK(button, chirality)                           \
-	({                                                            \
-		auto pNodeShared = node.pShared[sessionId];            \
-		atomic_thread_fence(memory_order_acquire);                \
-		auto pController = &pNodeShared->chirality;               \
-		auto changed = pState->isActive != pController->active || \
-		               pState->boolValue != pController->button;  \
-		pState->isActive = pController->active;                   \
-		pState->boolValue = pController->button;                  \
-		changed;                                                  \
-	})
+#define UPDATE_CLICK(button, chirality)    \
+    ({                                     \
+        MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, (node_h)sessionId); \
+        atomic_thread_fence(memory_order_acquire); \
+        MxcController* pController = &pNodeShrd->chirality; \
+        bool changed = pState->isActive != pController->active || \
+                       pState->boolValue != pController->button; \
+        pState->isActive = pController->active; \
+        pState->boolValue = pController->button; \
+        changed; \
+    })
 int xrInputSelectClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, left);
@@ -336,10 +341,10 @@ int xrInputMenuClick_Right(session_i sessionId, SubactionState* pState)
 
 #define UPDATE_POSE(pose, chirality)                                                                          \
 	({                                                                                                        \
-		auto pNodeShared = node.pShared[sessionId];                                                           \
+        MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, (node_h)sessionId); \
 		atomic_thread_fence(memory_order_acquire);                                                            \
-		auto pController = &pNodeShared->chirality;                                                           \
-		auto changed = pState->isActive != pController->active ||                                             \
+		MxcController* pController = &pNodeShrd->chirality;                                                           \
+		bool changed = pState->isActive != pController->active ||                                             \
 		               memcmp(&pState->eulerPoseValue.euler, &pController->pose.euler, sizeof(XrVector3f)) || \
 		               memcmp(&pState->eulerPoseValue.position, &pController->pose.pos, sizeof(XrVector3f));  \
 		pState->isActive = pController->active;                                                               \
