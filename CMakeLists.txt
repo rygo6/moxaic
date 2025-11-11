@@ -108,9 +108,8 @@ target_compile_definitions(${TARGET_NAME} PUBLIC
 target_compile_options(${TARGET_NAME} PRIVATE
 #        ${SANITIZER_FLAGS}
 #        ${SECURITY_FLAGS}
-#        -g3
-#        -O0
-#        -DDEBUG
+         -g3
+         -O0
 
         ${DEBUG_FLAGS}
         ${WARNING_FLAGS}

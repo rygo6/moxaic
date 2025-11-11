@@ -1382,8 +1382,7 @@ XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 	CHECK_INSTANCE(instance);
 
 	XrEventDataUnion* pEventData = (XrEventDataUnion*)eventData;
-	return MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData)
-	               == MID_SUCCESS
+	return MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData) == MID_SUCCESS
 	           ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
 }
 
@@ -2192,6 +2191,7 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
                           XrSwapchain*                 swapchain)
 {
 	LOG_METHOD(xrCreateSwapchain);
+	*swapchain = NULL;
 
 	bool isColor = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT;
 	bool isDepth = createInfo->usageFlags & XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -2298,7 +2298,10 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 	}
 
 	/* Create and Get Swap Images */
-	xrCreateSwapchainImages(pSession->index, iSwap, &pSwap->info);
+	if (xrCreateSwapchainImages(pSession->index, iSwap, &pSwap->info) != XR_SUCCESS) {
+		LOG_ERROR("XR_ERROR_RUNTIME_FAILURE!\n");
+		return XR_ERROR_RUNTIME_FAILURE;
+	}
 
 	switch (xr.instance.graphicsApi)
 	{
@@ -2432,6 +2435,11 @@ XR_PROC xrEnumerateSwapchainImages(
 {
 	LOG_METHOD(xrEnumerateSwapchainImages);
 
+	if (swapchain == NULL) {
+		LOG_ERROR("XR_ERROR_HANDLE_INVALID!\n");
+		return XR_ERROR_HANDLE_INVALID;
+	}
+
 	*imageCountOutput = XR_SWAPCHAIN_IMAGE_COUNT;
 
 	if (images == NULL)
@@ -2442,7 +2450,8 @@ XR_PROC xrEnumerateSwapchainImages(
 
 	auto_t pSwap = (Swapchain*)swapchain;
 
-	switch (images[0].type) {
+	switch (images[0].type)
+	{
 		case XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR: {
 			LOG("Enumerating gl Swapchain Images\n");
 			auto_t pImage = (XrSwapchainImageOpenGLKHR*)images;
@@ -2460,7 +2469,7 @@ XR_PROC xrEnumerateSwapchainImages(
 			break;
 		}
 		default:
-			LOG_ERROR("Swap interprocessMode not currently supported\n");
+			LOG_ERROR("XR_ERROR_HANDLE_INVALID Swap interprocessMode not currently supported\n");
 			return XR_ERROR_HANDLE_INVALID;
 	}
 
@@ -2671,7 +2680,8 @@ XR_PROC xrRequestExitSession(
 
 	pSession->exiting = true;
 
-	switch (pSession->activeSessionState) {
+	switch (pSession->activeSessionState)
+	{
 		case XR_SESSION_STATE_FOCUSED:
 			EnqueueEventDataSessionStateChanged(hSession, XR_SESSION_STATE_VISIBLE);
 			FALLTHROUGH;

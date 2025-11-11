@@ -115,10 +115,10 @@
 		CHECK(result, string_VkResult(result)); \
 	})
 
-#define VK_ASSERT(_command)                         \
-	({                                              \
-		VkResult _result = _command;                \
-		assert(_result == VK_SUCCESS && #_command); \
+#define VK_ASSERT(_command)                       \
+	({                                            \
+		VkResult _result = _command;              \
+		ASSERT(_result == VK_SUCCESS, #_command); \
 	})
 
 #define VK_INSTANCE_FUNC(_func)                                                             \
@@ -1199,9 +1199,9 @@ void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer
 void vkSubmitQueuedCommandBuffers()
 {
 	for (int iFamilyType = 0; iFamilyType < VK_QUEUE_FAMILY_TYPE_COUNT; ++iFamilyType) {
-		auto_t pFamily = &vk.context.queueFamilies[iFamilyType];
+		VkQueueFamily* pFamily = &vk.context.queueFamilies[iFamilyType];
 		VkQueuedCommandBuffer queuedCmd;
-		if (MID_QRING_DEQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
+		while (MID_QRING_DEQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
 			CmdSubmit(queuedCmd.cmd, pFamily->queue, queuedCmd.timeline, queuedCmd.timelineSignalValue);
 	}
 }
@@ -2415,6 +2415,7 @@ void vkCreateDedicatedTextureFromFile(const char* pPath, VkDedicatedTexture* pTe
 
 void vkDestroyDedicatedTexture(VkDedicatedTexture* pTexture)
 {
+	// Should these really be require?
 	REQUIRE_NOT_EQUAL(pTexture, NULL);
 	REQUIRE_NOT_EQUAL(pTexture->view, NULL);
 	REQUIRE_NOT_EQUAL(pTexture->image, NULL);

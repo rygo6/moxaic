@@ -115,9 +115,9 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 		ASSERT(pNodeShrd->nodeSwapStates[iColorSwap] == XR_SWAP_STATE_AVAILABLE, "Color swap not created!");
 		ASSERT(pNodeShrd->nodeSwapStates[iDepthSwap] == XR_SWAP_STATE_AVAILABLE, "Depth swap not created!");
 
-		swap_h hColorSwap = pNodeCtx->hNodeSwaps[iColorSwap];
+		swap_h hColorSwap = pNodeCtx->hSwaps[iColorSwap];
 		auto_t pColorSwap = BLOCK_PTR_H(cst.block.swap, hColorSwap);
-		swap_h hDepthSwap = pNodeCtx->hNodeSwaps[iDepthSwap];
+		swap_h hDepthSwap = pNodeCtx->hSwaps[iDepthSwap];
 		auto_t pDepthSwap = BLOCK_PTR_H(cst.block.swap, hDepthSwap);
 		for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 			swaps[iImg].colorView  = pColorSwap->externalTexture[iImg].texture.view;

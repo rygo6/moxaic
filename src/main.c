@@ -107,43 +107,40 @@ int main(void)
 		VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
 		while (isRunning) {
 
+			/* MXC_CYCLE_UPDATE_WINDOW_STATE */
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
-			///
-			/// MXC_CYCLE_UPDATE_WINDOW_STATE
+			ATOMIC_FENCE_SCOPE {
+				// This needs to be after a wait, and before a signal, as it will poll the IPC Message queue
+				// and those may make changes to active nodes, or other, which subsequent states will rely on
+				mxcNodeInterprocessPoll();
+				vkSubmitQueuedCommandBuffers();
 
-			// This needs to be after a wait, and before a signal, as it will poll the IPC Message queue
-			// and those may make changes to active nodes, or other, which subsequent states will rely on
-			mxcNodeInterprocessPoll();
-
-			midUpdateWindowInput();
-			mxcProcessWindowInput();
-			isRunning = midWindow.running;
-			atomic_thread_fence(memory_order_release);
+				midUpdateWindowInput();
+				mxcProcessWindowInput();
+				isRunning = midWindow.running;
+			}
 
 			vkTimelineSignal(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
-			///
-			/// MXC_CYCLE_PROCESS_INPUT
+			/* MXC_CYCLE_PROCESS_INPUT */
 
-			///
-			/// MXC_CYCLE_UPDATE_NODE_STATES
+			/* MXC_CYCLE_UPDATE_NODE_STATES */
 
-			///
-			/// MXC_CYCLE_COMPOSITOR_RECORD
+			/* MXC_CYCLE_COMPOSITOR_RECORD */
 
+			/* MXC_CYCLE_RENDER_COMPOSITE */
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
-			///
-			/// MXC_CYCLE_RENDER_COMPOSITE
+			ATOMIC_FENCE_SCOPE {
+				atomic_thread_fence(memory_order_acquire);
+				compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
+				CmdSubmitPresent(
+						compositorContext.gfxCmd,
+						VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
+						compositorContext.swapCtx,
+						compositorContext.timeline,
+						compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
+				vkSubmitQueuedCommandBuffers();
+			}
 
-			atomic_thread_fence(memory_order_acquire);
-			compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
-			CmdSubmitPresent(
-				compositorContext.gfxCmd,
-				VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
-				compositorContext.swapCtx,
-				compositorContext.timeline,
-				compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
-
-			vkSubmitQueuedCommandBuffers(); // I am not too sure where I should put this
 		}
 
 	////

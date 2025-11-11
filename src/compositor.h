@@ -107,3 +107,4 @@ typedef struct MxcCompositorCreateInfo {
 } MxcCompositorCreateInfo;
 
 void mxcCreateAndRunCompositorThread(VkSurfaceKHR surface);
+void mxcClearNodeDescriptorSet(node_h hNode);

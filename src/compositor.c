@@ -409,6 +409,15 @@ static u32 CompositorQueueFamilyIndex[] = {
 	[MXC_NODE_INTERPROCESS_MODE_EXPORTED] = 0,
 };
 
+void mxcClearNodeDescriptorSet(node_h hNode)
+{
+	u16 iNode = HANDLE_INDEX(hNode);
+	CMD_WRITE_SETS(vk.context.device, {
+		BIND_WRITE_NODE_COLOR(cst.nodeSet, iNode, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL),
+		BIND_WRITE_NODE_GBUFFER(cst.nodeSet, iNode, vk.context.nearestSampler, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL)
+	});
+}
+
 /*
  * Main Run Loop
  */
@@ -500,7 +509,6 @@ CompositeLoop:
 	/*
 	 * MXC_CYCLE_UPDATE_WINDOW_STATE
 	 */
-
 	// Waited in end of cycle.
 
 	/*
@@ -521,8 +529,8 @@ CompositeLoop:
 	vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_UPDATE_NODE_STATES, compTimeline);
 
 	CmdResetBegin(gfxCmd);
-//	vk.ResetQueryPool(device, timeQryPool, 0, TIME_QUERY_COUNT);
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
+	vk.ResetQueryPool(device, timeQryPool, 0, TIME_QUERY_COUNT);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_BEGIN);
 
 	ivec2 windowExtent  = mxcWindowInput.iDimensions;
 	i32   windowPixelCt = windowExtent.x * windowExtent.y;
@@ -771,9 +779,7 @@ CompositeLoop:
 							break;
 						}
 						case NODE_INTERACTION_STATE_HOVER: {
-							pNodeCpst->interactionState = isHovering ? moveButtonDown
-															? NODE_INTERACTION_STATE_SELECT	: NODE_INTERACTION_STATE_HOVER
-															 : NODE_INTERACTION_STATE_NONE;
+							pNodeCpst->interactionState = isHovering ? moveButtonDown ? NODE_INTERACTION_STATE_SELECT : NODE_INTERACTION_STATE_HOVER : NODE_INTERACTION_STATE_NONE;
 							break;
 						}
 						case NODE_INTERACTION_STATE_SELECT:
@@ -813,7 +819,7 @@ CompositeLoop:
 			}
 		}
 	}
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_END);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_GBUFFER_PROCESS_END);
 
 	/*
 	 * MXC_CYCLE_COMPOSITOR_RECORD
@@ -833,7 +839,7 @@ CompositeLoop:
 	bool hasComp = false;
 
 	/* Graphics Quad Node Commands */
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_QUAD].count > 0) {
 		hasGfx = true;
@@ -850,10 +856,10 @@ CompositeLoop:
 			vk.CmdDrawIndexed(gfxCmd, quadMeshOffsets.indexCount, 1, 0, 0, 0);
 		}
 	}
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_END);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_QUAD_RENDER_END);
 
 	/* Graphics Tesselation Node Commands */
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_TESSELATION].count > 0) {
 		hasGfx = true;
@@ -870,10 +876,10 @@ CompositeLoop:
 			vk.CmdDrawIndexed(gfxCmd, quadPatchOffsets.indexCount, 1, 0, 0, 0); // this should use instancing instead of push on the node handle
 		}
 	}
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_END);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TESS_RENDER_END);
 
 	/* Graphics Task Mesh Node Commands */
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_BEGIN);
 	atomic_thread_fence(memory_order_acquire);
 	if (node.active[MXC_COMPOSITOR_MODE_TASK_MESH].count > 0) {
 		hasGfx = true;
@@ -888,7 +894,7 @@ CompositeLoop:
 			vk.CmdDrawMeshTasksEXT(gfxCmd, 1, 1, 1);
 		}
 	}
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_END);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_TASKMESH_RENDER_END);
 
 	/* Graphic Line Commands */
 	{
@@ -908,8 +914,8 @@ CompositeLoop:
 				continue;
 
 			MxcActiveNodes* pActiveNodes = &node.active[iCstMode];
-			for (u16 iNode = 0; iNode < activeNodeCt; ++iNode) {
-				node_h hNode = pActiveNodes->handles[iNode];
+			for (u16 iActiveNode = 0; iActiveNode < activeNodeCt; ++iActiveNode) {
+				node_h hNode = pActiveNodes->handles[iActiveNode];
 				MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
 				memcpy(pLineMapped + (cubeCount * MXC_CUBE_SEGMENT_COUNT), pNodeCpst->worldLineSegments, sizeof(VkLineVert) * MXC_CUBE_SEGMENT_COUNT);
 				cubeCount++;
@@ -923,7 +929,7 @@ CompositeLoop:
 	vk.CmdEndRenderPass(gfxCmd);
 
 	/* Compute Recording Cycle */
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_BEGIN);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_BEGIN);
 	if (node.active[MXC_COMPOSITOR_MODE_COMPUTE].count > 0) {
 		hasComp = true;
 
@@ -933,7 +939,7 @@ CompositeLoop:
 		vk.CmdBindDescriptorSets(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, compPipeLayout, PIPE_SET_INDEX_NODE_COMPUTE_OUTPUT, 1, &compOutputSet, 0, NULL);
 
 		MxcActiveNodes* pActiveNodes = &node.active[MXC_COMPOSITOR_MODE_COMPUTE];
-		for (int iActiveNode = pActiveNodes->count - 1; iActiveNode >= 0; --iActiveNode) {
+		for (u16 iActiveNode = 0; iActiveNode < pActiveNodes->count; ++iActiveNode) {
 			node_h hNode = pActiveNodes->handles[iActiveNode];
 			u16    iNode = HANDLE_INDEX(hNode);
 			vk.CmdPushConstants(gfxCmd, compPipeLayout, COMPOSITOR_AGGREGATE_STAGE_FLAGS, 0, sizeof(NodePush), &(NodePush){.nodeHandle = iNode});
@@ -962,7 +968,7 @@ CompositeLoop:
 		vk.CmdBindPipeline(gfxCmd, VK_PIPELINE_BIND_POINT_COMPUTE, postCompPipe);
 		vk.CmdDispatch(gfxCmd, 1, windowGroupCt, 1);
 	}
-//	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_END);
+	vk.CmdWriteTimestamp2(gfxCmd, VK_PIPELINE_STAGE_2_NONE, timeQryPool, TIME_QUERY_COMPUTE_RENDER_END);
 
 	/* Blit Framebuffer */
 	{
@@ -1041,11 +1047,11 @@ CompositeLoop:
 	{
 		u64 nextUpdateWindowStateCycle = baseCycleValue + MXC_CYCLE_COUNT + MXC_CYCLE_UPDATE_WINDOW_STATE;
 		vkTimelineWait(device, nextUpdateWindowStateCycle, compTimeline);
-//		u64 timestampsNS[TIME_QUERY_COUNT];
-//		VK_CHECK(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
-//		double timestampsMS[TIME_QUERY_COUNT];
-//		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
-//		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
+		u64 timestampsNS[TIME_QUERY_COUNT];
+		VK_CHECK(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
+		double timestampsMS[TIME_QUERY_COUNT];
+		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
+		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
 	}
 
 	CHECK_RUNNING;

@@ -6,6 +6,7 @@
 #include "mid_vulkan.h"
 
 #include "node.h"
+#include "node_thread.h"
 
 void xrInitialize()
 {
@@ -31,14 +32,15 @@ void xrClaimSessionId(session_i* pSessionIndex)
 
 	// I believe both a session and a composition layer will end up constituting different Nodes
 	// and requesting a SessionId will simply mean the base compositionlayer index
-	node_h          hNode    = RequestExternalNodeHandle(&pImportedExternalMemory->shared);
+	node_h hNode = RequestExternalNodeHandle(&pImportedExternalMemory->shared);
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
-
 	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
 	pNodeCtxt->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
+	pNodeCtxt->imported.nodeTimelineHandle = pImportedExternalMemory->imports.nodeTimelineHandle;
+	pNodeCtxt->imported.compositorTimelineHandle = pImportedExternalMemory->imports.compositorTimelineHandle;
 
-	MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, hNode);
-	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+	MxcNodeShared* pNodeShrd  = ARRAY_H(node.pShared, hNode);
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
 
 	LOG("Importing node handle %d as OpenXR session\n", hNode);
 
@@ -81,8 +83,9 @@ void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds)
 
 void xrGetSessionTimeline(session_i iSession, HANDLE* pHandle)
 {
-	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
-	*pHandle = pImportParam->nodeTimelineHandle;
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	*pHandle = pNodeCtxt->imported.nodeTimelineHandle;
 }
 
 /// Set the new session timeline value to signal to the compositor there is a new frame.
@@ -97,8 +100,9 @@ void xrSetSessionTimelineValue(session_i iSession, uint64_t timelineValue)
 
 void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle)
 {
-	MxcNodeImports* pImportParam = &pImportedExternalMemory->imports;
-	*pHandle = pImportParam->compositorTimelineHandle;
+	node_h hNode = iSession;
+	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+	*pHandle = pNodeCtxt->imported.compositorTimelineHandle;
 }
 
 XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapInfo* pInfo)
@@ -116,7 +120,7 @@ XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapI
 	pNodeShrd->nodeSwapInfos[iSwap]  = *pInfo;
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
-	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
+	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, 2000);
 
 	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_REQUESTED) {
 		LOG_ERROR("Compositor failed to create Swap!\n");
@@ -136,7 +140,7 @@ XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapI
 void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle)
 {
 	node_h hNode = iSession;
-	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
+//	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 	MxcNodeImports* pImports = &pImportedExternalMemory->imports;
 	ASSERT(pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_READY, "Trying to get Swap Image which is not XR_SWAP_STATE_READY!");

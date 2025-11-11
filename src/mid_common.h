@@ -164,7 +164,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define UNLIKELY(x)                __builtin_expect(!!(x), 0)
 #define COUNT(_array)              (sizeof(_array) / sizeof(_array[0]))
 #define FLAG(b)                    (1 << (b))
-#define ZERO(_p)                   memset((_p), 0, sizeof(*_p))
+#define ZERO_STRUCT_P(_p)                   memset((_p), 0, sizeof(*_p))
 #define IS_STRUCT_P_ZEROED(_p)     (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
 
 #define XMALLOC_P(_p) \
@@ -174,7 +174,7 @@ extern void Panic(const char* file, int line, const char* message);
 #define XMALLOC_ZERO_P(_p) \
 	_p = malloc(sizeof(*_p)); \
 	REQUIRE(_p, #_p " XMALLOC Fail!"); \
-	ZERO(_p);
+	ZERO_STRUCT_P(_p);
 
 #define CONTAINS(_array, _count, _)        \
 	({                                     \

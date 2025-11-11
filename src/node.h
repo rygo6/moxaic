@@ -228,14 +228,14 @@ typedef struct MxcNodeContext {
 	MxcNodeInterprocessMode interprocessMode;
 
 	HANDLE swapsSyncedHandle;
-	swap_h hNodeSwaps[XR_SWAPCHAIN_CAPACITY];
+	swap_h hSwaps[MXC_NODE_SWAP_CAPACITY];
 
 	VkDedicatedTexture gbuffer[XR_MAX_VIEW_COUNT];
 
 	union {
 		// MXC_NODE_INTERPROCESS_MODE_THREAD
 		struct {
-			pthread_t id;
+			pthread_t threadId;
 
 			VkCommandPool   pool;
 			VkCommandBuffer gfxCmd;
@@ -250,8 +250,8 @@ typedef struct MxcNodeContext {
 
 		// MXC_NODE_INTERPROCESS_MODE_EXPORTED
 		struct {
-			DWORD  id;
-			HANDLE handle;
+			DWORD  processId;
+			HANDLE hProcess;
 
 			HANDLE                 exportedMemoryHandle;
 			MxcExternalNodeMemory* pExportedMemory;
@@ -292,11 +292,13 @@ extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 extern struct Node {
+	MidQRing newConnectionQueue;
+	node_h 	 queuedNewConnections[MID_QRING_CAPACITY];
+
 	MxcActiveNodes active[MXC_COMPOSITOR_MODE_COUNT];
 
 	BLOCK_DECL(MxcNodeContext, MXC_NODE_CAPACITY) context;
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
-
 
 	VkDescriptorSetLayout gbufferProcessSetLayout;
 	VkPipelineLayout      gbufferProcessPipeLayout;
@@ -322,8 +324,8 @@ node_h RequestLocalNodeHandle();
 node_h RequestExternalNodeHandle(MxcNodeShared* pNodeShared);
 
 void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle);
-
 void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessState, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent);
+void mxcRegisterActiveNode(node_h hNode);
 
 /*
  * Process Connection
@@ -341,17 +343,21 @@ static_assert(MXC_INTERPROCESS_TARGET_COUNT <= MID_QRING_CAPACITY, "IPC targets 
 extern const MxcIpcFuncPtr MXC_IPC_FUNCS[];
 
 int mxcIpcFuncEnqueue(node_h hNode, MxcIpcFunc target);
-int mxcIpcFuncDequeue(node_h hNode);
+void mxcIpcFuncDequeue(node_h hNode);
 
 static inline void mxcNodeInterprocessPoll()
 {
+	node_h hNewNode;
+	while (MID_QRING_DEQUEUE(&node.newConnectionQueue, node.queuedNewConnections, &hNewNode) == MID_SUCCESS)
+		mxcRegisterActiveNode(hNewNode);
+
 	// We still want to poll MXC_COMPOSITOR_MODE_NONE so it can send events when not being composited.
-	for (u32 iCstMode = MXC_COMPOSITOR_MODE_NONE; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
-		u16 activeNodeCt = atomic_load_explicit(&node.active[iCstMode].count, memory_order_acquire);
+	for (u32 iCpstMode = MXC_COMPOSITOR_MODE_NONE; iCpstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCpstMode) {
+		u16 activeNodeCt = atomic_load_explicit(&node.active[iCpstMode].count, memory_order_acquire);
 		if (activeNodeCt == 0)
 			continue;
 
-		MxcActiveNodes* pActiveNodes = &node.active[iCstMode];
+		MxcActiveNodes* pActiveNodes = &node.active[iCpstMode];
 		for (int iNode = 0; iNode < activeNodeCt; ++iNode) {
 			node_h hNode = pActiveNodes->handles[iNode];
 			mxcIpcFuncDequeue(hNode);
