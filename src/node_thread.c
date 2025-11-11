@@ -76,7 +76,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 	} swaps[XR_SWAPCHAIN_IMAGE_COUNT] ;
 
 	{
-		const int iColorSwap = 0;
+		const u8 iColorSwap = 0;
 		XrSwapInfo colorInfo = {
 			.createFlags  = 0,
 			.usageFlags   = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
@@ -94,7 +94,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 		xrCreateSwapchainImages(hNode, iColorSwap, &colorInfo);
 		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iColorSwap = iColorSwap;
 
-		const int iDepthSwap = 1;
+		const u8 iDepthSwap = 1;
 		XrSwapInfo depthInfo = {
 			.createFlags  = 0,
 			.usageFlags   = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
@@ -112,8 +112,8 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 		xrCreateSwapchainImages(hNode, iDepthSwap, &depthInfo);
 		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iDepthSwap = iDepthSwap;
 
-		ASSERT(pNodeShrd->nodeSwapStates[iColorSwap] == XR_SWAP_STATE_AVAILABLE, "Color swap not created!");
-		ASSERT(pNodeShrd->nodeSwapStates[iDepthSwap] == XR_SWAP_STATE_AVAILABLE, "Depth swap not created!");
+		ASSERT(pNodeShrd->nodeSwapStates[iColorSwap] == XR_SWAP_STATE_READY, "Color swap not created!");
+		ASSERT(pNodeShrd->nodeSwapStates[iDepthSwap] == XR_SWAP_STATE_READY, "Depth swap not created!");
 
 		swap_h hColorSwap = pNodeCtx->hSwaps[iColorSwap];
 		auto_t pColorSwap = BLOCK_PTR_H(cst.block.swap, hColorSwap);
@@ -139,7 +139,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 	u64 nodeTimelineValue = 0;
 
 	// Send Open Node IPC call
-	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
 	/*

@@ -337,7 +337,7 @@ static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
 node_h RequestLocalNodeHandle()
 {
 	node_h hNode = XBLOCK_CLAIM(node.context, 0);
-	LOG("Requested Local Node Handle %d.\n", hNode);
+	LOG("Requested Local Node Handle %d.\n", HANDLE_INDEX(hNode));
 
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	ZERO_STRUCT_P(pNodeCtxt);
@@ -590,10 +590,10 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle)
 
 	CHECK(pthread_create(&pNodeCtxt->thread.threadId, NULL, (void* (*)(void*))runFunc, (void*)(u64)hNode), "Node thread creation failed!");
 
-	// Initially set to MXC_COMPOSITOR_MODE_NONE to begin processing IPC without rendering. Node sets actual compositor mode.
-	syncActiveNodeMode(hNode);
+	// Add to COMPOSITOR_MODE_NONE initially to start processing
+	MID_QRING_ENQUEUE(&node.newConnectionQueue, node.queuedNewConnections, &hNode);
 
-	LOG("Request Node Thread Success. Handle: %d\n", hNode);
+	LOG("Request Node Thread Success. Handle: %d\n", HANDLE_INDEX(hNode));
 	// todo this needs error handling
 #endif
 }

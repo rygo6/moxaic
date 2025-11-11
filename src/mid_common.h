@@ -84,74 +84,6 @@ typedef _Atomic uint64_t a_u64;
 #define auto_t __auto_type
 
 /*
- * Debug Log
- */
-typedef enum PACKED MidResult {
-	// These align with VkResult
-	MID_SUCCESS          = 0,
-	MID_EMPTY            = 20001,
-	MID_LIMIT_REACHED    = 20002,
-	MID_RESULT_FINALIZED = 20003,
-	MID_ERROR_UNKNOW     = -13,
-	MID_RESULT_MAX_ENUM  = 0x7FFFFFFF
-} MidResult;
-
-// TODO
-// REQUIRE = Panic
-// ASSERT = release compile out
-// CHECK = error log return 0
-// TRY = error log goto ExitError
-
-extern void Panic(const char* file, int line, const char* message);
-#define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
-
-// Check if the condition is 1=True or 0=False TODO this needs to be REQUIRE_TRUE
-#define REQUIRE(_state, _message) if (UNLIKELY(!(_state))) PANIC(_message);
-
-#define ASSERT(_condition, ...) ((_condition) || (_assert((#_condition " " __VA_ARGS__), __FILE__, __LINE__), 0))
-#define STATIC_ASSERT(_condition, ...) _Static_assert(_condition, #_condition " " #__VA_ARGS__)
-
-// Check if the condition is 0=Success or 1=Fail
-#define CHECK(_err, _message)                \
-	if (UNLIKELY(_err)) {                    \
-		LOG_ERROR("Error Code: %d\n", _err); \
-		PANIC(_message);                     \
-	}
-
-// Check if the condition is 1=True or 0=False
-#define CHECK_TRUE(_err, _message)           \
-	if (UNLIKELY(!(_err))) {                 \
-		LOG_ERROR("Error Code: %d\n", _err); \
-		PANIC(_message);                     \
-	}
-
-#define REQUIRE_FALSE(_a, _b, ...)  REQUIRE_EQUAL(_a, false, __VA_ARGS__)
-
-#define REQUIRE_EQUAL(_a, _b, ...)                               \
-	if (UNLIKELY(((_a) != (_b)))) {                              \
-		PANIC("Expected: " #_a " == " #_b " " __VA_ARGS__ "\n"); \
-	}
-
-#define REQUIRE_NOT_EQUAL(_a, _b, ...)                           \
-	if (UNLIKELY(((_a) == (_b)))) {                              \
-		PANIC("Expected: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
-	}
-
-#define LOG(...) printf(__VA_ARGS__)
-#define LOG_ERROR(...) fprintf(stdout, "Error!!! " __VA_ARGS__)
-
-#define LOG_ONCE(...)               \
-	({                              \
-		static int _logged = false; \
-		if (!_logged) {             \
-			_logged = true;         \
-			LOG(__VA_ARGS__);       \
-		}                                 \
-	})
-
-#define STRING_CASE(_) case _: return #_
-
-/*
  * Utility
  */
 
@@ -203,6 +135,79 @@ extern void Panic(const char* file, int line, const char* message);
 		_ptr != NULL;                                                  \
 		free(_ptr), _ptr = NULL)
 
+/*
+ * Debug Log
+ */
+typedef enum PACKED MidResult {
+	// These align with VkResult
+	MID_SUCCESS          = 0,
+	MID_EMPTY            = 20001,
+	MID_LIMIT_REACHED    = 20002,
+	MID_RESULT_FINALIZED = 20003,
+	MID_ERROR_UNKNOW     = -13,
+	MID_RESULT_MAX_ENUM  = 0x7FFFFFFF
+} MidResult;
+
+// TODO
+// REQUIRE = Panic
+// ASSERT = release compile out
+// CHECK = error log return 0
+// TRY = error log goto ExitError
+
+extern void Panic(const char* file, int line, const char* message);
+#define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
+
+// Check if the condition is 1=True or 0=False TODO this needs to be REQUIRE_TRUE
+#define REQUIRE(_state, _message) if (UNLIKELY(!(_state))) PANIC(_message);
+
+#define ASSERT(_condition, ...) ({ \
+    if (UNLIKELY(!(_condition))) { \
+        fprintf(stderr, "\n%s:%d	ASSERT!	", __FILE__, __LINE__); \
+        fprintf(stderr, "(%s) " __VA_ARGS__ "\n", #_condition); \
+        _assert("(" #_condition ")\n" __VA_ARGS__, __FILE__, __LINE__); \
+	} \
+})
+#define STATIC_ASSERT(_condition, ...) _Static_assert(_condition, #_condition " " #__VA_ARGS__)
+
+// Check if the condition is 0=Success or 1=Fail
+#define CHECK(_err, _message)                \
+	if (UNLIKELY(_err)) {                    \
+		LOG_ERROR("Error Code: %d\n", _err); \
+		PANIC(_message);                     \
+	}
+
+// Check if the condition is 1=True or 0=False
+#define CHECK_TRUE(_err, _message)           \
+	if (UNLIKELY(!(_err))) {                 \
+		LOG_ERROR("Error Code: %d\n", _err); \
+		PANIC(_message);                     \
+	}
+
+#define REQUIRE_FALSE(_a, _b, ...)  REQUIRE_EQUAL(_a, false, __VA_ARGS__)
+
+#define REQUIRE_EQUAL(_a, _b, ...)                               \
+	if (UNLIKELY(((_a) != (_b)))) {                              \
+		PANIC("Expected: " #_a " == " #_b " " __VA_ARGS__ "\n"); \
+	}
+
+#define REQUIRE_NOT_EQUAL(_a, _b, ...)                           \
+	if (UNLIKELY(((_a) == (_b)))) {                              \
+		PANIC("Expected: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
+	}
+
+#define LOG(_format, ...) printf(__FILE__ ":%d	" _format, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR(_format, ...) fprintf(stderr, __FILE__ ":%d	Error! " _format, __LINE__, ##__VA_ARGS__)
+
+#define LOG_ONCE(...)               \
+	({                              \
+		static int _logged = false; \
+		if (!_logged) {             \
+			_logged = true;         \
+			LOG(__VA_ARGS__);       \
+		}                                 \
+	})
+
+#define STRING_CASE(_) case _: return #_
 
 /*
  * Win32
@@ -254,7 +259,7 @@ static void LogWin32Error(HRESULT err)
 #define MID_PANIC_METHOD
 void NO_RETURN Panic(const char* file, int line, const char* message)
 {
-	LOG("\n%s:%d PANIC! %s\n", file, line, message);
+	fprintf(stderr, "\nPANIC!\n%s:%d  %s\n", file, line, message);
 	__builtin_trap();
 }
 #endif // MID_PANIC_METHOD

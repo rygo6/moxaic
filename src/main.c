@@ -15,12 +15,6 @@ _Atomic bool isRunning = true;
 
 int main(void)
 {
-//	int test[10] = {};
-//	int a = test[11];
-
-//	block_h h = HANDLE_GENERATION_SET(1000, 1);
-//	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, (block_h) 10000);
-
 	//typedef PFN_vkGetInstanceProcAddr GetInstanceProcAddrFunc;
 	//    HMODULE vulkanLibrary = LoadLibrary("vulkan-1.dll");
 	//    if (vulkanLibrary == NULL) {
@@ -33,9 +27,9 @@ int main(void)
 	//      return EXIT_FAILURE;
 	//    }
 
-	////
-	//// Initialize
-	////
+	/*
+	 * Initialize
+	 */
 	{
 		midCreateWindow();
 
@@ -82,10 +76,10 @@ int main(void)
 
 #define TEST_NODE
 #ifdef TEST_NODE
-//		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
-//		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
-//		pTestNodeShrd->compositorCycleSkip = 8;
-//
+		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
+		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
+		pTestNodeShrd->compositorCycleSkip = 8;
+
 //		node_h testNodeHandle2;
 //		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
 //		node.pShared[testNodeHandle]->compositorCycleSkip = 24;
@@ -98,9 +92,9 @@ int main(void)
 #endif
 	}
 
-	////
-	//// Main Compositor Loop
-	////
+	/*
+	 * Main Compositor Loop
+	 */
 	if (isCompositor) {
 
 		VkDevice device = vk.context.device;
@@ -143,9 +137,9 @@ int main(void)
 
 		}
 
-	////
-	//// Main Node Loop
-	////
+	/*
+	 * Main Node Loop
+	 */
 	} else {
 
 		VkQueue graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;

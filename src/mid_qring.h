@@ -26,28 +26,28 @@ typedef struct MidQRing {
 /* Enqueue by memcpy of value. */
 MidResult midQRingEnqueue(MidQRing* pQ, int valueSize, int capacity, void* pValues, void* pValue);
 MidResult midQRingDequeue(MidQRing* pQ, int valueSize, int capacity, void* pValues, void* pValue);
-#define MID_QRING_ENQUEUE(_pQ, _pValues, _pValue) ({                                                     \
-	static_assert(TYPES_EQUAL(*_pValues, *_pValue), "Array does not match value type!");                 \
-	static_assert(IS_POWER_OF_2(COUNT(_pValues)), "Array size is not power of 2!");                      \
-	static_assert(COUNT(_pValues) <= MID_QRING_CAPACITY, "Array size greater than MID_QRING_CAPACITY!"); \
-	midQRingEnqueue(_pQ, sizeof(_pValues[0]), COUNT(_pValues), _pValues, _pValue);                       \
+#define MID_QRING_ENQUEUE(_pQ, _pValues, _pValue) ({ \
+	STATIC_ASSERT(TYPES_EQUAL(*_pValues, *_pValue), "Array does not match value type!"); \
+	STATIC_ASSERT(IS_POWER_OF_2(COUNT(_pValues)), "Array size is not power of 2!"); \
+	STATIC_ASSERT(COUNT(_pValues) <= MID_QRING_CAPACITY, "Array size greater than MID_QRING_CAPACITY!"); \
+	midQRingEnqueue(_pQ, sizeof(_pValues[0]), COUNT(_pValues), _pValues, _pValue); \
 })
-#define MID_QRING_DEQUEUE(_pQ, _pValues, _pValue) ({                                                     \
-	static_assert(TYPES_EQUAL(*_pValues, *_pValue), "Value array does not match value type!");           \
-    static_assert(IS_POWER_OF_2(COUNT(_pValues)), "Value array size is not power of 2!");                \
-    static_assert(COUNT(_pValues) <= MID_QRING_CAPACITY, "Array size greater than MID_QRING_CAPACITY!"); \
-	midQRingDequeue(_pQ, sizeof(_pValues[0]), COUNT(_pValues), _pValues, _pValue);                       \
+#define MID_QRING_DEQUEUE(_pQ, _pValues, _pValue) ({ \
+	STATIC_ASSERT(TYPES_EQUAL(*_pValues, *_pValue), "Value array does not match value type!"); \
+    STATIC_ASSERT(IS_POWER_OF_2(COUNT(_pValues)), "Value array size is not power of 2!"); \
+    STATIC_ASSERT(COUNT(_pValues) <= MID_QRING_CAPACITY, "Array size greater than MID_QRING_CAPACITY!"); \
+	midQRingDequeue(_pQ, sizeof(_pValues[0]), COUNT(_pValues), _pValues, _pValue); \
 })
 
 /* Enqueue by writing to directly to a ptr. */
 MidResult midQRingEnqueueBegin(MidQRing* pQ, int valueSize, int capacity, void* pValues, void** ppValue);
 MidResult midQRingEnqueueEnd(MidQRing* pQ);
-#define MID_QRING_ENQUEUE_SCOPE(_pQ, _pValues, _pValue)                                                                  \
-	static_assert(TYPES_EQUAL(*_pValues, *_pValue), "Value array does not match value type!");                           \
-    static_assert(IS_POWER_OF_2(COUNT(_pValues)), "Value array size is not power of 2!");                                \
-    static_assert(COUNT(_pValues) <= MID_QRING_CAPACITY, "Array size greater than MID_QRING_CAPACITY!");                 \
+#define MID_QRING_ENQUEUE_SCOPE(_pQ, _pValues, _pValue) \
+	STATIC_ASSERT(TYPES_EQUAL(*_pValues, *_pValue), "Value array does not match value type!"); \
+    STATIC_ASSERT(IS_POWER_OF_2(COUNT(_pValues)), "Value array size is not power of 2!"); \
+    STATIC_ASSERT(COUNT(_pValues) <= MID_QRING_CAPACITY, "Array size greater than MID_QRING_CAPACITY!"); \
 	for (MidResult result = midQRingEnqueueBegin(_pQ, sizeof(_pValues[0]), COUNT(_pValues), _pValues, (void**)&_pValue); \
-		result == MID_SUCCESS;                                                                                           \
+		result == MID_SUCCESS; \
 		result = midQRingEnqueueEnd(_pQ))
 
 #endif // MID_QRING_H
