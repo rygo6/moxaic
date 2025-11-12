@@ -340,7 +340,7 @@ node_h RequestLocalNodeHandle()
 	LOG("Requested Local Node Handle %d.\n", HANDLE_INDEX(hNode));
 
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
-	ZERO_STRUCT_P(pNodeCtxt);
+	ASSERT(IS_STRUCT_P_ZEROED(pNodeCtxt), "MxcNodeContext not zeroed!");
 
 	MxcNodeShared** ppNodeShrd = ARRAY_PTR_H(node.pShared, hNode);
 	ASSERT(*ppNodeShrd == NULL);
@@ -348,7 +348,7 @@ node_h RequestLocalNodeHandle()
 
 #if defined(MOXAIC_COMPOSITOR)
 	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
-	ZERO_STRUCT_P(pNodeCtxt);
+	ASSERT(IS_STRUCT_P_ZEROED(pNodeCpst), "MxcCompositorNodeData not zeroed!");
 #endif
 
 	return hNode;
@@ -530,6 +530,7 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle)
 #if defined(MOXAIC_COMPOSITOR)
 	LOG("Requesting Node Thread.\n");
 	node_h hNode = RequestLocalNodeHandle();
+	u16    iNode = HANDLE_INDEX(hNode);
 	MxcNodeContext*        pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*         pNodeShrd = ARRAY_H(node.pShared, hNode);
 	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
@@ -539,7 +540,7 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle)
 
 	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_NONE;
 
-	pNodeShrd->rootPose.pos = VEC3(hNode + 1, 0, 0);
+	pNodeShrd->rootPose.pos = VEC3(iNode + 1, 0, 0);
 	pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
 
 	pNodeShrd->cameraPose.pos = VEC3(0, 0, 0);

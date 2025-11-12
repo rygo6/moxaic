@@ -742,7 +742,7 @@ CompositeLoop:
 //					worldCorners[i] = VEC3(world.x, world.y, world.z);
 //					uvCorners[i] = uv;
 					pNodeCpst->worldCorners[i] = VEC3(world.x, world.y, world.z);
-                  pNodeCpst->uvCorners[i] = uv;
+					pNodeCpst->uvCorners[i] = uv;
 				}
 				vec2 uvMinClamp = Vec2Clamp(uvMin, 0.0f, 1.0f);
 				vec2 uvMaxClamp = Vec2Clamp(uvMax, 0.0f, 1.0f);

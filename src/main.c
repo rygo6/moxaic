@@ -80,9 +80,9 @@ int main(void)
 		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
 		pTestNodeShrd->compositorCycleSkip = 8;
 
-//		node_h testNodeHandle2;
-//		mxcRequestNodeThread(mxcRunNodeThread, &testNodeHandle2);
-//		node.pShared[testNodeHandle]->compositorCycleSkip = 24;
+		node_h hTestNode2; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode2);
+        MxcNodeShared* pTestNode2Shrd = ARRAY_H(node.pShared, hTestNode2);
+        pTestNode2Shrd->compositorCycleSkip = 24;
 #endif
 
 #elif defined(MOXAIC_NODE)

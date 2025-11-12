@@ -15,6 +15,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 {
 	LOG("Running Thread Node %d\n", hNode);
 
+	u16 iNode = HANDLE_INDEX(hNode);
 	MxcNodeContext* pNodeCtx  = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
@@ -91,7 +92,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 			.mipCount     = 1,
 		};
 		// I think I want this to be a thread_node and not go through openxr constructs at all
-		xrCreateSwapchainImages(hNode, iColorSwap, &colorInfo);
+		xrCreateSwapchainImages(iNode, iColorSwap, &colorInfo);
 		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iColorSwap = iColorSwap;
 
 		const u8 iDepthSwap = 1;
@@ -109,7 +110,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 			.arraySize    = 1,
 			.mipCount     = 1,
 		};
-		xrCreateSwapchainImages(hNode, iDepthSwap, &depthInfo);
+		xrCreateSwapchainImages(iNode, iDepthSwap, &depthInfo);
 		pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iDepthSwap = iDepthSwap;
 
 		ASSERT(pNodeShrd->nodeSwapStates[iColorSwap] == XR_SWAP_STATE_READY, "Color swap not created!");
@@ -139,7 +140,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 	u64 nodeTimelineValue = 0;
 
 	// Send Open Node IPC call
-	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
 
 	/*
