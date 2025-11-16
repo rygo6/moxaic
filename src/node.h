@@ -279,7 +279,7 @@ typedef struct MxcNodeContext {
 #if defined(MOXAIC_COMPOSITOR)
 #define MXC_NODE_CAPACITY 64
 #elif defined(MOXAIC_NODE)
-#define MXC_NODE_CAPACITY 4
+#define MXC_NODE_CAPACITY 8
 #endif
 
 typedef struct MxcActiveNodes {
@@ -297,7 +297,7 @@ extern struct Node {
 
 	MxcActiveNodes active[MXC_COMPOSITOR_MODE_COUNT];
 
-	BLOCK_DECL(MxcNodeContext, MXC_NODE_CAPACITY) context;
+	BLOCK_T_N(MxcNodeContext, MXC_NODE_CAPACITY) context;
 	MxcNodeShared* pShared[MXC_NODE_CAPACITY];
 
 	VkDescriptorSetLayout gbufferProcessSetLayout;
@@ -321,7 +321,7 @@ extern struct Node {
 void mxcInitializeNode();
 
 node_h RequestLocalNodeHandle();
-node_h RequestExternalNodeHandle(MxcNodeShared* pNodeShared);
+MidResult RequestExternalNodeHandle(MxcNodeShared* pNodeShared, node_h* pNode_h);
 
 void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle);
 void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessState, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent);

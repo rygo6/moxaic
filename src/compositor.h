@@ -75,7 +75,7 @@ typedef struct MxcCompositor {
 	VkLineVert*    pLineMapped;
 
 	struct {
-		BLOCK_DECL(MxcSwapTexture, MXC_NODE_CAPACITY) swap;
+		BLOCK_T_N(MxcSwapTexture, MXC_NODE_CAPACITY) swap;
 	} block;
 
 } MxcCompositor;

@@ -26,13 +26,16 @@ void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pV
 }
 
 // maybe should be external handle?
-void xrClaimSessionId(session_i* pSessionIndex)
+XrResult xrClaimSessionId(session_i* pSessionIndex)
 {
 	LOG("Creating Moxaic OpenXR Session.\n");
 
 	// I believe both a session and a composition layer will end up constituting different Nodes
 	// and requesting a SessionId will simply mean the base compositionlayer index
-	node_h hNode = RequestExternalNodeHandle(&pImportedExternalMemory->shared);
+	node_h hNode;
+	if (RequestExternalNodeHandle(&pImportedExternalMemory->shared, &hNode) != MID_SUCCESS)
+		return XR_ERROR_LIMIT_REACHED;
+
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
 	pNodeCtxt->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
@@ -47,6 +50,8 @@ void xrClaimSessionId(session_i* pSessionIndex)
 	*pSessionIndex = hNode; // openxr sessionId == moxaic node handle
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
+	
+	return XR_SUCCESS;
 }
 
 void xrReleaseSessionId(session_i iSession)

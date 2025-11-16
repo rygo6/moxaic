@@ -162,7 +162,7 @@ extern void Panic(const char* file, int line, const char* message);
 
 #define ASSERT(_condition, ...) ({ \
     if (UNLIKELY(!(_condition))) { \
-        fprintf(stderr, "\n%s:%d	ASSERT!	", __FILE__, __LINE__); \
+        fprintf(stderr, "\n%s:%d ASSERT! ", __FILE__, __LINE__); \
         fprintf(stderr, "(%s) " __VA_ARGS__ "\n", #_condition); \
         _assert("(" #_condition ")\n" __VA_ARGS__, __FILE__, __LINE__); \
 	} \

@@ -257,7 +257,7 @@ void xrInitialize();
 void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pView);
 
 // this should be sessionId and swapId. Id should be the external identifier
-void xrClaimSessionId(session_i* pSessionIndex);
+XrResult xrClaimSessionId(session_i* pSessionIndex);
 
 void xrReleaseSessionId(session_i iSession);
 void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds);
@@ -460,7 +460,7 @@ typedef struct Space {
 
 } Space;
 
-#define XR_SWAPCHAIN_CAPACITY 4
+#define XR_SWAPCHAIN_CAPACITY 8
 typedef struct Swapchain {
 	session_h    hSession;
 
@@ -594,15 +594,15 @@ static struct {
 	Instance instance;
 
 	struct {
-		BLOCK_DECL(Session,            XR_SESSIONS_CAPACITY)            session;
-		BLOCK_DECL(Path,               XR_PATH_CAPACITY)                path;
-		BLOCK_DECL(Binding,            XR_BINDINGS_CAPACITY)            binding;
-		BLOCK_DECL(InteractionProfile, XR_INTERACTION_PROFILE_CAPACITY) profile;
-		BLOCK_DECL(ActionSet,          XR_ACTION_SET_CAPACITY)          actionSet;
-		BLOCK_DECL(Action,             XR_ACTION_CAPACITY)              action;
-		BLOCK_DECL(SubactionState,     XR_SUBACTION_CAPACITY)           state;
-		BLOCK_DECL(Space,              XR_SPACE_CAPACITY)               space;
-		BLOCK_DECL(Swapchain,          XR_SWAPCHAIN_CAPACITY)           swap;
+		BLOCK_T_N(Session, XR_SESSIONS_CAPACITY)                       session;
+		BLOCK_T_N(Path, XR_PATH_CAPACITY)                              path;
+		BLOCK_T_N(Binding, XR_BINDINGS_CAPACITY)                       binding;
+		BLOCK_T_N(InteractionProfile, XR_INTERACTION_PROFILE_CAPACITY) profile;
+		BLOCK_T_N(ActionSet, XR_ACTION_SET_CAPACITY)                   actionSet;
+		BLOCK_T_N(Action, XR_ACTION_CAPACITY)                          action;
+		BLOCK_T_N(SubactionState, XR_SUBACTION_CAPACITY)               state;
+		BLOCK_T_N(Space, XR_SPACE_CAPACITY)                            space;
+		BLOCK_T_N(Swapchain, XR_SWAPCHAIN_CAPACITY)                    swap;
 	} block;
 
 } xr;
@@ -1516,7 +1516,12 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 		return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
 	}
 
-	session_i iSession; xrClaimSessionId(&iSession);
+	session_i iSession;
+	if (xrClaimSessionId(&iSession) != XR_SUCCESS) {
+		LOG_ERROR("XR_ERROR_LIMIT_REACHED\n");
+		return XR_ERROR_LIMIT_REACHED;
+	}
+
 	LOG("Claimed iSession %d\n", iSession);
 
 	session_h hSession = BLOCK_CLAIM(xr.block.session, iSession);

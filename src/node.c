@@ -336,7 +336,7 @@ static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
  */
 node_h RequestLocalNodeHandle()
 {
-	node_h hNode = XBLOCK_CLAIM(node.context, 0);
+	node_h hNode = BLOCK_CLAIM(node.context, 0);
 	LOG("Requested Local Node Handle %d.\n", HANDLE_INDEX(hNode));
 
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
@@ -354,10 +354,12 @@ node_h RequestLocalNodeHandle()
 	return hNode;
 }
 
-node_h RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
+MidResult RequestExternalNodeHandle(MxcNodeShared* pNodeShared, node_h* pNode_h)
 {
-	node_h hNode = XBLOCK_CLAIM(node.context, 0);
-	LOG("Requested External Node Handle %d.\n", HANDLE_INDEX(hNode));
+	LOG("Request External Node Handle.\n");
+	node_h hNode = BLOCK_CLAIM(node.context, 0);
+	if (HANDLE_INVALID(hNode)) return MID_LIMIT_REACHED;
+	LOG("Claimed External Node Handle %d.\n", HANDLE_INDEX(hNode));
 
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	ASSERT(IS_STRUCT_P_ZEROED(pNodeCtxt), "MxcNodeContext not zeroed!");
@@ -371,7 +373,8 @@ node_h RequestExternalNodeHandle(MxcNodeShared* pNodeShared)
 	ASSERT(IS_STRUCT_P_ZEROED(pNodeCpst), "MxcCompositorNodeData not zeroed!");
 #endif
 
-	return hNode;
+	*pNode_h = hNode;
+	return MID_SUCCESS;
 }
 
 void ReleaseNodeHandle(node_h hNode)
@@ -687,7 +690,8 @@ static void ServerInterprocessAcceptNodeConnection()
 	}
 
 	/// Claim Node Handle
-	node_h hNode = RequestExternalNodeHandle(pNodeShrd);
+	node_h hNode;
+	RequestExternalNodeHandle(pNodeShrd, &hNode);
 
 	/// Initialize Context
 	{

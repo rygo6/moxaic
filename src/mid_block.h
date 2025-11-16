@@ -30,6 +30,7 @@ typedef block_handle block_h; // TODO lets go to this
 #define HANDLE_DEFAULT ((0 & HANDLE_GENERATION_MASK) | (UINT16_MAX & HANDLE_INDEX_MASK))
 
 #define HANDLE_VALID(handle) (HANDLE_GENERATION(handle) != 0)
+#define HANDLE_INVALID(handle) (HANDLE_GENERATION(handle) == 0)
 
 #define HANDLE_GENERATION_INCREMENT(handle) ({	\
 	u8 g = HANDLE_GENERATION(handle);	\
@@ -53,18 +54,18 @@ typedef struct block_handle2 { // do this? yes probably
 /*
  * Block
  */
-#define BLOCK_DECL(_type, _n)	\
-	struct {	\
-		BITSET_DECL(occupied, _n);	\
-		block_key keys[_n];	\
-		_type      blocks[_n];	\
-		u8        generations[_n];	\
+#define BLOCK_T_N(_type, _n) \
+	struct { \
+		BITSET_N(_n) occupied; \
+		block_key    keys[_n]; \
+		_type        blocks[_n]; \
+		u8           generations[_n]; \
 	}
 
 // these should go in implementation
-static block_h BlockClaim(int occupiedCapacity, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
+static block_h BlockClaim(int occupiedByteCapacity, bitset_t* pOccupiedSet, block_key* pKeys, uint8_t* pGenerations, uint32_t key)
 {
-	int i = BitClaimFirstZero(occupiedCapacity, pOccupiedSet);
+	int i = BitClaimFirstZero(occupiedByteCapacity, pOccupiedSet);
 	if (i == -1) return HANDLE_DEFAULT;
 	pKeys[i] = key;
 	pGenerations[i] = pGenerations[i] == HANDLE_GENERATION_MAX ? 1 : (pGenerations[i] + 1) & 0xF;
@@ -93,7 +94,6 @@ static block_h BlockFindByHash(int hashCapacity, block_key* pHashes, uint8_t* pG
 #define BLOCK_CLAIM(_block, _key) \
 	({ \
 		block_h _h = BlockClaim(sizeof(_block.occupied), (bitset_t*)&_block.occupied, _block.keys, _block.generations, _key); \
-		ASSERT(HANDLE_VALID(_h), #_block ": Claiming handle. Out of capacity."); \
 		(block_handle)_h; \
 	})
 
