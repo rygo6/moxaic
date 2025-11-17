@@ -90,7 +90,6 @@ static block_h BlockFindByHash(int hashCapacity, block_key* pHashes, uint8_t* pG
 #define ASSERT_HANDLE_ARRAY_RANGE(_array, _handle, _message) ASSERT(CHECK_ARRAY_RANGE(_array, _handle), _message)
 
 // someway these should take ptrs... or should this be static block? STATIC_BLOCK_CLAIM ?
-// I probbaly want a macro that will make each of these methods for each type of pool
 #define BLOCK_CLAIM(_block, _key) \
 	({ \
 		block_h _h = BlockClaim(sizeof(_block.occupied), (bitset_t*)&_block.occupied, _block.keys, _block.generations, _key); \
@@ -104,13 +103,13 @@ static block_h BlockFindByHash(int hashCapacity, block_key* pHashes, uint8_t* pG
 		(block_handle)_h; \
 	})
 
-#define BLOCK_RELEASE(_, _handle)                                                                                                    \
-	({                                                                                                                               \
-		STATIC_ASSERT_TYPE(_handle, block_handle);                                                                                   \
+#define BLOCK_RELEASE(_, _handle) \
+	({ \
+		STATIC_ASSERT_TYPE(_handle, block_handle); \
 		ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_.blocks), #_ ": Releasing block handle. Out of range."); \
-		ASSERT(BITTEST(_.occupied, HANDLE_INDEX(_handle)), #_ ": Releasing block handle Should be occupied.");                       \
-		BITCLEAR(_.occupied, (int)HANDLE_INDEX(_handle));                                                                            \
-		&_.blocks[HANDLE_INDEX(_handle)];                                                                                            \
+		ASSERT(BITTEST(_.occupied, HANDLE_INDEX(_handle)), #_ ": Releasing block handle Should be occupied."); \
+		BITCLEAR(_.occupied, (int)HANDLE_INDEX(_handle)); \
+		&_.blocks[HANDLE_INDEX(_handle)]; \
 	})
 
 #define BLOCK_FIND(_, _hash)                                           \
@@ -119,10 +118,16 @@ static block_h BlockFindByHash(int hashCapacity, block_key* pHashes, uint8_t* pG
 		BlockFindByHash(sizeof(_.keys), _.keys, _.generations, _hash); \
 	})
 
-#define BLOCK_HANDLE(_block, _p)                                                                                                   \
-	({                                                                                                                             \
+#define BLOCK_HANDLE(_block, _p) \
+	({ \
 		ASSERT(_p >= _block.blocks && _p < _block.blocks + COUNT(_block.blocks), #_block ": Getting block handle. Out of range."); \
-		(block_handle)(HANDLE_GENERATION_SET((_p - _block.blocks), _block.generations[(_p - _block.blocks)]));                     \
+		(block_handle)(HANDLE_GENERATION_SET((_p - _block.blocks), _block.generations[(_p - _block.blocks)])); \
+	  })
+
+#define BLOCK_HANDLE_VALID(_block, _handle) \
+	({ \
+		ASSERT(HANDLE_INDEX(_handle) >= 0 && HANDLE_INDEX(_handle) < COUNT(_block.blocks), #_block ": Handle Out of range."); \
+		HANDLE_GENERATION(_handle) == _block.generations[HANDLE_INDEX(_handle)]; \
 	})
 
 #define BLOCK_HANDLE_INDEX(_block, _index)                                                        \
@@ -145,11 +150,11 @@ static block_h BlockFindByHash(int hashCapacity, block_key* pHashes, uint8_t* pG
 	})
 
 	// Block Ptr from Handle
-#define BLOCK_PTR_H(_block, _handle)	\
-	({	\
-		STATIC_ASSERT_TYPE(_handle, block_handle);	\
-		STATIC_ASSERT_HAS_FIELD(typeof(_block), blocks, #_block ": is not a block type!");	\
-		ASSERT_HANDLE_BLOCK_RANGE(_block, _handle, #_block ": Getting block ptr. Hande out of range.");	\
+#define BLOCK_PTR_H(_block, _handle) \
+	({ \
+		STATIC_ASSERT_TYPE(_handle, block_handle); \
+		STATIC_ASSERT_HAS_FIELD(typeof(_block), blocks, #_block ": is not a block type!"); \
+		ASSERT_HANDLE_BLOCK_RANGE(_block, _handle, #_block ": Getting block ptr. Hande out of range."); \
 		&_block.blocks[HANDLE_INDEX(_handle)];	\
 	})
 

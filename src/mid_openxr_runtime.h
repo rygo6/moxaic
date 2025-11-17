@@ -609,38 +609,80 @@ static struct {
 
 #define B xr.block // get rid of this
 
+#define XR_TYPE_TO_OBJECT_TYPE(_opaque_h_type) _Generic((_opaque_h_type*)0, \
+    XrInstance*:              XR_OBJECT_TYPE_INSTANCE, \
+    XrSession*:               XR_OBJECT_TYPE_SESSION, \
+    XrSwapchain*:             XR_OBJECT_TYPE_SWAPCHAIN, \
+    XrSpace*:                 XR_OBJECT_TYPE_SPACE, \
+    XrActionSet*:             XR_OBJECT_TYPE_ACTION_SET, \
+    XrAction*:                XR_OBJECT_TYPE_ACTION, \
+    XrDebugUtilsMessengerEXT*:XR_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT, \
+    XrHandTrackerEXT*:        XR_OBJECT_TYPE_HAND_TRACKER_EXT, \
+    XrSpatialAnchorMSFT*:     XR_OBJECT_TYPE_SPATIAL_ANCHOR_MSFT, \
+    XrSceneObserverMSFT*:     XR_OBJECT_TYPE_SCENE_OBSERVER_MSFT, \
+    XrSceneMSFT*:             XR_OBJECT_TYPE_SCENE_MSFT, \
+    default:                  NULL \
+)
+
+#define XR_OPAQUE_H_TO_OBJECT_TYPE(_opaque_h) _Generic(_opaque_h, \
+    XrInstance:              XR_OBJECT_TYPE_INSTANCE, \
+    XrSession:               XR_OBJECT_TYPE_SESSION, \
+    XrSwapchain:             XR_OBJECT_TYPE_SWAPCHAIN, \
+    XrSpace:                 XR_OBJECT_TYPE_SPACE, \
+    XrActionSet:             XR_OBJECT_TYPE_ACTION_SET, \
+    XrAction:                XR_OBJECT_TYPE_ACTION, \
+    XrDebugUtilsMessengerEXT:XR_OBJECT_TYPE_DEBUG_UTILS_MESSENGER_EXT, \
+    XrHandTrackerEXT:        XR_OBJECT_TYPE_HAND_TRACKER_EXT, \
+    XrSpatialAnchorMSFT:     XR_OBJECT_TYPE_SPATIAL_ANCHOR_MSFT, \
+    XrSceneObserverMSFT:     XR_OBJECT_TYPE_SCENE_OBSERVER_MSFT, \
+    XrSceneMSFT:             XR_OBJECT_TYPE_SCENE_MSFT, \
+    default:                 NULL \
+)
+
+#define XR_OPAQUE_H_TO_BLOCK(_opaque_h) _Generic(_opaque_h, \
+    XrSession:               xr.block.session, \
+    XrSwapchain:             xr.block.swap, \
+    XrSpace:                 xr.block.space, \
+    XrActionSet:             xr.block.actionSet, \
+    XrAction:                xr.block.action, \
+    default:                 NULL \
+)
+
 typedef enum XrAtomType {
 	XR_ATOM_TYPE_UNKNOWN = 0,
 	XR_ATOM_TYPE_PATH = 0,
 	XR_ATOM_TYPE_MAX_ENUM = 0x7FFFFFFF
 } XrAtomType;
 
-// Opaque Handle to Handle
-#define XR_OPAQUE_BLOCK_H(_opaqueHandle) ((block_handle)(u64)_opaqueHandle)
+#define ASSERT_XR_HANDLE_TYPE(_opaque_h_type, _opaque_h) \
+	ASSERT((XrObjectType)((u64)_opaque_h >> 32) == _opaque_h_type)
 
-// Atom to Handle
+/* Opaque Handle to Handle */
+#define XR_OPAQUE_BLOCK_H(_opaque_h) ({ \
+	ASSERT_XR_HANDLE_TYPE(XR_OPAQUE_H_TO_OBJECT_TYPE(_opaque_h), _opaque_h); \
+	(block_handle)(u64)_opaque_h; \
+})
+
+/* Handle to Opaque Handle */
+#define XR_TO_OPAQUE_H(_opaque_h_type, _h) \
+	(_opaque_h_type)(((u64)XR_TYPE_TO_OBJECT_TYPE(_opaque_h_type) << 32) | (u64)(_h))
+
+/* Atom to Handle */
 #define XR_ATOM_BLOCK_H(_atom) ((block_handle)_atom)
 
-// Opaque Handle to Ptr
-#define XR_OPAQUE_BLOCK_P(_opaqueHandle) _Generic(_opaqueHandle,                  \
-	    XrSession: BLOCK_PTR_H(xr.block.session, XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
-	    XrSpace:   BLOCK_PTR_H(xr.block.space,   XR_OPAQUE_BLOCK_H(_opaqueHandle)), \
-	    default:   NULL)
+/* Opaque Handle to Ptr */
+#define XR_OPAQUE_BLOCK_P(_opaque_h) _Generic(_opaque_h, \
+	XrSession: BLOCK_PTR_H(xr.block.session, (block_handle)(u64)_opaque_h), \
+	XrSpace:   BLOCK_PTR_H(xr.block.space,   (block_handle)(u64)_opaque_h), \
+	default:   NULL)
 
-// Atom to Ptr
+/* Atom to Ptr */
 #define XR_ATOM_BLOCK_P(_block, _atom) BLOCK_PTR_H(_block, XR_ATOM_BLOCK_H(_atom))
 
-// Handle to Opaque Handle
-#define XR_TO_OPAQUE_H(_type, _handle) _Generic((_type*)0,                 \
-    XrSession*: (_type)((u64)XR_OBJECT_TYPE_SESSION << 32 | (u64)_handle), \
-    XrSpace*:   (_type)((u64)XR_OBJECT_TYPE_SPACE  << 32  | (u64)_handle), \
-    default: (_type)0                                                      \
-)
+/* Handle to Atom */
+#define XR_TO_ATOM(_type, _h) ((u64)_type << 32 | (u64)_h)
 
-// Handle to Atom
-#define XR_TO_ATOM(_type, _handle) ((u64)_type << 32 | (u64)_handle)
-
-#define XR_OPAQUE_H_TYPE(_handle) (XrObjectType)(_handle >> 32);
+#define XR_OPAQUE_H_TYPE(_h) (XrObjectType)(_h >> 32);
 
 /*
  * Utility
@@ -693,7 +735,7 @@ static XrResult XrTimeWaitWin32(_Atomic XrTime* pSharedTime, XrTime waitTime)
 			return XR_SUCCESS;
 		}
 
-		printf("XrTime needs waiting!\n");
+		LOG("XrTime needs waiting!\n");
 		if (!WaitOnAddress(pSharedTime, &currentTime, sizeof(XrTime), INFINITE)) {
 			return XR_TIMEOUT_EXPIRED;
 		}
@@ -716,8 +758,8 @@ static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
 	}
 
 //#define ENABLE_LOG_METHOD_ALL
-#define ENABLE_LOG_METHOD_ONCE
-//#define ENABLE_LOG_METHOD_NOREPEAT
+//#define ENABLE_LOG_METHOD_ONCE
+#define ENABLE_LOG_METHOD_NOREPEAT
 //#define ENABLE_LOG_VERBOSE
 
 #ifdef ENABLE_LOG_VERBOSE
@@ -797,7 +839,7 @@ static const char* string_XrStructureType(XrStructureType type)
 static void LogNextChain(const XrBaseInStructure* nextProperties)
 {
 	while (nextProperties != NULL) {
-		printf("NextType: %s\n", string_XrStructureType(nextProperties->type));
+		LOG("NextType: %s\n", string_XrStructureType(nextProperties->type));
 		nextProperties = (XrBaseInStructure*)nextProperties->next;
 	}
 }
@@ -818,15 +860,11 @@ XR_PROC xrResultToString(XrInstance instance,
                          char buffer[XR_MAX_RESULT_STRING_SIZE])
 {
 	CHECK_INSTANCE(instance);
-
 	switch (value) {
 		XR_LIST_ENUM_XrResult(TRANSFER_ENUM_NAME);
-		default:
-			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
-			break;
+		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value); break;
 	}
 	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
-
 	return XR_SUCCESS;
 }
 
@@ -835,22 +873,20 @@ XR_PROC xrStructureTypeToString(XrInstance      instance,
                                 char            buffer[XR_MAX_STRUCTURE_NAME_SIZE])
 {
 	CHECK_INSTANCE(instance);
-
 	switch (value) {
 		XR_LIST_ENUM_XrStructureType(TRANSFER_ENUM_NAME);
-		default:
-			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value);
-			break;
+		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value); break;
 	}
 	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
-
 	return XR_SUCCESS;
 }
 
 #undef TRANSFER_ENUM_NAME
 
 /*
+ * ================================================================
  * Events
+ * ================================================================
  */
 #define XR_EVENT_ENQUEUE_SCOPE(_pData) \
 	MID_QRING_ENQUEUE_SCOPE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, _pData)
@@ -860,18 +896,18 @@ static void EnqueueEventDataSessionStateChanged(session_h hSession, XrSessionSta
 	Session* pSession = BLOCK_PTR_H(xr.block.session, hSession);
 	pSession->activeSessionState = sessionState;
 
+	XrSession session = XR_TO_OPAQUE_H(XrSession, hSession);
 	XrEventDataUnion* pEventData;
 	XR_EVENT_ENQUEUE_SCOPE(pEventData) {
 		pEventData->sessionStateChanged = (XrEventDataSessionStateChanged){
 			.type = XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED,
-			.session = XR_TO_OPAQUE_H(XrSession, hSession),
+			.session = session,
 			.state = sessionState,
 			.time = xrGetTime(),
 		};
 	}
 
-	LOG("Enqueue XrEventDataSessionStateChanged: %s\n",
-	    string_XrSessionState(sessionState));
+	LOG("Enqueue XrEventDataSessionStateChanged %p %llu %s\n", session, (u64)session, string_XrSessionState(sessionState));
 
 }
 
@@ -933,7 +969,9 @@ static void EnqueueEventDataUserPresenceChanged(session_h hSession, XrBool32 isU
 	LOG("Enqueue XrEventDataUserPresenceChangedEXT %b\n", isUserPresent);
 }
 
-/*
+ /** hello */
+
+/**
  * Math
  */
 #ifndef PI
@@ -966,7 +1004,7 @@ static inline float xrFloatLerp(float a, float b, float t)
 	return a + t * (b - a);
 }
 
-/*
+/**
  * Binding
  */
 static XrResult RegisterBinding(
@@ -1307,13 +1345,13 @@ XR_PROC xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* ins
 		int maj   = XR_VERSION_MAJOR(xr.instance.applicationInfo.apiVersion);
 		int min   = XR_VERSION_MINOR(xr.instance.applicationInfo.apiVersion);
 		int patch = XR_VERSION_PATCH(xr.instance.applicationInfo.apiVersion);
-		printf("apiVersion: %d.%d.%d\n", maj, min, patch);
+		LOG("apiVersion: %d.%d.%d\n", maj, min, patch);
 	}
 	{
 		int maj   = XR_VERSION_MAJOR(XR_CURRENT_API_VERSION);
 		int min   = XR_VERSION_MINOR(XR_CURRENT_API_VERSION);
 		int patch = XR_VERSION_PATCH(XR_CURRENT_API_VERSION);
-		printf("min apiVersion: 1.0.0\nmax apiVersion: %d.%d.%d\n", maj, min, patch);
+		LOG("min apiVersion: 1.0.0 - max apiVersion: %d.%d.%d\n", maj, min, patch);
 	}
 	if (createInfo->applicationInfo.apiVersion < XR_MAKE_VERSION(1, 0, 0) ||
 		createInfo->applicationInfo.apiVersion > XR_CURRENT_API_VERSION) {
@@ -1322,7 +1360,7 @@ XR_PROC xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* ins
 	}
 
 //#define FIELD_FORMAT_SPECIFIER(_field) _Generic(_field, uint64_t: "%llu", uint32_t: "%d", float: "%f", double: "%lf", char*: "%s", const char*: "%s")
-//#define PRINT_STRUCT(_field) printf(#_field ": "); printf(FIELD_FORMAT_SPECIFIER(xr.instance.applicationInfo._field), xr.instance.applicationInfo._field); printf("\n");
+//#define PRINT_STRUCT(_field) LOG(#_field ": "); LOG(FIELD_FORMAT_SPECIFIER(xr.instance.applicationInfo._field), xr.instance.applicationInfo._field); LOG("\n");
 //	XR_LIST_STRUCT_XrApplicationInfo(PRINT_STRUCT);
 
 	*instance = (XrInstance)&xr.instance;
@@ -1364,8 +1402,9 @@ XR_PROC xrDestroyInstance(XrInstance instance)
 	return XR_SUCCESS;
 }
 
-XR_PROC xrGetInstanceProperties(XrInstance            instance,
-                                XrInstanceProperties* instanceProperties)
+XR_PROC
+xrGetInstanceProperties(XrInstance instance,
+                        XrInstanceProperties* instanceProperties)
 {
 	LOG_METHOD(xrGetInstanceProperties);
 	CHECK_INSTANCE(instance);
@@ -1382,8 +1421,17 @@ XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 	CHECK_INSTANCE(instance);
 
 	XrEventDataUnion* pEventData = (XrEventDataUnion*)eventData;
-	return MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData) == MID_SUCCESS
-	           ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
+	pEventData->dataBuffer.type = 0;
+	MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData);
+	switch(pEventData->dataBuffer.type)
+	{
+		case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
+			// If session block has been destroyed and re-created skip evet which come from that session
+			session_h hSession = XR_OPAQUE_BLOCK_H(pEventData->sessionStateChanged.session);
+			return BLOCK_HANDLE_VALID(xr.block.session, hSession) ? XR_SUCCESS : XR_EVENT_UNAVAILABLE;
+		}
+		default: return XR_EVENT_UNAVAILABLE;
+	}
 }
 
 XR_PROC xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSystemId* systemId)
@@ -1404,7 +1452,7 @@ XR_PROC xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyste
 			*systemId = SYSTEM_ID_HANDHELD_AR;
 			return XR_SUCCESS;
 		default:
-			printf("XR_ERROR_FORM_FACTOR_UNSUPPORTED\n");
+			LOG("XR_ERROR_FORM_FACTOR_UNSUPPORTED\n");
 			*systemId = XR_NULL_SYSTEM_ID;
 			return XR_ERROR_FORM_FACTOR_UNSUPPORTED;
 	}
@@ -1511,6 +1559,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 		return XR_ERROR_SYSTEM_INVALID;
 	}
 
+	LOG("AdapterId: %lu\n", xr.instance.graphics.d3d11.adapterLuid.LowPart);
 	if (xr.instance.graphics.d3d11.adapterLuid.LowPart == 0) {
 		LOG_ERROR("XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING\n");
 		return XR_ERROR_GRAPHICS_REQUIREMENTS_CALL_MISSING;
@@ -1539,7 +1588,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 
 	switch (*(XrStructureType*)createInfo->next) {
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR: {
-			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR\n");
+			LOG("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR\n");
 			XrGraphicsBindingOpenGLWin32KHR* binding = (XrGraphicsBindingOpenGLWin32KHR*)createInfo->next;
 
 			pSession->binding.gl.hDC = binding->hDC;
@@ -1548,10 +1597,10 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 			break;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_D3D11_KHR: {
-			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_D3D11_KHR\n");
+			LOG("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_D3D11_KHR\n");
 			XrGraphicsBindingD3D11KHR* binding = (XrGraphicsBindingD3D11KHR*)createInfo->next;
 
-			printf("XR D3D11 Device: %p\n", (void*)binding->device);
+			LOG("XR D3D11 Device: %p\n", (void*)binding->device);
 			// do I need cleanup goto? maybe. Probably
 			if (binding->device == NULL) {
 				LOG_ERROR("XR D3D11 Device Invalid.\n");
@@ -1560,7 +1609,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 
 			ID3D11Device5* device5;
 			DX_CHECK(ID3D11Device_QueryInterface(binding->device, &IID_ID3D11Device5, (void**)&device5));
-			printf("XR D3D11 Device5: %p\n", (void*)device5);
+			LOG("XR D3D11 Device5: %p\n", (void*)device5);
 			if (device5 == NULL) {
 				LOG_ERROR("XR D3D11 Device5 Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
@@ -1570,7 +1619,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 			ID3D11Device5_GetImmediateContext(device5, &context);
 			ID3D11DeviceContext4* context4;
 			DX_CHECK(ID3D11DeviceContext_QueryInterface(context, &IID_ID3D11DeviceContext4, (void**)&context4));
-			printf("XR D3D11 Context4: %p\n", (void*)context4);
+			LOG("XR D3D11 Context4: %p\n", (void*)context4);
 			if (context4 == NULL) {
 				LOG_ERROR("XR D3D11 Context4 Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
@@ -1578,18 +1627,18 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 			ID3D11DeviceContext_Release(context);
 
 			ID3D11Fence* compositorFence;
-			printf("XR D3D11 Compositor Fence Handle: %p\n", compositorFenceHandle);
+			LOG("XR D3D11 Compositor Fence Handle: %p\n", compositorFenceHandle);
 			ID3D11Device5_OpenSharedFence(device5, compositorFenceHandle, &IID_ID3D11Fence, (void**)&compositorFence);
-			printf("XR D3D11 Compositor Fence: %p\n", (void*)compositorFence);
+			LOG("XR D3D11 Compositor Fence: %p\n", (void*)compositorFence);
 			if (compositorFence == NULL) {
 				LOG_ERROR("XR D3D11 Compositor Fence Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 			}
 
 			ID3D11Fence* sessionFence;
-			printf("XR D3D11 Session Fence Handle: %p\n", sessionFenceHandle);
+			LOG("XR D3D11 Session Fence Handle: %p\n", sessionFenceHandle);
 			ID3D11Device5_OpenSharedFence(device5, sessionFenceHandle, &IID_ID3D11Fence, (void**)&sessionFence);
-			printf("XR D3D11 Session Fence: %p\n", (void*)sessionFence);
+			LOG("XR D3D11 Session Fence: %p\n", (void*)sessionFence);
 			if (sessionFence == NULL) {
 				LOG_ERROR("XR D3D11 Session Fence Invalid.\n");
 				return XR_ERROR_GRAPHICS_DEVICE_INVALID;
@@ -1603,7 +1652,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 			break;
 		}
 		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: {
-			printf("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR\n");
+			LOG("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR\n");
 			XrGraphicsBindingVulkanKHR* binding = (XrGraphicsBindingVulkanKHR*)createInfo->next;
 
 			pSession->binding.vk.instance = binding->instance;
@@ -1617,6 +1666,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 		default: {
 			LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
 			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
+			return XR_ERROR_GRAPHICS_DEVICE_INVALID;
 		}
 	}
 
@@ -1624,13 +1674,14 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 	pSession->hActiveReferenceSpace = HANDLE_DEFAULT;
 	pSession->hActiveInteractionProfile = HANDLE_DEFAULT;
 	pSession->activeIsUserPresent = XR_FALSE;
+
 	*session = XR_TO_OPAQUE_H(XrSession, hSession);
 
 	EnqueueEventDataSessionStateChanged(hSession, XR_SESSION_STATE_IDLE);
 	EnqueueEventDataSessionStateChanged(hSession, XR_SESSION_STATE_READY);
 	EnqueueEventDataUserPresenceChanged(hSession, XR_TRUE);
 
-	LOG("Created session %llu. %d sessions in use\n", (u64)*session, BLOCK_COUNT(B.session));
+	LOG("Created Session: %p %llu Sessions in use: %d\n", *session, (u64)*session, BLOCK_COUNT(B.session));
 	return XR_SUCCESS;
 }
 
@@ -1644,7 +1695,7 @@ XR_PROC xrDestroySession(XrSession session)
 
 	xrReleaseSessionId(pSession->index);
 
-	LOG("%d sessions in use\n", BLOCK_COUNT(B.session));
+	LOG("Destroyed Session: %p %llu Sessions in use: %d\n", session, (u64)session, BLOCK_COUNT(B.session));
 	return XR_SUCCESS;
 }
 
@@ -1952,7 +2003,7 @@ XR_PROC xrGetViewConfigurationProperties(
 	XrViewConfigurationProperties* configurationProperties)
 {
 	LOG_METHOD(xrGetViewConfigurationProperties);
-	printf("%s\n", string_XrViewConfigurationType(viewConfigurationType));
+	LOG("%s\n", string_XrViewConfigurationType(viewConfigurationType));
 	CHECK_INSTANCE(instance);
 
 	if (!configurationProperties) {
@@ -2171,11 +2222,11 @@ XR_PROC xrEnumerateSwapchainFormats(
 
 	int index = 0;
 	for (u32 i = 0; i < colorCount; ++i) {
-		printf("Enumerating Color Format: %llu\n", colorFormats[i]);
+		LOG("Enumerating Color Format: %llu\n", colorFormats[i]);
 		formats[index++] = colorFormats[i];
 	}
 	for (u32 i = 0; i < depthCount; ++i) {
-		printf("Enumerating Depth Format: %llu\n", depthFormats[i]);
+		LOG("Enumerating Depth Format: %llu\n", depthFormats[i]);
 		formats[index++] = depthFormats[i];
 	}
 
@@ -2216,13 +2267,13 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 
 #define PRINT_CREATE_FLAGS(_flag, _bit)  \
 	if (createInfo->createFlags & _flag) \
-		printf("	flags:\n		" #_flag "\n");
+		LOG("	flags:\n		" #_flag "\n");
 	XR_LIST_BITS_XrSwapchainCreateFlags(PRINT_CREATE_FLAGS);
 #undef PRINT_CREATE_FLAGS
 
 #define PRINT_USAGE_FLAGS(_flag, _bit)  \
 	if (createInfo->usageFlags & _flag) \
-		printf("	usage:\n		" #_flag "\n");
+		LOG("	usage:\n		" #_flag "\n");
 	XR_LIST_BITS_XrSwapchainUsageFlags(PRINT_USAGE_FLAGS);
 #undef PRINT_USAGE_FLAGS
 
@@ -2311,7 +2362,7 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 	switch (xr.instance.graphicsApi)
 	{
 		case XR_GRAPHICS_API_OPENGL: {
-			printf("Creating OpenGL Swap");
+			LOG("Creating OpenGL Swap");
 			#define DEFAULT_IMAGE_CREATE_INFO(_width, _height, _format, _memObject, _texture, _handle)                    \
 				gl.CreateMemoryObjectsEXT(1, &_memObject);                                                                \
 				gl.ImportMemoryWin32HandleEXT(_memObject, _width* _height * 4, GL_HANDLE_TYPE_OPAQUE_WIN32_EXT, _handle); \
@@ -2321,7 +2372,7 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 //				HANDLE colorHandle;
 //				xrGetSwapchainImage(pSess->index, XR_SWAP_OUTPUT_FLAG_COLOR, &colorHandle);
 //				DEFAULT_IMAGE_CREATE_INFO(pSwap->width, pSwap->height, GL_RGBA8, pSwap->texture[i].gl.memObject, pSwap->texture[i].gl.texture, colorHandle);
-//				printf("Imported gl swaps texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
+//				LOG("Imported gl swaps texture. Texture: %d MemObject: %d\n", pSwap->texture[i].gl.texture, pSwap->texture[i].gl.memObject);
 //			}
 //			#undef DEFAULT_IMAGE_CREATE_INFO
 			break;
@@ -2634,7 +2685,7 @@ XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 		assert(secondBeginInfo->type == XR_TYPE_SECONDARY_VIEW_CONFIGURATION_SESSION_BEGIN_INFO_MSFT);
 		assert(secondBeginInfo->next == NULL);
 		for (u32 i = 0; i < secondBeginInfo->viewConfigurationCount; ++i) {
-			printf("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
+			LOG("Secondary ViewConfiguration: %d", secondBeginInfo->enabledViewConfigurationTypes[i]);
 		}
 	}
 
@@ -2967,7 +3018,7 @@ XR_PROC xrLocateViews(
 	XrView*                 views)
 {
 	LOG_METHOD(xrLocateViews);
-//	printf("Locating View %s\n", string_XrViewConfigurationType(viewLocateInfo->viewConfigurationType));
+//	LOG("Locating View %s\n", string_XrViewConfigurationType(viewLocateInfo->viewConfigurationType));
 	assert(views->next == NULL);
 
 	viewState->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT |
@@ -3098,7 +3149,7 @@ XR_PROC xrLocateViews(
 					break;
 				}
 				default:
-					printf("EyeView->Next Unknown: %d\n", *type);
+					LOG("EyeView->Next Unknown: %d\n", *type);
 			}
 		}
 	}
@@ -3174,7 +3225,7 @@ XR_PROC xrCreateActionSet(XrInstance                   instance,
 {
 #ifdef ENABLE_DEBUG_LOG_METHOD
 	LOG_METHOD(xrCreateActionSet);
-	printf("%lu:%lu: xrCreateActionSet %s %s\n", GetCurrentProcessId(), GetCurrentThreadId(), createInfo->actionSetName, createInfo->localizedActionSetName);
+	LOG("%lu:%lu: xrCreateActionSet %s %s\n", GetCurrentProcessId(), GetCurrentThreadId(), createInfo->actionSetName, createInfo->localizedActionSetName);
 #endif
 	assert(createInfo->next == NULL);
 
@@ -3268,13 +3319,13 @@ XR_PROC xrCreateAction(
 	}
 	auto_t hMapAction = MAP_ADD(pActionSet->actions, hAction, actionHash);
 
-	printf("	actionName: %s\n", pAction->actionName);
-	printf("	localizedActionName %s\n", pAction->localizedActionName);
-	printf("	actionType: %d\n", pAction->actionType);
-	printf("	countSubactionPaths: %d\n", pAction->countSubactions);
+	LOG("	actionName: %s\n", pAction->actionName);
+	LOG("	localizedActionName %s\n", pAction->localizedActionName);
+	LOG("	actionType: %d\n", pAction->actionType);
+	LOG("	countSubactionPaths: %d\n", pAction->countSubactions);
 	for (u32 i = 0; i < createInfo->countSubactionPaths; ++i) {
 		Path* pPath = BLOCK_PTR_H(xr.block.path, pAction->hSubactionPaths[i]);
-		printf("		subactionPath: %s\n", pPath->string);
+		LOG("		subactionPath: %s\n", pPath->string);
 	}
 
 	return XR_SUCCESS;
@@ -3317,7 +3368,7 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 	HANDLE_CHECK(hSuggestProfile, XR_ERROR_PATH_UNSUPPORTED);
 
 	auto_t pSuggestProfile = BLOCK_PTR_H(B.profile, hSuggestProfile);
-	printf("Binding: %s %p\n", pSuggestProfilePath->string, (void*)pSuggestProfilePath);
+	LOG("Binding: %s %p\n", pSuggestProfilePath->string, (void*)pSuggestProfilePath);
 
 	const XrActionSuggestedBinding* pSuggest = suggestedBindings->suggestedBindings;
 
@@ -3346,7 +3397,7 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 			for (u32 subIndex = 0; subIndex < pSuggestAction->countSubactions; ++subIndex)
 				pSuggestAction->hSubactionBindings[subIndex] = HANDLE_DEFAULT;
 
-			printf("Could not find suggested Binding: %s on InteractionProfile: %s\n", pSuggestBindPath->string, pSuggestProfilePath->string);
+			LOG("Could not find suggested Binding: %s on InteractionProfile: %s\n", pSuggestBindPath->string, pSuggestProfilePath->string);
 			continue;
 		}
 
@@ -3355,7 +3406,7 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 		if (pSuggestAction->countSubactions == 0) {
 			pSuggestAction->hSubactionBindings[0] = hSuggestBind;
 
-			printf("Bound Action: %s BindingPath: %s No Subaction\n", pSuggestAction->actionName, pSuggestBindPath->string);
+			LOG("Bound Action: %s BindingPath: %s No Subaction\n", pSuggestAction->actionName, pSuggestBindPath->string);
 			actsBound++;
 
 			continue;
@@ -3368,7 +3419,7 @@ xrSuggestInteractionProfileBindings(XrInstance                                  
 
 			pSuggestAction->hSubactionBindings[subIndex] = hSuggestBind;
 
-			printf("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pSuggestAction->actionName, pSuggestBindPath->string, subIndex, pSubPath->string);
+			LOG("Bound Action: %s BindingPath: %s Subaction Index: %d %s\n", pSuggestAction->actionName, pSuggestBindPath->string, subIndex, pSubPath->string);
 			actsBound++;
 		}
 	}
@@ -3410,11 +3461,11 @@ XR_PROC xrAttachSessionActionSets(XrSession                            session,
 		memset(&pActSet->states, 0, sizeof(pActSet->states));
 
 		pActSet->hAttachedToSession = hSession;
-		printf("Attached ActionSet %s\n", pActSet->actionSetName);
+		LOG("Attached ActionSet %s\n", pActSet->actionSetName);
 	}
 
 	if (!HANDLE_VALID(pSession->hActiveInteractionProfile)) {
-		printf("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
+		LOG("Setting default interaction profile: %s\n", XR_DEFAULT_INTERACTION_PROFILE);
 
 		XrPath profilePath;	xrStringToPath((XrInstance)&xr.instance, XR_DEFAULT_INTERACTION_PROFILE, &profilePath);
 		auto_t hProfilePath    = XR_ATOM_BLOCK_H(profilePath);
@@ -3974,7 +4025,7 @@ XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 	if (xr.instance.graphics.d3d11.adapterLuid.LowPart != 0) {
 		graphicsRequirements->adapterLuid = xr.instance.graphics.d3d11.adapterLuid;
 		graphicsRequirements->minFeatureLevel = xr.instance.graphics.d3d11.minFeatureLevel;
-		printf("Already found D3D11GraphicsRequirements LUID: %ld:%lu FeatureLevel: %d\n",
+		LOG("Already found D3D11GraphicsRequirements LUID: %ld:%lu FeatureLevel: %d\n",
 			   graphicsRequirements->adapterLuid.HighPart,
 			   graphicsRequirements->adapterLuid.LowPart,
 			   graphicsRequirements->minFeatureLevel);
@@ -3990,7 +4041,7 @@ XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 	for (UINT i = 0; IDXGIFactory1_EnumAdapters(factory1, i, &adapter) != DXGI_ERROR_NOT_FOUND; ++i) {
 		DXGI_ADAPTER_DESC desc;
 		DX_CHECK(IDXGIAdapter_GetDesc(adapter, &desc));
-		wprintf(L"DX11 Adapter %d Name: %ls LUID: %ld:%lu\n",
+		LOG("DX11 Adapter %d Name: %ls LUID: %ld:%lu\n",
 				i, desc.Description, desc.AdapterLuid.HighPart, desc.AdapterLuid.LowPart);
 
 		// Check device
@@ -4002,7 +4053,7 @@ XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 			(D3D_FEATURE_LEVEL[]){D3D_FEATURE_LEVEL_11_1}, 1, D3D11_SDK_VERSION,
 			&device, &featureLevel, &context));
 
-		printf("XR D3D11 Device: %p %d\n", (void*)device, featureLevel);
+		LOG("XR D3D11 Device: %p %d\n", (void*)device, featureLevel);
 		if (device == NULL || featureLevel < D3D_FEATURE_LEVEL_11_1) {
 			LOG_ERROR("XR_ERROR_FUNCTION_UNSUPPORTED XR D3D11 Device Invalid\n");
 			ID3D11Device_Release(device);
@@ -4021,7 +4072,7 @@ XR_PROC xrGetD3D11GraphicsRequirementsKHR(
 	IDXGIAdapter_Release(adapter);
 	IDXGIFactory1_Release(factory1);
 
-	printf("Found D3D11GraphicsRequirements LUID: %ld:%lu FeatureLevel: %d\n",
+	LOG("Found D3D11GraphicsRequirements LUID: %ld:%lu FeatureLevel: %d\n",
 		   graphicsRequirements->adapterLuid.HighPart,
 		   graphicsRequirements->adapterLuid.LowPart,
 		   graphicsRequirements->minFeatureLevel);

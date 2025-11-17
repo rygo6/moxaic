@@ -28,8 +28,6 @@ void xrGetViewConfigurationView(XrSystemId systemId, XrViewConfigurationView *pV
 // maybe should be external handle?
 XrResult xrClaimSessionId(session_i* pSessionIndex)
 {
-	LOG("Creating Moxaic OpenXR Session.\n");
-
 	// I believe both a session and a composition layer will end up constituting different Nodes
 	// and requesting a SessionId will simply mean the base compositionlayer index
 	node_h hNode;
@@ -44,9 +42,7 @@ XrResult xrClaimSessionId(session_i* pSessionIndex)
 
 	MxcNodeShared* pNodeShrd  = ARRAY_H(node.pShared, hNode);
 	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
-
-	LOG("Importing node handle %d as OpenXR session\n", hNode);
-
+	
 	*pSessionIndex = hNode; // openxr sessionId == moxaic node handle
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_OPENED);
@@ -56,12 +52,9 @@ XrResult xrClaimSessionId(session_i* pSessionIndex)
 
 void xrReleaseSessionId(session_i iSession)
 {
-	LOG("Releasing Moxaic OpenXR Session.\n");
 	node_h hNode = iSession;
-	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
-	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
-
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
+    ReleaseNodeHandle(hNode);
 }
 
 XrResult xrSharedPollEvent(session_i iSession, XrEventDataUnion* pEventData)

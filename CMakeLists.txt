@@ -27,7 +27,7 @@ set(SECURITY_FLAGS -fstack-protector-all -D_FORTIFY_SOURCE=2 -fPIE -pie)
 
 set(DEBUG_FLAGS -fno-omit-frame-pointer)
 set(WARNING_FLAGS -Wall -Wextra -Werror -Wformat -Wformat-security)
-set(DISABLE_WARNINGS -Wno-error=unused-value -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=unused-const-variable -Wno-error=pedantic)
+set(DISABLE_WARNINGS -Wno-unused-function -Wno-unused-variable -Wno-unused-parameter -Wno-error=unused-value -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-parameter -Wno-error=unused-const-variable -Wno-error=pedantic)
 
 # make switch to not compile oxr into main comp app
 
@@ -119,6 +119,7 @@ target_compile_options(${TARGET_NAME} PRIVATE
 #        -fsanitize=address
 #        -fsanitize=undefined
 
+        -fvisibility=hidden
         -include globals.h
         -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/= # make __FILE__ path relative to project
         -Wno-gnu-statement-expression

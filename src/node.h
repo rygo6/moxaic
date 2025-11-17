@@ -322,6 +322,7 @@ void mxcInitializeNode();
 
 node_h RequestLocalNodeHandle();
 MidResult RequestExternalNodeHandle(MxcNodeShared* pNodeShared, node_h* pNode_h);
+void ReleaseNodeHandle(node_h hNode);
 
 void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle);
 void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessState, MxcNodeSwap* pDepthSwap, MxcNodeGBuffer* pGBuffer, ivec2 nodeSwapExtent);

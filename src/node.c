@@ -356,7 +356,6 @@ node_h RequestLocalNodeHandle()
 
 MidResult RequestExternalNodeHandle(MxcNodeShared* pNodeShared, node_h* pNode_h)
 {
-	LOG("Request External Node Handle.\n");
 	node_h hNode = BLOCK_CLAIM(node.context, 0);
 	if (HANDLE_INVALID(hNode)) return MID_LIMIT_REACHED;
 	LOG("Claimed External Node Handle %d.\n", HANDLE_INDEX(hNode));

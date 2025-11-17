@@ -195,8 +195,8 @@ extern void Panic(const char* file, int line, const char* message);
 		PANIC("Expected: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
 	}
 
-#define LOG(_format, ...) printf(__FILE__ ":%d	" _format, __LINE__, ##__VA_ARGS__)
-#define LOG_ERROR(_format, ...) fprintf(stderr, __FILE__ ":%d	Error! " _format, __LINE__, ##__VA_ARGS__)
+#define LOG(_format, ...) fprintf(stdout, __FILE__ ":%d " _format, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR(_format, ...) fprintf(stdout, __FILE__ ":%d Error! " _format, __LINE__, ##__VA_ARGS__)
 
 #define LOG_ONCE(...)               \
 	({                              \
