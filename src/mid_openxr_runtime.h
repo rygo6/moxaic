@@ -1734,7 +1734,7 @@ XR_PROC xrEnumerateReferenceSpaces(
 		XR_REFERENCE_SPACE_TYPE_LOCAL,
 		XR_REFERENCE_SPACE_TYPE_STAGE,
 		XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR,
-		XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT,
+//		XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT,
 	};
 
 	*spaceCountOutput = COUNT(supportedSpaces);
@@ -4352,22 +4352,22 @@ XR_PROC xrGetInstanceProcAddr(
 	CHECK_PROC_ADDR(xrStopHapticFeedback)
 
 	// openxr extension procs
-	CHECK_PROC_ADDR(xrGetVisibilityMaskKHR)
+//	CHECK_PROC_ADDR(xrGetVisibilityMaskKHR)
 
-	CHECK_PROC_ADDR(xrSetInputDeviceActiveEXT)
-	CHECK_PROC_ADDR(xrSetInputDeviceStateBoolEXT)
-	CHECK_PROC_ADDR(xrSetInputDeviceStateFloatEXT)
-	CHECK_PROC_ADDR(xrSetInputDeviceStateVector2fEXT)
-	CHECK_PROC_ADDR(xrSetInputDeviceLocationEXT)
+//	CHECK_PROC_ADDR(xrSetInputDeviceActiveEXT)
+//	CHECK_PROC_ADDR(xrSetInputDeviceStateBoolEXT)
+//	CHECK_PROC_ADDR(xrSetInputDeviceStateFloatEXT)
+//	CHECK_PROC_ADDR(xrSetInputDeviceStateVector2fEXT)
+//	CHECK_PROC_ADDR(xrSetInputDeviceLocationEXT)
 
-	CHECK_PROC_ADDR(xrEnumeratePerformanceMetricsCounterPathsMETA)
-	CHECK_PROC_ADDR(xrSetPerformanceMetricsStateMETA)
-	CHECK_PROC_ADDR(xrGetPerformanceMetricsStateMETA)
-	CHECK_PROC_ADDR(xrQueryPerformanceMetricsCounterMETA)
+//	CHECK_PROC_ADDR(xrEnumeratePerformanceMetricsCounterPathsMETA)
+//	CHECK_PROC_ADDR(xrSetPerformanceMetricsStateMETA)
+//	CHECK_PROC_ADDR(xrGetPerformanceMetricsStateMETA)
+//	CHECK_PROC_ADDR(xrQueryPerformanceMetricsCounterMETA)
 
-	CHECK_PROC_ADDR(xrGetRecommendedLayerResolutionMETA)
+//	CHECK_PROC_ADDR(xrGetRecommendedLayerResolutionMETA)
 
-	CHECK_PROC_ADDR(xrPerfSettingsSetPerformanceLevelEXT)
+//	CHECK_PROC_ADDR(xrPerfSettingsSetPerformanceLevelEXT)
 
 
 //	CHECK_PROC_ADDR(xrSetDebugUtilsObjectNameEXT)
@@ -4378,26 +4378,26 @@ XR_PROC xrGetInstanceProcAddr(
 //	CHECK_PROC_ADDR(xrSessionEndDebugUtilsLabelRegionEXT)
 //	CHECK_PROC_ADDR(xrSessionInsertDebugUtilsLabelEXT)
 
-	CHECK_PROC_ADDR(xrCreateHandTrackerEXT)
-	CHECK_PROC_ADDR(xrDestroyHandTrackerEXT)
-	CHECK_PROC_ADDR(xrLocateHandJointsEXT)
-	CHECK_PROC_ADDR(xrCreateSpatialAnchorMSFT)
-	CHECK_PROC_ADDR(xrCreateSpatialAnchorSpaceMSFT)
-	CHECK_PROC_ADDR(xrDestroySpatialAnchorMSFT)
-	CHECK_PROC_ADDR(xrEnumerateSceneComputeFeaturesMSFT)
-	CHECK_PROC_ADDR(xrCreateSceneObserverMSFT)
-	CHECK_PROC_ADDR(xrDestroySceneObserverMSFT)
-	CHECK_PROC_ADDR(xrCreateSceneMSFT)
-	CHECK_PROC_ADDR(xrDestroySceneMSFT)
-	CHECK_PROC_ADDR(xrComputeNewSceneMSFT)
-	CHECK_PROC_ADDR(xrGetSceneComputeStateMSFT)
-	CHECK_PROC_ADDR(xrGetSceneComponentsMSFT)
-	CHECK_PROC_ADDR(xrLocateSceneComponentsMSFT)
-	CHECK_PROC_ADDR(xrGetSceneMeshBuffersMSFT)
+//	CHECK_PROC_ADDR(xrCreateHandTrackerEXT)
+//	CHECK_PROC_ADDR(xrDestroyHandTrackerEXT)
+//	CHECK_PROC_ADDR(xrLocateHandJointsEXT)
+//	CHECK_PROC_ADDR(xrCreateSpatialAnchorMSFT)
+//	CHECK_PROC_ADDR(xrCreateSpatialAnchorSpaceMSFT)
+//	CHECK_PROC_ADDR(xrDestroySpatialAnchorMSFT)
+//	CHECK_PROC_ADDR(xrEnumerateSceneComputeFeaturesMSFT)
+//	CHECK_PROC_ADDR(xrCreateSceneObserverMSFT)
+//	CHECK_PROC_ADDR(xrDestroySceneObserverMSFT)
+//	CHECK_PROC_ADDR(xrCreateSceneMSFT)
+//	CHECK_PROC_ADDR(xrDestroySceneMSFT)
+//	CHECK_PROC_ADDR(xrComputeNewSceneMSFT)
+//	CHECK_PROC_ADDR(xrGetSceneComputeStateMSFT)
+//	CHECK_PROC_ADDR(xrGetSceneComponentsMSFT)
+//	CHECK_PROC_ADDR(xrLocateSceneComponentsMSFT)
+//	CHECK_PROC_ADDR(xrGetSceneMeshBuffersMSFT)
 
-	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
+//	CHECK_PROC_ADDR(xrGetOpenGLGraphicsRequirementsKHR)
 	CHECK_PROC_ADDR(xrGetD3D11GraphicsRequirementsKHR)
-	CHECK_PROC_ADDR(xrConvertWin32PerformanceCounterToTimeKHR)
+//	CHECK_PROC_ADDR(xrConvertWin32PerformanceCounterToTimeKHR)
 
 #undef CHECK_PROC_ADDR
 
