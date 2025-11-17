@@ -1813,27 +1813,37 @@ XR_PROC xrGetReferenceSpaceBoundsRect(XrSession            session,
 	LOG_METHOD(xrGetReferenceSpaceBoundsRect);
 
 	switch (referenceSpaceType) {
+		case XR_REFERENCE_SPACE_TYPE_STAGE: {
+			Session*  pSession = XR_OPAQUE_BLOCK_P(session);
+			session_h hSession = XR_OPAQUE_BLOCK_H(session);
+			xrGetReferenceSpaceBounds(pSession->index, bounds);
+
+			LOG("xrGetReferenceSpaceBoundsRect %s\n	windowWidth: %f\n	windowHeight: %f\n",
+			    string_XrReferenceSpaceType(referenceSpaceType), bounds->width, bounds->height);
+
+			return XR_SUCCESS;
+		}
+
 		case XR_REFERENCE_SPACE_TYPE_VIEW:
 		case XR_REFERENCE_SPACE_TYPE_LOCAL:
 		case XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR:
 		case XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT:
 		case XR_REFERENCE_SPACE_TYPE_COMBINED_EYE_VARJO:
 		case XR_REFERENCE_SPACE_TYPE_LOCALIZATION_MAP_ML:
+			ZERO_STRUCT_P(bounds);
+			LOG_ERROR("XR_SPACE_BOUNDS_UNAVAILABLE %s\n",  string_XrReferenceSpaceType(referenceSpaceType));
 			return XR_SPACE_BOUNDS_UNAVAILABLE;
 
-		case XR_REFERENCE_SPACE_TYPE_STAGE:
+		case XR_REFERENCE_SPACE_TYPE_MAX_ENUM:
+			ZERO_STRUCT_P(bounds);
+			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE %s\n",  string_XrReferenceSpaceType(referenceSpaceType));
+			return XR_ERROR_VALIDATION_FAILURE;
+
 		default:
-			break;
+			ZERO_STRUCT_P(bounds);
+			LOG_ERROR("XR_ERROR_REFERENCE_SPACE_UNSUPPORTED %s\n",  string_XrReferenceSpaceType(referenceSpaceType));
+			return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
 	}
-
-	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
-	session_h hSession = XR_OPAQUE_BLOCK_H(session);
-	xrGetReferenceSpaceBounds(pSession->index, bounds);
-
-	LOG("xrGetReferenceSpaceBoundsRect %s\n	windowWidth: %f\n	windowHeight: %f\n",
-		string_XrReferenceSpaceType(referenceSpaceType), bounds->width, bounds->height);
-
-	return XR_SUCCESS;
 }
 
 XR_PROC xrCreateActionSpace(
