@@ -1440,21 +1440,25 @@ XR_PROC xrGetSystem(XrInstance instance, const XrSystemGetInfo* getInfo, XrSyste
 	LogNextChain((XrBaseInStructure*)getInfo->next);
 	CHECK_INSTANCE(instance);
 
-	switch (getInfo->formFactor) {
-		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY:
+	switch (getInfo->formFactor)
+	{
+		case XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY: {
 			xr.instance.systemFormFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
 			xr.instance.systemId = SYSTEM_ID_HMD_VR_STEREO;
 			*systemId = SYSTEM_ID_HMD_VR_STEREO;
 			return XR_SUCCESS;
-		case XR_FORM_FACTOR_HANDHELD_DISPLAY:
+		}
+		case XR_FORM_FACTOR_HANDHELD_DISPLAY: {
 			xr.instance.systemFormFactor = XR_FORM_FACTOR_HANDHELD_DISPLAY;
 			xr.instance.systemId = SYSTEM_ID_HANDHELD_AR;
 			*systemId = SYSTEM_ID_HANDHELD_AR;
 			return XR_SUCCESS;
-		default:
-			LOG("XR_ERROR_FORM_FACTOR_UNSUPPORTED\n");
+		}
+		default: {
 			*systemId = XR_NULL_SYSTEM_ID;
+			LOG("XR_ERROR_FORM_FACTOR_UNSUPPORTED\n");
 			return XR_ERROR_FORM_FACTOR_UNSUPPORTED;
+		}
 	}
 }
 
@@ -1514,6 +1518,29 @@ xrEnumerateEnvironmentBlendModes(XrInstance              instance,
 	LOG_METHOD(xrEnumerateEnvironmentBlendModes);
 	CHECK_INSTANCE(instance);
 
+	bool supported = false;
+	switch ((SystemId)systemId)
+	{
+		case SYSTEM_ID_HANDHELD_AR: {
+			supported = (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO);
+			break;
+		}
+		case SYSTEM_ID_HMD_VR_STEREO: {
+			supported = (viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO ||
+			             viewConfigurationType == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO);
+			break;
+		}
+		default: {
+			LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
+			return XR_ERROR_SYSTEM_INVALID;
+		}
+	}
+
+	if (!supported) {
+		LOG_ERROR("XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED\n");
+		return XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED;
+	}
+
 	static const XrEnvironmentBlendMode modes[] = {
 		XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
 		XR_ENVIRONMENT_BLEND_MODE_ADDITIVE,
@@ -1528,16 +1555,8 @@ xrEnumerateEnvironmentBlendModes(XrInstance              instance,
 	if (environmentBlendModeCapacityInput < COUNT(modes))
 		return XR_ERROR_SIZE_INSUFFICIENT;
 
-	switch (viewConfigurationType) {
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-		default:
-			for (u32 i = 0; i < COUNT(modes); ++i)
-				environmentBlendModes[i] = modes[i];
-			break;
-	}
+	for (u32 i = 0; i < COUNT(modes); ++i)
+		environmentBlendModes[i] = modes[i];
 
 	return XR_SUCCESS;
 }
@@ -1956,11 +1975,12 @@ XR_PROC xrDestroySpace(XrSpace space)
 	return XR_SUCCESS;
 }
 
-XR_PROC xrEnumerateViewConfigurations(XrInstance               instance,
-                                      XrSystemId               systemId,
-                                      uint32_t                 viewConfigurationTypeCapacityInput,
-                                      uint32_t*                viewConfigurationTypeCountOutput,
-                                      XrViewConfigurationType* viewConfigurationTypes)
+XR_PROC
+xrEnumerateViewConfigurations(XrInstance               instance,
+							  XrSystemId               systemId,
+							  uint32_t                 viewConfigurationTypeCapacityInput,
+							  uint32_t*                viewConfigurationTypeCountOutput,
+							  XrViewConfigurationType* viewConfigurationTypes)
 {
 	LOG_METHOD(xrEnumerateViewConfigurations);
 	CHECK_INSTANCE(instance);
@@ -1988,9 +2008,10 @@ XR_PROC xrEnumerateViewConfigurations(XrInstance               instance,
 			TRANSFER_MODES(vrStereoModes);
 			return XR_SUCCESS;
 		}
-		default:
+		default: {
 			LOG_ERROR("XR_ERROR_SYSTEM_INVALID\n");
 			return XR_ERROR_SYSTEM_INVALID;
+		}
 	}
 
 #undef TRANSFER_MODES
