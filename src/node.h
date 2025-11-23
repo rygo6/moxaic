@@ -11,7 +11,7 @@
 #include "mid_vulkan.h"
 #include "mid_bit.h"
 #include "mid_openxr_runtime.h"
-#include "mid_qring.h"
+#include "mid_channel.h"
 
 #include "pipe_gbuffer_process.h"
 
@@ -88,15 +88,15 @@ typedef struct MxcClip {
 	vec2 lrUV;
 } MxcClip;
 
-typedef struct MxcNodeShared {
-
+typedef volatile struct MxcNodeShared {
+	// TODO these all should be volatile and use barriers
 	// Read/Write every cycle
-	_Atomic u64  timelineValue;
-	MxcClip      clip;
+	u64     timelineValue;
+	MxcClip clip;
 	ProcessState processState;
-	pose         rootPose;
-	pose         cameraPose;
-	camera       camera;
+	pose   rootPose;
+	pose   cameraPose;
+	camera camera;
 
 	MxcController left;
 	MxcController right;
@@ -121,11 +121,11 @@ typedef struct MxcNodeShared {
 	MxcCompositorMode compositorMode;
 
 	// Interprocess
-	MidQRing ipcFuncQueue;
+	MidChannelRing ipcFuncQueue;
 	MxcIpcFunc queuedIpcFuncs[MID_QRING_CAPACITY];
 
 	/* Events */
-	MidQRing eventDataQueue;
+	MidChannelRing eventDataQueue;
 	XrEventDataUnion queuedEventDataBuffers[MID_QRING_CAPACITY];
 
 } MxcNodeShared; //MxcSharedNodeData to reflect MxcCompositorNodeData?
@@ -292,7 +292,7 @@ extern HANDLE                 importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 extern struct Node {
-	MidQRing newConnectionQueue;
+	MidChannelRing newConnectionQueue;
 	node_h 	 queuedNewConnections[MID_QRING_CAPACITY];
 
 	MxcActiveNodes active[MXC_COMPOSITOR_MODE_COUNT];
@@ -349,7 +349,7 @@ void mxcIpcFuncDequeue(node_h hNode);
 static inline void mxcNodeInterprocessPoll()
 {
 	node_h hNewNode;
-	while (MID_QRING_DEQUEUE(&node.newConnectionQueue, node.queuedNewConnections, &hNewNode) == MID_SUCCESS)
+	while (MID_CHANNEL_RECV(&node.newConnectionQueue, node.queuedNewConnections, &hNewNode) == MID_SUCCESS)
 		mxcRegisterActiveNode(hNewNode);
 
 	// We still want to poll MXC_COMPOSITOR_MODE_NONE so it can send events when not being composited.

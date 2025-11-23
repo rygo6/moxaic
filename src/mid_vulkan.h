@@ -30,7 +30,7 @@
 #endif
 
 #include "mid_common.h"
-#include "mid_qring.h"
+#include "mid_channel.h"
 #include "mid_math.h"
 
 ////
@@ -283,7 +283,7 @@ typedef struct VkQueueFamily {
 	u32     index;
 	VkQueue queue;
 
-	MidQRing              cmdQueue;
+	MidChannelRing              cmdQueue;
 	VkQueuedCommandBuffer queuedCmds[128];
 
 	VkSemaphore   immediateTimeline;
@@ -1192,7 +1192,7 @@ static VkBool32 VkmDebugUtilsCallback(
 void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer queuedCmd)
 {
 	auto_t pFamily = &vk.context.queueFamilies[iFamilyType];
-	if (MID_QRING_ENQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_LIMIT_REACHED)
+	if (MID_CHANNEL_SEND(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_LIMIT_REACHED)
 		LOG_ERROR("%s CommandBuffer Queue reached limit!\n", string_VkQueueFamilyType[iFamilyType]);
 }
 
@@ -1201,7 +1201,7 @@ void vkSubmitQueuedCommandBuffers()
 	for (int iFamilyType = 0; iFamilyType < VK_QUEUE_FAMILY_TYPE_COUNT; ++iFamilyType) {
 		VkQueueFamily* pFamily = &vk.context.queueFamilies[iFamilyType];
 		VkQueuedCommandBuffer queuedCmd;
-		while (MID_QRING_DEQUEUE(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
+		while (MID_CHANNEL_RECV(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
 			CmdSubmit(queuedCmd.cmd, pFamily->queue, queuedCmd.timeline, queuedCmd.timelineSignalValue);
 	}
 }

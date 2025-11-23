@@ -74,7 +74,7 @@ int main(void)
 		mxcCreateAndRunCompositorThread(vk.surfaces[0]);
 		mxcServerInitializeInterprocess();
 
-//#define TEST_NODE
+#define TEST_NODE
 #ifdef TEST_NODE
 		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
 		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);

@@ -60,7 +60,7 @@
 #include "mid_window.h"
 
 #define MID_QRING_IMPLEMENTATION
-#include "mid_qring.h"
+#include "mid_channel.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"

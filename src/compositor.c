@@ -682,7 +682,7 @@ CompositeLoop:
 					},
 				});
 
-				auto_t pProcessState = &pNodeShrd->processState;
+				ProcessState* pProcessState = (ProcessState*)&pNodeShrd->processState;
 				// Should be way to only set this once
 				pProcessState->cameraNearZ = globCam.zNear;
 				pProcessState->cameraFarZ = globCam.zFar;
@@ -815,7 +815,8 @@ CompositeLoop:
 				pNodeShrd->clip.lrUV = uvMaxClamp;
 
 				vkUpdateGlobalSetViewProj(pNodeShrd->camera, pNodeShrd->cameraPose, (VkGlobalSetState*)&pNodeCpst->renderingNodeSetState.view); // don't have to call SetViewProj every frame?
-				memcpy(&pNodeCpst->renderingNodeSetState.ulUV, &pNodeShrd->clip, sizeof(MxcClip));
+				pNodeCpst->renderingNodeSetState.ulUV = pNodeShrd->clip.ulUV;
+				pNodeCpst->renderingNodeSetState.lrUV = pNodeShrd->clip.lrUV;
 			}
 		}
 	}

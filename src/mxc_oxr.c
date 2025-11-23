@@ -63,8 +63,8 @@ XrResult xrSharedPollEvent(session_i iSession, XrEventDataUnion* pEventData)
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
-	return MID_QRING_DEQUEUE(&pNodeShrd->eventDataQueue, pNodeShrd->queuedEventDataBuffers, pEventData) == MID_SUCCESS ?
-		XR_SUCCESS : XR_EVENT_UNAVAILABLE;
+	return MID_CHANNEL_RECV(&pNodeShrd->eventDataQueue, pNodeShrd->queuedEventDataBuffers, pEventData) == MID_SUCCESS ?
+	       XR_SUCCESS : XR_EVENT_UNAVAILABLE;
 }
 
 void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds)
@@ -285,7 +285,7 @@ void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView)
     ({                                     \
         MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, (node_h)sessionId); \
         atomic_thread_fence(memory_order_acquire); \
-        MxcController* pController = &pNodeShrd->chirality; \
+        volatile MxcController* pController = &pNodeShrd->chirality; \
         bool changed = pState->isActive != pController->active || \
                        pState->boolValue != pController->button; \
         pState->isActive = pController->active; \
@@ -345,10 +345,10 @@ int xrInputMenuClick_Right(session_i sessionId, SubactionState* pState)
 	({                                                                                                        \
         MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, (node_h)sessionId); \
 		atomic_thread_fence(memory_order_acquire);                                                            \
-		MxcController* pController = &pNodeShrd->chirality;                                                           \
+		volatile MxcController* pController = &pNodeShrd->chirality;                                          \
 		bool changed = pState->isActive != pController->active ||                                             \
-		               memcmp(&pState->eulerPoseValue.euler, &pController->pose.euler, sizeof(XrVector3f)) || \
-		               memcmp(&pState->eulerPoseValue.position, &pController->pose.pos, sizeof(XrVector3f));  \
+		               memcmp((void*)&pState->eulerPoseValue.euler, (void*)&pController->pose.euler, sizeof(XrVector3f)) || \
+		               memcmp((void*)&pState->eulerPoseValue.position, (void*)&pController->pose.pos, sizeof(XrVector3f));  \
 		pState->isActive = pController->active;                                                               \
 		pState->eulerPoseValue.euler = *(XrVector3f*)&pController->pose.euler;                                \
 		pState->eulerPoseValue.position = *(XrVector3f*)&pController->pose.pos;                               \

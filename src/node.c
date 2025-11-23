@@ -476,7 +476,7 @@ static int CleanupNode(node_h hNode)
 			if (result != 0) {
 				perror("Thread join failed");
 			}
-			free(pNodeShrd);
+			free((void*)pNodeShrd);
 			break;
 		}
 		case MXC_NODE_INTERPROCESS_MODE_EXPORTED: {
@@ -594,7 +594,7 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle)
 	CHECK(pthread_create(&pNodeCtxt->thread.threadId, NULL, (void* (*)(void*))runFunc, (void*)(u64)hNode), "Node thread creation failed!");
 
 	// Add to COMPOSITOR_MODE_NONE initially to start processing
-	MID_QRING_ENQUEUE(&node.newConnectionQueue, node.queuedNewConnections, &hNode);
+	MID_CHANNEL_SEND(&node.newConnectionQueue, node.queuedNewConnections, &hNode);
 
 	LOG("Request Node Thread Success. Handle: %d\n", HANDLE_INDEX(hNode));
 	// todo this needs error handling
@@ -782,7 +782,7 @@ static void ServerInterprocessAcceptNodeConnection()
 	/// Add Active node
 	{
 		// Add to COMPOSITOR_MODE_NONE initially to start processing
-		MID_QRING_ENQUEUE(&node.newConnectionQueue, node.queuedNewConnections, &hNode);
+		MID_CHANNEL_SEND(&node.newConnectionQueue, node.queuedNewConnections, &hNode);
 		goto ExitSuccess;
 	}
 
@@ -1121,7 +1121,7 @@ static void ipcFuncClaimSwap(node_h hNode)
 
 				pNodeCtxt->hSwaps[iNodeSwap] = HANDLE_DEFAULT;
 				pNodeShrd->nodeSwapStates[iNodeSwap] = XR_SWAP_STATE_UNITIALIZED;
-				memset(pNodeShrd->nodeSwapInfos + iNodeSwap, 0, sizeof(XrSwapInfo));
+				ZERO_STRUCT_P(&pNodeShrd->nodeSwapInfos[iNodeSwap]);
 
 				break;
 			}
@@ -1152,14 +1152,14 @@ const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {
 
 int mxcIpcFuncEnqueue(node_h hNode, MxcIpcFunc target) {
 	MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, hNode);
-	return MID_QRING_ENQUEUE(&pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target);
+	return MID_CHANNEL_SEND(&pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target);
 }
 
 void mxcIpcFuncDequeue(node_h hNode)
 {
 	MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, hNode);
 	MxcIpcFunc target;
-	if (MID_QRING_DEQUEUE(&pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target) == MID_SUCCESS)
+	if (MID_CHANNEL_RECV(&pNodeShrd->ipcFuncQueue, pNodeShrd->queuedIpcFuncs, &target) == MID_SUCCESS)
       MXC_IPC_FUNCS[target](hNode);
 }
 

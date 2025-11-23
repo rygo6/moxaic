@@ -96,7 +96,7 @@ typedef _Atomic uint64_t a_u64;
 #define UNLIKELY(x)                __builtin_expect(!!(x), 0)
 #define COUNT(_array)              (sizeof(_array) / sizeof(_array[0]))
 #define FLAG(b)                    (1 << (b))
-#define ZERO_STRUCT_P(_p)          memset((_p), 0, sizeof(*_p))
+#define ZERO_STRUCT_P(_p)          memset((void*)(_p), 0, sizeof(*_p))
 #define IS_STRUCT_P_ZEROED(_p)     (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
 
 #define XMALLOC_P(_p) \

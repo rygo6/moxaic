@@ -52,7 +52,7 @@
 #include "mid_common.h"
 #include "mid_bit.h"
 #include "mid_block.h"
-#include "mid_qring.h"
+#include "mid_channel.h"
 
 #ifdef MID_IDE_ANALYSIS
 #undef XRAPI_CALL
@@ -576,7 +576,7 @@ typedef struct Instance {
 	} graphics;
 
 	/* Events */
-	MidQRing         eventDataQueue;
+	MidChannelRing         eventDataQueue;
 	XrEventDataUnion queuedEventDataBuffers[MID_QRING_CAPACITY];
 
 } Instance;
@@ -889,7 +889,7 @@ XR_PROC xrStructureTypeToString(XrInstance      instance,
  * ================================================================
  */
 #define XR_EVENT_ENQUEUE_SCOPE(_pData) \
-	MID_QRING_ENQUEUE_SCOPE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, _pData)
+	MID_CHANNEL_SEND_SCOPE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, _pData)
 
 static void EnqueueEventDataSessionStateChanged(session_h hSession, XrSessionState sessionState)
 {
@@ -1422,7 +1422,7 @@ XR_PROC xrPollEvent(XrInstance instance, XrEventDataBuffer* eventData)
 
 	XrEventDataUnion* pEventData = (XrEventDataUnion*)eventData;
 	pEventData->dataBuffer.type = 0;
-	MID_QRING_DEQUEUE(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData);
+	MID_CHANNEL_RECV(&xr.instance.eventDataQueue, xr.instance.queuedEventDataBuffers, pEventData);
 	switch(pEventData->dataBuffer.type)
 	{
 		case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED: {
