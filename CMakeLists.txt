@@ -127,6 +127,8 @@ target_compile_options(${TARGET_NAME} PRIVATE
         -fwrapv
 )
 
+message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     target_compile_definitions(${TARGET_NAME} PRIVATE DEBUG)
 endif()

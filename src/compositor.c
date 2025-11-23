@@ -495,7 +495,7 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 		.dimension.y = DEFAULT_HEIGHT,
 	};
 	pose globCamPose = {
-		.pos = VEC3(0.0f, 0.0f, 2.0f),
+		.pos = VEC3(0.0f, 0.0f, 0.0f),
 		.euler = VEC3(0.0f, 0.0f, 0.0f),
 	};
 	globCamPose.rot = QuatFromEuler(globCamPose.euler);
@@ -509,6 +509,7 @@ CompositeLoop:
 	/*
 	 * MXC_CYCLE_UPDATE_WINDOW_STATE
 	 */
+
 	// Waited in end of cycle.
 
 	/*

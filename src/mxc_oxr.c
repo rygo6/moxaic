@@ -34,6 +34,12 @@ XrResult xrClaimSessionId(session_i* pSessionIndex)
 	if (RequestExternalNodeHandle(&pImportedExternalMemory->shared, &hNode) != MID_SUCCESS)
 		return XR_ERROR_LIMIT_REACHED;
 
+	if (pImportedExternalMemory == NULL)
+		return XR_ERROR_RUNTIME_FAILURE;
+
+	if (pImportedExternalMemory->imports.swapsSyncedHandle == NULL)
+		return XR_ERROR_RUNTIME_FAILURE;
+
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
 	pNodeCtxt->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;

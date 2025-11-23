@@ -1,9 +1,10 @@
-#ifndef MID_OPENXR_RUNTIME_H
-#define MID_OPENXR_RUNTIME_H
-
 /*
  * Mid OpenXR Runtime Header
+ *
  */
+
+#ifndef MID_OPENXR_RUNTIME_H
+#define MID_OPENXR_RUNTIME_H
 
 #include <math.h>
 #include <pthread.h>
@@ -810,6 +811,7 @@ STRING_ENUM_TYPE(XrReferenceSpaceType)
 STRING_ENUM_TYPE(XrViewConfigurationType)
 STRING_ENUM_TYPE(XrVisibilityMaskTypeKHR)
 STRING_ENUM_TYPE(XrSessionState)
+STRING_ENUM_TYPE(XrResult)
 
 #undef ENUM_NAME_CASE
 #undef STRING_ENUM_TYPE
@@ -1594,11 +1596,11 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 	}
 
 	session_i iSession;
-	if (xrClaimSessionId(&iSession) != XR_SUCCESS) {
-		LOG_ERROR("XR_ERROR_LIMIT_REACHED\n");
-		return XR_ERROR_LIMIT_REACHED;
+	XrResult claimResult = xrClaimSessionId(&iSession);
+	if (claimResult != XR_SUCCESS) {
+		LOG_ERROR("%s\n", string_XrResult(claimResult));
+		return claimResult;
 	}
-
 	LOG("Claimed iSession %d\n", iSession);
 
 	session_h hSession = BLOCK_CLAIM(xr.block.session, iSession);
@@ -1856,10 +1858,10 @@ XR_PROC xrGetReferenceSpaceBoundsRect(XrSession            session,
 	}
 }
 
-XR_PROC xrCreateActionSpace(
-	XrSession                      session,
-	const XrActionSpaceCreateInfo* createInfo,
-	XrSpace*                       space)
+XR_PROC
+xrCreateActionSpace(XrSession                      session,
+                    const XrActionSpaceCreateInfo* createInfo,
+                    XrSpace*                       space)
 {
 	XrVector3f    position    = createInfo->poseInActionSpace.position;
 	XrQuaternionf orientation = createInfo->poseInActionSpace.orientation;
@@ -1889,15 +1891,22 @@ XR_PROC xrCreateActionSpace(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrLocateSpace(XrSpace          space,
-                      XrSpace          baseSpace,
-                      XrTime           time,
-                      XrSpaceLocation* location)
+XR_PROC
+xrLocateSpace(XrSpace          space,
+			  XrSpace          baseSpace,
+			  XrTime           time,
+			  XrSpaceLocation* location)
 {
 	LOG_METHOD(xrLocateSpace);
 
-	Space*   pSpace = (Space*)space;
-	Session* pSession = BLOCK_PTR_H(xr.block.session, pSpace->hSession);
+	if (time <= 0) {
+		LOG_ERROR("XR_ERROR_TIME_INVALID %lld\n", time);
+		return XR_ERROR_TIME_INVALID;
+	}
+
+	Space*   pSpace     = (Space*)space;
+	Space*   pBaseSpace = (Space*)baseSpace;
+	Session* pSession   = BLOCK_PTR_H(xr.block.session, pSpace->hSession);
 
 	XrBool32 isActive = false;
 	XrEulerPosef eulerPose = {};
@@ -1923,7 +1932,6 @@ XR_PROC xrLocateSpace(XrSpace          space,
 
 			eulerPose = pState->eulerPoseValue;
 			isActive = pState->isActive;
-
 			break;
 		}
 		case XR_TYPE_REFERENCE_SPACE_CREATE_INFO: {
@@ -1933,19 +1941,21 @@ XR_PROC xrLocateSpace(XrSpace          space,
 				case XR_REFERENCE_SPACE_TYPE_STAGE:
 				case XR_REFERENCE_SPACE_TYPE_VIEW:
 					xrGetHeadPose(pSession->index, &eulerPose);
-				isActive = true;
-				break;
+					isActive = true;
+					break;
+
 				default:
 					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space interprocessMode %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
-				return XR_ERROR_VALIDATION_FAILURE;
+					return XR_ERROR_VALIDATION_FAILURE;
 			}
-
 			break;
 		}
 		default:
 			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space interprocessMode %s\n", string_XrStructureType(pSpace->type));
 			return XR_ERROR_VALIDATION_FAILURE;
 	}
+
+
 
 	switch (xr.instance.graphicsApi)
 	{
@@ -1959,6 +1969,10 @@ XR_PROC xrLocateSpace(XrSpace          space,
 			// Not all APIS might need adjustment?
 			break;
 	}
+
+	eulerPose.position.x += pSpace->poseInSpace.position.x -= pBaseSpace->poseInSpace.position.x;
+	eulerPose.position.y += pSpace->poseInSpace.position.y -= pBaseSpace->poseInSpace.position.y;
+	eulerPose.position.z += pSpace->poseInSpace.position.z -= pBaseSpace->poseInSpace.position.z;
 
 	location->pose.orientation = xrQuaternionFromEuler(eulerPose.euler);
 	location->pose.position = eulerPose.position;
@@ -1981,7 +1995,8 @@ XR_PROC xrLocateSpace(XrSpace          space,
 	return XR_SUCCESS;
 }
 
-XR_PROC xrDestroySpace(XrSpace space)
+XR_PROC
+xrDestroySpace(XrSpace space)
 {
 	LOG_METHOD(xrDestroySpace);
 	auto_t pSpace = (Space*)space;
@@ -4308,6 +4323,8 @@ XR_PROC xrGetInstanceProcAddr(
 	const char*         name,
 	PFN_xrVoidFunction* function)
 {
+//	LOG("xrGetInstanceProcAddr: %p %s\n", (void*)instance, name);
+
 #define CHECK_PROC_ADDR(_method)                                    \
 	if (strncmp(name, #_method, XR_MAX_STRUCTURE_NAME_SIZE) == 0) { \
 		*function = (PFN_xrVoidFunction)_method;                    \
