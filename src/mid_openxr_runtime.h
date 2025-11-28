@@ -201,6 +201,8 @@ typedef struct XrEulerPosef {
 	XrVector3f position;
 } XrEulerPosef;
 
+#define XR_EULER_POSE_IDENT (XrEulerPosef){}
+
 typedef struct XrSubView {
 	XrStructureType    type;
 	void* XR_MAY_ALIAS next;
@@ -981,8 +983,8 @@ EnqueueEventDataUserPresenceChanged(session_h hSession, XrBool32 isUserPresent)
 #ifndef PI
 #define PI 3.14159265358979323846
 #endif
-static inline
-XrQuaternionf xrQuaternionFromEuler(XrVector3f euler)
+static inline XrQuaternionf
+xrQuaternionFromEuler(XrVector3f euler)
 {
 	XrVector3f c, s;
 	c.x = cos(euler.x * 0.5f);
@@ -1000,14 +1002,23 @@ XrQuaternionf xrQuaternionFromEuler(XrVector3f euler)
 	return out;
 }
 
-
-#define XR_CONVERT_DD11_POSITION(_) _.y = -_.y
-#define XR_CONVERT_D3D11_EULER(_) _.x = -_.x
+// this is from here https://github.com/KhronosGroup/OpenXR-CTS/blob/devel/src/common/xr_linear.h#L251
+// is that okay?
+inline static void
+XrQuaternionf_Multiply(XrQuaternionf* result, const XrQuaternionf* a, const XrQuaternionf* b) {
+	result->x = (b->w * a->x) + (b->x * a->w) + (b->y * a->z) - (b->z * a->y);
+	result->y = (b->w * a->y) - (b->x * a->z) + (b->y * a->w) + (b->z * a->x);
+	result->z = (b->w * a->z) + (b->x * a->y) - (b->y * a->x) + (b->z * a->w);
+	result->w = (b->w * a->w) - (b->x * a->x) - (b->y * a->y) - (b->z * a->z);
+}
 
 static inline float xrFloatLerp(float a, float b, float t)
 {
 	return a + t * (b - a);
 }
+
+#define XR_CONVERT_DD11_POSITION(_) _.y = -_.y
+#define XR_CONVERT_D3D11_EULER(_) _.x = -_.x
 
 /**
  * Binding
@@ -1803,12 +1814,11 @@ XR_PROC xrCreateReferenceSpace(XrSession                         session,
 	pSpace->poseInSpace = createInfo->poseInReferenceSpace;
 	pSpace->reference.spaceType = createInfo->referenceSpaceType;
 
-	// auto_t switch to first created space
+	// automatically switch to first created space
 	if (!HANDLE_VALID(pSession->hActiveReferenceSpace)) {
 		EnqueueEventDataReferenceSpaceChangePending(
 			hSession, hSpace, 
 			createInfo->referenceSpaceType,
-			// this is not correct, supposed to be origin of new space in space of prior space
 			createInfo->poseInReferenceSpace);
 	}
 
@@ -1891,6 +1901,46 @@ xrCreateActionSpace(XrSession                      session,
 	return XR_SUCCESS;
 }
 
+// 1. Quaternion Conjugate (Inverse for unit quaternions)
+static inline XrQuaternionf XrQuaternionInverse(XrQuaternionf q) {
+	return (XrQuaternionf){.x = -q.x, .y = -q.y, .z = -q.z, .w = q.w};
+}
+
+// 2. Quaternion Multiplication (Q1 * Q2)
+static inline XrQuaternionf XrQuaternionMultiply(XrQuaternionf a, XrQuaternionf b) {
+	return (XrQuaternionf){
+		.x =  a.x * b.w + a.y * b.z - a.z * b.y + a.w * b.x,
+		.y = -a.x * b.z + a.y * b.w + a.z * b.x + a.w * b.y,
+		.z =  a.x * b.y - a.y * b.x + a.z * b.w + a.w * b.z,
+		.w = -a.x * b.x - a.y * b.y - a.z * b.z + a.w * b.w
+	};
+}
+
+// 3. Rotate Vector by Quaternion
+static inline XrVector3f XrRotateVector(XrQuaternionf q, XrVector3f v) {
+	XrVector3f qv = {q.x, q.y, q.z};
+
+	// uv = cross(q.xyz, v)
+	XrVector3f uv;
+	uv.x = qv.y * v.z - qv.z * v.y;
+	uv.y = qv.z * v.x - qv.x * v.z;
+	uv.z = qv.x * v.y - qv.y * v.x;
+
+	// uuv = cross(q.xyz, uv)
+	XrVector3f uuv;
+	uuv.x = qv.y * uv.z - qv.z * uv.y;
+	uuv.y = qv.z * uv.x - qv.x * uv.z;
+	uuv.z = qv.x * uv.y - qv.y * uv.x;
+
+	// v + ((uv * q.w) + uuv) * 2
+	float w2 = q.w * 2.0f;
+	return (XrVector3f){
+		.x = v.x + (uv.x * w2 + uuv.x * 2.0f),
+		.y = v.y + (uv.y * w2 + uuv.y * 2.0f),
+		.z = v.z + (uv.z * w2 + uuv.z * 2.0f)
+	};
+}
+
 XR_PROC
 xrLocateSpace(XrSpace          space,
 			  XrSpace          baseSpace,
@@ -1909,15 +1959,15 @@ xrLocateSpace(XrSpace          space,
 	Session* pSession   = BLOCK_PTR_H(xr.block.session, pSpace->hSession);
 
 	XrBool32 isActive = false;
-	XrEulerPosef eulerPose = {};
+	XrEulerPosef eulerPose;
 	switch (pSpace->type)
 	{
 		case XR_TYPE_ACTION_SPACE_CREATE_INFO: {
-			auto_t pSubPath = BLOCK_PTR_H(xr.block.path, pSpace->action.hSubactionPath);
-			auto_t pAction = BLOCK_PTR_H(xr.block.action, pSpace->action.hAction);
+			Path*   pSubPath = BLOCK_PTR_H(xr.block.path, pSpace->action.hSubactionPath);
+			Action* pAction  = BLOCK_PTR_H(xr.block.action, pSpace->action.hAction);
 
-			auto_t hSession = BLOCK_HANDLE(xr.block.session, pSession);
-			auto_t pActionSet = BLOCK_PTR_H(xr.block.actionSet, pAction->hActionSet);
+			session_h  hSession   = BLOCK_HANDLE(xr.block.session, pSession);
+			ActionSet* pActionSet = BLOCK_PTR_H(xr.block.actionSet, pAction->hActionSet);
 
 			if (hSession != pActionSet->hAttachedToSession) {
 				LOG_ERROR("XR_ERROR_ACTIONSET_NOT_ATTACHED\n");
@@ -1939,11 +1989,15 @@ xrLocateSpace(XrSpace          space,
 			{
 				case XR_REFERENCE_SPACE_TYPE_LOCAL:
 				case XR_REFERENCE_SPACE_TYPE_STAGE:
+				case XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR:
+					eulerPose = XR_EULER_POSE_IDENT;
+					xrGetHeadPose(pSession->index, &eulerPose);
+					isActive = true;
+					break;
 				case XR_REFERENCE_SPACE_TYPE_VIEW:
 					xrGetHeadPose(pSession->index, &eulerPose);
 					isActive = true;
 					break;
-
 				default:
 					LOG_ERROR("XR_ERROR_VALIDATION_FAILURE reference space interprocessMode %s\n", string_XrReferenceSpaceType(pSpace->reference.spaceType));
 					return XR_ERROR_VALIDATION_FAILURE;
@@ -1954,8 +2008,6 @@ xrLocateSpace(XrSpace          space,
 			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE space interprocessMode %s\n", string_XrStructureType(pSpace->type));
 			return XR_ERROR_VALIDATION_FAILURE;
 	}
-
-
 
 	switch (xr.instance.graphicsApi)
 	{
@@ -1970,12 +2022,26 @@ xrLocateSpace(XrSpace          space,
 			break;
 	}
 
-	eulerPose.position.x += pSpace->poseInSpace.position.x -= pBaseSpace->poseInSpace.position.x;
-	eulerPose.position.y += pSpace->poseInSpace.position.y -= pBaseSpace->poseInSpace.position.y;
-	eulerPose.position.z += pSpace->poseInSpace.position.z -= pBaseSpace->poseInSpace.position.z;
+	XrPosef basePose = pBaseSpace->poseInSpace;
+	XrPosef pose = {
+		.orientation = XrQuaternionMultiply(pSpace->poseInSpace.orientation, xrQuaternionFromEuler(eulerPose.euler)),
+		.position = {
+			pSpace->poseInSpace.position.x + eulerPose.position.x,
+			pSpace->poseInSpace.position.y + eulerPose.position.y,
+			pSpace->poseInSpace.position.z + eulerPose.position.z,
+		}
+	};
 
-	location->pose.orientation = xrQuaternionFromEuler(eulerPose.euler);
-	location->pose.position = eulerPose.position;
+
+	XrQuaternionf rotInv = XrQuaternionInverse(basePose.orientation);
+	XrVector3f posDiff = {
+		pose.position.x - basePose.position.x,
+		pose.position.y - basePose.position.y,
+		pose.position.z - basePose.position.z,
+	};
+
+	location->pose.orientation = XrQuaternionMultiply(rotInv, pose.orientation);
+	location->pose.position = XrRotateVector(rotInv, posDiff);
 	location->locationFlags = isActive ? XR_SPACE_LOCATION_ALL_TRACKED : 0;
 
 	if (location->next != NULL) {
