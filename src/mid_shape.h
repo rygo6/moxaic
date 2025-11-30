@@ -69,12 +69,12 @@ void vkCreateSphereMesh(float radius, int slicesCount, int stackCount, VkMesh* p
 }
 
 void vkCreateQuadMesh(float size, VkMesh* pMesh) {
-  uint16_t  indices[] = {0, 1, 2, 1, 3, 2};
-  vert      vertices[] = {
+  uint16_t indices[] = {0, 1, 2, 1, 3, 2};
+  vert vertices[] = {
       {.pos = VEC3(-size, -size, 0), .uv = VEC2(0, 0)},
-      {.pos = VEC3(size, -size, 0),  .uv = VEC2(1, 0)},
-      {.pos = VEC3(-size, size, 0),  .uv = VEC2(0, 1)},
-      {.pos = VEC3(size, size, 0),   .uv = VEC2(1, 1)},
+      {.pos = VEC3( size, -size, 0), .uv = VEC2(1, 0)},
+      {.pos = VEC3(-size,  size, 0), .uv = VEC2(0, 1)},
+      {.pos = VEC3( size,  size, 0), .uv = VEC2(1, 1)},
   };
   VkMeshCreateInfo info = {
       .indexCount = 6,
@@ -85,14 +85,14 @@ void vkCreateQuadMesh(float size, VkMesh* pMesh) {
   vkCreateMesh(&info, pMesh);
 }
 
-#define QUAD_PATCH_MESH_INFO  \
+#define QUAD_PATCH_MESH_INFO \
 	VkMeshCreateInfo info = { \
-		.indexCount = 6,      \
-		.vertexCount = 4,     \
+		.indexCount = 6, \
+		.vertexCount = 4, \
 	};
-#define QUAD_PATCH_MESH_VERTICES_INDICES                  \
-	info.pIndices = (uint16_t[]){0, 1, 3, 2};             \
-	info.pVertices = (vert[]){                            \
+#define QUAD_PATCH_MESH_VERTICES_INDICES \
+	info.pIndices = (uint16_t[]){0, 1, 3, 2}; \
+	info.pVertices = (vert[]){ \
 		{.pos = VEC3(-size, -size, 0), .uv = VEC2(0, 0)}, \
 		{.pos = VEC3(size, -size, 0),  .uv = VEC2(1, 0)}, \
 		{.pos = VEC3(-size, size, 0),  .uv = VEC2(0, 1)}, \

@@ -494,7 +494,7 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 		.dimension.x = DEFAULT_WIDTH,
 		.dimension.y = DEFAULT_HEIGHT,
 	};
-	pose globCamPose = {
+	MidPose globCamPose = {
 		.pos = VEC3(0.0f, 0.0f, 0.0f),
 		.euler = VEC3(0.0f, 0.0f, 0.0f),
 	};
@@ -571,7 +571,7 @@ CompositeLoop:
 						vec3 hitPoints[2];
 						if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) &&
 							rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
-							worldDiff = vec3Sub(hitPoints[0], hitPoints[1]);
+							worldDiff = Vec3Sub(hitPoints[0], hitPoints[1]);
 						}
 
 						break;

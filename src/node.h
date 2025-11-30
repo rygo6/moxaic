@@ -76,8 +76,8 @@ typedef enum PACKED MxcIpcFunc {
 
 typedef struct MxcController {
 	bool    active;
-	pose    gripPose;
-	pose    aimPose;
+	MidPose gripPose;
+	MidPose aimPose;
 	bool    selectClick;
 	bool    menuClick;
 	float   triggerValue;
@@ -94,8 +94,8 @@ typedef volatile struct MxcNodeShared {
 	u64     timelineValue;
 	MxcClip clip;
 	ProcessState processState;
-	pose   rootPose;
-	pose   cameraPose;
+	MidPose   rootPose;
+	MidPose   cameraPose;
 	camera camera;
 
 	MxcController left;

@@ -861,7 +861,7 @@ INLINE void vkBindSharedBuffer(VkSharedBuffer* pBuffer)
 }
 
 // probably move to math lib and take copy to pointer out
-INLINE void vkUpdateGlobalSetViewProj(camera camera, pose cameraPose, VkGlobalSetState* pState)
+INLINE void vkUpdateGlobalSetViewProj(camera camera, MidPose cameraPose, VkGlobalSetState* pState)
 {
 	float aspect = (float)camera.dimension.x / (float)camera.dimension.y;
 	pState->framebufferSize.x = camera.dimension.x;
@@ -873,14 +873,14 @@ INLINE void vkUpdateGlobalSetViewProj(camera camera, pose cameraPose, VkGlobalSe
 	pState->viewProj = mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = mat4Inv(pState->viewProj);
 }
-INLINE void vkUpdateGlobalSetView(pose cameraPose, VkGlobalSetState* pState)
+INLINE void vkUpdateGlobalSetView(MidPose cameraPose, VkGlobalSetState* pState)
 {
 	pState->invView = mat4FromPosRot(cameraPose.pos, cameraPose.rot);
 	pState->view = mat4Inv(pState->invView);
 	pState->viewProj = mat4Mul(pState->proj, pState->view);
 	pState->invViewProj = mat4Inv(pState->viewProj);
 }
-INLINE void vkUpdateObjectSet(pose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
+INLINE void vkUpdateObjectSet(MidPose* pTransform, VkObjectSetState* pState, VkObjectSetState* pSphereObjectSetMapped)
 {
 	pTransform->rot = QuatFromEuler(pTransform->euler);
 	pState->model = mat4FromPosRot(pTransform->pos, pTransform->rot);
@@ -888,7 +888,7 @@ INLINE void vkUpdateObjectSet(pose* pTransform, VkObjectSetState* pState, VkObje
 }
 
 // this should go in mid math
-INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, pose* pCameraTransform)
+INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, MidPose* pCameraTransform)
 {
 	pCameraTransform->euler.y -= mouseDelta.x * deltaTime * 0.4f;
 	pCameraTransform->euler.x += mouseDelta.y * deltaTime * 0.4f;
@@ -896,9 +896,10 @@ INLINE void midProcessCameraMouseInput(double deltaTime, vec2 mouseDelta, pose* 
 }
 
 // move[] = Forward, Back, Left, Right
-INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], pose* pCameraTransform)
+INLINE void midProcessCameraKeyInput(double deltaTime, bool move[4], MidPose* pCameraTransform)
 {
-	vec3  localTranslate = vec3Rot(pCameraTransform->rot, (vec3){.x = move[3] - move[2], .y = move[5] - move[4], .z = move[1] - move[0]});
+	vec3  localTranslate = Vec3Rot(pCameraTransform->rot, (vec3) {.x = move[3] - move[2], .y = move[5] - move[4], .z =
+	move[1] - move[0]});
 	float moveSensitivity = deltaTime * 0.8f;
 	for (int i = 0; i < 3; ++i) pCameraTransform->pos.vec[i] += localTranslate.vec[i] * moveSensitivity;
 }

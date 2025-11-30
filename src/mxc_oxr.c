@@ -259,14 +259,14 @@ XrTime xrGetFrameInterval(session_i iSession)
 	return hzTime;
 }
 
-void xrGetHeadPose(session_i iSession, XrEulerPosef* pPose)
+void xrGetHeadPose(session_i iSession, MidEulerPose* pPose)
 {
 	node_h hNode = iSession;
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
-	pPose->euler    = *(XrVector3f*)&pNodeShrd->cameraPose.euler;
-	pPose->position = *(XrVector3f*)&pNodeShrd->cameraPose.pos;
+	pPose->pos = pNodeShrd->cameraPose.pos;
+	pPose->euler = pNodeShrd->cameraPose.euler;
 }
 
 void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView)
@@ -287,91 +287,107 @@ void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView)
 		pEyeView->position.x += 0.1f;
 }
 
-#define UPDATE_CLICK(button, chirality)    \
-    ({                                     \
+#define UPDATE_CLICK(button, chirality) \
+    ({ \
         MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, (node_h)sessionId); \
         atomic_thread_fence(memory_order_acquire); \
         volatile MxcController* pController = &pNodeShrd->chirality; \
-        bool changed = pState->isActive != pController->active || \
+        bool changed = pState->isActive  != pController->active || \
                        pState->boolValue != pController->button; \
-        pState->isActive = pController->active; \
+        pState->isActive  = pController->active; \
         pState->boolValue = pController->button; \
         changed; \
     })
+
 int xrInputSelectClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, left);
 }
+
 int xrInputSelectClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, right);
 }
+
 int xrInputSqueezeValue_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
+
 int xrInputSqueezeValue_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
+
 int xrInputSqueezeClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
+
 int xrInputSqueezeClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
+
 int xrInputTriggerValue_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, left);
 }
+
 int xrInputTriggerValue_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, right);
 }
+
 int xrInputTriggerClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, left);
 }
+
 int xrInputTriggerClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_CLICK(selectClick, right);
 }
+
 int xrInputMenuClick_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
+
 int xrInputMenuClick_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
 
-#define UPDATE_POSE(pose, chirality)                                                                          \
-	({                                                                                                        \
+#define UPDATE_POSE(pose, chirality) \
+	({ \
         MxcNodeShared* pNodeShrd = ARRAY_H(node.pShared, (node_h)sessionId); \
-		atomic_thread_fence(memory_order_acquire);                                                            \
-		volatile MxcController* pController = &pNodeShrd->chirality;                                          \
-		bool changed = pState->isActive != pController->active ||                                             \
-		               memcmp((void*)&pState->eulerPoseValue.euler, (void*)&pController->pose.euler, sizeof(XrVector3f)) || \
-		               memcmp((void*)&pState->eulerPoseValue.position, (void*)&pController->pose.pos, sizeof(XrVector3f));  \
-		pState->isActive = pController->active;                                                               \
-		pState->eulerPoseValue.euler = *(XrVector3f*)&pController->pose.euler;                                \
-		pState->eulerPoseValue.position = *(XrVector3f*)&pController->pose.pos;                               \
-		changed;                                                                                              \
+		atomic_thread_fence(memory_order_acquire); \
+		volatile MxcController* pController = &pNodeShrd->chirality; \
+		bool changed = pState->isActive != pController->active || \
+                       !Vec3Cmp(pState->poseValue.euler, pController->pose.euler) || \
+                       !Vec3Cmp(pState->poseValue.pos, pController->pose.pos); \
+		pState->isActive        = pController->active; \
+		pState->poseValue.euler = pController->pose.euler; \
+		pState->poseValue.pos   = pController->pose.pos; \
+		changed; \
 	})
+
 int xrInputGripPose_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(gripPose, left);
 }
+
 int xrInputGripPose_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(gripPose, right);
 }
+
 int xrInputAimPose_Left(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(aimPose, left);
 }
+
 int xrInputAimPose_Right(session_i sessionId, SubactionState* pState)
 {
 	return UPDATE_POSE(aimPose, right);
@@ -381,6 +397,7 @@ int xrOutputHaptic_Left(session_i sessionId, SubactionState* pState)
 {
 	return 0;
 }
+
 int xrOutputHaptic_Right(session_i sessionId, SubactionState* pState)
 {
 	return 0;

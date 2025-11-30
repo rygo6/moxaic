@@ -16,26 +16,28 @@
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-#define SIMD_TYPE(type, name, count) typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
+#define SIMD_TYPE(type, name, count) \
+	typedef type name##_vec __attribute__((vector_size(sizeof(type) * count)))
 
-SIMD_TYPE(u8, u8_2, 2);
-SIMD_TYPE(u8, u8_3, 4);
-SIMD_TYPE(u8, u8_4, 4);
+	SIMD_TYPE(u8, u8_2, 2);
+	SIMD_TYPE(u8, u8_3, 4);
+	SIMD_TYPE(u8, u8_4, 4);
 
-SIMD_TYPE(u16, u16_2, 2);
+	SIMD_TYPE(u16, u16_2, 2);
 
-SIMD_TYPE(f32, float2, 2);
-SIMD_TYPE(f32, float3, 4);
-SIMD_TYPE(f32, float4, 4);
+	SIMD_TYPE(f32, float2, 2);
+	SIMD_TYPE(f32, float3, 4);
+	SIMD_TYPE(f32, float4, 4);
 
-SIMD_TYPE(i32, i32_2, 2);
-SIMD_TYPE(i32, i32_3, 4);
-SIMD_TYPE(i32, i32_4, 4);
+	SIMD_TYPE(i32, i32_2, 2);
+	SIMD_TYPE(i32, i32_3, 4);
+	SIMD_TYPE(i32, i32_4, 4);
 
-// basing it off a 64 byte simd type can offer small perf gain
-// with no negative when accessing 16 byte rows
-// https://godbolt.org/z/Gbssve8rf
-SIMD_TYPE(float, mat4, 16);
+	// TODO no don't do that. It will be an issue on some
+	// basing it off a 64 byte simd type can offer small perf gain
+	// with no negative when accessing 16 byte rows
+	// https://godbolt.org/z/Gbssve8rf
+	SIMD_TYPE(float, mat4, 16);
 
 #undef SIMD_TYPE
 
@@ -48,31 +50,38 @@ SIMD_TYPE(float, mat4, 16);
 		simd_type vec_name;                                           \
 	} name;
 
-VEC_UNION(u8_2, u8, u8_2_vec, 2, 2, vec, x, y)
-VEC_UNION(u8_3, u8, u8_3_vec, 4, 3, vec, x, y, z)
-VEC_UNION(u8_4, u8, u8_4_vec, 4, 4, vec, x, y, z, w)
-VEC_UNION(color, u8, u8_4_vec, 4, 4, vec, r, g, b, a)
+	VEC_UNION(u8_2, u8, u8_2_vec, 2, 2, vec, x, y)
+	VEC_UNION(u8_3, u8, u8_3_vec, 4, 3, vec, x, y, z)
+	VEC_UNION(u8_4, u8, u8_4_vec, 4, 4, vec, x, y, z, w)
+	VEC_UNION(color, u8, u8_4_vec, 4, 4, vec, r, g, b, a)
 
-VEC_UNION(u16_2, u16, u16_2_vec, 4, 2, vec, x, y)
+	VEC_UNION(u16_2, u16, u16_2_vec, 4, 2, vec, x, y)
 
-VEC_UNION(vec2, f32, float2_vec, 8, 2, vec, x, y)
-VEC_UNION(vec3, f32, float3_vec, 16, 3, vec, x, y, z)
-VEC_UNION(vec4, f32, float4_vec, 16, 4, vec, x, y, z, w)
+	VEC_UNION(f32_2, f32, float2_vec, 8, 2, vec, x, y)
 
-VEC_UNION(ivec2, i32, i32_2_vec, 8, 2, vec, x, y)
-VEC_UNION(ivec3, i32, i32_3_vec, 16, 3, vec, x, y, z)
-VEC_UNION(ivec4, i32, i32_4_vec, 16, 4, vec, x, y, z, w)
+	VEC_UNION(vec2, f32, float2_vec, 8, 2, vec, x, y)
+	VEC_UNION(vec3, f32, float3_vec, 16, 3, vec, x, y, z)
+	VEC_UNION(vec4, f32, float4_vec, 16, 4, vec, x, y, z, w)
 
-VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
+	VEC_UNION(i32_2, i32, i32_2_vec, 8, 2, vec, x, y)
+
+	VEC_UNION(ivec2, i32, i32_2_vec, 8, 2, vec, x, y)
+	VEC_UNION(ivec3, i32, i32_3_vec, 16, 3, vec, x, y, z)
+	VEC_UNION(ivec4, i32, i32_4_vec, 16, 4, vec, x, y, z, w)
+
+	VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 
 #undef VEC_UNION
 
-#define VEC2(x, y)        (vec2)  {{x, y}}
-#define VEC3(x, y, z)     (vec3)  {{x, y, z}}
-#define VEC4(x, y, z,  w) (vec4)  {{x, y, z, w}}
-#define IVEC2(x, y)       (ivec2) {{x, y}}
-#define IVEC3(x, y, z)    (ivec3) {{x, y, z}}
-#define IVEC4(x, y, z, w) (ivec4) {{x, y, z, w}}
+#define VEC2(x, y)         (vec2){{x, y}}
+#define VEC3(x, y, z)      (vec3){{x, y, z}}
+#define TO_VEC3(_from)     (vec3){{_from.x, _from.y, _from.z}}
+#define VEC4(x, y, z, w)   (vec4){{x, y, z, w}}
+#define QUAT(x, y, z, w)   (quat){{x, y, z, w}}
+#define TO_QUAT(_from)     (quat){{_from.x, _from.y, _from.z, _from.w}}
+#define IVEC2(x, y)        (ivec2) {{x, y}}
+#define IVEC3(x, y, z)     (ivec3) {{x, y, z}}
+#define IVEC4(x, y, z, w)  (ivec4) {{x, y, z, w}}
 
 #define MAT_UNION(name, type, simd_type, align, count, vec_name, ...) \
 	typedef union __attribute((aligned(align))) name {                \
@@ -82,8 +91,11 @@ VEC_UNION(mat4_row, float, float4_vec, 16, 4, row, r0, r1, r2, r3)
 			type __VA_ARGS__;                                         \
 		};                                                            \
 	} name;
-MAT_UNION(mat4, mat4_row, mat4_vec, 16, 4, col, c0, c1, c2, c3)
+
+	MAT_UNION(mat4, mat4_row, mat4_vec, 16, 4, col, c0, c1, c2, c3)
+
 #undef MAT_UNION
+
 #define MAT4(m00, m01, m02, m03, \
 		     m10, m11, m12, m13, \
 		     m20, m21, m22, m23, \
@@ -101,11 +113,11 @@ typedef struct ray {
 	vec3 dir;
 } ray;
 
-typedef struct pose {
+typedef struct MidPose {
 	vec3 pos;
 	vec3 euler;
 	quat rot;
-} pose;
+} MidPose;
 
 typedef struct camera {
 	f32 zNear;
@@ -119,6 +131,21 @@ typedef struct vert {
 	vec3 norm;
 	vec2 uv;
 } vert;
+
+typedef struct MidEulerPose {
+	vec3 euler;
+	vec3 pos;
+} MidEulerPose;
+
+typedef struct MidQuatPose {
+	quat rot;
+	vec3 pos;
+} MidQuatPose;
+
+// TODO should do this?
+#ifdef USING_MID_NAMESPACE
+typedef midEulerPose EulerPose;
+#endif
 
 #define VEC_NIL -1
 enum VecComponents {
@@ -147,10 +174,10 @@ enum MatComponents {
 	C3_R3,
 	MAT_COUNT,
 };
-static const vec3 VEC3_ZERO = {{0.0f, 0.0f, 0.0f}};
-static const vec4 VEC4_ZERO = {{0.0f, 0.0f, 0.0f, 0.0f}};
-static const vec4 VEC4_IDENT = {{0.0f, 0.0f, 0.0f, 1.0f}};
-static const quat QUAT_IDENT = {{0.0f, 0.0f, 0.0f, 1.0f}};
+static const vec3 VEC3_ZERO  = {{ 0.0f, 0.0f, 0.0f }};
+static const vec4 VEC4_ZERO  = {{ 0.0f, 0.0f, 0.0f, 0.0f }};
+static const vec4 VEC4_IDENT = {{ 0.0f, 0.0f, 0.0f, 1.0f }};
+static const quat QUAT_IDENT = {{ 0.0f, 0.0f, 0.0f, 1.0f }};
 static const mat4 MAT4_IDENT = {{
 	1.0f, 0.0f, 0.0f, 0.0f,
 	0.0f, 1.0f, 0.0f, 0.0f,
@@ -158,17 +185,21 @@ static const mat4 MAT4_IDENT = {{
 	0.0f, 0.0f, 0.0f, 1.0f,
 }};
 
+static const MidEulerPose MID_EULER_POSE_ZERO  = {.euler = VEC3_ZERO, .pos = VEC3_ZERO};
+
 // force inlining appears to produce same assembly for returning or by passing out pointer
 // https://godbolt.org/z/rzo8hEaaG
 // https://godbolt.org/z/149rjsPG3
 #define MATH_INLINE       __attribute__((always_inline)) static inline
 #define SHUFFLE(vec, ...) __builtin_shufflevector(vec, vec, __VA_ARGS__)
 
-MATH_INLINE float float2Sum(float2_vec float2) {
+MATH_INLINE float
+float2Sum(float2_vec float2) {
 	return float2[0] + float2[1];
 }
 
-MATH_INLINE float float3Sum(float3_vec float3)
+MATH_INLINE float
+float3Sum(float3_vec float3)
 {
 	float3_vec shuf = SHUFFLE(float3, 2, 3, 0, 1);
 	float3_vec sums = float3 + shuf;
@@ -177,7 +208,8 @@ MATH_INLINE float float3Sum(float3_vec float3)
 	return sums[0];
 }
 
-MATH_INLINE float float4Sum(float4_vec float4)
+MATH_INLINE float
+float4Sum(float4_vec float4)
 {
 	// appears to make better SIMD assembly than a loop:
 	// https://godbolt.org/z/6jWe4Pj5b
@@ -213,19 +245,35 @@ MATH_INLINE float vec4Mag(vec4 v) {
 	return sqrtf(vec4Dot(v, v));
 }
 
+MATH_INLINE float vec4MagSqr(vec4 v) {
+	return vec4Dot(v, v);
+}
+
 MATH_INLINE vec2 vec2Sub(vec2 a, vec2 b) {
 	float2_vec diff = a.vec - b.vec;
 	return (vec2)diff;
 }
 
-MATH_INLINE vec3 vec3Sub(vec3 a, vec3 b) {
+#define VEC_ADD(_a, _b) (__typeof__(_a))(_a.vec + _b.vec)
+#define VEC_SUB(_a, _b) (__typeof__(_a))(_a.vec - _b.vec)
+
+MATH_INLINE vec3 Vec3Sub(vec3 a, vec3 b) {
 	float3_vec diff = a.vec - b.vec;
 	return (vec3)diff;
+}
+
+MATH_INLINE vec3 Vec3Add(vec3 a, vec3 b) {
+	return (vec3)(a.vec + b.vec);
 }
 
 MATH_INLINE vec4 vec4Sub(vec4 a, vec4 b) {
 	float4_vec diff = a.vec - b.vec;
 	return VEC4(diff[0], diff[1], diff[2], diff[3]);
+}
+
+MATH_INLINE bool Vec3Cmp(vec3 a, vec3 b) {
+	i32_3_vec compare = a.vec != b.vec;
+	return compare[0] & compare[1] & compare[2];
 }
 
 MATH_INLINE vec3 vec3Normalize(vec3 v)
@@ -476,17 +524,19 @@ MATH_INLINE mat4 Mat4PerspectiveVulkanReverseZ(float yFovRad, float aspect, floa
 
 MATH_INLINE vec3 vec3Cross(float3_vec l, float3_vec r)
 {
-	return (vec3){{l[Y] * r[Z] - r[Y] * l[Z],
-				  l[Z] * r[X] - r[Z] * l[X],
-				  l[X] * r[Y] - r[X] * l[Y]}};
+	return VEC3(l[Y] * r[Z] - r[Y] * l[Z],
+				l[Z] * r[X] - r[Z] * l[X],
+				l[X] * r[Y] - r[X] * l[Y]);
 }
 
-MATH_INLINE vec3 vec3Rot(quat q, vec3 v)
+/* Rotate Vec3 by Quat Rot */
+MATH_INLINE vec3 Vec3Rot(quat rot, vec3 v)
 {
-	vec3 uv = vec3Cross(q.vec, v.vec);
-	vec3 uuv = vec3Cross(q.vec, uv.vec);
+	vec3 uv = vec3Cross(rot.vec, v.vec);
+	vec3 uuv = vec3Cross(rot.vec, uv.vec);
 	vec3 out;
-	for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
+	for (int i = 0; i < 3; ++i)
+		out.vec[i] = v.vec[i] + ((uv.vec[i] * rot.vec[W]) + uuv.vec[i]) * 2.0f;
 	return out;
 }
 
@@ -495,7 +545,8 @@ MATH_INLINE vec4 Vec4Rot(quat q, vec4 v)
 	vec3 uv = vec3Cross(q.vec, v.vec);
 	vec3 uuv = vec3Cross(q.vec, uv.vec);
 	vec4 out = {.w = v.w};
-	for (int i = 0; i < 3; ++i) out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
+	for (int i = 0; i < 3; ++i)
+		out.vec[i] = v.vec[i] + ((uv.vec[i] * q.vec[W]) + uuv.vec[i]) * 2.0f;
 	return out;
 }
 
@@ -530,18 +581,21 @@ MATH_INLINE quat QuatMul(quat src, quat mul)
 	};
 }
 
-MATH_INLINE quat QuatInverse(quat q)
-{
-	// is this correct?
-	float magnitudeSquared = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
+/* Conjugate */
+MATH_INLINE quat QuatConj(quat q) {
+	q.vec *= (float4_vec){ -1, -1, -1, 1 };
+	return q;
+}
 
-	if (magnitudeSquared == 0.0) {
-		fprintf(stderr, "quatValue mag is zero cannot invert.n");
+/* Calculate normalized inverse */
+MATH_INLINE quat QuatInv(quat q)
+{
+	float magSqr = vec4MagSqr(q);
+	if (magSqr == 0.0) {
+		LOG_ERROR("quatValue mag is zero cannot invert.\n");
 		return (quat){{0, 0, 0, 0}};
 	}
-
-	quat conjugate = {{q.w, -q.x, -q.y, -q.z}};
-	return (quat){.vec = conjugate.vec / magnitudeSquared};
+	return (quat){.vec = QuatConj(q).vec / magSqr};
 }
 
 MATH_INLINE vec4 vec4MulMat4(mat4 m, vec4 v)
@@ -618,7 +672,7 @@ MATH_INLINE bool rayIntersetPlane(ray ray, Plane plane, vec3* outPoint)
 {
 	float facingRatio = vec3Dot(plane.normal, ray.dir);
 	if (fabsf(facingRatio) < 0.0001f) return false;
-	float t = vec3Dot(vec3Sub(plane.origin, ray.origin), plane.normal) / facingRatio;
+	float t = vec3Dot(Vec3Sub(plane.origin, ray.origin), plane.normal) / facingRatio;
 	if (t < 0) return false;
 	outPoint->vec = ray.origin.vec + ray.dir.vec * t;
 	return true;

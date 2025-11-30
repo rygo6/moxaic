@@ -17,7 +17,7 @@ typedef struct MxcNodeThread {
 	VkDedicatedTexture checkerTexture;
 
 	VkMesh  sphereMesh;
-	pose    sphereTransform;
+	MidPose    sphereTransform;
 
 	VkObjectSetState  sphereObjectState;
 	VkObjectSetState* pSphereObjectSetMapped;

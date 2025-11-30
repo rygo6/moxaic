@@ -170,7 +170,7 @@ NodeLoop:
 
 	/* Update Global State */
 	atomic_thread_fence(memory_order_acquire);
-	vkUpdateGlobalSetView((pose){
+	vkUpdateGlobalSetView((MidPose){
 		.pos = (vec3)(pNodeShrd->cameraPose.pos.vec - pNodeShrd->rootPose.pos.vec),
 		.euler = pNodeShrd->cameraPose.euler,
 		.rot = pNodeShrd->cameraPose.rot,
@@ -354,7 +354,7 @@ static void Create(node_h hNode, MxcNodeThread* pNode)
 	};
 	vkUpdateDescriptorSets(vk.context.device, COUNT(writeSets), writeSets, 0, NULL);
 
-	pNode->sphereTransform = (pose){.pos = VEC3(0, 0, 0)};
+	pNode->sphereTransform = (MidPose){.pos = VEC3(0, 0, 0)};
 	vkUpdateObjectSet(&pNode->sphereTransform, &pNode->sphereObjectState, pNode->pSphereObjectSetMapped);
 	vkCreateSphereMesh(0.5, 32, 32, &pNode->sphereMesh);
 
