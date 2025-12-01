@@ -872,7 +872,7 @@ xrStructureTypeToString(XrInstance instance, XrStructureType value, char buffer[
 	CHECK_INSTANCE(instance);
 	switch (value) {
 		XR_LIST_ENUM_XrStructureType(TRANSFER_ENUM_NAME);
-		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_TYPE_UNKNOWN_%d", value); break;
+		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value); break;
 	}
 	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
 	return XR_SUCCESS;
