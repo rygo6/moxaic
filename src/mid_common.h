@@ -148,9 +148,15 @@ typedef enum PACKED MidResult {
 	MID_RESULT_MAX_ENUM  = 0x7FFFFFFF
 } MidResult;
 
-#define RETURN_ERROR(_error) \
-	LOG_ERROR(#_error); \
-	return _error
+#define RETURN_ERROR_MSG(_error, _format, ...) { \
+		LOG_ERROR(#_error " " _format "\n", ##__VA_ARGS__); \
+		return _error; \
+	}
+
+#define RETURN_ERROR(_error) { \
+		LOG_ERROR(#_error "\n"); \
+		return _error; \
+	}
 
 // TODO
 // REQUIRE = Panic

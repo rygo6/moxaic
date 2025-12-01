@@ -759,7 +759,7 @@ static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
 //#define ENABLE_LOG_METHOD_ALL
 //#define ENABLE_LOG_METHOD_ONCE
 #define ENABLE_LOG_METHOD_NOREPEAT
-//#define ENABLE_LOG_VERBOSE
+#define ENABLE_LOG_VERBOSE
 
 #ifdef ENABLE_LOG_VERBOSE
 	#define LOG_VERBOSE(...) LOG(__VA_ARGS__)
@@ -858,7 +858,9 @@ xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_
 	CHECK_INSTANCE(instance);
 	switch (value) {
 		XR_LIST_ENUM_XrResult(TRANSFER_ENUM_NAME);
-		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value); break;
+		default:
+			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, value >= XR_SUCCESS ? "XR_UNKNOWN_SUCCESS_%d" : "XR_UNKNOWN_FAILURE_%d" , value);
+			break;
 	}
 	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
 	return XR_SUCCESS;
@@ -870,7 +872,7 @@ xrStructureTypeToString(XrInstance instance, XrStructureType value, char buffer[
 	CHECK_INSTANCE(instance);
 	switch (value) {
 		XR_LIST_ENUM_XrStructureType(TRANSFER_ENUM_NAME);
-		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_UNKNOWN_STRUCTURE_TYPE_%d", value); break;
+		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, "XR_TYPE_UNKNOWN_%d", value); break;
 	}
 	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
 	return XR_SUCCESS;
@@ -1046,7 +1048,7 @@ InitBinding(const char*        interactionProfile,
 {
 	XrPath profilePath;
 	xrStringToPath((XrInstance)&xr.instance, interactionProfile, &profilePath);
-	path_h hProfilePath = XR_ATOM_BLOCK_H(profilePath);
+	path_h hProfilePath       = XR_ATOM_BLOCK_H(profilePath);
 	block_key profilePathHash = BLOCK_KEY_H(xr.block.path, hProfilePath);
 
 	profile_h           hProfile = BLOCK_CLAIM(B.profile, profilePathHash);
@@ -3216,15 +3218,58 @@ xrLocateViews(XrSession               session,
 XR_PROC xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 {
 	LOG_METHOD(xrStringToPath);
-	LOG_VERBOSE("	string: %s\n", pathString);
 	CHECK_INSTANCE(instance);
+
+	if (pathString == NULL) RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+
+	int len = strnlen(pathString, XR_MAX_PATH_LENGTH);
+	LOG_VERBOSE("\n    string: %s %d\n", pathString, len);
+
+	if (strcmp(pathString, "/.f") == 0)
+		LOG("HERE");
+
+	if (len == XR_MAX_PATH_LENGTH ||
+		pathString[0] == '\0' || pathString[0] != '/' ||
+		pathString[1] == '\0' || pathString[len - 1] == '/' ||
+		pathString[len] != '\0')
+		RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+
+	bool hasChar = true;
+	for (int i = 0; i < len; ++i) {
+		switch (pathString[i])
+		{
+			case '_':
+			case '-':
+			case 'a'...'z':
+				hasChar = true;
+				break;
+
+			case 'A'...'Z':
+			case '?':
+			case ' ':
+				RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+
+			case '.':
+				if (pathString[i + 1] == '\0' && !hasChar)
+					RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+				break;
+
+			case '/':
+				if (pathString[i + 1] == '/' || !hasChar)
+					RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+				hasChar = false;
+				break;
+
+			default: break;
+		}
+	}
 
 	u32 pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (u32 i = 0; i < XR_PATH_CAPACITY; ++i) {
 		if (xr.block.path.keys[i] != pathHash) continue;
 		if (strncmp(xr.block.path.blocks[i].string, pathString, XR_MAX_PATH_LENGTH)) {
 			LOG_ERROR("Path Hash Collision! %s | %s\n", xr.block.path.blocks[i].string, pathString);
-			return XR_ERROR_PATH_INVALID;
+			return XR_ERROR_PATH_COUNT_EXCEEDED;
 		}
 		LOG_VERBOSE("Path Handle Found: %d\n    %s\n", i, xr.block.path.blocks[i].string);
 		path_h hFoundPath = BLOCK_HANDLE(xr.block.path, xr.block.path.blocks + i);
