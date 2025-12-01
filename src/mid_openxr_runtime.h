@@ -585,9 +585,7 @@ typedef struct Instance {
 #endif // MID_OPENXR_RUNTIME_H
 
 /*
- *
  * Mid OpenXR Runtime Implementation
- *
  */
 #if defined(MID_OPENXR_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
@@ -764,36 +762,36 @@ static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
 //#define ENABLE_LOG_VERBOSE
 
 #ifdef ENABLE_LOG_VERBOSE
-#define LOG_VERBOSE(...) LOG(__VA_ARGS__)
+	#define LOG_VERBOSE(...) LOG(__VA_ARGS__)
 #else
-#define LOG_VERBOSE(...)
+	#define LOG_VERBOSE(...)
 #endif
 
 #define LOG_METHOD_INTERNAL(_method) LOG("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
 
 #ifdef ENABLE_LOG_METHOD_ALL
-#define LOG_METHOD(_method) LOG_METHOD_INTERNAL(_method)
+	#define LOG_METHOD(_method) LOG_METHOD_INTERNAL(_method)
 #elif defined(ENABLE_LOG_METHOD_ONCE)
-#define LOG_METHOD(_method)               \
-	({                                    \
-		static bool logged = false;       \
-		if (!logged) {                    \
-			logged = true;                \
-			LOG_METHOD_INTERNAL(_method); \
-		}                                 \
-	})
+	#define LOG_METHOD(_method)               \
+		({                                    \
+			static bool logged = false;       \
+			if (!logged) {                    \
+				logged = true;                \
+				LOG_METHOD_INTERNAL(_method); \
+			}                                 \
+		})
 #elif defined(ENABLE_LOG_METHOD_NOREPEAT)
-static const char* pLastLogMethod = NULL;
-#define LOG_METHOD(_method)                      \
-	({                                           \
-		static const char* methodPtr = #_method; \
-		if (pLastLogMethod != methodPtr) {       \
-			pLastLogMethod = methodPtr;          \
-			LOG_METHOD_INTERNAL(_method);        \
-		}                                        \
-	})
+	static const char* pLastLogMethod = NULL;
+	#define LOG_METHOD(_method) \
+		({ \
+			static const char* methodPtr = #_method; \
+			if (pLastLogMethod != methodPtr) { \
+				pLastLogMethod = methodPtr; \
+				LOG_METHOD_INTERNAL(_method); \
+			} \
+		})
 #else
-#define LOG_METHOD(_name)
+	#define LOG_METHOD(_name)
 #endif
 
 #define ENUM_NAME_CASE(_enum, _value) case _value: return #_enum;
@@ -802,28 +800,25 @@ static const char* pLastLogMethod = NULL;
 	{                                              \
 		switch (value) {                           \
 			XR_LIST_ENUM_##_type(ENUM_NAME_CASE);  \
-			default:                               \
-				return "N/A";                      \
+			default: return "N/A";                 \
 		}                                          \
 	}
-
-STRING_ENUM_TYPE(XrReferenceSpaceType)
-STRING_ENUM_TYPE(XrViewConfigurationType)
-STRING_ENUM_TYPE(XrVisibilityMaskTypeKHR)
-STRING_ENUM_TYPE(XrSessionState)
-STRING_ENUM_TYPE(XrResult)
-
+	STRING_ENUM_TYPE(XrReferenceSpaceType)
+	STRING_ENUM_TYPE(XrViewConfigurationType)
+	STRING_ENUM_TYPE(XrVisibilityMaskTypeKHR)
+	STRING_ENUM_TYPE(XrSessionState)
+	STRING_ENUM_TYPE(XrResult)
 #undef ENUM_NAME_CASE
 #undef STRING_ENUM_TYPE
 
 #define STRUCTURE_TYPE_NAME_CASE(_name, _type) case _type: return #_name;
-static const char* string_XrStructureType(XrStructureType type)
-{
-	switch (type) {
-		XR_LIST_STRUCTURE_TYPES(STRUCTURE_TYPE_NAME_CASE);
-		default: return "N/A";
+	static const char* string_XrStructureType(XrStructureType type)
+	{
+		switch (type) {
+			XR_LIST_STRUCTURE_TYPES(STRUCTURE_TYPE_NAME_CASE);
+			default: return "N/A";
+		}
 	}
-}
 #undef STRUCTURE_TYPE_NAME_CASE
 
 // TODO analyize if I really want this
@@ -2147,10 +2142,8 @@ XR_PROC xrEnumerateViewConfigurationViews(
 	if (views == NULL)
 		return XR_SUCCESS;
 
-	if (viewCapacityInput != viewTypeCount) {
-		LOG_ERROR("XR_ERROR_SIZE_INSUFFICIENT");
+	if (viewCapacityInput != viewTypeCount)
 		return XR_ERROR_SIZE_INSUFFICIENT;
-	}
 
 	for (u32 i = 0; i < viewTypeCount; ++i)
 		xrGetViewConfigurationView(systemId, &views[i]);
@@ -2725,7 +2718,7 @@ XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 	switch (beginInfo->primaryViewConfigurationType) {
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			LOG_ERROR("	PrimaryViewConfigurationType: %s\n", string_XrViewConfigurationType(beginInfo->primaryViewConfigurationType));
+			LOG("PrimaryViewConfigurationType: %s\n", string_XrViewConfigurationType(beginInfo->primaryViewConfigurationType));
 			pSession->primaryViewConfigurationType = beginInfo->primaryViewConfigurationType;
 			break;
 
@@ -2963,13 +2956,12 @@ XR_PROC xrEndFrame(XrSession session,
 		switch (frameEndInfo->layers[layer]->type) {
 			/* Projection Layer */
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
-				auto_t pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
-				assert(pProjectionLayer->viewCount == XR_MAX_VIEW_COUNT); // need to deal with all layers at some point
 
+				const XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
 				for (u32 iView = 0; iView < pProjectionLayer->viewCount; ++iView) {
-					const XrCompositionLayerProjectionView* pView = &pProjectionLayer->views[iView];
 
 					/* Projection Layer View Color */
+					const XrCompositionLayerProjectionView* pView = &pProjectionLayer->views[iView];
 					{
 						auto_t pColorSwap = (Swapchain*)pView->subImage.swapchain;
 						swap_h hColorSwap = BLOCK_HANDLE(B.swap, pColorSwap);
@@ -3079,41 +3071,39 @@ XR_PROC xrEndFrame(XrSession session,
 	return XR_SUCCESS;
 }
 
-XR_PROC xrLocateViews(
-	XrSession               session,
-	const XrViewLocateInfo* viewLocateInfo,
-	XrViewState*            viewState,
-	uint32_t                viewCapacityInput,
-	uint32_t*               viewCountOutput,
-	XrView*                 views)
+XR_PROC
+xrLocateViews(XrSession               session,
+              const XrViewLocateInfo* viewLocateInfo,
+              XrViewState*            viewState,
+              uint32_t                viewCapacityInput,
+              uint32_t*               viewCountOutput,
+              XrView*                 views)
 {
 	LOG_METHOD(xrLocateViews);
-//	LOG("Locating View %s\n", string_XrViewConfigurationType(viewLocateInfo->viewConfigurationType));
-	assert(views->next == NULL);
+	ASSERT(views->next == NULL);
 
-	viewState->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT |
-								XR_VIEW_STATE_POSITION_VALID_BIT |
+	if (viewLocateInfo->displayTime <= 0) {
+		LOG_ERROR("XR_ERROR_TIME_INVALID %lld\n", viewLocateInfo->displayTime);
+		return XR_ERROR_TIME_INVALID;
+	}
+
+	viewState->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT   |
+								XR_VIEW_STATE_POSITION_VALID_BIT      |
 								XR_VIEW_STATE_ORIENTATION_TRACKED_BIT |
 								XR_VIEW_STATE_POSITION_TRACKED_BIT;
 
-	switch (viewLocateInfo->viewConfigurationType) {
-		default:
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
-			*viewCountOutput = 1;
-			break;
-		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO:
-			*viewCountOutput = 2;
-			break;
+	switch (viewLocateInfo->viewConfigurationType)
+	{
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:   *viewCountOutput = 1; break;
+		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO: *viewCountOutput = 2; break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
-			*viewCountOutput = 4;
-			break;
 		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-			*viewCountOutput = 1;  // not sure
-			break;
+		default:
+			LOG_ERROR("%s\n", string_XrViewConfigurationType(viewLocateInfo->viewConfigurationType));
+			RETURN_ERROR(XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED);
 	}
 
-	if (views == NULL)
-		return XR_SUCCESS;
+	if (views == NULL) return XR_SUCCESS;
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
@@ -3121,8 +3111,8 @@ XR_PROC xrLocateViews(
 	for (u32 i = 0; i < viewCapacityInput; ++i) {
 		XrEyeView eyeView;
 		xrGetEyeView(pSession->index, i, &eyeView);
-
-		switch (xr.instance.graphicsApi) {
+		switch (xr.instance.graphicsApi)
+		{
 			case XR_GRAPHICS_API_OPENGL:    break;
 			case XR_GRAPHICS_API_VULKAN:    break;
 			case XR_GRAPHICS_API_D3D11_4:
@@ -3139,15 +3129,12 @@ XR_PROC xrLocateViews(
 		float angleUp;
 		float angleDown;
 
-
-		switch (pSession->swapClip) {
-			default:
-			case XR_SWAP_CLIP_NONE:
+		switch (pSession->swapClip)
+		{
+			case XR_SWAP_CLIP_NONE: {
 				angleLeft = -fovHalfXRad;
 				angleRight = fovHalfXRad;
-
 				switch (xr.instance.graphicsApi) {
-					default:
 					case XR_GRAPHICS_API_OPENGL:
 					case XR_GRAPHICS_API_VULKAN:
 						angleUp = fovHalfYRad;
@@ -3164,15 +3151,14 @@ XR_PROC xrLocateViews(
 						angleRight -= PI * 2;
 
 						break;
+					default: RETURN_ERROR(XR_ERROR_VALIDATION_FAILURE);
 				}
-
 				break;
-			case XR_SWAP_CLIP_STRETCH:
+			}
+			case XR_SWAP_CLIP_STRETCH: {
 				angleLeft = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.upperLeftClip.x);
 				angleRight = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.lowerRightClip.x);
-
 				switch (xr.instance.graphicsApi) {
-					default:
 					case XR_GRAPHICS_API_OPENGL:
 					case XR_GRAPHICS_API_VULKAN:
 						angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.upperLeftClip.y);
@@ -3182,17 +3168,17 @@ XR_PROC xrLocateViews(
 						// DX11 Y needs to invert
 						angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.upperLeftClip.y);
 						angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.lowerRightClip.y);
-
 						// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices unless all the angles are negative.
 						angleUp -= PI * 2;
 						angleDown -= PI * 2;
 						angleLeft -= PI * 2;
 						angleRight -= PI * 2;
-
 						break;
+					default: RETURN_ERROR(XR_ERROR_VALIDATION_FAILURE);
 				}
-
 				break;
+			}
+			default: RETURN_ERROR(XR_ERROR_VALIDATION_FAILURE);
 		}
 
 		views[i].pose.orientation = xrQuaternionFromEuler(eyeView.euler);

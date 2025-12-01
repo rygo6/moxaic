@@ -456,7 +456,7 @@ void ReleaseCompositorNodeActive(node_h hNode)
 #define CLOSE_HANDLE(_handle)                                                     \
 	if (!CloseHandle(_handle)) {                                                  \
 		DWORD dwError = GetLastError();                                           \
-		printf("Could not close (%s) object buffer (%lu).\n", #_handle, dwError); \
+		LOG("Could not close (%s) object buffer (%lu).\n", #_handle, dwError); \
 	}
 static int CleanupNode(node_h hNode)
 {
@@ -637,7 +637,7 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 static void ServerInterprocessAcceptNodeConnection()
 {
 #if defined(MOXAIC_COMPOSITOR) // we need to break this out in a Compositor Node file
-	printf("Accepting connections on: '%s'\n", SOCKET_PATH);
+	LOG("Accepting connections on: '%s'\n", SOCKET_PATH);
 	MxcNodeContext*         pNodeCtxt = NULL;
 	MxcNodeShared*          pNodeShrd = NULL;
 	MxcNodeImports*         pImports = NULL;
@@ -851,7 +851,7 @@ void mxcServerInitializeInterprocess()
 {
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
-	printf("Min size of shared memory. Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
+	LOG("Min size of shared memory. Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
 
 	ipcServer.listenSocket = INVALID_SOCKET;
 	CHECK(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
@@ -873,11 +873,11 @@ void mxcServerShutdownInterprocess()
 void mxcConnectInterprocessNode(bool createTestNode)
 {
 	if (pImportedExternalMemory != NULL && importedExternalMemoryHandle != NULL) {
-		printf("IPC already connected, skipping.\n");
+		LOG("IPC already connected, skipping.\n");
 		return;
 	}
 
-	printf("Connecting on: '%s'\n", SOCKET_PATH);
+	LOG("Connecting on: '%s'\n", SOCKET_PATH);
 	MxcNodeContext*         pNodeCtxt = NULL;
 //	MxcNodeImports*         pNodeImports = NULL;
 //	MxcNodeShared*          pNodeShared = NULL;
@@ -894,12 +894,12 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		clientSocket = socket(AF_UNIX, SOCK_STREAM, 0);
 		WSA_CHECK(clientSocket == INVALID_SOCKET, "Socket creation failed");
 		WSA_CHECK(connect(clientSocket, (struct sockaddr*)&address, sizeof(address)), "Connect failed");
-		printf("Connected to server.\n");
+		LOG("Connected to server.\n");
 	}
 
 	// Send ack
 	{
-		printf("Sending node ack: %s size: %llu\n", nodeIPCAckMessage, strlen(nodeIPCAckMessage));
+		LOG("Sending node ack: %s size: %llu\n", nodeIPCAckMessage, strlen(nodeIPCAckMessage));
 		int sendResult = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
 		WSA_CHECK(sendResult == SOCKET_ERROR, "Send node ack failed");
 	}
@@ -909,24 +909,24 @@ void mxcConnectInterprocessNode(bool createTestNode)
 		char buffer[sizeof(serverIPCAckMessage)] = {};
 		int  receiveLength = recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
 		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv compositor ack failed");
-		printf("Received from server: %s size: %d\n", buffer, receiveLength);
+		LOG("Received from server: %s size: %d\n", buffer, receiveLength);
 		WSA_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
 	}
 
 	// Send process id
 	{
 		DWORD currentProcessId = GetCurrentProcessId();
-		printf("Sending exported buffer: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
+		LOG("Sending exported buffer: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
 		int sendResult = send(clientSocket, (const char*)&currentProcessId, sizeof(DWORD), 0);
 		WSA_CHECK(sendResult == SOCKET_ERROR, "Send exported id failed");
 	}
 
 	// Receive shared memory
 	{
-		printf("Waiting to receive externalNodeMemoryHandle.\n");
+		LOG("Waiting to receive externalNodeMemoryHandle.\n");
 		int receiveLength = recv(clientSocket, (char*)&externalNodeMemoryHandle, sizeof(HANDLE), 0);
 		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv externalNodeMemoryHandle failed");
-		printf("Received externalNodeMemoryHandle: %p Size: %d\n", externalNodeMemoryHandle, receiveLength);
+		LOG("Received externalNodeMemoryHandle: %p Size: %d\n", externalNodeMemoryHandle, receiveLength);
 
 		pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
 		WIN32_CHECK(pExternalNodeMemory != NULL, "Map pExternalNodeMemory failed");
@@ -990,7 +990,7 @@ void mxcConnectInterprocessNode(bool createTestNode)
 //		PANIC("We need a new test scene...");
 //		atomic_thread_fence(memory_order_release);
 //		CHECK(pthread_create(&pNodeContext->thread.id, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
-//		printf("Node Request Process Import Success.\n");
+//		LOG("Node Request Process Import Success.\n");
 //#endif
 		goto ExitSuccess;
 	}

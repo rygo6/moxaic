@@ -148,6 +148,10 @@ typedef enum PACKED MidResult {
 	MID_RESULT_MAX_ENUM  = 0x7FFFFFFF
 } MidResult;
 
+#define RETURN_ERROR(_error) \
+	LOG_ERROR(#_error); \
+	return _error
+
 // TODO
 // REQUIRE = Panic
 // ASSERT = release compile out
@@ -157,14 +161,20 @@ typedef enum PACKED MidResult {
 extern void Panic(const char* file, int line, const char* message);
 #define PANIC(_message) ({ Panic(__FILE__, __LINE__, _message); __builtin_unreachable(); })
 
+#define ANSI_RED     "\033[31m"
+#define ANSI_GREEN   "\033[32m"
+#define ANSI_YELLOW  "\033[33m"
+#define ANSI_BLUE    "\033[34m"
+#define ANSI_RESET   "\033[0m"
+
 // Check if the condition is 1=True or 0=False TODO this needs to be REQUIRE_TRUE
 #define REQUIRE(_state, _message) if (UNLIKELY(!(_state))) PANIC(_message);
 
 #define ASSERT(_condition, ...) ({ \
     if (UNLIKELY(!(_condition))) { \
-        fprintf(stderr, "\n%s:%d ASSERT! ", __FILE__, __LINE__); \
-        fprintf(stderr, "(%s) " __VA_ARGS__ "\n", #_condition); \
-        _assert("(" #_condition ")\n" __VA_ARGS__, __FILE__, __LINE__); \
+        fprintf(stderr, ANSI_RED "\n%s:%d ASSERT! ", __FILE__, __LINE__); \
+        fprintf(stderr, "(%s) " __VA_ARGS__ "\n" ANSI_RESET, #_condition); \
+        _assert("(" #_condition ")" __VA_ARGS__, __FILE__, __LINE__); \
 	} \
 })
 #define STATIC_ASSERT(_condition, ...) _Static_assert(_condition, #_condition " " #__VA_ARGS__)
@@ -195,8 +205,9 @@ extern void Panic(const char* file, int line, const char* message);
 		PANIC("Expected: " #_a " != " #_b " " __VA_ARGS__ "\n"); \
 	}
 
-#define LOG(_format, ...) fprintf(stdout, __FILE__ ":%d " _format, __LINE__, ##__VA_ARGS__)
-#define LOG_ERROR(_format, ...) fprintf(stdout, __FILE__ ":%d Error! " _format, __LINE__, ##__VA_ARGS__)
+#define LOG(_format, ...)         fprintf(stderr, __FILE__ ":%d " _format, __LINE__, ##__VA_ARGS__)
+#define LOG_WARNING(_format, ...) fprintf(stderr, ANSI_YELLOW __FILE__ ":%d Warning! " _format ANSI_RESET, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR(_format, ...)   fprintf(stderr, ANSI_RED    __FILE__ ":%d Error! "   _format ANSI_RESET, __LINE__, ##__VA_ARGS__)
 
 #define LOG_ONCE(...)               \
 	({                              \

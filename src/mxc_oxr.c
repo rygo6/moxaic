@@ -10,7 +10,7 @@
 
 void xrInitialize()
 {
-	printf("Initializing Moxaic OpenXR Node.\n");
+	LOG("Initializing Moxaic OpenXR Node.\n");
 	isCompositor = false;
 	mxcConnectInterprocessNode(false);
 }
