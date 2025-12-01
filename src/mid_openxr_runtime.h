@@ -3215,7 +3215,8 @@ xrLocateViews(XrSession               session,
 	return XR_SUCCESS;
 }
 
-XR_PROC xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
+XR_PROC
+xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 {
 	LOG_METHOD(xrStringToPath);
 	CHECK_INSTANCE(instance);
