@@ -95,7 +95,9 @@ typedef _Atomic uint64_t a_u64;
 #define UNLIKELY(x)                __builtin_expect(!!(x), 0)
 #define COUNT(_array)              (sizeof(_array) / sizeof(_array[0]))
 #define ZERO_P(_p)                 memset((void*)(_p), 0, sizeof(*_p))
-#define IS_P_ZEROED(_p)            (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
+#define IS_P_ZERO(_p)              (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
+#define COPY_P(_dst, _src)         memcpy(_dst,  _src, sizeof(*_dst))
+#define COPY_V(_dst, _src)         memcpy(&_dst, &_src, sizeof(_dst))
 
 #define XMALLOC_P(_p) \
 	_p = malloc(sizeof(*_p)); \

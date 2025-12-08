@@ -341,7 +341,7 @@ node_h RequestLocalNodeHandle()
 	LOG("Requested Local Node Handle %d.\n", HANDLE_INDEX(hNode));
 
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
-	ASSERT(IS_P_ZEROED(pNodeCtxt), "MxcNodeContext not zeroed!");
+	ASSERT(IS_P_ZERO(pNodeCtxt), "MxcNodeContext not zeroed!");
 
 	MxcNodeShared** ppNodeShrd = ARRAY_PTR_H(node.pShared, hNode);
 	ASSERT(*ppNodeShrd == NULL);
@@ -349,7 +349,7 @@ node_h RequestLocalNodeHandle()
 
 #if defined(MOXAIC_COMPOSITOR)
 	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
-	ASSERT(IS_P_ZEROED(pNodeCpst), "MxcCompositorNodeData not zeroed!");
+	ASSERT(IS_P_ZERO(pNodeCpst), "MxcCompositorNodeData not zeroed!");
 #endif
 
 	return hNode;
@@ -362,7 +362,7 @@ MidResult RequestExternalNodeHandle(MxcNodeShared* pNodeShared, node_h* pNode_h)
 	LOG("Claimed External Node Handle %d.\n", HANDLE_INDEX(hNode));
 
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
-	ASSERT(IS_P_ZEROED(pNodeCtxt), "MxcNodeContext not zeroed!");
+	ASSERT(IS_P_ZERO(pNodeCtxt), "MxcNodeContext not zeroed!");
 
 	MxcNodeShared** ppNodeShrd = ARRAY_PTR_H(node.pShared, hNode);
 	ASSERT(*ppNodeShrd == NULL);
@@ -370,7 +370,7 @@ MidResult RequestExternalNodeHandle(MxcNodeShared* pNodeShared, node_h* pNode_h)
 
 #if defined(MOXAIC_COMPOSITOR)
 	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
-	ASSERT(IS_P_ZEROED(pNodeCpst), "MxcCompositorNodeData not zeroed!");
+	ASSERT(IS_P_ZERO(pNodeCpst), "MxcCompositorNodeData not zeroed!");
 #endif
 
 	*pNode_h = hNode;
@@ -380,7 +380,7 @@ MidResult RequestExternalNodeHandle(MxcNodeShared* pNodeShared, node_h* pNode_h)
 void ReleaseNodeHandle(node_h hNode)
 {
 	MxcNodeContext* pNodeCtxt = BLOCK_RELEASE(node.context, hNode);
-	ASSERT(!IS_P_ZEROED(pNodeCtxt), "MxcNodeContext zeroed!");
+	ASSERT(!IS_P_ZERO(pNodeCtxt), "MxcNodeContext zeroed!");
 	ZERO_P(pNodeCtxt);
 
 	MxcNodeShared** ppNodeShrd = ARRAY_PTR_H(node.pShared, hNode);
@@ -389,7 +389,7 @@ void ReleaseNodeHandle(node_h hNode)
 
 #if defined(MOXAIC_COMPOSITOR)
 	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
-	ASSERT(!IS_P_ZEROED(pNodeCpst), "MxcCompositorNodeData zeroed!");
+	ASSERT(!IS_P_ZERO(pNodeCpst), "MxcCompositorNodeData zeroed!");
 	ZERO_P(pNodeCpst);
 #endif
 
@@ -435,7 +435,7 @@ void ReleaseCompositorNodeActive(node_h hNode)
 {
 #if defined(MOXAIC_COMPOSITOR)
 	ASSERT((compositorContext.baseCycleValue % MXC_CYCLE_COUNT) == MXC_CYCLE_UPDATE_WINDOW_STATE,
-		   "Trying to ReleaseCompositorNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
+		"Trying to ReleaseCompositorNodeActive not in MXC_CYCLE_UPDATE_WINDOW_STATE");
 
 	MxcNodeContext*        pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*         pNodeShrd = ARRAY_H(node.pShared, hNode);
@@ -447,8 +447,10 @@ void ReleaseCompositorNodeActive(node_h hNode)
 	// compact handles down... TODO this should use memmove
 	u16 count = atomic_fetch_sub(&pActiveNodes->count, 1);
 	u16 i = 0;
-	for (; i < count; ++i) if (pActiveNodes->handles[i] == hNode) break;
-	for (; i < count - 1; ++i) pActiveNodes->handles[i] = pActiveNodes->handles[i + 1];
+	for (; i < count; ++i)
+		if (pActiveNodes->handles[i] == hNode) break;
+	for (; i < count - 1; ++i)
+		pActiveNodes->handles[i] = pActiveNodes->handles[i + 1];
 #endif
 }
 
@@ -571,7 +573,7 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle)
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 	};
 	vkCreateSemaphoreExt(&semaphoreCreateInfo, &pNodeCtxt->thread.nodeTimeline);
-	VK_SET_DEBUG_NAME(pNodeCtxt->thread.nodeTimeline, "Thread Node Timeline");
+	VK_SET_DEBUG(pNodeCtxt->thread.nodeTimeline);
 
 	VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
 		VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -632,7 +634,7 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 		}                                                             \
 	}
 
-/// Called when compositor accepts connection
+// Called when compositor accepts connection
 static void ServerInterprocessAcceptNodeConnection()
 {
 #if defined(MOXAIC_COMPOSITOR) // we need to break this out in a Compositor Node file

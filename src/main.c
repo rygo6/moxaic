@@ -80,9 +80,9 @@ int main(void)
 
 #define TEST_NODE
 #ifdef TEST_NODE
-		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
-		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
-		pTestNodeShrd->compositorCycleSkip = 8;
+//		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
+//		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
+//		pTestNodeShrd->compositorCycleSkip = 8;
 
 		node_h hTestNode2; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode2);
         MxcNodeShared* pTestNode2Shrd = ARRAY_H(node.pShared, hTestNode2);

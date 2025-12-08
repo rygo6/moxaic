@@ -293,11 +293,11 @@ void xrProgressCompositorTimelineValue(session_i iSession, u64 timelineValue);
 void xrGetHeadPose(session_i iSession, MidEulerPose* pPose);
 
 typedef struct XrEyeView {
-	XrVector3f euler;
-	XrVector3f position;
-	XrVector2f fovRad;
-	XrVector2f upperLeftClip;
-	XrVector2f lowerRightClip;
+	vec3 euler;
+	vec3 position;
+	vec2 fovRad;
+	vec2 upperLeftClip;
+	vec2 lowerRightClip;
 } XrEyeView;
 void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView);
 
@@ -3108,31 +3108,27 @@ xrLocateViews(XrSession               session,
 
 		f32 fovHalfXRad = eyeView.fovRad.x / 2.0f;
 		f32 fovHalfYRad = eyeView.fovRad.y / 2.0f;
-		f32 angleLeft;
-		f32 angleRight;
-		f32 angleUp;
-		f32 angleDown;
-
+		XrFovf fov;
 		switch (pSession->swapClip)
 		{
 			case XR_SWAP_CLIP_NONE: {
-				angleLeft = -fovHalfXRad;
-				angleRight = fovHalfXRad;
+				fov.angleLeft = -fovHalfXRad;
+				fov.angleRight = fovHalfXRad;
 				switch (xr.instance.graphicsApi) {
 					case XR_GRAPHICS_API_OPENGL:
 					case XR_GRAPHICS_API_VULKAN:
-						angleUp = fovHalfYRad;
-						angleDown = -fovHalfYRad;
+						fov.angleUp = fovHalfYRad;
+						fov.angleDown = -fovHalfYRad;
 						break;
 					case XR_GRAPHICS_API_D3D11_4:
-						angleUp = fovHalfYRad;
-						angleDown = -fovHalfYRad;
+						fov.angleUp = fovHalfYRad;
+						fov.angleDown = -fovHalfYRad;
 
 						// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices unless all the angles are negative.
-						angleUp -= PI * 2;
-						angleDown -= PI * 2;
-						angleLeft -= PI * 2;
-						angleRight -= PI * 2;
+						fov.angleUp -= PI * 2;
+						fov.angleDown -= PI * 2;
+						fov.angleLeft -= PI * 2;
+						fov.angleRight -= PI * 2;
 
 						break;
 					default: RETURN_ERROR(XR_ERROR_VALIDATION_FAILURE);
@@ -3140,23 +3136,23 @@ xrLocateViews(XrSession               session,
 				break;
 			}
 			case XR_SWAP_CLIP_STRETCH: {
-				angleLeft = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.upperLeftClip.x);
-				angleRight = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.lowerRightClip.x);
+				fov.angleLeft = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.upperLeftClip.x);
+				fov.angleRight = xrFloatLerp(-fovHalfXRad, fovHalfXRad, eyeView.lowerRightClip.x);
 				switch (xr.instance.graphicsApi) {
 					case XR_GRAPHICS_API_OPENGL:
 					case XR_GRAPHICS_API_VULKAN:
-						angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.upperLeftClip.y);
-						angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.lowerRightClip.y);
+						fov.angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.upperLeftClip.y);
+						fov.angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, eyeView.lowerRightClip.y);
 						break;
 					case XR_GRAPHICS_API_D3D11_4:
 						// DX11 Y needs to invert
-						angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.upperLeftClip.y);
-						angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.lowerRightClip.y);
+						fov.angleUp = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.upperLeftClip.y);
+						fov.angleDown = xrFloatLerp(-fovHalfYRad, fovHalfYRad, 1.0f - eyeView.lowerRightClip.y);
 						// Some OXR implementations (Unity) cannot properly calculate the width and height of the projection matrices unless all the angles are negative.
-						angleUp -= PI * 2;
-						angleDown -= PI * 2;
-						angleLeft -= PI * 2;
-						angleRight -= PI * 2;
+						fov.angleUp -= PI * 2;
+						fov.angleDown -= PI * 2;
+						fov.angleLeft -= PI * 2;
+						fov.angleRight -= PI * 2;
 						break;
 					default: RETURN_ERROR(XR_ERROR_VALIDATION_FAILURE);
 				}
@@ -3165,12 +3161,10 @@ xrLocateViews(XrSession               session,
 			default: RETURN_ERROR(XR_ERROR_VALIDATION_FAILURE);
 		}
 
-		views[i].pose.orientation = xrQuaternionFromEuler(eyeView.euler);
-		views[i].pose.position = eyeView.position;
-		views[i].fov.angleLeft = angleLeft;
-		views[i].fov.angleRight = angleRight;
-		views[i].fov.angleUp = angleUp;
-		views[i].fov.angleDown = angleDown;
+		quat eyeViewQuat = QuatFromEuler(eyeView.euler);
+		COPY_V(views[i].pose.orientation, eyeViewQuat);
+		COPY_V(views[i].pose.position, eyeView.position);
+		COPY_V(views[i].fov, fov);
 
 		// do this? the app could calculate the subimage and pass it back with endframe info
 		// but xrEnumerateViewConfigurationViews instance based, not session based, so it can't be relied on to get expected frame size

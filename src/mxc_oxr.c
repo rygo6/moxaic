@@ -265,7 +265,7 @@ void xrGetHeadPose(session_i iSession, MidEulerPose* pPose)
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
-	pPose->pos = pNodeShrd->cameraPose.pos;
+	pPose->pos.vec = pNodeShrd->cameraPose.pos.vec - pNodeShrd->rootPose.pos.vec;
 	pPose->euler = pNodeShrd->cameraPose.euler;
 }
 
@@ -275,12 +275,11 @@ void xrGetEyeView(session_i iSession, view_i iView, XrEyeView *pEyeView)
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
-	pEyeView->euler    = *(XrVector3f*)&pNodeShrd->cameraPose.euler;
-	pEyeView->position = *(XrVector3f*)&pNodeShrd->cameraPose.pos;
-	pEyeView->fovRad   = (XrVector2f){pNodeShrd->camera.yFovRad, pNodeShrd->camera.yFovRad};
-
-	pEyeView->upperLeftClip  = *(XrVector2f*)&pNodeShrd->clip.ulUV;
-	pEyeView->lowerRightClip = *(XrVector2f*)&pNodeShrd->clip.lrUV;
+	pEyeView->euler        = pNodeShrd->cameraPose.euler;
+	pEyeView->position.vec = pNodeShrd->cameraPose.pos.vec - pNodeShrd->rootPose.pos.vec;
+	pEyeView->fovRad       = VEC2(pNodeShrd->camera.yFovRad, pNodeShrd->camera.yFovRad);
+	pEyeView->upperLeftClip  = pNodeShrd->clip.ulUV;
+	pEyeView->lowerRightClip = pNodeShrd->clip.lrUV;
 
 	// TODO this is to debug
 	if (iView == 1)
