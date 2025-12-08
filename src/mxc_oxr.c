@@ -11,7 +11,7 @@
 void xrInitialize()
 {
 	LOG("Initializing Moxaic OpenXR Node.\n");
-	isCompositor = false;
+	mxc.isCompositor = false;
 	mxcConnectInterprocessNode(false);
 }
 
@@ -158,12 +158,12 @@ XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap)
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
 	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_UNITIALIZED) {
-		LOG_ERROR("Trying to destroy unitialized swapchain images!");
+		LOG_ERROR("Trying to destroy unitialized swapchain images!\n");
 		return XR_ERROR_HANDLE_INVALID;
 	}
 
 	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_DESTROYED) {
-		LOG_ERROR("Trying to destroy already destroyed swapchain images!");
+		LOG_ERROR("Trying to destroy already destroyed swapchain images!\n");
 		return XR_ERROR_HANDLE_INVALID;
 	}
 
@@ -173,12 +173,12 @@ XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap)
 	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 
 	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_DESTROYED) {
-		LOG_ERROR("Compositor failed to destroy Swap!");
+		LOG_ERROR("Compositor failed to destroy Swap!\n");
 		return XR_ERROR_HANDLE_INVALID;
 	}
 
 	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_ERROR) {
-		LOG_ERROR("Compositor error when destroying swap!");
+		LOG_ERROR("Compositor error when destroying swap!\n");
 		pNodeShrd->nodeSwapStates[iSwap] = XR_SWAP_STATE_UNITIALIZED;
 		return XR_ERROR_HANDLE_INVALID;
 	}

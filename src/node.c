@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #undef UNICODE
+#include <window.h>
 #include <winsock2.h>
 #include <afunix.h>
 #include <stdio.h>
@@ -833,7 +834,7 @@ static void* RunInterProcessServer(void* arg)
 	WSA_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Socket bind failed");
 	WSA_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
 
-	while (atomic_load_explicit(&isRunning, memory_order_acquire))
+	while (ATOMIC_GET(mxc.lifecycle) != MXC_LIFECYCLE_EXITING)
 		ServerInterprocessAcceptNodeConnection();
 
 Error:

@@ -120,10 +120,12 @@ typedef _Atomic uint64_t a_u64;
 		found;                             \
 	})
 
-#define ATOMIC_FENCE_SCOPE                                                \
-	for (bool _done = (atomic_thread_fence(memory_order_acquire), false); \
-		 !_done;                                                          \
-		 _done = true, atomic_thread_fence(memory_order_release))
+#define ATOMIC_FENCE_SCOPE
+
+#define ATOMIC_ACQUIRE(_field)         atomic_load_explicit(&_field, memory_order_acquire)
+#define ATOMIC_RELEASE(_field, _value) atomic_store_explicit(&_field, _value, memory_order_release)
+#define ATOMIC_GET(_field)             atomic_load_explicit(&_field, memory_order_relaxed)
+#define ATOMIC_SET(_field, _value)     atomic_store_explicit(&_field, _value, memory_order_relaxed)
 
 #define MALLOC_SCOPE(_ptr)             \
 	for (_ptr = malloc(sizeof(*_ptr)); \

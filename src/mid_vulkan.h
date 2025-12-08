@@ -1199,20 +1199,17 @@ void vkEnqueueCommandBuffer(VkQueueFamilyType iFamilyType, VkQueuedCommandBuffer
 
 void vkSubmitQueuedCommandBuffers()
 {
+	VkQueuedCommandBuffer queuedCmd;
 	for (int iFamilyType = 0; iFamilyType < VK_QUEUE_FAMILY_TYPE_COUNT; ++iFamilyType) {
 		VkQueueFamily* pFamily = &vk.context.queueFamilies[iFamilyType];
-		VkQueuedCommandBuffer queuedCmd;
 		while (MID_CHANNEL_RECV(&pFamily->cmdQueue, pFamily->queuedCmds, &queuedCmd) == MID_SUCCESS)
 			CmdSubmit(queuedCmd.cmd, pFamily->queue, queuedCmd.timeline, queuedCmd.timelineSignalValue);
 	}
 }
 
-////
-//// Immediate Command Buffers
-////
-
-
-
+/*
+ * Immediate Command Buffers
+ */
 VkCommandBuffer vkBeginImmediateCommandBuffer(VkQueueFamilyType iFamilyType)
 {
 	auto_t pFamily = &vk.context.queueFamilies[iFamilyType];

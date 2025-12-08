@@ -129,15 +129,15 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 	}
 
 	/* Timeline Initial State */
+	u64 baseCycleValue = 0;
+	u64 nodeTimelineValue = 0;
 	{
 		uint64_t compositorTimelineValue;
 		VK_CHECK(vk.GetSemaphoreCounterValue(device, cstTimeline, &compositorTimelineValue));
 		REQUIRE(compositorTimelineValue != 0xffffffffffffffff, "compositorTimelineValue imported as max value!");
 		u64 timelineCycleStartValue = compositorTimelineValue - (compositorTimelineValue % MXC_CYCLE_COUNT);
-		pNodeShrd->compositorBaseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
+		baseCycleValue = timelineCycleStartValue + MXC_CYCLE_COUNT;
 	}
-
-	u64 nodeTimelineValue = 0;
 
 	// Send Open Node IPC call
 	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
@@ -147,7 +147,7 @@ void mxcTestNodeRun(node_h hNode, MxcNodeThread* pNode)
 	 * Main Loop
 	 */
 NodeLoop:
-	vkTimelineWait(device, pNodeShrd->compositorBaseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
+	vkTimelineWait(device, baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, cstTimeline);
 
 	/*
 	 * MXC_CYCLE_UPDATE_WINDOW_STATE
@@ -166,10 +166,9 @@ NodeLoop:
 	/*
 	 * MXC_CYCLE_COMPOSITOR_RECORD
 	 */
-	vkTimelineWait(device, pNodeShrd->compositorBaseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
+	vkTimelineWait(device, baseCycleValue + MXC_CYCLE_COMPOSITOR_RECORD, cstTimeline);
 
 	/* Update Global State */
-	atomic_thread_fence(memory_order_acquire);
 	vkUpdateGlobalSetView((MidPose){
 		.pos = (vec3)(pNodeShrd->cameraPose.pos.vec - pNodeShrd->rootPose.pos.vec),
 		.euler = pNodeShrd->cameraPose.euler,
@@ -180,7 +179,7 @@ NodeLoop:
 	vk.ResetCommandBuffer(gfxCmd, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 	vk.BeginCommandBuffer(gfxCmd, &(VkCommandBufferBeginInfo){VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT});
 
-	int iSwapImg = nodeTimelineValue % VK_SWAP_COUNT;
+	u8 iSwapImg = nodeTimelineValue % VK_SWAP_COUNT;
 	pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iColorImg = iSwapImg;
 	pNodeShrd->viewSwaps[XR_VIEW_ID_CENTER_MONO].iDepthImg = iSwapImg;
 
@@ -283,7 +282,6 @@ NodeLoop:
 
 	/* Submit */
 	nodeTimelineValue++;
-
 	vkEnqueueCommandBuffer(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS, (VkQueuedCommandBuffer){
 		.cmd = gfxCmd,
 		.timeline = nodeTimeline,
@@ -296,9 +294,8 @@ NodeLoop:
 	pNodeShrd->processState.depthFarZ = pNodeShrd->camera.zNear;
 
 	/* Signal Updated to Compositor */
-	pNodeShrd->timelineValue = nodeTimelineValue;
-	pNodeShrd->compositorBaseCycleValue += MXC_CYCLE_COUNT * pNodeShrd->compositorCycleSkip;
-	atomic_thread_fence(memory_order_release);
+	baseCycleValue += MXC_CYCLE_COUNT * pNodeShrd->compositorCycleSkip;
+	ATOMIC_RELEASE(pNodeShrd->timelineValue, nodeTimelineValue);
 
 	CHECK_RUNNING
 	goto NodeLoop;

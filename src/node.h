@@ -88,15 +88,18 @@ typedef struct MxcClip {
 	vec2 lrUV;
 } MxcClip;
 
-typedef volatile struct MxcNodeShared {
-	// TODO these all should be volatile and use barriers
-	// Read/Write every cycle
-	u64     timelineValue;
-	MxcClip clip;
+typedef struct MxcNodeShared {
+	/* Read/Write every cycle */
+
+	// Used as frame synchronization atomic.
+	// Stored last after all node changes. Read first before compositor updates.
+	_Atomic u64  timelineValue;
+
+	MxcClip      clip;
 	ProcessState processState;
-	MidPose   rootPose;
-	MidPose   cameraPose;
-	camera camera;
+	MidPose      rootPose;
+	MidPose      cameraPose;
+	camera       camera;
 
 	MxcController left;
 	MxcController right;
@@ -117,8 +120,10 @@ typedef volatile struct MxcNodeShared {
 	// Read every cycle. Occasional write.
 	f32               compositorRadius;
 	u32               compositorCycleSkip;
-	uint64_t          compositorBaseCycleValue;
 	MxcCompositorMode compositorMode;
+
+	// compositor doesn't need to read this?!
+	uint64_t          compositorBaseCycleValue;
 
 	// Interprocess
 	MidChannelRing ipcFuncQueue;

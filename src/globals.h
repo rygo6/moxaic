@@ -22,18 +22,13 @@
 #define DEFAULT_WINDOW_X_POSITION 0
 #define DEFAULT_WINDOW_Y_POSITION 0
 
-typedef enum MxcView {
-	MXC_VIEW_UNINITIALIZED = 0,
-	MXC_VIEW_MONO = 1,
-	MXC_VIEW_STEREO = 2,
-} MxcView;
-
-extern MxcView compositorView;
-extern bool isCompositor;
-
-extern _Atomic bool isRunning;
-#define CHECK_RUNNING                 \
-	if (UNLIKELY(!isRunning)) return;
+typedef enum MXC_LIFECYCLE {
+	MXC_LIFECYCLE_NONE,
+	MXC_LIFECYCLE_INITIALIZING,
+	MXC_LIFECYCLE_RUNNING,
+	MXC_LIFECYCLE_EXITING,
+	MXC_LIFECYCLE_COUNT,
+} MXC_LIFECYCLE;
 
 typedef enum MxcCycle {
   MXC_CYCLE_UPDATE_WINDOW_STATE, // update window input, submit queues
@@ -53,6 +48,14 @@ typedef enum MxcPostCycle {
   MXC_CYCLE_POST_COUNT
 } MxcPostCycle;
 
+extern struct Mxc {
+	_Atomic MXC_LIFECYCLE lifecycle;
+	bool isCompositor;
+} mxc;
+
+#define CHECK_RUNNING \
+	if (UNLIKELY(ATOMIC_GET(mxc.lifecycle) == MXC_LIFECYCLE_EXITING)) return;
+
 typedef struct Input {
   float mouseDeltaX;
   float mouseDeltaY;
@@ -68,24 +71,3 @@ typedef struct Input {
   bool debugSwap;
 
 } Input;
-
-
-//typedef uint16_t arena_offset;
-//
-//extern void*    static_arena;
-//static uint8_t  dynamic_arena[1 << 16];
-//static uint16_t dynamic_arena_end;
-//
-//#define A_OFFSET(arena, field)     (void*)field - (void*)arena
-//#define A_PTR(arena, offset, type) ((type*)((void*)&arena + offset))
-//#define STC_A_PTR(offset, type)    ((type*)(static_arena + offset))
-
-//struct static_arena_memory {
-//  VkmInstance instance;
-//  VkmContext  context;
-//};
-//void* static_arena = &(struct static_arena_memory){};
-
-
-//  assert(sizeof(struct static_arena_memory) <= 1 << 16);
-//  arena_offset aInstance = offsetof(struct static_arena_memory, instance);

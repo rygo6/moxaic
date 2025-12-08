@@ -9,9 +9,11 @@
 #include "mid_vulkan.h"
 #include "mid_window.h"
 
-MxcView compositorView = MXC_VIEW_STEREO;
-bool isCompositor = true;
-_Atomic bool isRunning = true;
+struct Mxc mxc;
+
+static void OnWindowExit(){
+	ATOMIC_SET(mxc.lifecycle, MXC_LIFECYCLE_EXITING);
+}
 
 int main(void)
 {
@@ -30,8 +32,10 @@ int main(void)
 	/*
 	 * Initialize
 	 */
+	ATOMIC_SET(mxc.lifecycle, MXC_LIFECYCLE_INITIALIZING);
 	{
 		midCreateWindow();
+		midWindowExitEvent = &OnWindowExit;
 
 		vkInitializeInstance();
 		VkContextCreateInfo contextCreateInfo = {
@@ -70,7 +74,7 @@ int main(void)
 
 #if defined(MOXAIC_COMPOSITOR)
 		printf("Moxaic Compositor\n");
-		isCompositor = true;
+		mxc.isCompositor = true;
 		mxcCreateAndRunCompositorThread(vk.surfaces[0]);
 		mxcServerInitializeInterprocess();
 
@@ -87,7 +91,7 @@ int main(void)
 
 #elif defined(MOXAIC_NODE)
 		printf("Moxaic node\n");
-		isCompositor = false;
+		mxc.isCompositor = false;
 		mxcConnectInterprocessNode(true);
 #endif
 	}
@@ -95,24 +99,22 @@ int main(void)
 	/*
 	 * Main Compositor Loop
 	 */
-	if (isCompositor) {
+	ATOMIC_SET(mxc.lifecycle, MXC_LIFECYCLE_RUNNING);
+	if (mxc.isCompositor) {
 
 		VkDevice device = vk.context.device;
 		VkQueue  graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-		while (isRunning) {
-
+		while (ATOMIC_GET(mxc.lifecycle) == MXC_LIFECYCLE_RUNNING) {
 			/* MXC_CYCLE_UPDATE_WINDOW_STATE */
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE, compositorContext.timeline);
-			ATOMIC_FENCE_SCOPE {
-				// This needs to be after a wait, and before a signal, as it will poll the IPC Message queue
-				// and those may make changes to active nodes, or other, which subsequent states will rely on
-				mxcNodeInterprocessPoll();
-				vkSubmitQueuedCommandBuffers();
 
-				midUpdateWindowInput();
-				mxcProcessWindowInput();
-				isRunning = midWindow.running;
-			}
+			// This needs to be after a wait, and before a signal, as it will poll the IPC Message queue
+			// and those may make changes to active nodes, or other, which subsequent states will rely on
+			mxcNodeInterprocessPoll();
+			vkSubmitQueuedCommandBuffers();
+
+			midUpdateWindowInput();
+			mxcProcessWindowInput();
 
 			vkTimelineSignal(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compositorContext.timeline);
 			/* MXC_CYCLE_PROCESS_INPUT */
@@ -123,18 +125,14 @@ int main(void)
 
 			/* MXC_CYCLE_RENDER_COMPOSITE */
 			vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compositorContext.timeline);
-			ATOMIC_FENCE_SCOPE {
-				atomic_thread_fence(memory_order_acquire);
-				compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
-				CmdSubmitPresent(
-						compositorContext.gfxCmd,
-						VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
-						compositorContext.swapCtx,
-						compositorContext.timeline,
-						compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
-				vkSubmitQueuedCommandBuffers();
-			}
 
+			compositorContext.baseCycleValue += MXC_CYCLE_COUNT;
+			CmdSubmitPresent(compositorContext.gfxCmd,
+					VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS,
+					compositorContext.swapCtx,
+					compositorContext.timeline,
+					compositorContext.baseCycleValue + MXC_CYCLE_UPDATE_WINDOW_STATE);
+			vkSubmitQueuedCommandBuffers();
 		}
 
 	/*
@@ -143,9 +141,8 @@ int main(void)
 	} else {
 
 		VkQueue graphicsQueue = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].queue;
-		while (isRunning) {
+		while (ATOMIC_GET(mxc.lifecycle) == MXC_LIFECYCLE_RUNNING) {
 			midUpdateWindowInput();
-			isRunning = midWindow.running;
 
 			// I guess technically we just want to go as fast as possible in a node, but we would probably need to process and send input here first at some point?
 			// we probably want to signal and wait on semaphore here

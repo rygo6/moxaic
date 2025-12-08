@@ -539,15 +539,9 @@ CompositeLoop:
 
 	/* Iterate Node State Updates */
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
-		atomic_thread_fence(memory_order_acquire);
-		if (node.active[iCstMode].count == 0)
-			continue;
-
-		ImageMemoryBarrierDst dstBarrier = ProcessDstBarrier[iCstMode];
-
 		MxcActiveNodes* pActiveNodes = &node.active[iCstMode];
-		for (u32 iActiveNode = 0; iActiveNode < pActiveNodes->count; ++iActiveNode) {
-			atomic_thread_fence(memory_order_acquire);
+		u16 activeNodeCount = ATOMIC_ACQUIRE(pActiveNodes->count);
+		for (u32 iActiveNode = 0; iActiveNode < activeNodeCount; ++iActiveNode) {
 			node_h hNode = pActiveNodes->handles[iActiveNode];
 			u16    iNode = HANDLE_INDEX(hNode);
 			MxcNodeShared*         pNodeShrd = ARRAY_H(node.pShared, hNode);
@@ -556,43 +550,36 @@ CompositeLoop:
 			EXTRACT_FIELD(pNodeCpst, activeInterprocessMode);
 
 			/* Update Root Pose */
-			ATOMIC_FENCE_SCOPE {
-				// Update InteractionState and RootPose every cycle no matter what so that app stays responsive to moving.
-				// This should probably be in a threaded node.
-				vec3 worldDiff = VEC3_ZERO;
-				switch (pNodeCpst->interactionState) {
-					case NODE_INTERACTION_STATE_SELECT: {
-						ray priorScreenRay = rayFromScreenUV(mxcWindowInput.priorMouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
-						ray screenRay = rayFromScreenUV(mxcWindowInput.mouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
+			// TODO  Update InteractionState and RootPose every cycle no matter what so that app stays responsive to moving. This should be in a threaded node.
+			vec3 worldDiff = VEC3_ZERO;
+			switch (pNodeCpst->interactionState) {
+				case NODE_INTERACTION_STATE_SELECT: {
+					ray priorScreenRay = rayFromScreenUV(mxcWindowInput.priorMouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
+					ray screenRay = rayFromScreenUV(mxcWindowInput.mouseUV, globSetState.invProj, globSetState.invView, globSetState.invViewProj);
 
-						vec4 nodeOrigin = vec4MulMat4(pNodeCpst->compositingNodeSetState.model, VEC4_IDENT);
-						Plane plane = {.origin = VEC3(nodeOrigin.x, nodeOrigin.y, nodeOrigin.z), .normal = VEC3(0, 0, 1)};
+					vec4 nodeOrigin = vec4MulMat4(pNodeCpst->compositingNodeSetState.model, VEC4_IDENT);
+					Plane plane = {.origin = VEC3(nodeOrigin.x, nodeOrigin.y, nodeOrigin.z), .normal = VEC3(0, 0, 1)};
 
-						vec3 hitPoints[2];
-						if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) &&
-							rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
-							worldDiff = Vec3Sub(hitPoints[0], hitPoints[1]);
-						}
 
-						break;
+					vec3 hitPoints[2];
+					if (rayIntersetPlane(priorScreenRay, plane, &hitPoints[0]) &&
+						rayIntersetPlane(screenRay, plane, &hitPoints[1])) {
+						worldDiff = Vec3Sub(hitPoints[0], hitPoints[1]);
 					}
-					default: break;
+					break;
 				}
-
-              pNodeShrd->rootPose.pos.vec -= worldDiff.vec;
-              pNodeCpst->compositingNodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.pos, pNodeShrd->rootPose.rot);
+				default: break;
 			}
+			pNodeShrd->rootPose.pos.vec -= worldDiff.vec;
+			pNodeCpst->compositingNodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.pos, pNodeShrd->rootPose.rot);
 
 			/* Poll New Node Swap */
-			u64 nodeTimelineValue = pNodeShrd->timelineValue;
-			if (nodeTimelineValue <= pNodeCpst->lastTimelineValue)
-				continue;
-
+			u64 nodeTimelineValue = ATOMIC_ACQUIRE(pNodeShrd->timelineValue);
+			if (nodeTimelineValue <= pNodeCpst->lastTimelineValue) continue;
 			pNodeCpst->lastTimelineValue = nodeTimelineValue;
-			atomic_thread_fence(memory_order_release);
 
 			/* Acquire New Node Swap */
-			ATOMIC_FENCE_SCOPE {
+			{
 				swap_i iLeftColorSwap  = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorSwap;
 				swap_i iLeftColorImg   = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iColorImg;
 				swap_i iLeftDepthSwap  = pNodeShrd->viewSwaps[XR_VIEW_ID_LEFT_STEREO].iDepthSwap;
@@ -645,6 +632,7 @@ CompositeLoop:
 				u32 dstQueueFamilyIndex = CompositorQueueFamilyIndex[activeInterprocessMode];
 
 				// Acquire Swaps
+				ImageMemoryBarrierDst dstBarrier = ProcessDstBarrier[iCstMode];
 				CMD_IMAGE_BARRIERS2(gfxCmd, {
 					{	// Color
 						VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -713,7 +701,7 @@ CompositeLoop:
 			}
 
 			/* Calc new node uniform and shared data */
-			ATOMIC_FENCE_SCOPE {
+			{
 				float radius = pNodeShrd->compositorRadius;
 				vec3 corners[CORNER_COUNT] = {
 					[CORNER_LUB] = VEC3(-radius, -radius, -radius),

@@ -1,6 +1,8 @@
-////
-//// Mid Window Header
-////
+/*
+ *
+ * Mid Window Header
+ *
+ */
 #ifndef MID_WINDOW_H
 #define MID_WINDOW_H
 
@@ -12,6 +14,9 @@
 
 #include "mid_common.h"
 
+/*
+ * Globals
+ */
 #ifndef DEFAULT_WIDTH
 #define DEFAULT_WIDTH 1920
 #endif
@@ -25,6 +30,16 @@
 #define DEFAULT_WINDOW_Y_POSITION CW_USEDEFAULT
 #endif
 
+#define MID_KEY_A keyChar['A' - '0']
+#define MID_KEY_D keyChar['D' - '0']
+#define MID_KEY_F keyChar['F' - '0']
+#define MID_KEY_R keyChar['R' - '0']
+#define MID_KEY_S keyChar['S' - '0']
+#define MID_KEY_W keyChar['W' - '0']
+
+/*
+ * State
+ */
 typedef struct MidWindow {
 	HINSTANCE hInstance;
 	HWND      hWnd;
@@ -76,16 +91,14 @@ typedef struct MidWindowInput {
 
 } MidWindowInput;
 
-#define MID_KEY_A keyChar['A' - '0']
-#define MID_KEY_D keyChar['D' - '0']
-#define MID_KEY_F keyChar['F' - '0']
-#define MID_KEY_R keyChar['R' - '0']
-#define MID_KEY_S keyChar['S' - '0']
-#define MID_KEY_W keyChar['W' - '0']
-
 extern MidWindow      midWindow;
 extern MidWindowInput midWindowInput;
+extern double timeQueryMs;
 
+/* Events */
+extern void (*midWindowExitEvent)();
+
+/* Methods */
 void midUpdateWindowInput();
 void midCreateWindow();
 
@@ -101,13 +114,13 @@ static inline uint64_t midQueryPerformanceCounter()
 	return value.QuadPart;
 }
 
-extern double timeQueryMs;
-
 #endif // MID_WINDOW_H
 
-////
-//// Mid Window Implementation
-////
+/*
+ *
+ * Mid Window Implementation
+ *
+ */
 #if defined(MID_WINDOW_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
 
 #define WIN32_LEAN_AND_MEAN
@@ -115,12 +128,19 @@ extern double timeQueryMs;
 #include <windowsx.h>
 #include <stdio.h>
 
+/* Globals */
 #define WINDOW_NAME "moxaic"
 #define CLASS_NAME  "MoxaicWindowClass"
 
+/* State */
 MidWindowInput midWindowInput;
 MidWindow      midWindow;
+double timeQueryMs;
 
+/* Events */
+void (*midWindowExitEvent)();
+
+/* Methods */
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg) {
@@ -199,6 +219,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		case WM_CLOSE:
 			atomic_store_explicit(&midWindow.running, false, memory_order_release);
+			if (midWindowExitEvent != NULL) midWindowExitEvent;
 			return 0;
 
 #define MOUSE_PHASE(macro_prefix, button_prefix)                      \
@@ -223,8 +244,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 	}
 }
-
-double timeQueryMs;
 
 void midUpdateWindowInput()
 {

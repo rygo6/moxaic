@@ -121,6 +121,15 @@ typedef enum PACKED XrGraphicsApi {
 	XR_GRAPHICS_API_COUNT,
 } XrGraphicsApi;
 
+static const char* string_XrGraphicsApi(XrGraphicsApi api) {
+	switch (api) {
+		case XR_GRAPHICS_API_OPENGL:  return "XR_GRAPHICS_API_OPENGL";
+		case XR_GRAPHICS_API_VULKAN:  return "XR_GRAPHICS_API_VULKAN";
+		case XR_GRAPHICS_API_D3D11_4: return "XR_GRAPHICS_API_D3D11_4";
+		default:                     return "N/A";
+	}
+}
+
 typedef enum PACKED XrSwapOutput {
 	XR_SWAP_OUTPUT_UNKNOWN,
 	XR_SWAP_OUTPUT_COLOR,
@@ -808,18 +817,9 @@ static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
 	STRING_ENUM_TYPE(XrVisibilityMaskTypeKHR)
 	STRING_ENUM_TYPE(XrSessionState)
 	STRING_ENUM_TYPE(XrResult)
+	STRING_ENUM_TYPE(XrStructureType)
 #undef ENUM_NAME_CASE
 #undef STRING_ENUM_TYPE
-
-#define STRUCTURE_TYPE_NAME_CASE(_name, _type) case _type: return #_name;
-	static const char* string_XrStructureType(XrStructureType type)
-	{
-		switch (type) {
-			XR_LIST_STRUCTURE_TYPES(STRUCTURE_TYPE_NAME_CASE);
-			default: return "N/A";
-		}
-	}
-#undef STRUCTURE_TYPE_NAME_CASE
 
 // TODO analyize if I really want this
 #define STR(s)       #s
@@ -841,12 +841,12 @@ static void LogNextChain(const XrBaseInStructure* nextProperties)
 	}
 }
 
-#define CHECK_NEXT_CHAIN(_pInfo)                                                         \
-	({                                                                                   \
-		if (_pInfo->next != NULL) {                                                      \
+#define CHECK_NEXT_CHAIN(_pInfo) \
+	({ \
+		if (_pInfo->next != NULL) { \
 			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE " #_pInfo " does not support next!"); \
-			return XR_ERROR_VALIDATION_FAILURE;                                          \
-		}                                                                                \
+			return XR_ERROR_VALIDATION_FAILURE; \
+		} \
 	})
 
 #define TRANSFER_ENUM_NAME(_type, _) \
@@ -858,9 +858,7 @@ xrResultToString(XrInstance instance, XrResult value, char buffer[XR_MAX_RESULT_
 	CHECK_INSTANCE(instance);
 	switch (value) {
 		XR_LIST_ENUM_XrResult(TRANSFER_ENUM_NAME);
-		default:
-			snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, value >= XR_SUCCESS ? "XR_UNKNOWN_SUCCESS_%d" : "XR_UNKNOWN_FAILURE_%d" , value);
-			break;
+		default: snprintf(buffer, XR_MAX_RESULT_STRING_SIZE, value >= XR_SUCCESS ? "XR_UNKNOWN_SUCCESS_%d" : "XR_UNKNOWN_FAILURE_%d" , value); break;
 	}
 	buffer[XR_MAX_RESULT_STRING_SIZE - 1] = '\0';
 	return XR_SUCCESS;
@@ -2759,8 +2757,8 @@ XR_PROC xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo)
 	return XR_SUCCESS;
 }
 
-XR_PROC xrEndSession(
-	XrSession session)
+XR_PROC
+xrEndSession(XrSession session)
 {
 	LOG_METHOD(xrEndSession);
 
@@ -2786,8 +2784,8 @@ XR_PROC xrEndSession(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrRequestExitSession(
-	XrSession session)
+XR_PROC
+xrRequestExitSession(XrSession session)
 {
 	LOG_METHOD(xrRequestExitSession);
 
@@ -2823,10 +2821,10 @@ XR_PROC xrRequestExitSession(
 }
 
 
-XR_PROC xrWaitFrame(
-	XrSession              session,
-	const XrFrameWaitInfo* frameWaitInfo,
-	XrFrameState*          frameState)
+XR_PROC
+xrWaitFrame(XrSession              session,
+            const XrFrameWaitInfo* frameWaitInfo,
+            XrFrameState*          frameState)
 {
 	LOG_METHOD(xrWaitFrame);
 
@@ -2884,14 +2882,14 @@ XR_PROC xrWaitFrame(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrBeginFrame(
-	XrSession               session,
-	const XrFrameBeginInfo* frameBeginInfo)
+XR_PROC
+xrBeginFrame(XrSession               session,
+			 const XrFrameBeginInfo* frameBeginInfo)
 {
 	LOG_METHOD(xrBeginFrame);
 
 	if (frameBeginInfo != NULL)
-		assert(frameBeginInfo->next == NULL);
+		ASSERT(frameBeginInfo->next == NULL);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
@@ -2918,47 +2916,39 @@ XR_PROC xrBeginFrame(
 	return XR_SUCCESS;
 }
 
-XR_PROC xrEndFrame(XrSession session,
-                   const XrFrameEndInfo* frameEndInfo)
+XR_PROC
+xrEndFrame(XrSession             session,
+		   const XrFrameEndInfo* frameEndInfo)
 {
 	LOG_METHOD(xrEndFrame);
-	assert(frameEndInfo->next == NULL);
+	ASSERT(frameEndInfo->next == NULL);
 
 	Session*  pSession = XR_OPAQUE_BLOCK_P(session);
 	session_h hSession = XR_OPAQUE_BLOCK_H(session);
 
-	if (!pSession->running ||
-		pSession->activeSessionState == XR_SESSION_STATE_IDLE ||
-		pSession->activeSessionState == XR_SESSION_STATE_EXITING) {
-		LOG_ERROR("XR_ERROR_SESSION_NOT_RUNNING\n");
-		return XR_ERROR_SESSION_NOT_RUNNING;
-	}
+	XrSessionState activeSessionState = pSession->activeSessionState;
+	if (!pSession->running || activeSessionState == XR_SESSION_STATE_IDLE || activeSessionState == XR_SESSION_STATE_EXITING)
+		RETURN_ERROR(XR_ERROR_SESSION_NOT_RUNNING);
 
-	if (frameEndInfo->displayTime <= 0 ) {
-		LOG_ERROR("XR_ERROR_TIME_INVALID \n");
-		return XR_ERROR_TIME_INVALID ;
-	}
+	if (frameEndInfo->displayTime <= 0)
+		RETURN_ERROR(XR_ERROR_TIME_INVALID);
 
-	if (pSession->frameBegan == pSession->frameEnded) {
-		LOG_ERROR("XR_ERROR_CALL_ORDER_INVALID \n");
-		return XR_ERROR_CALL_ORDER_INVALID;
-	}
+	if (pSession->frameBegan == pSession->frameEnded)
+		RETURN_ERROR(XR_ERROR_CALL_ORDER_INVALID);
 
 	/* Process Layers */
 	for (u32 layer = 0; layer < frameEndInfo->layerCount; ++layer) {
 
-		if (frameEndInfo->layers[layer] == NULL) {
-			LOG_ERROR("XR_ERROR_LAYER_INVALID\n");
-			return XR_ERROR_LAYER_INVALID;
-		}
+		if (frameEndInfo->layers[layer] == NULL)
+			RETURN_ERROR(XR_ERROR_LAYER_INVALID);
 
-		ID3D11Device5*        device5 = pSession->binding.d3d11.device5;
+		ID3D11Device5*        device5  = pSession->binding.d3d11.device5;
 		ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
 
-		switch (frameEndInfo->layers[layer]->type) {
+		switch (frameEndInfo->layers[layer]->type)
+		{
 			/* Projection Layer */
 			case XR_TYPE_COMPOSITION_LAYER_PROJECTION: {
-
 				const XrCompositionLayerProjection* pProjectionLayer = (XrCompositionLayerProjection*)frameEndInfo->layers[layer];
 				for (u32 iView = 0; iView < pProjectionLayer->viewCount; ++iView) {
 
@@ -2978,7 +2968,8 @@ XR_PROC xrEndFrame(XrSession session,
 						xrSetColorSwapId(pSession->index, iView, iColorSwap, iColorSwapImg);
 					}
 
-					switch (pView->next != NULL ? *(XrStructureType*)pView->next : 0) {
+					switch (pView->next != NULL ? *(XrStructureType*)pView->next : 0)
+					{
 						/* Projection Layer View Depth */
 						case XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR: {
 							auto_t pDepthInfo = (XrCompositionLayerDepthInfoKHR*)pView->next;
@@ -3001,14 +2992,11 @@ XR_PROC xrEndFrame(XrSession session,
 							xrSetDepthSwapId(pSession->index, iView, iDepthSwap, iDepthSwapImg);
 							break;
 						}
-
 						default: break;
 					}
 				}
-
 				break;
 			}
-
 			case XR_TYPE_COMPOSITION_LAYER_ALPHA_BLEND_FB:
 				LOG_ERROR("XR_TYPE_COMPOSITION_LAYER_ALPHA_BLEND_FB not implemented.");
 				break;
@@ -3018,15 +3006,16 @@ XR_PROC xrEndFrame(XrSession session,
 			case XR_TYPE_COMPOSITION_LAYER_QUAD:
 				LOG_ERROR("XR_TYPE_COMPOSITION_LAYER_QUAD not implemented.");
 				break;
-
 			default:
 				LOG_ERROR("Unknown Composition layer %d", frameEndInfo->layers[layer]->type);
+				break;
 		}
 	}
 
 	/* Wait for Graphics Queue To Finish */
 	u64 sessionTimelineValue = ++pSession->sessionTimelineValue;
-	switch (xr.instance.graphicsApi) {
+	switch (xr.instance.graphicsApi)
+	{
 		case XR_GRAPHICS_API_D3D11_4:   {
 			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
 			ID3D11Fence*          sessionFence = pSession->binding.d3d11.sessionFence;
@@ -3044,12 +3033,9 @@ XR_PROC xrEndFrame(XrSession session,
 			DX_CHECK(ID3D11Fence_SetEventOnCompletion(sessionFence, sessionTimelineValue, eventHandle));
 			WaitForSingleObject(eventHandle, INFINITE);
 			CloseHandle(eventHandle);
-
 			break;
 		}
-		default:
-			LOG_ERROR("Graphics API not supported.\n");
-			return XR_ERROR_RUNTIME_FAILURE;
+		default: RETURN_ERROR_MSG(XR_ERROR_RUNTIME_FAILURE, "API not supported: %s\n", string_XrGraphicsApi(xr.instance.graphicsApi));
 	}
 
 	/* Finish Frame */
@@ -3084,10 +3070,8 @@ xrLocateViews(XrSession               session,
 	LOG_METHOD(xrLocateViews);
 	ASSERT(views->next == NULL);
 
-	if (viewLocateInfo->displayTime <= 0) {
-		LOG_ERROR("XR_ERROR_TIME_INVALID %lld\n", viewLocateInfo->displayTime);
-		return XR_ERROR_TIME_INVALID;
-	}
+	if (viewLocateInfo->displayTime <= 0)
+		RETURN_ERROR_MSG(XR_ERROR_TIME_INVALID, "DisplayTime: %lld\n", viewLocateInfo->displayTime);
 
 	viewState->viewStateFlags = XR_VIEW_STATE_ORIENTATION_VALID_BIT   |
 								XR_VIEW_STATE_POSITION_VALID_BIT      |
@@ -3100,9 +3084,7 @@ xrLocateViews(XrSession               session,
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO: *viewCountOutput = 2; break;
 		case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO_WITH_FOVEATED_INSET:
 		case XR_VIEW_CONFIGURATION_TYPE_SECONDARY_MONO_FIRST_PERSON_OBSERVER_MSFT:
-		default:
-			LOG_ERROR("%s\n", string_XrViewConfigurationType(viewLocateInfo->viewConfigurationType));
-			RETURN_ERROR(XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED);
+		default: RETURN_ERROR_MSG(XR_ERROR_VIEW_CONFIGURATION_TYPE_UNSUPPORTED, "ViewConfigurationType: %s\n", string_XrViewConfigurationType(viewLocateInfo->viewConfigurationType));
 	}
 
 	if (views == NULL) return XR_SUCCESS;
@@ -3124,12 +3106,12 @@ xrLocateViews(XrSession               session,
 			default: break;
 		}
 
-		float fovHalfXRad = eyeView.fovRad.x / 2.0f;
-		float fovHalfYRad = eyeView.fovRad.y / 2.0f;
-		float angleLeft;
-		float angleRight;
-		float angleUp;
-		float angleDown;
+		f32 fovHalfXRad = eyeView.fovRad.x / 2.0f;
+		f32 fovHalfYRad = eyeView.fovRad.y / 2.0f;
+		f32 angleLeft;
+		f32 angleRight;
+		f32 angleUp;
+		f32 angleDown;
 
 		switch (pSession->swapClip)
 		{
@@ -3221,19 +3203,17 @@ xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 	LOG_METHOD(xrStringToPath);
 	CHECK_INSTANCE(instance);
 
-	if (pathString == NULL) RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+	/* Conformance Test Validation */
+	if (pathString == NULL) goto errorPathFormatInvalid;
 
 	int len = strnlen(pathString, XR_MAX_PATH_LENGTH);
 	LOG_VERBOSE("\n    string: %s %d\n", pathString, len);
-
-	if (strcmp(pathString, "/.f") == 0)
-		LOG("HERE");
 
 	if (len == XR_MAX_PATH_LENGTH ||
 		pathString[0] == '\0' || pathString[0] != '/' ||
 		pathString[1] == '\0' || pathString[len - 1] == '/' ||
 		pathString[len] != '\0')
-		RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+		goto errorPathFormatInvalid;
 
 	bool hasChar = true;
 	for (int i = 0; i < len; ++i) {
@@ -3247,17 +3227,16 @@ xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 
 			case 'A'...'Z':
 			case '?':
-			case ' ':
-				RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+			case ' ': goto errorPathFormatInvalid;
 
 			case '.':
 				if (pathString[i + 1] == '\0' && !hasChar)
-					RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+					goto errorPathFormatInvalid;
 				break;
 
 			case '/':
 				if (pathString[i + 1] == '/' || !hasChar)
-					RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
+					goto errorPathFormatInvalid;
 				hasChar = false;
 				break;
 
@@ -3265,6 +3244,7 @@ xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 		}
 	}
 
+	/* Hash and Claim Block */
 	u32 pathHash = CalcDJB2(pathString, XR_MAX_PATH_LENGTH);
 	for (u32 i = 0; i < XR_PATH_CAPACITY; ++i) {
 		if (xr.block.path.keys[i] != pathHash) continue;
@@ -3286,15 +3266,18 @@ xrStringToPath(XrInstance instance, const char* pathString, XrPath* path)
 	pPath->string[XR_MAX_PATH_LENGTH - 1] = '\0';
 
 	*path = XR_TO_ATOM(XR_ATOM_TYPE_PATH, hPath);
-
 	return XR_SUCCESS;
+
+errorPathFormatInvalid:
+	RETURN_ERROR(XR_ERROR_PATH_FORMAT_INVALID);
 }
 
-XR_PROC xrPathToString(XrInstance instance,
-                       XrPath     path,
-                       uint32_t   bufferCapacityInput,
-                       uint32_t*  bufferCountOutput,
-                       char*      buffer)
+XR_PROC
+xrPathToString(XrInstance instance,
+			   XrPath     path,
+			   uint32_t   bufferCapacityInput,
+			   uint32_t*  bufferCountOutput,
+			   char*      buffer)
 {
 	LOG_METHOD(xrPathToString);
 	CHECK_INSTANCE(instance);
@@ -3303,18 +3286,13 @@ XR_PROC xrPathToString(XrInstance instance,
 
 	*bufferCountOutput = strlen(pPath->string) + 1;
 
-	if (buffer == NULL)
-		return XR_SUCCESS;
+	if (buffer == NULL)	return XR_SUCCESS;
 
-	if (bufferCapacityInput > XR_MAX_PATH_LENGTH) {
-		LOG_ERROR("XR_ERROR_VALIDATION_FAILURE\n");
-		return XR_ERROR_VALIDATION_FAILURE;
-	}
+	if (bufferCapacityInput > XR_MAX_PATH_LENGTH)
+		RETURN_ERROR(XR_ERROR_VALIDATION_FAILURE)
 
-	if (bufferCapacityInput < *bufferCountOutput) {
-		LOG_ERROR("XR_ERROR_SIZE_INSUFFICIENT\n");
-		return XR_ERROR_SIZE_INSUFFICIENT;
-	}
+	if (bufferCapacityInput < *bufferCountOutput)
+		RETURN_ERROR(XR_ERROR_SIZE_INSUFFICIENT)
 
 	strncpy(buffer, pPath->string, *bufferCountOutput);
 
