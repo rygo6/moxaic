@@ -219,7 +219,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 		case WM_CLOSE:
 			atomic_store_explicit(&midWindow.running, false, memory_order_release);
-			if (midWindowExitEvent != NULL) midWindowExitEvent;
+			if (midWindowExitEvent != NULL) midWindowExitEvent();
 			return 0;
 
 #define MOUSE_PHASE(macro_prefix, button_prefix)                      \
