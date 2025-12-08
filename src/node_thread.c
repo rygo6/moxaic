@@ -295,7 +295,7 @@ NodeLoop:
 
 	/* Signal Updated to Compositor */
 	baseCycleValue += MXC_CYCLE_COUNT * pNodeShrd->compositorCycleSkip;
-	ATOMIC_RELEASE(pNodeShrd->timelineValue, nodeTimelineValue);
+	ATOMIC_REL(pNodeShrd->timelineValue, nodeTimelineValue);
 
 	CHECK_RUNNING
 	goto NodeLoop;

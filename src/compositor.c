@@ -540,7 +540,7 @@ CompositeLoop:
 	/* Iterate Node State Updates */
 	for (u32 iCstMode = MXC_COMPOSITOR_MODE_QUAD; iCstMode < MXC_COMPOSITOR_MODE_COUNT; ++iCstMode) {
 		MxcActiveNodes* pActiveNodes = &node.active[iCstMode];
-		u16 activeNodeCount = ATOMIC_ACQUIRE(pActiveNodes->count);
+		u16 activeNodeCount = ATOMIC_ACQ(pActiveNodes->count);
 		for (u32 iActiveNode = 0; iActiveNode < activeNodeCount; ++iActiveNode) {
 			node_h hNode = pActiveNodes->handles[iActiveNode];
 			u16    iNode = HANDLE_INDEX(hNode);
@@ -574,7 +574,7 @@ CompositeLoop:
 			pNodeCpst->compositingNodeSetState.model = mat4FromPosRot(pNodeShrd->rootPose.pos, pNodeShrd->rootPose.rot);
 
 			/* Poll New Node Swap */
-			u64 nodeTimelineValue = ATOMIC_ACQUIRE(pNodeShrd->timelineValue);
+			u64 nodeTimelineValue = ATOMIC_ACQ(pNodeShrd->timelineValue);
 			if (nodeTimelineValue <= pNodeCpst->lastTimelineValue) continue;
 			pNodeCpst->lastTimelineValue = nodeTimelineValue;
 

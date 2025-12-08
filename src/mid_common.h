@@ -90,14 +90,12 @@ typedef _Atomic uint64_t a_u64;
 #define IS_POWER_OF_2(_v)          (((_v) != 0) && (((_v) & ((_v) - 1)) == 0))
 #define SHIFT_DIVIDE(_v, _divisor) ({ static_assert(IS_POWER_OF_2(_divisor)); ((_v) >> __builtin_ctz(_divisor)); })
 #define TYPES_EQUAL(a, b)          __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
-#define CONCAT(_a, _b)             #_a #_b
 #define EXTRACT_FIELD(_p, _field)  __typeof__((_p)->_field) _field = (_p)->_field
 #define LIKELY(x)                  __builtin_expect(!!(x), 1)
 #define UNLIKELY(x)                __builtin_expect(!!(x), 0)
 #define COUNT(_array)              (sizeof(_array) / sizeof(_array[0]))
-#define FLAG(b)                    (1 << (b))
-#define ZERO_STRUCT_P(_p)          memset((void*)(_p), 0, sizeof(*_p))
-#define IS_STRUCT_P_ZEROED(_p)     (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
+#define ZERO_P(_p)                 memset((void*)(_p), 0, sizeof(*_p))
+#define IS_P_ZEROED(_p)            (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
 
 #define XMALLOC_P(_p) \
 	_p = malloc(sizeof(*_p)); \
@@ -106,7 +104,7 @@ typedef _Atomic uint64_t a_u64;
 #define XMALLOC_ZERO_P(_p) \
 	_p = malloc(sizeof(*_p)); \
 	REQUIRE(_p, #_p " XMALLOC Fail!"); \
-	ZERO_STRUCT_P(_p);
+	ZERO_P(_p);
 
 #define CONTAINS(_array, _count, _)        \
 	({                                     \
@@ -120,13 +118,6 @@ typedef _Atomic uint64_t a_u64;
 		found;                             \
 	})
 
-#define ATOMIC_FENCE_SCOPE
-
-#define ATOMIC_ACQUIRE(_field)         atomic_load_explicit(&_field, memory_order_acquire)
-#define ATOMIC_RELEASE(_field, _value) atomic_store_explicit(&_field, _value, memory_order_release)
-#define ATOMIC_GET(_field)             atomic_load_explicit(&_field, memory_order_relaxed)
-#define ATOMIC_SET(_field, _value)     atomic_store_explicit(&_field, _value, memory_order_relaxed)
-
 #define MALLOC_SCOPE(_ptr)             \
 	for (_ptr = malloc(sizeof(*_ptr)); \
 		_ptr != NULL;                  \
@@ -136,6 +127,11 @@ typedef _Atomic uint64_t a_u64;
 	for (_ptr = malloc(sizeof(*_ptr)), memset(_ptr, 0, sizeof(*_ptr)); \
 		_ptr != NULL;                                                  \
 		free(_ptr), _ptr = NULL)
+
+#define ATOMIC_ACQ(_field)         atomic_load_explicit(&_field, memory_order_acquire)
+#define ATOMIC_REL(_field, _value) atomic_store_explicit(&_field, _value, memory_order_release)
+#define ATOMIC_GET(_field)         atomic_load_explicit(&_field, memory_order_relaxed)
+#define ATOMIC_SET(_field, _value) atomic_store_explicit(&_field, _value, memory_order_relaxed)
 
 /*
  * Debug Log
