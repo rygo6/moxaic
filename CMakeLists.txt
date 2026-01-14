@@ -106,26 +106,27 @@ target_compile_definitions(${TARGET_NAME} PUBLIC
         MOXAIC_COMPOSITOR
 )
 target_compile_options(${TARGET_NAME} PRIVATE
-#        ${SANITIZER_FLAGS}
-#        ${SECURITY_FLAGS}
-         -g3
-         -O0
+	#        ${SANITIZER_FLAGS}
+	#        ${SECURITY_FLAGS}
+	-std=gnu11
+	-g3
+	-O0
 
-        ${DEBUG_FLAGS}
-        ${WARNING_FLAGS}
-        ${DISABLE_WARNINGS}
+	${DEBUG_FLAGS}
+	${WARNING_FLAGS}
+	${DISABLE_WARNINGS}
 
-#        -fstack-protector-strong
-#        -fsanitize=address
-#        -fsanitize=undefined
+	#        -fstack-protector-strong
+	#        -fsanitize=address
+	#        -fsanitize=undefined
 
-        -fvisibility=hidden
-        -include globals.h
-        -fmacro-prefix-map=${CMAKE_SOURCE_DIR}/= # make __FILE__ path relative to project
-        -Wno-gnu-statement-expression
-        -fno-strict-aliasing
-        -fwrapv
-)
+	-fvisibility=hidden
+	-include globals.h
+	-fmacro-prefix-map=${CMAKE_SOURCE_DIR}/= # make __FILE__ path relative to project
+	-Wno-gnu-statement-expression
+	-fno-strict-aliasing
+	-fwrapv
+	)
 
 message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 
