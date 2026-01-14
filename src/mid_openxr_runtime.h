@@ -2512,38 +2512,32 @@ XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 	Session*   pSession = BLOCK_PTR_H(B.session, pSwap->hSession);
 	session_i  iSession = HANDLE_INDEX( pSwap->hSession);
 
-	switch (xr.instance.graphicsApi) {
-
+	switch (xr.instance.graphicsApi)
+	{
 		case XR_GRAPHICS_API_OPENGL: {
 			LOG("Destroying OpenGL Swap");
 			break;
 		}
-
 		case XR_GRAPHICS_API_D3D11_4: {
 			LOG("Destroying D3D11 Swap\n");
-			ID3D11Device5* device5 = pSession->binding.d3d11.device5;
-			ID3D11DeviceContext4* context4 = pSession->binding.d3d11.context4;
-
-			for (int i = 0; i < XR_SWAPCHAIN_IMAGE_COUNT; ++i) {
-				if (pSwap->texture[i].d3d11.localResource != NULL)
-					ID3D11Resource_Release(pSwap->texture[i].d3d11.localResource);
-				if (pSwap->texture[i].d3d11.localTexture != NULL)
-					ID3D11Texture2D_Release(pSwap->texture[i].d3d11.localTexture);
+			for (int iSwap = 0; iSwap < XR_SWAPCHAIN_IMAGE_COUNT; ++iSwap) {
+				xrDestroySwapchainImages(iSession, iSwap);
+				if (pSwap->texture[iSwap].d3d11.localResource != NULL)
+					ID3D11Resource_Release(pSwap->texture[iSwap].d3d11.localResource);
+				if (pSwap->texture[iSwap].d3d11.localTexture != NULL)
+					ID3D11Texture2D_Release(pSwap->texture[iSwap].d3d11.localTexture);
 			}
-
 			break;
 		}
-
 		case XR_GRAPHICS_API_VULKAN:
 			break;
-
 		default:
+			LOG_ERROR("XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED\n");
 			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	ZERO(pSwap);
-	xrDestroySwapchainImages(iSession, iSwap);
 	BLOCK_RELEASE(B.swap, hSwap);
+	ZERO(pSwap);
 
 	LOG("%d viewSwaps in use\n", BLOCK_COUNT(B.swap));
 	return XR_SUCCESS;
