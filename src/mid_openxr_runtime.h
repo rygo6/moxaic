@@ -257,7 +257,7 @@ typedef struct XrEventDataSpaceBoundsChanged {
 	XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT | \
 	XR_SPACE_LOCATION_POSITION_TRACKED_BIT
 
-typedef u16 session_i; // session could probably be sessionId since it being contiguous on other side doesn't matter
+typedef u16 session_i; // session could probably be sessionId since it being contiguous on other side doesn't matter.
 typedef u16 swap_i;
 typedef u8  view_i;
 
@@ -1838,17 +1838,17 @@ XR_PROC xrGetReferenceSpaceBoundsRect(XrSession            session,
 		case XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT:
 		case XR_REFERENCE_SPACE_TYPE_COMBINED_EYE_VARJO:
 		case XR_REFERENCE_SPACE_TYPE_LOCALIZATION_MAP_ML:
-			ZERO_P(bounds);
+			ZERO(bounds);
 			LOG_ERROR("XR_SPACE_BOUNDS_UNAVAILABLE %s\n",  string_XrReferenceSpaceType(referenceSpaceType));
 			return XR_SPACE_BOUNDS_UNAVAILABLE;
 
 		case XR_REFERENCE_SPACE_TYPE_MAX_ENUM:
-			ZERO_P(bounds);
+			ZERO(bounds);
 			LOG_ERROR("XR_ERROR_VALIDATION_FAILURE %s\n",  string_XrReferenceSpaceType(referenceSpaceType));
 			return XR_ERROR_VALIDATION_FAILURE;
 
 		default:
-			ZERO_P(bounds);
+			ZERO(bounds);
 			LOG_ERROR("XR_ERROR_REFERENCE_SPACE_UNSUPPORTED %s\n",  string_XrReferenceSpaceType(referenceSpaceType));
 			return XR_ERROR_REFERENCE_SPACE_UNSUPPORTED;
 	}
@@ -2210,7 +2210,7 @@ static const i64* TO_VK_FORMATS[XR_GRAPHICS_API_COUNT] = {
 };
 
 // TODO should start to use inline switch line this as they do compile down statically but can also enable a check
-static inline const i64* XrGraphicsApiVkFormats(XrGraphicsApi api) {
+INLINE const i64* XrGraphicsApiVkFormats(XrGraphicsApi api) {
 	switch (api) {
 		case XR_GRAPHICS_API_OPENGL:  return DXGI_TO_VK_FORMAT;
 		case XR_GRAPHICS_API_VULKAN:  return DXGI_TO_VK_FORMAT;
@@ -2394,19 +2394,21 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 	Swapchain* pSwap = BLOCK_PTR_H(B.swap, hSwap);
 	swap_i     iSwap = HANDLE_INDEX(hSwap);
 
-	pSwap->lastWaitedIndex = XR_INVALID_SWAP_INDEX;
+	pSwap->lastAcquiredIndex = XR_INVALID_SWAP_INDEX;
+	pSwap->lastWaitedIndex   = XR_INVALID_SWAP_INDEX;
+	pSwap->lastReleasedIndex = XR_INVALID_SWAP_INDEX;
 	pSwap->hSession = hSession;
 	pSwap->output = output;
 	pSwap->info = (XrSwapInfo){
-		.createFlags = createInfo->createFlags,
-		.usageFlags = vkUsageFlags,
-		.windowWidth = createInfo->width,
+		.createFlags  = createInfo->createFlags,
+		.usageFlags   = vkUsageFlags,
+		.windowWidth  = createInfo->width,
 		.windowHeight = createInfo->height,
-		.format = vkFormat,
-		.sampleCount = createInfo->sampleCount,
-		.faceCount = createInfo->faceCount,
-		.arraySize = createInfo->arraySize,
-		.mipCount = createInfo->mipCount,
+		.format       = vkFormat,
+		.sampleCount  = createInfo->sampleCount,
+		.faceCount    = createInfo->faceCount,
+		.arraySize    = createInfo->arraySize,
+		.mipCount     = createInfo->mipCount,
 	};
 	for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 		if (pSwap->states[iImg] != XR_SWAP_STATE_UNITIALIZED) {
@@ -2504,9 +2506,11 @@ XR_PROC xrCreateSwapchain(XrSession                    session,
 XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 {
 	LOG_METHOD(xrDestroySwapchain);
-	auto_t    pSwap    = (Swapchain*)swapchain;
-	Session*  pSession = BLOCK_PTR_H(B.session, pSwap->hSession);
-	session_i iSession = HANDLE_INDEX( pSwap->hSession);
+	Swapchain* pSwap    = (Swapchain*)swapchain;
+	swap_h     hSwap    = BLOCK_HANDLE(B.swap, pSwap);
+	swap_i     iSwap    = HANDLE_INDEX(pSwap->hSession);
+	Session*   pSession = BLOCK_PTR_H(B.session, pSwap->hSession);
+	session_i  iSession = HANDLE_INDEX( pSwap->hSession);
 
 	switch (xr.instance.graphicsApi) {
 
@@ -2537,11 +2541,10 @@ XR_PROC xrDestroySwapchain(XrSwapchain swapchain)
 			return XR_ERROR_SWAPCHAIN_FORMAT_UNSUPPORTED;
 	}
 
-	swap_h hSwap = BLOCK_HANDLE(B.swap, pSwap);
-	swap_i iSwap = HANDLE_INDEX(pSwap->hSession);
+	ZERO(pSwap);
 	xrDestroySwapchainImages(iSession, iSwap);
-
 	BLOCK_RELEASE(B.swap, hSwap);
+
 	LOG("%d viewSwaps in use\n", BLOCK_COUNT(B.swap));
 	return XR_SUCCESS;
 }
@@ -3162,9 +3165,9 @@ xrLocateViews(XrSession               session,
 		}
 
 		quat eyeViewQuat = QuatFromEuler(eyeView.euler);
-		COPY_V(views[i].pose.orientation, eyeViewQuat);
-		COPY_V(views[i].pose.position, eyeView.position);
-		COPY_V(views[i].fov, fov);
+		memcpy(&views[i].pose.orientation, &eyeViewQuat, sizeof(XrQuaternionf));
+		memcpy(&views[i].pose.position, &eyeView.position, sizeof(XrVector3f));
+		memcpy(&views[i].fov, &fov, sizeof(XrFovf));
 
 		// do this? the app could calculate the subimage and pass it back with endframe info
 		// but xrEnumerateViewConfigurationViews instance based, not session based, so it can't be relied on to get expected frame size

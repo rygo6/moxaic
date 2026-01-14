@@ -49,6 +49,16 @@
 #include <assert.h>
 #include <string.h>
 
+#define ASSERT(_condition, ...) ({\
+	if (UNLIKELY(!(_condition))) {\
+	fprintf(stderr, ANSI_RED "\n%s:%d ASSERT! ", __FILE__, __LINE__);\
+	fprintf(stderr, "(%s) " __VA_ARGS__ "\n" ANSI_RESET, #_condition);\
+	_assert("(" #_condition ")" __VA_ARGS__, __FILE__, __LINE__);\
+	}\
+})
+
+#define STATIC_ASSERT(_condition, ...) _Static_assert(_condition, #_condition " " #__VA_ARGS__)
+
 /*
  * Attributes
  */
@@ -94,10 +104,8 @@ typedef _Atomic uint64_t a_u64;
 #define LIKELY(x)                  __builtin_expect(!!(x), 1)
 #define UNLIKELY(x)                __builtin_expect(!!(x), 0)
 #define COUNT(_array)              (sizeof(_array) / sizeof(_array[0]))
-#define ZERO_P(_p)                 memset((void*)(_p), 0, sizeof(*_p))
+#define ZERO(_p)                   memset((_p), 0, sizeof(*_p))
 #define IS_P_ZERO(_p)              (memcmp(_p, &(typeof(*_p)){0}, sizeof(*_p)) == 0)
-#define COPY_P(_dst, _src)         memcpy(_dst,  _src, sizeof(*_dst))
-#define COPY_V(_dst, _src)         memcpy(&_dst, &_src, sizeof(_dst))
 
 #define XMALLOC_P(_p) \
 	_p = malloc(sizeof(*_p)); \
@@ -106,7 +114,7 @@ typedef _Atomic uint64_t a_u64;
 #define XMALLOC_ZERO_P(_p) \
 	_p = malloc(sizeof(*_p)); \
 	REQUIRE(_p, #_p " XMALLOC Fail!"); \
-	ZERO_P(_p);
+	ZERO(_p);
 
 #define CONTAINS(_array, _count, _)        \
 	({                                     \
@@ -175,15 +183,6 @@ extern void Panic(const char* file, int line, const char* message);
 
 // Check if the condition is 1=True or 0=False TODO this needs to be REQUIRE_TRUE
 #define REQUIRE(_state, _message) if (UNLIKELY(!(_state))) PANIC(_message);
-
-#define ASSERT(_condition, ...) ({ \
-    if (UNLIKELY(!(_condition))) { \
-        fprintf(stderr, ANSI_RED "\n%s:%d ASSERT! ", __FILE__, __LINE__); \
-        fprintf(stderr, "(%s) " __VA_ARGS__ "\n" ANSI_RESET, #_condition); \
-        _assert("(" #_condition ")" __VA_ARGS__, __FILE__, __LINE__); \
-	} \
-})
-#define STATIC_ASSERT(_condition, ...) _Static_assert(_condition, #_condition " " #__VA_ARGS__)
 
 // Check if the condition is 0=Success or 1=Fail
 #define CHECK(_err, _message)                \

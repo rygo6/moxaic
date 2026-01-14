@@ -381,7 +381,7 @@ void ReleaseNodeHandle(node_h hNode)
 {
 	MxcNodeContext* pNodeCtxt = BLOCK_RELEASE(node.context, hNode);
 	ASSERT(!IS_P_ZERO(pNodeCtxt), "MxcNodeContext zeroed!");
-	ZERO_P(pNodeCtxt);
+	ZERO(pNodeCtxt);
 
 	MxcNodeShared** ppNodeShrd = ARRAY_PTR_H(node.pShared, hNode);
 	ASSERT(*ppNodeShrd != NULL);
@@ -390,7 +390,7 @@ void ReleaseNodeHandle(node_h hNode)
 #if defined(MOXAIC_COMPOSITOR)
 	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
 	ASSERT(!IS_P_ZERO(pNodeCpst), "MxcCompositorNodeData zeroed!");
-	ZERO_P(pNodeCpst);
+	ZERO(pNodeCpst);
 #endif
 
 	LOG("Released Node Handle %d.\n", HANDLE_INDEX(hNode));
@@ -1122,7 +1122,7 @@ static void ipcFuncClaimSwap(node_h hNode)
 
 				pNodeCtxt->hSwaps[iNodeSwap] = HANDLE_DEFAULT;
 				pNodeShrd->nodeSwapStates[iNodeSwap] = XR_SWAP_STATE_UNITIALIZED;
-				ZERO_P(&pNodeShrd->nodeSwapInfos[iNodeSwap]);
+				ZERO(&pNodeShrd->nodeSwapInfos[iNodeSwap]);
 
 				break;
 			}

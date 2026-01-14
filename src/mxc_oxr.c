@@ -111,6 +111,7 @@ void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle)
 
 XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapInfo* pInfo)
 {
+	LOG("xrCreateSwapchainImages iSession: %d iSwap: %d\n", iSession, iSwap);
 	node_h hNode = iSession;
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
@@ -143,6 +144,7 @@ XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapI
 
 void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle)
 {
+	LOG("xrGetSwapchainImportedImage iSession: %d iSwap: %d iImg: %d\n", iSession, iSwap, iImg);
 	node_h hNode = iSession;
 //	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
@@ -153,22 +155,24 @@ void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HAN
 
 XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap)
 {
+	LOG("xrDestroySwapchainImages iSession: %d iSwap: %d\n", iSession, iSwap);
 	node_h hNode = iSession;
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
 	MxcNodeShared*  pNodeShrd = ARRAY_H(node.pShared, hNode);
 
-	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_UNITIALIZED) {
+	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_UNITIALIZED) {
 		LOG_ERROR("Trying to destroy unitialized swapchain images!\n");
 		return XR_ERROR_HANDLE_INVALID;
 	}
 
-	if (pNodeShrd->nodeSwapStates[iSwap] != XR_SWAP_STATE_DESTROYED) {
+	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_DESTROYED) {
 		LOG_ERROR("Trying to destroy already destroyed swapchain images!\n");
 		return XR_ERROR_HANDLE_INVALID;
 	}
 
+	// Set to STATE_DESTROYED and wait.
+	// INTERPROCESS_TARGET_SYNC_SWAPS IPC call will transition to STATE_UNITIALIZED.
 	pNodeShrd->nodeSwapStates[iSwap] = XR_SWAP_STATE_DESTROYED;
-
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
 	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
 
