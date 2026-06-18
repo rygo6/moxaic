@@ -504,7 +504,7 @@ static void CompositorRun(MxcCompositorContext* pCstCtx, MxcCompositor* pCst)
 	vkUpdateGlobalSetViewProj(globCam, globCamPose, &globSetState);
 	memcpy(pGlobSetMapped, &globSetState, sizeof(VkGlobalSetState));
 
-CompositeLoop:
+CompositeLoop:;
 
 	/*
 	 * MXC_CYCLE_UPDATE_WINDOW_STATE
@@ -518,6 +518,10 @@ CompositeLoop:
 	atomic_thread_fence(memory_order_acquire);
 	vkTimelineWait(device, compositorContext.baseCycleValue + MXC_CYCLE_PROCESS_INPUT, compTimeline);
 	u64 baseCycleValue = compositorContext.baseCycleValue;
+
+	// Begin Timer
+	struct timespec cpuLoopStart;
+	clock_gettime(CLOCK_MONOTONIC, &cpuLoopStart);
 
 	midProcessCameraMouseInput(midWindowInput.deltaTime, mxcWindowInput.mouseDelta, &globCamPose);
 	midProcessCameraKeyInput(midWindowInput.deltaTime, mxcWindowInput.move, &globCamPose);
@@ -1029,6 +1033,12 @@ CompositeLoop:
 	{
 		// Signal will submit gfxCmd on main
 		vkTimelineSignal(device, baseCycleValue + MXC_CYCLE_RENDER_COMPOSITE, compTimeline);
+
+		// End Timer
+		struct timespec cpuLoopEnd;
+		clock_gettime(CLOCK_MONOTONIC, &cpuLoopEnd);
+		cpuTimeQueryMs = (double)(cpuLoopEnd.tv_sec - cpuLoopStart.tv_sec) * 1000.0
+		               + (double)(cpuLoopEnd.tv_nsec - cpuLoopStart.tv_nsec) * 1e-6;
 	}
 
 	/*
@@ -1041,7 +1051,7 @@ CompositeLoop:
 		VK_CHECK(vk.GetQueryPoolResults(device, timeQryPool, 0, TIME_QUERY_COUNT, sizeof(u64) * TIME_QUERY_COUNT, timestampsNS, sizeof(u64), VK_QUERY_RESULT_64_BIT));
 		double timestampsMS[TIME_QUERY_COUNT];
 		for (u32 i = 0; i < TIME_QUERY_COUNT; ++i) timestampsMS[i] = (double)timestampsNS[i] / (double)1000000;  // ns to ms
-		timeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_COMPUTE_RENDER_BEGIN];
+		gpuTimeQueryMs = timestampsMS[TIME_QUERY_COMPUTE_RENDER_END] - timestampsMS[TIME_QUERY_GBUFFER_PROCESS_BEGIN];
 	}
 
 	CHECK_RUNNING;

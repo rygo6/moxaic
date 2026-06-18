@@ -93,7 +93,7 @@ typedef struct MxcCompositorContext {
 	VkCommandPool gfxPool;
 	pthread_t     threadId;
 
-	HANDLE timelineHandle;
+	platform_handle_t timelineHandle;
 
 	_Atomic bool isReady;
 

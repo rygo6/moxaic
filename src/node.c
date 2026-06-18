@@ -1,11 +1,28 @@
-#define WIN32_LEAN_AND_MEAN
-#undef UNICODE
-#include <window.h>
-#include <winsock2.h>
-#include <afunix.h>
 #include <stdio.h>
 #include <pthread.h>
 #include <assert.h>
+#include <string.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#undef UNICODE
+#include <windows.h>
+#include <winsock2.h>
+#include <afunix.h>
+#else
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/mman.h>
+#include <sys/eventfd.h>
+#include <fcntl.h>
+#include <errno.h>
+typedef int SOCKET;
+#define INVALID_SOCKET (-1)
+#define SOCKET_ERROR   (-1)
+#define closesocket    close
+#define SHM_NAME       "/moxaic_node_mem"
+#endif
 
 #include "mid_vulkan.h"
 
@@ -13,8 +30,7 @@
 #include "compositor.h"
 
 // State imported into Node Process
-// TODO this should be CompositeSharedMemory and deal with all nodes from another process
-HANDLE                 importedExternalMemoryHandle = NULL;
+platform_handle_t      importedExternalMemoryHandle = INVALID_PLATFORM_HANDLE;
 MxcExternalNodeMemory* pImportedExternalMemory = NULL;
 
 struct Node node;
@@ -166,7 +182,6 @@ void mxcNodeGBufferProcessDepth(VkCommandBuffer gfxCmd, ProcessState* pProcessSt
 }
 
 
-// this couild go in mid vk
 static void CreateColorSwapTexture(const XrSwapInfo* pInfo, VkExternalTexture* pSwapTexture)
 {
 	VkImageCreateInfo info = {
@@ -183,6 +198,7 @@ static void CreateColorSwapTexture(const XrSwapInfo* pInfo, VkExternalTexture* p
 		.samples     = VK_SAMPLE_COUNT_1_BIT,
 		.usage       = VK_RENDER_PASS_USAGES[VK_RENDER_PASS_ATTACHMENT_INDEX_COLOR] | pInfo->usageFlags,
 	};
+#ifdef _WIN32
 	vkCreateExternalPlatformTexture(&info, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
 		.pImageCreateInfo = &info,
@@ -191,10 +207,19 @@ static void CreateColorSwapTexture(const XrSwapInfo* pInfo, VkExternalTexture* p
 		.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 		.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 	};
+#else
+	VkDedicatedTextureCreateInfo textureInfo = {
+		.pImageCreateInfo = &info,
+		.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
+		.importHandle     = INVALID_PLATFORM_HANDLE,
+		.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+		.locality         = VK_LOCALITY_CONTEXT,
+	};
+#endif
 	vkCreateDedicatedTexture(&textureInfo, &pSwapTexture->texture);
 
-	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)	{
-		CMD_IMAGE_BARRIERS(cmd,	{
+	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS) {
+		CMD_IMAGE_BARRIERS(cmd, {
 			VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 			.image = pSwapTexture->texture.image,
 			VK_IMAGE_BARRIER_SRC_UNDEFINED,
@@ -225,6 +250,7 @@ static void CreateDepthSwapTexture(const XrSwapInfo* pInfo, VkExternalTexture* p
 	                   VK_IMAGE_USAGE_SAMPLED_BIT |
 					   VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 	};
+#ifdef _WIN32
 	vkCreateExternalPlatformTexture(&imageCreateInfo, &pSwapTexture->platform);
 	VkDedicatedTextureCreateInfo textureInfo = {
 		.pImageCreateInfo = &imageCreateInfo,
@@ -233,6 +259,15 @@ static void CreateDepthSwapTexture(const XrSwapInfo* pInfo, VkExternalTexture* p
 		.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
 		.locality         = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
 	};
+#else
+	VkDedicatedTextureCreateInfo textureInfo = {
+		.pImageCreateInfo = &imageCreateInfo,
+		.aspectMask       = VK_IMAGE_ASPECT_COLOR_BIT,
+		.importHandle     = INVALID_PLATFORM_HANDLE,
+		.handleType       = MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE,
+		.locality         = VK_LOCALITY_CONTEXT,
+	};
+#endif
 	vkCreateDedicatedTexture(&textureInfo, &pSwapTexture->texture);
 
 	VK_IMMEDIATE_COMMAND_BUFFER_CONTEXT(VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS)	{
@@ -327,7 +362,9 @@ static void mxcDestroySwapTexture(MxcSwapTexture* pSwap)
 {
 	for (int iImg = 0; iImg < XR_SWAPCHAIN_IMAGE_COUNT; ++iImg) {
 		vkDestroyDedicatedTexture(&pSwap->externalTexture[iImg].texture);
+#ifdef _WIN32
 		vkDestroyExternalPlatformTexture(&pSwap->externalTexture[iImg].platform);
+#endif
 	}
 	memset(pSwap, 0, sizeof(MxcSwapTexture));
 }
@@ -454,11 +491,15 @@ void ReleaseCompositorNodeActive(node_h hNode)
 #endif
 }
 
+#ifdef _WIN32
 #define CLOSE_HANDLE(_handle)                                                     \
 	if (!CloseHandle(_handle)) {                                                  \
 		DWORD dwError = GetLastError();                                           \
 		LOG("Could not close (%s) object buffer (%lu).\n", #_handle, dwError); \
 	}
+#else
+#define CLOSE_HANDLE(_handle) close(_handle)
+#endif
 static int CleanupNode(node_h hNode)
 {
 	u16 iNode = HANDLE_INDEX(hNode);
@@ -502,9 +543,14 @@ static int CleanupNode(node_h hNode)
 
 			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
 
+#ifdef _WIN32
 			CHECK_WIN32(UnmapViewOfFile(pNodeCtxt->exported.pExportedMemory));
 			CLOSE_HANDLE(pNodeCtxt->exported.exportedMemoryHandle);
 			CLOSE_HANDLE(pNodeCtxt->exported.hProcess);
+#else
+			munmap(pNodeCtxt->exported.pExportedMemory, sizeof(MxcExternalNodeMemory));
+			shm_unlink(SHM_NAME);
+#endif
 #endif
 			break;
 		}
@@ -518,7 +564,11 @@ static int CleanupNode(node_h hNode)
 			CLOSE_HANDLE(pNodeCtxt->swapsSyncedHandle);
 			CLOSE_HANDLE(pNodeCtxt->imported.nodeTimelineHandle);
 			CLOSE_HANDLE(pNodeCtxt->imported.compositorTimelineHandle);
+#ifdef _WIN32
 			CHECK_WIN32(UnmapViewOfFile(pImportedExternalMemory));
+#else
+			munmap(pImportedExternalMemory, sizeof(MxcExternalNodeMemory));
+#endif
 			CLOSE_HANDLE(importedExternalMemoryHandle);
 			break;
 		}
@@ -539,7 +589,11 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle)
 	MxcCompositorNodeData* pNodeCpst = ARRAY_PTR_H(cst.nodeData, hNode);
 
 	pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_THREAD;
+#ifdef _WIN32
 	pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+#else
+	pNodeCtxt->swapsSyncedHandle = eventfd(0, 0);
+#endif
 
 	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_NONE;
 
@@ -605,7 +659,11 @@ void mxcRequestNodeThread(void* (*runFunc)(void*), node_h* pNodeHandle)
 /*
  * IPC LifeCycle
  */
+#ifdef _WIN32
 #define SOCKET_PATH "C:\\temp\\moxaic_socket"
+#else
+#define SOCKET_PATH "/tmp/moxaic_socket"
+#endif
 
 static struct {
 	SOCKET    listenSocket;
@@ -614,8 +672,16 @@ static struct {
 const char serverIPCAckMessage[] = "CONNECT-MOXAIC-COMPOSITOR-0.0.0";
 const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 
-// these should really be CHECK_WIN32_ERROR_HANDLE or something
-// Checks WIN32 error code. Expects 1 for success.
+#define SOCK_CHECK(_command, _message)                              \
+	{                                                               \
+		int _result = (int)(_command);                              \
+		if (__builtin_expect(!!(_result < 0), 0)) {                 \
+			fprintf(stderr, "%s: %d\n", _message, errno);           \
+			goto Error;                                             \
+		}                                                           \
+	}
+
+#ifdef _WIN32
 #define WIN32_CHECK(_command, _message)                             \
 	{                                                               \
 		int _result = (_command);                                   \
@@ -624,7 +690,6 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 			goto Error;                                             \
 		}                                                           \
 	}
-// Checks WSA error code. Expects 0 for success.
 #define WSA_CHECK(_command, _message)                                 \
 	{                                                                 \
 		int _result = (_command);                                     \
@@ -633,89 +698,78 @@ const char nodeIPCAckMessage[] = "CONNECT-MOXAIC-NODE-0.0.0";
 			goto Error;                                               \
 		}                                                             \
 	}
+#endif
 
-// Called when compositor accepts connection
 static void ServerInterprocessAcceptNodeConnection()
 {
-#if defined(MOXAIC_COMPOSITOR) // we need to break this out in a Compositor Node file
+#if defined(MOXAIC_COMPOSITOR)
 	LOG("Accepting connections on: '%s'\n", SOCKET_PATH);
-	MxcNodeContext*         pNodeCtxt = NULL;
-	MxcNodeShared*          pNodeShrd = NULL;
-	MxcNodeImports*         pImports = NULL;
-	MxcCompositorNodeData*  pNodeCpst = NULL;
-	HANDLE                  hProcess = INVALID_HANDLE_VALUE;
-	HANDLE                  hExtNodeMem = INVALID_HANDLE_VALUE;
-	MxcExternalNodeMemory*  pExtNodeMem = NULL;
-	DWORD                   processId = 0;
+	MxcNodeContext*        pNodeCtxt = NULL;
+	MxcNodeShared*         pNodeShrd = NULL;
+	MxcNodeImports*        pImports  = NULL;
+	MxcExternalNodeMemory* pExtNodeMem = NULL;
+	platform_pid_t         processId = 0;
 
 	SOCKET clientSocket = accept(ipcServer.listenSocket, NULL, NULL);
-	WSA_CHECK(clientSocket == INVALID_SOCKET, "Accept failed");
+	if (clientSocket == INVALID_SOCKET) goto Error;
 	LOG("Accepted Connection.\n");
 
-	/// Receive Node Ack Message
 	{
 		char buffer[sizeof(nodeIPCAckMessage)] = {};
-		int  receiveLength = recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
-		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv nodeIPCAckMessage failed");
-		LOG("Received node ack: %s Size: %d\n", buffer, receiveLength);
+		int  n = (int)recv(clientSocket, buffer, sizeof(nodeIPCAckMessage), 0);
+		if (n <= 0) { fprintf(stderr, "Recv nodeIPCAckMessage failed\n"); goto Error; }
 		CHECK(strcmp(buffer, nodeIPCAckMessage), "Unexpected node message");
 	}
-
-	/// Send Server Ack message
 	{
-		LOG("Sending server ack: %s size: %llu\n", serverIPCAckMessage, strlen(serverIPCAckMessage));
-		int sendResult = send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
-		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send server ack failed");
+		int sendResult = (int)send(clientSocket, serverIPCAckMessage, strlen(serverIPCAckMessage), 0);
+		if (sendResult <= 0) { fprintf(stderr, "Send server ack failed\n"); goto Error; }
+	}
+	{
+		int n = (int)recv(clientSocket, (char*)&processId, sizeof(processId), 0);
+		if (n <= 0) { fprintf(stderr, "Recv processId failed\n"); goto Error; }
+		LOG("Received node processId: %d\n", (int)processId);
 	}
 
-	/// Receive Node Process Handle
-	{
-		int receiveLength = recv(clientSocket, (char*)&processId, sizeof(DWORD), 0);
-		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv node exported id failed");
-		LOG("Received node exported id: %lu Size: %d\n", processId, receiveLength);
-		CHECK(processId == 0, "Invalid node exported id");
-	}
+#ifdef _WIN32
+	HANDLE hProcess = OpenProcess(PROCESS_DUP_HANDLE, FALSE, processId);
+	WIN32_CHECK(hProcess != NULL && hProcess != INVALID_HANDLE_VALUE, "Open process failed");
+	HANDLE hExtNodeMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(MxcExternalNodeMemory), NULL);
+	WIN32_CHECK(hExtNodeMem != NULL, "Could not create file mapping object");
+	pExtNodeMem = MapViewOfFile(hExtNodeMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
+	WIN32_CHECK(pExtNodeMem != NULL, "MapViewOfFile failed");
+#else
+	shm_unlink(SHM_NAME);
+	int shmFd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0600);
+	SOCK_CHECK(shmFd, "shm_open failed");
+	SOCK_CHECK(ftruncate(shmFd, sizeof(MxcExternalNodeMemory)), "ftruncate failed");
+	pExtNodeMem = mmap(NULL, sizeof(MxcExternalNodeMemory), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+	SOCK_CHECK(pExtNodeMem == MAP_FAILED ? -1 : 0, "mmap failed");
+	if (pExtNodeMem == MAP_FAILED) goto Error;
+	platform_handle_t hExtNodeMem = shmFd;
+#endif
 
-	/// Create Shared Memory
-	{
-		hProcess = OpenProcess(PROCESS_DUP_HANDLE, FALSE, processId);
-		WIN32_CHECK(hProcess != NULL && hProcess != INVALID_HANDLE_VALUE, "Duplicate exported buffer failed");
-		hExtNodeMem = CreateFileMapping(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(MxcExternalNodeMemory), NULL);
-		WIN32_CHECK(hExtNodeMem != NULL, "Could not create file mapping object");
-		pExtNodeMem = MapViewOfFile(hExtNodeMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
-		WIN32_CHECK(pExtNodeMem != NULL, "Could not map view of file");
-		memset(pExtNodeMem, 0, sizeof(MxcExternalNodeMemory));
-		pImports = &pExtNodeMem->imports;
-		pNodeShrd = &pExtNodeMem->shared;
-	}
+	memset(pExtNodeMem, 0, sizeof(MxcExternalNodeMemory));
+	pImports = &pExtNodeMem->imports;
+	pNodeShrd = &pExtNodeMem->shared;
 
-	/// Claim Node Handle
 	node_h hNode;
 	RequestExternalNodeHandle(pNodeShrd, &hNode);
 
-	/// Initialize Context
 	{
-		// Init Node Shared
 		pNodeShrd->rootPose.pos = VEC3(0, 0, 0);
 		pNodeShrd->rootPose.rot = QuatFromEuler(pNodeShrd->rootPose.euler);
-
 		pNodeShrd->cameraPose.pos = VEC3(0, 0, 0);
 		pNodeShrd->cameraPose.rot = QuatFromEuler(pNodeShrd->cameraPose.euler);
-
 		pNodeShrd->camera.yFovRad = RAD_FROM_DEG(45.0f);
 		pNodeShrd->camera.zNear = 0.1f;
 		pNodeShrd->camera.zFar = 100.0f;
 		pNodeShrd->camera.dimension.x = DEFAULT_WIDTH;
 		pNodeShrd->camera.dimension.y = DEFAULT_HEIGHT;
-
 		pNodeShrd->compositorRadius = 0.5;
 		pNodeShrd->compositorCycleSkip = 8;
 		pNodeShrd->swapMaxWidth = DEFAULT_WIDTH;
 		pNodeShrd->swapMaxHeight = DEFAULT_HEIGHT;
-
 		for (int i = 0; i < XR_MAX_VIEW_COUNT; ++i) {
-			// need better way to determine these invalid
-			// and maybe better way to signify frame has been set
 			pNodeShrd->viewSwaps[i].iColorSwap = CHAR_MAX;
 			pNodeShrd->viewSwaps[i].iDepthSwap = CHAR_MAX;
 		}
@@ -724,115 +778,89 @@ static void ServerInterprocessAcceptNodeConnection()
 			.locality = VK_LOCALITY_INTERPROCESS_EXPORTED_READWRITE,
 			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		};
-		VkSemaphore nodeTimeline; vkCreateSemaphoreExt(&semaphoreCreateInfo, &nodeTimeline);
+		VkSemaphore nodeTimeline;
+		vkCreateSemaphoreExt(&semaphoreCreateInfo, &nodeTimeline);
 		VK_SET_DEBUG_NAME(nodeTimeline, "Export Node Timeline");
 
-		// Init Node Context
 		pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
-
 		pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_EXPORTED;
-
-		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
-
 		pNodeCtxt->exported.processId = processId;
-		pNodeCtxt->exported.hProcess = hProcess;
-
 		pNodeCtxt->exported.exportedMemoryHandle = hExtNodeMem;
 		pNodeCtxt->exported.pExportedMemory = pExtNodeMem;
-
 		pNodeCtxt->exported.nodeTimeline = nodeTimeline;
 		pNodeCtxt->exported.nodeTimelineHandle = vkGetSemaphoreExternalHandle(nodeTimeline);
-
 		pNodeCtxt->exported.compositorTimeline = compositorContext.timeline;
 		pNodeCtxt->exported.compositorTimelineHandle = compositorContext.timelineHandle;
 
-		// Duplicate Handles
+#ifdef _WIN32
+		pNodeCtxt->swapsSyncedHandle = CreateEvent(NULL, FALSE, FALSE, NULL);
+		pNodeCtxt->exported.hProcess = hProcess;
+
 		HANDLE currentHandle = GetCurrentProcess();
-		WIN32_CHECK(DuplicateHandle(
-				currentHandle, pNodeCtxt->swapsSyncedHandle,
-				hProcess, &pImports->swapsSyncedHandle,
-				0, false, DUPLICATE_SAME_ACCESS),
-			"Duplicate nodeFenceHandle buffer fail.");
-		WIN32_CHECK(DuplicateHandle(
-				currentHandle, pNodeCtxt->exported.nodeTimelineHandle,
-				hProcess, &pImports->nodeTimelineHandle,
-				0, false, DUPLICATE_SAME_ACCESS),
-			"Duplicate nodeTimeline buffer fail.");
-		WIN32_CHECK(DuplicateHandle(
-				currentHandle, pNodeCtxt->exported.compositorTimelineHandle,
-				hProcess, &pImports->compositorTimelineHandle,
-				0, false, DUPLICATE_SAME_ACCESS),
-			"Duplicate compositor timeline buffer fail.");
+		WIN32_CHECK(DuplicateHandle(currentHandle, pNodeCtxt->swapsSyncedHandle,
+				hProcess, &pImports->swapsSyncedHandle, 0, false, DUPLICATE_SAME_ACCESS),
+			"Duplicate swapsSyncedHandle fail.");
+		WIN32_CHECK(DuplicateHandle(currentHandle, pNodeCtxt->exported.nodeTimelineHandle,
+				hProcess, &pImports->nodeTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS),
+			"Duplicate nodeTimeline fail.");
+		WIN32_CHECK(DuplicateHandle(currentHandle, pNodeCtxt->exported.compositorTimelineHandle,
+				hProcess, &pImports->compositorTimelineHandle, 0, false, DUPLICATE_SAME_ACCESS),
+			"Duplicate compositor timeline fail.");
+#else
+		pNodeCtxt->swapsSyncedHandle = eventfd(0, 0);
+		pImports->swapsSyncedHandle = INVALID_PLATFORM_HANDLE;
+		pImports->nodeTimelineHandle = INVALID_PLATFORM_HANDLE;
+		pImports->compositorTimelineHandle = INVALID_PLATFORM_HANDLE;
+#endif
 	}
 
-	/// Send Shared Memory
 	{
-		HANDLE duplicatedExternalNodeMemoryHandle;
-		WIN32_CHECK(DuplicateHandle(
-				GetCurrentProcess(), pNodeCtxt->exported.exportedMemoryHandle,
-				hProcess, &duplicatedExternalNodeMemoryHandle,
-				0, false, DUPLICATE_SAME_ACCESS),
-					"Duplicate sharedMemory buffer fail.");
-		LOG("Sending duplicatedExternalNodeMemoryHandle: %p Size: %llu\n", duplicatedExternalNodeMemoryHandle, sizeof(HANDLE));
-		int sendResult = send(clientSocket, (const char*)&duplicatedExternalNodeMemoryHandle, sizeof(HANDLE), 0);
-		WSA_CHECK(sendResult == SOCKET_ERROR || sendResult == 0, "Send shared memory buffer failed");
+#ifdef _WIN32
+		HANDLE duplicatedExtNodeMemHandle;
+		WIN32_CHECK(DuplicateHandle(GetCurrentProcess(), pNodeCtxt->exported.exportedMemoryHandle,
+				hProcess, &duplicatedExtNodeMemHandle, 0, false, DUPLICATE_SAME_ACCESS),
+			"Duplicate sharedMemory fail.");
+		int sendResult = (int)send(clientSocket, (const char*)&duplicatedExtNodeMemHandle, sizeof(HANDLE), 0);
+		if (sendResult <= 0) { fprintf(stderr, "Send shared memory failed\n"); goto Error; }
+#else
+		/* On Linux, send the shm name and node index; node opens it independently */
+		uint32_t nodeIdx = (uint32_t)HANDLE_INDEX(hNode);
+		int n = (int)send(clientSocket, (char*)&nodeIdx, sizeof(nodeIdx), 0);
+		if (n <= 0) { fprintf(stderr, "Send nodeIdx failed\n"); goto Error; }
+#endif
 		LOG("Process Node Export Success.\n");
-
 	}
 
-	/// Add Active node
-	{
-		// Add to COMPOSITOR_MODE_NONE initially to start processing
-		MID_CHANNEL_SEND(&node.newConnectionQueue, node.queuedNewConnections, &hNode);
-		goto ExitSuccess;
-	}
+	MID_CHANNEL_SEND(&node.newConnectionQueue, node.queuedNewConnections, &hNode);
+	goto ExitSuccess;
 
 Error:
-//	if (pImports != NULL) {
-//		for (int i = 0; i < VK_SWAP_COUNT; ++i) {
-//			if (pImportParam->framebufferHandles[i].color != INVALID_HANDLE_VALUE)
-//				CloseHandle(pImportParam->framebufferHandles[i].color);
-//			if (pImportParam->framebufferHandles[i].normal != INVALID_HANDLE_VALUE)
-//				CloseHandle(pImportParam->framebufferHandles[i].normal);
-//			if (pImportParam->framebufferHandles[i].gbuffer != INVALID_HANDLE_VALUE)
-//				CloseHandle(pImportParam->framebufferHandles[i].gbuffer);
-//		}
-//		if (pImportParam->nodeFenceHandle != INVALID_HANDLE_VALUE)
-//			CloseHandle(pImportParam->nodeFenceHandle);
-//		if (pImports->nodeTimelineHandle != INVALID_HANDLE_VALUE)
-//			CloseHandle(pImports->nodeTimelineHandle);
-//		if (pImports->compositorTimelineHandle != INVALID_HANDLE_VALUE)
-//			CloseHandle(pImports->compositorTimelineHandle);
-//	}
-//	if (pExtNodeMem != NULL)
-//		UnmapViewOfFile(pExtNodeMem);
-//	if (hExtNodeMem != INVALID_HANDLE_VALUE)
-//		CloseHandle(hExtNodeMem);
-//	if (hNodeProc != INVALID_HANDLE_VALUE)
-//		CloseHandle(hNodeProc);
+	fprintf(stderr, "ServerInterprocessAcceptNodeConnection error\n");
 ExitSuccess:
 	if (clientSocket != INVALID_SOCKET)
 		closesocket(clientSocket);
 #endif
 }
 
-///
-/// Server thread loop running on compositor
 static void* RunInterProcessServer(void* arg)
 {
-	SOCKADDR_UN address = {.sun_family = AF_UNIX};
-	WSADATA     wsaData = {};
+	(void)arg;
+	struct sockaddr_un address;
+	memset(&address, 0, sizeof(address));
+	address.sun_family = AF_UNIX;
 
-	// Unlink/delete sock file in case it was left from before
 	unlink(SOCKET_PATH);
+	strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
 
-	CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
-	WSA_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
+#ifdef _WIN32
+	WSADATA wsaData = {};
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData)) goto Error;
+#endif
 
 	ipcServer.listenSocket = socket(AF_UNIX, SOCK_STREAM, 0);
-	WSA_CHECK(ipcServer.listenSocket == INVALID_SOCKET, "Socket failed");
-	WSA_CHECK(bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address)), "Socket bind failed");
-	WSA_CHECK(listen(ipcServer.listenSocket, SOMAXCONN), "Listen failed");
+	if (ipcServer.listenSocket == INVALID_SOCKET) goto Error;
+	if (bind(ipcServer.listenSocket, (struct sockaddr*)&address, sizeof(address))) goto Error;
+	if (listen(ipcServer.listenSocket, SOMAXCONN)) goto Error;
 
 	while (ATOMIC_GET(mxc.lifecycle) != MXC_LIFECYCLE_EXITING)
 		ServerInterprocessAcceptNodeConnection();
@@ -840,179 +868,129 @@ static void* RunInterProcessServer(void* arg)
 Error:
 	if (ipcServer.listenSocket != INVALID_SOCKET)
 		closesocket(ipcServer.listenSocket);
-
 	unlink(SOCKET_PATH);
+#ifdef _WIN32
 	WSACleanup();
+#endif
 	return NULL;
 }
 
-///
-/// Start Server Compositor
 void mxcServerInitializeInterprocess()
 {
+#ifdef _WIN32
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
-	LOG("Min size of shared memory. Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
-
+	LOG("Allocation granularity: %lu\n", systemInfo.dwAllocationGranularity);
+#endif
 	ipcServer.listenSocket = INVALID_SOCKET;
-	CHECK(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server pipe creation Fail!");
+	CHECK(pthread_create(&ipcServer.thread, NULL, RunInterProcessServer, NULL), "IPC server thread creation failed!");
 }
 
-///
-/// Shutdown Server Compositor
 void mxcServerShutdownInterprocess()
 {
 	if (ipcServer.listenSocket != INVALID_SOCKET)
 		closesocket(ipcServer.listenSocket);
-
 	unlink(SOCKET_PATH);
+#ifdef _WIN32
 	WSACleanup();
+#endif
 }
 
-///
-/// Connect Node to Server Compositor over IPC
 void mxcConnectInterprocessNode(bool createTestNode)
 {
-	if (pImportedExternalMemory != NULL && importedExternalMemoryHandle != NULL) {
+	(void)createTestNode;
+	if (pImportedExternalMemory != NULL && PLATFORM_HANDLE_VALID(importedExternalMemoryHandle)) {
 		LOG("IPC already connected, skipping.\n");
 		return;
 	}
 
 	LOG("Connecting on: '%s'\n", SOCKET_PATH);
-	MxcNodeContext*         pNodeCtxt = NULL;
-//	MxcNodeImports*         pNodeImports = NULL;
-//	MxcNodeShared*          pNodeShared = NULL;
-	MxcExternalNodeMemory*  pExternalNodeMemory = NULL;
-	SOCKET                  clientSocket = INVALID_SOCKET;
-	HANDLE                  externalNodeMemoryHandle = INVALID_HANDLE_VALUE;
+	MxcExternalNodeMemory* pExternalNodeMemory = NULL;
+	SOCKET clientSocket = INVALID_SOCKET;
+	platform_handle_t externalNodeMemoryHandle = INVALID_PLATFORM_HANDLE;
 
-	// Setup and connect
 	{
-		SOCKADDR_UN address = {.sun_family = AF_UNIX};
-		CHECK(strncpy_s(address.sun_path, sizeof address.sun_path, SOCKET_PATH, (sizeof SOCKET_PATH) - 1), "Address copy failed");
+		struct sockaddr_un address;
+		memset(&address, 0, sizeof(address));
+		address.sun_family = AF_UNIX;
+		strncpy(address.sun_path, SOCKET_PATH, sizeof(address.sun_path) - 1);
+#ifdef _WIN32
 		WSADATA wsaData = {};
-		WSA_CHECK(WSAStartup(MAKEWORD(2, 2), &wsaData), "WSAStartup failed");
+		if (WSAStartup(MAKEWORD(2, 2), &wsaData)) goto Error;
+#endif
 		clientSocket = socket(AF_UNIX, SOCK_STREAM, 0);
-		WSA_CHECK(clientSocket == INVALID_SOCKET, "Socket creation failed");
-		WSA_CHECK(connect(clientSocket, (struct sockaddr*)&address, sizeof(address)), "Connect failed");
+		if (clientSocket == INVALID_SOCKET) { fprintf(stderr, "Socket failed\n"); goto Error; }
+		if (connect(clientSocket, (struct sockaddr*)&address, sizeof(address))) { fprintf(stderr, "Connect failed\n"); goto Error; }
 		LOG("Connected to server.\n");
 	}
 
-	// Send ack
 	{
-		LOG("Sending node ack: %s size: %llu\n", nodeIPCAckMessage, strlen(nodeIPCAckMessage));
-		int sendResult = send(clientSocket, nodeIPCAckMessage, (int)strlen(nodeIPCAckMessage), 0);
-		WSA_CHECK(sendResult == SOCKET_ERROR, "Send node ack failed");
+		int n = (int)send(clientSocket, nodeIPCAckMessage, strlen(nodeIPCAckMessage), 0);
+		if (n <= 0) { fprintf(stderr, "Send node ack failed\n"); goto Error; }
 	}
-
-	// Receive and check ack
 	{
 		char buffer[sizeof(serverIPCAckMessage)] = {};
-		int  receiveLength = recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
-		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv compositor ack failed");
-		LOG("Received from server: %s size: %d\n", buffer, receiveLength);
-		WSA_CHECK(strcmp(buffer, serverIPCAckMessage), "Unexpected compositor ack");
+		int n = (int)recv(clientSocket, buffer, sizeof(serverIPCAckMessage), 0);
+		if (n <= 0 || strcmp(buffer, serverIPCAckMessage)) { fprintf(stderr, "Recv server ack failed\n"); goto Error; }
 	}
 
-	// Send process id
+#ifdef _WIN32
 	{
-		DWORD currentProcessId = GetCurrentProcessId();
-		LOG("Sending exported buffer: %lu size: %llu\n", currentProcessId, sizeof(DWORD));
-		int sendResult = send(clientSocket, (const char*)&currentProcessId, sizeof(DWORD), 0);
-		WSA_CHECK(sendResult == SOCKET_ERROR, "Send exported id failed");
+		DWORD pid = GetCurrentProcessId();
+		int n = (int)send(clientSocket, (char*)&pid, sizeof(pid), 0);
+		if (n <= 0) { fprintf(stderr, "Send processId failed\n"); goto Error; }
 	}
-
-	// Receive shared memory
 	{
-		LOG("Waiting to receive externalNodeMemoryHandle.\n");
-		int receiveLength = recv(clientSocket, (char*)&externalNodeMemoryHandle, sizeof(HANDLE), 0);
-		WSA_CHECK(receiveLength == SOCKET_ERROR || receiveLength == 0, "Recv externalNodeMemoryHandle failed");
-		LOG("Received externalNodeMemoryHandle: %p Size: %d\n", externalNodeMemoryHandle, receiveLength);
-
+		int n = (int)recv(clientSocket, (char*)&externalNodeMemoryHandle, sizeof(HANDLE), 0);
+		if (n <= 0) { fprintf(stderr, "Recv sharedMem handle failed\n"); goto Error; }
 		pExternalNodeMemory = MapViewOfFile(externalNodeMemoryHandle, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(MxcExternalNodeMemory));
-		WIN32_CHECK(pExternalNodeMemory != NULL, "Map pExternalNodeMemory failed");
-		pImportedExternalMemory = pExternalNodeMemory;
-		importedExternalMemoryHandle = externalNodeMemoryHandle;
-
-//		pNodeImports = &pExternalNodeMemory->imports;
-//		pNodeShared = &pExternalNodeMemory->shared;
+		WIN32_CHECK(pExternalNodeMemory != NULL, "MapViewOfFile failed");
 	}
-
-//	if (!createTestNode)
-//		goto ExitSuccess;
-//
-//	// Request and setup handle data
-//	{
-//		node_h hNode = RequestExternalNodeHandle(pNodeShared);
-//		MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
-//		pNodeCtxt->interprocessMode = MXC_NODE_INTERPROCESS_MODE_IMPORTED;
-//		pNodeCtxt->swapsSyncedHandle = pImportedExternalMemory->imports.swapsSyncedHandle;
-//		pNodeCtxt->imported.nodeTimelineHandle = pImportedExternalMemory->imports.nodeTimelineHandle;
-//		pNodeCtxt->imported.compositorTimelineHandle = pImportedExternalMemory->imports.compositorTimelineHandle;
-//		ASSERT(pNodeCtxt->swapsSyncedHandle != NULL);
-//		LOG("Importing node buffer %d\n", hNode);
-//	}
-//
-//	// Create node data
-//	{
-//		vkSemaphoreCreateInfoExt compTimelineCreateInfo = {
-//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY,
-//			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-//			.importHandle = pNodeImports->compositorTimelineHandle,
-//		};
-//		vkCreateSemaphoreExt(&compTimelineCreateInfo, &pNodeCtxt->imported.compositorTimeline);
-//		VK_SET_DEBUG_NAME(pNodeCtxt->imported.compositorTimeline, "Imported Compositor Timeline");
-//		vkSemaphoreCreateInfoExt nodeTimelineCreateInfo = {
-//			.locality = VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE,
-//			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-//			.importHandle = pNodeImports->nodeTimelineHandle,
-//		};
-//		vkCreateSemaphoreExt(&nodeTimelineCreateInfo, &pNodeCtxt->imported.nodeTimeline);
-//		VK_SET_DEBUG_NAME(pNodeCtxt->imported.nodeTimeline, "Imported Node Timeline");
-//
-//		VkCommandPoolCreateInfo graphicsCommandPoolCreateInfo = {
-//			VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-//			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-//			.queueFamilyIndex = vk.context.queueFamilies[VK_QUEUE_FAMILY_TYPE_MAIN_GRAPHICS].index,
-//		};
-//		VK_CHECK(vkCreateCommandPool(vk.context.device, &graphicsCommandPoolCreateInfo, VK_ALLOC, &pNodeCtxt->thread.pool));
-//		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {
-//			VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-//			.commandPool = pNodeCtxt->thread.pool,
-//			.commandBufferCount = 1,
-//		};
-//		VK_CHECK(vkAllocateCommandBuffers(vk.context.device, &commandBufferAllocateInfo, &pNodeCtxt->thread.gfxCmd));
-//		vkSetDebugName(VK_OBJECT_TYPE_COMMAND_BUFFER, (uint64_t)pNodeCtxt->thread.gfxCmd, "TestNode");
-//	}
-
-	// Start node thread
+#else
 	{
-//#if defined(MOXAIC_COMPOSITOR)
-//		PANIC("We need a new test scene...");
-//		atomic_thread_fence(memory_order_release);
-//		CHECK(pthread_create(&pNodeContext->thread.id, NULL, (void* (*)(void*))mxcTestNodeThread, pNodeContext), "Node Process Import thread creation failed!");
-//		LOG("Node Request Process Import Success.\n");
-//#endif
-		goto ExitSuccess;
+		platform_pid_t pid = getpid();
+		int n = (int)send(clientSocket, (char*)&pid, sizeof(pid), 0);
+		if (n <= 0) { fprintf(stderr, "Send processId failed\n"); goto Error; }
 	}
+	{
+		uint32_t nodeIdx = 0;
+		int n = (int)recv(clientSocket, (char*)&nodeIdx, sizeof(nodeIdx), 0);
+		if (n <= 0) { fprintf(stderr, "Recv nodeIdx failed\n"); goto Error; }
+		int shmFd = shm_open(SHM_NAME, O_RDWR, 0);
+		if (shmFd < 0) { fprintf(stderr, "shm_open failed\n"); goto Error; }
+		pExternalNodeMemory = mmap(NULL, sizeof(MxcExternalNodeMemory), PROT_READ | PROT_WRITE, MAP_SHARED, shmFd, 0);
+		if (pExternalNodeMemory == MAP_FAILED) { fprintf(stderr, "mmap failed\n"); close(shmFd); goto Error; }
+		externalNodeMemoryHandle = shmFd;
+	}
+#endif
+
+	pImportedExternalMemory = pExternalNodeMemory;
+	importedExternalMemoryHandle = externalNodeMemoryHandle;
+	goto ExitSuccess;
 
 Error:
-	// do cleanup
-	// need a NodeContext cleanup method
+	fprintf(stderr, "mxcConnectInterprocessNode error\n");
 ExitSuccess:
 	if (clientSocket != INVALID_SOCKET)
 		closesocket(clientSocket);
+#ifdef _WIN32
 	WSACleanup();
+#endif
 }
-///
-/// Shutdown Node from Server
-// I don't know if I'd ever want to do this?
+
 void mxcShutdownInterprocessNode()
 {
-//	for (int i = 0; i < nodeCount; ++i) {
-//		// make another queue to evade ptr?
-//		mxcIpcFuncEnqueue(&pDuplicatedNodeShared[i]->ipcFuncQueue, MXC_INTERPROCESS_TARGET_NODE_CLOSED);
-//	}
+	if (PLATFORM_HANDLE_VALID(importedExternalMemoryHandle)) {
+#ifdef _WIN32
+		UnmapViewOfFile(pImportedExternalMemory);
+		CloseHandle(importedExternalMemoryHandle);
+#else
+		munmap(pImportedExternalMemory, sizeof(MxcExternalNodeMemory));
+		close(importedExternalMemoryHandle);
+#endif
+		pImportedExternalMemory = NULL;
+		importedExternalMemoryHandle = INVALID_PLATFORM_HANDLE;
+	}
 }
 
 /*
@@ -1094,6 +1072,7 @@ static void ipcFuncClaimSwap(node_h hNode)
 					}
 
 					// TODO Should always export to enable a reusable pool of swaps
+#ifdef _WIN32
 					if (needsExport) {
 						MxcNodeImports* pImports = &pNodeCtxt->exported.pExportedMemory->imports;
 						WIN32_CHECK(DuplicateHandle(GetCurrentProcess(),
@@ -1103,6 +1082,7 @@ static void ipcFuncClaimSwap(node_h hNode)
 						                            0, false, DUPLICATE_SAME_ACCESS),
 						            "Duplicate localTexture buffer fail");
 					}
+#endif
 
 					pNodeCpst->swaps[iNodeSwap][iImg].image = pSwap->externalTexture[iImg].texture.image;
 					pNodeCpst->swaps[iNodeSwap][iImg].view = pSwap->externalTexture[iImg].texture.view;
@@ -1138,10 +1118,14 @@ static void ipcFuncClaimSwap(node_h hNode)
 		}
 	}
 
-Error:
+Error: __attribute__((unused));
 	// TODO
 Out:
+#ifdef _WIN32
 	SetEvent(pNodeCtxt->swapsSyncedHandle);
+#else
+	{ uint64_t v = 1; write(pNodeCtxt->swapsSyncedHandle, &v, sizeof(v)); }
+#endif
 #endif
 }
 const MxcIpcFuncPtr MXC_IPC_FUNCS[] = {

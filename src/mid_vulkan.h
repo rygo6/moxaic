@@ -27,6 +27,11 @@
 
 #include <vulkan/vulkan_win32.h>
 
+#else
+
+#include <unistd.h>
+#include <vulkan/vulkan_wayland.h>
+
 #endif
 
 #include "mid_common.h"
@@ -91,14 +96,14 @@
 #define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_WIN32_BIT
 #define VK_EXTERNAL_HANDLE_PLATFORM                HANDLE
 #else
-#define VK_PLATFORM_SURFACE_EXTENSION_NAME         0
-#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          0
-#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       0
-#define VK_EXTERNAL_FENCE_EXTENSION_NAME           0
-#define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    0
-#define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM 0
-#define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     0
-#define VK_EXTERNAL_HANDLE_PLATFORM                0
+#define VK_PLATFORM_SURFACE_EXTENSION_NAME         VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME
+#define VK_EXTERNAL_MEMORY_EXTENSION_NAME          VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME
+#define VK_EXTERNAL_SEMAPHORE_EXTENSION_NAME       VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME
+#define VK_EXTERNAL_FENCE_EXTENSION_NAME           VK_KHR_EXTERNAL_FENCE_FD_EXTENSION_NAME
+#define VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM    VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT
+#define VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT
+#define VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM     VK_EXTERNAL_FENCE_HANDLE_TYPE_OPAQUE_FD_BIT
+#define VK_EXTERNAL_HANDLE_PLATFORM                int
 #endif
 
 #define VK_ALLOC   NULL
@@ -1133,11 +1138,13 @@ void vkCreateExternalPlatformTexture(const VkImageCreateInfo* pCreateInfo, VkExt
 void vkDestroyExternalPlatformTexture(VkExternalPlatformTexture* pTexture);
 
 void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
+#else
+void vkCreateVulkanSurface(struct wl_display* display, struct wl_surface* surface, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface);
 #endif
 
 typedef struct VkExternalTexture {
 	VkDedicatedTexture texture;
-#if _WIN32
+#ifdef _WIN32
 	VkExternalPlatformTexture platform;
 #endif
 } VkExternalTexture;
@@ -2048,7 +2055,7 @@ void vkEndAllocationRequests()
 	}
 }
 
-static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropertyFlags propFlags, VkLocality locality, VkExternalMemoryHandleTypeFlagBits importHandleType, HANDLE importHandle, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory)
+static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropertyFlags propFlags, VkLocality locality, VkExternalMemoryHandleTypeFlagBits importHandleType, VK_EXTERNAL_HANDLE_PLATFORM importHandle, const VkMemoryDedicatedAllocateInfo* pDedicatedAllocInfo, VkDeviceMemory* pDeviceMemory)
 {
 	VkPhysicalDeviceMemoryProperties memProps;
 	vkGetPhysicalDeviceMemoryProperties(vk.context.physicalDevice, &memProps);
@@ -2058,7 +2065,7 @@ static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropert
 	VkExportMemoryWin32HandleInfoKHR exportMemPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
 		.pNext = pDedicatedAllocInfo,
-		.dwAccess = GENERIC_ALL,  // Doesn't seem to effect actual texture access. Only NT handle.
+		.dwAccess = GENERIC_ALL,
 	};
 	VkImportMemoryWin32HandleInfoKHR importMemAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_WIN32_HANDLE_INFO_KHR,
@@ -2066,18 +2073,30 @@ static void AllocateMemory(const VkMemoryRequirements* pMemReqs, VkMemoryPropert
 		.handleType = importHandleType,
 		.handle = importHandle,
 	};
-#endif
-
 	VkExportMemoryAllocateInfo exportMemAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
 		.pNext = &exportMemPlatformInfo,
 		.handleTypes = importHandleType,
 	};
+#else
+	VkImportMemoryFdInfoKHR importMemAllocInfo = {
+		.sType = VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR,
+		.pNext = pDedicatedAllocInfo,
+		.handleType = importHandleType,
+		.fd = importHandle,
+	};
+	VkExportMemoryAllocateInfo exportMemAllocInfo = {
+		.sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+		.pNext = (void*)pDedicatedAllocInfo,
+		.handleTypes = importHandleType,
+	};
+#endif
+
 	VkMemoryAllocateInfo memAllocInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
 		.pNext = VK_LOCALITY_INTERPROCESS_EXPORTED(locality) ?
 			&exportMemAllocInfo : VK_LOCALITY_INTERPROCESS_IMPORTED(locality) ?
-				&importMemAllocInfo
+				(void*)&importMemAllocInfo
 				: (void*)pDedicatedAllocInfo,
 		.allocationSize = pMemReqs->size,
 		.memoryTypeIndex = memTypeIndex,
@@ -2117,7 +2136,7 @@ static void CreateAllocBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize b
 	//	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, NULL,
 	//				   (requiresDedicated || prefersDedicated) && !MID_LOCALITY_INTERPROCESS(locality) ? &dedicatedAllocInfo : NULL,
 	//				   pDeviceMem);
-	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, 0, NULL, requiresDedicated ? &dedicatedAllocInfo : NULL, pMemory);
+	AllocateMemory(&memReqs2.memoryRequirements, memPropFlags, locality, 0, (VK_EXTERNAL_HANDLE_PLATFORM)0, requiresDedicated ? &dedicatedAllocInfo : NULL, pMemory);
 }
 
 static void CreateAllocBindBuffer(VkMemoryPropertyFlags memPropFlags, VkDeviceSize bufferSize, VkBufferUsageFlags usage, VkLocality locality, VkDeviceMemory* pDeviceMem, VkBuffer* pBuffer)
@@ -2427,6 +2446,7 @@ void vkDestroyDedicatedTexture(VkDedicatedTexture* pTexture)
 }
 
 
+#ifdef _WIN32
 static struct {
 	IDXGIFactory4* factory;
 	IDXGIAdapter1* adapter;
@@ -2622,6 +2642,7 @@ void vkDestroyExternalPlatformTexture(VkExternalPlatformTexture* pTexture)
 	pTexture->texture = NULL;
 	pTexture->handle = NULL;
 }
+#endif // _WIN32
 
 void vkCreateDepthFramebuffer(const VkDepthFramebufferCreateInfo* pCreateInfo, VkFramebuffer* pFramebuffer)
 {
@@ -2824,7 +2845,16 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 		VkPhysicalDevice devices[deviceCount];
 		VK_CHECK(vkEnumeratePhysicalDevices(vk.instance, &deviceCount, devices));
 
-		vk.context.physicalDevice = devices[0];  // We are just assuming the best GPU is first. So far this is true.
+		// Prefer discrete GPU over integrated or software renderers.
+		vk.context.physicalDevice = devices[0];
+		for (u32 i = 0; i < deviceCount; ++i) {
+			VkPhysicalDeviceProperties props;
+			vkGetPhysicalDeviceProperties(devices[i], &props);
+			if (props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+				vk.context.physicalDevice = devices[i];
+				break;
+			}
+		}
 		VkPhysicalDeviceProperties2 physicalDeviceProperties = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = NULL};
 		vkGetPhysicalDeviceProperties2(vk.context.physicalDevice, &physicalDeviceProperties);
 		printf("PhysicalDevice: %s\n", physicalDeviceProperties.properties.deviceName);
@@ -2834,8 +2864,8 @@ void vkCreateContext(const VkContextCreateInfo* pContextCreateInfo)
 			VK_API_VERSION_MINOR(physicalDeviceProperties.properties.apiVersion),
 			VK_API_VERSION_PATCH(physicalDeviceProperties.properties.apiVersion));
 
-		printf("minUniformBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment);
-		printf("minStorageBufferOffsetAlignment: %llu\n", physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
+		printf("minUniformBufferOffsetAlignment: %llu\n", (unsigned long long)physicalDeviceProperties.properties.limits.minUniformBufferOffsetAlignment);
+		printf("minStorageBufferOffsetAlignment: %llu\n", (unsigned long long)physicalDeviceProperties.properties.limits.minStorageBufferOffsetAlignment);
 		CHECK(physicalDeviceProperties.properties.apiVersion < VK_VERSION, "Insufficient Vulkan API Version");
 
 		VkPhysicalDeviceMaintenance8FeaturesKHR physicalDeviceMaintenance8FeaturesKHR = {
@@ -3140,13 +3170,14 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 #if _WIN32
 	VkExportFenceWin32HandleInfoKHR exportPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_WIN32_HANDLE_INFO_KHR,
-		// TODO are these the best security options? Read seems to affect it and solves issue of child corrupting semaphore on crash... but not 100%
 		.dwAccess = pCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY ? GENERIC_READ : GENERIC_ALL,
 	};
 #endif
 	VkExportFenceCreateInfo exportInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_FENCE_CREATE_INFO,
+#if _WIN32
 		.pNext = &exportPlatformInfo,
+#endif
 		.handleTypes = VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM,
 	};
 	VkFenceCreateInfo info = {
@@ -3160,33 +3191,42 @@ void vkCreateExternalFence(const VkExternalFenceCreateInfo* pCreateInfo, VkFence
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY:  {
 #if _WIN32
-			VkImportFenceWin32HandleInfoKHR importWin32HandleInfo = {
+			VkImportFenceWin32HandleInfoKHR importHandleInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_WIN32_HANDLE_INFO_KHR,
 				.fence = *pFence,
 				.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM,
 				.handle = pCreateInfo->importHandle,
 			};
 			VK_INSTANCE_FUNC(ImportFenceWin32HandleKHR);
-			VK_CHECK(ImportFenceWin32HandleKHR(vk.context.device, &importWin32HandleInfo));
+			VK_CHECK(ImportFenceWin32HandleKHR(vk.context.device, &importHandleInfo));
+#else
+			VkImportFenceFdInfoKHR importHandleInfo = {
+				.sType = VK_STRUCTURE_TYPE_IMPORT_FENCE_FD_INFO_KHR,
+				.fence = *pFence,
+				.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM,
+				.fd = pCreateInfo->importHandle,
+			};
+			VK_DEVICE_FUNC(ImportFenceFdKHR);
+			VK_CHECK(ImportFenceFdKHR(vk.context.device, &importHandleInfo));
 #endif
 			break;
 		}
 	}
 }
 
-// I need a word that represents a more comprehensive Create more function
 void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemaphore* pSemaphore)
 {
 #if _WIN32
 	VkExportSemaphoreWin32HandleInfoKHR exportPlatformInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
-		// TODO are these the best security options? Read seems to affect it and solves issue of child corrupting semaphore on crash... but not 100%
 		.dwAccess = pCreateInfo->locality == VK_LOCALITY_INTERPROCESS_EXPORTED_READONLY ? GENERIC_READ : GENERIC_ALL,
 	};
 #endif
 	VkExportSemaphoreCreateInfo exportInfo = {
 		.sType = VK_STRUCTURE_TYPE_EXPORT_SEMAPHORE_CREATE_INFO,
+#if _WIN32
 		.pNext = &exportPlatformInfo,
+#endif
 		.handleTypes = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM,
 	};
 	VkSemaphoreTypeCreateInfo typeInfo = {
@@ -3204,14 +3244,23 @@ void vkCreateSemaphoreExt(const vkSemaphoreCreateInfoExt* pCreateInfo, VkSemapho
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READWRITE:
 		case VK_LOCALITY_INTERPROCESS_IMPORTED_READONLY:  {
 #if _WIN32
-			VkImportSemaphoreWin32HandleInfoKHR importWin32HandleInfo = {
+			VkImportSemaphoreWin32HandleInfoKHR importHandleInfo = {
 				.sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_WIN32_HANDLE_INFO_KHR,
 				.semaphore = *pSemaphore,
 				.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM,
 				.handle = pCreateInfo->importHandle,
 			};
 			VK_INSTANCE_FUNC(ImportSemaphoreWin32HandleKHR);
-			VK_CHECK(ImportSemaphoreWin32HandleKHR(vk.context.device, &importWin32HandleInfo));
+			VK_CHECK(ImportSemaphoreWin32HandleKHR(vk.context.device, &importHandleInfo));
+#else
+			VkImportSemaphoreFdInfoKHR importHandleInfo = {
+				.sType = VK_STRUCTURE_TYPE_IMPORT_SEMAPHORE_FD_INFO_KHR,
+				.semaphore = *pSemaphore,
+				.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM,
+				.fd = pCreateInfo->importHandle,
+			};
+			VK_DEVICE_FUNC(ImportSemaphoreFdKHR);
+			VK_CHECK(ImportSemaphoreFdKHR(vk.context.device, &importHandleInfo));
 #endif
 			break;
 		}
@@ -3231,71 +3280,114 @@ void vkSetDebugName(VkObjectType objectType, u64 objectHandle, const char* pDebu
 
 VK_EXTERNAL_HANDLE_PLATFORM vkGetMemoryExternalHandle(VkDeviceMemory memory)
 {
+#ifdef _WIN32
 	VK_INSTANCE_FUNC(GetMemoryWin32HandleKHR);
-	VkMemoryGetWin32HandleInfoKHR getWin32HandleInfo = {
+	VkMemoryGetWin32HandleInfoKHR getHandleInfo = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_GET_WIN32_HANDLE_INFO_KHR,
 		.memory = memory,
 		.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM,
 	};
 	HANDLE handle;
-	VK_CHECK(GetMemoryWin32HandleKHR(vk.context.device, &getWin32HandleInfo, &handle));
+	VK_CHECK(GetMemoryWin32HandleKHR(vk.context.device, &getHandleInfo, &handle));
 	return handle;
+#else
+	VK_DEVICE_FUNC(GetMemoryFdKHR);
+	VkMemoryGetFdInfoKHR getHandleInfo = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
+		.memory = memory,
+		.handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_PLATFORM,
+	};
+	int fd;
+	VK_CHECK(GetMemoryFdKHR(vk.context.device, &getHandleInfo, &fd));
+	return fd;
+#endif
 }
+
 VK_EXTERNAL_HANDLE_PLATFORM vkGetFenceExternalHandle(VkFence fence)
 {
+#ifdef _WIN32
 	VK_INSTANCE_FUNC(GetFenceWin32HandleKHR);
-	VkFenceGetWin32HandleInfoKHR getWin32HandleInfo = {
+	VkFenceGetWin32HandleInfoKHR getHandleInfo = {
 		VK_STRUCTURE_TYPE_FENCE_GET_WIN32_HANDLE_INFO_KHR,
 		.fence = fence,
 		.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM,
 	};
 	HANDLE handle;
-	VK_CHECK(GetFenceWin32HandleKHR(vk.context.device, &getWin32HandleInfo, &handle));
+	VK_CHECK(GetFenceWin32HandleKHR(vk.context.device, &getHandleInfo, &handle));
 	return handle;
+#else
+	VK_DEVICE_FUNC(GetFenceFdKHR);
+	VkFenceGetFdInfoKHR getHandleInfo = {
+		VK_STRUCTURE_TYPE_FENCE_GET_FD_INFO_KHR,
+		.fence = fence,
+		.handleType = VK_EXTERNAL_FENCE_HANDLE_TYPE_PLATFORM,
+	};
+	int fd;
+	VK_CHECK(GetFenceFdKHR(vk.context.device, &getHandleInfo, &fd));
+	return fd;
+#endif
 }
+
 VK_EXTERNAL_HANDLE_PLATFORM vkGetSemaphoreExternalHandle(VkSemaphore semaphore)
 {
+#ifdef _WIN32
 	VK_INSTANCE_FUNC(GetSemaphoreWin32HandleKHR);
-	VkSemaphoreGetWin32HandleInfoKHR getWin32HandleInfo = {
+	VkSemaphoreGetWin32HandleInfoKHR getHandleInfo = {
 		VK_STRUCTURE_TYPE_SEMAPHORE_GET_WIN32_HANDLE_INFO_KHR,
 		.semaphore = semaphore,
 		.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM,
 	};
 	HANDLE handle;
-	VK_CHECK(GetSemaphoreWin32HandleKHR(vk.context.device, &getWin32HandleInfo, &handle));
+	VK_CHECK(GetSemaphoreWin32HandleKHR(vk.context.device, &getHandleInfo, &handle));
 	return handle;
+#else
+	VK_DEVICE_FUNC(GetSemaphoreFdKHR);
+	VkSemaphoreGetFdInfoKHR getHandleInfo = {
+		VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR,
+		.semaphore = semaphore,
+		.handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_PLATFORM,
+	};
+	int fd;
+	VK_CHECK(GetSemaphoreFdKHR(vk.context.device, &getHandleInfo, &fd));
+	return fd;
+#endif
 }
 
 #ifdef _WIN32
 void vkCreateVulkanSurface(HINSTANCE hInstance, HWND hWnd, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
 {
-	VkWin32SurfaceCreateInfoKHR win32SurfaceCreateInfo = {
+	VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
 		VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
 		.hinstance = hInstance,
 		.hwnd = hWnd,
 	};
 	VK_INSTANCE_FUNC(CreateWin32SurfaceKHR);
-	VK_CHECK(CreateWin32SurfaceKHR(vk.instance, &win32SurfaceCreateInfo, pAllocator, pSurface));
+	VK_CHECK(CreateWin32SurfaceKHR(vk.instance, &surfaceCreateInfo, pAllocator, pSurface));
 
 	VkSurfaceCapabilitiesKHR capabilities;
 	VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.context.physicalDevice, *pSurface, &capabilities));
 
 	LOG("Created Win32 Surface:\n");
-	LOG("  minImageCount: %d\n", capabilities.minImageCount);
-	LOG("  maxImageCount: %d\n", capabilities.maxImageCount);
 	LOG("  currentExtent: %d %d\n", capabilities.currentExtent.width, capabilities.currentExtent.height);
-	LOG("  minImageExtent: %d %d\n", capabilities.minImageExtent.width, capabilities.minImageExtent.height);
-	LOG("  maxImageExtent: %d %d\n", capabilities.maxImageExtent.width, capabilities.maxImageExtent.height);
-	LOG("  maxImageArrayLayers: %d\n", capabilities.maxImageArrayLayers);
-	LOG("  supportedTransforms:\n");
-	LogFlags("    ", "\n", capabilities.currentTransform, string_VkSurfaceTransformFlagBitsKHR);
-	LOG("  currentTransform: %s\n", string_VkSurfaceTransformFlagBitsKHR(capabilities.currentTransform));
-	LOG("  supportedTransforms:\n");
-	LogFlags("    ", "\n", capabilities.supportedCompositeAlpha, string_VkCompositeAlphaFlagBitsKHR);
-	LOG("  supportedTransforms:\n");
-	LogFlags("    ", "\n", capabilities.supportedUsageFlags, string_VkImageUsageFlagBits);
 }
-#endif // _WIN32
+#else
+void vkCreateVulkanSurface(struct wl_display* display, struct wl_surface* surface, const VkAllocationCallbacks* pAllocator, VkSurfaceKHR* pSurface)
+{
+	VkWaylandSurfaceCreateInfoKHR surfaceCreateInfo = {
+		.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+		.display = display,
+		.surface = surface,
+	};
+	VK_INSTANCE_FUNC(CreateWaylandSurfaceKHR);
+	VK_CHECK(CreateWaylandSurfaceKHR(vk.instance, &surfaceCreateInfo, pAllocator, pSurface));
+
+	VkSurfaceCapabilitiesKHR capabilities;
+	VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.context.physicalDevice, *pSurface, &capabilities));
+
+	LOG("Created Wayland Surface:\n");
+	LOG("  currentExtent: %d %d\n", capabilities.currentExtent.width, capabilities.currentExtent.height);
+}
+#endif
 
 #undef MID_VULKAN_IMPLEMENTATION
 #endif // MID_VULKAN_IMPLEMENTATION

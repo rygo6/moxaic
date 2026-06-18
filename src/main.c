@@ -66,7 +66,11 @@ int main(void)
 			},
 		};
 		vkCreateContext(&contextCreateInfo);
+#ifdef _WIN32
 		vkCreateVulkanSurface(midWindow.hInstance, midWindow.hWnd, VK_ALLOC, &vk.surfaces[0]);
+#else
+		vkCreateVulkanSurface(midWindow.display, midWindow.surface, VK_ALLOC, &vk.surfaces[0]);
+#endif
 		vkCreateGraphics();
 		vkCreateLineGraphics();
 
@@ -80,13 +84,13 @@ int main(void)
 
 #define TEST_NODE
 #ifdef TEST_NODE
-//		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
-//		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
-//		pTestNodeShrd->compositorCycleSkip = 8;
+		node_h hTestNode; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode);
+		MxcNodeShared* pTestNodeShrd = ARRAY_H(node.pShared, hTestNode);
+		pTestNodeShrd->compositorCycleSkip = 24;
 
-		node_h hTestNode2; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode2);
-        MxcNodeShared* pTestNode2Shrd = ARRAY_H(node.pShared, hTestNode2);
-        pTestNode2Shrd->compositorCycleSkip = 24;
+		// node_h hTestNode2; mxcRequestNodeThread(mxcRunNodeThread, &hTestNode2);
+        // MxcNodeShared* pTestNode2Shrd = ARRAY_H(node.pShared, hTestNode2);
+        // pTestNode2Shrd->compositorCycleSkip = 24;
 #endif
 
 #elif defined(MOXAIC_NODE)

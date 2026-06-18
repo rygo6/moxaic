@@ -1,3 +1,4 @@
+#include "node.h"
 #if defined(MOXAIC_COMPOSITOR)
 
 #include <assert.h>

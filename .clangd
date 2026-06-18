@@ -1,0 +1,2 @@
+CompileFlags:
+  Add: [-DMID_IDE_ANALYSIS]

@@ -35,6 +35,16 @@
 	#include <d3d11_4.h>
 	#include <dxgi.h>
 	#include <dxgi1_4.h>
+#else
+	#define XR_USE_PLATFORM_WAYLAND
+	#include <wayland-client.h>
+#endif
+
+#ifdef _WIN32
+	typedef HANDLE platform_handle_t;
+#else
+	#include <sys/types.h>
+	typedef int platform_handle_t;
 #endif
 
 #define XR_USE_GRAPHICS_API_VULKAN
@@ -273,19 +283,19 @@ XrResult xrClaimSessionId(session_i* pSessionIndex);
 void xrReleaseSessionId(session_i iSession);
 void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds);
 XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapInfo* pSwapInfo);
-void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle);
+void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, platform_handle_t* pHandle);
 XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap);
 void xrSetColorSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg);
 void xrSetDepthSwapId(session_i iSession, XrViewId viewId, swap_i iSwap, u32 iImg);
 void xrSetDepthInfo(session_i iSession, float minDepth, float maxDepth, float nearZ, float farZ);
 
-void xrGetSessionTimeline(session_i iSession, HANDLE* pHandle);
+void xrGetSessionTimeline(session_i iSession, platform_handle_t* pHandle);
 void xrSetSessionTimelineValue(session_i iSession, u64 timelineValue);
 
 void xrClaimSwapImageIndex(session_i iSession, u8* pIndex);
 void xrReleaseSwapImageIndex(session_i iSession, u8 index);
 
-void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle);
+void xrGetCompositorTimeline(session_i iSession, platform_handle_t* pHandle);
 void xrSetInitialCompositorTimelineValue(session_i iSession, u64 timelineValue);
 void xrGetCompositorTimelineValue(session_i iSession, u64* pTimelineValue);
 void xrProgressCompositorTimelineValue(session_i iSession, u64 timelineValue);
@@ -484,12 +494,14 @@ typedef struct Swapchain {
 			GLuint texture;
 			GLuint memObject;
 		} gl;
+#ifdef _WIN32
 		struct {
 			ID3D11Texture2D* localTexture;
 			ID3D11Texture2D* transferTexture;
 			ID3D11Resource*  localResource;
 			ID3D11Resource*  transferResource;
 		} d3d11;
+#endif
 	} texture[XR_SWAPCHAIN_IMAGE_COUNT];
 
 	XrSwapOutput    output;
@@ -534,6 +546,7 @@ typedef struct Session {
 	/* Graphics */
 	union {
 
+#ifdef _WIN32
 		struct {
 			HDC   hDC;
 			HGLRC hGLRC;
@@ -545,6 +558,7 @@ typedef struct Session {
 			ID3D11Fence*          compositorFence;
 			ID3D11Fence*          sessionFence;
 		} d3d11;
+#endif
 
 		struct {
 			VkInstance       instance;
@@ -578,12 +592,14 @@ typedef struct Instance {
 	MAP_DECL(XR_INTERACTION_PROFILE_CAPACITY) interactionProfiles;
 
 	/* Graphics */
+#ifdef _WIN32
 	union {
 		struct {
 			LUID              adapterLuid;
 			D3D_FEATURE_LEVEL minFeatureLevel;
 		} d3d11;
 	} graphics;
+#endif
 
 	/* Events */
 	MidChannelRing         eventDataQueue;
@@ -596,7 +612,7 @@ typedef struct Instance {
 /*
  * Mid OpenXR Runtime Implementation
  */
-#if defined(MID_OPENXR_IMPLEMENTATION) || defined(MID_IDE_ANALYSIS)
+#if (defined(MID_OPENXR_IMPLEMENTATION) && defined(_WIN32)) || defined(MID_IDE_ANALYSIS)
 
 static struct {
 	Instance instance;
@@ -717,6 +733,7 @@ static double xrTimeToMilliseconds(XrTime nanoseconds)
 	return (double)nanoseconds / 1000000.0;
 }
 
+#ifdef _WIN32
 static XrTime xrGetTime()
 {
 	LARGE_INTEGER qpc;
@@ -733,7 +750,17 @@ static XrTime xrGetTime()
 
 	return xrTime;
 }
+#else
+#include <time.h>
+static XrTime xrGetTime()
+{
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (XrTime)((int64_t)ts.tv_sec * 1000000000LL + ts.tv_nsec);
+}
+#endif
 
+#ifdef _WIN32
 static XrResult XrTimeWaitWin32(_Atomic XrTime* pSharedTime, XrTime waitTime)
 {
 	// this should be pthreads since it doesnt happen that much and cross platform is probably fine
@@ -755,6 +782,23 @@ static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
 	atomic_store_explicit(pSharedTime, signalTime, memory_order_release);
 	WakeByAddressAll(pSharedTime);
 }
+#else
+static XrResult XrTimeWaitWin32(_Atomic XrTime* pSharedTime, XrTime waitTime)
+{
+	while (1) {
+		XrTime currentTime = atomic_load_explicit(pSharedTime, memory_order_acquire);
+		if (currentTime >= waitTime)
+			return XR_SUCCESS;
+		struct timespec ts = {.tv_nsec = 500000};
+		nanosleep(&ts, NULL);
+	}
+}
+
+static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
+{
+	atomic_store_explicit(pSharedTime, signalTime, memory_order_release);
+}
+#endif
 
 /*
  * OpenXR Debug Logging
@@ -776,7 +820,15 @@ static void XrTimeSignalWin32(_Atomic XrTime* pSharedTime, XrTime signalTime)
 	#define LOG_VERBOSE(...)
 #endif
 
-#define LOG_METHOD_INTERNAL(_method) LOG("%lu:%lu: " #_method "\n", GetCurrentProcessId(), GetCurrentThreadId())
+#ifdef _WIN32
+#define GET_PID() ((unsigned long)GetCurrentProcessId())
+#define GET_TID() ((unsigned long)GetCurrentThreadId())
+#else
+#include <unistd.h>
+#define GET_PID() ((unsigned long)getpid())
+#define GET_TID() ((unsigned long)pthread_self())
+#endif
+#define LOG_METHOD_INTERNAL(_method) LOG("%lu:%lu: " #_method "\n", GET_PID(), GET_TID())
 
 #ifdef ENABLE_LOG_METHOD_ALL
 	#define LOG_METHOD(_method) LOG_METHOD_INTERNAL(_method)
@@ -1602,8 +1654,8 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 	memset(pSession, 0, sizeof(Session));
 	pSession->index = iSession;
 
-	HANDLE compositorFenceHandle; xrGetCompositorTimeline(iSession, &compositorFenceHandle);
-	HANDLE sessionFenceHandle; xrGetSessionTimeline(iSession, &sessionFenceHandle);
+	platform_handle_t compositorFenceHandle; xrGetCompositorTimeline(iSession, &compositorFenceHandle);
+	platform_handle_t sessionFenceHandle; xrGetSessionTimeline(iSession, &sessionFenceHandle);
 
 	if (createInfo->next == NULL) {
 		LOG_ERROR("XR_ERROR_GRAPHICS_DEVICE_INVALID\n");
@@ -1611,6 +1663,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 	}
 
 	switch (*(XrStructureType*)createInfo->next) {
+#ifdef _WIN32
 		case XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR: {
 			LOG("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_OPENGL_WIN32_KHR\n");
 			XrGraphicsBindingOpenGLWin32KHR* binding = (XrGraphicsBindingOpenGLWin32KHR*)createInfo->next;
@@ -1675,6 +1728,7 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo, XrSe
 
 			break;
 		}
+#endif // _WIN32
 		case XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR: {
 			LOG("OpenXR Graphics Binding: XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR\n");
 			XrGraphicsBindingVulkanKHR* binding = (XrGraphicsBindingVulkanKHR*)createInfo->next;
@@ -1803,7 +1857,7 @@ XR_PROC xrCreateReferenceSpace(XrSession                         session,
 	// automatically switch to first created space
 	if (!HANDLE_VALID(pSession->hActiveReferenceSpace)) {
 		EnqueueEventDataReferenceSpaceChangePending(
-			hSession, hSpace, 
+			hSession, hSpace,
 			createInfo->referenceSpaceType,
 			createInfo->poseInReferenceSpace);
 	}
@@ -3296,7 +3350,7 @@ XR_PROC xrCreateActionSet(XrInstance                   instance,
 {
 #ifdef ENABLE_DEBUG_LOG_METHOD
 	LOG_METHOD(xrCreateActionSet);
-	LOG("%lu:%lu: xrCreateActionSet %s %s\n", GetCurrentProcessId(), GetCurrentThreadId(), createInfo->actionSetName, createInfo->localizedActionSetName);
+	LOG("%lu:%lu: xrCreateActionSet %s %s\n", GET_PID(), GET_TID(), createInfo->actionSetName, createInfo->localizedActionSetName);
 #endif
 	assert(createInfo->next == NULL);
 

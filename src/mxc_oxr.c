@@ -1,5 +1,9 @@
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <unistd.h>
+#endif
 #include <stdatomic.h>
 
 #include "mid_openxr_runtime.h"
@@ -37,7 +41,7 @@ XrResult xrClaimSessionId(session_i* pSessionIndex)
 	if (pImportedExternalMemory == NULL)
 		return XR_ERROR_RUNTIME_FAILURE;
 
-	if (pImportedExternalMemory->imports.swapsSyncedHandle == NULL)
+	if (!PLATFORM_HANDLE_VALID(pImportedExternalMemory->imports.swapsSyncedHandle))
 		return XR_ERROR_RUNTIME_FAILURE;
 
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
@@ -47,7 +51,7 @@ XrResult xrClaimSessionId(session_i* pSessionIndex)
 	pNodeCtxt->imported.compositorTimelineHandle = pImportedExternalMemory->imports.compositorTimelineHandle;
 
 	MxcNodeShared* pNodeShrd  = ARRAY_H(node.pShared, hNode);
-	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_TESSELATION;
+	pNodeShrd->compositorMode = MXC_COMPOSITOR_MODE_COMPUTE;
 	
 	*pSessionIndex = hNode; // openxr sessionId == moxaic node handle
 
@@ -85,7 +89,7 @@ void xrGetReferenceSpaceBounds(session_i iSession, XrExtent2Df* pBounds)
 	*pBounds = (XrExtent2Df) {.width = radius, .height = radius };
 }
 
-void xrGetSessionTimeline(session_i iSession, HANDLE* pHandle)
+void xrGetSessionTimeline(session_i iSession, platform_handle_t* pHandle)
 {
 	node_h hNode = iSession;
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
@@ -102,7 +106,7 @@ void xrSetSessionTimelineValue(session_i iSession, uint64_t timelineValue)
 	atomic_store_explicit(&pNodeShrd->timelineValue, timelineValue, memory_order_release);
 }
 
-void xrGetCompositorTimeline(session_i iSession, HANDLE* pHandle)
+void xrGetCompositorTimeline(session_i iSession, platform_handle_t* pHandle)
 {
 	node_h hNode = iSession;
 	MxcNodeContext* pNodeCtxt = BLOCK_PTR_H(node.context, hNode);
@@ -125,7 +129,11 @@ XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapI
 	pNodeShrd->nodeSwapInfos[iSwap]  = *pInfo;
 
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
+#ifdef _WIN32
 	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, 2000);
+#else
+	{ uint64_t v; read(pNodeCtxt->swapsSyncedHandle, &v, sizeof(v)); }
+#endif
 
 	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_REQUESTED) {
 		LOG_ERROR("Compositor failed to create Swap!\n");
@@ -142,7 +150,7 @@ XrResult xrCreateSwapchainImages(session_i iSession, swap_i iSwap, const XrSwapI
 	return XR_SUCCESS;
 }
 
-void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, HANDLE* pHandle)
+void xrGetSwapchainImportedImage(session_i iSession, swap_i iSwap, u32 iImg, platform_handle_t* pHandle)
 {
 	LOG("xrGetSwapchainImportedImage iSession: %d iSwap: %d iImg: %d\n", iSession, iSwap, iImg);
 	node_h hNode = iSession;
@@ -174,7 +182,11 @@ XrResult xrDestroySwapchainImages(session_i iSession, swap_i iSwap)
 	// INTERPROCESS_TARGET_SYNC_SWAPS IPC call will transition to STATE_UNITIALIZED.
 	pNodeShrd->nodeSwapStates[iSwap] = XR_SWAP_STATE_DESTROYED;
 	mxcIpcFuncEnqueue(hNode, MXC_INTERPROCESS_TARGET_SYNC_SWAPS);
+#ifdef _WIN32
 	WaitForSingleObject(pNodeCtxt->swapsSyncedHandle, INFINITE);
+#else
+	{ uint64_t v; read(pNodeCtxt->swapsSyncedHandle, &v, sizeof(v)); }
+#endif
 
 	if (pNodeShrd->nodeSwapStates[iSwap] == XR_SWAP_STATE_DESTROYED) {
 		LOG_ERROR("Compositor failed to destroy Swap!\n");

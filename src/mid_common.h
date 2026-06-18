@@ -48,12 +48,14 @@
 #include <stdatomic.h>
 #include <assert.h>
 #include <string.h>
+#include <limits.h>
+#include <stdlib.h>
 
 #define ASSERT(_condition, ...) ({\
 	if (UNLIKELY(!(_condition))) {\
 	fprintf(stderr, ANSI_RED "\n%s:%d ASSERT! ", __FILE__, __LINE__);\
 	fprintf(stderr, "(%s) " __VA_ARGS__ "\n" ANSI_RESET, #_condition);\
-	_assert("(" #_condition ")" __VA_ARGS__, __FILE__, __LINE__);\
+	abort();\
 	}\
 })
 

@@ -5,8 +5,20 @@
 #include <stdio.h>
 #include <assert.h>
 
+#ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+typedef HANDLE platform_handle_t;
+typedef DWORD  platform_pid_t;
+#define INVALID_PLATFORM_HANDLE  NULL
+#define PLATFORM_HANDLE_VALID(h) ((h) != NULL && (h) != INVALID_HANDLE_VALUE)
+#else
+#include <sys/types.h>
+typedef int    platform_handle_t;
+typedef pid_t  platform_pid_t;
+#define INVALID_PLATFORM_HANDLE  (-1)
+#define PLATFORM_HANDLE_VALID(h) ((h) >= 0)
+#endif
 
 #include "mid_vulkan.h"
 #include "mid_bit.h"
@@ -24,7 +36,11 @@
 #define MXC_NODE_GBUFFER_FORMAT VK_FORMAT_R16G16B16A16_SFLOAT
 #define MXC_NODE_GBUFFER_USAGE  VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
 #define MXC_NODE_CLEAR_COLOR (VkClearColorValue) { 0.0f, 0.0f, 0.0f, 0.0f }
+#ifdef _WIN32
 #define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE_BIT
+#else
+#define MXC_EXTERNAL_FRAMEBUFFER_HANDLE_TYPE VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT
+#endif
 
 /*
  * Shared Types
@@ -138,11 +154,11 @@ typedef struct MxcNodeShared {
 typedef struct MxcNodeImports {
 
 	// We could do sync handle per swap but it's also not an issue if nodes wait a little.
-	HANDLE swapsSyncedHandle;
-	HANDLE swapImageHandles[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
+	platform_handle_t swapsSyncedHandle;
+	platform_handle_t swapImageHandles[XR_SWAPCHAIN_CAPACITY][XR_SWAPCHAIN_IMAGE_COUNT];
 
-	HANDLE nodeTimelineHandle;
-	HANDLE compositorTimelineHandle;
+	platform_handle_t nodeTimelineHandle;
+	platform_handle_t compositorTimelineHandle;
 
 } MxcNodeImports;
 
@@ -232,7 +248,7 @@ typedef struct MxcNodeSwap {
 typedef struct MxcNodeContext {
 	MxcNodeInterprocessMode interprocessMode;
 
-	HANDLE swapsSyncedHandle;
+	platform_handle_t swapsSyncedHandle;
 	swap_h hSwaps[MXC_NODE_SWAP_CAPACITY];
 
 	VkDedicatedTexture gbuffer[XR_MAX_VIEW_COUNT];
@@ -245,37 +261,29 @@ typedef struct MxcNodeContext {
 			VkCommandPool   pool;
 			VkCommandBuffer gfxCmd;
 
-			// TODO use these pNode should be entirely for custom node rendering
-//			VkGlobalSetState* pGlobalSetMapped;
-//			VkSharedBuffer  globalBuffer;
-//			VkDescriptorSet globalSet;
-
 			VkSemaphore nodeTimeline;
 		} thread;
 
 		// MXC_NODE_INTERPROCESS_MODE_EXPORTED
 		struct {
-			DWORD  processId;
-			HANDLE hProcess;
-
-			HANDLE                 exportedMemoryHandle;
+			platform_pid_t    processId;
+#ifdef _WIN32
+			platform_handle_t hProcess;
+#endif
+			platform_handle_t exportedMemoryHandle;
 			MxcExternalNodeMemory* pExportedMemory;
 
 			VkSemaphore  compositorTimeline;
 			VkSemaphore  nodeTimeline;
 
-			HANDLE nodeTimelineHandle;
-			HANDLE compositorTimelineHandle;
+			platform_handle_t nodeTimelineHandle;
+			platform_handle_t compositorTimelineHandle;
 		} exported;
 
 		// MXC_NODE_INTERPROCESS_MODE_IMPORTED
 		struct {
-			// Use this. even if it points to same shared memory. Although its not a tragedy if each has their own shared memory
-//			HANDLE                 importedExternalMemoryHandle;
-//			MxcExternalNodeMemory* pImportedExternalMemory;
-
-			HANDLE nodeTimelineHandle;
-			HANDLE compositorTimelineHandle;
+			platform_handle_t nodeTimelineHandle;
+			platform_handle_t compositorTimelineHandle;
 		} imported;
 	};
 
@@ -293,7 +301,7 @@ typedef struct MxcActiveNodes {
 } MxcActiveNodes;
 
 // Only one import into a node from a compositor? No move into MxcNodeContext. Duplicate is probably fine
-extern HANDLE                 importedExternalMemoryHandle;
+extern platform_handle_t      importedExternalMemoryHandle;
 extern MxcExternalNodeMemory* pImportedExternalMemory;
 
 extern struct Node {
@@ -311,10 +319,8 @@ extern struct Node {
 	VkPipeline            gbufferProcessUpPipe;
 
 #if defined(MOXAIC_NODE)
-
-	HANDLE                 importedExternalMemoryHandle;
+	platform_handle_t      importedExternalMemoryHandle;
 	MxcExternalNodeMemory* pImportedExternalMemory;
-
 #endif
 
 } node;

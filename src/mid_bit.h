@@ -38,7 +38,7 @@ static_assert(sizeof(bitset512_t) == 64, "");
 #elif __clang__
 #define TRAILING_ONES(_) ((int)__builtin_ctz(~_))
 #elif __GNUC__
-#define TRAILING_ONES(_) ((int)__builtin_stdc_trailing_ones(_))
+#define TRAILING_ONES(_) ((int)__builtin_ctz(~(_)))
 #endif
 
 #ifdef MID_IDE_ANALYSIS
